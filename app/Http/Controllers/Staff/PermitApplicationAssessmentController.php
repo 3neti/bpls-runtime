@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Staff;
 
 use App\Actions\CreateAssessmentForPermitApplication;
+use App\Actions\RenderAssessmentPdf;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Models\Assessment;
 use App\Models\PermitApplication;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -112,8 +114,24 @@ class PermitApplicationAssessmentController extends Controller
             'can' => [
                 'prepare_payment_schedule' => auth()->user()?->can(UserPermission::PreparePaymentSchedules->value) ?? false,
                 'view_payment_schedules' => auth()->user()?->can(UserPermission::ViewPaymentSchedules->value) ?? false,
+                'view_assessment_documents' => auth()->user()?->can(UserPermission::ViewPermitApplications->value) ?? false,
+            ],
+            'assessmentDocumentGaps' => [
+                'Generated assessment artifact renders persisted line snapshots only; it does not recalculate fees or taxes.',
+                'Full Revenue Code catalog, formula semantics, rounding, PIL, surcharge, and final assessment-sheet layout remain unresolved where not already characterized.',
             ],
         ]);
+    }
+
+    public function pdf(Assessment $assessment, RenderAssessmentPdf $renderAssessmentPdf): HttpResponse
+    {
+        Gate::authorize(UserPermission::ViewPermitApplications->value);
+
+        return response($renderAssessmentPdf->handle($assessment))
+            ->withHeaders([
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="'.$this->assessmentFilename($assessment).'"',
+            ]);
     }
 
     /**
@@ -134,5 +152,18 @@ class PermitApplicationAssessmentController extends Controller
             'total_amount_cents' => $assessment->total_amount_cents,
             'assessed_at' => $assessment->assessed_at?->toIso8601String(),
         ];
+    }
+
+    private function assessmentFilename(Assessment $assessment): string
+    {
+        $applicationNumber = $assessment->permitApplication()->value('application_number');
+        $label = ($applicationNumber ?? 'application-'.$assessment->permit_application_id).'-assessment-'.$assessment->sequence;
+        $safeLabel = str($label)
+            ->replaceMatches('/[^A-Za-z0-9._-]+/', '-')
+            ->trim('-')
+            ->lower()
+            ->toString();
+
+        return ($safeLabel === '' ? 'assessment-'.$assessment->id : $safeLabel).'.pdf';
     }
 }

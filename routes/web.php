@@ -24,6 +24,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.permit.pdf');
         Route::get('assessments/{assessment}', [PermitApplicationAssessmentController::class, 'show'])
             ->name('permit-applications.assessments.show');
+        Route::get('assessments/{assessment}/pdf', [PermitApplicationAssessmentController::class, 'pdf'])
+            ->name('permit-applications.assessments.pdf');
         Route::post('assessments/{assessment}/payment-schedule', [AssessmentPaymentScheduleController::class, 'store'])
             ->name('assessments.payment-schedule.store');
         Route::get('payment-schedules/{paymentSchedule}', [AssessmentPaymentScheduleController::class, 'show'])

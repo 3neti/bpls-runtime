@@ -1,9 +1,14 @@
 <?php
 
+use App\Actions\RenderAssessmentPdf;
 use App\Enums\FeeRuleCalculationType;
+use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
 use App\Enums\UserPermission;
 use App\Models\Assessment;
+use App\Models\AssessmentLine;
+use App\Models\Business;
+use App\Models\BusinessOwner;
 use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
@@ -122,5 +127,135 @@ test('staff users with view permission can review a computed assessment', functi
             ->where('assessment.total_amount_cents', 25_000)
             ->where('assessment.lines.0.code', 'APPLICATION-FEE')
             ->where('assessment.lines.0.name', 'Application Fee')
+            ->where('can.view_assessment_documents', true)
+            ->where('assessmentDocumentGaps.0', 'Generated assessment artifact renders persisted line snapshots only; it does not recalculate fees or taxes.')
         );
 });
+
+test('staff users with view permission can open an assessment pdf artifact', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+    ]);
+
+    $assessment = assessmentDocumentFixture();
+
+    $response = $this->actingAs($user)
+        ->get(route('staff.permit-applications.assessments.pdf', $assessment))
+        ->assertSuccessful()
+        ->assertHeader('Content-Type', 'application/pdf')
+        ->assertHeader('Content-Disposition', 'inline; filename="app-2026-assessment-assessment-1.pdf"');
+
+    $pdf = $response->getContent();
+
+    expect($pdf)
+        ->toStartWith('%PDF-1.4')
+        ->toContain('Assessment Sheet Artifact')
+        ->toContain('Assessment #1')
+        ->toContain('APP-2026-ASSESSMENT')
+        ->toContain('Assessment Artifact Store')
+        ->toContain('Assessment Owner')
+        ->toContain('MAYOR-PERMIT')
+        ->toContain('Business Tax')
+        ->toContain('PHP 420.00')
+        ->toContain('This artifact renders persisted assessment lines and does not recalculate fees or')
+        ->toContain('taxes.')
+        ->toContain('Full Revenue Code fee/rate catalog extraction remains incomplete.')
+        ->and(assessmentPdfPageCount($pdf))->toBe(1);
+});
+
+test('assessment pdf output is deterministic for the same persisted assessment facts', function () {
+    $assessment = assessmentDocumentFixture();
+
+    $renderer = app(RenderAssessmentPdf::class);
+
+    expect($renderer->handle($assessment))->toBe($renderer->handle($assessment->fresh()));
+});
+
+test('staff users without view permission cannot open assessment pdf artifacts', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::AssessPermitApplications,
+    ]);
+
+    $assessment = Assessment::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.assessments.pdf', $assessment))
+        ->assertForbidden();
+});
+
+function assessmentDocumentFixture(): Assessment
+{
+    $owner = BusinessOwner::factory()->create([
+        'name' => 'Assessment Owner',
+        'email' => 'assessment-owner@example.test',
+    ]);
+    $business = Business::factory()->for($owner, 'owner')->create([
+        'name' => 'Assessment Artifact Store',
+        'trade_name' => 'Assessment Store',
+        'registration_number' => 'BN-ASSESSMENT-001',
+        'address' => 'Ipil Assessment Road',
+        'barangay' => 'Poblacion',
+    ]);
+    $application = PermitApplication::factory()->for($business)->create([
+        'application_number' => 'APP-2026-ASSESSMENT',
+        'application_year' => 2026,
+    ]);
+    $lineOfBusiness = LineOfBusiness::factory()->create([
+        'name' => 'Retail Store',
+        'code' => 'RETAIL',
+    ]);
+    $applicationLine = PermitApplicationLine::factory()
+        ->for($application)
+        ->for($lineOfBusiness)
+        ->create([
+            'declared_gross_sales_cents' => 12_500_000,
+            'capital_investment_cents' => 25_000_000,
+            'quantity' => 2,
+        ]);
+
+    $assessment = Assessment::factory()->for($application)->create([
+        'sequence' => 1,
+        'total_amount_cents' => 42_000,
+        'assessed_at' => now()->startOfSecond(),
+        'source_snapshot' => [
+            'policy' => 'persisted assessment fixture',
+        ],
+    ]);
+
+    AssessmentLine::factory()->for($assessment)->create([
+        'permit_application_line_id' => $applicationLine->id,
+        'line_of_business_id' => $lineOfBusiness->id,
+        'code' => 'BUSINESS-TAX',
+        'name' => 'Business Tax',
+        'category' => FeeRuleCategory::Tax,
+        'calculation_type' => FeeRuleCalculationType::Range,
+        'basis' => 'gross_sales',
+        'basis_amount_cents' => 12_500_000,
+        'amount_cents' => 29_500,
+        'legal_basis' => 'Revenue Code fixture',
+    ]);
+
+    AssessmentLine::factory()->for($assessment)->create([
+        'permit_application_line_id' => $applicationLine->id,
+        'line_of_business_id' => $lineOfBusiness->id,
+        'code' => 'MAYOR-PERMIT',
+        'name' => 'Mayor Permit Fee',
+        'category' => FeeRuleCategory::Fee,
+        'calculation_type' => FeeRuleCalculationType::Fixed,
+        'basis' => 'application',
+        'basis_amount_cents' => 0,
+        'amount_cents' => 12_500,
+        'legal_basis' => 'Revenue Code fixture',
+    ]);
+
+    return $assessment;
+}
+
+function assessmentPdfPageCount(string $pdf): int
+{
+    preg_match_all('/\/Type \/Page\b/', $pdf, $matches);
+
+    return count($matches[0]);
+}

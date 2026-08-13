@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, CreditCard, ReceiptText } from '@lucide/vue';
+import { ArrowLeft, CreditCard, FileText, ReceiptText } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
+import {
+    index as assessmentIndex,
+    pdf as assessmentPdf,
+} from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import {
     show as paymentScheduleShow,
     store as paymentScheduleStore,
@@ -57,7 +60,9 @@ const props = defineProps<{
     can: {
         prepare_payment_schedule: boolean;
         view_payment_schedules: boolean;
+        view_assessment_documents: boolean;
     };
+    assessmentDocumentGaps: string[];
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -113,6 +118,17 @@ function money(amountCents: number): string {
                         {{ money(assessment.total_amount_cents) }}
                     </div>
                     <div class="mt-3 flex justify-end gap-2">
+                        <Button
+                            v-if="can.view_assessment_documents"
+                            as-child
+                            variant="outline"
+                            size="sm"
+                        >
+                            <a :href="assessmentPdf.url(assessment.id)" target="_blank">
+                                <FileText />
+                                PDF
+                            </a>
+                        </Button>
                         <Button
                             v-if="
                                 assessment.latest_payment_schedule &&
@@ -266,6 +282,19 @@ function money(amountCents: number): string {
                         </tbody>
                     </table>
                 </div>
+            </section>
+
+            <section
+                class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+            >
+                <h2 class="mb-2 text-sm font-semibold text-foreground">
+                    Assessment document gaps
+                </h2>
+                <ul class="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                    <li v-for="gap in assessmentDocumentGaps" :key="gap">
+                        {{ gap }}
+                    </li>
+                </ul>
             </section>
         </main>
     </AppLayout>
