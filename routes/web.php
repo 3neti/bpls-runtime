@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Staff\AssessmentPaymentScheduleController;
+use App\Http\Controllers\Staff\CollectionReceiptController;
 use App\Http\Controllers\Staff\PaymentScheduleCollectionController;
 use App\Http\Controllers\Staff\PermitApplicationAssessmentController;
 use App\Http\Controllers\Staff\PermitApplicationController;
@@ -26,6 +27,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('payment-schedules.show');
         Route::post('payment-schedules/{paymentSchedule}/collections', [PaymentScheduleCollectionController::class, 'store'])
             ->name('payment-schedules.collections.store');
+        Route::post('collections/{collection}/receipt', [CollectionReceiptController::class, 'store'])
+            ->name('collections.receipt.store');
     });
 });
 

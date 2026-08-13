@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, Banknote } from '@lucide/vue';
+import { ArrowLeft, Banknote, ReceiptText } from '@lucide/vue';
 import { computed } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { show as assessmentShow } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
+import { store as receiptStore } from '@/actions/App/Http/Controllers/Staff/CollectionReceiptController';
 import { store as collectionStore } from '@/actions/App/Http/Controllers/Staff/PaymentScheduleCollectionController';
 import type { BreadcrumbItem } from '@/types';
 
@@ -64,7 +65,18 @@ type TreasuryCollection = {
     reference_number: string | null;
     received_at: string;
     received_by: string | null;
+    receipt: Receipt | null;
     allocations: CollectionAllocation[];
+};
+
+type Receipt = {
+    id: number;
+    status: string;
+    numbering_authority: string;
+    receipt_number: string;
+    amount_cents: number;
+    issued_at: string;
+    issued_by: string | null;
 };
 
 type CollectionAllocation = {
@@ -86,6 +98,8 @@ const props = defineProps<{
     can: {
         record_collections: boolean;
         view_collections: boolean;
+        issue_receipts: boolean;
+        view_receipts: boolean;
     };
 }>();
 
@@ -217,7 +231,7 @@ function money(amountCents: number): string {
                         </h2>
                         <p class="text-xs text-muted-foreground">
                             Over-the-counter collection only. Receipt issuance is
-                            not part of this action.
+                            handled separately below.
                         </p>
                     </div>
                 </div>
@@ -357,7 +371,12 @@ function money(amountCents: number): string {
             </section>
 
             <section
-                v-if="can.view_collections || can.record_collections"
+                v-if="
+                    can.view_collections ||
+                    can.record_collections ||
+                    can.view_receipts ||
+                    can.issue_receipts
+                "
                 class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
             >
                 <div class="border-b px-4 py-3">
@@ -376,7 +395,10 @@ function money(amountCents: number): string {
                                 <th class="px-4 py-3 font-medium">Method</th>
                                 <th class="px-4 py-3 font-medium">Payer</th>
                                 <th class="px-4 py-3 font-medium">Reference</th>
-                                <th class="px-4 py-3 font-medium">Received by</th>
+                                <th class="px-4 py-3 font-medium">
+                                    Received by
+                                </th>
+                                <th class="px-4 py-3 font-medium">Receipt</th>
                                 <th class="px-4 py-3 text-right font-medium">
                                     Amount
                                 </th>
@@ -411,6 +433,84 @@ function money(amountCents: number): string {
                                 <td class="px-4 py-3 align-top">
                                     {{ collection.received_by ?? 'System' }}
                                 </td>
+                                <td class="px-4 py-3 align-top">
+                                    <div v-if="collection.receipt">
+                                        <Badge
+                                            variant="secondary"
+                                            class="capitalize"
+                                        >
+                                            {{
+                                                collection.receipt.status.replace(
+                                                    '_',
+                                                    ' ',
+                                                )
+                                            }}
+                                        </Badge>
+                                        <div class="mt-1 font-mono text-xs">
+                                            {{
+                                                collection.receipt
+                                                    .receipt_number
+                                            }}
+                                        </div>
+                                        <div
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            {{
+                                                collection.receipt
+                                                    .numbering_authority
+                                            }}
+                                            ·
+                                            {{
+                                                collection.receipt.issued_by ??
+                                                'System'
+                                            }}
+                                        </div>
+                                    </div>
+                                    <Form
+                                        v-else-if="
+                                            can.issue_receipts &&
+                                            collection.status ===
+                                                'pending_receipt'
+                                        "
+                                        v-bind="receiptStore.form(collection.id)"
+                                        v-slot="{ errors, processing }"
+                                        class="grid min-w-72 gap-2"
+                                    >
+                                        <Label
+                                            :for="`receipt_number_${collection.id}`"
+                                        >
+                                            Manual receipt number
+                                        </Label>
+                                        <div class="flex gap-2">
+                                            <Input
+                                                :id="`receipt_number_${collection.id}`"
+                                                name="receipt_number"
+                                                required
+                                            />
+                                            <Button
+                                                type="submit"
+                                                size="sm"
+                                                :disabled="processing"
+                                            >
+                                                <ReceiptText />
+                                                {{
+                                                    processing
+                                                        ? 'Issuing...'
+                                                        : 'Issue'
+                                                }}
+                                            </Button>
+                                        </div>
+                                        <InputError
+                                            :message="errors.receipt_number"
+                                        />
+                                    </Form>
+                                    <span
+                                        v-else
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        Pending receipt
+                                    </span>
+                                </td>
                                 <td
                                     class="px-4 py-3 text-right align-top font-medium"
                                 >
@@ -419,7 +519,7 @@ function money(amountCents: number): string {
                             </tr>
                             <tr v-if="paymentSchedule.collections.length === 0">
                                 <td
-                                    colspan="7"
+                                    colspan="8"
                                     class="px-4 py-10 text-center text-muted-foreground"
                                 >
                                     No collections have been recorded.

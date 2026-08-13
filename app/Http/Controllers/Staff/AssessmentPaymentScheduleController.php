@@ -31,6 +31,8 @@ class AssessmentPaymentScheduleController extends Controller
 
         $canRecordCollections = auth()->user()?->can(UserPermission::RecordCollections->value) ?? false;
         $canViewCollections = auth()->user()?->can(UserPermission::ViewCollections->value) ?? false;
+        $canIssueReceipts = auth()->user()?->can(UserPermission::IssueReceipts->value) ?? false;
+        $canViewReceipts = auth()->user()?->can(UserPermission::ViewReceipts->value) ?? false;
 
         $paymentSchedule->load([
             'preparedBy',
@@ -39,9 +41,15 @@ class AssessmentPaymentScheduleController extends Controller
             'lines.lineOfBusiness',
         ]);
 
-        if ($canRecordCollections || $canViewCollections) {
+        if ($canRecordCollections || $canViewCollections || $canIssueReceipts || $canViewReceipts) {
             $paymentSchedule->load([
-                'treasuryCollections' => fn ($query) => $query->with(['receivedBy', 'allocations.paymentScheduleLine'])->latest('received_at'),
+                'treasuryCollections' => fn ($query) => $query
+                    ->with(['receivedBy', 'allocations.paymentScheduleLine'])
+                    ->when(
+                        $canIssueReceipts || $canViewReceipts,
+                        fn ($query) => $query->with(['receipt.issuedBy']),
+                    )
+                    ->latest('received_at'),
             ]);
         }
 
@@ -56,6 +64,8 @@ class AssessmentPaymentScheduleController extends Controller
             'can' => [
                 'record_collections' => $canRecordCollections,
                 'view_collections' => $canViewCollections,
+                'issue_receipts' => $canIssueReceipts,
+                'view_receipts' => $canViewReceipts,
             ],
         ]);
     }
@@ -120,6 +130,15 @@ class AssessmentPaymentScheduleController extends Controller
                     'reference_number' => $collection->reference_number,
                     'received_at' => $collection->received_at->toIso8601String(),
                     'received_by' => $collection->receivedBy?->name,
+                    'receipt' => $collection->relationLoaded('receipt') && $collection->receipt !== null ? [
+                        'id' => $collection->receipt->id,
+                        'status' => $collection->receipt->status->value,
+                        'numbering_authority' => $collection->receipt->numbering_authority,
+                        'receipt_number' => $collection->receipt->receipt_number,
+                        'amount_cents' => $collection->receipt->amount_cents,
+                        'issued_at' => $collection->receipt->issued_at->toIso8601String(),
+                        'issued_by' => $collection->receipt->issuedBy?->name,
+                    ] : null,
                     'allocations' => $collection->allocations
                         ->values()
                         ->map(fn ($allocation): array => [

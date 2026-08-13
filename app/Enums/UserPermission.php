@@ -12,4 +12,6 @@ enum UserPermission: string
     case PreparePaymentSchedules = 'payment_schedules.prepare';
     case ViewCollections = 'collections.view';
     case RecordCollections = 'collections.record';
+    case ViewReceipts = 'receipts.view';
+    case IssueReceipts = 'receipts.issue';
 }
