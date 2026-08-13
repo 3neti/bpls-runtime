@@ -51,6 +51,11 @@ class Assessment extends Model
         return $this->hasMany(AssessmentLine::class);
     }
 
+    public function paymentSchedules(): HasMany
+    {
+        return $this->hasMany(PaymentSchedule::class);
+    }
+
     /**
      * @return array<string, string>
      */

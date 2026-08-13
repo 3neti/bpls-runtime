@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Staff\AssessmentPaymentScheduleController;
 use App\Http\Controllers\Staff\PermitApplicationAssessmentController;
 use App\Http\Controllers\Staff\PermitApplicationController;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +19,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.assessments.store');
         Route::get('assessments/{assessment}', [PermitApplicationAssessmentController::class, 'show'])
             ->name('permit-applications.assessments.show');
+        Route::post('assessments/{assessment}/payment-schedule', [AssessmentPaymentScheduleController::class, 'store'])
+            ->name('assessments.payment-schedule.store');
+        Route::get('payment-schedules/{paymentSchedule}', [AssessmentPaymentScheduleController::class, 'show'])
+            ->name('payment-schedules.show');
     });
 });
 

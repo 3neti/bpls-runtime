@@ -60,7 +60,10 @@ class PermitApplicationAssessmentController extends Controller
             'permitApplication.business.owner',
             'permitApplication.lines.lineOfBusiness',
             'lines.lineOfBusiness',
+            'paymentSchedules' => fn ($query) => $query->latest(),
         ]);
+
+        $latestPaymentSchedule = $assessment->paymentSchedules->first();
 
         return Inertia::render('permit-applications/Assessments/Show', [
             'assessment' => [
@@ -96,6 +99,19 @@ class PermitApplicationAssessmentController extends Controller
                         'legal_basis' => $line->legal_basis,
                         'rule_snapshot' => $line->rule_snapshot,
                     ]),
+                'latest_payment_schedule' => $latestPaymentSchedule === null ? null : [
+                    'id' => $latestPaymentSchedule->id,
+                    'sequence' => $latestPaymentSchedule->sequence,
+                    'status' => $latestPaymentSchedule->status->value,
+                    'payment_mode' => $latestPaymentSchedule->payment_mode,
+                    'total_amount_cents' => $latestPaymentSchedule->total_amount_cents,
+                    'paid_amount_cents' => $latestPaymentSchedule->paid_amount_cents,
+                    'created_at' => $latestPaymentSchedule->created_at?->toIso8601String(),
+                ],
+            ],
+            'can' => [
+                'prepare_payment_schedule' => auth()->user()?->can(UserPermission::PreparePaymentSchedules->value) ?? false,
+                'view_payment_schedules' => auth()->user()?->can(UserPermission::ViewPaymentSchedules->value) ?? false,
             ],
         ]);
     }

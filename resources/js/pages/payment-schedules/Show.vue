@@ -1,36 +1,41 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, CreditCard, ReceiptText } from '@lucide/vue';
+import { ArrowLeft } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
-import {
-    show as paymentScheduleShow,
-    store as paymentScheduleStore,
-} from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
+import { show as assessmentShow } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
+import { show } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import type { BreadcrumbItem } from '@/types';
 
-type AssessmentLine = {
+type PaymentScheduleLine = {
     id: number;
+    assessment_line_id: number | null;
     code: string;
     name: string;
     category: string;
-    calculation_type: string;
-    basis: string;
-    basis_amount_cents: number;
+    due_on: string | null;
+    status: string;
     amount_cents: number;
+    paid_amount_cents: number;
     line_of_business: string | null;
-    legal_basis: string | null;
 };
 
-type Assessment = {
+type PaymentSchedule = {
     id: number;
     sequence: number;
     status: string;
-    assessed_at: string | null;
-    assessed_by: string | null;
+    payment_mode: string;
+    due_on: string | null;
     total_amount_cents: number;
+    paid_amount_cents: number;
+    prepared_by: string | null;
+    created_at: string | null;
+    assessment: {
+        id: number;
+        sequence: number;
+        status: string;
+    };
     permit_application: {
         id: number;
         application_number: string | null;
@@ -40,34 +45,17 @@ type Assessment = {
         business_name: string;
         owner_name: string;
     };
-    lines: AssessmentLine[];
-    latest_payment_schedule: {
-        id: number;
-        sequence: number;
-        status: string;
-        payment_mode: string;
-        total_amount_cents: number;
-        paid_amount_cents: number;
-        created_at: string | null;
-    } | null;
+    lines: PaymentScheduleLine[];
 };
 
 const props = defineProps<{
-    assessment: Assessment;
-    can: {
-        prepare_payment_schedule: boolean;
-        view_payment_schedules: boolean;
-    };
+    paymentSchedule: PaymentSchedule;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Permit Assessments',
-        href: assessmentIndex(),
-    },
-    {
-        title: `Assessment #${props.assessment.sequence}`,
-        href: '#',
+        title: 'Payment Schedule',
+        href: show(props.paymentSchedule.id),
     },
 ];
 
@@ -81,7 +69,7 @@ function money(amountCents: number): string {
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbs">
-        <Head :title="`Assessment #${assessment.sequence}`" />
+        <Head :title="`Payment Schedule #${paymentSchedule.sequence}`" />
 
         <main class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
             <div class="flex flex-wrap items-start justify-between gap-3">
@@ -92,62 +80,35 @@ function money(amountCents: number): string {
                         size="sm"
                         class="w-fit px-0"
                     >
-                        <Link :href="assessmentIndex()">
+                        <Link :href="assessmentShow(paymentSchedule.assessment.id)">
                             <ArrowLeft />
                             Back
                         </Link>
                     </Button>
                     <h1 class="text-xl font-semibold text-foreground">
-                        Assessment #{{ assessment.sequence }}
+                        Payment Schedule #{{ paymentSchedule.sequence }}
                     </h1>
                     <p class="text-sm text-muted-foreground">
-                        {{ assessment.permit_application.business_name }} ·
-                        {{ assessment.permit_application.owner_name }}
+                        {{ paymentSchedule.permit_application.business_name }}
+                        · {{ paymentSchedule.permit_application.owner_name }}
                     </p>
                 </div>
                 <div class="text-right">
                     <div class="text-xs text-muted-foreground uppercase">
-                        Total assessed
+                        Balance due
                     </div>
                     <div class="text-2xl font-semibold">
-                        {{ money(assessment.total_amount_cents) }}
-                    </div>
-                    <div class="mt-3 flex justify-end gap-2">
-                        <Button
-                            v-if="
-                                assessment.latest_payment_schedule &&
-                                can.view_payment_schedules
-                            "
-                            as-child
-                            variant="outline"
-                            size="sm"
-                        >
-                            <Link
-                                :href="
-                                    paymentScheduleShow(
-                                        assessment.latest_payment_schedule.id,
-                                    )
-                                "
-                            >
-                                <ReceiptText />
-                                Payment Schedule
-                            </Link>
-                        </Button>
-                        <Link
-                            v-else-if="can.prepare_payment_schedule"
-                            :href="paymentScheduleStore(assessment.id)"
-                            method="post"
-                            as="button"
-                            :class="buttonVariants({ size: 'sm' })"
-                        >
-                            <CreditCard />
-                            Prepare Payment
-                        </Link>
+                        {{
+                            money(
+                                paymentSchedule.total_amount_cents -
+                                    paymentSchedule.paid_amount_cents,
+                            )
+                        }}
                     </div>
                 </div>
             </div>
 
-            <section class="grid gap-3 md:grid-cols-3">
+            <section class="grid gap-3 md:grid-cols-4">
                 <div
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
@@ -156,32 +117,25 @@ function money(amountCents: number): string {
                     </div>
                     <div class="mt-1 font-medium">
                         {{
-                            assessment.permit_application.application_number ??
-                            `Application #${assessment.permit_application.id}`
+                            paymentSchedule.permit_application
+                                .application_number ??
+                            `Application #${paymentSchedule.permit_application.id}`
                         }}
                     </div>
                     <div class="text-sm text-muted-foreground capitalize">
-                        {{ assessment.permit_application.type }} ·
-                        {{ assessment.permit_application.application_year }}
+                        {{ paymentSchedule.permit_application.type }} ·
+                        {{ paymentSchedule.permit_application.application_year }}
                     </div>
                 </div>
                 <div
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
                     <div class="text-xs text-muted-foreground uppercase">
-                        Status
+                        Schedule status
                     </div>
-                    <div class="mt-2 flex flex-wrap gap-2">
-                        <Badge variant="secondary" class="capitalize">{{
-                            assessment.status
-                        }}</Badge>
-                        <Badge variant="outline" class="capitalize">
-                            {{
-                                assessment.permit_application.status.replace(
-                                    '_',
-                                    ' ',
-                                )
-                            }}
+                    <div class="mt-2">
+                        <Badge variant="secondary" class="capitalize">
+                            {{ paymentSchedule.status.replace('_', ' ') }}
                         </Badge>
                     </div>
                 </div>
@@ -189,13 +143,26 @@ function money(amountCents: number): string {
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
                     <div class="text-xs text-muted-foreground uppercase">
-                        Assessed by
+                        Payment mode
                     </div>
-                    <div class="mt-1 font-medium">
-                        {{ assessment.assessed_by ?? 'System' }}
+                    <div class="mt-1 font-medium capitalize">
+                        {{ paymentSchedule.payment_mode }}
                     </div>
                     <div class="text-sm text-muted-foreground">
-                        {{ assessment.assessed_at ?? 'No timestamp' }}
+                        {{ paymentSchedule.due_on ?? 'No due date set' }}
+                    </div>
+                </div>
+                <div
+                    class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+                >
+                    <div class="text-xs text-muted-foreground uppercase">
+                        Prepared by
+                    </div>
+                    <div class="mt-1 font-medium">
+                        {{ paymentSchedule.prepared_by ?? 'System' }}
+                    </div>
+                    <div class="text-sm text-muted-foreground">
+                        {{ paymentSchedule.created_at ?? 'No timestamp' }}
                     </div>
                 </div>
             </section>
@@ -210,11 +177,11 @@ function money(amountCents: number): string {
                         >
                             <tr>
                                 <th class="px-4 py-3 font-medium">Code</th>
-                                <th class="px-4 py-3 font-medium">Fee / Tax</th>
+                                <th class="px-4 py-3 font-medium">Item</th>
                                 <th class="px-4 py-3 font-medium">Category</th>
-                                <th class="px-4 py-3 font-medium">Basis</th>
+                                <th class="px-4 py-3 font-medium">Status</th>
                                 <th class="px-4 py-3 text-right font-medium">
-                                    Basis amount
+                                    Paid
                                 </th>
                                 <th class="px-4 py-3 text-right font-medium">
                                     Amount
@@ -223,7 +190,7 @@ function money(amountCents: number): string {
                         </thead>
                         <tbody>
                             <tr
-                                v-for="line in assessment.lines"
+                                v-for="line in paymentSchedule.lines"
                                 :key="line.id"
                                 class="border-b last:border-b-0"
                             >
@@ -247,20 +214,26 @@ function money(amountCents: number): string {
                                     {{ line.category }}
                                 </td>
                                 <td class="px-4 py-3 align-top">
-                                    <div class="capitalize">
-                                        {{ line.calculation_type }}
-                                    </div>
-                                    <div class="text-xs text-muted-foreground">
-                                        {{ line.basis.replaceAll('_', ' ') }}
-                                    </div>
+                                    <Badge variant="outline" class="capitalize">
+                                        {{ line.status.replace('_', ' ') }}
+                                    </Badge>
                                 </td>
                                 <td class="px-4 py-3 text-right align-top">
-                                    {{ money(line.basis_amount_cents) }}
+                                    {{ money(line.paid_amount_cents) }}
                                 </td>
                                 <td
                                     class="px-4 py-3 text-right align-top font-medium"
                                 >
                                     {{ money(line.amount_cents) }}
+                                </td>
+                            </tr>
+                            <tr v-if="paymentSchedule.lines.length === 0">
+                                <td
+                                    colspan="6"
+                                    class="px-4 py-10 text-center text-muted-foreground"
+                                >
+                                    No payment schedule lines have been
+                                    prepared.
                                 </td>
                             </tr>
                         </tbody>
