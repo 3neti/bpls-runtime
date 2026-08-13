@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { show as assessmentShow } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
+import { show as receiptShow } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
 import { store as receiptStore } from '@/actions/App/Http/Controllers/Staff/CollectionReceiptController';
 import { store as collectionStore } from '@/actions/App/Http/Controllers/Staff/PaymentScheduleCollectionController';
 import type { BreadcrumbItem } from '@/types';
@@ -446,7 +447,20 @@ function money(amountCents: number): string {
                                                 )
                                             }}
                                         </Badge>
-                                        <div class="mt-1 font-mono text-xs">
+                                        <Link
+                                            v-if="can.view_receipts"
+                                            :href="receiptShow(collection.receipt.id)"
+                                            class="mt-1 block w-fit font-mono text-xs text-primary underline-offset-4 hover:underline"
+                                        >
+                                            {{
+                                                collection.receipt
+                                                    .receipt_number
+                                            }}
+                                        </Link>
+                                        <div
+                                            v-else
+                                            class="mt-1 font-mono text-xs"
+                                        >
                                             {{
                                                 collection.receipt
                                                     .receipt_number

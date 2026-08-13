@@ -5,6 +5,7 @@ use App\Http\Controllers\Staff\CollectionReceiptController;
 use App\Http\Controllers\Staff\PaymentScheduleCollectionController;
 use App\Http\Controllers\Staff\PermitApplicationAssessmentController;
 use App\Http\Controllers\Staff\PermitApplicationController;
+use App\Http\Controllers\Staff\ReceiptController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
@@ -29,6 +30,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('payment-schedules.collections.store');
         Route::post('collections/{collection}/receipt', [CollectionReceiptController::class, 'store'])
             ->name('collections.receipt.store');
+        Route::get('receipts/{receipt}', [ReceiptController::class, 'show'])
+            ->name('receipts.show');
     });
 });
 
