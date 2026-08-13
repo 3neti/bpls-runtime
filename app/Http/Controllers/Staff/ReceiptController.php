@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Staff;
 
+use App\Actions\RenderReceiptPdf;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Models\CollectionAllocation;
 use App\Models\Receipt;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -33,6 +35,17 @@ class ReceiptController extends Controller
                 'Void, reprint, and reconciliation policy remain unresolved.',
             ],
         ]);
+    }
+
+    public function pdf(Receipt $receipt, RenderReceiptPdf $renderReceiptPdf): HttpResponse
+    {
+        Gate::authorize(UserPermission::ViewReceipts->value);
+
+        return response($renderReceiptPdf->handle($receipt))
+            ->withHeaders([
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="'.$this->receiptFilename($receipt).'"',
+            ]);
     }
 
     /**
@@ -110,5 +123,16 @@ class ReceiptController extends Controller
                     'amount_cents' => $allocation->amount_cents,
                 ]),
         ];
+    }
+
+    private function receiptFilename(Receipt $receipt): string
+    {
+        $safeReceiptNumber = str($receipt->receipt_number)
+            ->replaceMatches('/[^A-Za-z0-9._-]+/', '-')
+            ->trim('-')
+            ->lower()
+            ->toString();
+
+        return ($safeReceiptNumber === '' ? 'receipt-'.$receipt->id : $safeReceiptNumber).'.pdf';
     }
 }

@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, Printer } from '@lucide/vue';
+import { ArrowLeft, FileText, Printer } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
-import { show as receiptShow } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
+import {
+    pdf as receiptPdf,
+    show as receiptShow,
+} from '@/actions/App/Http/Controllers/Staff/ReceiptController';
 import type { BreadcrumbItem } from '@/types';
 
 type ReceiptAllocation = {
@@ -130,10 +133,18 @@ function printReceipt(): void {
                         {{ receipt.business.owner.name }}
                     </p>
                 </div>
-                <Button type="button" @click="printReceipt">
-                    <Printer />
-                    Print
-                </Button>
+                <div class="flex flex-wrap gap-2">
+                    <Button as-child variant="outline">
+                        <a :href="receiptPdf.url(receipt.id)" target="_blank">
+                            <FileText />
+                            PDF
+                        </a>
+                    </Button>
+                    <Button type="button" @click="printReceipt">
+                        <Printer />
+                        Print
+                    </Button>
+                </div>
             </div>
 
             <section

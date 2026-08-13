@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\RenderReceiptPdf;
 use App\Enums\FeeRuleCategory;
 use App\Enums\PaymentScheduleLineStatus;
 use App\Enums\PaymentScheduleStatus;
@@ -24,6 +25,94 @@ test('staff users with view receipt permission can view receipt detail evidence'
         UserPermission::ViewReceipts,
     ]);
 
+    $receipt = receiptDocumentFixture();
+
+    $this->actingAs($user)
+        ->get(route('staff.receipts.show', $receipt))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('receipts/Show')
+            ->where('receipt.id', $receipt->id)
+            ->where('receipt.receipt_number', 'LOCAL-OR-001')
+            ->where('receipt.issued_by', 'Local Assessor')
+            ->where('receipt.collection.payer_name', 'Codex Browser Payer')
+            ->where('receipt.collection.received_by', 'Cashier One')
+            ->where('receipt.payment_schedule.id', $receipt->payment_schedule_id)
+            ->where('receipt.permit_application.application_number', 'LOCAL-PERMIT')
+            ->where('receipt.business.name', 'Codex Quantity Store')
+            ->where('receipt.business.owner.name', 'Codex Owner')
+            ->where('receipt.allocations.0.code', 'MAYOR-PERMIT')
+            ->where('receipt.allocations.0.amount_cents', 12_500)
+            ->where('policyGaps.0', 'Automatic receipt numbering authority remains unresolved.')
+            ->where('policyGaps.1', 'This is a print-friendly receipt view, not the final official PDF layout.')
+        );
+});
+
+test('staff users with view receipt permission can open a receipt pdf artifact', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewReceipts,
+    ]);
+
+    $receipt = receiptDocumentFixture();
+
+    $response = $this->actingAs($user)
+        ->get(route('staff.receipts.pdf', $receipt))
+        ->assertSuccessful()
+        ->assertHeader('Content-Type', 'application/pdf')
+        ->assertHeader('Content-Disposition', 'inline; filename="local-or-001.pdf"');
+
+    $pdf = $response->getContent();
+
+    expect($pdf)
+        ->toStartWith('%PDF-1.4')
+        ->toContain('Business Permit Receipt')
+        ->toContain('LOCAL-OR-001')
+        ->toContain('PHP 125.00')
+        ->toContain('Codex Quantity Store')
+        ->toContain('Codex Browser Payer')
+        ->toContain('MAYOR-PERMIT')
+        ->toContain('Automatic receipt numbering authority remains unresolved.')
+        ->toContain('Void, reprint, and reconciliation policy remain unresolved.')
+        ->and(pdfPageCount($pdf))->toBe(1);
+});
+
+test('receipt pdf output is deterministic for the same persisted receipt facts', function () {
+    $receipt = receiptDocumentFixture();
+
+    $renderer = app(RenderReceiptPdf::class);
+
+    expect($renderer->handle($receipt))->toBe($renderer->handle($receipt->fresh()));
+});
+
+test('staff users without view receipt permission cannot view receipt details', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewCollections,
+    ]);
+
+    $receipt = Receipt::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('staff.receipts.show', $receipt))
+        ->assertForbidden();
+});
+
+test('staff users without view receipt permission cannot open receipt pdf artifacts', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewCollections,
+    ]);
+
+    $receipt = Receipt::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('staff.receipts.pdf', $receipt))
+        ->assertForbidden();
+});
+
+function receiptDocumentFixture(): Receipt
+{
     $issuedBy = User::factory()->create(['name' => 'Local Assessor']);
     $receivedBy = User::factory()->create(['name' => 'Cashier One']);
     $owner = BusinessOwner::factory()->create([
@@ -84,7 +173,7 @@ test('staff users with view receipt permission can view receipt detail evidence'
             'amount_cents' => 12_500,
         ]);
 
-    $receipt = Receipt::factory()
+    return Receipt::factory()
         ->for($collection)
         ->for($paymentSchedule)
         ->for($permitApplication)
@@ -94,6 +183,7 @@ test('staff users with view receipt permission can view receipt detail evidence'
             'status' => ReceiptStatus::Issued,
             'receipt_number' => 'LOCAL-OR-001',
             'amount_cents' => 12_500,
+            'issued_at' => now()->startOfSecond(),
             'remarks' => 'Manual receipt observed during local verification.',
             'source_snapshot' => [
                 'policy' => [
@@ -102,37 +192,11 @@ test('staff users with view receipt permission can view receipt detail evidence'
                 ],
             ],
         ]);
+}
 
-    $this->actingAs($user)
-        ->get(route('staff.receipts.show', $receipt))
-        ->assertOk()
-        ->assertInertia(fn (Assert $page) => $page
-            ->component('receipts/Show')
-            ->where('receipt.id', $receipt->id)
-            ->where('receipt.receipt_number', 'LOCAL-OR-001')
-            ->where('receipt.issued_by', 'Local Assessor')
-            ->where('receipt.collection.payer_name', 'Codex Browser Payer')
-            ->where('receipt.collection.received_by', 'Cashier One')
-            ->where('receipt.payment_schedule.id', $paymentSchedule->id)
-            ->where('receipt.permit_application.application_number', 'LOCAL-PERMIT')
-            ->where('receipt.business.name', 'Codex Quantity Store')
-            ->where('receipt.business.owner.name', 'Codex Owner')
-            ->where('receipt.allocations.0.code', 'MAYOR-PERMIT')
-            ->where('receipt.allocations.0.amount_cents', 12_500)
-            ->where('policyGaps.0', 'Automatic receipt numbering authority remains unresolved.')
-            ->where('policyGaps.1', 'This is a print-friendly receipt view, not the final official PDF layout.')
-        );
-});
+function pdfPageCount(string $pdf): int
+{
+    preg_match_all('/\/Type \/Page\b/', $pdf, $matches);
 
-test('staff users without view receipt permission cannot view receipt details', function () {
-    $user = userWithPermissions([
-        UserPermission::AccessStaff,
-        UserPermission::ViewCollections,
-    ]);
-
-    $receipt = Receipt::factory()->create();
-
-    $this->actingAs($user)
-        ->get(route('staff.receipts.show', $receipt))
-        ->assertForbidden();
-});
+    return count($matches[0]);
+}

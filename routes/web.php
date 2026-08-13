@@ -32,6 +32,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('collections.receipt.store');
         Route::get('receipts/{receipt}', [ReceiptController::class, 'show'])
             ->name('receipts.show');
+        Route::get('receipts/{receipt}/pdf', [ReceiptController::class, 'pdf'])
+            ->name('receipts.pdf');
     });
 });
 
