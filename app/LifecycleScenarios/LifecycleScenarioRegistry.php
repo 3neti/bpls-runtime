@@ -12,6 +12,40 @@ final class LifecycleScenarioRegistry
     public function all(): array
     {
         return [
+            'manual_collection_receipt_visibility' => new LifecycleScenarioDefinition(
+                key: 'manual_collection_receipt_visibility',
+                label: 'Manual collection receipt visibility',
+                mode: 'manual_collection_receipt_visibility',
+                risk: 'local transactional',
+                actors: [
+                    'operator' => 'primary_operator',
+                    'recipient' => 'sample_recipient',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'payment_schedule_status' => 'paid',
+                    'collection_status' => 'receipted',
+                    'receipt_status' => 'issued',
+                    'numbering_authority' => 'manual',
+                    'external_calls' => 0,
+                    'irreversible_actions' => false,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
             'permit_application_pending_payment_visibility' => new LifecycleScenarioDefinition(
                 key: 'permit_application_pending_payment_visibility',
                 label: 'Permit application pending payment visibility',

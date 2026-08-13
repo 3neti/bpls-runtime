@@ -1,11 +1,14 @@
 <?php
 
 use App\Enums\PermitApplicationStatus;
+use App\Enums\ReceiptStatus;
 use App\Enums\StoryboardExportFormat;
 use App\Enums\StoryboardExportStatus;
+use App\Enums\TreasuryCollectionStatus;
 use App\Enums\UserPermission;
 use App\Jobs\GenerateStoryboardVideo;
 use App\LifecycleScenarios\LifecycleScenarioRegistry;
+use App\LifecycleScenarios\ManualCollectionReceiptVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationCancelledVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationPendingPaymentVisibilityScenario;
 use App\LifecycleScenarios\ScenarioActorResolver;
@@ -13,8 +16,10 @@ use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\LifecycleScenarios\StoryboardTerminalStateVisibilityScenario;
 use App\Models\Permission;
 use App\Models\PermitApplication;
+use App\Models\Receipt;
 use App\Models\Role;
 use App\Models\Storyboard;
+use App\Models\TreasuryCollection;
 use App\Models\User;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -28,6 +33,19 @@ test('scenario registry discovers the storyboard terminal visibility scenario', 
         ->risk->toBe('local transactional')
         ->and($scenario->safety['external_integrations'])->toBeFalse()
         ->and($scenario->safety['irreversible_actions'])->toBeFalse();
+});
+
+test('scenario registry discovers the manual collection receipt visibility scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('manual_collection_receipt_visibility');
+
+    expect($scenario)
+        ->key->toBe('manual_collection_receipt_visibility')
+        ->label->toBe('Manual collection receipt visibility')
+        ->risk->toBe('local transactional')
+        ->and($scenario->expectations['payment_schedule_status'])->toBe('paid')
+        ->and($scenario->expectations['collection_status'])->toBe('receipted')
+        ->and($scenario->expectations['receipt_status'])->toBe('issued')
+        ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
 test('scenario registry discovers the permit application cancelled visibility scenario', function () {
@@ -182,6 +200,73 @@ test('permit application cancellation scenario executes real domain action and i
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
 });
 
+test('manual collection receipt scenario executes treasury actions idempotently', function () {
+    Storage::fake('local');
+
+    $user = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('manual_collection_receipt_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'manual-receipt-test-001');
+    $runner = app(ManualCollectionReceiptVisibilityScenario::class);
+
+    $firstManifest = $runner->prepare($scenario, 'manual-receipt-test-001', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+    $secondManifest = $runner->prepare($scenario, 'manual-receipt-test-001', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+
+    $receipt = Receipt::query()->findOrFail($firstManifest['resources']['record_id']);
+    $collection = TreasuryCollection::query()->findOrFail($firstManifest['resources']['collection_id']);
+
+    expect($firstManifest['resources']['record_type'])->toBe('receipt')
+        ->and($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
+        ->and($firstManifest['resources']['collection_id'])->toBe($secondManifest['resources']['collection_id'])
+        ->and(Receipt::query()->count())->toBe(1)
+        ->and(TreasuryCollection::query()->count())->toBe(1)
+        ->and($receipt->status)->toBe(ReceiptStatus::Issued)
+        ->and($receipt->numbering_authority)->toBe('manual')
+        ->and($collection->status)->toBe(TreasuryCollectionStatus::Receipted)
+        ->and($artifactStore->exists('terminal/prepare.json'))->toBeTrue()
+        ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
+});
+
+test('manual collection receipt scenario audit compares browser evidence with canonical treasury state', function () {
+    Storage::fake('local');
+
+    $user = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('manual_collection_receipt_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'manual-receipt-test-002');
+    $runner = app(ManualCollectionReceiptVisibilityScenario::class);
+
+    $manifest = $runner->prepare($scenario, 'manual-receipt-test-002', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+    $artifactStore->putJson('browser/report.json', [
+        'result' => [
+            'passed' => true,
+        ],
+        'checks' => [],
+        'artifacts' => [
+            'screenshots' => [
+                '01-payment-schedule' => 'browser/screenshots/01-payment-schedule.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($manifest, $artifactStore);
+
+    expect($audited['result'])
+        ->terminal->toBe('passed')
+        ->browser->toBe('passed')
+        ->audit->toBe('passed')
+        ->passed->toBeTrue()
+        ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
+});
+
 test('permit application cancellation scenario audit compares browser evidence with canonical state', function () {
     Storage::fake('local');
 
@@ -301,6 +386,10 @@ function configuredScenarioUser(string $email): User
         UserPermission::AssessPermitApplications,
         UserPermission::PreparePaymentSchedules,
         UserPermission::ViewPaymentSchedules,
+        UserPermission::RecordCollections,
+        UserPermission::ViewCollections,
+        UserPermission::IssueReceipts,
+        UserPermission::ViewReceipts,
         UserPermission::UpdatePermitApplicationStatus,
         UserPermission::ManageStoryboards,
     ])->map(fn (UserPermission $permission): int => Permission::factory()->create([

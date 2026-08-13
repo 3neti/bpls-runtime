@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\LifecycleScenarios\LifecycleScenarioRegistry;
+use App\LifecycleScenarios\ManualCollectionReceiptVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationCancelledVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationPendingPaymentVisibilityScenario;
 use App\LifecycleScenarios\ScenarioActorResolver;
@@ -28,6 +29,7 @@ class LifecycleScenarioCommand extends Command
     public function handle(
         LifecycleScenarioRegistry $registry,
         ScenarioActorResolver $actorResolver,
+        ManualCollectionReceiptVisibilityScenario $manualCollectionReceiptScenario,
         PermitApplicationCancelledVisibilityScenario $permitApplicationCancelledScenario,
         PermitApplicationPendingPaymentVisibilityScenario $permitApplicationPendingPaymentScenario,
         StoryboardTerminalStateVisibilityScenario $storyboardScenario,
@@ -45,6 +47,7 @@ class LifecycleScenarioCommand extends Command
             if (in_array($phase, ['prepare', 'all'], true)) {
                 $actors = $actorResolver->resolve($scenario);
                 $manifest = match ($scenario->key) {
+                    'manual_collection_receipt_visibility' => $manualCollectionReceiptScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'permit_application_cancelled_visibility' => $permitApplicationCancelledScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'permit_application_pending_payment_visibility' => $permitApplicationPendingPaymentScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'storyboard_terminal_state_visibility' => $storyboardScenario->prepare($scenario, $runId, $actors, $artifactStore),
@@ -60,6 +63,7 @@ class LifecycleScenarioCommand extends Command
 
             if (in_array($phase, ['audit', 'all'], true)) {
                 $manifest = match ($scenario->key) {
+                    'manual_collection_receipt_visibility' => $manualCollectionReceiptScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'permit_application_cancelled_visibility' => $permitApplicationCancelledScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'permit_application_pending_payment_visibility' => $permitApplicationPendingPaymentScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'storyboard_terminal_state_visibility' => $storyboardScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),

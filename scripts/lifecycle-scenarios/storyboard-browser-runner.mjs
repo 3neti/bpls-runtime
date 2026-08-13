@@ -20,6 +20,7 @@ if (manifest.schema_version !== 'application.lifecycle-evidence.v1') {
 }
 
 const supportedScenarios = [
+    'manual_collection_receipt_visibility',
     'storyboard_terminal_state_visibility',
     'permit_application_cancelled_visibility',
     'permit_application_pending_payment_visibility',
@@ -87,6 +88,13 @@ try {
         await inspectPendingPaymentPermitApplicationDetail(page, baseUrl);
         await inspectPendingPaymentScheduleDetail(page, baseUrl);
         await inspectPendingPaymentPermitApplicationMobile(page, baseUrl);
+    }
+
+    if (manifest.scenario.key === 'manual_collection_receipt_visibility') {
+        await inspectManualReceiptPaymentSchedule(page, baseUrl);
+        await inspectManualReceiptDetail(page, baseUrl);
+        await inspectManualReceiptPdf(page, baseUrl);
+        await inspectManualReceiptMobile(page, baseUrl);
     }
 } catch (error) {
     checks.push(check('browser-exception', 'Browser runner completed without exception', true, false, {
@@ -275,6 +283,64 @@ async function inspectPendingPaymentPermitApplicationMobile(targetPage, targetBa
     checks.push(check('mobile-pending-payment-visible', 'Mobile detail keeps pending payment state visible', true, pendingPaymentVisible));
     checks.push(check('mobile-no-horizontal-overflow', 'Mobile detail has no horizontal overflow', false, horizontalOverflow));
     await screenshot(targetPage, '04-mobile-detail', 'browser/screenshots/04-mobile-detail.png');
+}
+
+async function inspectManualReceiptPaymentSchedule(targetPage, targetBaseUrl) {
+    const scheduleUrl = `${targetBaseUrl}${manifest.resources.payment_schedule_url}`;
+    await targetPage.goto(scheduleUrl, { waitUntil: 'networkidle' });
+    const applicationVisible = await targetPage.getByText(manifest.resources.application_number, { exact: false }).first().isVisible().catch(() => false);
+    const paidVisible = await targetPage.getByText('paid', { exact: false }).first().isVisible().catch(() => false);
+    const receiptedVisible = await targetPage.getByText('receipted', { exact: false }).first().isVisible().catch(() => false);
+    const receiptNumberVisible = await targetPage.getByText(manifest.resources.public_reference, { exact: false }).first().isVisible().catch(() => false);
+    const balancePaidVisible = await targetPage.getByText('₱0.00', { exact: false }).first().isVisible().catch(() => false);
+
+    checks.push(check('schedule-application-visible', 'Payment schedule shows exact permit application', true, applicationVisible, { url: scheduleUrl }));
+    checks.push(check('schedule-paid-visible', 'Payment schedule shows paid status and zero balance', true, paidVisible && balancePaidVisible));
+    checks.push(check('schedule-receipted-visible', 'Collection history shows receipted status', true, receiptedVisible));
+    checks.push(check('schedule-receipt-number-visible', 'Collection history links the exact manual receipt', true, receiptNumberVisible));
+    await screenshot(targetPage, '01-payment-schedule', 'browser/screenshots/01-payment-schedule.png');
+}
+
+async function inspectManualReceiptDetail(targetPage, targetBaseUrl) {
+    const receiptUrl = `${targetBaseUrl}${manifest.resources.receipt_url}`;
+    await targetPage.goto(receiptUrl, { waitUntil: 'networkidle' });
+    const receiptVisible = await targetPage.getByText(manifest.resources.public_reference, { exact: false }).first().isVisible().catch(() => false);
+    const applicationVisible = await targetPage.getByText(manifest.resources.application_number, { exact: false }).first().isVisible().catch(() => false);
+    const issuedVisible = await targetPage.getByText('issued', { exact: false }).first().isVisible().catch(() => false);
+    const manualVisible = await targetPage.getByText('manual numbering', { exact: false }).first().isVisible().catch(() => false);
+    const policyGapVisible = await targetPage.getByText('Automatic receipt numbering authority remains unresolved.', { exact: true }).first().isVisible().catch(() => false);
+
+    checks.push(check('receipt-number-visible', 'Receipt detail shows exact manual receipt number', true, receiptVisible, { url: receiptUrl }));
+    checks.push(check('receipt-application-visible', 'Receipt detail shows exact permit application', true, applicationVisible));
+    checks.push(check('receipt-issued-manual-visible', 'Receipt detail shows issued status and manual numbering', true, issuedVisible && manualVisible));
+    checks.push(check('receipt-policy-gap-visible', 'Receipt detail keeps unresolved numbering policy visible', true, policyGapVisible));
+    await screenshot(targetPage, '02-receipt-detail', 'browser/screenshots/02-receipt-detail.png');
+}
+
+async function inspectManualReceiptPdf(targetPage, targetBaseUrl) {
+    const pdfResponse = await targetPage.request.get(`${targetBaseUrl}${manifest.resources.receipt_pdf_url}`);
+    const contentType = pdfResponse.headers()['content-type'] ?? '';
+    const body = await pdfResponse.text();
+    const pdfVisible = pdfResponse.ok() && contentType.includes('application/pdf') && body.startsWith('%PDF-1.4') && body.includes(manifest.resources.public_reference);
+
+    checks.push(check('receipt-pdf-available', 'Receipt PDF route returns the exact generated receipt artifact', true, pdfVisible, {
+        url: `${targetBaseUrl}${manifest.resources.receipt_pdf_url}`,
+        status: pdfResponse.status(),
+        content_type: contentType,
+    }));
+}
+
+async function inspectManualReceiptMobile(targetPage, targetBaseUrl) {
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(`${targetBaseUrl}${manifest.resources.receipt_url}`, { waitUntil: 'networkidle' });
+    const receiptVisible = await targetPage.getByText(manifest.resources.public_reference, { exact: false }).first().isVisible().catch(() => false);
+    const issuedVisible = await targetPage.getByText('issued', { exact: false }).first().isVisible().catch(() => false);
+    const horizontalOverflow = await targetPage.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+
+    checks.push(check('mobile-receipt-visible', 'Mobile receipt keeps exact receipt number visible', true, receiptVisible));
+    checks.push(check('mobile-issued-visible', 'Mobile receipt keeps issued status visible', true, issuedVisible));
+    checks.push(check('mobile-no-horizontal-overflow', 'Mobile receipt has no horizontal overflow', false, horizontalOverflow));
+    await screenshot(targetPage, '03-mobile-receipt', 'browser/screenshots/03-mobile-receipt.png');
 }
 
 async function screenshot(targetPage, label, relativePath) {
