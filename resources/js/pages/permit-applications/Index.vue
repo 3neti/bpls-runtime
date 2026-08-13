@@ -1,23 +1,12 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { Calculator, Eye } from '@lucide/vue';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Calculator, Eye, Plus } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
+import { Button, buttonVariants } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
-import {
-    index as assessmentIndex,
-    show,
-    store,
-} from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
+import { create, index, show } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
+import { store as assess } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import type { BreadcrumbItem } from '@/types';
-
-type LatestAssessment = {
-    id: number;
-    sequence: number;
-    status: string;
-    total_amount_cents: number;
-    assessed_at: string | null;
-};
 
 type PermitApplicationRow = {
     id: number;
@@ -25,10 +14,28 @@ type PermitApplicationRow = {
     type: string;
     status: string;
     application_year: number;
-    business_name: string;
-    owner_name: string;
-    line_count: number;
-    latest_assessment: LatestAssessment | null;
+    business: {
+        name: string;
+        owner: {
+            name: string;
+        };
+    };
+    lines: {
+        id: number;
+        line_of_business: {
+            name: string | null;
+        };
+        declared_gross_sales_cents: number;
+        capital_investment_cents: number;
+        quantity: number;
+    }[];
+    latest_assessment: {
+        id: number;
+        sequence: number;
+        status: string;
+        total_amount_cents: number;
+        assessed_at: string | null;
+    } | null;
 };
 
 defineProps<{
@@ -36,14 +43,15 @@ defineProps<{
         data: PermitApplicationRow[];
     };
     can: {
+        create_permit_applications: boolean;
         assess_permit_applications: boolean;
     };
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Permit Assessments',
-        href: assessmentIndex(),
+        title: 'Permit Applications',
+        href: index(),
     },
 ];
 
@@ -57,28 +65,32 @@ function money(amountCents: number): string {
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbs">
-        <Head title="Permit Assessments" />
+        <Head title="Permit Applications" />
 
         <main class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
-            <section class="flex flex-col gap-2">
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <h1 class="text-xl font-semibold text-foreground">
-                            Permit Assessments
-                        </h1>
-                        <p class="text-sm text-muted-foreground">
-                            Review permit applications and compute assessment
-                            snapshots.
-                        </p>
-                    </div>
+            <section class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h1 class="text-xl font-semibold text-foreground">
+                        Permit Applications
+                    </h1>
+                    <p class="text-sm text-muted-foreground">
+                        Staff intake and review surface for business permit
+                        applications.
+                    </p>
                 </div>
+                <Button v-if="can.create_permit_applications" as-child>
+                    <Link :href="create()">
+                        <Plus />
+                        New Application
+                    </Link>
+                </Button>
             </section>
 
             <section
                 class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
             >
                 <div class="overflow-x-auto">
-                    <table class="w-full min-w-[860px] text-sm">
+                    <table class="w-full min-w-[920px] text-sm">
                         <thead
                             class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
                         >
@@ -90,10 +102,10 @@ function money(amountCents: number): string {
                                 <th class="px-4 py-3 font-medium">Type</th>
                                 <th class="px-4 py-3 font-medium">Status</th>
                                 <th class="px-4 py-3 text-right font-medium">
-                                    Lines
+                                    Activity
                                 </th>
                                 <th class="px-4 py-3 text-right font-medium">
-                                    Latest assessment
+                                    Assessment
                                 </th>
                                 <th class="px-4 py-3 text-right font-medium">
                                     Actions
@@ -119,10 +131,13 @@ function money(amountCents: number): string {
                                 </td>
                                 <td class="px-4 py-3 align-top">
                                     <div class="font-medium">
-                                        {{ permitApplication.business_name }}
+                                        {{ permitApplication.business.name }}
                                     </div>
                                     <div class="text-xs text-muted-foreground">
-                                        {{ permitApplication.owner_name }}
+                                        {{
+                                            permitApplication.business.owner
+                                                .name
+                                        }}
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 align-top capitalize">
@@ -142,7 +157,22 @@ function money(amountCents: number): string {
                                     </Badge>
                                 </td>
                                 <td class="px-4 py-3 text-right align-top">
-                                    {{ permitApplication.line_count }}
+                                    <div>
+                                        {{ permitApplication.lines.length }}
+                                        line
+                                    </div>
+                                    <div
+                                        v-if="permitApplication.lines[0]"
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        {{
+                                            money(
+                                                permitApplication.lines[0]
+                                                    .declared_gross_sales_cents,
+                                            )
+                                        }}
+                                        gross
+                                    </div>
                                 </td>
                                 <td class="px-4 py-3 text-right align-top">
                                     <div
@@ -176,20 +206,13 @@ function money(amountCents: number): string {
                                 <td class="px-4 py-3 align-top">
                                     <div class="flex justify-end gap-2">
                                         <Button
-                                            v-if="
-                                                permitApplication.latest_assessment
-                                            "
                                             as-child
                                             variant="outline"
                                             size="sm"
                                         >
                                             <Link
                                                 :href="
-                                                    show(
-                                                        permitApplication
-                                                            .latest_assessment
-                                                            .id,
-                                                    )
+                                                    show(permitApplication.id)
                                                 "
                                             >
                                                 <Eye />
@@ -198,7 +221,7 @@ function money(amountCents: number): string {
                                         </Button>
                                         <Link
                                             v-if="can.assess_permit_applications"
-                                            :href="store(permitApplication.id)"
+                                            :href="assess(permitApplication.id)"
                                             method="post"
                                             as="button"
                                             :class="
@@ -216,8 +239,7 @@ function money(amountCents: number): string {
                                     colspan="7"
                                     class="px-4 py-10 text-center text-muted-foreground"
                                 >
-                                    No permit applications are available for
-                                    assessment.
+                                    No permit applications have been recorded.
                                 </td>
                             </tr>
                         </tbody>

@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Staff;
 
 use App\Actions\CreateAssessmentForPermitApplication;
+use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Models\Assessment;
 use App\Models\PermitApplication;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -14,6 +16,8 @@ class PermitApplicationAssessmentController extends Controller
 {
     public function index(): Response
     {
+        Gate::authorize(UserPermission::ViewPermitApplications->value);
+
         $permitApplications = PermitApplication::query()
             ->with(['business.owner', 'lines.lineOfBusiness', 'assessments' => fn ($query) => $query->latest()])
             ->latest()
@@ -32,11 +36,16 @@ class PermitApplicationAssessmentController extends Controller
 
         return Inertia::render('permit-applications/Assessments/Index', [
             'permitApplications' => $permitApplications,
+            'can' => [
+                'assess_permit_applications' => auth()->user()?->can(UserPermission::AssessPermitApplications->value) ?? false,
+            ],
         ]);
     }
 
     public function store(PermitApplication $permitApplication, CreateAssessmentForPermitApplication $createAssessment): RedirectResponse
     {
+        Gate::authorize(UserPermission::AssessPermitApplications->value);
+
         $assessment = $createAssessment->handle($permitApplication, auth()->user());
 
         return to_route('staff.permit-applications.assessments.show', $assessment);
@@ -44,6 +53,8 @@ class PermitApplicationAssessmentController extends Controller
 
     public function show(Assessment $assessment): Response
     {
+        Gate::authorize(UserPermission::ViewPermitApplications->value);
+
         $assessment->load([
             'assessedBy',
             'permitApplication.business.owner',

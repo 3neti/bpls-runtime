@@ -2,12 +2,12 @@
 
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleScope;
+use App\Enums\UserPermission;
 use App\Models\Assessment;
 use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
-use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('guests are redirected away from staff permit assessments', function () {
@@ -15,8 +15,18 @@ test('guests are redirected away from staff permit assessments', function () {
         ->assertRedirect(route('login'));
 });
 
-test('authenticated users can view the staff permit assessment index', function () {
-    $user = User::factory()->create();
+test('users without staff access cannot view the staff permit assessment index', function () {
+    $this->actingAs(userWithPermissions([]))
+        ->get(route('staff.permit-applications.assessments.index'))
+        ->assertForbidden();
+});
+
+test('staff users with view permission can view the staff permit assessment index', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+    ]);
+
     $application = PermitApplication::factory()->create([
         'application_number' => 'APP-2026-00001',
     ]);
@@ -34,11 +44,16 @@ test('authenticated users can view the staff permit assessment index', function 
             ->where('permitApplications.data.0.application_number', 'APP-2026-00001')
             ->where('permitApplications.data.0.line_count', 1)
             ->where('permitApplications.data.0.latest_assessment', null)
+            ->where('can.assess_permit_applications', false)
         );
 });
 
-test('authenticated users can compute an assessment from the staff surface', function () {
-    $user = User::factory()->create();
+test('staff users with assess permission can compute an assessment from the staff surface', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::AssessPermitApplications,
+    ]);
+
     $application = PermitApplication::factory()->create([
         'application_year' => 2026,
     ]);
@@ -61,8 +76,26 @@ test('authenticated users can compute an assessment from the staff surface', fun
     expect($assessment->total_amount_cents)->toBe(25_000);
 });
 
-test('authenticated users can review a computed assessment', function () {
-    $user = User::factory()->create();
+test('staff users without assess permission cannot compute an assessment', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+    ]);
+
+    $application = PermitApplication::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('staff.permit-applications.assessments.store', $application))
+        ->assertForbidden();
+});
+
+test('staff users with view permission can review a computed assessment', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+        UserPermission::AssessPermitApplications,
+    ]);
+
     $application = PermitApplication::factory()->create([
         'application_year' => 2026,
     ]);

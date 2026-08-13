@@ -1,5 +1,10 @@
 <?php
 
+use App\Enums\UserPermission;
+use App\Enums\UserRole;
+use App\Models\Permission;
+use App\Models\Role;
+use App\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\TestCase;
 
@@ -47,4 +52,26 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * @param  array<int, UserPermission|string>  $permissions
+ */
+function userWithPermissions(array $permissions, UserRole $roleCode = UserRole::Bplo): User
+{
+    $role = Role::factory()->create([
+        'name' => str($roleCode->value)->replace('_', ' ')->title()->toString(),
+        'code' => $roleCode->value,
+    ]);
+
+    $role->permissions()->sync(collect($permissions)
+        ->map(fn (\App\Enums\UserPermission|string $permission) => Permission::factory()->create([
+            'name' => str($permission instanceof UserPermission ? $permission->value : $permission)->replace('.', ' ')->title()->toString(),
+            'code' => $permission instanceof UserPermission ? $permission->value : $permission,
+        ])->id)
+        ->all());
+
+    return User::factory()->create([
+        'role_id' => $role->id,
+    ]);
 }
