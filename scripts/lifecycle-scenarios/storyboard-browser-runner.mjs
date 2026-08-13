@@ -93,6 +93,7 @@ try {
     if (manifest.scenario.key === 'manual_collection_receipt_visibility') {
         await inspectManualReceiptPaymentSchedule(page, baseUrl);
         await inspectManualReceiptDetail(page, baseUrl);
+        await inspectManualReceiptPermitReleaseBoundary(page, baseUrl);
         await inspectManualReceiptPdf(page, baseUrl);
         await inspectManualReceiptMobile(page, baseUrl);
     }
@@ -317,6 +318,23 @@ async function inspectManualReceiptDetail(targetPage, targetBaseUrl) {
     await screenshot(targetPage, '02-receipt-detail', 'browser/screenshots/02-receipt-detail.png');
 }
 
+async function inspectManualReceiptPermitReleaseBoundary(targetPage, targetBaseUrl) {
+    const permitUrl = `${targetBaseUrl}${manifest.resources.permit_application_url}`;
+    await targetPage.goto(permitUrl, { waitUntil: 'networkidle' });
+    const applicationVisible = await targetPage.getByText(manifest.resources.application_number, { exact: false }).first().isVisible().catch(() => false);
+    const boundaryVisible = await targetPage.getByText('Permit release boundary', { exact: true }).first().isVisible().catch(() => false);
+    const unavailableVisible = await targetPage.getByText('Release unavailable', { exact: false }).first().isVisible().catch(() => false);
+    const reasonVisible = await targetPage.getByText('Clearance completion, permit issuance authority, signatories, QR verification, and legacy Released status semantics remain unresolved.', { exact: true }).first().isVisible().catch(() => false);
+    const pendingPaymentVisible = await targetPage.getByText('pending payment', { exact: false }).first().isVisible().catch(() => false);
+
+    checks.push(check('permit-application-visible', 'Permit detail shows exact permit application', true, applicationVisible, { url: permitUrl }));
+    checks.push(check('permit-release-boundary-visible', 'Permit detail shows release boundary', true, boundaryVisible));
+    checks.push(check('permit-release-unavailable-visible', 'Permit detail shows release unavailable action', true, unavailableVisible));
+    checks.push(check('permit-release-boundary-reason-visible', 'Permit detail shows unresolved release policy reason', true, reasonVisible));
+    checks.push(check('permit-pending-payment-status-visible', 'Permit detail keeps pending payment status after blocked release attempt', true, pendingPaymentVisible));
+    await screenshot(targetPage, '03-permit-release-boundary', 'browser/screenshots/03-permit-release-boundary.png');
+}
+
 async function inspectManualReceiptPdf(targetPage, targetBaseUrl) {
     const pdfResponse = await targetPage.request.get(`${targetBaseUrl}${manifest.resources.receipt_pdf_url}`);
     const contentType = pdfResponse.headers()['content-type'] ?? '';
@@ -340,7 +358,7 @@ async function inspectManualReceiptMobile(targetPage, targetBaseUrl) {
     checks.push(check('mobile-receipt-visible', 'Mobile receipt keeps exact receipt number visible', true, receiptVisible));
     checks.push(check('mobile-issued-visible', 'Mobile receipt keeps issued status visible', true, issuedVisible));
     checks.push(check('mobile-no-horizontal-overflow', 'Mobile receipt has no horizontal overflow', false, horizontalOverflow));
-    await screenshot(targetPage, '03-mobile-receipt', 'browser/screenshots/03-mobile-receipt.png');
+    await screenshot(targetPage, '04-mobile-receipt', 'browser/screenshots/04-mobile-receipt.png');
 }
 
 async function screenshot(targetPage, label, relativePath) {

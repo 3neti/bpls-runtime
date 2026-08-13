@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { Calculator, CircleX, FileText, ListChecks, WalletCards } from '@lucide/vue';
+import { Calculator, CircleX, FileText, ListChecks, LockKeyhole, WalletCards } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -9,6 +9,7 @@ import {
     cancel,
     index,
     permitPdf,
+    release,
     show,
 } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import { show as showAssessment, store as assess } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
@@ -66,6 +67,16 @@ type PermitApplication = {
         reason: string;
         occurred_at: string;
     } | null;
+    release_policy_boundary: {
+        status: string;
+        payment_schedule_id: number | null;
+        payment_schedule_status: string | null;
+        is_paid: boolean;
+        receipt_count: number;
+        blocked_transition: string;
+        reason: string;
+        occurred_at: string;
+    } | null;
     can_continue: boolean;
 };
 
@@ -75,6 +86,7 @@ const props = defineProps<{
         assess_permit_applications: boolean;
         update_permit_application_status: boolean;
         view_permit_documents: boolean;
+        attempt_release: boolean;
     };
     permitDocumentGaps: string[];
 }>();
@@ -201,6 +213,19 @@ function money(amountCents: number): string {
                     >
                         <CircleX />
                         Cancel
+                    </Link>
+                    <Link
+                        v-if="
+                            can.attempt_release &&
+                            permitApplication.latest_payment_schedule
+                        "
+                        :href="release(permitApplication.id)"
+                        method="post"
+                        as="button"
+                        :class="buttonVariants({ variant: 'outline' })"
+                    >
+                        <LockKeyhole />
+                        Release unavailable
                     </Link>
                 </div>
             </section>
@@ -446,6 +471,69 @@ function money(amountCents: number): string {
                     <div>
                         <dt class="text-xs text-muted-foreground">Reason</dt>
                         <dd>{{ permitApplication.terminal_state.reason }}</dd>
+                    </div>
+                </dl>
+            </section>
+
+            <section
+                class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+            >
+                <div class="mb-3 flex items-center gap-2">
+                    <LockKeyhole class="size-4 text-muted-foreground" />
+                    <h2 class="text-sm font-semibold text-foreground">
+                        Permit release boundary
+                    </h2>
+                </div>
+                <p class="text-sm text-muted-foreground">
+                    Permit release is unavailable until clearance completion,
+                    issuance authority, signatories, QR verification, and legacy
+                    Released status semantics are reconciled.
+                </p>
+                <dl
+                    v-if="permitApplication.release_policy_boundary"
+                    class="mt-4 grid gap-2 text-sm md:grid-cols-3"
+                >
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Attempted transition
+                        </dt>
+                        <dd class="capitalize">
+                            {{
+                                permitApplication.release_policy_boundary.blocked_transition.replace(
+                                    '_',
+                                    ' ',
+                                )
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Paid schedule
+                        </dt>
+                        <dd>
+                            {{
+                                permitApplication.release_policy_boundary.is_paid
+                                    ? 'Yes'
+                                    : 'No'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Receipts
+                        </dt>
+                        <dd>
+                            {{
+                                permitApplication.release_policy_boundary
+                                    .receipt_count
+                            }}
+                        </dd>
+                    </div>
+                    <div class="md:col-span-3">
+                        <dt class="text-xs text-muted-foreground">Reason</dt>
+                        <dd>
+                            {{ permitApplication.release_policy_boundary.reason }}
+                        </dd>
                     </div>
                 </dl>
             </section>

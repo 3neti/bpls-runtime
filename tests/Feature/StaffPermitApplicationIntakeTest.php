@@ -10,6 +10,7 @@ use App\Models\Assessment;
 use App\Models\Business;
 use App\Models\BusinessOwner;
 use App\Models\LineOfBusiness;
+use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -182,6 +183,53 @@ test('staff users with status permission can cancel a permit application', funct
         ->and($application->metadata['status_history'][0]['actor_id'])->toBe($user->id);
 });
 
+test('permit release attempt records unresolved policy boundary without releasing application', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+        UserPermission::UpdatePermitApplicationStatus,
+    ]);
+
+    $application = PermitApplication::factory()->create([
+        'application_number' => 'APP-2026-RELEASE-BLOCKED',
+        'status' => PermitApplicationStatus::PendingPayment,
+    ]);
+
+    PaymentSchedule::factory()->for($application, 'permitApplication')->create([
+        'status' => 'paid',
+        'total_amount_cents' => 42_000,
+        'paid_amount_cents' => 42_000,
+    ]);
+
+    $this->actingAs($user)
+        ->from(route('staff.permit-applications.show', $application))
+        ->post(route('staff.permit-applications.release', $application))
+        ->assertRedirectBackWithErrors(['release_policy']);
+
+    $application->refresh();
+
+    expect($application->status)->toBe(PermitApplicationStatus::PendingPayment)
+        ->and($application->metadata['release_policy_boundary']['blocked_transition'])->toBe(PermitApplicationStatus::Released->value)
+        ->and($application->metadata['release_policy_boundary']['is_paid'])->toBeTrue()
+        ->and($application->metadata['release_policy_boundary']['reason'])->toContain('Clearance completion');
+});
+
+test('staff users without status permission cannot attempt permit release', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+    ]);
+    $application = PermitApplication::factory()->create([
+        'status' => PermitApplicationStatus::PendingPayment,
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('staff.permit-applications.release', $application))
+        ->assertForbidden();
+
+    expect($application->refresh()->metadata['release_policy_boundary'] ?? null)->toBeNull();
+});
+
 test('staff users without status permission cannot cancel a permit application', function () {
     $user = userWithPermissions([
         UserPermission::AccessStaff,
@@ -243,6 +291,47 @@ test('cancelled permit applications expose terminal state and unavailable contin
             ->where('permitApplications.data.0.application_number', 'APP-2026-CANCELLED')
             ->where('permitApplications.data.0.status', PermitApplicationStatus::Cancelled->value)
             ->where('permitApplications.data.0.can_continue', false)
+        );
+});
+
+test('permit application review exposes release policy boundary evidence', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+        UserPermission::UpdatePermitApplicationStatus,
+    ]);
+
+    $application = PermitApplication::factory()->create([
+        'application_number' => 'APP-2026-RELEASE-EVIDENCE',
+        'status' => PermitApplicationStatus::PendingPayment,
+        'metadata' => [
+            'release_policy_boundary' => [
+                'status' => PermitApplicationStatus::PendingPayment->value,
+                'payment_schedule_id' => 100,
+                'payment_schedule_status' => 'paid',
+                'is_paid' => true,
+                'receipt_count' => 1,
+                'blocked_transition' => PermitApplicationStatus::Released->value,
+                'reason' => 'Clearance completion, permit issuance authority, signatories, QR verification, and legacy Released status semantics remain unresolved.',
+                'occurred_at' => now()->toIso8601String(),
+            ],
+        ],
+    ]);
+    PaymentSchedule::factory()->for($application, 'permitApplication')->create([
+        'status' => 'paid',
+        'total_amount_cents' => 42_000,
+        'paid_amount_cents' => 42_000,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.show', $application))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Show')
+            ->where('permitApplication.release_policy_boundary.blocked_transition', PermitApplicationStatus::Released->value)
+            ->where('permitApplication.release_policy_boundary.is_paid', true)
+            ->where('permitApplication.release_policy_boundary.receipt_count', 1)
+            ->where('can.attempt_release', true)
         );
 });
 

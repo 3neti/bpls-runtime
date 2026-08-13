@@ -27,6 +27,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.permit.pdf');
         Route::post('permit-applications/{permitApplication}/cancel', [PermitApplicationController::class, 'cancel'])
             ->name('permit-applications.cancel');
+        Route::post('permit-applications/{permitApplication}/release', [PermitApplicationController::class, 'release'])
+            ->name('permit-applications.release');
         Route::get('assessments/{assessment}', [PermitApplicationAssessmentController::class, 'show'])
             ->name('permit-applications.assessments.show');
         Route::get('assessments/{assessment}/pdf', [PermitApplicationAssessmentController::class, 'pdf'])

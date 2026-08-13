@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Staff;
 
+use App\Actions\AttemptPermitApplicationRelease;
 use App\Actions\CancelPermitApplication;
 use App\Actions\CreateStaffPermitApplication;
 use App\Actions\RenderApplicationFormPdf;
 use App\Actions\RenderPermitPdf;
 use App\Enums\PermitApplicationType;
 use App\Enums\UserPermission;
+use App\Exceptions\UnresolvedPermitReleasePolicy;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Staff\CancelPermitApplicationRequest;
 use App\Http\Requests\Staff\StorePermitApplicationRequest;
@@ -82,11 +84,31 @@ class PermitApplicationController extends Controller
             ->with('status', 'Permit application cancelled.');
     }
 
+    public function release(PermitApplication $permitApplication, AttemptPermitApplicationRelease $attemptPermitApplicationRelease): RedirectResponse
+    {
+        Gate::authorize(UserPermission::UpdatePermitApplicationStatus->value);
+
+        try {
+            $attemptPermitApplicationRelease->handle($permitApplication, auth()->user());
+        } catch (UnresolvedPermitReleasePolicy $exception) {
+            return back()->withErrors([
+                'release_policy' => $exception->getMessage(),
+            ]);
+        }
+
+        return to_route('staff.permit-applications.show', $permitApplication);
+    }
+
     public function show(PermitApplication $permitApplication): Response
     {
         Gate::authorize(UserPermission::ViewPermitApplications->value);
 
-        $permitApplication->load(['business.owner', 'lines.lineOfBusiness', 'assessments' => fn ($query) => $query->latest(), 'paymentSchedules' => fn ($query) => $query->latest()]);
+        $permitApplication->load([
+            'business.owner',
+            'lines.lineOfBusiness',
+            'assessments' => fn ($query) => $query->latest(),
+            'paymentSchedules' => fn ($query) => $query->latest(),
+        ]);
 
         return Inertia::render('permit-applications/Show', [
             'permitApplication' => $this->permitApplicationPayload($permitApplication),
@@ -94,6 +116,7 @@ class PermitApplicationController extends Controller
                 'assess_permit_applications' => auth()->user()?->can(UserPermission::AssessPermitApplications->value) ?? false,
                 'update_permit_application_status' => auth()->user()?->can(UserPermission::UpdatePermitApplicationStatus->value) ?? false,
                 'view_permit_documents' => auth()->user()?->can(UserPermission::ViewPermitApplications->value) ?? false,
+                'attempt_release' => auth()->user()?->can(UserPermission::UpdatePermitApplicationStatus->value) ?? false,
             ],
             'permitDocumentGaps' => [
                 'Generated application form artifact captures current rescue intake facts only.',
@@ -183,6 +206,7 @@ class PermitApplicationController extends Controller
                 'paid_amount_cents' => $latestPaymentSchedule->paid_amount_cents,
             ],
             'terminal_state' => $permitApplication->metadata['terminal_state'] ?? null,
+            'release_policy_boundary' => $permitApplication->metadata['release_policy_boundary'] ?? null,
             'can_continue' => ($permitApplication->metadata['terminal_state']['can_continue'] ?? true) !== false,
         ];
     }

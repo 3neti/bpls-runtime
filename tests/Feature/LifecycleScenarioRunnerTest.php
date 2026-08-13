@@ -228,6 +228,7 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($receipt->status)->toBe(ReceiptStatus::Issued)
         ->and($receipt->numbering_authority)->toBe('manual')
         ->and($collection->status)->toBe(TreasuryCollectionStatus::Receipted)
+        ->and(PermitApplication::query()->findOrFail($firstManifest['resources']['permit_application_id'])->metadata['release_policy_boundary']['blocked_transition'])->toBe(PermitApplicationStatus::Released->value)
         ->and($artifactStore->exists('terminal/prepare.json'))->toBeTrue()
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
 });
