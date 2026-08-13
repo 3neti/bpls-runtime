@@ -27,7 +27,7 @@ class PermitApplicationController extends Controller
         Gate::authorize(UserPermission::ViewPermitApplications->value);
 
         $permitApplications = PermitApplication::query()
-            ->with(['business.owner', 'lines.lineOfBusiness', 'assessments' => fn ($query) => $query->latest()])
+            ->with(['business.owner', 'lines.lineOfBusiness', 'assessments' => fn ($query) => $query->latest(), 'paymentSchedules' => fn ($query) => $query->latest()])
             ->latest()
             ->paginate(15)
             ->through(fn (PermitApplication $permitApplication): array => $this->permitApplicationPayload($permitApplication));
@@ -86,7 +86,7 @@ class PermitApplicationController extends Controller
     {
         Gate::authorize(UserPermission::ViewPermitApplications->value);
 
-        $permitApplication->load(['business.owner', 'lines.lineOfBusiness', 'assessments' => fn ($query) => $query->latest()]);
+        $permitApplication->load(['business.owner', 'lines.lineOfBusiness', 'assessments' => fn ($query) => $query->latest(), 'paymentSchedules' => fn ($query) => $query->latest()]);
 
         return Inertia::render('permit-applications/Show', [
             'permitApplication' => $this->permitApplicationPayload($permitApplication),
@@ -131,6 +131,7 @@ class PermitApplicationController extends Controller
     private function permitApplicationPayload(PermitApplication $permitApplication): array
     {
         $latestAssessment = $permitApplication->assessments->first();
+        $latestPaymentSchedule = $permitApplication->paymentSchedules->first();
 
         return [
             'id' => $permitApplication->id,
@@ -173,6 +174,13 @@ class PermitApplicationController extends Controller
                 'status' => $latestAssessment->status->value,
                 'total_amount_cents' => $latestAssessment->total_amount_cents,
                 'assessed_at' => $latestAssessment->assessed_at?->toIso8601String(),
+            ],
+            'latest_payment_schedule' => $latestPaymentSchedule === null ? null : [
+                'id' => $latestPaymentSchedule->id,
+                'sequence' => $latestPaymentSchedule->sequence,
+                'status' => $latestPaymentSchedule->status->value,
+                'total_amount_cents' => $latestPaymentSchedule->total_amount_cents,
+                'paid_amount_cents' => $latestPaymentSchedule->paid_amount_cents,
             ],
             'terminal_state' => $permitApplication->metadata['terminal_state'] ?? null,
             'can_continue' => ($permitApplication->metadata['terminal_state']['can_continue'] ?? true) !== false,

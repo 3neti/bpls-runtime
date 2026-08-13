@@ -19,7 +19,11 @@ if (manifest.schema_version !== 'application.lifecycle-evidence.v1') {
     fail('Unsupported manifest schema.');
 }
 
-const supportedScenarios = ['storyboard_terminal_state_visibility', 'permit_application_cancelled_visibility'];
+const supportedScenarios = [
+    'storyboard_terminal_state_visibility',
+    'permit_application_cancelled_visibility',
+    'permit_application_pending_payment_visibility',
+];
 
 if (!supportedScenarios.includes(manifest.scenario?.key)) {
     fail('Unsupported scenario key.');
@@ -76,6 +80,13 @@ try {
         await inspectPermitApplicationList(page, baseUrl);
         await inspectPermitApplicationDetail(page, baseUrl);
         await inspectPermitApplicationMobile(page, baseUrl);
+    }
+
+    if (manifest.scenario.key === 'permit_application_pending_payment_visibility') {
+        await inspectPendingPaymentPermitApplicationList(page, baseUrl);
+        await inspectPendingPaymentPermitApplicationDetail(page, baseUrl);
+        await inspectPendingPaymentScheduleDetail(page, baseUrl);
+        await inspectPendingPaymentPermitApplicationMobile(page, baseUrl);
     }
 } catch (error) {
     checks.push(check('browser-exception', 'Browser runner completed without exception', true, false, {
@@ -206,6 +217,64 @@ async function inspectPermitApplicationMobile(targetPage, targetBaseUrl) {
     checks.push(check('mobile-terminal-evidence-visible', 'Mobile detail keeps terminal evidence visible', true, terminalEvidenceVisible));
     checks.push(check('mobile-no-horizontal-overflow', 'Mobile detail has no horizontal overflow', false, horizontalOverflow));
     await screenshot(targetPage, '03-mobile-detail', 'browser/screenshots/03-mobile-detail.png');
+}
+
+async function inspectPendingPaymentPermitApplicationList(targetPage, targetBaseUrl) {
+    const listUrl = `${targetBaseUrl}${manifest.resources.list_url}`;
+    await targetPage.goto(listUrl, { waitUntil: 'networkidle' });
+    const recordVisible = await targetPage.getByText(manifest.resources.public_reference, { exact: false }).first().isVisible().catch(() => false);
+    const pendingPaymentVisible = await targetPage.getByText('pending payment', { exact: false }).first().isVisible().catch(() => false);
+    const paymentActionVisible = await targetPage.getByRole('link', { name: /payment/i }).first().isVisible().catch(() => false);
+
+    checks.push(check('list-record-visible', 'List screen shows prepared permit application', true, recordVisible, {
+        url: listUrl,
+        permit_application_id: manifest.resources.record_id,
+    }));
+    checks.push(check('list-pending-payment-status-visible', 'List screen shows pending payment status', true, pendingPaymentVisible));
+    checks.push(check('list-payment-action-visible', 'List screen links to the prepared payment schedule', true, paymentActionVisible));
+    await screenshot(targetPage, '01-list', 'browser/screenshots/01-list.png');
+}
+
+async function inspectPendingPaymentPermitApplicationDetail(targetPage, targetBaseUrl) {
+    const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    const recordVisible = await targetPage.getByText(manifest.resources.public_reference, { exact: false }).first().isVisible().catch(() => false);
+    const pendingPaymentVisible = await targetPage.getByText('pending payment', { exact: false }).first().isVisible().catch(() => false);
+    const paymentScheduleVisible = await targetPage.getByText('Payment schedule', { exact: false }).first().isVisible().catch(() => false);
+    const schedulePendingVisible = await targetPage.getByText('pending', { exact: false }).first().isVisible().catch(() => false);
+    const paymentLinkVisible = await targetPage.getByRole('link', { name: /payment schedule/i }).first().isVisible().catch(() => false);
+
+    checks.push(check('detail-record-visible', 'Detail screen shows exact prepared permit application', true, recordVisible, { url: detailUrl }));
+    checks.push(check('detail-pending-payment-status-visible', 'Detail screen shows pending payment status', true, pendingPaymentVisible));
+    checks.push(check('detail-payment-schedule-visible', 'Detail screen shows latest payment schedule evidence', true, paymentScheduleVisible && schedulePendingVisible));
+    checks.push(check('detail-payment-schedule-link-visible', 'Detail screen links to the exact payment schedule', true, paymentLinkVisible));
+    await screenshot(targetPage, '02-detail', 'browser/screenshots/02-detail.png');
+}
+
+async function inspectPendingPaymentScheduleDetail(targetPage, targetBaseUrl) {
+    const scheduleUrl = `${targetBaseUrl}${manifest.resources.payment_schedule_url}`;
+    await targetPage.goto(scheduleUrl, { waitUntil: 'networkidle' });
+    const recordVisible = await targetPage.getByText(manifest.resources.public_reference, { exact: false }).first().isVisible().catch(() => false);
+    const pendingVisible = await targetPage.getByText('pending', { exact: false }).first().isVisible().catch(() => false);
+    const amountVisible = await targetPage.getByText('₱300.00', { exact: false }).first().isVisible().catch(() => false);
+
+    checks.push(check('payment-schedule-record-visible', 'Payment schedule detail shows exact permit application', true, recordVisible, { url: scheduleUrl }));
+    checks.push(check('payment-schedule-pending-visible', 'Payment schedule detail shows pending collection status', true, pendingVisible));
+    checks.push(check('payment-schedule-amount-visible', 'Payment schedule detail shows computed amount due', true, amountVisible));
+    await screenshot(targetPage, '03-payment-schedule', 'browser/screenshots/03-payment-schedule.png');
+}
+
+async function inspectPendingPaymentPermitApplicationMobile(targetPage, targetBaseUrl) {
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(`${targetBaseUrl}${manifest.resources.detail_url}`, { waitUntil: 'networkidle' });
+    const recordVisible = await targetPage.getByText(manifest.resources.public_reference, { exact: false }).first().isVisible().catch(() => false);
+    const pendingPaymentVisible = await targetPage.getByText('pending payment', { exact: false }).first().isVisible().catch(() => false);
+    const horizontalOverflow = await targetPage.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+
+    checks.push(check('mobile-record-visible', 'Mobile detail keeps exact permit application visible', true, recordVisible));
+    checks.push(check('mobile-pending-payment-visible', 'Mobile detail keeps pending payment state visible', true, pendingPaymentVisible));
+    checks.push(check('mobile-no-horizontal-overflow', 'Mobile detail has no horizontal overflow', false, horizontalOverflow));
+    await screenshot(targetPage, '04-mobile-detail', 'browser/screenshots/04-mobile-detail.png');
 }
 
 async function screenshot(targetPage, label, relativePath) {

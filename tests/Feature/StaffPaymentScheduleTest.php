@@ -3,6 +3,7 @@
 use App\Enums\AssessmentStatus;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
+use App\Enums\PermitApplicationStatus;
 use App\Enums\UserPermission;
 use App\Models\Assessment;
 use App\Models\AssessmentLine;
@@ -18,6 +19,7 @@ test('staff users with prepare permission can prepare a payment schedule from an
 
     $application = PermitApplication::factory()->create([
         'application_number' => 'APP-PAY-001',
+        'status' => PermitApplicationStatus::Assessment,
     ]);
 
     $assessment = Assessment::factory()->for($application)->create([
@@ -47,6 +49,7 @@ test('staff users with prepare permission can prepare a payment schedule from an
         ->post(route('staff.assessments.payment-schedule.store', $assessment));
 
     $schedule = PaymentSchedule::query()->sole();
+    $application->refresh();
 
     $response->assertRedirect(route('staff.payment-schedules.show', $schedule));
 
@@ -59,7 +62,10 @@ test('staff users with prepare permission can prepare a payment schedule from an
         ->and($schedule->source_snapshot['policy']['due_on'])->toBeNull()
         ->and($schedule->lines()->count())->toBe(2)
         ->and($schedule->lines()->where('code', 'BUSINESS-TAX')->sole()->amount_cents)->toBe(30_000)
-        ->and($schedule->lines()->where('code', 'MAYORS-PERMIT')->sole()->amount_cents)->toBe(15_000);
+        ->and($schedule->lines()->where('code', 'MAYORS-PERMIT')->sole()->amount_cents)->toBe(15_000)
+        ->and($application->status)->toBe(PermitApplicationStatus::PendingPayment)
+        ->and($application->metadata['status_history'][0]['from'])->toBe(PermitApplicationStatus::Assessment->value)
+        ->and($application->metadata['status_history'][0]['to'])->toBe(PermitApplicationStatus::PendingPayment->value);
 });
 
 test('preparing a payment schedule is idempotent for an assessment', function () {
@@ -86,7 +92,8 @@ test('preparing a payment schedule is idempotent for an assessment', function ()
         ->assertRedirect();
 
     expect(PaymentSchedule::query()->count())->toBe(1)
-        ->and(PaymentSchedule::query()->sole()->lines()->count())->toBe(1);
+        ->and(PaymentSchedule::query()->sole()->lines()->count())->toBe(1)
+        ->and($assessment->permitApplication->refresh()->metadata['status_history'])->toHaveCount(1);
 });
 
 test('staff users without prepare permission cannot prepare a payment schedule', function () {
@@ -174,5 +181,39 @@ test('assessment review exposes payment schedule permission state', function () 
             ->where('assessment.latest_payment_schedule.id', $schedule->id)
             ->where('can.prepare_payment_schedule', true)
             ->where('can.view_payment_schedules', true)
+        );
+});
+
+test('permit application review exposes latest payment schedule state', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+    ]);
+
+    $application = PermitApplication::factory()->create([
+        'application_number' => 'APP-PAY-003',
+        'status' => PermitApplicationStatus::PendingPayment,
+    ]);
+
+    $assessment = Assessment::factory()->for($application)->create([
+        'status' => AssessmentStatus::Computed,
+        'sequence' => 1,
+        'total_amount_cents' => 25_000,
+    ]);
+
+    $schedule = PaymentSchedule::factory()->for($application, 'permitApplication')->for($assessment)->create([
+        'sequence' => 1,
+        'total_amount_cents' => 25_000,
+        'paid_amount_cents' => 0,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.show', $application))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Show')
+            ->where('permitApplication.status', 'pending_payment')
+            ->where('permitApplication.latest_payment_schedule.id', $schedule->id)
+            ->where('permitApplication.latest_payment_schedule.status', 'pending')
         );
 });

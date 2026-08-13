@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { Calculator, Eye, Plus } from '@lucide/vue';
+import { Calculator, Eye, Plus, WalletCards } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { create, index, show } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
+import { show as showPaymentSchedule } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { store as assess } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import type { BreadcrumbItem } from '@/types';
 
@@ -35,6 +36,13 @@ type PermitApplicationRow = {
         status: string;
         total_amount_cents: number;
         assessed_at: string | null;
+    } | null;
+    latest_payment_schedule: {
+        id: number;
+        sequence: number;
+        status: string;
+        total_amount_cents: number;
+        paid_amount_cents: number;
     } | null;
     can_continue: boolean;
 };
@@ -236,6 +244,27 @@ function money(amountCents: number): string {
                                             <Calculator />
                                             Assess
                                         </Link>
+                                        <Button
+                                            v-if="
+                                                permitApplication.latest_payment_schedule
+                                            "
+                                            as-child
+                                            variant="outline"
+                                            size="sm"
+                                        >
+                                            <Link
+                                                :href="
+                                                    showPaymentSchedule(
+                                                        permitApplication
+                                                            .latest_payment_schedule
+                                                            .id,
+                                                    )
+                                                "
+                                            >
+                                                <WalletCards />
+                                                Payment
+                                            </Link>
+                                        </Button>
                                         <span
                                             v-if="
                                                 !permitApplication.can_continue

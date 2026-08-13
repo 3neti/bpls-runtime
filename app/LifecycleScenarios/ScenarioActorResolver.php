@@ -55,6 +55,8 @@ final class ScenarioActorResolver
                 UserPermission::ViewPermitApplications,
                 UserPermission::CreatePermitApplications,
                 UserPermission::AssessPermitApplications,
+                UserPermission::PreparePaymentSchedules,
+                UserPermission::ViewPaymentSchedules,
                 UserPermission::UpdatePermitApplicationStatus,
                 UserPermission::ManageStoryboards,
             ],

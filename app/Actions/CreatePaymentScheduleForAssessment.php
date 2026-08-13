@@ -5,9 +5,11 @@ namespace App\Actions;
 use App\Enums\AssessmentStatus;
 use App\Enums\PaymentScheduleLineStatus;
 use App\Enums\PaymentScheduleStatus;
+use App\Enums\PermitApplicationStatus;
 use App\Models\Assessment;
 use App\Models\AssessmentLine;
 use App\Models\PaymentSchedule;
+use App\Models\PermitApplication;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -33,6 +35,8 @@ class CreatePaymentScheduleForAssessment
                 ->first();
 
             if ($existingSchedule instanceof PaymentSchedule) {
+                $this->markPermitApplicationPendingPayment($assessment->permitApplication, $preparedBy);
+
                 return $existingSchedule;
             }
 
@@ -65,8 +69,40 @@ class CreatePaymentScheduleForAssessment
                     'source_snapshot' => $this->lineSourceSnapshot($line),
                 ]));
 
+            $this->markPermitApplicationPendingPayment($assessment->permitApplication, $preparedBy);
+
             return $schedule->load(['lines.lineOfBusiness', 'preparedBy', 'assessment.permitApplication.business.owner']);
         });
+    }
+
+    private function markPermitApplicationPendingPayment(PermitApplication $permitApplication, ?User $preparedBy): void
+    {
+        $permitApplication->refresh();
+
+        if ($permitApplication->status === PermitApplicationStatus::PendingPayment) {
+            return;
+        }
+
+        if (isset($permitApplication->metadata['terminal_state'])) {
+            throw new LogicException("Payment schedule cannot advance terminal permit application [{$permitApplication->id}].");
+        }
+
+        $metadata = $permitApplication->metadata ?? [];
+        $metadata['status_history'] = [
+            ...($metadata['status_history'] ?? []),
+            [
+                'from' => $permitApplication->status->value,
+                'to' => PermitApplicationStatus::PendingPayment->value,
+                'actor_id' => $preparedBy?->id,
+                'reason' => 'Payment schedule prepared from computed assessment.',
+                'occurred_at' => now()->toIso8601String(),
+            ],
+        ];
+
+        $permitApplication->forceFill([
+            'status' => PermitApplicationStatus::PendingPayment,
+            'metadata' => $metadata,
+        ])->save();
     }
 
     /**

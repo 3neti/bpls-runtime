@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\LifecycleScenarios\LifecycleScenarioRegistry;
 use App\LifecycleScenarios\PermitApplicationCancelledVisibilityScenario;
+use App\LifecycleScenarios\PermitApplicationPendingPaymentVisibilityScenario;
 use App\LifecycleScenarios\ScenarioActorResolver;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\LifecycleScenarios\StoryboardTerminalStateVisibilityScenario;
@@ -28,6 +29,7 @@ class LifecycleScenarioCommand extends Command
         LifecycleScenarioRegistry $registry,
         ScenarioActorResolver $actorResolver,
         PermitApplicationCancelledVisibilityScenario $permitApplicationCancelledScenario,
+        PermitApplicationPendingPaymentVisibilityScenario $permitApplicationPendingPaymentScenario,
         StoryboardTerminalStateVisibilityScenario $storyboardScenario,
     ): int {
         $scenario = $registry->get((string) $this->argument('scenario'));
@@ -44,6 +46,7 @@ class LifecycleScenarioCommand extends Command
                 $actors = $actorResolver->resolve($scenario);
                 $manifest = match ($scenario->key) {
                     'permit_application_cancelled_visibility' => $permitApplicationCancelledScenario->prepare($scenario, $runId, $actors, $artifactStore),
+                    'permit_application_pending_payment_visibility' => $permitApplicationPendingPaymentScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'storyboard_terminal_state_visibility' => $storyboardScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     default => throw new RuntimeException("No prepare runner is registered for lifecycle scenario [{$scenario->key}]."),
                 };
@@ -58,6 +61,7 @@ class LifecycleScenarioCommand extends Command
             if (in_array($phase, ['audit', 'all'], true)) {
                 $manifest = match ($scenario->key) {
                     'permit_application_cancelled_visibility' => $permitApplicationCancelledScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
+                    'permit_application_pending_payment_visibility' => $permitApplicationPendingPaymentScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'storyboard_terminal_state_visibility' => $storyboardScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     default => throw new RuntimeException("No audit runner is registered for lifecycle scenario [{$scenario->key}]."),
                 };

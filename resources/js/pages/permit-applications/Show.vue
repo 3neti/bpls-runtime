@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { Calculator, CircleX, FileText, ListChecks } from '@lucide/vue';
+import { Calculator, CircleX, FileText, ListChecks, WalletCards } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -12,6 +12,7 @@ import {
     show,
 } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import { show as showAssessment, store as assess } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
+import { show as showPaymentSchedule } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import type { BreadcrumbItem } from '@/types';
 
 type PermitApplication = {
@@ -50,6 +51,13 @@ type PermitApplication = {
         status: string;
         total_amount_cents: number;
         assessed_at: string | null;
+    } | null;
+    latest_payment_schedule: {
+        id: number;
+        sequence: number;
+        status: string;
+        total_amount_cents: number;
+        paid_amount_cents: number;
     } | null;
     terminal_state: {
         status: string;
@@ -149,6 +157,22 @@ function money(amountCents: number): string {
                             Assessment
                         </Link>
                     </Button>
+                    <Button
+                        v-if="permitApplication.latest_payment_schedule"
+                        as-child
+                        variant="outline"
+                    >
+                        <Link
+                            :href="
+                                showPaymentSchedule(
+                                    permitApplication.latest_payment_schedule.id,
+                                )
+                            "
+                        >
+                            <WalletCards />
+                            Payment Schedule
+                        </Link>
+                    </Button>
                     <Link
                         v-if="
                             can.assess_permit_applications &&
@@ -203,6 +227,49 @@ function money(amountCents: number): string {
                 <div>
                     <div class="text-xs text-muted-foreground">Year</div>
                     <div>{{ permitApplication.application_year }}</div>
+                </div>
+            </section>
+
+            <section
+                v-if="permitApplication.latest_payment_schedule"
+                class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-3 dark:border-sidebar-border"
+            >
+                <div>
+                    <div class="text-xs text-muted-foreground">
+                        Payment schedule
+                    </div>
+                    <div>
+                        Sequence
+                        {{ permitApplication.latest_payment_schedule.sequence }}
+                    </div>
+                </div>
+                <div>
+                    <div class="text-xs text-muted-foreground">
+                        Schedule status
+                    </div>
+                    <Badge variant="secondary" class="capitalize">
+                        {{
+                            permitApplication.latest_payment_schedule.status.replace(
+                                '_',
+                                ' ',
+                            )
+                        }}
+                    </Badge>
+                </div>
+                <div>
+                    <div class="text-xs text-muted-foreground">
+                        Amount due
+                    </div>
+                    <div>
+                        {{
+                            money(
+                                permitApplication.latest_payment_schedule
+                                    .total_amount_cents -
+                                    permitApplication.latest_payment_schedule
+                                        .paid_amount_cents,
+                            )
+                        }}
+                    </div>
                 </div>
             </section>
 
