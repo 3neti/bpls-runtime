@@ -20,6 +20,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->only(['index', 'create', 'store', 'show']);
         Route::post('permit-applications/{permitApplication}/assessments', [PermitApplicationAssessmentController::class, 'store'])
             ->name('permit-applications.assessments.store');
+        Route::get('permit-applications/{permitApplication}/application-form.pdf', [PermitApplicationController::class, 'applicationFormPdf'])
+            ->name('permit-applications.application-form.pdf');
         Route::get('permit-applications/{permitApplication}/permit.pdf', [PermitApplicationController::class, 'permitPdf'])
             ->name('permit-applications.permit.pdf');
         Route::get('assessments/{assessment}', [PermitApplicationAssessmentController::class, 'show'])

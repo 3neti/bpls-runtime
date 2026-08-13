@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import {
+    applicationFormPdf,
     index,
     permitPdf,
     show,
@@ -99,6 +100,19 @@ function money(amountCents: number): string {
                     </p>
                 </div>
                 <div class="flex gap-2">
+                    <Button
+                        v-if="can.view_permit_documents"
+                        as-child
+                        variant="outline"
+                    >
+                        <a
+                            :href="applicationFormPdf.url(permitApplication.id)"
+                            target="_blank"
+                        >
+                            <FileText />
+                            Application PDF
+                        </a>
+                    </Button>
                     <Button
                         v-if="can.view_permit_documents"
                         as-child

@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\RenderApplicationFormPdf;
 use App\Actions\RenderPermitPdf;
 use App\Enums\AssessmentStatus;
 use App\Enums\PermitApplicationType;
@@ -146,8 +147,60 @@ test('staff users with view permission can review a permit application', functio
             ->where('permitApplication.lines.0.line_of_business.name', 'Restaurant')
             ->where('can.assess_permit_applications', false)
             ->where('can.view_permit_documents', true)
-            ->where('permitDocumentGaps.0', 'Generated permit artifact does not release or issue a permit.')
+            ->where('permitDocumentGaps.0', 'Generated application form artifact captures current rescue intake facts only.')
         );
+});
+
+test('staff users with view permission can open an application form pdf artifact', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+    ]);
+
+    $application = permitDocumentFixture();
+
+    $response = $this->actingAs($user)
+        ->get(route('staff.permit-applications.application-form.pdf', $application))
+        ->assertSuccessful()
+        ->assertHeader('Content-Type', 'application/pdf')
+        ->assertHeader('Content-Disposition', 'inline; filename="app-2026-00013-application-form.pdf"');
+
+    $pdf = $response->getContent();
+
+    expect($pdf)
+        ->toStartWith('%PDF-1.4')
+        ->toContain('Business Application Form Artifact')
+        ->toContain('APP-2026-00013')
+        ->toContain('Permit Artifact Store')
+        ->toContain('Permit Owner')
+        ->toContain('permit-owner@example.test')
+        ->toContain('RETAIL')
+        ->toContain('PHP 125,000.00')
+        ->toContain('Application form artifact renders currently captured intake facts')
+        ->toContain('Documentary requirements, uploaded files, and checklist evidence are not yet')
+        ->toContain('represented in this artifact.')
+        ->and(permitPdfPageCount($pdf))->toBe(1);
+});
+
+test('application form pdf output is deterministic for the same persisted permit facts', function () {
+    $application = permitDocumentFixture();
+
+    $renderer = app(RenderApplicationFormPdf::class);
+
+    expect($renderer->handle($application))->toBe($renderer->handle($application->fresh()));
+});
+
+test('staff users without view permission cannot open application form pdf artifacts', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::CreatePermitApplications,
+    ]);
+
+    $application = PermitApplication::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.application-form.pdf', $application))
+        ->assertForbidden();
 });
 
 test('staff users with view permission can open a permit pdf artifact', function () {
