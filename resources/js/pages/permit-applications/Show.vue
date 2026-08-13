@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { Calculator, FileText, ListChecks } from '@lucide/vue';
+import { Calculator, CircleX, FileText, ListChecks } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import {
     applicationFormPdf,
+    cancel,
     index,
     permitPdf,
     show,
@@ -50,12 +51,21 @@ type PermitApplication = {
         total_amount_cents: number;
         assessed_at: string | null;
     } | null;
+    terminal_state: {
+        status: string;
+        is_terminal: boolean;
+        can_continue: boolean;
+        reason: string;
+        occurred_at: string;
+    } | null;
+    can_continue: boolean;
 };
 
 const props = defineProps<{
     permitApplication: PermitApplication;
     can: {
         assess_permit_applications: boolean;
+        update_permit_application_status: boolean;
         view_permit_documents: boolean;
     };
     permitDocumentGaps: string[];
@@ -140,7 +150,10 @@ function money(amountCents: number): string {
                         </Link>
                     </Button>
                     <Link
-                        v-if="can.assess_permit_applications"
+                        v-if="
+                            can.assess_permit_applications &&
+                            permitApplication.can_continue
+                        "
                         :href="assess(permitApplication.id)"
                         method="post"
                         as="button"
@@ -148,6 +161,22 @@ function money(amountCents: number): string {
                     >
                         <Calculator />
                         Assess
+                    </Link>
+                    <Link
+                        v-if="
+                            can.update_permit_application_status &&
+                            permitApplication.can_continue
+                        "
+                        :href="cancel(permitApplication.id)"
+                        method="post"
+                        as="button"
+                        :data="{
+                            reason: 'Cancelled from staff review surface.',
+                        }"
+                        :class="buttonVariants({ variant: 'destructive' })"
+                    >
+                        <CircleX />
+                        Cancel
                     </Link>
                 </div>
             </section>
@@ -164,6 +193,12 @@ function money(amountCents: number): string {
                     <Badge variant="secondary" class="capitalize">
                         {{ permitApplication.status.replace('_', ' ') }}
                     </Badge>
+                    <div
+                        v-if="permitApplication.terminal_state"
+                        class="mt-2 text-xs text-muted-foreground"
+                    >
+                        Terminal state. Further processing is unavailable.
+                    </div>
                 </div>
                 <div>
                     <div class="text-xs text-muted-foreground">Year</div>
@@ -308,6 +343,44 @@ function money(amountCents: number): string {
                         </tbody>
                     </table>
                 </div>
+            </section>
+
+            <section
+                v-if="permitApplication.terminal_state"
+                class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+            >
+                <h2 class="mb-2 text-sm font-semibold text-foreground">
+                    Terminal status evidence
+                </h2>
+                <dl class="grid gap-2 text-sm md:grid-cols-3">
+                    <div>
+                        <dt class="text-xs text-muted-foreground">Status</dt>
+                        <dd class="capitalize">
+                            {{
+                                permitApplication.terminal_state.status.replace(
+                                    '_',
+                                    ' ',
+                                )
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Can continue
+                        </dt>
+                        <dd>
+                            {{
+                                permitApplication.terminal_state.can_continue
+                                    ? 'Yes'
+                                    : 'No'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">Reason</dt>
+                        <dd>{{ permitApplication.terminal_state.reason }}</dd>
+                    </div>
+                </dl>
             </section>
 
             <section

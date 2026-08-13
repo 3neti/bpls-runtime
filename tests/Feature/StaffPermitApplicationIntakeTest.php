@@ -3,6 +3,7 @@
 use App\Actions\RenderApplicationFormPdf;
 use App\Actions\RenderPermitPdf;
 use App\Enums\AssessmentStatus;
+use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
 use App\Enums\UserPermission;
 use App\Models\Assessment;
@@ -146,8 +147,102 @@ test('staff users with view permission can review a permit application', functio
             ->where('permitApplication.application_number', 'APP-2026-00012')
             ->where('permitApplication.lines.0.line_of_business.name', 'Restaurant')
             ->where('can.assess_permit_applications', false)
+            ->where('can.update_permit_application_status', false)
             ->where('can.view_permit_documents', true)
             ->where('permitDocumentGaps.0', 'Generated application form artifact captures current rescue intake facts only.')
+        );
+});
+
+test('staff users with status permission can cancel a permit application', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+        UserPermission::UpdatePermitApplicationStatus,
+    ]);
+
+    $application = PermitApplication::factory()->create([
+        'application_number' => 'APP-2026-CANCEL',
+        'status' => PermitApplicationStatus::Assessment,
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('staff.permit-applications.cancel', $application), [
+            'reason' => 'Applicant requested cancellation before payment.',
+        ])
+        ->assertRedirect(route('staff.permit-applications.show', $application));
+
+    $application->refresh();
+
+    expect($application->status)->toBe(PermitApplicationStatus::Cancelled)
+        ->and($application->metadata['terminal_state']['status'])->toBe(PermitApplicationStatus::Cancelled->value)
+        ->and($application->metadata['terminal_state']['can_continue'])->toBeFalse()
+        ->and($application->metadata['terminal_state']['reason'])->toBe('Applicant requested cancellation before payment.')
+        ->and($application->metadata['status_history'][0]['from'])->toBe(PermitApplicationStatus::Assessment->value)
+        ->and($application->metadata['status_history'][0]['to'])->toBe(PermitApplicationStatus::Cancelled->value)
+        ->and($application->metadata['status_history'][0]['actor_id'])->toBe($user->id);
+});
+
+test('staff users without status permission cannot cancel a permit application', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+    ]);
+    $application = PermitApplication::factory()->create([
+        'status' => PermitApplicationStatus::Assessment,
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('staff.permit-applications.cancel', $application), [
+            'reason' => 'Attempted cancellation.',
+        ])
+        ->assertForbidden();
+
+    expect($application->refresh()->status)->toBe(PermitApplicationStatus::Assessment);
+});
+
+test('cancelled permit applications expose terminal state and unavailable continuation actions', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+        UserPermission::AssessPermitApplications,
+        UserPermission::UpdatePermitApplicationStatus,
+    ]);
+
+    $application = PermitApplication::factory()->create([
+        'application_number' => 'APP-2026-CANCELLED',
+        'status' => PermitApplicationStatus::Cancelled,
+        'metadata' => [
+            'terminal_state' => [
+                'status' => PermitApplicationStatus::Cancelled->value,
+                'is_terminal' => true,
+                'can_continue' => false,
+                'reason' => 'Applicant requested cancellation before payment.',
+                'actor_id' => $user->id,
+                'occurred_at' => now()->toIso8601String(),
+            ],
+        ],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.show', $application))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Show')
+            ->where('permitApplication.status', PermitApplicationStatus::Cancelled->value)
+            ->where('permitApplication.can_continue', false)
+            ->where('permitApplication.terminal_state.reason', 'Applicant requested cancellation before payment.')
+            ->where('can.assess_permit_applications', true)
+            ->where('can.update_permit_application_status', true)
+        );
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Index')
+            ->where('permitApplications.data.0.application_number', 'APP-2026-CANCELLED')
+            ->where('permitApplications.data.0.status', PermitApplicationStatus::Cancelled->value)
+            ->where('permitApplications.data.0.can_continue', false)
         );
 });
 

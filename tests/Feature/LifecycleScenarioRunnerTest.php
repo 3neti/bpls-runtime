@@ -1,14 +1,17 @@
 <?php
 
+use App\Enums\PermitApplicationStatus;
 use App\Enums\StoryboardExportFormat;
 use App\Enums\StoryboardExportStatus;
 use App\Enums\UserPermission;
 use App\Jobs\GenerateStoryboardVideo;
 use App\LifecycleScenarios\LifecycleScenarioRegistry;
+use App\LifecycleScenarios\PermitApplicationCancelledVisibilityScenario;
 use App\LifecycleScenarios\ScenarioActorResolver;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\LifecycleScenarios\StoryboardTerminalStateVisibilityScenario;
 use App\Models\Permission;
+use App\Models\PermitApplication;
 use App\Models\Role;
 use App\Models\Storyboard;
 use App\Models\User;
@@ -24,6 +27,17 @@ test('scenario registry discovers the storyboard terminal visibility scenario', 
         ->risk->toBe('local transactional')
         ->and($scenario->safety['external_integrations'])->toBeFalse()
         ->and($scenario->safety['irreversible_actions'])->toBeFalse();
+});
+
+test('scenario registry discovers the permit application cancelled visibility scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('permit_application_cancelled_visibility');
+
+    expect($scenario)
+        ->key->toBe('permit_application_cancelled_visibility')
+        ->label->toBe('Permit application cancelled visibility')
+        ->risk->toBe('local transactional')
+        ->and($scenario->expectations['canonical_state'])->toBe('cancelled')
+        ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
 test('actor resolver resolves configured users through roles and permissions', function () {
@@ -127,6 +141,69 @@ test('audit merges browser report and compares visible evidence to canonical sta
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
 
+test('permit application cancellation scenario executes real domain action and is idempotent', function () {
+    Storage::fake('local');
+
+    $user = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('permit_application_cancelled_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'permit-cancelled-test-001');
+    $runner = app(PermitApplicationCancelledVisibilityScenario::class);
+
+    $firstManifest = $runner->prepare($scenario, 'permit-cancelled-test-001', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+    $secondManifest = $runner->prepare($scenario, 'permit-cancelled-test-001', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+
+    $application = PermitApplication::query()->findOrFail($firstManifest['resources']['record_id']);
+
+    expect($firstManifest['resources']['record_type'])->toBe('permit_application')
+        ->and($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
+        ->and(PermitApplication::query()->count())->toBe(1)
+        ->and($application->status)->toBe(PermitApplicationStatus::Cancelled)
+        ->and($application->metadata['terminal_state']['can_continue'])->toBeFalse()
+        ->and($artifactStore->exists('terminal/prepare.json'))->toBeTrue()
+        ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
+});
+
+test('permit application cancellation scenario audit compares browser evidence with canonical state', function () {
+    Storage::fake('local');
+
+    $user = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('permit_application_cancelled_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'permit-cancelled-test-002');
+    $runner = app(PermitApplicationCancelledVisibilityScenario::class);
+
+    $manifest = $runner->prepare($scenario, 'permit-cancelled-test-002', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+    $artifactStore->putJson('browser/report.json', [
+        'result' => [
+            'passed' => true,
+        ],
+        'checks' => [],
+        'artifacts' => [
+            'screenshots' => [
+                '01-list' => 'browser/screenshots/01-list.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($manifest, $artifactStore);
+
+    expect($audited['result'])
+        ->terminal->toBe('passed')
+        ->browser->toBe('passed')
+        ->audit->toBe('passed')
+        ->passed->toBeTrue()
+        ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
+});
+
 test('command refuses unsafe environments before preparing records', function () {
     app()->detectEnvironment(fn (): string => 'production');
 
@@ -140,14 +217,18 @@ test('command refuses unsafe environments before preparing records', function ()
 
 function configuredScenarioUser(string $email): User
 {
-    $permission = Permission::factory()->create([
-        'code' => UserPermission::ManageStoryboards->value,
-    ]);
-    $staffPermission = Permission::factory()->create([
-        'code' => UserPermission::AccessStaff->value,
-    ]);
+    $permissions = collect([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+        UserPermission::CreatePermitApplications,
+        UserPermission::AssessPermitApplications,
+        UserPermission::UpdatePermitApplicationStatus,
+        UserPermission::ManageStoryboards,
+    ])->map(fn (UserPermission $permission): int => Permission::factory()->create([
+        'code' => $permission->value,
+    ])->id);
     $role = Role::factory()->create();
-    $role->permissions()->sync([$permission->id, $staffPermission->id]);
+    $role->permissions()->sync($permissions->all());
 
     return User::factory()->create([
         'role_id' => $role->id,

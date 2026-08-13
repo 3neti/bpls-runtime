@@ -2,15 +2,18 @@
 
 namespace App\Http\Controllers\Staff;
 
+use App\Actions\CancelPermitApplication;
 use App\Actions\CreateStaffPermitApplication;
 use App\Actions\RenderApplicationFormPdf;
 use App\Actions\RenderPermitPdf;
 use App\Enums\PermitApplicationType;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Staff\CancelPermitApplicationRequest;
 use App\Http\Requests\Staff\StorePermitApplicationRequest;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
+use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Gate;
@@ -34,6 +37,7 @@ class PermitApplicationController extends Controller
             'can' => [
                 'create_permit_applications' => auth()->user()?->can(UserPermission::CreatePermitApplications->value) ?? false,
                 'assess_permit_applications' => auth()->user()?->can(UserPermission::AssessPermitApplications->value) ?? false,
+                'update_permit_application_status' => auth()->user()?->can(UserPermission::UpdatePermitApplicationStatus->value) ?? false,
             ],
         ]);
     }
@@ -64,6 +68,20 @@ class PermitApplicationController extends Controller
         return to_route('staff.permit-applications.show', $permitApplication);
     }
 
+    public function cancel(CancelPermitApplicationRequest $request, PermitApplication $permitApplication, CancelPermitApplication $cancelPermitApplication): RedirectResponse
+    {
+        try {
+            $cancelPermitApplication->handle($permitApplication, $request->user(), (string) $request->validated('reason'));
+        } catch (DomainException $exception) {
+            return back()->withErrors([
+                'status' => $exception->getMessage(),
+            ]);
+        }
+
+        return to_route('staff.permit-applications.show', $permitApplication)
+            ->with('status', 'Permit application cancelled.');
+    }
+
     public function show(PermitApplication $permitApplication): Response
     {
         Gate::authorize(UserPermission::ViewPermitApplications->value);
@@ -74,6 +92,7 @@ class PermitApplicationController extends Controller
             'permitApplication' => $this->permitApplicationPayload($permitApplication),
             'can' => [
                 'assess_permit_applications' => auth()->user()?->can(UserPermission::AssessPermitApplications->value) ?? false,
+                'update_permit_application_status' => auth()->user()?->can(UserPermission::UpdatePermitApplicationStatus->value) ?? false,
                 'view_permit_documents' => auth()->user()?->can(UserPermission::ViewPermitApplications->value) ?? false,
             ],
             'permitDocumentGaps' => [
@@ -155,6 +174,8 @@ class PermitApplicationController extends Controller
                 'total_amount_cents' => $latestAssessment->total_amount_cents,
                 'assessed_at' => $latestAssessment->assessed_at?->toIso8601String(),
             ],
+            'terminal_state' => $permitApplication->metadata['terminal_state'] ?? null,
+            'can_continue' => ($permitApplication->metadata['terminal_state']['can_continue'] ?? true) !== false,
         ];
     }
 

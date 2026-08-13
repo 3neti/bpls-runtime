@@ -12,6 +12,39 @@ final class LifecycleScenarioRegistry
     public function all(): array
     {
         return [
+            'permit_application_cancelled_visibility' => new LifecycleScenarioDefinition(
+                key: 'permit_application_cancelled_visibility',
+                label: 'Permit application cancelled visibility',
+                mode: 'permit_application_cancelled_visibility',
+                risk: 'local transactional',
+                actors: [
+                    'operator' => 'primary_operator',
+                    'recipient' => 'sample_recipient',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'canonical_state' => 'cancelled',
+                    'display_status' => 'cancelled',
+                    'is_terminal' => true,
+                    'can_continue' => false,
+                    'external_calls' => 0,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
             'storyboard_terminal_state_visibility' => new LifecycleScenarioDefinition(
                 key: 'storyboard_terminal_state_visibility',
                 label: 'Storyboard terminal export visibility',

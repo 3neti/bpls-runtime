@@ -19,7 +19,9 @@ if (manifest.schema_version !== 'application.lifecycle-evidence.v1') {
     fail('Unsupported manifest schema.');
 }
 
-if (manifest.scenario?.key !== 'storyboard_terminal_state_visibility') {
+const supportedScenarios = ['storyboard_terminal_state_visibility', 'permit_application_cancelled_visibility'];
+
+if (!supportedScenarios.includes(manifest.scenario?.key)) {
     fail('Unsupported scenario key.');
 }
 
@@ -63,9 +65,18 @@ try {
     });
 
     await authenticate(page, baseUrl, email, password);
-    await inspectList(page, baseUrl);
-    await inspectDetail(page, baseUrl);
-    await inspectMobile(page, baseUrl);
+
+    if (manifest.scenario.key === 'storyboard_terminal_state_visibility') {
+        await inspectStoryboardList(page, baseUrl);
+        await inspectStoryboardDetail(page, baseUrl);
+        await inspectStoryboardMobile(page, baseUrl);
+    }
+
+    if (manifest.scenario.key === 'permit_application_cancelled_visibility') {
+        await inspectPermitApplicationList(page, baseUrl);
+        await inspectPermitApplicationDetail(page, baseUrl);
+        await inspectPermitApplicationMobile(page, baseUrl);
+    }
 } catch (error) {
     checks.push(check('browser-exception', 'Browser runner completed without exception', true, false, {
         message: redact(error instanceof Error ? error.message : String(error)),
@@ -107,7 +118,7 @@ async function authenticate(targetPage, targetBaseUrl, actorEmail, actorPassword
     checks.push(check('authenticated', 'Authenticate as manifest operator', true, true));
 }
 
-async function inspectList(targetPage, targetBaseUrl) {
+async function inspectStoryboardList(targetPage, targetBaseUrl) {
     const listUrl = `${targetBaseUrl}${manifest.resources.list_url}`;
     await targetPage.goto(listUrl, { waitUntil: 'networkidle' });
     await targetPage.getByText(manifest.resources.public_reference.replace('STORYBOARD-', ''), { exact: false }).first().waitFor({ timeout: 10000 }).catch(() => {});
@@ -119,7 +130,7 @@ async function inspectList(targetPage, targetBaseUrl) {
     await screenshot(targetPage, '01-list', 'browser/screenshots/01-list.png');
 }
 
-async function inspectDetail(targetPage, targetBaseUrl) {
+async function inspectStoryboardDetail(targetPage, targetBaseUrl) {
     const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
     await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
     const titleVisible = await hasTitleInputValue(targetPage);
@@ -136,13 +147,63 @@ async function inspectDetail(targetPage, targetBaseUrl) {
     await screenshot(targetPage, '02-detail', 'browser/screenshots/02-detail.png');
 }
 
-async function inspectMobile(targetPage, targetBaseUrl) {
+async function inspectStoryboardMobile(targetPage, targetBaseUrl) {
     await targetPage.setViewportSize({ width: 390, height: 844 });
     await targetPage.goto(`${targetBaseUrl}${manifest.resources.detail_url}`, { waitUntil: 'networkidle' });
     const titleVisible = await hasTitleInputValue(targetPage);
     const horizontalOverflow = await targetPage.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
 
     checks.push(check('mobile-title-visible', 'Mobile detail keeps exact storyboard title visible', true, titleVisible));
+    checks.push(check('mobile-no-horizontal-overflow', 'Mobile detail has no horizontal overflow', false, horizontalOverflow));
+    await screenshot(targetPage, '03-mobile-detail', 'browser/screenshots/03-mobile-detail.png');
+}
+
+async function inspectPermitApplicationList(targetPage, targetBaseUrl) {
+    const listUrl = `${targetBaseUrl}${manifest.resources.list_url}`;
+    await targetPage.goto(listUrl, { waitUntil: 'networkidle' });
+    const recordVisible = await targetPage.getByText(manifest.resources.public_reference, { exact: false }).first().isVisible().catch(() => false);
+    const cancelledVisible = await targetPage.getByText('cancelled', { exact: false }).first().isVisible().catch(() => false);
+    const terminalVisible = await targetPage.getByText('Terminal', { exact: true }).first().isVisible().catch(() => false);
+    const assessVisible = await targetPage.getByRole('button', { name: /assess/i }).isVisible().catch(() => false);
+
+    checks.push(check('list-record-visible', 'List screen shows prepared permit application', true, recordVisible, {
+        url: listUrl,
+        permit_application_id: manifest.resources.record_id,
+    }));
+    checks.push(check('list-cancelled-status-visible', 'List screen shows cancelled status', true, cancelledVisible));
+    checks.push(check('list-terminal-marker-visible', 'List screen marks record as terminal', true, terminalVisible));
+    checks.push(check('list-assess-action-unavailable', 'List screen does not offer assessment continuation for terminal record', false, assessVisible));
+    await screenshot(targetPage, '01-list', 'browser/screenshots/01-list.png');
+}
+
+async function inspectPermitApplicationDetail(targetPage, targetBaseUrl) {
+    const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    const recordVisible = await targetPage.getByText(manifest.resources.public_reference, { exact: false }).first().isVisible().catch(() => false);
+    const cancelledVisible = await targetPage.getByText('cancelled', { exact: false }).first().isVisible().catch(() => false);
+    const terminalEvidenceVisible = await targetPage.getByText('Terminal status evidence', { exact: true }).first().isVisible().catch(() => false);
+    const canContinueNoVisible = await targetPage.getByText('No', { exact: true }).first().isVisible().catch(() => false);
+    const assessVisible = await targetPage.getByRole('button', { name: /assess/i }).isVisible().catch(() => false);
+    const cancelVisible = await targetPage.getByRole('button', { name: /cancel/i }).isVisible().catch(() => false);
+
+    checks.push(check('detail-record-visible', 'Detail screen shows exact prepared permit application', true, recordVisible, { url: detailUrl }));
+    checks.push(check('detail-cancelled-status-visible', 'Detail screen shows cancelled status', true, cancelledVisible));
+    checks.push(check('detail-terminal-evidence-visible', 'Detail screen shows terminal status evidence', true, terminalEvidenceVisible));
+    checks.push(check('detail-can-continue-false-visible', 'Detail screen shows continuation is unavailable', true, canContinueNoVisible));
+    checks.push(check('detail-assess-action-unavailable', 'Detail screen does not offer assessment continuation for terminal record', false, assessVisible));
+    checks.push(check('detail-cancel-action-unavailable', 'Detail screen does not offer repeat cancellation for terminal record', false, cancelVisible));
+    await screenshot(targetPage, '02-detail', 'browser/screenshots/02-detail.png');
+}
+
+async function inspectPermitApplicationMobile(targetPage, targetBaseUrl) {
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(`${targetBaseUrl}${manifest.resources.detail_url}`, { waitUntil: 'networkidle' });
+    const recordVisible = await targetPage.getByText(manifest.resources.public_reference, { exact: false }).first().isVisible().catch(() => false);
+    const terminalEvidenceVisible = await targetPage.getByText('Terminal status evidence', { exact: true }).first().isVisible().catch(() => false);
+    const horizontalOverflow = await targetPage.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+
+    checks.push(check('mobile-record-visible', 'Mobile detail keeps exact permit application visible', true, recordVisible));
+    checks.push(check('mobile-terminal-evidence-visible', 'Mobile detail keeps terminal evidence visible', true, terminalEvidenceVisible));
     checks.push(check('mobile-no-horizontal-overflow', 'Mobile detail has no horizontal overflow', false, horizontalOverflow));
     await screenshot(targetPage, '03-mobile-detail', 'browser/screenshots/03-mobile-detail.png');
 }

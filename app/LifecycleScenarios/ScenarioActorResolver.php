@@ -35,12 +35,32 @@ final class ScenarioActorResolver
             throw new RuntimeException("Lifecycle scenario actor [{$identity}] with email [{$email}] was not found. Create or seed the user in local/testing before running this scenario.");
         }
 
-        foreach ([UserPermission::AccessStaff, UserPermission::ManageStoryboards] as $permission) {
+        foreach ($this->requiredPermissions($identity) as $permission) {
             if (! $user->can($permission->value)) {
                 throw new RuntimeException("Lifecycle scenario actor [{$identity}] is missing permission [{$permission->value}].");
             }
         }
 
         return $user;
+    }
+
+    /**
+     * @return list<UserPermission>
+     */
+    private function requiredPermissions(string $identity): array
+    {
+        return match ($identity) {
+            'primary_operator' => [
+                UserPermission::AccessStaff,
+                UserPermission::ViewPermitApplications,
+                UserPermission::CreatePermitApplications,
+                UserPermission::AssessPermitApplications,
+                UserPermission::UpdatePermitApplicationStatus,
+                UserPermission::ManageStoryboards,
+            ],
+            default => [
+                UserPermission::AccessStaff,
+            ],
+        };
     }
 }

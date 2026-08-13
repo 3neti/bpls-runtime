@@ -36,6 +36,7 @@ type PermitApplicationRow = {
         total_amount_cents: number;
         assessed_at: string | null;
     } | null;
+    can_continue: boolean;
 };
 
 defineProps<{
@@ -45,6 +46,7 @@ defineProps<{
     can: {
         create_permit_applications: boolean;
         assess_permit_applications: boolean;
+        update_permit_application_status: boolean;
     };
 }>();
 
@@ -220,7 +222,10 @@ function money(amountCents: number): string {
                                             </Link>
                                         </Button>
                                         <Link
-                                            v-if="can.assess_permit_applications"
+                                            v-if="
+                                                can.assess_permit_applications &&
+                                                permitApplication.can_continue
+                                            "
                                             :href="assess(permitApplication.id)"
                                             method="post"
                                             as="button"
@@ -231,6 +236,14 @@ function money(amountCents: number): string {
                                             <Calculator />
                                             Assess
                                         </Link>
+                                        <span
+                                            v-if="
+                                                !permitApplication.can_continue
+                                            "
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            Terminal
+                                        </span>
                                     </div>
                                 </td>
                             </tr>
