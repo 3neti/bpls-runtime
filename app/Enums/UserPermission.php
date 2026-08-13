@@ -14,4 +14,5 @@ enum UserPermission: string
     case RecordCollections = 'collections.record';
     case ViewReceipts = 'receipts.view';
     case IssueReceipts = 'receipts.issue';
+    case VoidReceipts = 'receipts.void';
 }

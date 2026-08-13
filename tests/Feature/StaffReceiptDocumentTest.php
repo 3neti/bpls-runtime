@@ -45,6 +45,27 @@ test('staff users with view receipt permission can view receipt detail evidence'
             ->where('receipt.allocations.0.amount_cents', 12_500)
             ->where('policyGaps.0', 'Automatic receipt numbering authority remains unresolved.')
             ->where('policyGaps.1', 'This is a print-friendly receipt view, not the final official PDF layout.')
+            ->where('can.void_receipts', false)
+        );
+});
+
+test('staff users with void receipt permission can see the unresolved void policy boundary', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewReceipts,
+        UserPermission::VoidReceipts,
+    ]);
+
+    $receipt = receiptDocumentFixture();
+
+    $this->actingAs($user)
+        ->get(route('staff.receipts.show', $receipt))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('receipts/Show')
+            ->where('receipt.id', $receipt->id)
+            ->where('can.void_receipts', true)
+            ->where('policyGaps.2', 'Void, reprint, and reconciliation policy remain unresolved.')
         );
 });
 
@@ -109,6 +130,42 @@ test('staff users without view receipt permission cannot open receipt pdf artifa
     $this->actingAs($user)
         ->get(route('staff.receipts.pdf', $receipt))
         ->assertForbidden();
+});
+
+test('authorized receipt void attempts are blocked without mutating financial state', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewReceipts,
+        UserPermission::VoidReceipts,
+    ]);
+
+    $receipt = receiptDocumentFixture();
+    $collection = $receipt->treasuryCollection;
+
+    $this->actingAs($user)
+        ->from(route('staff.receipts.show', $receipt))
+        ->post(route('staff.receipts.void', $receipt))
+        ->assertRedirectBackWithErrors(['receipt_policy']);
+
+    expect($receipt->refresh()->status)->toBe(ReceiptStatus::Issued)
+        ->and($collection->refresh()->status)->toBe(TreasuryCollectionStatus::Receipted);
+});
+
+test('staff users without void receipt permission cannot attempt receipt voiding', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewReceipts,
+    ]);
+
+    $receipt = receiptDocumentFixture();
+    $collection = $receipt->treasuryCollection;
+
+    $this->actingAs($user)
+        ->post(route('staff.receipts.void', $receipt))
+        ->assertForbidden();
+
+    expect($receipt->refresh()->status)->toBe(ReceiptStatus::Issued)
+        ->and($collection->refresh()->status)->toBe(TreasuryCollectionStatus::Receipted);
 });
 
 function receiptDocumentFixture(): Receipt

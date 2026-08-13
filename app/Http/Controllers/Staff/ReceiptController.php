@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Staff;
 
 use App\Actions\RenderReceiptPdf;
+use App\Actions\VoidReceipt;
 use App\Enums\UserPermission;
+use App\Exceptions\UnresolvedReceiptPolicy;
 use App\Http\Controllers\Controller;
 use App\Models\CollectionAllocation;
 use App\Models\Receipt;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -34,6 +37,9 @@ class ReceiptController extends Controller
                 'This is a print-friendly receipt view, not the final official PDF layout.',
                 'Void, reprint, and reconciliation policy remain unresolved.',
             ],
+            'can' => [
+                'void_receipts' => auth()->user()?->can(UserPermission::VoidReceipts->value) ?? false,
+            ],
         ]);
     }
 
@@ -46,6 +52,19 @@ class ReceiptController extends Controller
                 'Content-Type' => 'application/pdf',
                 'Content-Disposition' => 'inline; filename="'.$this->receiptFilename($receipt).'"',
             ]);
+    }
+
+    public function voidReceipt(Receipt $receipt, VoidReceipt $voidReceipt): RedirectResponse
+    {
+        Gate::authorize(UserPermission::VoidReceipts->value);
+
+        try {
+            $voidReceipt->handle($receipt, auth()->user());
+        } catch (UnresolvedReceiptPolicy $exception) {
+            return back()->withErrors([
+                'receipt_policy' => $exception->getMessage(),
+            ]);
+        }
     }
 
     /**

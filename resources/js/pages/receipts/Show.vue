@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, FileText, Printer } from '@lucide/vue';
+import { Form, Head, Link } from '@inertiajs/vue3';
+import { ArrowLeft, Ban, FileText, Printer } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -8,6 +8,7 @@ import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Staf
 import {
     pdf as receiptPdf,
     show as receiptShow,
+    voidReceipt as receiptVoidReceipt,
 } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
 import type { BreadcrumbItem } from '@/types';
 
@@ -80,6 +81,9 @@ type Receipt = {
 const props = defineProps<{
     receipt: Receipt;
     policyGaps: string[];
+    can: {
+        void_receipts: boolean;
+    };
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -134,6 +138,27 @@ function printReceipt(): void {
                     </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
+                    <Form
+                        v-if="can.void_receipts"
+                        v-bind="receiptVoidReceipt.form(receipt.id)"
+                        #default="{ errors }"
+                    >
+                        <Button
+                            type="submit"
+                            variant="outline"
+                            disabled
+                            title="Receipt voiding policy is unresolved"
+                        >
+                            <Ban />
+                            Void unavailable
+                        </Button>
+                        <p
+                            v-if="errors.receipt_policy"
+                            class="mt-1 text-xs text-destructive"
+                        >
+                            {{ errors.receipt_policy }}
+                        </p>
+                    </Form>
                     <Button as-child variant="outline">
                         <a :href="receiptPdf.url(receipt.id)" target="_blank">
                             <FileText />

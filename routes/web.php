@@ -34,6 +34,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('receipts.show');
         Route::get('receipts/{receipt}/pdf', [ReceiptController::class, 'pdf'])
             ->name('receipts.pdf');
+        Route::post('receipts/{receipt}/void', [ReceiptController::class, 'voidReceipt'])
+            ->name('receipts.void');
     });
 });
 
