@@ -1,0 +1,132 @@
+# Capability Ledger
+
+Discovery date: 2026-08-13
+
+Evidence states: `REQUIRED`, `IMPLEMENTED`, `PARTIAL`, `NOT FOUND`, `NOT OBSERVED`, `CONTRADICTED`, `UNKNOWN`.
+
+Evidence sources:
+
+- `LEGAL-MRC-001`: Municipal Revenue Code, 83-page PDF.
+- `CONTRACT-TOR-001`: Terms of Reference, 29-page PDF.
+- `LEGACY-SOURCE-001`: `bpls-system-main.zip`.
+- `LIVE-APP-001`: verified BPLS Portal dashboard.
+- `REPORTING-ENV-001`: verified ad hoc reporting dashboard.
+
+| ID | Capability | Area | TOR | Ordinance | Legacy source | Live | Current implementation status | Known discrepancy | Confidence | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| CAP-001 | Staff authentication | Identity | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Convex Auth password provider; staff login verified live. |
+| CAP-002 | Citizen registration/login | Identity | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Live citizen portal not separately verified beyond source. | Medium | Source has `apps/web/register`, `apps/web/login`, citizen auth namespace. |
+| CAP-003 | Role-based access control | Authorization | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Admin client/server permission behavior may diverge. | High | Roles, permissions, role-permissions, hierarchical resources. |
+| CAP-004 | User management | Administration | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Live portal nav includes User Management. |
+| CAP-005 | Role/permission matrix | Administration | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Admin UI may show full access when backend lacks rows. | High | Dedicated roles route and permission matrix in source. |
+| CAP-006 | Business owner registry | Registry | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Owner list/detail/create/update, blacklist fields. |
+| CAP-007 | Business registry | Registry | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Business records include address, registration, ownership, employees, occupancy, documents. |
+| CAP-008 | Business category/subcategory taxonomy | Registry/reporting | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Some reports note category-derived PLDS fields are blank until sync. | High | Separate stat dimension from fee hierarchy. |
+| CAP-009 | Location references | Reference data | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | High | Provinces, cities, barangays. |
+| CAP-010 | New business permit application | Permit lifecycle | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Source and live portal include permit applications. |
+| CAP-011 | Renewal permit application | Permit lifecycle | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Not live-observed due production safety. | High | Citizen and staff source support `Renewal`. |
+| CAP-012 | Additional line/business application | Permit lifecycle | UNKNOWN | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | TOR does not explicitly call out `Additional`. | Medium | Source supports `Additional` as application type. |
+| CAP-013 | Amendment/change application | Permit lifecycle | UNKNOWN | REQUIRED/PARTIAL | NOT FOUND | NOT OBSERVED | UNKNOWN | Ordinance treats ownership/name/management changes as termination/new record; no first-class amendment found. | Medium | Needs owner decision during architecture. |
+| CAP-014 | Transfer of business/location handling | Permit lifecycle | UNKNOWN | REQUIRED | PARTIAL | NOT OBSERVED | PARTIAL | Ordinance has location transfer and ownership transfer rules; source has business update, no dedicated transfer lifecycle found. | Medium | Must preserve required legal behavior if in scope. |
+| CAP-015 | Retirement/closure workflow | Permit lifecycle | UNKNOWN | REQUIRED | NOT FOUND | NOT OBSERVED | UNKNOWN | Ordinance has retirement process; source lacks obvious retirement lifecycle. | Medium | Candidate gap. |
+| CAP-016 | Draft application | Permit lifecycle | UNKNOWN | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | TOR workflow starts at application submission; source supports Draft. | High | Citizen draft creation/update supported. |
+| CAP-017 | Application assessment queue | Permit lifecycle | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | `Assessment` status and route. |
+| CAP-018 | Application approval/evaluation queue | Permit lifecycle | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | TOR says evaluation then approval; source stage is `Approval`. | High | Terminology may need parity attention. |
+| CAP-019 | Pending payment queue | Permit lifecycle | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | `Pending Payment` status and payment route. |
+| CAP-020 | Permit release/releasing queue | Permit lifecycle | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | Source status `Released` means first payment paid and permit can be released; actual document issuance is separate. | High | Important status semantics. |
+| CAP-021 | Application status update controls | Workflow/admin | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Restricted permission exists; safe live mutation not attempted. | High | Permission `permit_applications:status_update`. |
+| CAP-022 | Application timeline/history | Audit/workflow | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | Medium | Activity log and application timeline components. |
+| CAP-023 | Unified business application form | Forms | REQUIRED | REQUIRED | PARTIAL | NOT OBSERVED | PARTIAL | TOR enumerates broad fields; source has many but not all regulatory/fire/local tax fields as explicit structured data. | Medium | Needs full field-level characterization. |
+| CAP-024 | Applicant/business document tracking | Forms | REQUIRED | REQUIRED | PARTIAL | NOT OBSERVED | PARTIAL | Source has business documents; no strong evidence of full documentary requirement checklist. | Medium | TOR requires upload/checklist behavior. |
+| CAP-025 | Business owner profile photo | Forms | UNKNOWN | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | Medium | Source has profile photo upload components. |
+| CAP-026 | Line of business capture | Assessment | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | High | Embedded in application and business. |
+| CAP-027 | Major/division/group fee hierarchy | Assessment config | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | Source names `groups` as LOB, which can confuse RBAC groups. | High | Major -> Division -> Group/LOB. |
+| CAP-028 | Fee names catalog | Assessment config | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Fee names and fees routes. |
+| CAP-029 | Constant fee calculation | Assessment | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | High | Fee engine supports Constant. |
+| CAP-030 | Range-based fee calculation | Assessment | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | High | Used for capital/gross/etc. |
+| CAP-031 | Formula-based fee calculation | Assessment | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Multiple formula evaluators may diverge. | High | Assessment, reporting, and surcharge formula evaluators differ. |
+| CAP-032 | Per-LOB fee overrides | Assessment | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Special permission controls some overrides after schedule creation. | High | Override reason required in source. |
+| CAP-033 | Fee exclusion/disabled fees | Assessment | UNKNOWN | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Not explicitly TOR-derived. | Medium | Source supports excluded fees per LOB. |
+| CAP-034 | Units of measurement for formula variables | Assessment | REQUIRED | REQUIRED/PARTIAL | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | High | Dynamic variables for formula fees. |
+| CAP-035 | Business tax based on gross sales/receipts | Assessment | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Exact ordinance rates still require full extraction into test cases. | High | Revenue Code governs computation. |
+| CAP-036 | New business tax exemption from initial local business tax | Assessment | UNKNOWN | REQUIRED | UNKNOWN | NOT OBSERVED | UNKNOWN | Ordinance says new businesses pay permit/regulatory fees, not initial local business tax; source support not proven. | Medium | High-risk financial rule. |
+| CAP-037 | Presumptive income level validation | Assessment | UNKNOWN | REQUIRED | NOT FOUND | NOT OBSERVED | UNKNOWN | Ordinance requires PIL validation/refusal for low declarations; source not found in first pass. | Medium | High-risk gap. |
+| CAP-038 | Surcharge/penalty configuration | Assessment/payment | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | Formula must reconcile with ordinance 25% surcharge and interest rules. | High | Source has global formula config. |
+| CAP-039 | Payment schedule configuration | Payment | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Default due dates may not cover all legal cases. | High | Annual/semiannual/quarterly. |
+| CAP-040 | Annual payment mode | Payment | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | High | One section. |
+| CAP-041 | Semi-annual payment mode | Payment | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | High | Two sections. |
+| CAP-042 | Quarterly payment mode | Payment | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Non-tax fees upfront; tax split equally. | High | Source-specific distribution rule. |
+| CAP-043 | Over-the-counter payment recording | Treasury/payment | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | No mutation attempted. | High | Payment methods include manual/OTC-style recording. |
+| CAP-044 | Online payment | Treasury/payment | REQUIRED/CONDITIONAL | UNKNOWN | PARTIAL | NOT OBSERVED | PARTIAL | Source README says citizen payment is mock/no live gateway. | High | Major TOR gap if online payment required for acceptance. |
+| CAP-045 | Payment receipt number capture | Treasury/payment | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Official receipt sequence governance unresolved. | High | Receipt number optional on payment. |
+| CAP-046 | Payment void/cancellation | Treasury/payment | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | No live mutation; source demotes released app if all payment removed. | High | Voids set payment to failed. |
+| CAP-047 | Failed/cancelled/refunded payment statuses | Treasury/payment | REQUIRED | UNKNOWN | PARTIAL | NOT OBSERVED | PARTIAL | Source statuses include completed/pending/failed/cancelled/refunded in some contexts but void uses failed. | Medium | Needs reconciliation. |
+| CAP-048 | Treasury daily collection | Treasury/reporting | REQUIRED | REQUIRED | PARTIAL | IMPLEMENTED/PARTIAL | PARTIAL | Implemented mostly through reports/billing/payment summaries, not necessarily a full Treasury Collection System. | Medium | TOR scope broad. |
+| CAP-049 | Miscellaneous fee collection | Treasury | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | Via configurable billing groups, not fixed Treasury module. | High | Live reports include billing group abstracts. |
+| CAP-050 | Government stall rental collection | Treasury | REQUIRED | REQUIRED | IMPLEMENTED/PARTIAL | IMPLEMENTED/PARTIAL | PARTIAL | Source supports configurable billing groups; specific rental lifecycle not proven. | Medium | TOR names this explicitly. |
+| CAP-051 | Franchise payment collection | Treasury | REQUIRED | REQUIRED | IMPLEMENTED/PARTIAL | IMPLEMENTED/PARTIAL | PARTIAL | Source supports billing groups; specific franchise lifecycle not proven. | Medium | TOR names this explicitly. |
+| CAP-052 | Other Treasury collections | Treasury | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | Configurable billing groups cover generic non-permit revenue. | Medium | Need owner acceptance for configurability vs explicit modules. |
+| CAP-053 | Taxpayer/customer account card | Treasury/reporting | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc app exposes Taxpayer Account Card. |
+| CAP-054 | Manual debit/credit transactions | Treasury | UNKNOWN | REQUIRED/PARTIAL | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | Not explicitly TOR-named but supports Treasury adjustments. | Medium | Source has manual transactions. |
+| CAP-055 | Billing group definitions | Treasury config | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Custom fields, fee library, receipt layouts. |
+| CAP-056 | Billing group records | Treasury | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Records may be pending/completed/voided/deleted. |
+| CAP-057 | Billing group line items | Treasury | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Multi-line item transactions. |
+| CAP-058 | Billing group receipts | Documents/Treasury | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | No live print/download attempted. | High | Template-based PDF receipts. |
+| CAP-059 | Clearance type administration | Clearances | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Live nav includes Clearances. |
+| CAP-060 | Permit clearance checklist | Clearances | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Source assigns active clearances after first payment; TOR workflow suggests before release. | High | Timing semantics need decision. |
+| CAP-061 | Clearance completion gating for permit issuance | Clearances | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Payment first triggers clearances; issuance button gated until all clearances complete. | High | Source has checklist card. |
+| CAP-062 | Issued permits list | Permits | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Live nav includes Permits. |
+| CAP-063 | Mayor's Permit PDF | Documents | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | No live download attempted. | High | Template and QR capable. |
+| CAP-064 | Public QR permit verification | Documents | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Route exists in source; not live-verified. | High | `/permits/verify/[id]`. |
+| CAP-065 | Application form PDF | Documents | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | Medium | Source has application form document/modal. |
+| CAP-066 | Assessment sheet PDF | Documents | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | Medium | Source has assessment sheet document/PDF. |
+| CAP-067 | Permit receipt PDF | Documents/Treasury | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | High | Template-based receipt document. |
+| CAP-068 | Configurable permit layout | Documents/config | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Settings nav includes permit layout. |
+| CAP-069 | Configurable receipt layout | Documents/config | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Settings nav includes receipting. |
+| CAP-070 | Municipality profile/settings | Municipality config | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Municipality and officials settings. |
+| CAP-071 | Branding/theme settings | Municipality theme | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Branding settings; platform settings. |
+| CAP-072 | Officials/signatories | Municipality config | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Officials settings. |
+| CAP-073 | Dashboard statistics/charts | Dashboards | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Staff dashboard and charts. |
+| CAP-074 | LGU official dashboards | Dashboards | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | Exact role-specific dashboard differences not characterized. | Medium | Needs later browser verification. |
+| CAP-075 | Activity/audit log | Audit | REQUIRED | REQUIRED/PARTIAL | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | Completeness per mutation not exhaustively verified. | High | Activity route and log functions. |
+| CAP-076 | Global search/command palette | UX/search | UNKNOWN | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Not contractually required. | Medium | Source has search indexes/globalSearch. |
+| CAP-077 | Business owner search/filter/table | UX/search | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | High | Source components. |
+| CAP-078 | Business search/filter/table | UX/search | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | High | Source components. |
+| CAP-079 | Application search/filter/table | UX/search | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | High | Source paginated/search queries. |
+| CAP-080 | Permit search/filter/table | UX/search | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | High | Source permit list client. |
+| CAP-081 | Payment search/filter/table | UX/search | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | High | Source payment queries/search. |
+| CAP-082 | Convex-native ad hoc report builder | Reporting | REQUIRED | UNKNOWN | PARTIAL | IMPLEMENTED | PARTIAL | README says only permit_applications export fully wired; other resources placeholder. | High | Saved report configs supported. |
+| CAP-083 | Saved reports | Reporting | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | `saved_reports`. |
+| CAP-084 | Server-side CSV export | Reporting | REQUIRED | UNKNOWN | PARTIAL | NOT OBSERVED | PARTIAL | Only permit applications fully wired in workflow export. | High | Placeholder for other resources. |
+| CAP-085 | All Abstract report | Reporting/Treasury | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc reporting app. |
+| CAP-086 | Abstract by billing group | Reporting/Treasury | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc route `/abstract/[billingGroupId]`. |
+| CAP-087 | Paid establishment masterlist | Reporting | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc app. |
+| CAP-088 | Unpaid establishment masterlist | Reporting | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc app. |
+| CAP-089 | Breakdown of collectibles | Reporting/Treasury | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc app. |
+| CAP-090 | Business tax by major type | Reporting | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc app. |
+| CAP-091 | Top establishments by tax due | Reporting | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc app. |
+| CAP-092 | Total capital/gross summary | Reporting | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Live sample did not list it in first 25 lines but source route exists. | High | Ad hoc route exists. |
+| CAP-093 | CMCI LDCS report | Reporting | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc app. |
+| CAP-094 | PLDS report | Reporting | REQUIRED | UNKNOWN | PARTIAL | IMPLEMENTED | PARTIAL | Source says main economic activity and major product/services blank pending category sync. | High | Explicit source TODO. |
+| CAP-095 | BSP report | Reporting | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc app. |
+| CAP-096 | ANNEX-C DNFBP report | Reporting | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc app. |
+| CAP-097 | Collection by revenue account/source reports | Reporting/Treasury | REQUIRED | REQUIRED | PARTIAL | NOT OBSERVED | PARTIAL | TOR lists many Treasury reports; source has several but not all named outputs. | Medium | Needs report-by-report reconciliation. |
+| CAP-098 | Online payment reconciliation | Treasury/payment | REQUIRED | UNKNOWN | NOT FOUND/PARTIAL | NOT OBSERVED | UNKNOWN | Source has no live payment gateway; reconciliation not found as complete flow. | Medium | Major TOR gap if required. |
+| CAP-099 | Notifications to applicants | Notifications | REQUIRED | UNKNOWN | PARTIAL | NOT OBSERVED | PARTIAL | Source evidence weak; no SMS/email integration found. | Medium | TOR names email/SMS/in-app. |
+| CAP-100 | SMS/email service integration | Integrations | REQUIRED/CONDITIONAL | UNKNOWN | NOT FOUND | NOT OBSERVED | UNKNOWN | No custom REST/webhook endpoints beyond auth found. | Medium | Potential gap. |
+| CAP-101 | Data migration support | Migration | REQUIRED | UNKNOWN | PARTIAL | NOT OBSERVED | PARTIAL | Source has Convex migrations, but not legacy-to-new migration package. | Medium | Future rescue risk. |
+| CAP-102 | Backup/recovery/security controls | Operations | REQUIRED | UNKNOWN | UNKNOWN | NOT OBSERVED | UNKNOWN | Source has auth/RBAC but operational controls not proven. | Low | Architecture phase must address. |
+| CAP-103 | First-run onboarding | Administration | REQUIRED/PARTIAL | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Not observed live. | High | `/admin/onboarding`. |
+| CAP-104 | Platform configuration | Administration | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Settings route. |
+| CAP-105 | Permit number format configuration | Administration | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | Medium | Platform settings include format. |
+| CAP-106 | Permit expiry configuration | Administration | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Exact legal expiry semantics need verification. | Medium | Platform settings include expiry mode. |
+| CAP-107 | Blacklist business owner/business | Compliance | UNKNOWN | REQUIRED/PARTIAL | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Not explicit TOR, but supports refusal/risk controls. | Medium | Source has blacklist fields. |
+| CAP-108 | Data privacy/security | Security | REQUIRED | UNKNOWN | PARTIAL | NOT OBSERVED | PARTIAL | Code has auth/RBAC; no full compliance proof. | Medium | TOR cites Data Privacy Act. |
+| CAP-109 | Public landing/marketing page | Citizen UX | UNKNOWN | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Not rescue-critical unless live parity requires it. | Medium | `apps/web` landing components. |
+| CAP-110 | Citizen business profile linking/creation | Citizen portal | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | High | Citizen profile links or creates owner record. |
+| CAP-111 | Citizen-owned business selection/create | Citizen portal | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | High | Application wizard business selection. |
+| CAP-112 | Citizen application tracking | Citizen portal | REQUIRED | UNKNOWN | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | None known | High | Citizen app details strips admin-only fields. |
+| CAP-113 | Citizen payment detail | Citizen portal | REQUIRED | UNKNOWN | PARTIAL | NOT OBSERVED | PARTIAL | Payment is mock/no live gateway. | High | Source route `/portal/payments/[id]`. |
+| CAP-114 | Citizen permit download | Citizen portal | REQUIRED | UNKNOWN | UNKNOWN | NOT OBSERVED | UNKNOWN | TOR requires download approved permits; source evidence not confirmed in citizen portal. | Medium | Needs follow-up. |
+| CAP-115 | Permit release documents after clearances | Documents/workflow | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Exact sequence differs from TOR wording. | High | Clearances assigned after first payment. |
+| CAP-116 | Revenue Code full fee catalog | Legal/financial | REQUIRED | REQUIRED | PARTIAL | NOT OBSERVED | PARTIAL | Source supports configurable fees, but seeded completeness against ordinance not proven. | Medium | Full extraction/test later required. |
