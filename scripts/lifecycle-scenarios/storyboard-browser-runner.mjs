@@ -322,12 +322,22 @@ async function inspectManualReceiptPermitReleaseBoundary(targetPage, targetBaseU
     const permitUrl = `${targetBaseUrl}${manifest.resources.permit_application_url}`;
     await targetPage.goto(permitUrl, { waitUntil: 'networkidle' });
     const applicationVisible = await targetPage.getByText(manifest.resources.application_number, { exact: false }).first().isVisible().catch(() => false);
+    const clearanceChecklistVisible = await targetPage.getByText('Clearance checklist', { exact: true }).first().isVisible().catch(() => false);
+    const clearanceSummaryVisible = await targetPage.getByText('3 / 3 complete', { exact: false }).first().isVisible().catch(() => false);
+    const bploClearanceVisible = await targetPage.getByText('BPLO review', { exact: true }).first().isVisible().catch(() => false);
+    const treasuryClearanceVisible = await targetPage.getByText('Treasury payment evidence', { exact: true }).first().isVisible().catch(() => false);
+    const releaseAuthorityClearanceVisible = await targetPage.getByText('Release authority', { exact: true }).first().isVisible().catch(() => false);
     const boundaryVisible = await targetPage.getByText('Permit release boundary', { exact: true }).first().isVisible().catch(() => false);
     const unavailableVisible = await targetPage.getByText('Release unavailable', { exact: false }).first().isVisible().catch(() => false);
     const reasonVisible = await targetPage.getByText('Clearance completion, permit issuance authority, signatories, QR verification, and legacy Released status semantics remain unresolved.', { exact: true }).first().isVisible().catch(() => false);
     const pendingPaymentVisible = await targetPage.getByText('pending payment', { exact: false }).first().isVisible().catch(() => false);
 
     checks.push(check('permit-application-visible', 'Permit detail shows exact permit application', true, applicationVisible, { url: permitUrl }));
+    checks.push(check('permit-clearance-checklist-visible', 'Permit detail shows clearance checklist', true, clearanceChecklistVisible));
+    checks.push(check('permit-clearance-summary-visible', 'Permit detail shows all clearances complete', true, clearanceSummaryVisible));
+    checks.push(check('permit-bplo-clearance-visible', 'Permit detail shows BPLO clearance evidence', true, bploClearanceVisible));
+    checks.push(check('permit-treasury-clearance-visible', 'Permit detail shows Treasury clearance evidence', true, treasuryClearanceVisible));
+    checks.push(check('permit-release-authority-clearance-visible', 'Permit detail shows release authority boundary item', true, releaseAuthorityClearanceVisible));
     checks.push(check('permit-release-boundary-visible', 'Permit detail shows release boundary', true, boundaryVisible));
     checks.push(check('permit-release-unavailable-visible', 'Permit detail shows release unavailable action', true, unavailableVisible));
     checks.push(check('permit-release-boundary-reason-visible', 'Permit detail shows unresolved release policy reason', true, reasonVisible));

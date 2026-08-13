@@ -4,17 +4,21 @@ namespace App\Http\Controllers\Staff;
 
 use App\Actions\AttemptPermitApplicationRelease;
 use App\Actions\CancelPermitApplication;
+use App\Actions\CompletePermitClearance;
 use App\Actions\CreateStaffPermitApplication;
 use App\Actions\RenderApplicationFormPdf;
 use App\Actions\RenderPermitPdf;
 use App\Enums\PermitApplicationType;
+use App\Enums\PermitClearanceStatus;
 use App\Enums\UserPermission;
 use App\Exceptions\UnresolvedPermitReleasePolicy;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Staff\CancelPermitApplicationRequest;
+use App\Http\Requests\Staff\CompletePermitClearanceRequest;
 use App\Http\Requests\Staff\StorePermitApplicationRequest;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
+use App\Models\PermitClearance;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Response as HttpResponse;
@@ -99,6 +103,16 @@ class PermitApplicationController extends Controller
         return to_route('staff.permit-applications.show', $permitApplication);
     }
 
+    public function completeClearance(CompletePermitClearanceRequest $request, PermitApplication $permitApplication, PermitClearance $clearance, CompletePermitClearance $completePermitClearance): RedirectResponse
+    {
+        abort_unless($clearance->permit_application_id === $permitApplication->id, 404);
+
+        $completePermitClearance->handle($clearance, $request->user(), $request->validated('remarks'));
+
+        return to_route('staff.permit-applications.show', $permitApplication)
+            ->with('status', 'Clearance evidence recorded.');
+    }
+
     public function show(PermitApplication $permitApplication): Response
     {
         Gate::authorize(UserPermission::ViewPermitApplications->value);
@@ -108,6 +122,7 @@ class PermitApplicationController extends Controller
             'lines.lineOfBusiness',
             'assessments' => fn ($query) => $query->latest(),
             'paymentSchedules' => fn ($query) => $query->latest(),
+            'clearances' => fn ($query) => $query->with('completedBy')->orderBy('id'),
         ]);
 
         return Inertia::render('permit-applications/Show', [
@@ -117,6 +132,7 @@ class PermitApplicationController extends Controller
                 'update_permit_application_status' => auth()->user()?->can(UserPermission::UpdatePermitApplicationStatus->value) ?? false,
                 'view_permit_documents' => auth()->user()?->can(UserPermission::ViewPermitApplications->value) ?? false,
                 'attempt_release' => auth()->user()?->can(UserPermission::UpdatePermitApplicationStatus->value) ?? false,
+                'complete_clearances' => auth()->user()?->can(UserPermission::CompletePermitClearances->value) ?? false,
             ],
             'permitDocumentGaps' => [
                 'Generated application form artifact captures current rescue intake facts only.',
@@ -207,6 +223,27 @@ class PermitApplicationController extends Controller
             ],
             'terminal_state' => $permitApplication->metadata['terminal_state'] ?? null,
             'release_policy_boundary' => $permitApplication->metadata['release_policy_boundary'] ?? null,
+            'clearance_summary' => [
+                'completed' => $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count(),
+                'total' => $permitApplication->clearances->count(),
+                'all_completed' => $permitApplication->clearances->isNotEmpty() && $permitApplication->clearances->every(fn (PermitClearance $clearance): bool => $clearance->status === PermitClearanceStatus::Completed),
+                'policy_note' => 'Clearance completion records checklist evidence only; release authority remains unresolved.',
+            ],
+            'clearances' => $permitApplication->clearances
+                ->values()
+                ->map(fn (PermitClearance $clearance): array => [
+                    'id' => $clearance->id,
+                    'code' => $clearance->code,
+                    'label' => $clearance->label,
+                    'status' => $clearance->status->value,
+                    'completed_at' => $clearance->completed_at?->toIso8601String(),
+                    'completed_by' => $clearance->completedBy === null ? null : [
+                        'id' => $clearance->completedBy->id,
+                        'name' => $clearance->completedBy->name,
+                    ],
+                    'remarks' => $clearance->remarks,
+                    'policy_note' => $clearance->source_snapshot['policy_note'] ?? null,
+                ]),
             'can_continue' => ($permitApplication->metadata['terminal_state']['can_continue'] ?? true) !== false,
         ];
     }

@@ -7,6 +7,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import {
     applicationFormPdf,
     cancel,
+    completeClearance,
     index,
     permitPdf,
     release,
@@ -77,6 +78,25 @@ type PermitApplication = {
         reason: string;
         occurred_at: string;
     } | null;
+    clearance_summary: {
+        completed: number;
+        total: number;
+        all_completed: boolean;
+        policy_note: string;
+    };
+    clearances: {
+        id: number;
+        code: string;
+        label: string;
+        status: string;
+        completed_at: string | null;
+        completed_by: {
+            id: number;
+            name: string;
+        } | null;
+        remarks: string | null;
+        policy_note: string | null;
+    }[];
     can_continue: boolean;
 };
 
@@ -87,6 +107,7 @@ const props = defineProps<{
         update_permit_application_status: boolean;
         view_permit_documents: boolean;
         attempt_release: boolean;
+        complete_clearances: boolean;
     };
     permitDocumentGaps: string[];
 }>();
@@ -473,6 +494,95 @@ function money(amountCents: number): string {
                         <dd>{{ permitApplication.terminal_state.reason }}</dd>
                     </div>
                 </dl>
+            </section>
+
+            <section
+                class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+            >
+                <div
+                    class="mb-3 flex flex-wrap items-center justify-between gap-3"
+                >
+                    <div class="flex items-center gap-2">
+                        <ListChecks class="size-4 text-muted-foreground" />
+                        <h2 class="text-sm font-semibold text-foreground">
+                            Clearance checklist
+                        </h2>
+                    </div>
+                    <Badge
+                        :variant="
+                            permitApplication.clearance_summary.all_completed
+                                ? 'default'
+                                : 'secondary'
+                        "
+                        class="capitalize"
+                    >
+                        {{ permitApplication.clearance_summary.completed }} /
+                        {{ permitApplication.clearance_summary.total }}
+                        complete
+                    </Badge>
+                </div>
+                <p class="mb-4 text-sm text-muted-foreground">
+                    {{ permitApplication.clearance_summary.policy_note }}
+                </p>
+                <div class="grid gap-3">
+                    <div
+                        v-for="clearance in permitApplication.clearances"
+                        :key="clearance.id"
+                        class="grid gap-3 rounded-md border border-sidebar-border/70 p-3 md:grid-cols-[1fr_auto] md:items-center dark:border-sidebar-border"
+                    >
+                        <div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h3 class="text-sm font-medium text-foreground">
+                                    {{ clearance.label }}
+                                </h3>
+                                <Badge variant="secondary" class="capitalize">
+                                    {{ clearance.status.replace('_', ' ') }}
+                                </Badge>
+                            </div>
+                            <p
+                                v-if="clearance.policy_note"
+                                class="mt-1 text-xs text-muted-foreground"
+                            >
+                                {{ clearance.policy_note }}
+                            </p>
+                            <p
+                                v-if="clearance.completed_by"
+                                class="mt-1 text-xs text-muted-foreground"
+                            >
+                                Completed by
+                                {{ clearance.completed_by.name }}
+                            </p>
+                            <p
+                                v-if="clearance.remarks"
+                                class="mt-1 text-xs text-muted-foreground"
+                            >
+                                {{ clearance.remarks }}
+                            </p>
+                        </div>
+                        <Link
+                            v-if="
+                                can.complete_clearances &&
+                                clearance.status !== 'completed'
+                            "
+                            :href="
+                                completeClearance([
+                                    permitApplication.id,
+                                    clearance.id,
+                                ])
+                            "
+                            method="post"
+                            as="button"
+                            :data="{
+                                remarks:
+                                    'Completed from staff review surface.',
+                            }"
+                            :class="buttonVariants({ variant: 'outline' })"
+                        >
+                            <ListChecks />
+                            Mark complete
+                        </Link>
+                    </div>
+                </div>
             </section>
 
             <section

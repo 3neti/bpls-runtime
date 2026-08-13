@@ -16,6 +16,8 @@ use LogicException;
 
 class RecordPaymentScheduleCollection
 {
+    public function __construct(private readonly EnsurePermitApplicationClearances $ensureClearances) {}
+
     /**
      * @param  array{amount_cents: int, method: string, payer_name?: string|null, reference_number?: string|null, remarks?: string|null}  $data
      */
@@ -106,6 +108,10 @@ class RecordPaymentScheduleCollection
                 ? PaymentScheduleStatus::Paid
                 : PaymentScheduleStatus::PartiallyPaid;
             $paymentSchedule->save();
+
+            if ($paymentSchedule->status === PaymentScheduleStatus::Paid) {
+                $this->ensureClearances->handle($paymentSchedule->permitApplication);
+            }
 
             return $collection->load(['receivedBy', 'allocations.paymentScheduleLine']);
         });

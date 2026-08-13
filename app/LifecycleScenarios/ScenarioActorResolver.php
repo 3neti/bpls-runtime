@@ -62,6 +62,7 @@ final class ScenarioActorResolver
                 UserPermission::IssueReceipts,
                 UserPermission::ViewReceipts,
                 UserPermission::UpdatePermitApplicationStatus,
+                UserPermission::CompletePermitClearances,
                 UserPermission::ManageStoryboards,
             ],
             default => [

@@ -3,9 +3,11 @@
 namespace App\LifecycleScenarios;
 
 use App\Actions\AttemptPermitApplicationRelease;
+use App\Actions\CompletePermitClearance;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\CreateStaffPermitApplication;
+use App\Actions\EnsurePermitApplicationClearances;
 use App\Actions\IssueManualCollectionReceipt;
 use App\Actions\RecordPaymentScheduleCollection;
 use App\Enums\FeeRuleCalculationType;
@@ -14,6 +16,7 @@ use App\Enums\FeeRuleScope;
 use App\Enums\PaymentScheduleStatus;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
+use App\Enums\PermitClearanceStatus;
 use App\Enums\ReceiptStatus;
 use App\Enums\TreasuryCollectionMethod;
 use App\Enums\TreasuryCollectionStatus;
@@ -35,6 +38,8 @@ final class ManualCollectionReceiptVisibilityScenario
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
         private readonly RecordPaymentScheduleCollection $recordCollection,
         private readonly IssueManualCollectionReceipt $issueReceipt,
+        private readonly EnsurePermitApplicationClearances $ensureClearances,
+        private readonly CompletePermitClearance $completeClearance,
         private readonly AttemptPermitApplicationRelease $attemptRelease,
         private readonly ScenarioManifest $scenarioManifest,
         private readonly ScenarioSummaryRenderer $summaryRenderer,
@@ -91,6 +96,17 @@ final class ManualCollectionReceiptVisibilityScenario
             'receipt_number' => 'SCENARIO-OR-'.$this->safeRunReference($runId),
             'remarks' => 'Lifecycle scenario manual receipt.',
         ], $operator);
+        $permitApplication = $this->ensureClearances->handle($permitApplication);
+        $completedClearances = 0;
+
+        foreach ($permitApplication->clearances as $clearance) {
+            $this->completeClearance->handle($clearance, $operator, 'Lifecycle scenario clearance evidence.');
+            $completedClearances++;
+        }
+
+        $permitApplication->load([
+            'clearances' => fn ($query) => $query->orderBy('id'),
+        ]);
         $releaseBlocked = false;
 
         try {
@@ -110,6 +126,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('payment-schedule-prepared', 'Prepare payment schedule through payment schedule action', ['application_status' => PermitApplicationStatus::PendingPayment->value], ['application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id]),
             $this->step('collection-recorded', 'Record full over-the-counter collection through Treasury action', ['payment_schedule_status' => PaymentScheduleStatus::Paid->value, 'collection_status' => TreasuryCollectionStatus::PendingReceipt->value], ['payment_schedule_status' => $paymentSchedule->status->value, 'collection_status' => $collectionStatusBeforeReceipt->value, 'collection_id' => $collection->id]),
             $this->step('manual-receipt-issued', 'Issue manual receipt through receipt action', ['receipt_status' => ReceiptStatus::Issued->value, 'collection_status' => TreasuryCollectionStatus::Receipted->value], ['receipt_status' => $receipt->status->value, 'collection_status' => $collection->status->value, 'receipt_id' => $receipt->id]),
+            $this->step('clearance-checklist-completed', 'Complete clearance checklist through clearance actions', ['completed_clearances' => 3, 'all_completed' => true], ['completed_clearances' => $completedClearances, 'all_completed' => $permitApplication->clearances->every(fn ($clearance): bool => $clearance->status === PermitClearanceStatus::Completed)]),
             $this->step('permit-release-blocked', 'Attempt permit release through release boundary action', ['release_blocked' => true, 'application_status' => PermitApplicationStatus::PendingPayment->value], ['release_blocked' => $releaseBlocked, 'application_status' => $permitApplication->status->value]),
         ];
 
@@ -149,6 +166,14 @@ final class ManualCollectionReceiptVisibilityScenario
             'receipt_id' => $receipt->id,
             'receipt_number' => $receipt->receipt_number,
             'receipt_status' => $receipt->status->value,
+            'clearances' => $permitApplication->clearances
+                ->map(fn ($clearance): array => [
+                    'id' => $clearance->id,
+                    'code' => $clearance->code,
+                    'status' => $clearance->status->value,
+                ])
+                ->values()
+                ->all(),
             'release_policy_boundary' => $permitApplication->metadata['release_policy_boundary'] ?? null,
             'run_id' => $runId,
         ]);
@@ -175,7 +200,9 @@ final class ManualCollectionReceiptVisibilityScenario
         $paymentSchedule = PaymentSchedule::query()->findOrFail($manifest['resources']['payment_schedule_id']);
         $collection = TreasuryCollection::query()->with('receipt')->findOrFail($manifest['resources']['collection_id']);
         $receipt = Receipt::query()->findOrFail($manifest['resources']['record_id']);
-        $permitApplication = PermitApplication::query()->findOrFail($manifest['resources']['permit_application_id']);
+        $permitApplication = PermitApplication::query()
+            ->with('clearances')
+            ->findOrFail($manifest['resources']['permit_application_id']);
         $browserReport = $artifactStore->readJson('browser/report.json') ?? [
             'result' => [
                 'passed' => false,
@@ -187,6 +214,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('audit-payment-schedule-paid', 'Payment schedule is paid', ['status' => PaymentScheduleStatus::Paid->value], ['status' => $paymentSchedule->status->value]),
             $this->step('audit-collection-receipted', 'Collection is receipted', ['status' => TreasuryCollectionStatus::Receipted->value], ['status' => $collection->status->value]),
             $this->step('audit-receipt-issued', 'Manual receipt is issued', ['status' => ReceiptStatus::Issued->value, 'numbering_authority' => 'manual'], ['status' => $receipt->status->value, 'numbering_authority' => $receipt->numbering_authority]),
+            $this->step('audit-clearances-completed', 'Clearance checklist evidence is complete', ['completed_clearances' => 3, 'all_completed' => true], ['completed_clearances' => $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count(), 'all_completed' => $permitApplication->clearances->isNotEmpty() && $permitApplication->clearances->every(fn ($clearance): bool => $clearance->status === PermitClearanceStatus::Completed)]),
             $this->step('audit-release-boundary', 'Permit release remains blocked by explicit policy boundary', ['status' => PermitApplicationStatus::PendingPayment->value, 'blocked_transition' => PermitApplicationStatus::Released->value], ['status' => $permitApplication->status->value, 'blocked_transition' => $permitApplication->metadata['release_policy_boundary']['blocked_transition'] ?? null]),
             $this->step('audit-browser-result', 'Browser evidence runner passed', ['browser' => true], ['browser' => (bool) data_get($browserReport, 'result.passed')]),
         ];
@@ -218,6 +246,14 @@ final class ManualCollectionReceiptVisibilityScenario
                 'receipt_status' => $receipt->status->value,
                 'numbering_authority' => $receipt->numbering_authority,
                 'permit_application_status' => $permitApplication->status->value,
+                'clearances' => $permitApplication->clearances
+                    ->map(fn ($clearance): array => [
+                        'id' => $clearance->id,
+                        'code' => $clearance->code,
+                        'status' => $clearance->status->value,
+                    ])
+                    ->values()
+                    ->all(),
                 'release_policy_boundary' => $permitApplication->metadata['release_policy_boundary'] ?? null,
             ],
             'browser' => $browserReport,
@@ -328,9 +364,15 @@ final class ManualCollectionReceiptVisibilityScenario
                     'duration_seconds' => 5,
                 ],
                 [
+                    'title' => 'Clearance checklist is completed',
+                    'description' => 'The scenario records clearance checklist evidence through clearance actions.',
+                    'dialogue' => 'Clearance evidence is visible and auditable, but it is not permit issuance.',
+                    'duration_seconds' => 5,
+                ],
+                [
                     'title' => 'Release remains blocked',
-                    'description' => 'The scenario attempts permit release through the release boundary action after full collection and receipt issuance.',
-                    'dialogue' => 'No permit is released until clearance and issuance policy are consciously resolved.',
+                    'description' => 'The scenario attempts permit release through the release boundary action after full collection, receipt issuance, and clearance completion.',
+                    'dialogue' => 'No permit is released until issuance authority and document policy are consciously resolved.',
                     'duration_seconds' => 5,
                 ],
                 [

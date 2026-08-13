@@ -67,6 +67,11 @@ class PermitApplication extends Model
         return $this->hasMany(TreasuryCollection::class);
     }
 
+    public function clearances(): HasMany
+    {
+        return $this->hasMany(PermitClearance::class);
+    }
+
     /**
      * @return array<string, string>
      */

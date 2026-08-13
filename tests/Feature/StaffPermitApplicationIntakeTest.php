@@ -1,10 +1,12 @@
 <?php
 
+use App\Actions\EnsurePermitApplicationClearances;
 use App\Actions\RenderApplicationFormPdf;
 use App\Actions\RenderPermitPdf;
 use App\Enums\AssessmentStatus;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
+use App\Enums\PermitClearanceStatus;
 use App\Enums\UserPermission;
 use App\Models\Assessment;
 use App\Models\Business;
@@ -13,6 +15,7 @@ use App\Models\LineOfBusiness;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
+use App\Models\PermitClearance;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('guests are redirected away from staff permit applications', function () {
@@ -333,6 +336,105 @@ test('permit application review exposes release policy boundary evidence', funct
             ->where('permitApplication.release_policy_boundary.receipt_count', 1)
             ->where('can.attempt_release', true)
         );
+});
+
+test('permit application review initializes and exposes clearance checklist evidence', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+        UserPermission::CompletePermitClearances,
+    ]);
+
+    $application = PermitApplication::factory()->create([
+        'application_number' => 'APP-2026-CLEARANCE',
+        'status' => PermitApplicationStatus::PendingPayment,
+    ]);
+    PermitClearance::factory()->for($application, 'permitApplication')->create([
+        'code' => 'bplo_review',
+        'label' => 'BPLO review',
+        'source_snapshot' => [
+            'policy_note' => 'Represents BPLO staff review evidence only; final release authority remains unresolved.',
+        ],
+    ]);
+    PermitClearance::factory()->for($application, 'permitApplication')->create([
+        'code' => 'treasury_payment',
+        'label' => 'Treasury payment evidence',
+        'source_snapshot' => [
+            'policy_note' => 'Represents visible payment and receipt evidence; reconciliation policy remains unresolved.',
+        ],
+    ]);
+    PermitClearance::factory()->for($application, 'permitApplication')->create([
+        'code' => 'release_authority',
+        'label' => 'Release authority',
+        'source_snapshot' => [
+            'policy_note' => 'Represents the unresolved release/signatory authority boundary, not actual permit issuance.',
+        ],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.show', $application))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Show')
+            ->where('permitApplication.clearance_summary.completed', 0)
+            ->where('permitApplication.clearance_summary.total', 3)
+            ->where('permitApplication.clearance_summary.all_completed', false)
+            ->where('permitApplication.clearances.0.code', 'bplo_review')
+            ->where('can.complete_clearances', true)
+        );
+
+    expect($application->clearances()->count())->toBe(3);
+});
+
+test('staff users with clearance permission can complete a clearance without releasing application', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+        UserPermission::CompletePermitClearances,
+    ]);
+
+    $application = PermitApplication::factory()->create([
+        'application_number' => 'APP-2026-CLEARANCE-COMPLETE',
+        'status' => PermitApplicationStatus::PendingPayment,
+    ]);
+
+    app(EnsurePermitApplicationClearances::class)->handle($application);
+
+    $clearance = $application->clearances()->where('code', 'bplo_review')->sole();
+
+    $this->actingAs($user)
+        ->post(route('staff.permit-applications.clearances.complete', [$application, $clearance]), [
+            'remarks' => 'BPLO review evidence confirmed.',
+        ])
+        ->assertRedirect(route('staff.permit-applications.show', $application));
+
+    $application->refresh();
+    $clearance->refresh();
+
+    expect($clearance->status)->toBe(PermitClearanceStatus::Completed)
+        ->and($clearance->completed_by_id)->toBe($user->id)
+        ->and($clearance->remarks)->toBe('BPLO review evidence confirmed.')
+        ->and($clearance->source_snapshot['completion']['policy_note'])->toContain('does not release')
+        ->and($application->status)->toBe(PermitApplicationStatus::PendingPayment);
+});
+
+test('staff users without clearance permission cannot complete clearances', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+    ]);
+    $application = PermitApplication::factory()->create([
+        'status' => PermitApplicationStatus::PendingPayment,
+    ]);
+    $clearance = PermitClearance::factory()->for($application, 'permitApplication')->create();
+
+    $this->actingAs($user)
+        ->post(route('staff.permit-applications.clearances.complete', [$application, $clearance]), [
+            'remarks' => 'Unauthorized.',
+        ])
+        ->assertForbidden();
+
+    expect($clearance->refresh()->status)->toBe(PermitClearanceStatus::Pending);
 });
 
 test('staff users with view permission can open an application form pdf artifact', function () {

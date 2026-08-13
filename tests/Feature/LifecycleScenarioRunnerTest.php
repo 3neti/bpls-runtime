@@ -392,6 +392,7 @@ function configuredScenarioUser(string $email): User
         UserPermission::IssueReceipts,
         UserPermission::ViewReceipts,
         UserPermission::UpdatePermitApplicationStatus,
+        UserPermission::CompletePermitClearances,
         UserPermission::ManageStoryboards,
     ])->map(fn (UserPermission $permission): int => Permission::factory()->create([
         'code' => $permission->value,

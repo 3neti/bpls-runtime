@@ -3,6 +3,7 @@
 use App\Enums\FeeRuleCategory;
 use App\Enums\PaymentScheduleLineStatus;
 use App\Enums\PaymentScheduleStatus;
+use App\Enums\PermitClearanceStatus;
 use App\Enums\TreasuryCollectionStatus;
 use App\Enums\UserPermission;
 use App\Models\PaymentSchedule;
@@ -98,7 +99,9 @@ test('recording the final collection marks the schedule paid without issuing a r
 
     expect($schedule->paid_amount_cents)->toBe(15_000)
         ->and($schedule->status)->toBe(PaymentScheduleStatus::Paid)
-        ->and($collection->status)->toBe(TreasuryCollectionStatus::PendingReceipt);
+        ->and($collection->status)->toBe(TreasuryCollectionStatus::PendingReceipt)
+        ->and($schedule->permitApplication->clearances()->count())->toBe(3)
+        ->and($schedule->permitApplication->clearances()->where('status', PermitClearanceStatus::Pending->value)->count())->toBe(3);
 });
 
 test('collections are not allocated to waived schedule lines', function () {
