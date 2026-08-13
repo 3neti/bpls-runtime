@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { Calculator, ListChecks } from '@lucide/vue';
+import { Calculator, FileText, ListChecks } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { index, show } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
+import {
+    index,
+    permitPdf,
+    show,
+} from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import { show as showAssessment, store as assess } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import type { BreadcrumbItem } from '@/types';
 
@@ -51,7 +55,9 @@ const props = defineProps<{
     permitApplication: PermitApplication;
     can: {
         assess_permit_applications: boolean;
+        view_permit_documents: boolean;
     };
+    permitDocumentGaps: string[];
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -93,6 +99,16 @@ function money(amountCents: number): string {
                     </p>
                 </div>
                 <div class="flex gap-2">
+                    <Button
+                        v-if="can.view_permit_documents"
+                        as-child
+                        variant="outline"
+                    >
+                        <a :href="permitPdf.url(permitApplication.id)" target="_blank">
+                            <FileText />
+                            Permit PDF
+                        </a>
+                    </Button>
                     <Button
                         v-if="permitApplication.latest_assessment"
                         as-child
@@ -278,6 +294,19 @@ function money(amountCents: number): string {
                         </tbody>
                     </table>
                 </div>
+            </section>
+
+            <section
+                class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+            >
+                <h2 class="mb-2 text-sm font-semibold text-foreground">
+                    Permit document gaps
+                </h2>
+                <ul class="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                    <li v-for="gap in permitDocumentGaps" :key="gap">
+                        {{ gap }}
+                    </li>
+                </ul>
             </section>
         </main>
     </AppLayout>

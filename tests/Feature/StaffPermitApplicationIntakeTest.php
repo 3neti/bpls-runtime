@@ -1,7 +1,10 @@
 <?php
 
+use App\Actions\RenderPermitPdf;
+use App\Enums\AssessmentStatus;
 use App\Enums\PermitApplicationType;
 use App\Enums\UserPermission;
+use App\Models\Assessment;
 use App\Models\Business;
 use App\Models\BusinessOwner;
 use App\Models\LineOfBusiness;
@@ -142,7 +145,59 @@ test('staff users with view permission can review a permit application', functio
             ->where('permitApplication.application_number', 'APP-2026-00012')
             ->where('permitApplication.lines.0.line_of_business.name', 'Restaurant')
             ->where('can.assess_permit_applications', false)
+            ->where('can.view_permit_documents', true)
+            ->where('permitDocumentGaps.0', 'Generated permit artifact does not release or issue a permit.')
         );
+});
+
+test('staff users with view permission can open a permit pdf artifact', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+    ]);
+
+    $application = permitDocumentFixture();
+
+    $response = $this->actingAs($user)
+        ->get(route('staff.permit-applications.permit.pdf', $application))
+        ->assertSuccessful()
+        ->assertHeader('Content-Type', 'application/pdf')
+        ->assertHeader('Content-Disposition', 'inline; filename="app-2026-00013-permit.pdf"');
+
+    $pdf = $response->getContent();
+
+    expect($pdf)
+        ->toStartWith('%PDF-1.4')
+        ->toContain("Mayor's Permit Artifact")
+        ->toContain('APP-2026-00013')
+        ->toContain('Permit Artifact Store')
+        ->toContain('Permit Owner')
+        ->toContain('RETAIL')
+        ->toContain('PHP 125,000.00')
+        ->toContain('Generated permit artifact; this route does not release or issue a permit.')
+        ->toContain('QR verification route and public verification behavior are not yet implemented.')
+        ->and(permitPdfPageCount($pdf))->toBe(1);
+});
+
+test('permit pdf output is deterministic for the same persisted permit facts', function () {
+    $application = permitDocumentFixture();
+
+    $renderer = app(RenderPermitPdf::class);
+
+    expect($renderer->handle($application))->toBe($renderer->handle($application->fresh()));
+});
+
+test('staff users without view permission cannot open permit pdf artifacts', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::CreatePermitApplications,
+    ]);
+
+    $application = PermitApplication::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.permit.pdf', $application))
+        ->assertForbidden();
 });
 
 test('staff users without create permission cannot record a permit application', function () {
@@ -166,3 +221,53 @@ test('staff users without create permission cannot record a permit application',
         ])
         ->assertForbidden();
 });
+
+function permitDocumentFixture(): PermitApplication
+{
+    $owner = BusinessOwner::factory()->create([
+        'name' => 'Permit Owner',
+        'email' => 'permit-owner@example.test',
+        'phone' => '555-0101',
+        'address' => 'Owner Permit Address',
+    ]);
+    $business = Business::factory()->for($owner, 'owner')->create([
+        'name' => 'Permit Artifact Store',
+        'trade_name' => 'Artifact Store',
+        'registration_number' => 'BN-PERMIT-001',
+        'address' => 'Ipil Central',
+        'barangay' => 'Poblacion',
+    ]);
+    $application = PermitApplication::factory()->for($business)->create([
+        'application_number' => 'APP-2026-00013',
+        'application_year' => 2026,
+        'submitted_at' => now()->startOfSecond(),
+    ]);
+
+    PermitApplicationLine::factory()
+        ->for($application)
+        ->for(LineOfBusiness::factory()->create([
+            'name' => 'Retail Store',
+            'code' => 'RETAIL',
+        ]))
+        ->create([
+            'declared_gross_sales_cents' => 12_500_000,
+            'capital_investment_cents' => 25_000_000,
+            'quantity' => 2,
+        ]);
+
+    Assessment::factory()->for($application)->create([
+        'sequence' => 1,
+        'status' => AssessmentStatus::Computed,
+        'total_amount_cents' => 42_000,
+        'assessed_at' => now()->startOfSecond(),
+    ]);
+
+    return $application;
+}
+
+function permitPdfPageCount(string $pdf): int
+{
+    preg_match_all('/\/Type \/Page\b/', $pdf, $matches);
+
+    return count($matches[0]);
+}

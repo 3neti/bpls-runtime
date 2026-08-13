@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Staff;
 
 use App\Actions\CreateStaffPermitApplication;
+use App\Actions\RenderPermitPdf;
 use App\Enums\PermitApplicationType;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
@@ -10,6 +11,7 @@ use App\Http\Requests\Staff\StorePermitApplicationRequest;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -71,8 +73,24 @@ class PermitApplicationController extends Controller
             'permitApplication' => $this->permitApplicationPayload($permitApplication),
             'can' => [
                 'assess_permit_applications' => auth()->user()?->can(UserPermission::AssessPermitApplications->value) ?? false,
+                'view_permit_documents' => auth()->user()?->can(UserPermission::ViewPermitApplications->value) ?? false,
+            ],
+            'permitDocumentGaps' => [
+                'Generated permit artifact does not release or issue a permit.',
+                'Clearance completion, QR verification, signatories, and final municipal layout remain unresolved.',
             ],
         ]);
+    }
+
+    public function permitPdf(PermitApplication $permitApplication, RenderPermitPdf $renderPermitPdf): HttpResponse
+    {
+        Gate::authorize(UserPermission::ViewPermitApplications->value);
+
+        return response($renderPermitPdf->handle($permitApplication))
+            ->withHeaders([
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="'.$this->permitFilename($permitApplication).'"',
+            ]);
     }
 
     /**
@@ -125,5 +143,17 @@ class PermitApplicationController extends Controller
                 'assessed_at' => $latestAssessment->assessed_at?->toIso8601String(),
             ],
         ];
+    }
+
+    private function permitFilename(PermitApplication $permitApplication): string
+    {
+        $label = $permitApplication->application_number ?? 'permit-application-'.$permitApplication->id;
+        $safeLabel = str($label)
+            ->replaceMatches('/[^A-Za-z0-9._-]+/', '-')
+            ->trim('-')
+            ->lower()
+            ->toString();
+
+        return ($safeLabel === '' ? 'permit-application-'.$permitApplication->id : $safeLabel).'-permit.pdf';
     }
 }
