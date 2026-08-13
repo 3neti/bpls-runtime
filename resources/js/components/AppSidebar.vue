@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Calculator, FileText, FolderGit2, LayoutGrid } from '@lucide/vue';
+import {
+    BookOpen,
+    Calculator,
+    FileText,
+    Film,
+    FolderGit2,
+    LayoutGrid,
+} from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -16,6 +23,7 @@ import {
 } from '@/components/ui/sidebar';
 import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import { index as permitApplicationIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
+import { index as storyboardIndex } from '@/actions/App/Http/Controllers/Staff/StoryboardController';
 import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
@@ -34,6 +42,11 @@ const mainNavItems: NavItem[] = [
         title: 'Permit Assessments',
         href: assessmentIndex(),
         icon: Calculator,
+    },
+    {
+        title: 'Storyboards',
+        href: storyboardIndex(),
+        icon: Film,
     },
 ];
 

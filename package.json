@@ -10,7 +10,8 @@
         "format:check": "prettier --check resources/",
         "lint": "eslint . --fix",
         "lint:check": "eslint .",
-        "types:check": "vue-tsc --noEmit"
+        "types:check": "vue-tsc --noEmit",
+        "lifecycle:browser": "node scripts/lifecycle-scenarios/storyboard-browser-runner.mjs"
     },
     "devDependencies": {
         "@eslint/js": "^9.19.0",
@@ -26,6 +27,7 @@
         "eslint-import-resolver-typescript": "^4.4.4",
         "eslint-plugin-import": "^2.32.0",
         "eslint-plugin-vue": "^9.32.0",
+        "playwright": "^1.62.1",
         "prettier": "^3.4.2",
         "prettier-plugin-tailwindcss": "^0.6.11",
         "typescript": "^5.2.2",

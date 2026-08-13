@@ -6,6 +6,7 @@ use App\Http\Controllers\Staff\PaymentScheduleCollectionController;
 use App\Http\Controllers\Staff\PermitApplicationAssessmentController;
 use App\Http\Controllers\Staff\PermitApplicationController;
 use App\Http\Controllers\Staff\ReceiptController;
+use App\Http\Controllers\Staff\StoryboardController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
@@ -42,6 +43,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('receipts.pdf');
         Route::post('receipts/{receipt}/void', [ReceiptController::class, 'voidReceipt'])
             ->name('receipts.void');
+        Route::post('storyboards/{storyboard}/exports/pdf', [StoryboardController::class, 'exportPdf'])
+            ->name('storyboards.exports.pdf');
+        Route::post('storyboards/{storyboard}/exports/video', [StoryboardController::class, 'exportVideo'])
+            ->name('storyboards.exports.video');
+        Route::resource('storyboards', StoryboardController::class);
     });
 });
 
