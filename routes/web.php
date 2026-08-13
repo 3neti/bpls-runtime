@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Staff\AssessmentPaymentScheduleController;
+use App\Http\Controllers\Staff\PaymentScheduleCollectionController;
 use App\Http\Controllers\Staff\PermitApplicationAssessmentController;
 use App\Http\Controllers\Staff\PermitApplicationController;
 use Illuminate\Support\Facades\Route;
@@ -23,6 +24,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('assessments.payment-schedule.store');
         Route::get('payment-schedules/{paymentSchedule}', [AssessmentPaymentScheduleController::class, 'show'])
             ->name('payment-schedules.show');
+        Route::post('payment-schedules/{paymentSchedule}/collections', [PaymentScheduleCollectionController::class, 'store'])
+            ->name('payment-schedules.collections.store');
     });
 });
 

@@ -62,6 +62,11 @@ class PermitApplication extends Model
         return $this->hasMany(PaymentSchedule::class);
     }
 
+    public function treasuryCollections(): HasMany
+    {
+        return $this->hasMany(TreasuryCollection::class);
+    }
+
     /**
      * @return array<string, string>
      */

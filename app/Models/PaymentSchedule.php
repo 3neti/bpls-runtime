@@ -60,6 +60,11 @@ class PaymentSchedule extends Model
         return $this->hasMany(PaymentScheduleLine::class);
     }
 
+    public function treasuryCollections(): HasMany
+    {
+        return $this->hasMany(TreasuryCollection::class);
+    }
+
     /**
      * @return array<string, string>
      */

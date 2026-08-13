@@ -10,4 +10,6 @@ enum UserPermission: string
     case AssessPermitApplications = 'permit_applications.assess';
     case ViewPaymentSchedules = 'payment_schedules.view';
     case PreparePaymentSchedules = 'payment_schedules.prepare';
+    case ViewCollections = 'collections.view';
+    case RecordCollections = 'collections.record';
 }

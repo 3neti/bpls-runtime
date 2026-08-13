@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Staff;
 
 use App\Actions\CreatePaymentScheduleForAssessment;
+use App\Enums\TreasuryCollectionMethod;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Models\Assessment;
 use App\Models\PaymentSchedule;
+use App\Models\TreasuryCollection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -27,6 +29,9 @@ class AssessmentPaymentScheduleController extends Controller
     {
         Gate::authorize(UserPermission::ViewPaymentSchedules->value);
 
+        $canRecordCollections = auth()->user()?->can(UserPermission::RecordCollections->value) ?? false;
+        $canViewCollections = auth()->user()?->can(UserPermission::ViewCollections->value) ?? false;
+
         $paymentSchedule->load([
             'preparedBy',
             'assessment',
@@ -34,8 +39,24 @@ class AssessmentPaymentScheduleController extends Controller
             'lines.lineOfBusiness',
         ]);
 
+        if ($canRecordCollections || $canViewCollections) {
+            $paymentSchedule->load([
+                'treasuryCollections' => fn ($query) => $query->with(['receivedBy', 'allocations.paymentScheduleLine'])->latest('received_at'),
+            ]);
+        }
+
         return Inertia::render('payment-schedules/Show', [
             'paymentSchedule' => $this->paymentSchedulePayload($paymentSchedule),
+            'collectionMethods' => collect(TreasuryCollectionMethod::cases())
+                ->map(fn (TreasuryCollectionMethod $method): array => [
+                    'label' => str($method->value)->replace('_', ' ')->title()->toString(),
+                    'value' => $method->value,
+                ])
+                ->values(),
+            'can' => [
+                'record_collections' => $canRecordCollections,
+                'view_collections' => $canViewCollections,
+            ],
         ]);
     }
 
@@ -44,6 +65,10 @@ class AssessmentPaymentScheduleController extends Controller
      */
     private function paymentSchedulePayload(PaymentSchedule $paymentSchedule): array
     {
+        $treasuryCollections = $paymentSchedule->relationLoaded('treasuryCollections')
+            ? $paymentSchedule->treasuryCollections
+            : collect();
+
         return [
             'id' => $paymentSchedule->id,
             'sequence' => $paymentSchedule->sequence,
@@ -82,6 +107,28 @@ class AssessmentPaymentScheduleController extends Controller
                     'amount_cents' => $line->amount_cents,
                     'paid_amount_cents' => $line->paid_amount_cents,
                     'line_of_business' => $line->lineOfBusiness?->name,
+                ]),
+            'collections' => $treasuryCollections
+                ->values()
+                ->map(fn (TreasuryCollection $collection): array => [
+                    'id' => $collection->id,
+                    'status' => $collection->status->value,
+                    'channel' => $collection->channel->value,
+                    'method' => $collection->method->value,
+                    'amount_cents' => $collection->amount_cents,
+                    'payer_name' => $collection->payer_name,
+                    'reference_number' => $collection->reference_number,
+                    'received_at' => $collection->received_at->toIso8601String(),
+                    'received_by' => $collection->receivedBy?->name,
+                    'allocations' => $collection->allocations
+                        ->values()
+                        ->map(fn ($allocation): array => [
+                            'id' => $allocation->id,
+                            'payment_schedule_line_id' => $allocation->payment_schedule_line_id,
+                            'code' => $allocation->paymentScheduleLine->code,
+                            'name' => $allocation->paymentScheduleLine->name,
+                            'amount_cents' => $allocation->amount_cents,
+                        ]),
                 ]),
         ];
     }
