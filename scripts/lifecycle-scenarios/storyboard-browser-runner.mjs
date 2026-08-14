@@ -721,6 +721,51 @@ async function inspectRevenueCodeFeeCatalogDetail(targetPage, targetBaseUrl) {
         .first()
         .isVisible()
         .catch(() => false);
+    const visiblePolicyBoundaries = [];
+
+    for (const policyBoundary of manifest.resources.policy_boundaries ?? []) {
+        const visible = await targetPage
+            .getByText(uiLabel(policyBoundary), { exact: false })
+            .first()
+            .isVisible()
+            .catch(() => false);
+
+        if (visible) {
+            visiblePolicyBoundaries.push(policyBoundary);
+        }
+
+        checks.push(
+            check(
+                `fee-catalog-detail-policy-boundary-${policyBoundary}-visible`,
+                `Fee rule detail shows policy boundary ${policyBoundary}`,
+                true,
+                visible,
+            ),
+        );
+    }
+
+    const visibleApplicationTypes = [];
+
+    for (const applicationType of manifest.resources.application_types ?? []) {
+        const visible = await targetPage
+            .getByText(uiLabel(applicationType), { exact: false })
+            .first()
+            .isVisible()
+            .catch(() => false);
+
+        if (visible) {
+            visibleApplicationTypes.push(applicationType);
+        }
+
+        checks.push(
+            check(
+                `fee-catalog-detail-application-type-${applicationType}-visible`,
+                `Fee rule detail shows applicability ${applicationType}`,
+                true,
+                visible,
+            ),
+        );
+    }
 
     checks.push(
         check(
@@ -754,6 +799,8 @@ async function inspectRevenueCodeFeeCatalogDetail(targetPage, targetBaseUrl) {
     feeCatalogEvidence.fee_rule_code = manifest.resources.fee_rule_code;
     feeCatalogEvidence.detail_visible = headingVisible && nameVisible;
     feeCatalogEvidence.policy_boundary_visible = policyBoundaryVisible;
+    feeCatalogEvidence.policy_boundaries_visible = visiblePolicyBoundaries;
+    feeCatalogEvidence.application_types_visible = visibleApplicationTypes;
     feeCatalogEvidence.range_amount_visible = rangeAmountVisible;
     feeCatalogEvidence.legal_basis_visible = legalBasisVisible;
 
@@ -2994,6 +3041,10 @@ function uiMoneyFromCents(amountCents) {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     })}`;
+}
+
+function uiLabel(value) {
+    return String(value).replaceAll('_', ' ');
 }
 
 async function hasTitleInputValue(targetPage) {

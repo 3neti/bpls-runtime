@@ -1158,6 +1158,8 @@ test('revenue code fee catalog visibility audit compares browser evidence with c
             'fee_rule_code' => $manifest['resources']['fee_rule_code'],
             'detail_visible' => true,
             'policy_boundary_visible' => true,
+            'policy_boundaries_visible' => $manifest['resources']['policy_boundaries'],
+            'application_types_visible' => $manifest['resources']['application_types'],
             'range_amount_visible' => true,
             'legal_basis_visible' => true,
         ],

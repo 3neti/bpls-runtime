@@ -116,11 +116,15 @@ final class RevenueCodeFeeCatalogVisibilityScenario
             ->with(['lineOfBusiness', 'ranges' => fn ($query) => $query->orderBy('min_basis_cents')])
             ->findOrFail($manifest['resources']['record_id']);
         $browserReport = $artifactStore->readJson('browser/report.json') ?? [];
+        $applicationTypes = array_values($feeRule->metadata['application_types'] ?? []);
+        $policyBoundaries = array_values($feeRule->metadata['policy_boundaries'] ?? []);
 
         $checks = [
             $this->step('audit-browser-result', 'Browser evidence runner passed', ['browser' => true], ['browser' => (bool) data_get($browserReport, 'result.passed')]),
             $this->step('audit-canonical-fee-rule', 'Canonical fee rule still matches prepared Revenue Code evidence', ['fee_rule_code' => $manifest['resources']['fee_rule_code'], 'range_count' => $manifest['resources']['range_count']], ['fee_rule_code' => $feeRule->code, 'range_count' => $feeRule->ranges->count()]),
-            $this->step('audit-browser-fee-catalog', 'Browser evidence shows catalog and exact fee-rule detail', ['fee_rule_code' => $feeRule->code, 'detail_visible' => true, 'policy_boundary_visible' => true], ['fee_rule_code' => data_get($browserReport, 'fee_catalog.fee_rule_code'), 'detail_visible' => data_get($browserReport, 'fee_catalog.detail_visible'), 'policy_boundary_visible' => data_get($browserReport, 'fee_catalog.policy_boundary_visible')]),
+            $this->step('audit-browser-fee-catalog', 'Browser evidence shows catalog and exact fee-rule detail', ['fee_rule_code' => $feeRule->code, 'detail_visible' => true, 'range_amount_visible' => true, 'legal_basis_visible' => true], ['fee_rule_code' => data_get($browserReport, 'fee_catalog.fee_rule_code'), 'detail_visible' => data_get($browserReport, 'fee_catalog.detail_visible'), 'range_amount_visible' => data_get($browserReport, 'fee_catalog.range_amount_visible'), 'legal_basis_visible' => data_get($browserReport, 'fee_catalog.legal_basis_visible')]),
+            $this->step('audit-browser-fee-catalog-applicability', 'Browser evidence shows the persisted fee-rule applicability', ['application_types' => $applicationTypes], ['application_types' => data_get($browserReport, 'fee_catalog.application_types_visible', [])]),
+            $this->step('audit-browser-fee-catalog-policy-boundaries', 'Browser evidence shows every persisted unresolved policy boundary', ['policy_boundaries' => $policyBoundaries], ['policy_boundaries' => data_get($browserReport, 'fee_catalog.policy_boundaries_visible', [])]),
         ];
         $passed = collect($checks)->every(fn (array $check): bool => $check['passed']);
 
@@ -142,7 +146,8 @@ final class RevenueCodeFeeCatalogVisibilityScenario
                 'fee_rule_id' => $feeRule->id,
                 'fee_rule_code' => $feeRule->code,
                 'range_count' => $feeRule->ranges->count(),
-                'policy_boundaries' => $feeRule->metadata['policy_boundaries'] ?? [],
+                'application_types' => $applicationTypes,
+                'policy_boundaries' => $policyBoundaries,
             ],
             'browser' => $browserReport,
         ]);
