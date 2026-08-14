@@ -114,6 +114,7 @@ try {
         await inspectPendingPaymentPermitApplicationDetail(page, baseUrl);
         await inspectPendingPaymentAssessmentDetail(page, baseUrl);
         await inspectPendingPaymentScheduleDetail(page, baseUrl);
+        await inspectPendingPaymentUnpaidEstablishmentsReport(page, baseUrl);
         await inspectPendingPaymentPermitApplicationMobile(page, baseUrl);
     }
 
@@ -938,6 +939,94 @@ async function inspectPendingPaymentScheduleDetail(targetPage, targetBaseUrl) {
     );
 }
 
+async function inspectPendingPaymentUnpaidEstablishmentsReport(
+    targetPage,
+    targetBaseUrl,
+) {
+    const reportUrl = `${targetBaseUrl}${manifest.resources.unpaid_establishments_report_url}`;
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const applicationVisible = await targetPage
+        .getByText(manifest.resources.application_number, { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const businessVisible = await targetPage
+        .getByText(manifest.resources.unpaid_establishment_business_name, {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const scopeVisible = await targetPage
+        .getByText(
+            'Pending and partially paid permit payment schedules for the selected application year.',
+            {
+                exact: true,
+            },
+        )
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const policyVisible = await targetPage
+        .getByText('does not calculate legal delinquency', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const csvExportVisible = await targetPage
+        .getByRole('link', { name: /export csv/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'unpaid-establishments-report-application-visible',
+            'Unpaid establishments report shows exact pending permit application',
+            true,
+            applicationVisible,
+            {
+                url: reportUrl,
+                application_number: manifest.resources.application_number,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'unpaid-establishments-report-business-visible',
+            'Unpaid establishments report shows exact business name',
+            true,
+            businessVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'unpaid-establishments-report-scope-visible',
+            'Unpaid establishments report keeps delinquency policy boundary visible',
+            true,
+            scopeVisible && policyVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'unpaid-establishments-report-csv-visible',
+            'Unpaid establishments report offers CSV export',
+            true,
+            csvExportVisible,
+        ),
+    );
+    reportUnpaidEstablishments(
+        manifest.resources.application_number,
+        manifest.resources.unpaid_establishment_business_name,
+        applicationVisible,
+        csvExportVisible,
+    );
+    await screenshot(
+        targetPage,
+        '05-unpaid-establishments-report',
+        'browser/screenshots/05-unpaid-establishments-report.png',
+    );
+}
+
 async function inspectPendingPaymentPermitApplicationMobile(
     targetPage,
     targetBaseUrl,
@@ -1041,8 +1130,8 @@ async function inspectPendingPaymentPermitApplicationMobile(
     );
     await screenshot(
         targetPage,
-        '05-mobile-detail',
-        'browser/screenshots/05-mobile-detail.png',
+        '06-mobile-detail',
+        'browser/screenshots/06-mobile-detail.png',
     );
 }
 
@@ -2425,6 +2514,20 @@ function reportPaidEstablishments(
     csvExportVisible,
 ) {
     reportEvidence.paid_establishments = {
+        application_number: applicationNumber,
+        business_name: businessName,
+        application_visible: applicationVisible,
+        csv_export_visible: csvExportVisible,
+    };
+}
+
+function reportUnpaidEstablishments(
+    applicationNumber,
+    businessName,
+    applicationVisible,
+    csvExportVisible,
+) {
+    reportEvidence.unpaid_establishments = {
         application_number: applicationNumber,
         business_name: businessName,
         application_visible: applicationVisible,

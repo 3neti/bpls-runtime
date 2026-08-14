@@ -550,6 +550,8 @@ test('permit application pending payment scenario executes assessment and paymen
         ->and($firstManifest['resources']['business_tax_basis'])->toBe('declared_gross_sales')
         ->and($firstManifest['resources']['business_tax_declared_gross_sales_cents'])->toBe(12_500_000)
         ->and($firstManifest['resources']['business_tax_amount_cents'])->toBe(20_000)
+        ->and($firstManifest['resources']['unpaid_establishments_report_url'])->toContain('q=APP-SCENARIO-PERMIT-PENDING-PAYMENT-TEST-001')
+        ->and($firstManifest['resources']['unpaid_establishment_business_name'])->toBe('Scenario Payment Business permit-pending-payment-test-001')
         ->and(PermitApplication::query()->count())->toBe(1)
         ->and($application->status)->toBe(PermitApplicationStatus::PendingPayment)
         ->and($application->paymentSchedules()->count())->toBe(1)
@@ -731,6 +733,14 @@ test('permit application pending payment scenario audit compares browser evidenc
                 'amount_cents' => $manifest['resources']['business_tax_amount_cents'],
             ],
         ],
+        'reports' => [
+            'unpaid_establishments' => [
+                'application_number' => $manifest['resources']['application_number'],
+                'business_name' => $manifest['resources']['unpaid_establishment_business_name'],
+                'application_visible' => true,
+                'csv_export_visible' => true,
+            ],
+        ],
         'checks' => [],
         'artifacts' => [
             'screenshots' => [
@@ -786,6 +796,14 @@ test('renewal permit lifecycle foundation audit compares browser policy evidence
                 'basis' => $manifest['resources']['business_tax_basis'],
                 'declared_gross_sales_cents' => $manifest['resources']['business_tax_declared_gross_sales_cents'],
                 'amount_cents' => $manifest['resources']['business_tax_amount_cents'],
+            ],
+        ],
+        'reports' => [
+            'unpaid_establishments' => [
+                'application_number' => $manifest['resources']['application_number'],
+                'business_name' => $manifest['resources']['unpaid_establishment_business_name'],
+                'application_visible' => true,
+                'csv_export_visible' => true,
             ],
         ],
         'checks' => [],
@@ -845,6 +863,14 @@ test('amendment permit lifecycle foundation audit compares browser policy eviden
                 'amount_cents' => $manifest['resources']['business_tax_amount_cents'],
             ],
         ],
+        'reports' => [
+            'unpaid_establishments' => [
+                'application_number' => $manifest['resources']['application_number'],
+                'business_name' => $manifest['resources']['unpaid_establishment_business_name'],
+                'application_visible' => true,
+                'csv_export_visible' => true,
+            ],
+        ],
         'checks' => [],
         'artifacts' => [
             'screenshots' => [
@@ -902,6 +928,14 @@ test('transfer permit lifecycle foundation audit compares browser policy evidenc
                 'amount_cents' => $manifest['resources']['business_tax_amount_cents'],
             ],
         ],
+        'reports' => [
+            'unpaid_establishments' => [
+                'application_number' => $manifest['resources']['application_number'],
+                'business_name' => $manifest['resources']['unpaid_establishment_business_name'],
+                'application_visible' => true,
+                'csv_export_visible' => true,
+            ],
+        ],
         'checks' => [],
         'artifacts' => [
             'screenshots' => [
@@ -957,6 +991,14 @@ test('retirement permit lifecycle foundation audit compares browser policy evide
                 'basis' => $manifest['resources']['business_tax_basis'],
                 'declared_gross_sales_cents' => $manifest['resources']['business_tax_declared_gross_sales_cents'],
                 'amount_cents' => $manifest['resources']['business_tax_amount_cents'],
+            ],
+        ],
+        'reports' => [
+            'unpaid_establishments' => [
+                'application_number' => $manifest['resources']['application_number'],
+                'business_name' => $manifest['resources']['unpaid_establishment_business_name'],
+                'application_visible' => true,
+                'csv_export_visible' => true,
             ],
         ],
         'checks' => [],

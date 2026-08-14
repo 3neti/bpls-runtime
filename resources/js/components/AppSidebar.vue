@@ -6,6 +6,7 @@ import {
     ChartColumn,
     ChartNoAxesColumnIncreasing,
     ClipboardCheck,
+    ClipboardX,
     FileText,
     Film,
     FolderGit2,
@@ -21,6 +22,7 @@ import { index as permitApplicationIndex } from '@/actions/App/Http/Controllers/
 import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
 import { index as revenueSourceReportIndex } from '@/actions/App/Http/Controllers/Staff/RevenueSourceReportController';
 import { index as storyboardIndex } from '@/actions/App/Http/Controllers/Staff/StoryboardController';
+import { index as unpaidEstablishmentReportIndex } from '@/actions/App/Http/Controllers/Staff/UnpaidEstablishmentReportController';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -77,6 +79,11 @@ const mainNavItems: NavItem[] = [
         title: 'Paid Establishments',
         href: paidEstablishmentReportIndex(),
         icon: ClipboardCheck,
+    },
+    {
+        title: 'Unpaid Establishments',
+        href: unpaidEstablishmentReportIndex(),
+        icon: ClipboardX,
     },
     {
         title: 'Storyboards',
