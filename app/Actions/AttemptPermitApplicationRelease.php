@@ -14,6 +14,7 @@ final class AttemptPermitApplicationRelease
 
     public function handle(PermitApplication $permitApplication, ?User $releasedBy = null): never
     {
+        $permitApplication->refresh();
         $permitApplication->loadMissing([
             'paymentSchedules.treasuryCollections.receipt',
             'clearances',

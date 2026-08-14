@@ -329,6 +329,7 @@ test('staff users with view permission can review a permit application', functio
 
     $application = PermitApplication::factory()->create([
         'application_number' => 'APP-2026-00012',
+        'submitted_by_id' => $user->id,
     ]);
 
     PermitApplicationLine::factory()
@@ -358,6 +359,9 @@ test('staff users with view permission can review a permit application', functio
             ->where('permitApplication.verification_boundary.url', fn (string $url): bool => str_contains($url, '/permits/verify/'.$application->id.'/'))
             ->where('permitApplication.verification_boundary.view_url', fn (string $url): bool => str_ends_with($url, '/view'))
             ->where('permitApplication.verification_boundary.can_verify_release', false)
+            ->where('permitApplication.timeline.0.key', "application-recorded:{$application->id}")
+            ->where('permitApplication.timeline.0.title', 'Permit application recorded')
+            ->where('permitApplication.timeline.0.actor.id', $user->id)
         );
 });
 

@@ -54,6 +54,7 @@ const checks = [];
 const screenshots = {};
 const permitArtifactEvidence = {};
 const verificationEvidence = {};
+const timelineEvidence = {};
 const receiptVoidBoundaryEvidence = {};
 const documentEvidence = {};
 const assessmentEvidence = {};
@@ -184,6 +185,7 @@ const report = {
     failed_requests: failedRequests,
     permit_artifact: permitArtifactEvidence,
     verification: verificationEvidence,
+    timeline: timelineEvidence,
     receipt_void_boundary: receiptVoidBoundaryEvidence,
     documents: documentEvidence,
     assessment: assessmentEvidence,
@@ -2260,6 +2262,18 @@ async function inspectManualReceiptPermitReleaseBoundary(
         .first()
         .isVisible()
         .catch(() => false);
+    const timeline = targetPage.getByTestId('permit-timeline');
+    const timelineVisible = await timeline.isVisible().catch(() => false);
+    const timelineEventKeys = await targetPage
+        .getByTestId('permit-timeline-event')
+        .evaluateAll((elements) =>
+            elements
+                .map((element) => element.getAttribute('data-timeline-key'))
+                .filter((key) => key !== null),
+        )
+        .catch(() => []);
+    const expectedTimelineEventKeys =
+        manifest.resources.permit_timeline_event_keys ?? [];
     const clearanceChecklistVisible = await targetPage
         .getByText('Clearance checklist', { exact: true })
         .first()
@@ -2396,6 +2410,34 @@ async function inspectManualReceiptPermitReleaseBoundary(
         .first()
         .isVisible()
         .catch(() => false);
+
+    checks.push(
+        check(
+            'permit-application-timeline-visible',
+            'Permit detail shows the authoritative application timeline',
+            true,
+            timelineVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'permit-application-timeline-events-match',
+            'Permit detail shows the exact canonical timeline event keys in order',
+            expectedTimelineEventKeys,
+            timelineEventKeys,
+        ),
+    );
+    timelineEvidence.event_count = timelineEventKeys.length;
+    timelineEvidence.event_keys = timelineEventKeys;
+
+    if (timelineVisible) {
+        await timeline.scrollIntoViewIfNeeded();
+        await screenshot(
+            targetPage,
+            '03a-permit-timeline',
+            'browser/screenshots/03a-permit-timeline.png',
+        );
+    }
 
     checks.push(
         check(
@@ -3090,7 +3132,9 @@ function check(key, action, expected, actual, evidence = {}) {
         action,
         expected,
         actual,
-        passed: expected === actual,
+        passed:
+            Object.is(expected, actual) ||
+            JSON.stringify(expected) === JSON.stringify(actual),
         occurred_at: new Date().toISOString(),
         evidence,
     };

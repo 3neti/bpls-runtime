@@ -6,6 +6,7 @@ use App\Actions\AttemptPermitApplicationRelease;
 use App\Actions\BuildCollectionsByRevenueSourceReport;
 use App\Actions\BuildDailyCollectionsReport;
 use App\Actions\BuildPaidEstablishmentsReport;
+use App\Actions\BuildPermitApplicationTimeline;
 use App\Actions\CompletePermitClearance;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
@@ -55,6 +56,7 @@ final class ManualCollectionReceiptVisibilityScenario
         private readonly BuildDailyCollectionsReport $buildDailyCollectionsReport,
         private readonly BuildCollectionsByRevenueSourceReport $buildCollectionsByRevenueSourceReport,
         private readonly BuildPaidEstablishmentsReport $buildPaidEstablishmentsReport,
+        private readonly BuildPermitApplicationTimeline $buildPermitApplicationTimeline,
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly DescribePermitArtifact $describePermitArtifact,
         private readonly DescribePermitReleaseReadiness $describeReleaseReadiness,
@@ -171,6 +173,8 @@ final class ManualCollectionReceiptVisibilityScenario
             ->firstWhere('application_number', $permitApplication->application_number);
         $verificationBoundary = $this->describeVerificationBoundary->handle($permitApplication);
         $receiptVoidBoundary = $this->describeReceiptVoidBoundary->handle($receipt);
+        $timeline = $this->buildPermitApplicationTimeline->handle($permitApplication);
+        $timelineKeys = collect($timeline)->pluck('key')->all();
 
         $steps = [
             $this->step('actors-resolved', 'Resolve actual application users', ['operator_id' => $operator->id], ['operator_id' => $operator->id]),
@@ -185,6 +189,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('release-ready-for-authority-review', 'Describe release readiness without issuing permit', ['ready_for_authority_review' => true, 'can_release' => false], ['ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'], 'can_release' => $releaseReadiness['can_release']]),
             $this->step('permit-artifact-available-for-authority-review', 'Describe generated permit artifact without issuing permit', ['status' => 'generated_artifact_available', 'ready_for_authority_review' => true, 'can_issue' => false, 'can_release' => false], ['status' => $permitArtifact['status'], 'ready_for_authority_review' => $permitArtifact['ready_for_authority_review'], 'can_issue' => $permitArtifact['can_issue'], 'can_release' => $permitArtifact['can_release']]),
             $this->step('permit-release-blocked', 'Attempt permit release through release boundary action', ['release_blocked' => true, 'application_status' => PermitApplicationStatus::PendingPayment->value], ['release_blocked' => $releaseBlocked, 'application_status' => $permitApplication->status->value]),
+            $this->step('application-timeline-projected', 'Project authoritative lifecycle records into chronological review evidence', ['event_count' => 10, 'release_boundary_visible' => true], ['event_count' => count($timelineKeys), 'release_boundary_visible' => in_array("release-blocked:{$permitApplication->id}", $timelineKeys, true)]),
         ];
 
         foreach ($steps as $step) {
@@ -254,6 +259,8 @@ final class ManualCollectionReceiptVisibilityScenario
                 'permitApplication' => $permitApplication,
                 'verificationCode' => $verificationBoundary['reference'],
             ], false),
+            'permit_timeline_event_count' => count($timelineKeys),
+            'permit_timeline_event_keys' => $timelineKeys,
         ];
         $manifest['steps'] = $steps;
         $manifest['result']['terminal'] = collect($steps)->every(fn (array $step): bool => $step['passed']) ? 'passed' : 'failed';
@@ -309,6 +316,7 @@ final class ManualCollectionReceiptVisibilityScenario
             'permit_artifact' => $permitArtifact,
             'release_readiness' => $releaseReadiness,
             'verification_boundary' => $verificationBoundary,
+            'timeline' => $timeline,
             'run_id' => $runId,
         ]);
         $artifactStore->putJson('terminal/execution.json', [
@@ -361,6 +369,8 @@ final class ManualCollectionReceiptVisibilityScenario
         $permitArtifact = $this->describePermitArtifact->handle($permitApplication);
         $verificationBoundary = $this->describeVerificationBoundary->handle($permitApplication);
         $receiptVoidBoundary = $this->describeReceiptVoidBoundary->handle($receipt);
+        $timeline = $this->buildPermitApplicationTimeline->handle($permitApplication);
+        $timelineKeys = collect($timeline)->pluck('key')->all();
         $browserReport = $artifactStore->readJson('browser/report.json') ?? [
             'result' => [
                 'passed' => false,
@@ -388,6 +398,8 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('audit-permit-artifact', 'Generated permit artifact remains review evidence and not issuance', ['status' => 'generated_artifact_available', 'ready_for_authority_review' => true, 'can_issue' => false, 'can_release' => false, 'can_make_legally_effective' => false], ['status' => $permitArtifact['status'], 'ready_for_authority_review' => $permitArtifact['ready_for_authority_review'], 'can_issue' => $permitArtifact['can_issue'], 'can_release' => $permitArtifact['can_release'], 'can_make_legally_effective' => $permitArtifact['can_make_legally_effective']]),
             $this->step('audit-browser-permit-artifact', 'Browser evidence observed the same permit artifact boundary', ['permit_pdf_url' => $permitArtifact['permit_pdf_url'], 'verification_reference' => $permitArtifact['verification_reference'], 'panel_visible' => true, 'not_legally_effective_visible' => true, 'open_affordance_visible' => true], ['permit_pdf_url' => data_get($browserReport, 'permit_artifact.permit_pdf_url'), 'verification_reference' => data_get($browserReport, 'permit_artifact.verification_reference'), 'panel_visible' => data_get($browserReport, 'permit_artifact.panel_visible'), 'not_legally_effective_visible' => data_get($browserReport, 'permit_artifact.not_legally_effective_visible'), 'open_affordance_visible' => data_get($browserReport, 'permit_artifact.open_affordance_visible')]),
             $this->step('audit-release-boundary', 'Permit release remains blocked by explicit policy boundary', ['status' => PermitApplicationStatus::PendingPayment->value, 'blocked_transition' => PermitApplicationStatus::Released->value], ['status' => $permitApplication->status->value, 'blocked_transition' => $permitApplication->metadata['release_policy_boundary']['blocked_transition'] ?? null]),
+            $this->step('audit-application-timeline', 'Timeline projection matches the exact authoritative lifecycle records prepared for this run', ['event_count' => $manifest['resources']['permit_timeline_event_count'], 'event_keys' => $manifest['resources']['permit_timeline_event_keys']], ['event_count' => count($timelineKeys), 'event_keys' => $timelineKeys]),
+            $this->step('audit-browser-application-timeline', 'Browser evidence shows the exact canonical timeline event keys', ['event_count' => count($timelineKeys), 'event_keys' => $timelineKeys], ['event_count' => data_get($browserReport, 'timeline.event_count'), 'event_keys' => data_get($browserReport, 'timeline.event_keys')]),
             $this->step('audit-browser-application-form-pdf', 'Browser evidence confirms application form artifact renders exact intake facts', ['application_number' => $permitApplication->application_number, 'available' => true], ['application_number' => data_get($browserReport, 'documents.application_form.application_number'), 'available' => (bool) data_get($browserReport, 'documents.application_form.available')]),
             $this->step('audit-browser-assessment-pdf', 'Browser evidence confirms assessment artifact renders exact persisted assessment snapshot', ['assessment_id' => $assessment->id, 'total_amount_cents' => $assessment->total_amount_cents, 'available' => true], ['assessment_id' => data_get($browserReport, 'documents.assessment.assessment_id'), 'total_amount_cents' => data_get($browserReport, 'documents.assessment.total_amount_cents'), 'available' => (bool) data_get($browserReport, 'documents.assessment.available')]),
             $this->step('audit-verification-reference', 'Permit artifact verification reference matches canonical boundary', ['reference' => $verificationBoundary['reference'], 'can_verify_release' => false], ['reference' => $manifest['resources']['permit_verification_reference'] ?? null, 'can_verify_release' => $verificationBoundary['can_verify_release']]),
@@ -458,6 +470,7 @@ final class ManualCollectionReceiptVisibilityScenario
                 'permit_artifact' => $permitArtifact,
                 'release_readiness' => $releaseReadiness,
                 'verification_boundary' => $verificationBoundary,
+                'timeline' => $timeline,
             ],
             'browser' => $browserReport,
         ]);

@@ -4,6 +4,7 @@ import {
     Calculator,
     CircleX,
     FileText,
+    History,
     LinkIcon,
     ListChecks,
     LockKeyhole,
@@ -187,6 +188,22 @@ type PermitApplication = {
         remarks: string | null;
         policy_note: string | null;
     }[];
+    timeline: {
+        key: string;
+        category: string;
+        title: string;
+        description: string;
+        status: string;
+        actor: {
+            id: number;
+            name: string;
+        } | null;
+        occurred_at: string | null;
+        source: {
+            type: string;
+            id: number;
+        };
+    }[];
     can_continue: boolean;
 };
 
@@ -224,6 +241,17 @@ function money(amountCents: number): string {
 
 function label(value: string): string {
     return value.replaceAll('_', ' ');
+}
+
+function dateTime(value: string | null): string {
+    if (value === null) {
+        return 'Time not recorded';
+    }
+
+    return new Intl.DateTimeFormat('en-PH', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+    }).format(new Date(value));
 }
 
 function booleanEntries(
@@ -688,6 +716,63 @@ function booleanEntries(
                         </tbody>
                     </table>
                 </div>
+            </section>
+
+            <section
+                data-testid="permit-timeline"
+                class="border-y border-sidebar-border/70 bg-background py-4 dark:border-sidebar-border"
+            >
+                <div class="mb-4 flex items-center gap-2 px-1">
+                    <History class="size-4 text-muted-foreground" />
+                    <div>
+                        <h2 class="text-sm font-semibold text-foreground">
+                            Application timeline
+                        </h2>
+                        <p class="text-xs text-muted-foreground">
+                            Chronological evidence from application, assessment,
+                            Treasury, clearance, and authority-boundary records.
+                        </p>
+                    </div>
+                </div>
+
+                <ol class="relative ml-3 border-l border-border pl-6">
+                    <li
+                        v-for="event in permitApplication.timeline"
+                        :key="event.key"
+                        data-testid="permit-timeline-event"
+                        :data-timeline-key="event.key"
+                        class="relative pb-5 last:pb-0"
+                    >
+                        <span
+                            class="absolute top-1 -left-[1.77rem] size-3 rounded-full border-2 border-background bg-primary"
+                        />
+                        <div
+                            class="flex flex-wrap items-start justify-between gap-2"
+                        >
+                            <div class="min-w-0 flex-1">
+                                <h3
+                                    class="text-sm font-medium break-words text-foreground"
+                                >
+                                    {{ event.title }}
+                                </h3>
+                                <p
+                                    class="mt-1 text-sm break-words text-muted-foreground"
+                                >
+                                    {{ event.description }}
+                                </p>
+                            </div>
+                            <Badge variant="secondary" class="capitalize">
+                                {{ label(event.status) }}
+                            </Badge>
+                        </div>
+                        <p class="mt-1 text-xs text-muted-foreground">
+                            {{ dateTime(event.occurred_at) }}
+                            <template v-if="event.actor">
+                                · {{ event.actor.name }}
+                            </template>
+                        </p>
+                    </li>
+                </ol>
             </section>
 
             <section

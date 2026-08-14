@@ -343,6 +343,17 @@ test('manual collection receipt scenario executes treasury actions idempotently'
 
     $receipt = Receipt::query()->findOrFail($firstManifest['resources']['record_id']);
     $collection = TreasuryCollection::query()->findOrFail($firstManifest['resources']['collection_id']);
+    $permitApplication = PermitApplication::query()->findOrFail($firstManifest['resources']['permit_application_id']);
+    $expectedTimelineKeys = [
+        "application-recorded:{$permitApplication->id}",
+        "assessment-computed:{$firstManifest['resources']['assessment_id']}",
+        "payment-schedule-prepared:{$firstManifest['resources']['payment_schedule_id']}",
+        'status-transition:0',
+        "collection-recorded:{$firstManifest['resources']['collection_id']}",
+        "receipt-issued:{$receipt->id}",
+        ...$permitApplication->clearances()->orderBy('id')->pluck('id')->map(fn (int $clearanceId): string => "clearance-completed:{$clearanceId}"),
+        "release-blocked:{$permitApplication->id}",
+    ];
 
     expect($firstManifest['resources']['record_type'])->toBe('receipt')
         ->and($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
@@ -360,6 +371,8 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($firstManifest['resources']['permit_verification_url'])->toContain($firstManifest['resources']['permit_verification_reference'])
         ->and($firstManifest['resources']['permit_verification_view_url'])->toBe($firstManifest['resources']['permit_verification_url'].'/view')
         ->and($firstManifest['resources']['receipt_void_boundary_reference'])->toStartWith('RVB-'.$firstManifest['resources']['record_id'].'-')
+        ->and($firstManifest['resources']['permit_timeline_event_count'])->toBe(10)
+        ->and($firstManifest['resources']['permit_timeline_event_keys'])->toBe($expectedTimelineKeys)
         ->and(Receipt::query()->count())->toBe(1)
         ->and(TreasuryCollection::query()->count())->toBe(1)
         ->and($receipt->status)->toBe(ReceiptStatus::Issued)
@@ -606,6 +619,10 @@ test('manual collection receipt scenario audit compares browser evidence with ca
             'released' => false,
             'public_page_visible' => true,
             'public_page_mobile_visible' => true,
+        ],
+        'timeline' => [
+            'event_count' => $manifest['resources']['permit_timeline_event_count'],
+            'event_keys' => $manifest['resources']['permit_timeline_event_keys'],
         ],
         'permit_artifact' => [
             'permit_pdf_url' => $manifest['resources']['permit_pdf_url'],

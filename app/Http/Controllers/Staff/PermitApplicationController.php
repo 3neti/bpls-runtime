@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Staff;
 
 use App\Actions\AttemptPermitApplicationRelease;
+use App\Actions\BuildPermitApplicationTimeline;
 use App\Actions\CancelPermitApplication;
 use App\Actions\CompletePermitClearance;
 use App\Actions\CreateStaffPermitApplication;
@@ -43,6 +44,7 @@ class PermitApplicationController extends Controller
         private readonly DescribeAmendmentPolicyBoundary $describeAmendmentPolicyBoundary,
         private readonly DescribeTransferPolicyBoundary $describeTransferPolicyBoundary,
         private readonly DescribeRetirementPolicyBoundary $describeRetirementPolicyBoundary,
+        private readonly BuildPermitApplicationTimeline $buildPermitApplicationTimeline,
     ) {}
 
     public function index(): Response
@@ -136,14 +138,16 @@ class PermitApplicationController extends Controller
 
         $permitApplication->load([
             'business.owner',
+            'submittedBy',
             'lines.lineOfBusiness',
-            'assessments' => fn ($query) => $query->latest(),
-            'paymentSchedules' => fn ($query) => $query->latest(),
+            'assessments' => fn ($query) => $query->with('assessedBy')->latest(),
+            'paymentSchedules' => fn ($query) => $query->with('preparedBy')->latest(),
+            'treasuryCollections' => fn ($query) => $query->with(['receivedBy', 'receipt.issuedBy'])->oldest(),
             'clearances' => fn ($query) => $query->with('completedBy')->orderBy('id'),
         ]);
 
         return Inertia::render('permit-applications/Show', [
-            'permitApplication' => $this->permitApplicationPayload($permitApplication),
+            'permitApplication' => $this->permitApplicationPayload($permitApplication, includeTimeline: true),
             'can' => [
                 'assess_permit_applications' => auth()->user()?->can(UserPermission::AssessPermitApplications->value) ?? false,
                 'update_permit_application_status' => auth()->user()?->can(UserPermission::UpdatePermitApplicationStatus->value) ?? false,
@@ -184,7 +188,7 @@ class PermitApplicationController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function permitApplicationPayload(PermitApplication $permitApplication): array
+    private function permitApplicationPayload(PermitApplication $permitApplication, bool $includeTimeline = false): array
     {
         $latestAssessment = $permitApplication->assessments->first();
         $latestPaymentSchedule = $permitApplication->paymentSchedules->first();
@@ -251,6 +255,7 @@ class PermitApplicationController extends Controller
             'permit_artifact' => $this->describePermitArtifact->handle($permitApplication),
             'release_readiness' => $this->describeReleaseReadiness->handle($permitApplication),
             'verification_boundary' => $this->describeVerificationBoundary->handle($permitApplication),
+            ...($includeTimeline ? ['timeline' => $this->buildPermitApplicationTimeline->handle($permitApplication)] : []),
             'clearance_summary' => [
                 'completed' => $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count(),
                 'total' => $permitApplication->clearances->count(),
