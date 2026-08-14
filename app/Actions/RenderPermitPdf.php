@@ -13,6 +13,7 @@ final class RenderPermitPdf
             'business.owner',
             'lines.lineOfBusiness',
             'assessments' => fn ($query) => $query->latest(),
+            'clearances' => fn ($query) => $query->with('completedBy')->orderBy('id'),
         ]);
 
         $document = new SimplePdfDocument(
@@ -54,10 +55,11 @@ final class RenderPermitPdf
         ]);
 
         $y = $this->lines($document, $page, $y, $permitApplication);
+        $y = $this->clearances($document, $page, $y, $permitApplication);
 
         $this->section($document, $page, $y, 'Policy Gaps', [
             'Release' => 'Permit issuance and release gating remain unresolved because source Released status precedes clearance completion.',
-            'Clearances' => 'Clearance completion evidence is not yet represented in this artifact.',
+            'Clearances' => 'Clearance checklist evidence is represented for review only and does not release or issue a permit.',
             'Verification' => 'QR verification route and public verification behavior are not yet implemented.',
             'Signatories' => 'Official signatories, seal placement, and final municipal layout remain unresolved.',
         ]);
@@ -115,6 +117,40 @@ final class RenderPermitPdf
         }
 
         return $y - 18;
+    }
+
+    private function clearances(SimplePdfDocument $document, int $page, float $y, PermitApplication $permitApplication): float
+    {
+        $document->text($page, 'CLEARANCE EVIDENCE', 42, $y, 9, true);
+        $y -= 18;
+        $document->line($page, 42, $y + 7, 553, $y + 7, 0.6, 0.45);
+        $document->text($page, 'Clearance', 54, $y, 7.5, true);
+        $document->text($page, 'Status', 285, $y, 7.5, true);
+        $document->text($page, 'Completed by', 365, $y, 7.5, true);
+        $document->text($page, 'Completed at', 541, $y, 7.5, true, 'right');
+        $y -= 14;
+
+        foreach ($permitApplication->clearances as $clearance) {
+            if ($y < SimplePdfDocument::ContentBottom + 42) {
+                $page = $document->addPage('Clearance evidence continued');
+                $y = SimplePdfDocument::ContentTop;
+            }
+
+            $document->wrappedText($page, $clearance->label, 54, $y, 205, 7.5, 9);
+            $document->text($page, $this->label($clearance->status->value), 285, $y, 7.5);
+            $document->wrappedText($page, $clearance->completedBy?->name ?? 'Not completed', 365, $y, 115, 7.5, 9);
+            $document->text($page, $clearance->completed_at?->toDateString() ?? 'Pending', 541, $y, 7.5, align: 'right');
+            $y -= 28;
+        }
+
+        if ($permitApplication->clearances->isEmpty()) {
+            $document->text($page, 'No clearance checklist evidence has been recorded.', 54, $y, 8);
+            $y -= 24;
+        }
+
+        $document->wrappedText($page, 'Clearance completion evidence is informational in this artifact. Actual permit release remains blocked until issuance authority, signatories, QR verification, and legacy Released status semantics are resolved.', 54, $y, 470, 8, 10);
+
+        return $y - 36;
     }
 
     private function line(SimplePdfDocument $document, int $page, float $y, PermitApplicationLine $line): void

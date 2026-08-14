@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\CompletePermitClearance;
 use App\Actions\EnsurePermitApplicationClearances;
 use App\Actions\RenderApplicationFormPdf;
 use App\Actions\RenderPermitPdf;
@@ -16,6 +17,7 @@ use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
 use App\Models\PermitClearance;
+use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('guests are redirected away from staff permit applications', function () {
@@ -495,7 +497,7 @@ test('staff users with view permission can open a permit pdf artifact', function
         UserPermission::ViewPermitApplications,
     ]);
 
-    $application = permitDocumentFixture();
+    $application = permitDocumentFixtureWithCompletedClearances($user);
 
     $response = $this->actingAs($user)
         ->get(route('staff.permit-applications.permit.pdf', $application))
@@ -513,6 +515,13 @@ test('staff users with view permission can open a permit pdf artifact', function
         ->toContain('Permit Owner')
         ->toContain('RETAIL')
         ->toContain('PHP 125,000.00')
+        ->toContain('CLEARANCE EVIDENCE')
+        ->toContain('BPLO review')
+        ->toContain('Treasury payment evidence')
+        ->toContain('Release authority')
+        ->toContain('Completed')
+        ->toContain('Clearance completion evidence is informational')
+        ->toContain('Actual permit release remains blocked')
         ->toContain('Generated permit artifact; this route does not release or issue a permit.')
         ->toContain('QR verification route and public verification behavior are not yet implemented.')
         ->and(permitPdfPageCount($pdf))->toBe(1);
@@ -602,6 +611,18 @@ function permitDocumentFixture(): PermitApplication
     ]);
 
     return $application;
+}
+
+function permitDocumentFixtureWithCompletedClearances(User $user): PermitApplication
+{
+    $application = permitDocumentFixture();
+    $application = app(EnsurePermitApplicationClearances::class)->handle($application);
+
+    foreach ($application->clearances as $clearance) {
+        app(CompletePermitClearance::class)->handle($clearance, $user, 'Permit artifact clearance evidence.');
+    }
+
+    return $application->refresh();
 }
 
 function permitPdfPageCount(string $pdf): int
