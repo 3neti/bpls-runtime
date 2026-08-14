@@ -49,14 +49,26 @@ final class RenderApplicationFormPdf
             'Registration' => $business->registration_number ?? 'Not recorded',
             'Business address' => $business->address ?? 'Not recorded',
             'Barangay' => $business->barangay ?? 'Not recorded',
+            'Ownership type' => $this->optionalLabel($business->ownership_type),
+            'Organization/company' => $business->organization_name ?? 'Not recorded',
+            'Occupancy' => $this->optionalLabel($business->occupancy),
+            'Building' => $business->building_name ?? 'Not recorded',
+            'Property index number' => $business->property_index_number ?? 'Not recorded',
+            'Business area' => $business->business_area_square_meters === null ? 'Not recorded' : $business->business_area_square_meters.' square meters',
+            'Employees' => $business->male_employee_count === null && $business->female_employee_count === null ? 'Not recorded' : 'Male '.($business->male_employee_count ?? 0).' / Female '.($business->female_employee_count ?? 0),
+            'Business contact' => $business->contact_number ?? 'Not recorded',
+            'Business email' => $business->email ?? 'Not recorded',
+            'Established on' => $business->established_on?->toDateString() ?? 'Not recorded',
+            'Operations started on' => $business->started_on?->toDateString() ?? 'Not recorded',
+            'Registered on' => $business->registered_on?->toDateString() ?? 'Not recorded',
             'Submitted at' => $permitApplication->submitted_at?->toIso8601String() ?? 'Not recorded',
         ]);
 
         $y = $this->lines($document, $page, $y, $permitApplication);
 
         $this->section($document, $page, $y, 'Policy Gaps', [
-            'Field parity' => 'TOR/regulatory fields beyond the current rescue intake remain unresolved.',
-            'Attachments' => 'Documentary requirements, uploaded files, and checklist evidence are not yet represented in this artifact.',
+            'Field parity' => 'Zoning, sanitary, local tax, regulatory, and fire-safety fields remain unresolved.',
+            'Attachments' => 'Supporting documents are tracked separately; documentary checklist and sufficiency semantics remain unresolved.',
             'Certification' => 'Applicant certification, sworn declaration, official receiving marks, and final municipal layout remain unresolved.',
             'Lifecycle scope' => 'Renewal, amendment, transfer, retirement, and PIL-specific fields remain unresolved where not already characterized.',
         ]);
@@ -79,8 +91,8 @@ final class RenderApplicationFormPdf
             }
 
             $document->text($page, $label, 54, $y, 7.5, true);
-            $y = $document->wrappedText($page, $value, 170, $y, 370, 8.5, 11);
-            $y -= 3;
+            $y = $document->wrappedText($page, $value, 170, $y, 370, 8.5, 10);
+            $y -= 2;
         }
 
         return $y - 10;
@@ -143,5 +155,10 @@ final class RenderApplicationFormPdf
     private function label(string $value): string
     {
         return str($value)->replace('_', ' ')->title()->toString();
+    }
+
+    private function optionalLabel(?string $value): string
+    {
+        return $value === null ? 'Not recorded' : $this->label($value);
     }
 }

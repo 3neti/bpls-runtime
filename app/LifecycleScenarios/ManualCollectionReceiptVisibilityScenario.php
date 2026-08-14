@@ -89,7 +89,7 @@ final class ManualCollectionReceiptVisibilityScenario
         $lineOfBusiness = $this->lineOfBusiness();
         $this->feeRules($lineOfBusiness);
 
-        $applicationNumber = 'APP-SCENARIO-'.str($runId)->upper()->replaceMatches('/[^A-Z0-9]+/', '-')->trim('-')->limit(40, '')->toString();
+        $applicationNumber = 'APP-SCENARIO-'.$this->boundedRunReference($runId, 40);
         $permitApplication = $this->createPermitApplication->handle([
             'owner_name' => 'Scenario Owner '.$runId,
             'owner_email' => null,
@@ -100,6 +100,18 @@ final class ManualCollectionReceiptVisibilityScenario
             'registration_number' => 'SCENARIO-'.$runId,
             'business_address' => 'Scenario verification address',
             'barangay' => 'Poblacion',
+            'ownership_type' => 'sole-proprietorship',
+            'occupancy' => 'rented',
+            'building_name' => 'Scenario Commerce Building',
+            'property_index_number' => 'SCENARIO-PIN-001',
+            'business_area_square_meters' => '84.50',
+            'male_employee_count' => 3,
+            'female_employee_count' => 4,
+            'business_contact_number' => '09170000000',
+            'business_email' => 'scenario-business@example.test',
+            'established_on' => '2018-01-15',
+            'started_on' => '2018-02-01',
+            'registered_on' => '2018-01-10',
             'application_number' => $applicationNumber,
             'type' => PermitApplicationType::New->value,
             'application_year' => now()->year,
@@ -211,6 +223,14 @@ final class ManualCollectionReceiptVisibilityScenario
             'public_reference' => $receipt->receipt_number,
             'permit_application_id' => $permitApplication->id,
             'application_number' => $permitApplication->application_number,
+            'establishment_ownership_type' => $permitApplication->business->ownership_type,
+            'establishment_occupancy' => $permitApplication->business->occupancy,
+            'establishment_building_name' => $permitApplication->business->building_name,
+            'establishment_property_index_number' => $permitApplication->business->property_index_number,
+            'establishment_business_area_square_meters' => $permitApplication->business->business_area_square_meters,
+            'establishment_male_employee_count' => $permitApplication->business->male_employee_count,
+            'establishment_female_employee_count' => $permitApplication->business->female_employee_count,
+            'establishment_started_on' => $permitApplication->business->started_on?->toDateString(),
             'supporting_document_id' => $supportingDocument->id,
             'supporting_document_label' => $supportingDocument->label,
             'supporting_document_name' => $supportingDocument->original_name,
@@ -221,6 +241,7 @@ final class ManualCollectionReceiptVisibilityScenario
             'payment_schedule_id' => $paymentSchedule->id,
             'online_payment_boundary_status' => $onlinePaymentBoundary['status'],
             'collection_id' => $collection->id,
+            'permit_application_create_url' => route('staff.permit-applications.create', absolute: false),
             'permit_application_url' => route('staff.permit-applications.show', $permitApplication, false),
             'payment_schedule_queue_url' => route('staff.payment-schedules.index', [
                 'q' => $permitApplication->application_number,
@@ -401,6 +422,8 @@ final class ManualCollectionReceiptVisibilityScenario
 
         $checks = [
             $this->step('audit-payment-schedule-paid', 'Payment schedule is paid', ['status' => PaymentScheduleStatus::Paid->value], ['status' => $paymentSchedule->status->value]),
+            $this->step('audit-establishment-profile', 'Structured establishment profile remains attached to the exact business', ['ownership_type' => $manifest['resources']['establishment_ownership_type'], 'occupancy' => $manifest['resources']['establishment_occupancy'], 'business_area_square_meters' => $manifest['resources']['establishment_business_area_square_meters'], 'male_employee_count' => $manifest['resources']['establishment_male_employee_count'], 'female_employee_count' => $manifest['resources']['establishment_female_employee_count'], 'started_on' => $manifest['resources']['establishment_started_on']], ['ownership_type' => $permitApplication->business->ownership_type, 'occupancy' => $permitApplication->business->occupancy, 'business_area_square_meters' => $permitApplication->business->business_area_square_meters, 'male_employee_count' => $permitApplication->business->male_employee_count, 'female_employee_count' => $permitApplication->business->female_employee_count, 'started_on' => $permitApplication->business->started_on?->toDateString()]),
+            $this->step('audit-browser-establishment-profile', 'Browser evidence shows the real intake surface and exact canonical establishment profile', ['ownership_type' => $manifest['resources']['establishment_ownership_type'], 'occupancy' => $manifest['resources']['establishment_occupancy'], 'business_area_square_meters' => $manifest['resources']['establishment_business_area_square_meters'], 'male_employee_count' => $manifest['resources']['establishment_male_employee_count'], 'female_employee_count' => $manifest['resources']['establishment_female_employee_count'], 'started_on' => $manifest['resources']['establishment_started_on'], 'intake_form_visible' => true, 'intake_form_mobile_visible' => true, 'mobile_visible' => true], ['ownership_type' => data_get($browserReport, 'establishment_profile.ownership_type'), 'occupancy' => data_get($browserReport, 'establishment_profile.occupancy'), 'business_area_square_meters' => data_get($browserReport, 'establishment_profile.business_area_square_meters'), 'male_employee_count' => data_get($browserReport, 'establishment_profile.male_employee_count'), 'female_employee_count' => data_get($browserReport, 'establishment_profile.female_employee_count'), 'started_on' => data_get($browserReport, 'establishment_profile.started_on'), 'intake_form_visible' => data_get($browserReport, 'establishment_profile.intake_form_visible'), 'intake_form_mobile_visible' => data_get($browserReport, 'establishment_profile.intake_form_mobile_visible'), 'mobile_visible' => data_get($browserReport, 'establishment_profile.mobile_visible')]),
             $this->step('audit-supporting-document', 'Supporting evidence remains attached to the exact permit application in private storage', ['permit_application_id' => $permitApplication->id, 'document_id' => $manifest['resources']['supporting_document_id'], 'storage_private' => true], ['permit_application_id' => $supportingDocument->permit_application_id, 'document_id' => $supportingDocument->id, 'storage_private' => $supportingDocument->storage_disk === 'local' && Storage::disk('local')->exists($supportingDocument->path)]),
             $this->step('audit-browser-supporting-document', 'Browser evidence observed and downloaded the exact supporting document', ['document_id' => $supportingDocument->id, 'label' => $supportingDocument->label, 'download_available' => true], ['document_id' => data_get($browserReport, 'supporting_document.id'), 'label' => data_get($browserReport, 'supporting_document.label'), 'download_available' => data_get($browserReport, 'supporting_document.download_available')]),
             $this->step('audit-online-payment-boundary', 'Online payment and reconciliation boundary remains blocked', ['status' => 'blocked', 'can_pay_online' => false, 'can_reconcile_online' => false], ['status' => $onlinePaymentBoundary['status'], 'can_pay_online' => $onlinePaymentBoundary['can_pay_online'], 'can_reconcile_online' => $onlinePaymentBoundary['can_reconcile_online']]),
@@ -449,6 +472,17 @@ final class ManualCollectionReceiptVisibilityScenario
             'passed' => $passed,
             'canonical' => [
                 'payment_schedule_id' => $paymentSchedule->id,
+                'establishment_profile' => [
+                    'business_id' => $permitApplication->business->id,
+                    'ownership_type' => $permitApplication->business->ownership_type,
+                    'occupancy' => $permitApplication->business->occupancy,
+                    'building_name' => $permitApplication->business->building_name,
+                    'property_index_number' => $permitApplication->business->property_index_number,
+                    'business_area_square_meters' => $permitApplication->business->business_area_square_meters,
+                    'male_employee_count' => $permitApplication->business->male_employee_count,
+                    'female_employee_count' => $permitApplication->business->female_employee_count,
+                    'started_on' => $permitApplication->business->started_on?->toDateString(),
+                ],
                 'supporting_document' => [
                     'id' => $supportingDocument->id,
                     'permit_application_id' => $supportingDocument->permit_application_id,
@@ -705,6 +739,23 @@ final class ManualCollectionReceiptVisibilityScenario
 
     private function safeRunReference(string $runId): string
     {
-        return str($runId)->upper()->replaceMatches('/[^A-Z0-9]+/', '-')->trim('-')->limit(60, '')->toString();
+        return $this->boundedRunReference($runId, 60);
+    }
+
+    private function boundedRunReference(string $runId, int $maximumLength): string
+    {
+        $reference = str($runId)
+            ->upper()
+            ->replaceMatches('/[^A-Z0-9]+/', '-')
+            ->trim('-')
+            ->toString();
+
+        if (mb_strlen($reference) <= $maximumLength) {
+            return $reference;
+        }
+
+        $hash = substr(hash('sha256', $runId), 0, 10);
+
+        return mb_substr($reference, 0, $maximumLength - mb_strlen($hash) - 1).'-'.$hash;
     }
 }

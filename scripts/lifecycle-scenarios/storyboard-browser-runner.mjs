@@ -56,6 +56,7 @@ const permitArtifactEvidence = {};
 const verificationEvidence = {};
 const timelineEvidence = {};
 const supportingDocumentEvidence = {};
+const establishmentProfileEvidence = {};
 const receiptVoidBoundaryEvidence = {};
 const documentEvidence = {};
 const assessmentEvidence = {};
@@ -188,6 +189,7 @@ const report = {
     verification: verificationEvidence,
     timeline: timelineEvidence,
     supporting_document: supportingDocumentEvidence,
+    establishment_profile: establishmentProfileEvidence,
     receipt_void_boundary: receiptVoidBoundaryEvidence,
     documents: documentEvidence,
     assessment: assessmentEvidence,
@@ -2269,6 +2271,75 @@ async function inspectManualReceiptPermitReleaseBoundary(
     targetPage,
     targetBaseUrl,
 ) {
+    const intakeUrl = `${targetBaseUrl}${manifest.resources.permit_application_create_url}`;
+    await targetPage.goto(intakeUrl, { waitUntil: 'networkidle' });
+    const establishmentIntake = targetPage.getByTestId(
+        'permit-establishment-intake',
+    );
+    const establishmentIntakeVisible = await establishmentIntake
+        .isVisible()
+        .catch(() => false);
+    const establishmentIntakeControlCount = await establishmentIntake
+        .locator(
+            '#ownership_type, #organization_name, #occupancy, #building_name, #property_index_number, #business_area_square_meters, #male_employee_count, #female_employee_count, #business_contact_number, #business_email, #established_on, #started_on, #registered_on',
+        )
+        .count();
+    checks.push(
+        check(
+            'permit-establishment-intake-visible',
+            'Staff intake shows every structured establishment-profile control',
+            true,
+            establishmentIntakeVisible &&
+                establishmentIntakeControlCount === 13,
+            { url: intakeUrl },
+        ),
+    );
+    establishmentProfileEvidence.intake_form_visible =
+        establishmentIntakeVisible && establishmentIntakeControlCount === 13;
+
+    if (establishmentIntakeVisible) {
+        await establishmentIntake.scrollIntoViewIfNeeded();
+        await screenshot(
+            targetPage,
+            '00-establishment-intake',
+            'browser/screenshots/00-establishment-intake.png',
+        );
+        await targetPage.setViewportSize({ width: 390, height: 844 });
+        const mobileEstablishmentIntakeVisible = await establishmentIntake
+            .isVisible()
+            .catch(() => false);
+        const mobileEstablishmentIntakeOverflow = await targetPage.evaluate(
+            () => document.documentElement.scrollWidth > window.innerWidth,
+        );
+        checks.push(
+            check(
+                'mobile-permit-establishment-intake-visible',
+                'Mobile staff intake keeps the establishment-profile controls visible',
+                true,
+                mobileEstablishmentIntakeVisible,
+            ),
+        );
+        checks.push(
+            check(
+                'mobile-permit-establishment-intake-no-overflow',
+                'Mobile staff intake has no horizontal overflow',
+                false,
+                mobileEstablishmentIntakeOverflow,
+            ),
+        );
+        establishmentProfileEvidence.intake_form_mobile_visible =
+            mobileEstablishmentIntakeVisible;
+        establishmentProfileEvidence.intake_form_mobile_horizontal_overflow =
+            mobileEstablishmentIntakeOverflow;
+        await establishmentIntake.scrollIntoViewIfNeeded();
+        await screenshot(
+            targetPage,
+            '00b-mobile-establishment-intake',
+            'browser/screenshots/00b-mobile-establishment-intake.png',
+        );
+        await targetPage.setViewportSize({ width: 1440, height: 900 });
+    }
+
     const permitUrl = `${targetBaseUrl}${manifest.resources.permit_application_url}`;
     await targetPage.goto(permitUrl, { waitUntil: 'networkidle' });
     const applicationVisible = await targetPage
@@ -2288,6 +2359,47 @@ async function inspectManualReceiptPermitReleaseBoundary(
         .catch(() => []);
     const expectedTimelineEventKeys =
         manifest.resources.permit_timeline_event_keys ?? [];
+    const establishmentProfile = targetPage.getByTestId(
+        'permit-establishment-profile',
+    );
+    const establishmentProfileVisible = await establishmentProfile
+        .isVisible()
+        .catch(() => false);
+    const establishmentOwnershipType = await targetPage
+        .getByTestId('establishment-ownership-type')
+        .textContent()
+        .catch(() => null);
+    const establishmentOccupancy = await targetPage
+        .getByTestId('establishment-occupancy')
+        .textContent()
+        .catch(() => null);
+    const establishmentBusinessArea = await targetPage
+        .getByTestId('establishment-business-area')
+        .textContent()
+        .catch(() => null);
+    const establishmentEmployeeCounts = await targetPage
+        .getByTestId('establishment-employee-counts')
+        .textContent()
+        .catch(() => null);
+    const establishmentStartedOn = await targetPage
+        .getByTestId('establishment-started-on')
+        .textContent()
+        .catch(() => null);
+    const establishmentProfileMatches =
+        establishmentProfileVisible &&
+        normalizedText(establishmentOwnershipType) ===
+            manifest.resources.establishment_ownership_type.replaceAll(
+                '-',
+                ' ',
+            ) &&
+        normalizedText(establishmentOccupancy) ===
+            manifest.resources.establishment_occupancy &&
+        normalizedText(establishmentBusinessArea) ===
+            `${manifest.resources.establishment_business_area_square_meters} m²` &&
+        normalizedText(establishmentEmployeeCounts) ===
+            `Male ${manifest.resources.establishment_male_employee_count} · Female ${manifest.resources.establishment_female_employee_count}` &&
+        normalizedText(establishmentStartedOn) ===
+            manifest.resources.establishment_started_on;
     const supportingDocuments = targetPage.getByTestId(
         'permit-supporting-documents',
     );
@@ -2491,6 +2603,37 @@ async function inspectManualReceiptPermitReleaseBoundary(
 
     checks.push(
         check(
+            'permit-establishment-profile-matches',
+            'Permit detail shows the exact canonical establishment profile',
+            true,
+            establishmentProfileMatches,
+        ),
+    );
+    establishmentProfileEvidence.ownership_type =
+        manifest.resources.establishment_ownership_type;
+    establishmentProfileEvidence.occupancy =
+        manifest.resources.establishment_occupancy;
+    establishmentProfileEvidence.business_area_square_meters =
+        manifest.resources.establishment_business_area_square_meters;
+    establishmentProfileEvidence.male_employee_count =
+        manifest.resources.establishment_male_employee_count;
+    establishmentProfileEvidence.female_employee_count =
+        manifest.resources.establishment_female_employee_count;
+    establishmentProfileEvidence.started_on =
+        manifest.resources.establishment_started_on;
+    establishmentProfileEvidence.panel_visible = establishmentProfileVisible;
+
+    if (establishmentProfileVisible) {
+        await establishmentProfile.scrollIntoViewIfNeeded();
+        await screenshot(
+            targetPage,
+            '03-establishment-profile',
+            'browser/screenshots/03-establishment-profile.png',
+        );
+    }
+
+    checks.push(
+        check(
             'permit-supporting-documents-visible',
             'Permit detail shows the supporting-document evidence boundary',
             true,
@@ -2550,11 +2693,22 @@ async function inspectManualReceiptPermitReleaseBoundary(
         );
 
         await targetPage.setViewportSize({ width: 390, height: 844 });
+        const mobileEstablishmentProfileVisible = await establishmentProfile
+            .isVisible()
+            .catch(() => false);
         const mobileSupportingDocumentVisible = await supportingDocument
             .isVisible()
             .catch(() => false);
         const mobileSupportingDocumentsOverflow = await targetPage.evaluate(
             () => document.documentElement.scrollWidth > window.innerWidth,
+        );
+        checks.push(
+            check(
+                'mobile-permit-establishment-profile-visible',
+                'Mobile permit detail keeps the establishment profile visible',
+                true,
+                mobileEstablishmentProfileVisible,
+            ),
         );
         checks.push(
             check(
@@ -2576,6 +2730,8 @@ async function inspectManualReceiptPermitReleaseBoundary(
             mobileSupportingDocumentVisible;
         supportingDocumentEvidence.mobile_horizontal_overflow =
             mobileSupportingDocumentsOverflow;
+        establishmentProfileEvidence.mobile_visible =
+            mobileEstablishmentProfileVisible;
         await supportingDocuments.scrollIntoViewIfNeeded();
         await screenshot(
             targetPage,
@@ -2933,6 +3089,21 @@ async function inspectManualReceiptPermitVerificationBoundary(
         ) &&
         applicationFormPdfBody.includes(
             'Application form artifact renders currently captured intake facts',
+        ) &&
+        applicationFormPdfBody.includes(
+            manifest.resources.establishment_building_name,
+        ) &&
+        applicationFormPdfBody.includes(
+            manifest.resources.establishment_property_index_number,
+        ) &&
+        applicationFormPdfBody.includes(
+            `${manifest.resources.establishment_business_area_square_meters} square meters`,
+        ) &&
+        applicationFormPdfBody.includes(
+            `Male ${manifest.resources.establishment_male_employee_count} / Female ${manifest.resources.establishment_female_employee_count}`,
+        ) &&
+        applicationFormPdfBody.includes(
+            manifest.resources.establishment_started_on,
         );
     checks.push(
         check(
@@ -3546,6 +3717,12 @@ function uiMoneyFromCents(amountCents) {
 
 function uiLabel(value) {
     return String(value).replaceAll('_', ' ');
+}
+
+function normalizedText(value) {
+    return String(value ?? '')
+        .replaceAll(/\s+/g, ' ')
+        .trim();
 }
 
 async function hasTitleInputValue(targetPage) {

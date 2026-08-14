@@ -429,6 +429,32 @@ test('new permit lifecycle scenario executes real domain actions to authority bo
         ->and($artifactStore->exists('storyboard/storyboard.html'))->toBeTrue();
 });
 
+test('new permit lifecycle scenario preserves uniqueness for long run references with a shared prefix', function () {
+    Storage::fake('local');
+
+    $user = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('new_permit_lifecycle_authority_boundary');
+    $runner = app(ManualCollectionReceiptVisibilityScenario::class);
+    $firstRunId = 'permit-establishment-profile-with-shared-reference-prefix-001';
+    $secondRunId = 'permit-establishment-profile-with-shared-reference-prefix-002';
+
+    $firstManifest = $runner->prepare($scenario, $firstRunId, [
+        'operator' => $user,
+        'recipient' => $user,
+    ], new ScenarioArtifactStore($scenario->key, $firstRunId));
+    $secondManifest = $runner->prepare($scenario, $secondRunId, [
+        'operator' => $user,
+        'recipient' => $user,
+    ], new ScenarioArtifactStore($scenario->key, $secondRunId));
+
+    expect($firstManifest['resources']['application_number'])
+        ->not->toBe($secondManifest['resources']['application_number'])
+        ->and($firstManifest['resources']['public_reference'])
+        ->not->toBe($secondManifest['resources']['public_reference'])
+        ->and(PermitApplication::query()->count())->toBe(2)
+        ->and(Receipt::query()->count())->toBe(2);
+});
+
 test('revenue code fee catalog visibility scenario prepares deterministic catalog evidence idempotently', function () {
     Storage::fake('local');
 
@@ -636,6 +662,18 @@ test('manual collection receipt scenario audit compares browser evidence with ca
             'download_available' => true,
             'mobile_visible' => true,
             'mobile_horizontal_overflow' => false,
+        ],
+        'establishment_profile' => [
+            'ownership_type' => $manifest['resources']['establishment_ownership_type'],
+            'occupancy' => $manifest['resources']['establishment_occupancy'],
+            'business_area_square_meters' => $manifest['resources']['establishment_business_area_square_meters'],
+            'male_employee_count' => $manifest['resources']['establishment_male_employee_count'],
+            'female_employee_count' => $manifest['resources']['establishment_female_employee_count'],
+            'started_on' => $manifest['resources']['establishment_started_on'],
+            'panel_visible' => true,
+            'intake_form_visible' => true,
+            'intake_form_mobile_visible' => true,
+            'mobile_visible' => true,
         ],
         'permit_artifact' => [
             'permit_pdf_url' => $manifest['resources']['permit_pdf_url'],

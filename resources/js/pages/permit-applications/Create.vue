@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
 import { ArrowLeft, Save } from '@lucide/vue';
+import {
+    index,
+    store,
+} from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { index, store } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import type { BreadcrumbItem } from '@/types';
 
 type Option = {
@@ -100,11 +103,12 @@ const breadcrumbs: BreadcrumbItem[] = [
                 </section>
 
                 <section
-                    class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 dark:border-sidebar-border"
+                    data-testid="permit-establishment-intake"
+                    class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 lg:grid-cols-3 dark:border-sidebar-border"
                 >
-                    <div class="md:col-span-2">
+                    <div class="md:col-span-2 lg:col-span-3">
                         <h2 class="text-sm font-semibold text-foreground">
-                            Business
+                            Business and establishment
                         </h2>
                     </div>
                     <div class="grid gap-2">
@@ -140,6 +144,144 @@ const breadcrumbs: BreadcrumbItem[] = [
                         <Label for="business_address">Business address</Label>
                         <Input id="business_address" name="business_address" />
                         <InputError :message="errors.business_address" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="ownership_type">Ownership type</Label>
+                        <select
+                            id="ownership_type"
+                            name="ownership_type"
+                            class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            <option value="">Not recorded</option>
+                            <option value="sole-proprietorship">
+                                Sole proprietorship
+                            </option>
+                            <option value="partnership">Partnership</option>
+                            <option value="corporation">Corporation</option>
+                            <option value="cooperative">Cooperative</option>
+                            <option value="religious">Religious</option>
+                            <option value="non-profit">Non-profit</option>
+                        </select>
+                        <InputError :message="errors.ownership_type" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="organization_name">
+                            Organization/company name
+                        </Label>
+                        <Input
+                            id="organization_name"
+                            name="organization_name"
+                        />
+                        <InputError :message="errors.organization_name" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="occupancy">Occupancy</Label>
+                        <select
+                            id="occupancy"
+                            name="occupancy"
+                            class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            <option value="">Not recorded</option>
+                            <option value="owned">Owned</option>
+                            <option value="rented">Rented</option>
+                        </select>
+                        <InputError :message="errors.occupancy" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="building_name">Building name</Label>
+                        <Input id="building_name" name="building_name" />
+                        <InputError :message="errors.building_name" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="property_index_number">
+                            Property index number
+                        </Label>
+                        <Input
+                            id="property_index_number"
+                            name="property_index_number"
+                        />
+                        <InputError :message="errors.property_index_number" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="business_area_square_meters">
+                            Business area (m²)
+                        </Label>
+                        <Input
+                            id="business_area_square_meters"
+                            name="business_area_square_meters"
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                        />
+                        <InputError
+                            :message="errors.business_area_square_meters"
+                        />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="male_employee_count">
+                            Male employees
+                        </Label>
+                        <Input
+                            id="male_employee_count"
+                            name="male_employee_count"
+                            type="number"
+                            min="0"
+                        />
+                        <InputError :message="errors.male_employee_count" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="female_employee_count">
+                            Female employees
+                        </Label>
+                        <Input
+                            id="female_employee_count"
+                            name="female_employee_count"
+                            type="number"
+                            min="0"
+                        />
+                        <InputError :message="errors.female_employee_count" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="business_contact_number">
+                            Business contact number
+                        </Label>
+                        <Input
+                            id="business_contact_number"
+                            name="business_contact_number"
+                        />
+                        <InputError :message="errors.business_contact_number" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="business_email">Business email</Label>
+                        <Input
+                            id="business_email"
+                            name="business_email"
+                            type="email"
+                        />
+                        <InputError :message="errors.business_email" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="established_on">Established on</Label>
+                        <Input
+                            id="established_on"
+                            name="established_on"
+                            type="date"
+                        />
+                        <InputError :message="errors.established_on" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="started_on">Operations started on</Label>
+                        <Input id="started_on" name="started_on" type="date" />
+                        <InputError :message="errors.started_on" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="registered_on">Registered on</Label>
+                        <Input
+                            id="registered_on"
+                            name="registered_on"
+                            type="date"
+                        />
+                        <InputError :message="errors.registered_on" />
                     </div>
                 </section>
 
@@ -180,7 +322,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                             id="type"
                             name="type"
                             required
-                            class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                            class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <option
                                 v-for="type in applicationTypes"
@@ -200,7 +342,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                             id="line_of_business_id"
                             name="line_of_business_id"
                             required
-                            class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                            class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <option
                                 v-for="lineOfBusiness in lineOfBusinesses"

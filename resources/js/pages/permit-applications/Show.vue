@@ -49,6 +49,19 @@ type PermitApplication = {
         registration_number: string | null;
         address: string | null;
         barangay: string | null;
+        ownership_type: string | null;
+        organization_name: string | null;
+        occupancy: string | null;
+        building_name: string | null;
+        property_index_number: string | null;
+        business_area_square_meters: string | null;
+        male_employee_count: number | null;
+        female_employee_count: number | null;
+        contact_number: string | null;
+        email: string | null;
+        established_on: string | null;
+        started_on: string | null;
+        registered_on: string | null;
         owner: {
             name: string;
             email: string | null;
@@ -266,7 +279,7 @@ function money(amountCents: number): string {
 }
 
 function label(value: string): string {
-    return value.replaceAll('_', ' ');
+    return value.replaceAll(/[_-]/g, ' ');
 }
 
 function dateTime(value: string | null): string {
@@ -706,6 +719,110 @@ function fileSize(sizeBytes: number): string {
                             </dd>
                         </div>
                     </dl>
+                </div>
+            </section>
+
+            <section
+                data-testid="permit-establishment-profile"
+                class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 sm:grid-cols-2 lg:grid-cols-4 dark:border-sidebar-border"
+            >
+                <div class="sm:col-span-2 lg:col-span-4">
+                    <h2 class="text-sm font-semibold text-foreground">
+                        Establishment profile
+                    </h2>
+                </div>
+                <div v-if="permitApplication.business.ownership_type">
+                    <dt class="text-xs text-muted-foreground">
+                        Ownership type
+                    </dt>
+                    <dd data-testid="establishment-ownership-type">
+                        {{ label(permitApplication.business.ownership_type) }}
+                    </dd>
+                </div>
+                <div v-if="permitApplication.business.organization_name">
+                    <dt class="text-xs text-muted-foreground">
+                        Organization/company
+                    </dt>
+                    <dd>{{ permitApplication.business.organization_name }}</dd>
+                </div>
+                <div v-if="permitApplication.business.occupancy">
+                    <dt class="text-xs text-muted-foreground">Occupancy</dt>
+                    <dd data-testid="establishment-occupancy">
+                        {{ label(permitApplication.business.occupancy) }}
+                    </dd>
+                </div>
+                <div v-if="permitApplication.business.building_name">
+                    <dt class="text-xs text-muted-foreground">Building</dt>
+                    <dd>{{ permitApplication.business.building_name }}</dd>
+                </div>
+                <div v-if="permitApplication.business.property_index_number">
+                    <dt class="text-xs text-muted-foreground">
+                        Property index number
+                    </dt>
+                    <dd>
+                        {{ permitApplication.business.property_index_number }}
+                    </dd>
+                </div>
+                <div
+                    v-if="
+                        permitApplication.business.business_area_square_meters
+                    "
+                >
+                    <dt class="text-xs text-muted-foreground">Business area</dt>
+                    <dd data-testid="establishment-business-area">
+                        {{
+                            permitApplication.business
+                                .business_area_square_meters
+                        }}
+                        m²
+                    </dd>
+                </div>
+                <div
+                    v-if="
+                        permitApplication.business.male_employee_count !==
+                            null ||
+                        permitApplication.business.female_employee_count !==
+                            null
+                    "
+                >
+                    <dt class="text-xs text-muted-foreground">Employees</dt>
+                    <dd data-testid="establishment-employee-counts">
+                        Male
+                        {{
+                            permitApplication.business.male_employee_count ?? 0
+                        }}
+                        · Female
+                        {{
+                            permitApplication.business.female_employee_count ??
+                            0
+                        }}
+                    </dd>
+                </div>
+                <div v-if="permitApplication.business.contact_number">
+                    <dt class="text-xs text-muted-foreground">Contact</dt>
+                    <dd>{{ permitApplication.business.contact_number }}</dd>
+                </div>
+                <div v-if="permitApplication.business.email">
+                    <dt class="text-xs text-muted-foreground">Email</dt>
+                    <dd class="break-all">
+                        {{ permitApplication.business.email }}
+                    </dd>
+                </div>
+                <div v-if="permitApplication.business.established_on">
+                    <dt class="text-xs text-muted-foreground">Established</dt>
+                    <dd>{{ permitApplication.business.established_on }}</dd>
+                </div>
+                <div v-if="permitApplication.business.started_on">
+                    <dt class="text-xs text-muted-foreground">
+                        Operations started
+                    </dt>
+                    <dd data-testid="establishment-started-on">
+                        {{ permitApplication.business.started_on }}
+                    </dd>
+                </div>
+                <div v-if="permitApplication.business.registered_on">
+                    <dt class="text-xs text-muted-foreground">Registered</dt>
+                    <dd>{{ permitApplication.business.registered_on }}</dd>
                 </div>
             </section>
 

@@ -114,6 +114,19 @@ test('staff users with create permission can record a permit application', funct
             'registration_number' => 'DTI-12345',
             'business_address' => 'Market Road',
             'barangay' => 'Poblacion',
+            'ownership_type' => 'corporation',
+            'organization_name' => 'Ana Trading Corporation',
+            'occupancy' => 'rented',
+            'building_name' => 'Public Market Building',
+            'property_index_number' => 'PIN-2026-001',
+            'business_area_square_meters' => '84.50',
+            'male_employee_count' => 2,
+            'female_employee_count' => 3,
+            'business_contact_number' => '09170001111',
+            'business_email' => 'store@example.test',
+            'established_on' => '2020-01-15',
+            'started_on' => '2020-02-01',
+            'registered_on' => '2020-01-10',
             'application_number' => 'APP-2026-00011',
             'type' => PermitApplicationType::New->value,
             'application_year' => 2026,
@@ -131,10 +144,58 @@ test('staff users with create permission can record a permit application', funct
 
     expect(BusinessOwner::query()->where('name', 'Ana Cruz')->exists())->toBeTrue()
         ->and(Business::query()->where('name', 'Ana Trading')->exists())->toBeTrue()
+        ->and($application->business->ownership_type)->toBe('corporation')
+        ->and($application->business->organization_name)->toBe('Ana Trading Corporation')
+        ->and($application->business->occupancy)->toBe('rented')
+        ->and($application->business->building_name)->toBe('Public Market Building')
+        ->and($application->business->property_index_number)->toBe('PIN-2026-001')
+        ->and($application->business->business_area_square_meters)->toBe('84.50')
+        ->and($application->business->male_employee_count)->toBe(2)
+        ->and($application->business->female_employee_count)->toBe(3)
+        ->and($application->business->contact_number)->toBe('09170001111')
+        ->and($application->business->email)->toBe('store@example.test')
+        ->and($application->business->started_on?->toDateString())->toBe('2020-02-01')
         ->and($application->submitted_by_id)->toBe($user->id)
         ->and($application->lines()->sole()->declared_gross_sales_cents)->toBe(123_450)
         ->and($application->lines()->sole()->capital_investment_cents)->toBe(500_075)
         ->and($application->lines()->sole()->quantity)->toBe(2);
+});
+
+test('staff intake validates establishment profile consistency', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::CreatePermitApplications,
+    ]);
+    $lineOfBusiness = LineOfBusiness::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('staff.permit-applications.store'), [
+            'owner_name' => 'Validation Owner',
+            'business_name' => 'Validation Business',
+            'ownership_type' => 'corporation',
+            'occupancy' => 'temporary',
+            'business_area_square_meters' => '0',
+            'male_employee_count' => 0,
+            'female_employee_count' => 0,
+            'business_email' => 'invalid-email',
+            'started_on' => now()->addDay()->toDateString(),
+            'type' => PermitApplicationType::New->value,
+            'application_year' => now()->year,
+            'line_of_business_id' => $lineOfBusiness->id,
+            'declared_gross_sales_pesos' => '1000.00',
+            'capital_investment_pesos' => '1000.00',
+            'quantity' => 1,
+        ])
+        ->assertSessionHasErrors([
+            'organization_name',
+            'occupancy',
+            'business_area_square_meters',
+            'male_employee_count',
+            'business_email',
+            'started_on',
+        ]);
+
+    expect(PermitApplication::query()->count())->toBe(0);
 });
 
 test('staff users can record a renewal application with explicit renewal policy boundary', function () {
@@ -739,9 +800,13 @@ test('staff users with view permission can open an application form pdf artifact
         ->toContain('permit-owner@example.test')
         ->toContain('RETAIL')
         ->toContain('PHP 125,000.00')
+        ->toContain((string) $application->business->building_name)
+        ->toContain((string) $application->business->property_index_number)
+        ->toContain($application->business->business_area_square_meters.' square meters')
+        ->toContain('Male '.$application->business->male_employee_count.' / Female '.$application->business->female_employee_count)
         ->toContain('Application form artifact renders currently captured intake facts')
-        ->toContain('Documentary requirements, uploaded files, and checklist evidence are not yet')
-        ->toContain('represented in this artifact.')
+        ->toContain('Supporting documents are tracked separately; documentary checklist and sufficiency')
+        ->toContain('semantics remain unresolved.')
         ->and(permitPdfPageCount($pdf))->toBe(1);
 });
 
