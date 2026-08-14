@@ -17,6 +17,7 @@ class CreateStaffPermitApplication
         private readonly DescribeRenewalPolicyBoundary $describeRenewalPolicyBoundary,
         private readonly DescribeAmendmentPolicyBoundary $describeAmendmentPolicyBoundary,
         private readonly DescribeTransferPolicyBoundary $describeTransferPolicyBoundary,
+        private readonly DescribeRetirementPolicyBoundary $describeRetirementPolicyBoundary,
     ) {}
 
     /**
@@ -95,7 +96,15 @@ class CreateStaffPermitApplication
                 $transferPolicyBoundary = $this->describeTransferPolicyBoundary->handle($type);
 
                 if ($transferPolicyBoundary === null) {
-                    return null;
+                    $retirementPolicyBoundary = $this->describeRetirementPolicyBoundary->handle($type);
+
+                    if ($retirementPolicyBoundary === null) {
+                        return null;
+                    }
+
+                    return [
+                        'retirement_policy_boundary' => $retirementPolicyBoundary,
+                    ];
                 }
 
                 return [

@@ -28,6 +28,7 @@ const supportedScenarios = [
     'amendment_permit_lifecycle_foundation',
     'permit_application_pending_payment_visibility',
     'renewal_permit_lifecycle_foundation',
+    'retirement_permit_lifecycle_foundation',
     'transfer_permit_lifecycle_foundation',
 ];
 
@@ -56,6 +57,7 @@ const assessmentEvidence = {};
 const renewalPolicyEvidence = {};
 const amendmentPolicyEvidence = {};
 const transferPolicyEvidence = {};
+const retirementPolicyEvidence = {};
 
 let browser;
 
@@ -102,6 +104,7 @@ try {
             'amendment_permit_lifecycle_foundation',
             'permit_application_pending_payment_visibility',
             'renewal_permit_lifecycle_foundation',
+            'retirement_permit_lifecycle_foundation',
             'transfer_permit_lifecycle_foundation',
         ].includes(manifest.scenario.key)
     ) {
@@ -163,6 +166,7 @@ const report = {
     renewal_policy: renewalPolicyEvidence,
     amendment_policy: amendmentPolicyEvidence,
     transfer_policy: transferPolicyEvidence,
+    retirement_policy: retirementPolicyEvidence,
     artifacts: {
         screenshots,
     },
@@ -641,6 +645,8 @@ async function inspectPendingPaymentPermitApplicationDetail(
         await renewalPolicyBoundaryIsVisible(targetPage);
     const transferPolicyBoundaryVisible =
         await transferPolicyBoundaryIsVisible(targetPage);
+    const retirementPolicyBoundaryVisible =
+        await retirementPolicyBoundaryIsVisible(targetPage);
 
     checks.push(
         check(
@@ -718,6 +724,21 @@ async function inspectPendingPaymentPermitApplicationDetail(
         reportTransferPolicy(
             transferPolicyBoundaryVisible ? 'policy_boundary' : 'missing',
             transferPolicyBoundaryVisible,
+        );
+    }
+
+    if (manifest.resources.application_type === 'retirement') {
+        checks.push(
+            check(
+                'detail-retirement-policy-boundary-visible',
+                'Detail screen shows retirement policy boundary',
+                true,
+                retirementPolicyBoundaryVisible,
+            ),
+        );
+        reportRetirementPolicy(
+            retirementPolicyBoundaryVisible ? 'policy_boundary' : 'missing',
+            retirementPolicyBoundaryVisible,
         );
     }
 
@@ -934,6 +955,8 @@ async function inspectPendingPaymentPermitApplicationMobile(
         await renewalPolicyBoundaryIsVisible(targetPage);
     const transferPolicyBoundaryVisible =
         await transferPolicyBoundaryIsVisible(targetPage);
+    const retirementPolicyBoundaryVisible =
+        await retirementPolicyBoundaryIsVisible(targetPage);
     const horizontalOverflow = await targetPage.evaluate(
         () =>
             document.documentElement.scrollWidth >
@@ -986,6 +1009,17 @@ async function inspectPendingPaymentPermitApplicationMobile(
                 'Mobile detail keeps transfer policy boundary visible',
                 true,
                 transferPolicyBoundaryVisible,
+            ),
+        );
+    }
+
+    if (manifest.resources.application_type === 'retirement') {
+        checks.push(
+            check(
+                'mobile-retirement-policy-boundary-visible',
+                'Mobile detail keeps retirement policy boundary visible',
+                true,
+                retirementPolicyBoundaryVisible,
             ),
         );
     }
@@ -2096,6 +2130,11 @@ function reportTransferPolicy(status, unresolvedVisible) {
     transferPolicyEvidence.unresolved_visible = unresolvedVisible;
 }
 
+function reportRetirementPolicy(status, unresolvedVisible) {
+    retirementPolicyEvidence.status = status;
+    retirementPolicyEvidence.unresolved_visible = unresolvedVisible;
+}
+
 function moneyFromCents(amountCents) {
     return `PHP ${Number(amountCents / 100).toLocaleString('en-US', {
         minimumFractionDigits: 2,
@@ -2192,6 +2231,28 @@ async function transferPolicyBoundaryIsVisible(targetPage) {
         .catch(() => false);
     const policyVisible = await targetPage
         .getByText('legal effect remain unresolved', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    return boundaryVisible && unresolvedVisible && policyVisible;
+}
+
+async function retirementPolicyBoundaryIsVisible(targetPage) {
+    const boundaryVisible = await targetPage
+        .getByText('Retirement policy boundary', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const unresolvedVisible = await targetPage
+        .getByText('Unresolved retirement policy', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const policyVisible = await targetPage
+        .getByText('legal retirement effect remain unresolved', {
+            exact: false,
+        })
         .first()
         .isVisible()
         .catch(() => false);

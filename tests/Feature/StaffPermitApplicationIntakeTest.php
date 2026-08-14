@@ -273,6 +273,52 @@ test('staff users can record a transfer application with explicit transfer polic
         );
 });
 
+test('staff users can record a retirement application with explicit retirement policy boundary', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::CreatePermitApplications,
+        UserPermission::ViewPermitApplications,
+    ]);
+
+    $lineOfBusiness = LineOfBusiness::factory()->create([
+        'name' => 'Retirement Retail',
+        'code' => 'RETIREMENT-RETAIL',
+    ]);
+
+    $response = $this->actingAs($user)
+        ->post(route('staff.permit-applications.store'), [
+            'owner_name' => 'Retirement Owner',
+            'business_name' => 'Retirement Trading',
+            'application_number' => 'APP-RETIREMENT-2026-0001',
+            'type' => PermitApplicationType::Retirement->value,
+            'application_year' => 2026,
+            'line_of_business_id' => $lineOfBusiness->id,
+            'declared_gross_sales_pesos' => '125000.00',
+            'capital_investment_pesos' => '75000.00',
+            'quantity' => 1,
+        ]);
+
+    $application = PermitApplication::query()
+        ->where('application_number', 'APP-RETIREMENT-2026-0001')
+        ->sole();
+
+    $response->assertRedirect(route('staff.permit-applications.show', $application));
+
+    expect($application->type)->toBe(PermitApplicationType::Retirement)
+        ->and($application->metadata['retirement_policy_boundary']['status'])->toBe('policy_boundary')
+        ->and($application->metadata['retirement_policy_boundary']['unresolved_policy'])->toContain('retirement effective date and legal closure effect');
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.show', $application))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Show')
+            ->where('permitApplication.type', PermitApplicationType::Retirement->value)
+            ->where('permitApplication.retirement_policy_boundary.status', 'policy_boundary')
+            ->where('permitApplication.retirement_policy_boundary.software_knows.legal_retirement_effect_is_not_yet_automated', true)
+        );
+});
+
 test('staff users with view permission can review a permit application', function () {
     $user = userWithPermissions([
         UserPermission::AccessStaff,

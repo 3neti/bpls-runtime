@@ -79,6 +79,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             ...$this->renewalPolicySteps($scenario, $permitApplication),
             ...$this->amendmentPolicySteps($scenario, $permitApplication),
             ...$this->transferPolicySteps($scenario, $permitApplication),
+            ...$this->retirementPolicySteps($scenario, $permitApplication),
             $this->step('assessment-computed', 'Compute assessment through assessment action', ['assessment_status' => 'computed'], ['assessment_status' => $assessment->status->value, 'assessment_id' => $assessment->id]),
             $this->step('range-assessment-line-computed', 'Assessment action applied the gross-sales range fee rule', ['calculation_type' => FeeRuleCalculationType::Range->value, 'basis_amount_cents' => 12_500_000, 'amount_cents' => 20_000], ['calculation_type' => $rangeAssessmentLine->calculation_type->value, 'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents, 'assessment_line_id' => $rangeAssessmentLine->id]),
             $this->step('business-tax-assessment-line-computed', 'Assessment action persisted gross-sales business tax meaning', ['category' => FeeRuleCategory::Tax->value, 'basis' => 'declared_gross_sales', 'line_of_business' => $lineOfBusiness->name], ['category' => $rangeAssessmentLine->category->value, 'basis' => $rangeAssessmentLine->basis, 'line_of_business' => $rangeAssessmentLine->lineOfBusiness?->name, 'assessment_line_id' => $rangeAssessmentLine->id]),
@@ -97,6 +98,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             'renewal_policy_status' => data_get($permitApplication->metadata, 'renewal_policy_boundary.status'),
             'amendment_policy_status' => data_get($permitApplication->metadata, 'amendment_policy_boundary.status'),
             'transfer_policy_status' => data_get($permitApplication->metadata, 'transfer_policy_boundary.status'),
+            'retirement_policy_status' => data_get($permitApplication->metadata, 'retirement_policy_boundary.status'),
             'assessment_id' => $assessment->id,
             'assessment_url' => route('staff.permit-applications.assessments.show', $assessment, false),
             'assessment_total_amount_cents' => $assessment->total_amount_cents,
@@ -134,6 +136,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             'renewal_policy_boundary' => $permitApplication->metadata['renewal_policy_boundary'] ?? null,
             'amendment_policy_boundary' => $permitApplication->metadata['amendment_policy_boundary'] ?? null,
             'transfer_policy_boundary' => $permitApplication->metadata['transfer_policy_boundary'] ?? null,
+            'retirement_policy_boundary' => $permitApplication->metadata['retirement_policy_boundary'] ?? null,
             'assessment_id' => $assessment->id,
             'assessment_total_amount_cents' => $assessment->total_amount_cents,
             'range_assessment_line' => [
@@ -200,6 +203,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             ...$this->renewalPolicyAuditSteps($manifest, $permitApplication, $browserReport),
             ...$this->amendmentPolicyAuditSteps($manifest, $permitApplication, $browserReport),
             ...$this->transferPolicyAuditSteps($manifest, $permitApplication, $browserReport),
+            ...$this->retirementPolicyAuditSteps($manifest, $permitApplication, $browserReport),
             $this->step('audit-range-assessment-line', 'Canonical assessment line remains the computed gross-sales range line', ['calculation_type' => FeeRuleCalculationType::Range->value, 'basis_amount_cents' => $manifest['resources']['range_basis_amount_cents'], 'amount_cents' => $manifest['resources']['range_amount_cents']], ['calculation_type' => $rangeAssessmentLine->calculation_type->value, 'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents, 'assessment_line_id' => $rangeAssessmentLine->id]),
             $this->step('audit-browser-range-assessment-line', 'Browser evidence shows the same gross-sales range assessment line', ['code' => $rangeAssessmentLine->code, 'calculation_type' => $rangeAssessmentLine->calculation_type->value, 'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents], ['code' => data_get($browserReport, 'assessment.range_line.code'), 'calculation_type' => data_get($browserReport, 'assessment.range_line.calculation_type'), 'basis_amount_cents' => data_get($browserReport, 'assessment.range_line.basis_amount_cents'), 'amount_cents' => data_get($browserReport, 'assessment.range_line.amount_cents')]),
             $this->step('audit-business-tax-assessment-line', 'Canonical assessment line remains a gross-sales business tax', ['name' => $manifest['resources']['business_tax_name'], 'category' => FeeRuleCategory::Tax->value, 'line_of_business' => $manifest['resources']['business_tax_line_of_business'], 'declared_gross_sales_cents' => $manifest['resources']['business_tax_declared_gross_sales_cents'], 'amount_cents' => $manifest['resources']['business_tax_amount_cents']], ['name' => $rangeAssessmentLine->name, 'category' => $rangeAssessmentLine->category->value, 'line_of_business' => $rangeAssessmentLine->lineOfBusiness?->name, 'declared_gross_sales_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents]),
@@ -232,6 +236,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                 'renewal_policy_boundary' => $permitApplication->metadata['renewal_policy_boundary'] ?? null,
                 'amendment_policy_boundary' => $permitApplication->metadata['amendment_policy_boundary'] ?? null,
                 'transfer_policy_boundary' => $permitApplication->metadata['transfer_policy_boundary'] ?? null,
+                'retirement_policy_boundary' => $permitApplication->metadata['retirement_policy_boundary'] ?? null,
                 'assessment_id' => $manifest['resources']['assessment_id'],
                 'range_assessment_line' => [
                     'id' => $rangeAssessmentLine->id,
@@ -348,6 +353,10 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             return PermitApplicationType::Renewal;
         }
 
+        if ($scenario->key === 'retirement_permit_lifecycle_foundation') {
+            return PermitApplicationType::Retirement;
+        }
+
         return PermitApplicationType::New;
     }
 
@@ -365,6 +374,10 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             return 'Scenario Renewal Business '.$runId;
         }
 
+        if ($this->applicationType($scenario) === PermitApplicationType::Retirement) {
+            return 'Scenario Retirement Business '.$runId;
+        }
+
         return 'Scenario Payment Business '.$runId;
     }
 
@@ -380,6 +393,10 @@ final class PermitApplicationPendingPaymentVisibilityScenario
 
         if ($this->applicationType($scenario) === PermitApplicationType::Renewal) {
             return 'Scenario Renewal Trade';
+        }
+
+        if ($this->applicationType($scenario) === PermitApplicationType::Retirement) {
+            return 'Scenario Retirement Trade';
         }
 
         return 'Scenario Payment Trade';
@@ -445,6 +462,28 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                 ['transfer_policy_status' => 'policy_boundary'],
                 [
                     'transfer_policy_status' => data_get($permitApplication->metadata, 'transfer_policy_boundary.status'),
+                    'application_type' => $permitApplication->type->value,
+                ],
+            ),
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function retirementPolicySteps(LifecycleScenarioDefinition $scenario, PermitApplication $permitApplication): array
+    {
+        if ($this->applicationType($scenario) !== PermitApplicationType::Retirement) {
+            return [];
+        }
+
+        return [
+            $this->step(
+                'retirement-policy-boundary-recorded',
+                'Record retirement policy boundary without executing unresolved closure behavior',
+                ['retirement_policy_status' => 'policy_boundary'],
+                [
+                    'retirement_policy_status' => data_get($permitApplication->metadata, 'retirement_policy_boundary.status'),
                     'application_type' => $permitApplication->type->value,
                 ],
             ),
@@ -551,6 +590,39 @@ final class PermitApplicationPendingPaymentVisibilityScenario
     }
 
     /**
+     * @param  array<string, mixed>  $manifest
+     * @param  array<string, mixed>  $browserReport
+     * @return array<int, array<string, mixed>>
+     */
+    private function retirementPolicyAuditSteps(array $manifest, PermitApplication $permitApplication, array $browserReport): array
+    {
+        if (($manifest['resources']['application_type'] ?? null) !== PermitApplicationType::Retirement->value) {
+            return [];
+        }
+
+        return [
+            $this->step(
+                'audit-retirement-policy-boundary',
+                'Canonical retirement policy boundary remains explicit',
+                ['retirement_policy_status' => 'policy_boundary'],
+                [
+                    'retirement_policy_status' => data_get($permitApplication->metadata, 'retirement_policy_boundary.status'),
+                    'unresolved_policy_count' => count(data_get($permitApplication->metadata, 'retirement_policy_boundary.unresolved_policy', [])),
+                ],
+            ),
+            $this->step(
+                'audit-browser-retirement-policy-boundary',
+                'Browser evidence shows the retirement policy boundary',
+                ['retirement_policy_status' => 'policy_boundary'],
+                [
+                    'retirement_policy_status' => data_get($browserReport, 'retirement_policy.status'),
+                    'unresolved_visible' => data_get($browserReport, 'retirement_policy.unresolved_visible'),
+                ],
+            ),
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $expected
      * @param  array<string, mixed>  $actual
      * @return array<string, mixed>
@@ -577,18 +649,21 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         $isAmendment = $this->applicationType($scenario) === PermitApplicationType::Amendment;
         $isRenewal = $this->applicationType($scenario) === PermitApplicationType::Renewal;
         $isTransfer = $this->applicationType($scenario) === PermitApplicationType::Transfer;
+        $isRetirement = $this->applicationType($scenario) === PermitApplicationType::Retirement;
 
         return [
             'title' => match (true) {
                 $isAmendment => 'Amendment permit lifecycle foundation',
                 $isRenewal => 'Renewal permit lifecycle foundation',
                 $isTransfer => 'Transfer permit lifecycle foundation',
+                $isRetirement => 'Retirement permit lifecycle foundation',
                 default => 'Permit application pending payment visibility',
             },
             'summary' => match (true) {
                 $isAmendment => 'BPLO staff records an amendment permit application, computes assessment from current persisted fee rules, prepares a payment schedule, and verifies that unresolved amendment policy remains visible.',
                 $isRenewal => 'BPLO staff records a renewal permit application, computes assessment from current persisted fee rules, prepares a payment schedule, and verifies that unresolved renewal tax policy remains visible.',
                 $isTransfer => 'BPLO staff records a transfer permit application, computes assessment from current persisted fee rules, prepares a payment schedule, and verifies that unresolved transfer policy remains visible.',
+                $isRetirement => 'BPLO staff records a retirement permit application, computes assessment from current persisted fee rules, prepares a payment schedule, and verifies that unresolved retirement policy remains visible.',
                 default => 'BPLO staff records a disposable application, computes assessment, prepares a payment schedule, and verifies that staff screens show the application ready for collection.',
             },
             'run_id' => $runId,
@@ -600,6 +675,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                 'renewal_policy_status' => data_get($permitApplication->metadata, 'renewal_policy_boundary.status'),
                 'amendment_policy_status' => data_get($permitApplication->metadata, 'amendment_policy_boundary.status'),
                 'transfer_policy_status' => data_get($permitApplication->metadata, 'transfer_policy_boundary.status'),
+                'retirement_policy_status' => data_get($permitApplication->metadata, 'retirement_policy_boundary.status'),
                 'assessment_id' => $assessment->id,
                 'payment_schedule_id' => $paymentSchedule->id,
             ],
@@ -609,12 +685,14 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                         $isAmendment => 'Staff records amendment application',
                         $isRenewal => 'Staff records renewal application',
                         $isTransfer => 'Staff records transfer application',
+                        $isRetirement => 'Staff records retirement application',
                         default => 'Staff records application',
                     },
                     'description' => match (true) {
                         $isAmendment => 'BPLO staff records an amendment application for the scenario business and preserves unresolved amendment policy as explicit evidence.',
                         $isRenewal => 'BPLO staff records a renewal application for the scenario business and preserves unresolved renewal policy as explicit evidence.',
                         $isTransfer => 'BPLO staff records a transfer application for the scenario business and preserves unresolved transfer policy as explicit evidence.',
+                        $isRetirement => 'BPLO staff records a retirement application for the scenario business and preserves unresolved retirement policy as explicit evidence.',
                         default => 'BPLO staff records a new business permit application for the scenario business.',
                     },
                     'dialogue' => 'The application is ready for assessment.',
@@ -633,6 +711,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                         $isAmendment => 'The amendment application is pending payment; amended fields, fee basis, and supersession policy remain explicit boundaries.',
                         $isRenewal => 'The renewal application is pending payment; late payment, PIL, and deficiency policy remain explicit boundaries.',
                         $isTransfer => 'The transfer application is pending payment; ownership transfer, location transfer, and legal effect remain explicit boundaries.',
+                        $isRetirement => 'The retirement application is pending payment; closure date, final liability, inspection, and legal retirement effect remain explicit boundaries.',
                         default => 'The application is now pending payment; collection and receipt behavior remain separate scenarios.',
                     },
                     'duration_seconds' => 5,
