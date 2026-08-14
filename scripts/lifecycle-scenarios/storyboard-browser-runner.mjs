@@ -1206,7 +1206,7 @@ async function inspectManualReceiptPermitVerificationBoundary(
         .isVisible()
         .catch(() => false);
     const artifactOnlyVisible = await targetPage
-        .getByText('Artifact only', { exact: true })
+        .getByText(/artifact only/i)
         .first()
         .isVisible()
         .catch(() => false);
