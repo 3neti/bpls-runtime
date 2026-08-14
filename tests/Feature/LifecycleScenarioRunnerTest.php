@@ -418,6 +418,14 @@ test('manual collection receipt scenario audit compares browser evidence with ca
             'can_reconcile_online' => false,
             'unresolved_visible' => true,
         ],
+        'reports' => [
+            'daily_collection' => [
+                'receipt_number' => $manifest['resources']['public_reference'],
+                'amount_cents' => $manifest['resources']['assessment_total_amount_cents'],
+                'scope_visible' => true,
+                'csv_export_visible' => true,
+            ],
+        ],
         'verification' => [
             'reference' => $verification['reference'],
             'public_status' => 'artifact_only',
@@ -984,6 +992,7 @@ function configuredScenarioUser(string $email): User
         UserPermission::IssueReceipts,
         UserPermission::ViewReceipts,
         UserPermission::VoidReceipts,
+        UserPermission::ViewReports,
         UserPermission::UpdatePermitApplicationStatus,
         UserPermission::CompletePermitClearances,
         UserPermission::ManageStoryboards,

@@ -3,6 +3,7 @@
 use App\Http\Controllers\PublicPermitVerificationController;
 use App\Http\Controllers\Staff\AssessmentPaymentScheduleController;
 use App\Http\Controllers\Staff\CollectionReceiptController;
+use App\Http\Controllers\Staff\DailyCollectionReportController;
 use App\Http\Controllers\Staff\PaymentScheduleCollectionController;
 use App\Http\Controllers\Staff\PermitApplicationAssessmentController;
 use App\Http\Controllers\Staff\PermitApplicationController;
@@ -57,6 +58,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('receipts.pdf');
         Route::post('receipts/{receipt}/void', [ReceiptController::class, 'voidReceipt'])
             ->name('receipts.void');
+        Route::get('reports/daily-collections', [DailyCollectionReportController::class, 'index'])
+            ->name('reports.daily-collections.index');
+        Route::get('reports/daily-collections/download', [DailyCollectionReportController::class, 'download'])
+            ->name('reports.daily-collections.download');
         Route::post('storyboards/{storyboard}/exports/pdf', [StoryboardController::class, 'exportPdf'])
             ->name('storyboards.exports.pdf');
         Route::post('storyboards/{storyboard}/exports/video', [StoryboardController::class, 'exportVideo'])

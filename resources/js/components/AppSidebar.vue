@@ -3,6 +3,7 @@ import { Link } from '@inertiajs/vue3';
 import {
     BookOpen,
     Calculator,
+    ChartColumn,
     FileText,
     Film,
     FolderGit2,
@@ -10,6 +11,12 @@ import {
     ReceiptText,
     WalletCards,
 } from '@lucide/vue';
+import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
+import { index as dailyCollectionReportIndex } from '@/actions/App/Http/Controllers/Staff/DailyCollectionReportController';
+import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
+import { index as permitApplicationIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
+import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
+import { index as storyboardIndex } from '@/actions/App/Http/Controllers/Staff/StoryboardController';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -23,11 +30,6 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
-import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
-import { index as permitApplicationIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
-import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
-import { index as storyboardIndex } from '@/actions/App/Http/Controllers/Staff/StoryboardController';
 import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
@@ -56,6 +58,11 @@ const mainNavItems: NavItem[] = [
         title: 'Receipts',
         href: receiptIndex(),
         icon: ReceiptText,
+    },
+    {
+        title: 'Daily Collections',
+        href: dailyCollectionReportIndex(),
+        icon: ChartColumn,
     },
     {
         title: 'Storyboards',

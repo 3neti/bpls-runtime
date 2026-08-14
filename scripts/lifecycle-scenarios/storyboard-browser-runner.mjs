@@ -55,6 +55,7 @@ const receiptVoidBoundaryEvidence = {};
 const documentEvidence = {};
 const assessmentEvidence = {};
 const onlinePaymentBoundaryEvidence = {};
+const reportEvidence = {};
 const renewalPolicyEvidence = {};
 const amendmentPolicyEvidence = {};
 const transferPolicyEvidence = {};
@@ -124,6 +125,7 @@ try {
     ) {
         await inspectManualReceiptPaymentScheduleQueue(page, baseUrl);
         await inspectManualReceiptQueue(page, baseUrl);
+        await inspectManualReceiptDailyCollectionReport(page, baseUrl);
         await inspectManualReceiptPaymentSchedule(page, baseUrl);
         await inspectManualReceiptDetail(page, baseUrl);
         await inspectManualReceiptPermitReleaseBoundary(page, baseUrl);
@@ -165,6 +167,7 @@ const report = {
     documents: documentEvidence,
     assessment: assessmentEvidence,
     online_payment_boundary: onlinePaymentBoundaryEvidence,
+    reports: reportEvidence,
     renewal_policy: renewalPolicyEvidence,
     amendment_policy: amendmentPolicyEvidence,
     transfer_policy: transferPolicyEvidence,
@@ -1236,6 +1239,99 @@ async function inspectManualReceiptQueue(targetPage, targetBaseUrl) {
     );
 }
 
+async function inspectManualReceiptDailyCollectionReport(
+    targetPage,
+    targetBaseUrl,
+) {
+    const reportUrl = `${targetBaseUrl}${manifest.resources.daily_collection_report_url}`;
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const receiptVisible = await targetPage
+        .getByText(manifest.resources.public_reference, { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const applicationVisible = await targetPage
+        .getByText(manifest.resources.application_number, { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const amountVisible = await targetPage
+        .getByText(uiMoneyFromCents(manifest.resources.assessment_total_amount_cents), {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const scopeVisible = await targetPage
+        .getByText('Receipted permit collections with issued receipts only.', {
+            exact: true,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const csvExportVisible = await targetPage
+        .getByRole('link', { name: /export csv/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'daily-collection-report-receipt-visible',
+            'Daily collection report shows exact manual receipt',
+            true,
+            receiptVisible,
+            {
+                url: reportUrl,
+                receipt_id: manifest.resources.record_id,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'daily-collection-report-application-visible',
+            'Daily collection report shows exact permit application',
+            true,
+            applicationVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'daily-collection-report-amount-visible',
+            'Daily collection report shows canonical collection amount',
+            true,
+            amountVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'daily-collection-report-scope-visible',
+            'Daily collection report keeps reporting scope visible',
+            true,
+            scopeVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'daily-collection-report-csv-visible',
+            'Daily collection report offers CSV export',
+            true,
+            csvExportVisible,
+        ),
+    );
+    reportDailyCollection(
+        manifest.resources.public_reference,
+        manifest.resources.assessment_total_amount_cents,
+        scopeVisible,
+        csvExportVisible,
+    );
+    await screenshot(
+        targetPage,
+        '02-daily-collection-report',
+        'browser/screenshots/02-daily-collection-report.png',
+    );
+}
+
 async function inspectManualReceiptDetail(targetPage, targetBaseUrl) {
     const receiptUrl = `${targetBaseUrl}${manifest.resources.receipt_url}`;
     await targetPage.goto(receiptUrl, { waitUntil: 'networkidle' });
@@ -2136,6 +2232,20 @@ function reportOnlinePaymentBoundary(status, unresolvedVisible) {
     onlinePaymentBoundaryEvidence.can_pay_online = false;
     onlinePaymentBoundaryEvidence.can_reconcile_online = false;
     onlinePaymentBoundaryEvidence.unresolved_visible = unresolvedVisible;
+}
+
+function reportDailyCollection(
+    receiptNumber,
+    amountCents,
+    scopeVisible,
+    csvExportVisible,
+) {
+    reportEvidence.daily_collection = {
+        receipt_number: receiptNumber,
+        amount_cents: amountCents,
+        scope_visible: scopeVisible,
+        csv_export_visible: csvExportVisible,
+    };
 }
 
 function reportRenewalPolicy(status, unresolvedVisible) {

@@ -17,5 +17,6 @@ enum UserPermission: string
     case ViewReceipts = 'receipts.view';
     case IssueReceipts = 'receipts.issue';
     case VoidReceipts = 'receipts.void';
+    case ViewReports = 'reports.view';
     case ManageStoryboards = 'storyboards.manage';
 }
