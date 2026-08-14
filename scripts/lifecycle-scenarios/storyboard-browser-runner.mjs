@@ -22,6 +22,7 @@ if (manifest.schema_version !== 'application.lifecycle-evidence.v1') {
 
 const supportedScenarios = [
     'assessment_policy_boundary_visibility',
+    'citizen_permit_authority_review_visibility',
     'citizen_permit_processing_visibility',
     'citizen_permit_draft_document_visibility',
     'citizen_permit_draft_edit_visibility',
@@ -76,6 +77,7 @@ const retirementPolicyEvidence = {};
 const feeCatalogEvidence = {};
 const citizenDraftEvidence = {};
 const citizenProcessingEvidence = {};
+const citizenAuthorityReviewEvidence = {};
 
 let browser;
 
@@ -109,8 +111,20 @@ try {
 
     await authenticate(page, baseUrl, email, password);
 
-    if (manifest.scenario.key === 'citizen_permit_processing_visibility') {
+    if (
+        [
+            'citizen_permit_authority_review_visibility',
+            'citizen_permit_processing_visibility',
+        ].includes(manifest.scenario.key)
+    ) {
         await inspectCitizenPermitProcessing(page, baseUrl);
+    }
+
+    if (
+        manifest.scenario.key ===
+        'citizen_permit_authority_review_visibility'
+    ) {
+        await inspectCitizenPermitAuthorityReview(page, baseUrl);
     }
 
     if (manifest.scenario.key === 'citizen_permit_draft_visibility') {
@@ -232,6 +246,7 @@ const report = {
     fee_catalog: feeCatalogEvidence,
     citizen_draft: citizenDraftEvidence,
     citizen_processing: citizenProcessingEvidence,
+    citizen_authority_review: citizenAuthorityReviewEvidence,
     artifacts: {
         screenshots,
     },
@@ -506,6 +521,194 @@ async function inspectCitizenPermitProcessing(targetPage, targetBaseUrl) {
         targetPage,
         '03-citizen-processing-mobile',
         'browser/screenshots/03-citizen-processing-mobile.png',
+    );
+}
+
+async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
+    const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+
+    const collection = targetPage.getByTestId('citizen-collection-summary');
+    const receipt = targetPage.getByTestId('citizen-receipt-summary');
+    const clearances = targetPage.getByTestId('citizen-clearance-summary');
+    const authority = targetPage.getByTestId(
+        'citizen-authority-review-boundary',
+    );
+    const timeline = targetPage.getByTestId('citizen-application-timeline');
+    await collection.waitFor();
+    await receipt.waitFor();
+    await clearances.waitFor();
+    await authority.waitFor();
+    await timeline.waitFor();
+
+    const timelineEventKeys = await timeline
+        .getByTestId('citizen-timeline-event')
+        .evaluateAll((elements) =>
+            elements.map((element) =>
+                element.getAttribute('data-timeline-key'),
+            ),
+        );
+    const clearanceStatuses = await clearances
+        .getByTestId('citizen-clearance-item')
+        .evaluateAll((elements) =>
+            elements.map((element) => ({
+                code: element.getAttribute('data-clearance-code'),
+                status: element.getAttribute('data-clearance-status'),
+            })),
+        );
+    const browserState = {
+        collection_id: Number(
+            await collection.getAttribute('data-collection-id'),
+        ),
+        collection_status: await collection.getAttribute(
+            'data-collection-status',
+        ),
+        collection_amount_cents: Number(
+            await collection.getAttribute('data-collection-amount-cents'),
+        ),
+        receipt_id: Number(await receipt.getAttribute('data-receipt-id')),
+        receipt_number: await receipt.getAttribute('data-receipt-number'),
+        receipt_status: await receipt.getAttribute('data-receipt-status'),
+        clearances_completed: Number(
+            await clearances.getAttribute('data-clearances-completed'),
+        ),
+        clearances_total: Number(
+            await clearances.getAttribute('data-clearances-total'),
+        ),
+        ready_for_authority_review:
+            (await authority.getAttribute(
+                'data-ready-for-authority-review',
+            )) === 'true',
+        can_release:
+            (await authority.getAttribute('data-can-release')) === 'true',
+        authority_review_status: await authority.getAttribute(
+            'data-authority-review-status',
+        ),
+        timeline_event_count: timelineEventKeys.length,
+        timeline_event_keys: timelineEventKeys,
+    };
+    const expectedState = {
+        collection_id: manifest.resources.collection_id,
+        collection_status: manifest.resources.collection_status,
+        collection_amount_cents: manifest.resources.collection_amount_cents,
+        receipt_id: manifest.resources.receipt_id,
+        receipt_number: manifest.resources.receipt_number,
+        receipt_status: manifest.resources.receipt_status,
+        clearances_completed: manifest.resources.clearances_completed,
+        clearances_total: manifest.resources.clearances_total,
+        ready_for_authority_review:
+            manifest.resources.ready_for_authority_review,
+        can_release: manifest.resources.can_release,
+        authority_review_status: manifest.resources.authority_review_status,
+        timeline_event_count:
+            manifest.resources.citizen_timeline_event_count,
+        timeline_event_keys: manifest.resources.citizen_timeline_event_keys,
+    };
+    const releaseActionVisible = await targetPage
+        .getByRole('button', { name: /issue permit|release permit/i })
+        .isVisible()
+        .catch(() => false);
+    const paymentActionVisible = await targetPage
+        .getByRole('button', { name: /pay online|make payment|record payment/i })
+        .isVisible()
+        .catch(() => false);
+
+    Object.assign(citizenAuthorityReviewEvidence, browserState, {
+        clearance_statuses: clearanceStatuses,
+        release_action_visible: releaseActionVisible,
+        payment_action_visible: paymentActionVisible,
+    });
+    checks.push(
+        check(
+            'citizen-authority-review-matches-canonical',
+            'Citizen detail matches canonical collection, receipt, clearance, and authority state',
+            expectedState,
+            browserState,
+        ),
+        check(
+            'citizen-authority-review-clearances-complete',
+            'Citizen detail shows every clearance as completed',
+            true,
+            clearanceStatuses.length === manifest.resources.clearances_total &&
+                clearanceStatuses.every(
+                    (clearance) => clearance.status === 'completed',
+                ),
+        ),
+        check(
+            'citizen-authority-review-release-action-unavailable',
+            'Citizen detail does not expose permit issuance or release actions',
+            false,
+            releaseActionVisible,
+        ),
+        check(
+            'citizen-authority-review-payment-action-unavailable',
+            'Citizen detail remains read-only after collection',
+            false,
+            paymentActionVisible,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '04-citizen-authority-review',
+        'browser/screenshots/04-citizen-authority-review.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    const mobileCollectionVisible = await targetPage
+        .getByTestId('citizen-collection-summary')
+        .isVisible();
+    const mobileReceiptVisible = await targetPage
+        .getByTestId('citizen-receipt-summary')
+        .isVisible();
+    const mobileClearancesVisible = await targetPage
+        .getByTestId('citizen-clearance-summary')
+        .isVisible();
+    const mobileAuthorityVisible = await targetPage
+        .getByTestId('citizen-authority-review-boundary')
+        .isVisible();
+    const horizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+    checks.push(
+        check(
+            'citizen-authority-review-mobile-collection-visible',
+            'Mobile detail keeps collection evidence visible',
+            true,
+            mobileCollectionVisible,
+        ),
+        check(
+            'citizen-authority-review-mobile-receipt-visible',
+            'Mobile detail keeps receipt evidence visible',
+            true,
+            mobileReceiptVisible,
+        ),
+        check(
+            'citizen-authority-review-mobile-clearances-visible',
+            'Mobile detail keeps clearance evidence visible',
+            true,
+            mobileClearancesVisible,
+        ),
+        check(
+            'citizen-authority-review-mobile-boundary-visible',
+            'Mobile detail keeps the authority boundary visible',
+            true,
+            mobileAuthorityVisible,
+        ),
+        check(
+            'citizen-authority-review-mobile-no-horizontal-overflow',
+            'Mobile authority-review view has no page-level horizontal overflow',
+            false,
+            horizontalOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '05-citizen-authority-review-mobile',
+        'browser/screenshots/05-citizen-authority-review-mobile.png',
     );
 }
 

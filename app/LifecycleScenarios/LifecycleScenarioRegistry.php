@@ -12,6 +12,45 @@ final class LifecycleScenarioRegistry
     public function all(): array
     {
         return [
+            'citizen_permit_authority_review_visibility' => new LifecycleScenarioDefinition(
+                key: 'citizen_permit_authority_review_visibility',
+                label: 'Citizen permit authority review visibility',
+                mode: 'citizen_permit_authority_review_visibility',
+                risk: 'local transactional',
+                actors: [
+                    'applicant' => 'citizen_applicant',
+                    'operator' => 'primary_operator',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'canonical_state' => 'pending_payment',
+                    'payment_schedule_status' => 'paid',
+                    'collection_status' => 'receipted',
+                    'receipt_status' => 'issued',
+                    'clearances_completed' => true,
+                    'ready_for_authority_review' => true,
+                    'can_release' => false,
+                    'online_payment_status' => 'blocked',
+                    'browser_is_read_only' => true,
+                    'external_calls' => 0,
+                    'irreversible_actions' => false,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
             'citizen_permit_processing_visibility' => new LifecycleScenarioDefinition(
                 key: 'citizen_permit_processing_visibility',
                 label: 'Citizen permit processing visibility',

@@ -5,11 +5,17 @@ use App\Actions\DescribePaymentPolicyBoundary;
 use App\Enums\AssessmentStatus;
 use App\Enums\PaymentScheduleStatus;
 use App\Enums\PermitApplicationStatus;
+use App\Enums\PermitClearanceStatus;
+use App\Enums\ReceiptStatus;
+use App\Enums\TreasuryCollectionStatus;
 use App\Enums\UserPermission;
 use App\Enums\UserRole;
 use App\Models\Assessment;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
+use App\Models\PermitClearance;
+use App\Models\Receipt;
+use App\Models\TreasuryCollection;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -145,6 +151,76 @@ test('citizen payment state is not paired with a superseded assessment schedule'
             ->where('permitApplication.processing.assessment.id', $activeAssessment->id)
             ->where('permitApplication.processing.assessment.total_amount_cents', 110_000)
             ->where('permitApplication.processing.payment_schedule', null)
+        );
+});
+
+test('citizens can view collection receipt clearance and authority review evidence', function () {
+    $citizen = userWithPermissions([
+        UserPermission::AccessCitizen,
+        UserPermission::ViewOwnPermitApplications,
+        UserPermission::ViewOwnPermitApplicationFinancials,
+    ], UserRole::Citizen);
+    $application = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
+        'application_number' => 'APP-CITIZEN-AUTHORITY-001',
+        'status' => PermitApplicationStatus::PendingPayment,
+    ]);
+    $assessment = Assessment::factory()->for($application)->create([
+        'status' => AssessmentStatus::Computed,
+        'total_amount_cents' => 150_000,
+        'superseded_at' => null,
+    ]);
+    $paymentSchedule = PaymentSchedule::factory()
+        ->for($application)
+        ->for($assessment)
+        ->create([
+            'status' => PaymentScheduleStatus::Paid,
+            'total_amount_cents' => 150_000,
+            'paid_amount_cents' => 150_000,
+        ]);
+    $collection = TreasuryCollection::factory()
+        ->for($application)
+        ->for($assessment)
+        ->for($paymentSchedule)
+        ->create([
+            'status' => TreasuryCollectionStatus::Receipted,
+            'amount_cents' => 150_000,
+        ]);
+    $receipt = Receipt::factory()
+        ->for($collection, 'treasuryCollection')
+        ->for($application)
+        ->for($assessment)
+        ->for($paymentSchedule)
+        ->create([
+            'status' => ReceiptStatus::Issued,
+            'receipt_number' => 'OR-CITIZEN-001',
+            'amount_cents' => 150_000,
+        ]);
+
+    foreach (['bplo_review', 'treasury_payment', 'release_authority'] as $code) {
+        PermitClearance::factory()->for($application)->create([
+            'code' => $code,
+            'status' => PermitClearanceStatus::Completed,
+            'completed_at' => now(),
+        ]);
+    }
+
+    $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.show', $application))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('permitApplication.processing.payment_schedule.status', PaymentScheduleStatus::Paid->value)
+            ->where('permitApplication.processing.payment_schedule.balance_amount_cents', 0)
+            ->where('permitApplication.processing.collection.id', $collection->id)
+            ->where('permitApplication.processing.collection.status', TreasuryCollectionStatus::Receipted->value)
+            ->where('permitApplication.processing.collection.receipt.id', $receipt->id)
+            ->where('permitApplication.processing.collection.receipt.receipt_number', 'OR-CITIZEN-001')
+            ->where('permitApplication.processing.collection.receipt.status', ReceiptStatus::Issued->value)
+            ->where('permitApplication.processing.clearance_summary.completed', 3)
+            ->where('permitApplication.processing.clearance_summary.total', 3)
+            ->where('permitApplication.processing.clearance_summary.all_completed', true)
+            ->where('permitApplication.processing.authority_review.ready_for_authority_review', true)
+            ->where('permitApplication.processing.authority_review.can_release', false)
+            ->where('permitApplication.processing.authority_review.status', 'ready_for_authority_review')
         );
 });
 

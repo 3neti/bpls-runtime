@@ -6,9 +6,11 @@ use App\Actions\BuildPermitApplicationTimeline;
 use App\Actions\CreatePermitApplication;
 use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Actions\DescribePaymentPolicyBoundary;
+use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\UpdateCitizenPermitApplicationDraft;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
+use App\Enums\PermitClearanceStatus;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Citizen\StorePermitApplicationRequest;
@@ -28,6 +30,7 @@ class PermitApplicationController extends Controller
         private readonly BuildPermitApplicationTimeline $buildPermitApplicationTimeline,
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly DescribePaymentPolicyBoundary $describePaymentPolicyBoundary,
+        private readonly DescribePermitReleaseReadiness $describePermitReleaseReadiness,
     ) {}
 
     public function index(Request $request): Response
@@ -133,6 +136,13 @@ class PermitApplicationController extends Controller
         $latestPaymentSchedule = $latestAssessment === null
             ? null
             : $application->paymentSchedules->firstWhere('assessment_id', $latestAssessment->id);
+        $latestCollection = $latestPaymentSchedule?->treasuryCollections->sortByDesc('id')->first();
+        $latestReceipt = $latestCollection?->receipt;
+        $releaseReadiness = $canViewFinancials ? $this->describePermitReleaseReadiness->handle($application) : null;
+        $authorityReview = $releaseReadiness !== null
+            && $releaseReadiness['payment_schedule_id'] === $latestPaymentSchedule?->id
+                ? $releaseReadiness
+                : null;
 
         return Inertia::render('citizen/permit-applications/Show', [
             'permitApplication' => [
@@ -215,6 +225,43 @@ class PermitApplicationController extends Controller
                         'payment_policy_boundary' => $this->describePaymentPolicyBoundary->handle($latestPaymentSchedule),
                         'online_payment_boundary' => $this->describeOnlinePaymentBoundary->handle($latestPaymentSchedule),
                     ],
+                    'collection' => $latestCollection === null ? null : [
+                        'id' => $latestCollection->id,
+                        'status' => $latestCollection->status->value,
+                        'channel' => $latestCollection->channel->value,
+                        'method' => $latestCollection->method->value,
+                        'amount_cents' => $latestCollection->amount_cents,
+                        'received_at' => $latestCollection->received_at?->toIso8601String(),
+                        'receipt' => $latestReceipt === null ? null : [
+                            'id' => $latestReceipt->id,
+                            'receipt_number' => $latestReceipt->receipt_number,
+                            'status' => $latestReceipt->status->value,
+                            'numbering_authority' => $latestReceipt->numbering_authority,
+                            'amount_cents' => $latestReceipt->amount_cents,
+                            'issued_at' => $latestReceipt->issued_at?->toIso8601String(),
+                        ],
+                    ],
+                    'clearance_summary' => [
+                        'completed' => $application->clearances->where('status', PermitClearanceStatus::Completed)->count(),
+                        'total' => $application->clearances->count(),
+                        'all_completed' => $application->clearances->isNotEmpty()
+                            && $application->clearances->every(fn ($clearance): bool => $clearance->status === PermitClearanceStatus::Completed),
+                        'items' => $application->clearances->map(fn ($clearance): array => [
+                            'id' => $clearance->id,
+                            'code' => $clearance->code,
+                            'label' => $clearance->label,
+                            'status' => $clearance->status->value,
+                            'completed_at' => $clearance->completed_at?->toIso8601String(),
+                        ])->values(),
+                    ],
+                    'authority_review' => $authorityReview === null ? null : [
+                        'ready_for_authority_review' => $authorityReview['ready_for_authority_review'],
+                        'can_release' => $authorityReview['can_release'],
+                        'status' => $authorityReview['authority_boundary']['status'],
+                        'prerequisites' => $authorityReview['prerequisites'],
+                        'statement' => $authorityReview['authority_boundary']['artifact_statement'],
+                        'reason' => $authorityReview['reason'],
+                    ],
                 ],
                 'timeline' => $this->citizenTimeline($application, $canViewDocuments, $canViewFinancials),
                 'can_edit' => $request->user()->can(UserPermission::EditOwnPermitApplications->value)
@@ -238,6 +285,9 @@ class PermitApplicationController extends Controller
                 'documents' => fn ($query) => $query->latest('uploaded_at')->latest('id'),
                 'assessments' => fn ($query) => $query->whereNull('superseded_at')->latest('sequence'),
                 'paymentSchedules' => fn ($query) => $query->latest('sequence'),
+                'paymentSchedules.treasuryCollections' => fn ($query) => $query->oldest('id'),
+                'paymentSchedules.treasuryCollections.receipt',
+                'clearances' => fn ($query) => $query->oldest('id'),
             ])
             ->withExists('assessments')
             ->firstOrFail();

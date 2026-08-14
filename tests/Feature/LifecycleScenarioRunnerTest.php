@@ -12,6 +12,7 @@ use App\Enums\TreasuryCollectionStatus;
 use App\Enums\UserPermission;
 use App\Jobs\GenerateStoryboardVideo;
 use App\LifecycleScenarios\AssessmentPolicyBoundaryVisibilityScenario;
+use App\LifecycleScenarios\CitizenPermitAuthorityReviewVisibilityScenario;
 use App\LifecycleScenarios\CitizenPermitDraftVisibilityScenario;
 use App\LifecycleScenarios\CitizenPermitProcessingVisibilityScenario;
 use App\LifecycleScenarios\LifecycleScenarioRegistry;
@@ -90,6 +91,21 @@ test('scenario registry discovers the citizen permit processing visibility scena
         ->and($scenario->expectations['assessment_status'])->toBe('computed')
         ->and($scenario->expectations['online_payment_status'])->toBe('blocked')
         ->and($scenario->expectations['can_pay_online'])->toBeFalse()
+        ->and($scenario->safety['external_integrations'])->toBeFalse();
+});
+
+test('scenario registry discovers the citizen permit authority review visibility scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_permit_authority_review_visibility');
+
+    expect($scenario)
+        ->key->toBe('citizen_permit_authority_review_visibility')
+        ->label->toBe('Citizen permit authority review visibility')
+        ->risk->toBe('local transactional')
+        ->and($scenario->expectations['payment_schedule_status'])->toBe('paid')
+        ->and($scenario->expectations['collection_status'])->toBe('receipted')
+        ->and($scenario->expectations['receipt_status'])->toBe('issued')
+        ->and($scenario->expectations['ready_for_authority_review'])->toBeTrue()
+        ->and($scenario->expectations['can_release'])->toBeFalse()
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
@@ -697,6 +713,87 @@ test('citizen permit processing scenario audits browser financial state against 
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
 
+test('citizen permit authority review scenario composes domain actions idempotently and audits browser evidence', function () {
+    Storage::fake('local');
+
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    $operator = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_permit_authority_review_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'citizen-authority-review-test-001');
+    $runner = app(CitizenPermitAuthorityReviewVisibilityScenario::class);
+    $actors = [
+        'applicant' => $citizen,
+        'operator' => $operator,
+    ];
+
+    $firstManifest = $runner->prepare($scenario, 'citizen-authority-review-test-001', $actors, $artifactStore);
+    $secondManifest = $runner->prepare($scenario, 'citizen-authority-review-test-001', $actors, $artifactStore);
+    $expectedTimelineKeys = [
+        "application-recorded:{$firstManifest['resources']['record_id']}",
+        "assessment-computed:{$firstManifest['resources']['assessment_id']}",
+        "payment-schedule-prepared:{$firstManifest['resources']['payment_schedule_id']}",
+        'status-transition:0',
+        "collection-recorded:{$firstManifest['resources']['collection_id']}",
+        "receipt-issued:{$firstManifest['resources']['receipt_id']}",
+        ...PermitApplication::query()
+            ->findOrFail($firstManifest['resources']['record_id'])
+            ->clearances()
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn (int $clearanceId): string => "clearance-completed:{$clearanceId}"),
+        "release-blocked:{$firstManifest['resources']['record_id']}",
+    ];
+
+    $artifactStore->putJson('browser/report.json', [
+        'result' => ['passed' => true],
+        'citizen_authority_review' => [
+            'collection_id' => $firstManifest['resources']['collection_id'],
+            'collection_status' => $firstManifest['resources']['collection_status'],
+            'collection_amount_cents' => $firstManifest['resources']['collection_amount_cents'],
+            'receipt_id' => $firstManifest['resources']['receipt_id'],
+            'receipt_number' => $firstManifest['resources']['receipt_number'],
+            'receipt_status' => $firstManifest['resources']['receipt_status'],
+            'clearances_completed' => $firstManifest['resources']['clearances_completed'],
+            'clearances_total' => $firstManifest['resources']['clearances_total'],
+            'ready_for_authority_review' => true,
+            'can_release' => false,
+            'authority_review_status' => 'ready_for_authority_review',
+            'timeline_event_count' => $firstManifest['resources']['citizen_timeline_event_count'],
+            'timeline_event_keys' => $firstManifest['resources']['citizen_timeline_event_keys'],
+        ],
+        'checks' => [],
+        'artifacts' => [
+            'screenshots' => [
+                '04-citizen-authority-review' => 'browser/screenshots/04-citizen-authority-review.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($firstManifest, $artifactStore);
+    $audit = $artifactStore->readJson('terminal/audit.json');
+
+    expect($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
+        ->and($firstManifest['resources']['collection_id'])->toBe($secondManifest['resources']['collection_id'])
+        ->and($firstManifest['resources']['receipt_id'])->toBe($secondManifest['resources']['receipt_id'])
+        ->and($firstManifest['resources']['application_status'])->toBe(PermitApplicationStatus::PendingPayment->value)
+        ->and($firstManifest['resources']['payment_schedule_status'])->toBe('paid')
+        ->and($firstManifest['resources']['collection_status'])->toBe(TreasuryCollectionStatus::Receipted->value)
+        ->and($firstManifest['resources']['receipt_status'])->toBe(ReceiptStatus::Issued->value)
+        ->and($firstManifest['resources']['clearances_completed'])->toBe(3)
+        ->and($firstManifest['resources']['ready_for_authority_review'])->toBeTrue()
+        ->and($firstManifest['resources']['can_release'])->toBeFalse()
+        ->and($firstManifest['resources']['citizen_timeline_event_count'])->toBe(10)
+        ->and($firstManifest['resources']['citizen_timeline_event_keys'])->toBe($expectedTimelineKeys)
+        ->and(PermitApplication::query()->count())->toBe(1)
+        ->and(TreasuryCollection::query()->count())->toBe(1)
+        ->and(Receipt::query()->count())->toBe(1)
+        ->and($audited['result']['audit'])->toBe('passed')
+        ->and($audited['result']['passed'])->toBeTrue()
+        ->and($audit['canonical']['ready_for_authority_review'])->toBeTrue()
+        ->and($audit['canonical']['can_release'])->toBeFalse()
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
+});
+
 test('manual collection receipt scenario executes treasury actions idempotently', function () {
     Storage::fake('local');
 
@@ -980,6 +1077,32 @@ test('command prepares the citizen permit processing visibility scenario', funct
         ->and($manifest['result']['terminal'])->toBe('passed')
         ->and($manifest['resources']['application_status'])->toBe(PermitApplicationStatus::PendingPayment->value)
         ->and($manifest['resources']['payment_balance_amount_cents'])->toBe($manifest['resources']['assessment_total_amount_cents'])
+        ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
+});
+
+test('command prepares the citizen permit authority review visibility scenario', function () {
+    Storage::fake('local');
+
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    $operator = configuredScenarioUser('operator@example.test');
+    config()->set('lifecycle_scenarios.actors.citizen_applicant.email', $citizen->email);
+    config()->set('lifecycle_scenarios.actors.primary_operator.email', $operator->email);
+
+    $this->artisan('lifecycle:scenario', [
+        'scenario' => 'citizen_permit_authority_review_visibility',
+        '--run-id' => 'citizen-authority-review-command-test-001',
+        '--phase' => 'prepare',
+    ])->assertSuccessful();
+
+    $artifactStore = new ScenarioArtifactStore('citizen_permit_authority_review_visibility', 'citizen-authority-review-command-test-001');
+    $manifest = $artifactStore->readJson('manifest.json');
+
+    expect($manifest['scenario']['key'])->toBe('citizen_permit_authority_review_visibility')
+        ->and($manifest['result']['terminal'])->toBe('passed')
+        ->and($manifest['resources']['collection_status'])->toBe(TreasuryCollectionStatus::Receipted->value)
+        ->and($manifest['resources']['receipt_status'])->toBe(ReceiptStatus::Issued->value)
+        ->and($manifest['resources']['ready_for_authority_review'])->toBeTrue()
+        ->and($manifest['resources']['can_release'])->toBeFalse()
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
 });
 

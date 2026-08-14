@@ -9,6 +9,8 @@ import {
     FilePlus2,
     History,
     Paperclip,
+    ReceiptText,
+    ShieldCheck,
     Upload,
 } from '@lucide/vue';
 import {
@@ -114,6 +116,47 @@ type PermitApplication = {
                 can_reconcile_online: boolean;
                 artifact_statement: string;
             };
+        } | null;
+        collection: {
+            id: number;
+            status: string;
+            channel: string;
+            method: string;
+            amount_cents: number;
+            received_at: string | null;
+            receipt: {
+                id: number;
+                receipt_number: string;
+                status: string;
+                numbering_authority: string;
+                amount_cents: number;
+                issued_at: string | null;
+            } | null;
+        } | null;
+        clearance_summary: {
+            completed: number;
+            total: number;
+            all_completed: boolean;
+            items: {
+                id: number;
+                code: string;
+                label: string;
+                status: string;
+                completed_at: string | null;
+            }[];
+        };
+        authority_review: {
+            ready_for_authority_review: boolean;
+            can_release: boolean;
+            status: string;
+            prerequisites: {
+                payment_schedule_paid: boolean;
+                receipt_issued: boolean;
+                clearances_completed: boolean;
+                permit_artifact_available: boolean;
+            };
+            statement: string;
+            reason: string;
         } | null;
     };
     timeline: {
@@ -450,6 +493,216 @@ function documentBoundaryError(): string | undefined {
                             }}
                         </p>
                     </div>
+                </div>
+
+                <div
+                    v-if="permitApplication.processing.collection"
+                    data-testid="citizen-collection-summary"
+                    :data-collection-id="permitApplication.processing.collection.id"
+                    :data-collection-status="
+                        permitApplication.processing.collection.status
+                    "
+                    :data-collection-amount-cents="
+                        permitApplication.processing.collection.amount_cents
+                    "
+                    class="grid gap-4 border-t border-border pt-4"
+                >
+                    <div class="flex items-start gap-2">
+                        <ReceiptText class="mt-0.5 size-4 text-muted-foreground" />
+                        <div>
+                            <h3 class="text-sm font-semibold text-foreground">
+                                Treasury collection
+                            </h3>
+                            <p class="text-xs text-muted-foreground">
+                                {{
+                                    permitApplication.processing.collection.channel.replace(
+                                        '_',
+                                        ' ',
+                                    )
+                                }}
+                                ·
+                                {{ permitApplication.processing.collection.method }}
+                            </p>
+                        </div>
+                    </div>
+                    <dl class="grid gap-3 text-sm sm:grid-cols-3">
+                        <div>
+                            <dt class="text-xs text-muted-foreground">Status</dt>
+                            <dd class="font-medium capitalize">
+                                {{
+                                    permitApplication.processing.collection.status.replace(
+                                        '_',
+                                        ' ',
+                                    )
+                                }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground">Amount</dt>
+                            <dd class="font-medium tabular-nums">
+                                {{
+                                    money(
+                                        permitApplication.processing.collection
+                                            .amount_cents,
+                                    )
+                                }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground">Received</dt>
+                            <dd class="font-medium">
+                                {{
+                                    permitApplication.processing.collection
+                                        .received_at
+                                        ? dateTime(
+                                              permitApplication.processing.collection
+                                                  .received_at,
+                                          )
+                                        : 'Not recorded'
+                                }}
+                            </dd>
+                        </div>
+                    </dl>
+
+                    <dl
+                        v-if="permitApplication.processing.collection.receipt"
+                        data-testid="citizen-receipt-summary"
+                        :data-receipt-id="
+                            permitApplication.processing.collection.receipt.id
+                        "
+                        :data-receipt-status="
+                            permitApplication.processing.collection.receipt.status
+                        "
+                        :data-receipt-number="
+                            permitApplication.processing.collection.receipt
+                                .receipt_number
+                        "
+                        class="grid gap-3 border-t border-border pt-4 text-sm sm:grid-cols-4"
+                    >
+                        <div>
+                            <dt class="text-xs text-muted-foreground">Receipt</dt>
+                            <dd class="font-medium break-all">
+                                {{
+                                    permitApplication.processing.collection.receipt
+                                        .receipt_number
+                                }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground">Status</dt>
+                            <dd class="font-medium capitalize">
+                                {{
+                                    permitApplication.processing.collection.receipt.status.replace(
+                                        '_',
+                                        ' ',
+                                    )
+                                }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground">Amount</dt>
+                            <dd class="font-medium tabular-nums">
+                                {{
+                                    money(
+                                        permitApplication.processing.collection
+                                            .receipt.amount_cents,
+                                    )
+                                }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground">Issued</dt>
+                            <dd class="font-medium">
+                                {{
+                                    permitApplication.processing.collection.receipt
+                                        .issued_at
+                                        ? dateTime(
+                                              permitApplication.processing.collection
+                                                  .receipt.issued_at,
+                                          )
+                                        : 'Not recorded'
+                                }}
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <div
+                    v-if="
+                        permitApplication.processing.clearance_summary.total > 0
+                    "
+                    data-testid="citizen-clearance-summary"
+                    :data-clearances-completed="
+                        permitApplication.processing.clearance_summary.completed
+                    "
+                    :data-clearances-total="
+                        permitApplication.processing.clearance_summary.total
+                    "
+                    :data-all-clearances-completed="
+                        permitApplication.processing.clearance_summary.all_completed
+                    "
+                    class="grid gap-3 border-t border-border pt-4"
+                >
+                    <div class="flex items-start gap-2">
+                        <ShieldCheck class="mt-0.5 size-4 text-muted-foreground" />
+                        <div>
+                            <h3 class="text-sm font-semibold text-foreground">
+                                Clearance progress
+                            </h3>
+                            <p class="text-xs text-muted-foreground">
+                                {{
+                                    permitApplication.processing.clearance_summary
+                                        .completed
+                                }}
+                                of
+                                {{
+                                    permitApplication.processing.clearance_summary
+                                        .total
+                                }}
+                                checklist items recorded complete
+                            </p>
+                        </div>
+                    </div>
+                    <ul class="divide-y divide-border text-sm">
+                        <li
+                            v-for="clearance in permitApplication.processing
+                                .clearance_summary.items"
+                            :key="clearance.id"
+                            data-testid="citizen-clearance-item"
+                            :data-clearance-code="clearance.code"
+                            :data-clearance-status="clearance.status"
+                            class="flex flex-wrap items-center justify-between gap-2 py-2 first:pt-0 last:pb-0"
+                        >
+                            <span class="font-medium">{{ clearance.label }}</span>
+                            <Badge variant="secondary" class="capitalize">
+                                {{ clearance.status.replace('_', ' ') }}
+                            </Badge>
+                        </li>
+                    </ul>
+                </div>
+
+                <div
+                    v-if="permitApplication.processing.authority_review"
+                    data-testid="citizen-authority-review-boundary"
+                    :data-authority-review-status="
+                        permitApplication.processing.authority_review.status
+                    "
+                    :data-ready-for-authority-review="
+                        permitApplication.processing.authority_review
+                            .ready_for_authority_review
+                    "
+                    :data-can-release="
+                        permitApplication.processing.authority_review.can_release
+                    "
+                    class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+                >
+                    <p class="font-medium">Authority review boundary</p>
+                    <p class="mt-1">
+                        {{ permitApplication.processing.authority_review.statement }}
+                    </p>
+                    <p class="mt-2 text-xs">
+                        {{ permitApplication.processing.authority_review.reason }}
+                    </p>
                 </div>
             </section>
 
