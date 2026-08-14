@@ -7,6 +7,7 @@ use App\Actions\CancelPermitApplication;
 use App\Actions\CompletePermitClearance;
 use App\Actions\CreateStaffPermitApplication;
 use App\Actions\DescribePermitReleaseReadiness;
+use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\RenderApplicationFormPdf;
 use App\Actions\RenderPermitPdf;
 use App\Enums\PermitApplicationType;
@@ -29,7 +30,10 @@ use Inertia\Response;
 
 class PermitApplicationController extends Controller
 {
-    public function __construct(private readonly DescribePermitReleaseReadiness $describeReleaseReadiness) {}
+    public function __construct(
+        private readonly DescribePermitReleaseReadiness $describeReleaseReadiness,
+        private readonly DescribePermitVerificationBoundary $describeVerificationBoundary,
+    ) {}
 
     public function index(): Response
     {
@@ -140,7 +144,7 @@ class PermitApplicationController extends Controller
             'permitDocumentGaps' => [
                 'Generated application form artifact captures current rescue intake facts only.',
                 'Generated permit artifact does not release or issue a permit.',
-                'Clearance completion, QR verification, signatories, and final municipal layout remain unresolved.',
+                'Clearance completion, QR release verification, signatories, and final municipal layout remain unresolved.',
             ],
         ]);
     }
@@ -227,6 +231,7 @@ class PermitApplicationController extends Controller
             'terminal_state' => $permitApplication->metadata['terminal_state'] ?? null,
             'release_policy_boundary' => $permitApplication->metadata['release_policy_boundary'] ?? null,
             'release_readiness' => $this->describeReleaseReadiness->handle($permitApplication),
+            'verification_boundary' => $this->describeVerificationBoundary->handle($permitApplication),
             'clearance_summary' => [
                 'completed' => $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count(),
                 'total' => $permitApplication->clearances->count(),

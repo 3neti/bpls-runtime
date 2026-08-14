@@ -3,6 +3,7 @@
 use App\Actions\CompletePermitClearance;
 use App\Actions\DescribePermitDocumentConfiguration;
 use App\Actions\DescribePermitReleaseReadiness;
+use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\EnsurePermitApplicationClearances;
 use App\Actions\RenderApplicationFormPdf;
 use App\Actions\RenderPermitPdf;
@@ -160,6 +161,7 @@ test('staff users with view permission can review a permit application', functio
             ->where('can.update_permit_application_status', false)
             ->where('can.view_permit_documents', true)
             ->where('permitDocumentGaps.0', 'Generated application form artifact captures current rescue intake facts only.')
+            ->where('permitApplication.verification_boundary.can_verify_release', false)
         );
 });
 
@@ -595,9 +597,68 @@ test('staff users with view permission can open a permit pdf artifact', function
         ->toContain('Hon. Ipil Mayor')
         ->toContain('Maria BPLO')
         ->toContain('Configured signatories are document evidence only')
+        ->toContain('VERIFICATION BOUNDARY')
+        ->toContain('PVA-'.$application->id.'-')
+        ->toContain(route('public.permits.verify', [
+            'permitApplication' => $application,
+            'verificationCode' => app(DescribePermitVerificationBoundary::class)->handle($application)['reference'],
+        ]))
+        ->toContain('Public verification currently confirms artifact identity only')
         ->toContain('Generated permit artifact; this route does not release or issue a permit.')
-        ->toContain('QR verification route and public verification behavior are not yet implemented.')
+        ->toContain('verification remains unresolved.')
         ->and(permitPdfPageCount($pdf))->toBeGreaterThanOrEqual(1);
+});
+
+test('permit verification boundary provides a deterministic public artifact reference without releasing', function () {
+    $application = permitDocumentFixture();
+
+    $verification = app(DescribePermitVerificationBoundary::class)->handle($application);
+
+    expect($verification['reference'])->toStartWith('PVA-'.$application->id.'-')
+        ->and($verification['url'])->toBe(route('public.permits.verify', [
+            'permitApplication' => $application,
+            'verificationCode' => $verification['reference'],
+        ]))
+        ->and($verification['status'])->toBe('artifact_only')
+        ->and($verification['released'])->toBeFalse()
+        ->and($verification['can_verify_release'])->toBeFalse()
+        ->and(app(DescribePermitVerificationBoundary::class)->handle($application->fresh()))->toBe($verification);
+});
+
+test('public permit verification confirms artifact identity but not release', function () {
+    $application = permitDocumentFixture();
+    $verification = app(DescribePermitVerificationBoundary::class)->handle($application);
+
+    $this->get($verification['url'])
+        ->assertSuccessful()
+        ->assertJson([
+            'schema_version' => 'bpls.permit-verification-boundary.v1',
+            'verification' => [
+                'reference' => $verification['reference'],
+                'status' => 'artifact_only',
+                'can_verify_release' => false,
+                'released' => false,
+            ],
+            'permit' => [
+                'application_number' => 'APP-2026-00013',
+                'application_year' => 2026,
+                'application_status' => PermitApplicationStatus::Draft->value,
+                'business_name' => 'Permit Artifact Store',
+                'trade_name' => 'Artifact Store',
+            ],
+            'release_readiness' => [
+                'can_release' => false,
+            ],
+        ]);
+});
+
+test('public permit verification refuses mismatched references', function () {
+    $application = permitDocumentFixture();
+
+    $this->get(route('public.permits.verify', [
+        'permitApplication' => $application,
+        'verificationCode' => 'PVA-'.$application->id.'-invalid-reference',
+    ]))->assertNotFound();
 });
 
 test('permit document configuration keeps signatory authority explicit', function () {

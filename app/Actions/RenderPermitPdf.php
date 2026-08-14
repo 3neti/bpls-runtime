@@ -9,11 +9,13 @@ final class RenderPermitPdf
 {
     public function __construct(
         private readonly DescribePermitDocumentConfiguration $documentConfiguration,
+        private readonly DescribePermitVerificationBoundary $verificationBoundary,
     ) {}
 
     public function handle(PermitApplication $permitApplication): string
     {
         $documentConfiguration = $this->documentConfiguration->handle();
+        $verificationBoundary = $this->verificationBoundary->handle($permitApplication);
 
         $permitApplication->loadMissing([
             'business.owner',
@@ -63,11 +65,12 @@ final class RenderPermitPdf
         $y = $this->lines($document, $page, $y, $permitApplication);
         $y = $this->clearances($document, $page, $y, $permitApplication);
         $y = $this->signatories($document, $page, $y, $documentConfiguration);
+        $y = $this->verification($document, $page, $y, $verificationBoundary);
 
         $this->section($document, $page, $y, 'Policy Gaps', [
             'Release' => 'Permit issuance and release gating remain unresolved because source Released status precedes clearance completion.',
             'Clearances' => 'Clearance checklist evidence is represented for review only and does not release or issue a permit.',
-            'Verification' => 'QR verification route and public verification behavior are not yet implemented.',
+            'Verification' => 'Public verification currently confirms artifact identity only; QR release verification remains unresolved.',
             'Signatories' => 'Signatory names and titles may be configured for rendering, but official authority and final municipal layout remain unresolved.',
         ]);
 
@@ -77,7 +80,7 @@ final class RenderPermitPdf
     /**
      * @param  array<string, string>  $rows
      */
-    private function section(SimplePdfDocument $document, int $page, float $y, string $title, array $rows): float
+    private function section(SimplePdfDocument $document, int &$page, float $y, string $title, array $rows): float
     {
         if ($y < SimplePdfDocument::ContentBottom + 84) {
             $page = $document->addPage($title.' continued');
@@ -101,7 +104,7 @@ final class RenderPermitPdf
         return $y - 10;
     }
 
-    private function lines(SimplePdfDocument $document, int $page, float $y, PermitApplication $permitApplication): float
+    private function lines(SimplePdfDocument $document, int &$page, float $y, PermitApplication $permitApplication): float
     {
         $document->text($page, 'LINES OF BUSINESS', 42, $y, 9, true);
         $y -= 18;
@@ -131,7 +134,7 @@ final class RenderPermitPdf
         return $y - 18;
     }
 
-    private function clearances(SimplePdfDocument $document, int $page, float $y, PermitApplication $permitApplication): float
+    private function clearances(SimplePdfDocument $document, int &$page, float $y, PermitApplication $permitApplication): float
     {
         $document->text($page, 'CLEARANCE EVIDENCE', 42, $y, 9, true);
         $y -= 18;
@@ -173,7 +176,7 @@ final class RenderPermitPdf
      *     policy_note: string
      * }  $documentConfiguration
      */
-    private function signatories(SimplePdfDocument $document, int $page, float $y, array $documentConfiguration): float
+    private function signatories(SimplePdfDocument $document, int &$page, float $y, array $documentConfiguration): float
     {
         $rows = [
             'Municipality' => $documentConfiguration['municipality']['name'].', '.$documentConfiguration['municipality']['province'],
@@ -188,6 +191,26 @@ final class RenderPermitPdf
             : $documentConfiguration['policy_note'];
 
         return $this->section($document, $page, $y, 'Document Signatory Configuration', $rows);
+    }
+
+    /**
+     * @param  array{
+     *     reference: string,
+     *     url: string,
+     *     status: string,
+     *     can_verify_release: bool,
+     *     released: bool,
+     *     policy_note: string
+     * }  $verificationBoundary
+     */
+    private function verification(SimplePdfDocument $document, int &$page, float $y, array $verificationBoundary): float
+    {
+        return $this->section($document, $page, $y, 'Verification Boundary', [
+            'Reference' => $verificationBoundary['reference'],
+            'Public URL' => $verificationBoundary['url'],
+            'Status' => $this->label($verificationBoundary['status']),
+            'Policy note' => $verificationBoundary['policy_note'],
+        ]);
     }
 
     private function line(SimplePdfDocument $document, int $page, float $y, PermitApplicationLine $line): void

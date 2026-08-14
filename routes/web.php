@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\PublicPermitVerificationController;
 use App\Http\Controllers\Staff\AssessmentPaymentScheduleController;
 use App\Http\Controllers\Staff\CollectionReceiptController;
 use App\Http\Controllers\Staff\PaymentScheduleCollectionController;
@@ -10,6 +11,9 @@ use App\Http\Controllers\Staff\StoryboardController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
+
+Route::get('permits/verify/{permitApplication}/{verificationCode}', PublicPermitVerificationController::class)
+    ->name('public.permits.verify');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
