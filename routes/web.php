@@ -11,6 +11,7 @@ use App\Http\Controllers\Staff\PermitApplicationController;
 use App\Http\Controllers\Staff\ReceiptController;
 use App\Http\Controllers\Staff\RevenueSourceReportController;
 use App\Http\Controllers\Staff\StoryboardController;
+use App\Http\Controllers\Staff\TopEstablishmentTaxDueReportController;
 use App\Http\Controllers\Staff\UnpaidEstablishmentReportController;
 use Illuminate\Support\Facades\Route;
 
@@ -77,6 +78,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('reports.unpaid-establishments.index');
         Route::get('reports/unpaid-establishments/download', [UnpaidEstablishmentReportController::class, 'download'])
             ->name('reports.unpaid-establishments.download');
+        Route::get('reports/top-establishments-tax-due', [TopEstablishmentTaxDueReportController::class, 'index'])
+            ->name('reports.top-establishments-tax-due.index');
+        Route::get('reports/top-establishments-tax-due/download', [TopEstablishmentTaxDueReportController::class, 'download'])
+            ->name('reports.top-establishments-tax-due.download');
         Route::post('storyboards/{storyboard}/exports/pdf', [StoryboardController::class, 'exportPdf'])
             ->name('storyboards.exports.pdf');
         Route::post('storyboards/{storyboard}/exports/video', [StoryboardController::class, 'exportVideo'])

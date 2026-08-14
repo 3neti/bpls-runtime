@@ -115,6 +115,7 @@ try {
         await inspectPendingPaymentAssessmentDetail(page, baseUrl);
         await inspectPendingPaymentScheduleDetail(page, baseUrl);
         await inspectPendingPaymentUnpaidEstablishmentsReport(page, baseUrl);
+        await inspectPendingPaymentTopTaxDueReport(page, baseUrl);
         await inspectPendingPaymentPermitApplicationMobile(page, baseUrl);
     }
 
@@ -1027,6 +1028,110 @@ async function inspectPendingPaymentUnpaidEstablishmentsReport(
     );
 }
 
+async function inspectPendingPaymentTopTaxDueReport(targetPage, targetBaseUrl) {
+    const reportUrl = `${targetBaseUrl}${manifest.resources.top_tax_due_report_url}`;
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const applicationVisible = await targetPage
+        .getByText(manifest.resources.application_number, { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const businessVisible = await targetPage
+        .getByText(manifest.resources.top_tax_due_business_name, {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const taxAmountVisible = await targetPage
+        .getByText(uiMoneyFromCents(manifest.resources.top_tax_due_cents), {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const scopeVisible = await targetPage
+        .getByText(
+            'Top establishments by persisted tax assessment lines for the selected application year.',
+            {
+                exact: true,
+            },
+        )
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const policyVisible = await targetPage
+        .getByText('does not calculate legal delinquency', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const csvExportVisible = await targetPage
+        .getByRole('link', { name: /export csv/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'top-tax-due-report-application-visible',
+            'Top tax due report shows exact pending permit application',
+            true,
+            applicationVisible,
+            {
+                url: reportUrl,
+                application_number: manifest.resources.application_number,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'top-tax-due-report-business-visible',
+            'Top tax due report shows exact business name',
+            true,
+            businessVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'top-tax-due-report-tax-visible',
+            'Top tax due report shows exact persisted assessment tax-line total',
+            true,
+            taxAmountVisible,
+            {
+                tax_due_cents: manifest.resources.top_tax_due_cents,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'top-tax-due-report-scope-visible',
+            'Top tax due report keeps tax-due policy boundary visible',
+            true,
+            scopeVisible && policyVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'top-tax-due-report-csv-visible',
+            'Top tax due report offers CSV export',
+            true,
+            csvExportVisible,
+        ),
+    );
+    reportTopTaxDue(
+        manifest.resources.application_number,
+        manifest.resources.top_tax_due_business_name,
+        manifest.resources.top_tax_due_cents,
+        applicationVisible,
+        csvExportVisible,
+    );
+    await screenshot(
+        targetPage,
+        '06-top-tax-due-report',
+        'browser/screenshots/06-top-tax-due-report.png',
+    );
+}
+
 async function inspectPendingPaymentPermitApplicationMobile(
     targetPage,
     targetBaseUrl,
@@ -1130,8 +1235,8 @@ async function inspectPendingPaymentPermitApplicationMobile(
     );
     await screenshot(
         targetPage,
-        '06-mobile-detail',
-        'browser/screenshots/06-mobile-detail.png',
+        '07-mobile-detail',
+        'browser/screenshots/07-mobile-detail.png',
     );
 }
 
@@ -2530,6 +2635,22 @@ function reportUnpaidEstablishments(
     reportEvidence.unpaid_establishments = {
         application_number: applicationNumber,
         business_name: businessName,
+        application_visible: applicationVisible,
+        csv_export_visible: csvExportVisible,
+    };
+}
+
+function reportTopTaxDue(
+    applicationNumber,
+    businessName,
+    taxDueCents,
+    applicationVisible,
+    csvExportVisible,
+) {
+    reportEvidence.top_tax_due = {
+        application_number: applicationNumber,
+        business_name: businessName,
+        tax_due_cents: taxDueCents,
         application_visible: applicationVisible,
         csv_export_visible: csvExportVisible,
     };

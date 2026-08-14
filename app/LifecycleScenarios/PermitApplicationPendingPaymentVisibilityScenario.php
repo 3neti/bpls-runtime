@@ -2,6 +2,7 @@
 
 namespace App\LifecycleScenarios;
 
+use App\Actions\BuildTopEstablishmentsTaxDueReport;
 use App\Actions\BuildUnpaidEstablishmentsReport;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
@@ -29,6 +30,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         private readonly CreateAssessmentForPermitApplication $createAssessment,
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
         private readonly BuildUnpaidEstablishmentsReport $buildUnpaidEstablishmentsReport,
+        private readonly BuildTopEstablishmentsTaxDueReport $buildTopEstablishmentsTaxDueReport,
         private readonly ScenarioManifest $scenarioManifest,
         private readonly ScenarioSummaryRenderer $summaryRenderer,
     ) {}
@@ -80,6 +82,15 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         ]);
         $unpaidEstablishmentRow = collect($unpaidEstablishmentsReport['rows'])
             ->firstWhere('application_number', $permitApplication->application_number);
+        $topTaxDueReport = $this->buildTopEstablishmentsTaxDueReport->handle([
+            'year' => $permitApplication->application_year,
+            'q' => $permitApplication->application_number,
+        ]);
+        $topTaxDueRow = collect($topTaxDueReport['rows'])
+            ->firstWhere('application_number', $permitApplication->application_number);
+        $topTaxDueCents = $assessment->lines
+            ->filter(fn (AssessmentLine $assessmentLine): bool => $assessmentLine->category === FeeRuleCategory::Tax)
+            ->sum('amount_cents');
 
         $steps = [
             $this->step('actors-resolved', 'Resolve actual application users', ['operator_id' => $operator->id], ['operator_id' => $operator->id]),
@@ -93,6 +104,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             $this->step('business-tax-assessment-line-computed', 'Assessment action persisted gross-sales business tax meaning', ['category' => FeeRuleCategory::Tax->value, 'basis' => 'declared_gross_sales', 'line_of_business' => $lineOfBusiness->name], ['category' => $rangeAssessmentLine->category->value, 'basis' => $rangeAssessmentLine->basis, 'line_of_business' => $rangeAssessmentLine->lineOfBusiness?->name, 'assessment_line_id' => $rangeAssessmentLine->id]),
             $this->step('payment-schedule-prepared', 'Prepare payment schedule through payment schedule action', ['schedule_status' => PaymentScheduleStatus::Pending->value, 'application_status' => PermitApplicationStatus::PendingPayment->value], ['schedule_status' => $paymentSchedule->status->value, 'application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id]),
             $this->step('unpaid-establishments-report-row-projected', 'Unpaid establishments report contains the pending permit schedule', ['application_number' => $permitApplication->application_number, 'business_name' => $permitApplication->business->name], ['application_number' => $unpaidEstablishmentRow['application_number'] ?? null, 'business_name' => $unpaidEstablishmentRow['business_name'] ?? null]),
+            $this->step('top-tax-due-report-row-projected', 'Top tax due report contains the pending permit assessment tax lines', ['application_number' => $permitApplication->application_number, 'tax_due_cents' => $topTaxDueCents], ['application_number' => $topTaxDueRow['application_number'] ?? null, 'tax_due_cents' => $topTaxDueRow['tax_due_cents'] ?? null]),
         ];
 
         foreach ($steps as $step) {
@@ -139,6 +151,16 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                 'q' => $permitApplication->application_number,
             ], false),
             'unpaid_establishment_business_name' => $permitApplication->business->name,
+            'top_tax_due_report_url' => route('staff.reports.top-establishments-tax-due.index', [
+                'year' => $permitApplication->application_year,
+                'q' => $permitApplication->application_number,
+            ], false),
+            'top_tax_due_report_download_url' => route('staff.reports.top-establishments-tax-due.download', [
+                'year' => $permitApplication->application_year,
+                'q' => $permitApplication->application_number,
+            ], false),
+            'top_tax_due_business_name' => $permitApplication->business->name,
+            'top_tax_due_cents' => $topTaxDueCents,
         ];
         $manifest['steps'] = $steps;
         $manifest['result']['terminal'] = collect($steps)->every(fn (array $step): bool => $step['passed']) ? 'passed' : 'failed';
@@ -188,6 +210,13 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                 'application_number' => $unpaidEstablishmentRow['application_number'] ?? null,
                 'business_name' => $unpaidEstablishmentRow['business_name'] ?? null,
             ],
+            'top_tax_due_report' => [
+                'year' => $topTaxDueReport['filters']['year'],
+                'row_count' => $topTaxDueReport['summary']['row_count'],
+                'tax_due_cents' => $topTaxDueReport['summary']['tax_due_cents'],
+                'application_number' => $topTaxDueRow['application_number'] ?? null,
+                'business_name' => $topTaxDueRow['business_name'] ?? null,
+            ],
             'run_id' => $runId,
         ]);
         $artifactStore->putJson('terminal/execution.json', [
@@ -224,6 +253,12 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         ]);
         $unpaidEstablishmentRow = collect($unpaidEstablishmentsReport['rows'])
             ->firstWhere('application_number', $permitApplication->application_number);
+        $topTaxDueReport = $this->buildTopEstablishmentsTaxDueReport->handle([
+            'year' => $permitApplication->application_year,
+            'q' => $permitApplication->application_number,
+        ]);
+        $topTaxDueRow = collect($topTaxDueReport['rows'])
+            ->firstWhere('application_number', $permitApplication->application_number);
         $browserReport = $artifactStore->readJson('browser/report.json') ?? [
             'result' => [
                 'passed' => false,
@@ -245,6 +280,8 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             $this->step('audit-payment-schedule-status', 'Payment schedule remains pending for collection', ['status' => PaymentScheduleStatus::Pending->value], ['status' => $paymentSchedule->status->value]),
             $this->step('audit-unpaid-establishments-report-row', 'Unpaid establishments report contains the scenario pending permit schedule', ['application_number' => $permitApplication->application_number, 'business_name' => $permitApplication->business->name], ['application_number' => $unpaidEstablishmentRow['application_number'] ?? null, 'business_name' => $unpaidEstablishmentRow['business_name'] ?? null]),
             $this->step('audit-browser-unpaid-establishments-report-row', 'Browser evidence observed the unpaid establishments report row', ['application_number' => $permitApplication->application_number, 'csv_export_visible' => true], ['application_number' => data_get($browserReport, 'reports.unpaid_establishments.application_number'), 'csv_export_visible' => data_get($browserReport, 'reports.unpaid_establishments.csv_export_visible')]),
+            $this->step('audit-top-tax-due-report-row', 'Top tax due report contains the scenario pending permit assessment tax lines', ['application_number' => $permitApplication->application_number, 'tax_due_cents' => $manifest['resources']['top_tax_due_cents']], ['application_number' => $topTaxDueRow['application_number'] ?? null, 'tax_due_cents' => $topTaxDueRow['tax_due_cents'] ?? null]),
+            $this->step('audit-browser-top-tax-due-report-row', 'Browser evidence observed the top tax due report row', ['application_number' => $permitApplication->application_number, 'tax_due_cents' => $manifest['resources']['top_tax_due_cents'], 'csv_export_visible' => true], ['application_number' => data_get($browserReport, 'reports.top_tax_due.application_number'), 'tax_due_cents' => data_get($browserReport, 'reports.top_tax_due.tax_due_cents'), 'csv_export_visible' => data_get($browserReport, 'reports.top_tax_due.csv_export_visible')]),
             $this->step('audit-browser-result', 'Browser evidence runner passed', ['browser' => true], ['browser' => (bool) data_get($browserReport, 'result.passed')]),
         ];
 
@@ -302,6 +339,13 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                     'outstanding_amount_cents' => $unpaidEstablishmentsReport['summary']['outstanding_amount_cents'],
                     'application_number' => $unpaidEstablishmentRow['application_number'] ?? null,
                     'business_name' => $unpaidEstablishmentRow['business_name'] ?? null,
+                ],
+                'top_tax_due_report' => [
+                    'year' => $topTaxDueReport['filters']['year'],
+                    'row_count' => $topTaxDueReport['summary']['row_count'],
+                    'tax_due_cents' => $topTaxDueReport['summary']['tax_due_cents'],
+                    'application_number' => $topTaxDueRow['application_number'] ?? null,
+                    'business_name' => $topTaxDueRow['business_name'] ?? null,
                 ],
                 'status_history' => $permitApplication->metadata['status_history'] ?? [],
             ],

@@ -12,6 +12,7 @@ import {
     FolderGit2,
     LayoutGrid,
     ReceiptText,
+    Trophy,
     WalletCards,
 } from '@lucide/vue';
 import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
@@ -22,6 +23,7 @@ import { index as permitApplicationIndex } from '@/actions/App/Http/Controllers/
 import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
 import { index as revenueSourceReportIndex } from '@/actions/App/Http/Controllers/Staff/RevenueSourceReportController';
 import { index as storyboardIndex } from '@/actions/App/Http/Controllers/Staff/StoryboardController';
+import { index as topEstablishmentTaxDueReportIndex } from '@/actions/App/Http/Controllers/Staff/TopEstablishmentTaxDueReportController';
 import { index as unpaidEstablishmentReportIndex } from '@/actions/App/Http/Controllers/Staff/UnpaidEstablishmentReportController';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
@@ -84,6 +86,11 @@ const mainNavItems: NavItem[] = [
         title: 'Unpaid Establishments',
         href: unpaidEstablishmentReportIndex(),
         icon: ClipboardX,
+    },
+    {
+        title: 'Top Tax Due',
+        href: topEstablishmentTaxDueReportIndex(),
+        icon: Trophy,
     },
     {
         title: 'Storyboards',
