@@ -10,6 +10,7 @@ use App\Http\Controllers\Staff\PaidEstablishmentReportController;
 use App\Http\Controllers\Staff\PaymentScheduleCollectionController;
 use App\Http\Controllers\Staff\PermitApplicationAssessmentController;
 use App\Http\Controllers\Staff\PermitApplicationController;
+use App\Http\Controllers\Staff\PermitApplicationDocumentController;
 use App\Http\Controllers\Staff\ReceiptController;
 use App\Http\Controllers\Staff\RevenueSourceReportController;
 use App\Http\Controllers\Staff\StoryboardController;
@@ -44,6 +45,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.release');
         Route::post('permit-applications/{permitApplication}/clearances/{clearance}/complete', [PermitApplicationController::class, 'completeClearance'])
             ->name('permit-applications.clearances.complete');
+        Route::post('permit-applications/{permitApplication}/documents', [PermitApplicationDocumentController::class, 'store'])
+            ->name('permit-applications.documents.store');
+        Route::get('permit-applications/{permitApplication}/documents/{document}/download', [PermitApplicationDocumentController::class, 'download'])
+            ->name('permit-applications.documents.download');
         Route::get('fee-rules', [FeeRuleController::class, 'index'])
             ->name('fee-rules.index');
         Route::get('fee-rules/{feeRule}', [FeeRuleController::class, 'show'])

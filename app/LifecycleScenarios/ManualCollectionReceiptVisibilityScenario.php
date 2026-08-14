@@ -19,6 +19,8 @@ use App\Actions\DescribeReceiptVoidBoundary;
 use App\Actions\EnsurePermitApplicationClearances;
 use App\Actions\IssueManualCollectionReceipt;
 use App\Actions\RecordPaymentScheduleCollection;
+use App\Actions\SimplePdfDocument;
+use App\Actions\StorePermitApplicationDocument;
 use App\Actions\VoidReceipt;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
@@ -37,15 +39,19 @@ use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
+use App\Models\PermitApplicationDocument;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 final class ManualCollectionReceiptVisibilityScenario
 {
     public function __construct(
         private readonly CreateStaffPermitApplication $createPermitApplication,
+        private readonly StorePermitApplicationDocument $storePermitApplicationDocument,
         private readonly CreateAssessmentForPermitApplication $createAssessment,
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
         private readonly RecordPaymentScheduleCollection $recordCollection,
@@ -102,6 +108,8 @@ final class ManualCollectionReceiptVisibilityScenario
             'capital_investment_cents' => 75_000_00,
             'quantity' => 1,
         ], $operator);
+
+        $supportingDocument = $this->storeScenarioDocument($permitApplication, $operator, $runId);
 
         $assessment = $this->createAssessment->handle($permitApplication, $operator);
         $paymentSchedule = $this->createPaymentSchedule->handle($assessment, $operator);
@@ -179,6 +187,7 @@ final class ManualCollectionReceiptVisibilityScenario
         $steps = [
             $this->step('actors-resolved', 'Resolve actual application users', ['operator_id' => $operator->id], ['operator_id' => $operator->id]),
             $this->step('permit-application-created', 'Create permit application through staff intake action', ['status' => PermitApplicationStatus::Draft->value], ['status' => PermitApplicationStatus::Draft->value, 'permit_application_id' => $permitApplication->id]),
+            $this->step('supporting-document-recorded', 'Record supporting evidence through permit document action', ['document_id' => $supportingDocument->id, 'storage_private' => true], ['document_id' => $supportingDocument->id, 'storage_private' => $supportingDocument->storage_disk === 'local' && Storage::disk('local')->exists($supportingDocument->path)]),
             $this->step('assessment-computed', 'Compute assessment through assessment action', ['assessment_status' => 'computed'], ['assessment_status' => $assessment->status->value, 'assessment_id' => $assessment->id]),
             $this->step('payment-schedule-prepared', 'Prepare payment schedule through payment schedule action', ['application_status' => PermitApplicationStatus::PendingPayment->value], ['application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id]),
             $this->step('collection-recorded', 'Record full over-the-counter collection through Treasury action', ['payment_schedule_status' => PaymentScheduleStatus::Paid->value, 'collection_status' => TreasuryCollectionStatus::PendingReceipt->value], ['payment_schedule_status' => $paymentSchedule->status->value, 'collection_status' => $collectionStatusBeforeReceipt->value, 'collection_id' => $collection->id]),
@@ -189,7 +198,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('release-ready-for-authority-review', 'Describe release readiness without issuing permit', ['ready_for_authority_review' => true, 'can_release' => false], ['ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'], 'can_release' => $releaseReadiness['can_release']]),
             $this->step('permit-artifact-available-for-authority-review', 'Describe generated permit artifact without issuing permit', ['status' => 'generated_artifact_available', 'ready_for_authority_review' => true, 'can_issue' => false, 'can_release' => false], ['status' => $permitArtifact['status'], 'ready_for_authority_review' => $permitArtifact['ready_for_authority_review'], 'can_issue' => $permitArtifact['can_issue'], 'can_release' => $permitArtifact['can_release']]),
             $this->step('permit-release-blocked', 'Attempt permit release through release boundary action', ['release_blocked' => true, 'application_status' => PermitApplicationStatus::PendingPayment->value], ['release_blocked' => $releaseBlocked, 'application_status' => $permitApplication->status->value]),
-            $this->step('application-timeline-projected', 'Project authoritative lifecycle records into chronological review evidence', ['event_count' => 10, 'release_boundary_visible' => true], ['event_count' => count($timelineKeys), 'release_boundary_visible' => in_array("release-blocked:{$permitApplication->id}", $timelineKeys, true)]),
+            $this->step('application-timeline-projected', 'Project authoritative lifecycle records into chronological review evidence', ['event_count' => 11, 'release_boundary_visible' => true], ['event_count' => count($timelineKeys), 'release_boundary_visible' => in_array("release-blocked:{$permitApplication->id}", $timelineKeys, true)]),
         ];
 
         foreach ($steps as $step) {
@@ -202,6 +211,10 @@ final class ManualCollectionReceiptVisibilityScenario
             'public_reference' => $receipt->receipt_number,
             'permit_application_id' => $permitApplication->id,
             'application_number' => $permitApplication->application_number,
+            'supporting_document_id' => $supportingDocument->id,
+            'supporting_document_label' => $supportingDocument->label,
+            'supporting_document_name' => $supportingDocument->original_name,
+            'supporting_document_download_url' => route('staff.permit-applications.documents.download', [$permitApplication, $supportingDocument], false),
             'assessment_id' => $assessment->id,
             'assessment_total_amount_cents' => $assessment->total_amount_cents,
             'assessment_pdf_url' => route('staff.permit-applications.assessments.pdf', $assessment, false),
@@ -272,6 +285,13 @@ final class ManualCollectionReceiptVisibilityScenario
         $artifactStore->putJson('terminal/prepare.json', [
             'permit_application_id' => $permitApplication->id,
             'application_number' => $permitApplication->application_number,
+            'supporting_document' => [
+                'id' => $supportingDocument->id,
+                'label' => $supportingDocument->label,
+                'original_name' => $supportingDocument->original_name,
+                'path' => $supportingDocument->path,
+                'storage_disk' => $supportingDocument->storage_disk,
+            ],
             'assessment_id' => $assessment->id,
             'payment_schedule_id' => $paymentSchedule->id,
             'payment_schedule_status' => $paymentSchedule->status->value,
@@ -343,6 +363,7 @@ final class ManualCollectionReceiptVisibilityScenario
         $assessment = Assessment::query()->findOrFail($manifest['resources']['assessment_id']);
         $collection = TreasuryCollection::query()->with('receipt')->findOrFail($manifest['resources']['collection_id']);
         $receipt = Receipt::query()->findOrFail($manifest['resources']['record_id']);
+        $supportingDocument = PermitApplicationDocument::query()->findOrFail($manifest['resources']['supporting_document_id']);
         $permitApplication = PermitApplication::query()
             ->with(['business', 'clearances'])
             ->findOrFail($manifest['resources']['permit_application_id']);
@@ -380,6 +401,8 @@ final class ManualCollectionReceiptVisibilityScenario
 
         $checks = [
             $this->step('audit-payment-schedule-paid', 'Payment schedule is paid', ['status' => PaymentScheduleStatus::Paid->value], ['status' => $paymentSchedule->status->value]),
+            $this->step('audit-supporting-document', 'Supporting evidence remains attached to the exact permit application in private storage', ['permit_application_id' => $permitApplication->id, 'document_id' => $manifest['resources']['supporting_document_id'], 'storage_private' => true], ['permit_application_id' => $supportingDocument->permit_application_id, 'document_id' => $supportingDocument->id, 'storage_private' => $supportingDocument->storage_disk === 'local' && Storage::disk('local')->exists($supportingDocument->path)]),
+            $this->step('audit-browser-supporting-document', 'Browser evidence observed and downloaded the exact supporting document', ['document_id' => $supportingDocument->id, 'label' => $supportingDocument->label, 'download_available' => true], ['document_id' => data_get($browserReport, 'supporting_document.id'), 'label' => data_get($browserReport, 'supporting_document.label'), 'download_available' => data_get($browserReport, 'supporting_document.download_available')]),
             $this->step('audit-online-payment-boundary', 'Online payment and reconciliation boundary remains blocked', ['status' => 'blocked', 'can_pay_online' => false, 'can_reconcile_online' => false], ['status' => $onlinePaymentBoundary['status'], 'can_pay_online' => $onlinePaymentBoundary['can_pay_online'], 'can_reconcile_online' => $onlinePaymentBoundary['can_reconcile_online']]),
             $this->step('audit-browser-online-payment-boundary', 'Browser evidence observed the online payment and reconciliation boundary', ['status' => 'blocked', 'can_pay_online' => false, 'can_reconcile_online' => false], ['status' => data_get($browserReport, 'online_payment_boundary.status'), 'can_pay_online' => data_get($browserReport, 'online_payment_boundary.can_pay_online'), 'can_reconcile_online' => data_get($browserReport, 'online_payment_boundary.can_reconcile_online')]),
             $this->step('audit-collection-receipted', 'Collection is receipted', ['status' => TreasuryCollectionStatus::Receipted->value], ['status' => $collection->status->value]),
@@ -426,6 +449,14 @@ final class ManualCollectionReceiptVisibilityScenario
             'passed' => $passed,
             'canonical' => [
                 'payment_schedule_id' => $paymentSchedule->id,
+                'supporting_document' => [
+                    'id' => $supportingDocument->id,
+                    'permit_application_id' => $supportingDocument->permit_application_id,
+                    'label' => $supportingDocument->label,
+                    'original_name' => $supportingDocument->original_name,
+                    'storage_disk' => $supportingDocument->storage_disk,
+                    'path' => $supportingDocument->path,
+                ],
                 'payment_schedule_status' => $paymentSchedule->status->value,
                 'paid_amount_cents' => $paymentSchedule->paid_amount_cents,
                 'online_payment_boundary' => $onlinePaymentBoundary,
@@ -478,6 +509,43 @@ final class ManualCollectionReceiptVisibilityScenario
         $artifactStore->put('summary.html', $this->summaryRenderer->html($manifest));
 
         return $manifest;
+    }
+
+    private function storeScenarioDocument(PermitApplication $permitApplication, User $operator, string $runId): PermitApplicationDocument
+    {
+        $document = new SimplePdfDocument(
+            title: 'Scenario Supporting Evidence',
+            documentCode: 'SCENARIO-EVIDENCE',
+            subtitle: 'Permit application supporting document',
+            footerNote: 'Lifecycle scenario evidence only.',
+        );
+        $page = $document->addPage('Supporting evidence');
+        $document->text($page, 'Business registration evidence', 42, 710, 14, true);
+        $document->wrappedText($page, "Run ID: {$runId}", 42, 680, 511, 10);
+        $document->wrappedText($page, 'Receipt of this artifact does not establish statutory sufficiency, approval, or permit eligibility.', 42, 650, 511, 10);
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'bpls-scenario-document-');
+
+        if ($temporaryPath === false || file_put_contents($temporaryPath, $document->render()) === false) {
+            throw new RuntimeException('Unable to prepare lifecycle scenario supporting document.');
+        }
+
+        try {
+            return $this->storePermitApplicationDocument->handle($permitApplication, [
+                'label' => 'Business registration evidence',
+                'file' => new UploadedFile(
+                    $temporaryPath,
+                    'scenario-business-registration.pdf',
+                    'application/pdf',
+                    null,
+                    true,
+                ),
+                'remarks' => 'Lifecycle scenario intake evidence.',
+            ], $operator);
+        } finally {
+            if (is_file($temporaryPath)) {
+                unlink($temporaryPath);
+            }
+        }
     }
 
     private function lineOfBusiness(): LineOfBusiness

@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import {
     Calculator,
     CircleX,
+    Download,
     FileText,
     History,
     LinkIcon,
     ListChecks,
     LockKeyhole,
+    Paperclip,
+    Upload,
     WalletCards,
 } from '@lucide/vue';
 import { show as showPaymentSchedule } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
@@ -24,8 +27,12 @@ import {
     release,
     show,
 } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
+import { store as storeSupportingDocument } from '@/actions/App/Http/Controllers/Staff/PermitApplicationDocumentController';
+import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
@@ -204,6 +211,18 @@ type PermitApplication = {
             id: number;
         };
     }[];
+    documents: {
+        id: number;
+        label: string;
+        original_name: string;
+        mime_type: string;
+        size_bytes: number;
+        remarks: string | null;
+        uploaded_at: string;
+        uploaded_by: string | null;
+        download_url: string;
+        policy_note: string | null;
+    }[];
     can_continue: boolean;
 };
 
@@ -215,9 +234,16 @@ const props = defineProps<{
         view_permit_documents: boolean;
         attempt_release: boolean;
         complete_clearances: boolean;
+        upload_documents: boolean;
     };
     permitDocumentGaps: string[];
 }>();
+
+const documentForm = useForm({
+    label: '',
+    file: null as File | null,
+    remarks: '',
+});
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -258,6 +284,27 @@ function booleanEntries(
     values: Record<string, boolean>,
 ): { key: string; value: boolean }[] {
     return Object.entries(values).map(([key, value]) => ({ key, value }));
+}
+
+function selectDocument(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    documentForm.file = input.files?.[0] ?? null;
+}
+
+function uploadDocument(): void {
+    documentForm.post(storeSupportingDocument.url(props.permitApplication.id), {
+        forceFormData: true,
+        preserveScroll: true,
+        onSuccess: () => documentForm.reset(),
+    });
+}
+
+function fileSize(sizeBytes: number): string {
+    if (sizeBytes < 1024) {
+        return `${sizeBytes} B`;
+    }
+
+    return `${(sizeBytes / 1024).toFixed(1)} KB`;
 }
 </script>
 
@@ -475,8 +522,7 @@ function booleanEntries(
                     >
                         <a
                             :href="
-                                permitApplication.permit_artifact
-                                    .permit_pdf_url
+                                permitApplication.permit_artifact.permit_pdf_url
                             "
                             target="_blank"
                         >
@@ -716,6 +762,120 @@ function booleanEntries(
                         </tbody>
                     </table>
                 </div>
+            </section>
+
+            <section
+                data-testid="permit-supporting-documents"
+                class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+            >
+                <div class="flex items-start gap-2">
+                    <Paperclip class="mt-0.5 size-4 text-muted-foreground" />
+                    <div>
+                        <h2 class="text-sm font-semibold text-foreground">
+                            Supporting documents
+                        </h2>
+                        <p class="text-xs text-muted-foreground">
+                            Received evidence only. Uploading a document does
+                            not establish statutory sufficiency or approval.
+                        </p>
+                    </div>
+                </div>
+
+                <form
+                    v-if="can.upload_documents"
+                    class="grid gap-3 border-y border-border py-4 md:grid-cols-2"
+                    enctype="multipart/form-data"
+                    @submit.prevent="uploadDocument"
+                >
+                    <div class="grid gap-2">
+                        <Label for="document-label">Document label</Label>
+                        <Input
+                            id="document-label"
+                            v-model="documentForm.label"
+                            maxlength="120"
+                            required
+                        />
+                        <InputError :message="documentForm.errors.label" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="document-file">File</Label>
+                        <Input
+                            id="document-file"
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            required
+                            @change="selectDocument"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            PDF, JPG, or PNG up to 10 MB.
+                        </p>
+                        <InputError :message="documentForm.errors.file" />
+                    </div>
+                    <div class="grid gap-2 md:col-span-2">
+                        <Label for="document-remarks">Remarks</Label>
+                        <textarea
+                            id="document-remarks"
+                            v-model="documentForm.remarks"
+                            rows="2"
+                            maxlength="1000"
+                            class="flex min-h-16 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                        <InputError :message="documentForm.errors.remarks" />
+                    </div>
+                    <div class="md:col-span-2">
+                        <Button
+                            type="submit"
+                            :disabled="documentForm.processing"
+                        >
+                            <Upload />
+                            Record document
+                        </Button>
+                    </div>
+                </form>
+
+                <div
+                    v-if="permitApplication.documents.length === 0"
+                    class="py-2 text-sm text-muted-foreground"
+                >
+                    No supporting documents recorded.
+                </div>
+                <ul v-else class="divide-y divide-border">
+                    <li
+                        v-for="document in permitApplication.documents"
+                        :key="document.id"
+                        data-testid="permit-supporting-document"
+                        :data-document-id="document.id"
+                        class="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                    >
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-medium break-words">
+                                {{ document.label }}
+                            </p>
+                            <p class="text-xs break-all text-muted-foreground">
+                                {{ document.original_name }} ·
+                                {{ fileSize(document.size_bytes) }}
+                            </p>
+                            <p
+                                v-if="document.remarks"
+                                class="mt-1 text-sm break-words text-muted-foreground"
+                            >
+                                {{ document.remarks }}
+                            </p>
+                            <p class="mt-1 text-xs text-muted-foreground">
+                                {{ dateTime(document.uploaded_at) }}
+                                <template v-if="document.uploaded_by">
+                                    · {{ document.uploaded_by }}
+                                </template>
+                            </p>
+                        </div>
+                        <Button as-child variant="outline" size="sm">
+                            <a :href="document.download_url">
+                                <Download />
+                                Download
+                            </a>
+                        </Button>
+                    </li>
+                </ul>
             </section>
 
             <section
@@ -1160,8 +1320,7 @@ function booleanEntries(
                     <Button as-child variant="outline">
                         <a
                             :href="
-                                permitApplication.verification_boundary
-                                    .view_url
+                                permitApplication.verification_boundary.view_url
                             "
                             target="_blank"
                             rel="noopener noreferrer"
@@ -1221,8 +1380,7 @@ function booleanEntries(
                         </dt>
                         <dd class="font-mono text-xs break-all">
                             {{
-                                permitApplication.verification_boundary
-                                    .view_url
+                                permitApplication.verification_boundary.view_url
                             }}
                         </dd>
                     </div>

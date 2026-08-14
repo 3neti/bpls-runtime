@@ -22,6 +22,7 @@ use App\Models\Assessment;
 use App\Models\FeeRule;
 use App\Models\Permission;
 use App\Models\PermitApplication;
+use App\Models\PermitApplicationDocument;
 use App\Models\Receipt;
 use App\Models\Role;
 use App\Models\Storyboard;
@@ -346,6 +347,7 @@ test('manual collection receipt scenario executes treasury actions idempotently'
     $permitApplication = PermitApplication::query()->findOrFail($firstManifest['resources']['permit_application_id']);
     $expectedTimelineKeys = [
         "application-recorded:{$permitApplication->id}",
+        "document-recorded:{$firstManifest['resources']['supporting_document_id']}",
         "assessment-computed:{$firstManifest['resources']['assessment_id']}",
         "payment-schedule-prepared:{$firstManifest['resources']['payment_schedule_id']}",
         'status-transition:0',
@@ -371,10 +373,11 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($firstManifest['resources']['permit_verification_url'])->toContain($firstManifest['resources']['permit_verification_reference'])
         ->and($firstManifest['resources']['permit_verification_view_url'])->toBe($firstManifest['resources']['permit_verification_url'].'/view')
         ->and($firstManifest['resources']['receipt_void_boundary_reference'])->toStartWith('RVB-'.$firstManifest['resources']['record_id'].'-')
-        ->and($firstManifest['resources']['permit_timeline_event_count'])->toBe(10)
+        ->and($firstManifest['resources']['permit_timeline_event_count'])->toBe(11)
         ->and($firstManifest['resources']['permit_timeline_event_keys'])->toBe($expectedTimelineKeys)
         ->and(Receipt::query()->count())->toBe(1)
         ->and(TreasuryCollection::query()->count())->toBe(1)
+        ->and(PermitApplicationDocument::query()->count())->toBe(1)
         ->and($receipt->status)->toBe(ReceiptStatus::Issued)
         ->and($receipt->numbering_authority)->toBe('manual')
         ->and($collection->status)->toBe(TreasuryCollectionStatus::Receipted)
@@ -623,6 +626,16 @@ test('manual collection receipt scenario audit compares browser evidence with ca
         'timeline' => [
             'event_count' => $manifest['resources']['permit_timeline_event_count'],
             'event_keys' => $manifest['resources']['permit_timeline_event_keys'],
+        ],
+        'supporting_document' => [
+            'id' => $manifest['resources']['supporting_document_id'],
+            'label' => $manifest['resources']['supporting_document_label'],
+            'original_name' => $manifest['resources']['supporting_document_name'],
+            'download_url' => $manifest['resources']['supporting_document_download_url'],
+            'panel_visible' => true,
+            'download_available' => true,
+            'mobile_visible' => true,
+            'mobile_horizontal_overflow' => false,
         ],
         'permit_artifact' => [
             'permit_pdf_url' => $manifest['resources']['permit_pdf_url'],

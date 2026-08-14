@@ -139,6 +139,7 @@ class PermitApplicationController extends Controller
         $permitApplication->load([
             'business.owner',
             'submittedBy',
+            'documents' => fn ($query) => $query->with('uploadedBy')->latest('uploaded_at'),
             'lines.lineOfBusiness',
             'assessments' => fn ($query) => $query->with('assessedBy')->latest(),
             'paymentSchedules' => fn ($query) => $query->with('preparedBy')->latest(),
@@ -154,6 +155,8 @@ class PermitApplicationController extends Controller
                 'view_permit_documents' => auth()->user()?->can(UserPermission::ViewPermitApplications->value) ?? false,
                 'attempt_release' => auth()->user()?->can(UserPermission::UpdatePermitApplicationStatus->value) ?? false,
                 'complete_clearances' => auth()->user()?->can(UserPermission::CompletePermitClearances->value) ?? false,
+                'upload_documents' => $permitApplication->canContinue()
+                    && (auth()->user()?->can(UserPermission::CreatePermitApplications->value) ?? false),
             ],
             'permitDocumentGaps' => [
                 'Generated application form artifact captures current rescue intake facts only.',
@@ -256,6 +259,20 @@ class PermitApplicationController extends Controller
             'release_readiness' => $this->describeReleaseReadiness->handle($permitApplication),
             'verification_boundary' => $this->describeVerificationBoundary->handle($permitApplication),
             ...($includeTimeline ? ['timeline' => $this->buildPermitApplicationTimeline->handle($permitApplication)] : []),
+            ...($includeTimeline ? ['documents' => $permitApplication->documents
+                ->values()
+                ->map(fn ($document): array => [
+                    'id' => $document->id,
+                    'label' => $document->label,
+                    'original_name' => $document->original_name,
+                    'mime_type' => $document->mime_type,
+                    'size_bytes' => $document->size_bytes,
+                    'remarks' => $document->remarks,
+                    'uploaded_at' => $document->uploaded_at->toIso8601String(),
+                    'uploaded_by' => $document->uploadedBy?->name,
+                    'download_url' => route('staff.permit-applications.documents.download', [$permitApplication, $document], false),
+                    'policy_note' => $document->source_snapshot['policy_note'] ?? null,
+                ])] : []),
             'clearance_summary' => [
                 'completed' => $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count(),
                 'total' => $permitApplication->clearances->count(),
@@ -277,7 +294,7 @@ class PermitApplicationController extends Controller
                     'remarks' => $clearance->remarks,
                     'policy_note' => $clearance->source_snapshot['policy_note'] ?? null,
                 ]),
-            'can_continue' => ($permitApplication->metadata['terminal_state']['can_continue'] ?? true) !== false,
+            'can_continue' => $permitApplication->canContinue(),
         ];
     }
 

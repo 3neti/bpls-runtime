@@ -21,6 +21,7 @@ class BuildPermitApplicationTimeline
         $permitApplication->loadMissing([
             'business',
             'submittedBy',
+            'documents.uploadedBy',
             'assessments.assessedBy',
             'paymentSchedules.preparedBy',
             'treasuryCollections.receivedBy',
@@ -54,6 +55,20 @@ class BuildPermitApplicationTimeline
                 occurredAt: $assessment->assessed_at ?? $assessment->created_at,
                 sourceType: 'assessment',
                 sourceId: $assessment->id,
+            ));
+        }
+
+        foreach ($permitApplication->documents as $document) {
+            $events->push($this->event(
+                key: "document-recorded:{$document->id}",
+                category: 'document',
+                title: 'Supporting document recorded',
+                description: sprintf('%s (%s)', $document->label, $document->original_name),
+                status: 'received',
+                actor: $this->actor($document->uploadedBy),
+                occurredAt: $document->uploaded_at,
+                sourceType: 'permit_application_document',
+                sourceId: $document->id,
             ));
         }
 
@@ -228,6 +243,7 @@ class BuildPermitApplicationTimeline
     {
         return match ($sourceType) {
             'permit_application' => 10,
+            'permit_application_document' => 15,
             'assessment' => 20,
             'payment_schedule' => 30,
             'permit_application_status_history' => 40,

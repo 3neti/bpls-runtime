@@ -72,6 +72,16 @@ class PermitApplication extends Model
         return $this->hasMany(PermitClearance::class);
     }
 
+    public function documents(): HasMany
+    {
+        return $this->hasMany(PermitApplicationDocument::class);
+    }
+
+    public function canContinue(): bool
+    {
+        return ($this->metadata['terminal_state']['can_continue'] ?? true) !== false;
+    }
+
     /**
      * @return array<string, string>
      */

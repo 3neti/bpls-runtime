@@ -55,6 +55,7 @@ const screenshots = {};
 const permitArtifactEvidence = {};
 const verificationEvidence = {};
 const timelineEvidence = {};
+const supportingDocumentEvidence = {};
 const receiptVoidBoundaryEvidence = {};
 const documentEvidence = {};
 const assessmentEvidence = {};
@@ -186,6 +187,7 @@ const report = {
     permit_artifact: permitArtifactEvidence,
     verification: verificationEvidence,
     timeline: timelineEvidence,
+    supporting_document: supportingDocumentEvidence,
     receipt_void_boundary: receiptVoidBoundaryEvidence,
     documents: documentEvidence,
     assessment: assessmentEvidence,
@@ -703,7 +705,9 @@ async function inspectAssessmentPolicyBoundary(targetPage, targetBaseUrl) {
         .locator('tr')
         .filter({ hasText: manifest.resources.application_number })
         .first();
-    const applicationVisible = await applicationRow.isVisible().catch(() => false);
+    const applicationVisible = await applicationRow
+        .isVisible()
+        .catch(() => false);
 
     checks.push(
         check(
@@ -718,9 +722,7 @@ async function inspectAssessmentPolicyBoundary(targetPage, targetBaseUrl) {
         ),
     );
 
-    await applicationRow
-        .getByRole('button', { name: /assess/i })
-        .click();
+    await applicationRow.getByRole('button', { name: /assess/i }).click();
     await targetPage.waitForLoadState('networkidle');
     await targetPage
         .waitForFunction(
@@ -821,9 +823,12 @@ async function inspectRevenueCodeFeeCatalogDetail(targetPage, targetBaseUrl) {
         .isVisible()
         .catch(() => false);
     const rangeAmountVisible = await targetPage
-        .getByText(uiMoneyFromCents(manifest.resources.first_range_amount_cents), {
-            exact: false,
-        })
+        .getByText(
+            uiMoneyFromCents(manifest.resources.first_range_amount_cents),
+            {
+                exact: false,
+            },
+        )
         .first()
         .isVisible()
         .catch(() => false);
@@ -1267,16 +1272,22 @@ async function inspectPendingPaymentScheduleDetail(targetPage, targetBaseUrl) {
         .isVisible()
         .catch(() => false);
     const installmentVisible = await targetPage
-        .getByText('annual, semiannual, and quarterly payment splitting rules', {
-            exact: false,
-        })
+        .getByText(
+            'annual, semiannual, and quarterly payment splitting rules',
+            {
+                exact: false,
+            },
+        )
         .first()
         .isVisible()
         .catch(() => false);
     const dueDateVisible = await targetPage
-        .getByText('statutory due dates and renewal-specific due-date adjustments', {
-            exact: false,
-        })
+        .getByText(
+            'statutory due dates and renewal-specific due-date adjustments',
+            {
+                exact: false,
+            },
+        )
         .first()
         .isVisible()
         .catch(() => false);
@@ -1862,9 +1873,12 @@ async function inspectManualReceiptDailyCollectionReport(
         .isVisible()
         .catch(() => false);
     const amountVisible = await targetPage
-        .getByText(uiMoneyFromCents(manifest.resources.assessment_total_amount_cents), {
-            exact: false,
-        })
+        .getByText(
+            uiMoneyFromCents(manifest.resources.assessment_total_amount_cents),
+            {
+                exact: false,
+            },
+        )
         .first()
         .isVisible()
         .catch(() => false);
@@ -2274,6 +2288,51 @@ async function inspectManualReceiptPermitReleaseBoundary(
         .catch(() => []);
     const expectedTimelineEventKeys =
         manifest.resources.permit_timeline_event_keys ?? [];
+    const supportingDocuments = targetPage.getByTestId(
+        'permit-supporting-documents',
+    );
+    const supportingDocumentsVisible = await supportingDocuments
+        .isVisible()
+        .catch(() => false);
+    const supportingDocument = targetPage.locator(
+        `[data-document-id="${manifest.resources.supporting_document_id}"]`,
+    );
+    const supportingDocumentVisible = await supportingDocument
+        .isVisible()
+        .catch(() => false);
+    const supportingDocumentLabelVisible = await supportingDocument
+        .getByText(manifest.resources.supporting_document_label, {
+            exact: true,
+        })
+        .isVisible()
+        .catch(() => false);
+    const supportingDocumentNameVisible = await supportingDocument
+        .getByText(manifest.resources.supporting_document_name, {
+            exact: false,
+        })
+        .isVisible()
+        .catch(() => false);
+    const supportingDocumentLink = supportingDocument.getByRole('link', {
+        name: /download/i,
+    });
+    const supportingDocumentDownloadUrl = await supportingDocumentLink
+        .getAttribute('href')
+        .catch(() => null);
+    const supportingDocumentResponse = await targetPage.request.get(
+        `${targetBaseUrl}${manifest.resources.supporting_document_download_url}`,
+    );
+    const supportingDocumentContentType =
+        supportingDocumentResponse.headers()['content-type'] ?? '';
+    const supportingDocumentDisposition =
+        supportingDocumentResponse.headers()['content-disposition'] ?? '';
+    const supportingDocumentBody = await supportingDocumentResponse.body();
+    const supportingDocumentDownloadAvailable =
+        supportingDocumentResponse.ok() &&
+        supportingDocumentContentType.includes('application/pdf') &&
+        supportingDocumentDisposition.includes(
+            manifest.resources.supporting_document_name,
+        ) &&
+        supportingDocumentBody.subarray(0, 8).toString() === '%PDF-1.4';
     const clearanceChecklistVisible = await targetPage
         .getByText('Clearance checklist', { exact: true })
         .first()
@@ -2429,6 +2488,102 @@ async function inspectManualReceiptPermitReleaseBoundary(
     );
     timelineEvidence.event_count = timelineEventKeys.length;
     timelineEvidence.event_keys = timelineEventKeys;
+
+    checks.push(
+        check(
+            'permit-supporting-documents-visible',
+            'Permit detail shows the supporting-document evidence boundary',
+            true,
+            supportingDocumentsVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'permit-supporting-document-exact-record-visible',
+            'Permit detail shows the exact supporting document prepared by the terminal runner',
+            true,
+            supportingDocumentVisible &&
+                supportingDocumentLabelVisible &&
+                supportingDocumentNameVisible,
+            {
+                document_id: manifest.resources.supporting_document_id,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'permit-supporting-document-download-url-matches',
+            'Supporting-document affordance points to the exact manifest resource',
+            manifest.resources.supporting_document_download_url,
+            supportingDocumentDownloadUrl,
+        ),
+    );
+    checks.push(
+        check(
+            'permit-supporting-document-download-available',
+            'Supporting document downloads as the exact private PDF artifact',
+            true,
+            supportingDocumentDownloadAvailable,
+            {
+                url: manifest.resources.supporting_document_download_url,
+                status: supportingDocumentResponse.status(),
+                content_type: supportingDocumentContentType,
+            },
+        ),
+    );
+    supportingDocumentEvidence.id = manifest.resources.supporting_document_id;
+    supportingDocumentEvidence.label =
+        manifest.resources.supporting_document_label;
+    supportingDocumentEvidence.original_name =
+        manifest.resources.supporting_document_name;
+    supportingDocumentEvidence.download_url = supportingDocumentDownloadUrl;
+    supportingDocumentEvidence.panel_visible = supportingDocumentsVisible;
+    supportingDocumentEvidence.download_available =
+        supportingDocumentDownloadAvailable;
+
+    if (supportingDocumentsVisible) {
+        await supportingDocuments.scrollIntoViewIfNeeded();
+        await screenshot(
+            targetPage,
+            '03a-supporting-documents',
+            'browser/screenshots/03a-supporting-documents.png',
+        );
+
+        await targetPage.setViewportSize({ width: 390, height: 844 });
+        const mobileSupportingDocumentVisible = await supportingDocument
+            .isVisible()
+            .catch(() => false);
+        const mobileSupportingDocumentsOverflow = await targetPage.evaluate(
+            () => document.documentElement.scrollWidth > window.innerWidth,
+        );
+        checks.push(
+            check(
+                'mobile-permit-supporting-document-visible',
+                'Mobile permit detail keeps the exact supporting document visible',
+                true,
+                mobileSupportingDocumentVisible,
+            ),
+        );
+        checks.push(
+            check(
+                'mobile-permit-supporting-documents-no-overflow',
+                'Mobile supporting-document surface has no horizontal overflow',
+                false,
+                mobileSupportingDocumentsOverflow,
+            ),
+        );
+        supportingDocumentEvidence.mobile_visible =
+            mobileSupportingDocumentVisible;
+        supportingDocumentEvidence.mobile_horizontal_overflow =
+            mobileSupportingDocumentsOverflow;
+        await supportingDocuments.scrollIntoViewIfNeeded();
+        await screenshot(
+            targetPage,
+            '03b-mobile-supporting-documents',
+            'browser/screenshots/03b-mobile-supporting-documents.png',
+        );
+        await targetPage.setViewportSize({ width: 1440, height: 900 });
+    }
 
     if (timelineVisible) {
         await timeline.scrollIntoViewIfNeeded();
@@ -3024,8 +3179,7 @@ async function inspectManualReceiptPermitVerificationBoundary(
             },
         ),
     );
-    verificationEvidence.public_page_mobile_visible =
-        publicPageMobileVisible;
+    verificationEvidence.public_page_mobile_visible = publicPageMobileVisible;
     await screenshot(
         targetPage,
         '04b-mobile-permit-verification-boundary',
@@ -3454,7 +3608,10 @@ async function onlinePaymentBoundaryIsVisible(targetPage) {
         .catch(() => false);
 
     return (
-        boundaryVisible && onlineNoVisible && reconciliationVisible && policyVisible
+        boundaryVisible &&
+        onlineNoVisible &&
+        reconciliationVisible &&
+        policyVisible
     );
 }
 
