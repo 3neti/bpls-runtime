@@ -117,6 +117,22 @@ type PermitApplication = {
         reason: string;
         occurred_at: string;
     } | null;
+    permit_artifact: {
+        label: string;
+        status: string;
+        available: boolean;
+        ready_for_authority_review: boolean;
+        can_issue: boolean;
+        can_release: boolean;
+        can_make_legally_effective: boolean;
+        permit_pdf_url: string;
+        verification_reference: string;
+        verification_status: string;
+        authority_boundary_status: string;
+        artifact_statement: string;
+        policy_note: string;
+        blocked_by: string[];
+    };
     release_readiness: {
         ready_for_authority_review: boolean;
         can_release: boolean;
@@ -401,6 +417,140 @@ function booleanEntries(
                             )
                         }}
                     </div>
+                </div>
+            </section>
+
+            <section
+                class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+                aria-labelledby="permit-artifact-heading"
+            >
+                <div
+                    class="mb-3 flex flex-wrap items-start justify-between gap-3"
+                >
+                    <div class="flex items-center gap-2">
+                        <FileText class="size-4 text-muted-foreground" />
+                        <h2
+                            id="permit-artifact-heading"
+                            class="text-sm font-semibold text-foreground"
+                        >
+                            Permit artifact
+                        </h2>
+                    </div>
+                    <Button
+                        v-if="
+                            can.view_permit_documents &&
+                            permitApplication.permit_artifact.available
+                        "
+                        as-child
+                        variant="outline"
+                    >
+                        <a
+                            :href="
+                                permitApplication.permit_artifact
+                                    .permit_pdf_url
+                            "
+                            target="_blank"
+                        >
+                            <FileText />
+                            Open artifact
+                        </a>
+                    </Button>
+                </div>
+
+                <dl class="grid gap-3 text-sm md:grid-cols-4">
+                    <div>
+                        <dt class="text-xs text-muted-foreground">Artifact</dt>
+                        <dd>{{ permitApplication.permit_artifact.label }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">Status</dt>
+                        <dd class="capitalize">
+                            {{
+                                label(permitApplication.permit_artifact.status)
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Authority review
+                        </dt>
+                        <dd>
+                            {{
+                                permitApplication.permit_artifact
+                                    .ready_for_authority_review
+                                    ? 'Ready'
+                                    : 'Not ready'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Legal effect
+                        </dt>
+                        <dd>
+                            {{
+                                permitApplication.permit_artifact
+                                    .can_make_legally_effective
+                                    ? 'Effective'
+                                    : 'Not legally effective'
+                            }}
+                        </dd>
+                    </div>
+                    <div class="md:col-span-2">
+                        <dt class="text-xs text-muted-foreground">
+                            Verification reference
+                        </dt>
+                        <dd class="font-mono text-xs break-all">
+                            {{
+                                permitApplication.permit_artifact
+                                    .verification_reference
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Verification status
+                        </dt>
+                        <dd class="capitalize">
+                            {{
+                                label(
+                                    permitApplication.permit_artifact
+                                        .verification_status,
+                                )
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Can issue / release
+                        </dt>
+                        <dd>
+                            {{
+                                permitApplication.permit_artifact.can_issue ||
+                                permitApplication.permit_artifact.can_release
+                                    ? 'Yes'
+                                    : 'No'
+                            }}
+                        </dd>
+                    </div>
+                </dl>
+
+                <p class="mt-3 text-sm text-muted-foreground">
+                    {{ permitApplication.permit_artifact.policy_note }}
+                </p>
+                <p class="mt-2 text-sm text-muted-foreground">
+                    {{ permitApplication.permit_artifact.artifact_statement }}
+                </p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <Badge
+                        v-for="blocker in permitApplication.permit_artifact
+                            .blocked_by"
+                        :key="blocker"
+                        variant="outline"
+                        class="capitalize"
+                    >
+                        {{ label(blocker) }}
+                    </Badge>
                 </div>
             </section>
 

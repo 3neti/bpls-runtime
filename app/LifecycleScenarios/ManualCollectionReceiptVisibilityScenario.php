@@ -11,6 +11,7 @@ use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\CreateStaffPermitApplication;
 use App\Actions\DescribeOnlinePaymentBoundary;
+use App\Actions\DescribePermitArtifact;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\DescribeReceiptVoidBoundary;
@@ -55,6 +56,7 @@ final class ManualCollectionReceiptVisibilityScenario
         private readonly BuildCollectionsByRevenueSourceReport $buildCollectionsByRevenueSourceReport,
         private readonly BuildPaidEstablishmentsReport $buildPaidEstablishmentsReport,
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
+        private readonly DescribePermitArtifact $describePermitArtifact,
         private readonly DescribePermitReleaseReadiness $describeReleaseReadiness,
         private readonly DescribePermitVerificationBoundary $describeVerificationBoundary,
         private readonly DescribeReceiptVoidBoundary $describeReceiptVoidBoundary,
@@ -136,6 +138,7 @@ final class ManualCollectionReceiptVisibilityScenario
             'clearances' => fn ($query) => $query->orderBy('id'),
         ]);
         $releaseReadiness = $this->describeReleaseReadiness->handle($permitApplication);
+        $permitArtifact = $this->describePermitArtifact->handle($permitApplication);
         $releaseBlocked = false;
 
         try {
@@ -180,6 +183,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('receipt-void-blocked', 'Attempt receipt void through receipt policy boundary action', ['void_blocked' => true, 'receipt_status' => ReceiptStatus::Issued->value, 'collection_status' => TreasuryCollectionStatus::Receipted->value], ['void_blocked' => $receiptVoidBlocked, 'receipt_status' => $receipt->status->value, 'collection_status' => $collection->status->value, 'receipt_id' => $receipt->id]),
             $this->step('clearance-checklist-completed', 'Complete clearance checklist through clearance actions', ['completed_clearances' => 3, 'all_completed' => true], ['completed_clearances' => $completedClearances, 'all_completed' => $permitApplication->clearances->every(fn ($clearance): bool => $clearance->status === PermitClearanceStatus::Completed)]),
             $this->step('release-ready-for-authority-review', 'Describe release readiness without issuing permit', ['ready_for_authority_review' => true, 'can_release' => false], ['ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'], 'can_release' => $releaseReadiness['can_release']]),
+            $this->step('permit-artifact-available-for-authority-review', 'Describe generated permit artifact without issuing permit', ['status' => 'generated_artifact_available', 'ready_for_authority_review' => true, 'can_issue' => false, 'can_release' => false], ['status' => $permitArtifact['status'], 'ready_for_authority_review' => $permitArtifact['ready_for_authority_review'], 'can_issue' => $permitArtifact['can_issue'], 'can_release' => $permitArtifact['can_release']]),
             $this->step('permit-release-blocked', 'Attempt permit release through release boundary action', ['release_blocked' => true, 'application_status' => PermitApplicationStatus::PendingPayment->value], ['release_blocked' => $releaseBlocked, 'application_status' => $permitApplication->status->value]),
         ];
 
@@ -240,6 +244,7 @@ final class ManualCollectionReceiptVisibilityScenario
             'receipt_void_boundary_reference' => $receiptVoidBoundary['reference'],
             'application_form_pdf_url' => route('staff.permit-applications.application-form.pdf', $permitApplication, false),
             'permit_pdf_url' => route('staff.permit-applications.permit.pdf', $permitApplication, false),
+            'permit_artifact_status' => $permitArtifact['status'],
             'permit_verification_reference' => $verificationBoundary['reference'],
             'permit_verification_url' => route('public.permits.verify', [
                 'permitApplication' => $permitApplication,
@@ -297,6 +302,7 @@ final class ManualCollectionReceiptVisibilityScenario
                 ->values()
                 ->all(),
             'release_policy_boundary' => $permitApplication->metadata['release_policy_boundary'] ?? null,
+            'permit_artifact' => $permitArtifact,
             'release_readiness' => $releaseReadiness,
             'verification_boundary' => $verificationBoundary,
             'run_id' => $runId,
@@ -348,6 +354,7 @@ final class ManualCollectionReceiptVisibilityScenario
         $paidEstablishmentRow = collect($paidEstablishmentsReport['rows'])
             ->firstWhere('application_number', $permitApplication->application_number);
         $releaseReadiness = $this->describeReleaseReadiness->handle($permitApplication);
+        $permitArtifact = $this->describePermitArtifact->handle($permitApplication);
         $verificationBoundary = $this->describeVerificationBoundary->handle($permitApplication);
         $receiptVoidBoundary = $this->describeReceiptVoidBoundary->handle($receipt);
         $browserReport = $artifactStore->readJson('browser/report.json') ?? [
@@ -374,6 +381,8 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('audit-clearances-completed', 'Clearance checklist evidence is complete', ['completed_clearances' => 3, 'all_completed' => true], ['completed_clearances' => $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count(), 'all_completed' => $permitApplication->clearances->isNotEmpty() && $permitApplication->clearances->every(fn ($clearance): bool => $clearance->status === PermitClearanceStatus::Completed)]),
             $this->step('audit-release-readiness', 'Release readiness is ready for authority review but not releasable', ['ready_for_authority_review' => true, 'can_release' => false], ['ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'], 'can_release' => $releaseReadiness['can_release']]),
             $this->step('audit-authority-boundary', 'Authority boundary separates software evidence from human issuance authority', ['status' => 'ready_for_authority_review', 'artifact_statement' => 'Generated permit artifacts support authority review but do not issue, release, or make a permit legally effective.'], ['status' => $releaseReadiness['authority_boundary']['status'], 'artifact_statement' => $releaseReadiness['authority_boundary']['artifact_statement']]),
+            $this->step('audit-permit-artifact', 'Generated permit artifact remains review evidence and not issuance', ['status' => 'generated_artifact_available', 'ready_for_authority_review' => true, 'can_issue' => false, 'can_release' => false, 'can_make_legally_effective' => false], ['status' => $permitArtifact['status'], 'ready_for_authority_review' => $permitArtifact['ready_for_authority_review'], 'can_issue' => $permitArtifact['can_issue'], 'can_release' => $permitArtifact['can_release'], 'can_make_legally_effective' => $permitArtifact['can_make_legally_effective']]),
+            $this->step('audit-browser-permit-artifact', 'Browser evidence observed the same permit artifact boundary', ['permit_pdf_url' => $permitArtifact['permit_pdf_url'], 'verification_reference' => $permitArtifact['verification_reference'], 'panel_visible' => true, 'not_legally_effective_visible' => true, 'open_affordance_visible' => true], ['permit_pdf_url' => data_get($browserReport, 'permit_artifact.permit_pdf_url'), 'verification_reference' => data_get($browserReport, 'permit_artifact.verification_reference'), 'panel_visible' => data_get($browserReport, 'permit_artifact.panel_visible'), 'not_legally_effective_visible' => data_get($browserReport, 'permit_artifact.not_legally_effective_visible'), 'open_affordance_visible' => data_get($browserReport, 'permit_artifact.open_affordance_visible')]),
             $this->step('audit-release-boundary', 'Permit release remains blocked by explicit policy boundary', ['status' => PermitApplicationStatus::PendingPayment->value, 'blocked_transition' => PermitApplicationStatus::Released->value], ['status' => $permitApplication->status->value, 'blocked_transition' => $permitApplication->metadata['release_policy_boundary']['blocked_transition'] ?? null]),
             $this->step('audit-browser-application-form-pdf', 'Browser evidence confirms application form artifact renders exact intake facts', ['application_number' => $permitApplication->application_number, 'available' => true], ['application_number' => data_get($browserReport, 'documents.application_form.application_number'), 'available' => (bool) data_get($browserReport, 'documents.application_form.available')]),
             $this->step('audit-browser-assessment-pdf', 'Browser evidence confirms assessment artifact renders exact persisted assessment snapshot', ['assessment_id' => $assessment->id, 'total_amount_cents' => $assessment->total_amount_cents, 'available' => true], ['assessment_id' => data_get($browserReport, 'documents.assessment.assessment_id'), 'total_amount_cents' => data_get($browserReport, 'documents.assessment.total_amount_cents'), 'available' => (bool) data_get($browserReport, 'documents.assessment.available')]),
@@ -442,6 +451,7 @@ final class ManualCollectionReceiptVisibilityScenario
                     ->values()
                     ->all(),
                 'release_policy_boundary' => $permitApplication->metadata['release_policy_boundary'] ?? null,
+                'permit_artifact' => $permitArtifact,
                 'release_readiness' => $releaseReadiness,
                 'verification_boundary' => $verificationBoundary,
             ],

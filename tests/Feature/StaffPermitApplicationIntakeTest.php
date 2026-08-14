@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\CompletePermitClearance;
+use App\Actions\DescribePermitArtifact;
 use App\Actions\DescribePermitDocumentConfiguration;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
@@ -345,6 +346,14 @@ test('staff users with view permission can review a permit application', functio
             ->where('can.update_permit_application_status', false)
             ->where('can.view_permit_documents', true)
             ->where('permitDocumentGaps.0', 'Generated application form artifact captures current rescue intake facts only.')
+            ->where('permitApplication.permit_artifact.label', "Mayor's Permit Artifact")
+            ->where('permitApplication.permit_artifact.status', 'generated_artifact_available')
+            ->where('permitApplication.permit_artifact.available', true)
+            ->where('permitApplication.permit_artifact.permit_pdf_url', route('staff.permit-applications.permit.pdf', $application, false))
+            ->where('permitApplication.permit_artifact.verification_status', 'artifact_only')
+            ->where('permitApplication.permit_artifact.can_issue', false)
+            ->where('permitApplication.permit_artifact.can_release', false)
+            ->where('permitApplication.permit_artifact.can_make_legally_effective', false)
             ->where('permitApplication.verification_boundary.can_verify_release', false)
         );
 });
@@ -452,6 +461,15 @@ test('release readiness evidence can be ready for authority review without permi
         ->and($readiness['authority_boundary']['human_authority_decides'])->toContain('permit_legally_issued')
         ->and($readiness['authority_boundary']['software_records'])->toContain('authority_decision')
         ->and($readiness['authority_boundary']['artifact_statement'])->toContain('do not issue, release, or make a permit legally effective');
+    $artifact = app(DescribePermitArtifact::class)->handle($application);
+
+    expect($artifact['ready_for_authority_review'])->toBeTrue()
+        ->and($artifact['can_issue'])->toBeFalse()
+        ->and($artifact['can_release'])->toBeFalse()
+        ->and($artifact['can_make_legally_effective'])->toBeFalse()
+        ->and($artifact['authority_boundary_status'])->toBe('ready_for_authority_review')
+        ->and($artifact['permit_pdf_url'])->toBe(route('staff.permit-applications.permit.pdf', $application, false))
+        ->and($artifact['policy_note'])->toContain('do not issue, release, or make a permit legally effective');
 
     $this->actingAs($user)
         ->get(route('staff.permit-applications.show', $application))
@@ -463,6 +481,9 @@ test('release readiness evidence can be ready for authority review without permi
             ->where('permitApplication.release_readiness.prerequisites.receipt_issued', true)
             ->where('permitApplication.release_readiness.authority_boundary.status', 'ready_for_authority_review')
             ->where('permitApplication.release_readiness.authority_boundary.software_knows.payment_completed', true)
+            ->where('permitApplication.permit_artifact.ready_for_authority_review', true)
+            ->where('permitApplication.permit_artifact.can_issue', false)
+            ->where('permitApplication.permit_artifact.authority_boundary_status', 'ready_for_authority_review')
         );
 });
 

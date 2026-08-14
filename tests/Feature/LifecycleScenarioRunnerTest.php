@@ -308,6 +308,7 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($firstManifest['resources']['application_form_pdf_url'])->toBe('/staff/permit-applications/'.$firstManifest['resources']['permit_application_id'].'/application-form.pdf')
         ->and($firstManifest['resources']['assessment_pdf_url'])->toBe('/staff/assessments/'.$firstManifest['resources']['assessment_id'].'/pdf')
         ->and($firstManifest['resources']['assessment_total_amount_cents'])->toBe(PermitApplication::query()->findOrFail($firstManifest['resources']['permit_application_id'])->assessments()->firstOrFail()->total_amount_cents)
+        ->and($firstManifest['resources']['permit_artifact_status'])->toBe('generated_artifact_available')
         ->and($firstManifest['resources']['permit_verification_reference'])->toStartWith('PVA-'.$firstManifest['resources']['permit_application_id'].'-')
         ->and($firstManifest['resources']['permit_verification_url'])->toContain($firstManifest['resources']['permit_verification_reference'])
         ->and($firstManifest['resources']['receipt_void_boundary_reference'])->toStartWith('RVB-'.$firstManifest['resources']['record_id'].'-')
@@ -347,6 +348,7 @@ test('new permit lifecycle scenario executes real domain actions to authority bo
         ->and($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
         ->and($firstManifest['resources']['permit_application_id'])->toBe($secondManifest['resources']['permit_application_id'])
         ->and($firstManifest['resources']['collection_id'])->toBe($secondManifest['resources']['collection_id'])
+        ->and($firstManifest['resources']['permit_artifact_status'])->toBe('generated_artifact_available')
         ->and($firstManifest['resources']['permit_verification_reference'])->toStartWith('PVA-'.$firstManifest['resources']['permit_application_id'].'-')
         ->and($firstManifest['resources']['receipt_void_boundary_reference'])->toStartWith('RVB-'.$firstManifest['resources']['record_id'].'-')
         ->and($permitApplication->status)->toBe(PermitApplicationStatus::PendingPayment)
@@ -443,6 +445,13 @@ test('manual collection receipt scenario audit compares browser evidence with ca
             'can_verify_release' => false,
             'released' => false,
         ],
+        'permit_artifact' => [
+            'permit_pdf_url' => $manifest['resources']['permit_pdf_url'],
+            'verification_reference' => $verification['reference'],
+            'panel_visible' => true,
+            'not_legally_effective_visible' => true,
+            'open_affordance_visible' => true,
+        ],
         'documents' => [
             'application_form' => [
                 'available' => true,
@@ -474,6 +483,7 @@ test('manual collection receipt scenario audit compares browser evidence with ca
         ->audit->toBe('passed')
         ->passed->toBeTrue()
         ->and($audited['resources']['permit_verification_reference'])->toBe($verification['reference'])
+        ->and($audited['resources']['permit_artifact_status'])->toBe('generated_artifact_available')
         ->and($audited['resources']['receipt_void_boundary_reference'])->toBe($voidBoundary['reference'])
         ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
         ->and($artifactStore->exists('summary.html'))->toBeTrue();

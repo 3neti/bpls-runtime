@@ -50,6 +50,7 @@ const failedRequests = [];
 const actionLog = [];
 const checks = [];
 const screenshots = {};
+const permitArtifactEvidence = {};
 const verificationEvidence = {};
 const receiptVoidBoundaryEvidence = {};
 const documentEvidence = {};
@@ -166,6 +167,7 @@ const report = {
     checks,
     console_errors: consoleErrors,
     failed_requests: failedRequests,
+    permit_artifact: permitArtifactEvidence,
     verification: verificationEvidence,
     receipt_void_boundary: receiptVoidBoundaryEvidence,
     documents: documentEvidence,
@@ -1956,6 +1958,38 @@ async function inspectManualReceiptPermitReleaseBoundary(
         .first()
         .isVisible()
         .catch(() => false);
+    const permitArtifactPanelVisible = await targetPage
+        .getByText('Permit artifact', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const permitArtifactLabelVisible = await targetPage
+        .getByText("Mayor's Permit Artifact", { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const permitArtifactStatusVisible = await targetPage
+        .getByText('generated artifact available', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const permitArtifactLegalEffectVisible = await targetPage
+        .getByText('Not legally effective', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const permitArtifactReferenceVisible = await targetPage
+        .getByText(manifest.resources.permit_verification_reference, {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const permitArtifactOpenVisible = await targetPage
+        .getByRole('link', { name: /open artifact/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
 
     checks.push(
         check(
@@ -2109,6 +2143,67 @@ async function inspectManualReceiptPermitReleaseBoundary(
             true,
             artifactStatementVisible,
         ),
+    );
+    checks.push(
+        check(
+            'permit-artifact-panel-visible',
+            'Permit detail shows the permit artifact panel',
+            true,
+            permitArtifactPanelVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'permit-artifact-label-visible',
+            'Permit artifact panel shows the generated artifact label',
+            true,
+            permitArtifactLabelVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'permit-artifact-status-visible',
+            'Permit artifact panel shows generated artifact status',
+            true,
+            permitArtifactStatusVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'permit-artifact-not-legally-effective-visible',
+            'Permit artifact panel states artifact is not legally effective',
+            true,
+            permitArtifactLegalEffectVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'permit-artifact-reference-visible',
+            'Permit artifact panel shows exact verification reference',
+            true,
+            permitArtifactReferenceVisible,
+            {
+                reference: manifest.resources.permit_verification_reference,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'permit-artifact-open-affordance-visible',
+            'Permit artifact panel exposes the permit artifact PDF affordance',
+            true,
+            permitArtifactOpenVisible,
+            {
+                url: `${targetBaseUrl}${manifest.resources.permit_pdf_url}`,
+            },
+        ),
+    );
+    reportPermitArtifact(
+        manifest.resources.permit_pdf_url,
+        manifest.resources.permit_verification_reference,
+        permitArtifactPanelVisible,
+        permitArtifactLegalEffectVisible,
+        permitArtifactOpenVisible,
     );
     await screenshot(
         targetPage,
@@ -2501,6 +2596,21 @@ function reportVerification(
     verificationEvidence.public_status = publicStatus;
     verificationEvidence.can_verify_release = canVerifyRelease;
     verificationEvidence.released = released;
+}
+
+function reportPermitArtifact(
+    permitPdfUrl,
+    verificationReference,
+    panelVisible,
+    notLegallyEffectiveVisible,
+    openAffordanceVisible,
+) {
+    permitArtifactEvidence.permit_pdf_url = permitPdfUrl;
+    permitArtifactEvidence.verification_reference = verificationReference;
+    permitArtifactEvidence.panel_visible = panelVisible;
+    permitArtifactEvidence.not_legally_effective_visible =
+        notLegallyEffectiveVisible;
+    permitArtifactEvidence.open_affordance_visible = openAffordanceVisible;
 }
 
 function reportReceiptVoidBoundary(

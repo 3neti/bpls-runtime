@@ -7,6 +7,7 @@ use App\Actions\CancelPermitApplication;
 use App\Actions\CompletePermitClearance;
 use App\Actions\CreateStaffPermitApplication;
 use App\Actions\DescribeAmendmentPolicyBoundary;
+use App\Actions\DescribePermitArtifact;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\DescribeRenewalPolicyBoundary;
@@ -37,6 +38,7 @@ class PermitApplicationController extends Controller
     public function __construct(
         private readonly DescribePermitReleaseReadiness $describeReleaseReadiness,
         private readonly DescribePermitVerificationBoundary $describeVerificationBoundary,
+        private readonly DescribePermitArtifact $describePermitArtifact,
         private readonly DescribeRenewalPolicyBoundary $describeRenewalPolicyBoundary,
         private readonly DescribeAmendmentPolicyBoundary $describeAmendmentPolicyBoundary,
         private readonly DescribeTransferPolicyBoundary $describeTransferPolicyBoundary,
@@ -246,6 +248,7 @@ class PermitApplicationController extends Controller
             'retirement_policy_boundary' => $permitApplication->metadata['retirement_policy_boundary']
                 ?? $this->describeRetirementPolicyBoundary->handle($permitApplication->type),
             'release_policy_boundary' => $permitApplication->metadata['release_policy_boundary'] ?? null,
+            'permit_artifact' => $this->describePermitArtifact->handle($permitApplication),
             'release_readiness' => $this->describeReleaseReadiness->handle($permitApplication),
             'verification_boundary' => $this->describeVerificationBoundary->handle($permitApplication),
             'clearance_summary' => [
