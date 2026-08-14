@@ -61,6 +61,7 @@ final class ScenarioActorResolver
                 UserPermission::ViewCollections,
                 UserPermission::IssueReceipts,
                 UserPermission::ViewReceipts,
+                UserPermission::VoidReceipts,
                 UserPermission::UpdatePermitApplicationStatus,
                 UserPermission::CompletePermitClearances,
                 UserPermission::ManageStoryboards,

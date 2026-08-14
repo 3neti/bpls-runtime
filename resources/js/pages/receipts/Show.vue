@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, Ban, FileText, Printer } from '@lucide/vue';
+import { ArrowLeft, Ban, FileText, LockKeyhole, Printer } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -31,6 +31,14 @@ type Receipt = {
     issued_by: string | null;
     remarks: string | null;
     source_snapshot: Record<string, unknown>;
+    void_boundary: {
+        reference: string;
+        status: string;
+        can_void: boolean;
+        receipt_status: string;
+        collection_status: string;
+        policy_note: string;
+    };
     collection: {
         id: number;
         status: string;
@@ -123,7 +131,9 @@ function printReceipt(): void {
                         class="w-fit px-0"
                     >
                         <Link
-                            :href="paymentScheduleShow(receipt.payment_schedule.id)"
+                            :href="
+                                paymentScheduleShow(receipt.payment_schedule.id)
+                            "
                         >
                             <ArrowLeft />
                             Back
@@ -189,7 +199,9 @@ function printReceipt(): void {
                         >
                             Receipt {{ receipt.receipt_number }}
                         </h2>
-                        <p class="text-sm text-muted-foreground print:text-black">
+                        <p
+                            class="text-sm text-muted-foreground print:text-black"
+                        >
                             Business Permit and Licensing System
                         </p>
                     </div>
@@ -420,6 +432,66 @@ function printReceipt(): void {
                         Remarks
                     </div>
                     <p class="mt-1 text-sm">{{ receipt.remarks }}</p>
+                </div>
+
+                <div class="mt-6 border-t pt-4 print:hidden">
+                    <div class="mb-3 flex items-center gap-2">
+                        <LockKeyhole class="size-4 text-muted-foreground" />
+                        <div
+                            class="text-xs font-medium text-muted-foreground uppercase"
+                        >
+                            Void / reversal boundary
+                        </div>
+                    </div>
+                    <dl class="grid gap-3 text-sm md:grid-cols-4">
+                        <div>
+                            <dt class="text-xs text-muted-foreground">
+                                Reference
+                            </dt>
+                            <dd class="font-mono text-xs break-all">
+                                {{ receipt.void_boundary.reference }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground">
+                                Status
+                            </dt>
+                            <dd class="capitalize">
+                                {{ receipt.void_boundary.status }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground">
+                                Can void
+                            </dt>
+                            <dd>
+                                {{
+                                    receipt.void_boundary.can_void
+                                        ? 'Yes'
+                                        : 'No'
+                                }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground">
+                                Receipt remains
+                            </dt>
+                            <dd class="capitalize">
+                                {{ receipt.void_boundary.receipt_status }}
+                            </dd>
+                        </div>
+                        <div class="md:col-span-4">
+                            <dt class="text-xs text-muted-foreground">
+                                Collection remains
+                            </dt>
+                            <dd class="capitalize">
+                                {{ receipt.void_boundary.collection_status }}
+                            </dd>
+                        </div>
+                    </dl>
+                    <p class="mt-3 text-sm text-muted-foreground">
+                        {{ receipt.void_boundary.policy_note }}
+                    </p>
                 </div>
 
                 <div class="mt-6 border-t pt-4 print:hidden">

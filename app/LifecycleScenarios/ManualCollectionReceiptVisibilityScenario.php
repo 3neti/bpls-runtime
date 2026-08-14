@@ -9,9 +9,11 @@ use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\CreateStaffPermitApplication;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
+use App\Actions\DescribeReceiptVoidBoundary;
 use App\Actions\EnsurePermitApplicationClearances;
 use App\Actions\IssueManualCollectionReceipt;
 use App\Actions\RecordPaymentScheduleCollection;
+use App\Actions\VoidReceipt;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
@@ -23,6 +25,7 @@ use App\Enums\ReceiptStatus;
 use App\Enums\TreasuryCollectionMethod;
 use App\Enums\TreasuryCollectionStatus;
 use App\Exceptions\UnresolvedPermitReleasePolicy;
+use App\Exceptions\UnresolvedReceiptPolicy;
 use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
 use App\Models\PaymentSchedule;
@@ -45,6 +48,8 @@ final class ManualCollectionReceiptVisibilityScenario
         private readonly AttemptPermitApplicationRelease $attemptRelease,
         private readonly DescribePermitReleaseReadiness $describeReleaseReadiness,
         private readonly DescribePermitVerificationBoundary $describeVerificationBoundary,
+        private readonly DescribeReceiptVoidBoundary $describeReceiptVoidBoundary,
+        private readonly VoidReceipt $voidReceipt,
         private readonly ScenarioManifest $scenarioManifest,
         private readonly ScenarioSummaryRenderer $summaryRenderer,
     ) {}
@@ -100,6 +105,16 @@ final class ManualCollectionReceiptVisibilityScenario
             'receipt_number' => 'SCENARIO-OR-'.$this->safeRunReference($runId),
             'remarks' => 'Lifecycle scenario manual receipt.',
         ], $operator);
+        $receiptVoidBlocked = false;
+
+        try {
+            $this->voidReceipt->handle($receipt, $operator);
+        } catch (UnresolvedReceiptPolicy) {
+            $receiptVoidBlocked = true;
+        }
+
+        $receipt->refresh();
+        $collection->refresh();
         $permitApplication = $this->ensureClearances->handle($permitApplication);
         $completedClearances = 0;
 
@@ -122,8 +137,10 @@ final class ManualCollectionReceiptVisibilityScenario
 
         $paymentSchedule->refresh();
         $collection->refresh();
+        $receipt->refresh();
         $permitApplication = $paymentSchedule->permitApplication()->firstOrFail();
         $verificationBoundary = $this->describeVerificationBoundary->handle($permitApplication);
+        $receiptVoidBoundary = $this->describeReceiptVoidBoundary->handle($receipt);
 
         $steps = [
             $this->step('actors-resolved', 'Resolve actual application users', ['operator_id' => $operator->id], ['operator_id' => $operator->id]),
@@ -132,6 +149,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('payment-schedule-prepared', 'Prepare payment schedule through payment schedule action', ['application_status' => PermitApplicationStatus::PendingPayment->value], ['application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id]),
             $this->step('collection-recorded', 'Record full over-the-counter collection through Treasury action', ['payment_schedule_status' => PaymentScheduleStatus::Paid->value, 'collection_status' => TreasuryCollectionStatus::PendingReceipt->value], ['payment_schedule_status' => $paymentSchedule->status->value, 'collection_status' => $collectionStatusBeforeReceipt->value, 'collection_id' => $collection->id]),
             $this->step('manual-receipt-issued', 'Issue manual receipt through receipt action', ['receipt_status' => ReceiptStatus::Issued->value, 'collection_status' => TreasuryCollectionStatus::Receipted->value], ['receipt_status' => $receipt->status->value, 'collection_status' => $collection->status->value, 'receipt_id' => $receipt->id]),
+            $this->step('receipt-void-blocked', 'Attempt receipt void through receipt policy boundary action', ['void_blocked' => true, 'receipt_status' => ReceiptStatus::Issued->value, 'collection_status' => TreasuryCollectionStatus::Receipted->value], ['void_blocked' => $receiptVoidBlocked, 'receipt_status' => $receipt->status->value, 'collection_status' => $collection->status->value, 'receipt_id' => $receipt->id]),
             $this->step('clearance-checklist-completed', 'Complete clearance checklist through clearance actions', ['completed_clearances' => 3, 'all_completed' => true], ['completed_clearances' => $completedClearances, 'all_completed' => $permitApplication->clearances->every(fn ($clearance): bool => $clearance->status === PermitClearanceStatus::Completed)]),
             $this->step('release-ready-for-authority-review', 'Describe release readiness without issuing permit', ['ready_for_authority_review' => true, 'can_release' => false], ['ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'], 'can_release' => $releaseReadiness['can_release']]),
             $this->step('permit-release-blocked', 'Attempt permit release through release boundary action', ['release_blocked' => true, 'application_status' => PermitApplicationStatus::PendingPayment->value], ['release_blocked' => $releaseBlocked, 'application_status' => $permitApplication->status->value]),
@@ -154,6 +172,7 @@ final class ManualCollectionReceiptVisibilityScenario
             'payment_schedule_url' => route('staff.payment-schedules.show', $paymentSchedule, false),
             'receipt_url' => route('staff.receipts.show', $receipt, false),
             'receipt_pdf_url' => route('staff.receipts.pdf', $receipt, false),
+            'receipt_void_boundary_reference' => $receiptVoidBoundary['reference'],
             'permit_pdf_url' => route('staff.permit-applications.permit.pdf', $permitApplication, false),
             'permit_verification_reference' => $verificationBoundary['reference'],
             'permit_verification_url' => route('public.permits.verify', [
@@ -179,6 +198,7 @@ final class ManualCollectionReceiptVisibilityScenario
             'receipt_id' => $receipt->id,
             'receipt_number' => $receipt->receipt_number,
             'receipt_status' => $receipt->status->value,
+            'receipt_void_boundary' => $receiptVoidBoundary,
             'clearances' => $permitApplication->clearances
                 ->map(fn ($clearance): array => [
                     'id' => $clearance->id,
@@ -220,6 +240,7 @@ final class ManualCollectionReceiptVisibilityScenario
             ->findOrFail($manifest['resources']['permit_application_id']);
         $releaseReadiness = $this->describeReleaseReadiness->handle($permitApplication);
         $verificationBoundary = $this->describeVerificationBoundary->handle($permitApplication);
+        $receiptVoidBoundary = $this->describeReceiptVoidBoundary->handle($receipt);
         $browserReport = $artifactStore->readJson('browser/report.json') ?? [
             'result' => [
                 'passed' => false,
@@ -231,6 +252,8 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('audit-payment-schedule-paid', 'Payment schedule is paid', ['status' => PaymentScheduleStatus::Paid->value], ['status' => $paymentSchedule->status->value]),
             $this->step('audit-collection-receipted', 'Collection is receipted', ['status' => TreasuryCollectionStatus::Receipted->value], ['status' => $collection->status->value]),
             $this->step('audit-receipt-issued', 'Manual receipt is issued', ['status' => ReceiptStatus::Issued->value, 'numbering_authority' => 'manual'], ['status' => $receipt->status->value, 'numbering_authority' => $receipt->numbering_authority]),
+            $this->step('audit-receipt-void-boundary', 'Receipt void boundary remains blocked without financial mutation', ['reference' => $receiptVoidBoundary['reference'], 'status' => 'blocked', 'can_void' => false, 'receipt_status' => ReceiptStatus::Issued->value, 'collection_status' => TreasuryCollectionStatus::Receipted->value], ['reference' => $manifest['resources']['receipt_void_boundary_reference'] ?? null, 'status' => $receiptVoidBoundary['status'], 'can_void' => $receiptVoidBoundary['can_void'], 'receipt_status' => $receipt->status->value, 'collection_status' => $collection->status->value]),
+            $this->step('audit-browser-receipt-void-boundary', 'Browser evidence observed the same receipt void boundary', ['reference' => $receiptVoidBoundary['reference'], 'status' => 'blocked', 'can_void' => false], ['reference' => data_get($browserReport, 'receipt_void_boundary.reference'), 'status' => data_get($browserReport, 'receipt_void_boundary.status'), 'can_void' => data_get($browserReport, 'receipt_void_boundary.can_void')]),
             $this->step('audit-clearances-completed', 'Clearance checklist evidence is complete', ['completed_clearances' => 3, 'all_completed' => true], ['completed_clearances' => $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count(), 'all_completed' => $permitApplication->clearances->isNotEmpty() && $permitApplication->clearances->every(fn ($clearance): bool => $clearance->status === PermitClearanceStatus::Completed)]),
             $this->step('audit-release-readiness', 'Release readiness is ready for authority review but not releasable', ['ready_for_authority_review' => true, 'can_release' => false], ['ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'], 'can_release' => $releaseReadiness['can_release']]),
             $this->step('audit-release-boundary', 'Permit release remains blocked by explicit policy boundary', ['status' => PermitApplicationStatus::PendingPayment->value, 'blocked_transition' => PermitApplicationStatus::Released->value], ['status' => $permitApplication->status->value, 'blocked_transition' => $permitApplication->metadata['release_policy_boundary']['blocked_transition'] ?? null]),
@@ -266,6 +289,7 @@ final class ManualCollectionReceiptVisibilityScenario
                 'receipt_number' => $receipt->receipt_number,
                 'receipt_status' => $receipt->status->value,
                 'numbering_authority' => $receipt->numbering_authority,
+                'receipt_void_boundary' => $receiptVoidBoundary,
                 'permit_application_status' => $permitApplication->status->value,
                 'clearances' => $permitApplication->clearances
                     ->map(fn ($clearance): array => [
@@ -367,6 +391,7 @@ final class ManualCollectionReceiptVisibilityScenario
                 'payment_schedule_id' => $paymentSchedule->id,
                 'collection_id' => $collection->id,
                 'permit_verification_reference' => $this->describeVerificationBoundary->handle($permitApplication)['reference'],
+                'receipt_void_boundary_reference' => $this->describeReceiptVoidBoundary->handle($receipt)['reference'],
             ],
             'frames' => [
                 [
@@ -385,6 +410,12 @@ final class ManualCollectionReceiptVisibilityScenario
                     'title' => 'Manual receipt is issued',
                     'description' => 'The scenario issues a manual receipt with a deterministic run reference.',
                     'dialogue' => 'Automatic numbering remains unresolved; this verifies the explicit manual-number boundary.',
+                    'duration_seconds' => 5,
+                ],
+                [
+                    'title' => 'Receipt void remains blocked',
+                    'description' => 'The scenario attempts receipt voiding through the receipt policy boundary action.',
+                    'dialogue' => 'The receipt and collection remain unchanged because reversal and reconciliation policy are unresolved.',
                     'duration_seconds' => 5,
                 ],
                 [

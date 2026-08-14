@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\DescribeReceiptVoidBoundary;
 use App\Actions\RenderReceiptPdf;
 use App\Enums\FeeRuleCategory;
 use App\Enums\PaymentScheduleLineStatus;
@@ -43,10 +44,28 @@ test('staff users with view receipt permission can view receipt detail evidence'
             ->where('receipt.business.owner.name', 'Codex Owner')
             ->where('receipt.allocations.0.code', 'MAYOR-PERMIT')
             ->where('receipt.allocations.0.amount_cents', 12_500)
+            ->where('receipt.void_boundary.status', 'blocked')
+            ->where('receipt.void_boundary.can_void', false)
+            ->where('receipt.void_boundary.receipt_status', 'issued')
+            ->where('receipt.void_boundary.collection_status', 'receipted')
             ->where('policyGaps.0', 'Automatic receipt numbering authority remains unresolved.')
             ->where('policyGaps.1', 'This is a print-friendly receipt view, not the final official PDF layout.')
             ->where('can.void_receipts', false)
         );
+});
+
+test('receipt void boundary descriptor is deterministic and does not authorize voiding', function () {
+    $receipt = receiptDocumentFixture();
+
+    $boundary = app(DescribeReceiptVoidBoundary::class)->handle($receipt);
+
+    expect($boundary['reference'])->toStartWith('RVB-'.$receipt->id.'-')
+        ->and($boundary['status'])->toBe('blocked')
+        ->and($boundary['can_void'])->toBeFalse()
+        ->and($boundary['receipt_status'])->toBe('issued')
+        ->and($boundary['collection_status'])->toBe('receipted')
+        ->and($boundary['policy_note'])->toContain('reconciliation policy remain unresolved')
+        ->and(app(DescribeReceiptVoidBoundary::class)->handle($receipt->fresh()))->toBe($boundary);
 });
 
 test('staff users with void receipt permission can see the unresolved void policy boundary', function () {

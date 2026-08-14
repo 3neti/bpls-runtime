@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\DescribePermitVerificationBoundary;
+use App\Actions\DescribeReceiptVoidBoundary;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\ReceiptStatus;
 use App\Enums\StoryboardExportFormat;
@@ -46,6 +47,7 @@ test('scenario registry discovers the manual collection receipt visibility scena
         ->and($scenario->expectations['payment_schedule_status'])->toBe('paid')
         ->and($scenario->expectations['collection_status'])->toBe('receipted')
         ->and($scenario->expectations['receipt_status'])->toBe('issued')
+        ->and($scenario->expectations['receipt_void_status'])->toBe('blocked')
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
@@ -226,6 +228,7 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($firstManifest['resources']['collection_id'])->toBe($secondManifest['resources']['collection_id'])
         ->and($firstManifest['resources']['permit_verification_reference'])->toStartWith('PVA-'.$firstManifest['resources']['permit_application_id'].'-')
         ->and($firstManifest['resources']['permit_verification_url'])->toContain($firstManifest['resources']['permit_verification_reference'])
+        ->and($firstManifest['resources']['receipt_void_boundary_reference'])->toStartWith('RVB-'.$firstManifest['resources']['record_id'].'-')
         ->and(Receipt::query()->count())->toBe(1)
         ->and(TreasuryCollection::query()->count())->toBe(1)
         ->and($receipt->status)->toBe(ReceiptStatus::Issued)
@@ -251,9 +254,19 @@ test('manual collection receipt scenario audit compares browser evidence with ca
     $verification = app(DescribePermitVerificationBoundary::class)->handle(
         PermitApplication::query()->findOrFail($manifest['resources']['permit_application_id']),
     );
+    $voidBoundary = app(DescribeReceiptVoidBoundary::class)->handle(
+        Receipt::query()->findOrFail($manifest['resources']['record_id']),
+    );
     $artifactStore->putJson('browser/report.json', [
         'result' => [
             'passed' => true,
+        ],
+        'receipt_void_boundary' => [
+            'reference' => $voidBoundary['reference'],
+            'status' => 'blocked',
+            'can_void' => false,
+            'receipt_status' => 'issued',
+            'collection_status' => 'receipted',
         ],
         'verification' => [
             'reference' => $verification['reference'],
@@ -277,6 +290,7 @@ test('manual collection receipt scenario audit compares browser evidence with ca
         ->audit->toBe('passed')
         ->passed->toBeTrue()
         ->and($audited['resources']['permit_verification_reference'])->toBe($verification['reference'])
+        ->and($audited['resources']['receipt_void_boundary_reference'])->toBe($voidBoundary['reference'])
         ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
@@ -404,6 +418,7 @@ function configuredScenarioUser(string $email): User
         UserPermission::ViewCollections,
         UserPermission::IssueReceipts,
         UserPermission::ViewReceipts,
+        UserPermission::VoidReceipts,
         UserPermission::UpdatePermitApplicationStatus,
         UserPermission::CompletePermitClearances,
         UserPermission::ManageStoryboards,

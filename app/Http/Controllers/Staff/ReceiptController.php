@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Staff;
 
+use App\Actions\DescribeReceiptVoidBoundary;
 use App\Actions\RenderReceiptPdf;
 use App\Actions\VoidReceipt;
 use App\Enums\UserPermission;
@@ -17,6 +18,10 @@ use Inertia\Response;
 
 class ReceiptController extends Controller
 {
+    public function __construct(
+        private readonly DescribeReceiptVoidBoundary $describeVoidBoundary,
+    ) {}
+
     public function show(Receipt $receipt): Response
     {
         Gate::authorize(UserPermission::ViewReceipts->value);
@@ -87,6 +92,7 @@ class ReceiptController extends Controller
             'issued_by' => $receipt->issuedBy?->name,
             'remarks' => $receipt->remarks,
             'source_snapshot' => $receipt->source_snapshot,
+            'void_boundary' => $this->describeVoidBoundary->handle($receipt),
             'collection' => [
                 'id' => $collection->id,
                 'status' => $collection->status->value,

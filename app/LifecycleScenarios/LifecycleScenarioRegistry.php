@@ -31,6 +31,7 @@ final class LifecycleScenarioRegistry
                     'payment_schedule_status' => 'paid',
                     'collection_status' => 'receipted',
                     'receipt_status' => 'issued',
+                    'receipt_void_status' => 'blocked',
                     'numbering_authority' => 'manual',
                     'external_calls' => 0,
                     'irreversible_actions' => false,

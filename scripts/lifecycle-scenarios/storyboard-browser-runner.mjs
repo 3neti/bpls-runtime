@@ -46,6 +46,7 @@ const actionLog = [];
 const checks = [];
 const screenshots = {};
 const verificationEvidence = {};
+const receiptVoidBoundaryEvidence = {};
 
 let browser;
 
@@ -135,6 +136,7 @@ const report = {
     console_errors: consoleErrors,
     failed_requests: failedRequests,
     verification: verificationEvidence,
+    receipt_void_boundary: receiptVoidBoundaryEvidence,
     artifacts: {
         screenshots,
     },
@@ -854,6 +856,47 @@ async function inspectManualReceiptDetail(targetPage, targetBaseUrl) {
         .first()
         .isVisible()
         .catch(() => false);
+    const voidBoundaryReference =
+        manifest.resources.receipt_void_boundary_reference;
+    const voidBoundaryVisible = await targetPage
+        .getByText('Void / reversal boundary', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const voidReferenceVisible = await targetPage
+        .getByText(voidBoundaryReference, { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const voidBlockedVisible = await targetPage
+        .getByText('blocked', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const canVoidNoVisible =
+        (await targetPage
+            .getByText('Can void', { exact: true })
+            .first()
+            .isVisible()
+            .catch(() => false)) &&
+        (await targetPage
+            .getByText('No', { exact: true })
+            .first()
+            .isVisible()
+            .catch(() => false));
+    const voidPolicyVisible = await targetPage
+        .getByText(
+            'Receipt void, reversal, receipt-number reuse, and reconciliation policy remain unresolved',
+            { exact: false },
+        )
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const voidButton = targetPage.getByRole('button', {
+        name: /void unavailable/i,
+    });
+    const voidButtonVisible = await voidButton.isVisible().catch(() => false);
+    const voidButtonDisabled = await voidButton.isDisabled().catch(() => false);
 
     checks.push(
         check(
@@ -887,6 +930,46 @@ async function inspectManualReceiptDetail(targetPage, targetBaseUrl) {
             true,
             policyGapVisible,
         ),
+    );
+    checks.push(
+        check(
+            'receipt-void-boundary-visible',
+            'Receipt detail shows unresolved void boundary',
+            true,
+            voidBoundaryVisible,
+            { reference: voidBoundaryReference },
+        ),
+    );
+    checks.push(
+        check(
+            'receipt-void-reference-visible',
+            'Receipt detail shows exact void boundary reference',
+            true,
+            voidReferenceVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'receipt-void-blocked-visible',
+            'Receipt detail shows voiding is blocked',
+            true,
+            voidBlockedVisible && canVoidNoVisible && voidPolicyVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'receipt-void-action-disabled',
+            'Receipt detail keeps void action disabled',
+            true,
+            voidButtonVisible && voidButtonDisabled,
+        ),
+    );
+    reportReceiptVoidBoundary(
+        voidBoundaryReference,
+        'blocked',
+        false,
+        'issued',
+        'receipted',
     );
     await screenshot(
         targetPage,
@@ -1385,6 +1468,20 @@ function reportVerification(
     verificationEvidence.public_status = publicStatus;
     verificationEvidence.can_verify_release = canVerifyRelease;
     verificationEvidence.released = released;
+}
+
+function reportReceiptVoidBoundary(
+    reference,
+    status,
+    canVoid,
+    receiptStatus,
+    collectionStatus,
+) {
+    receiptVoidBoundaryEvidence.reference = reference;
+    receiptVoidBoundaryEvidence.status = status;
+    receiptVoidBoundaryEvidence.can_void = canVoid;
+    receiptVoidBoundaryEvidence.receipt_status = receiptStatus;
+    receiptVoidBoundaryEvidence.collection_status = collectionStatus;
 }
 
 async function hasTitleInputValue(targetPage) {
