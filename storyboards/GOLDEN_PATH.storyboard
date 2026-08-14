@@ -1,0 +1,111 @@
+# Golden Path Storyboard
+
+Status: PLANNED
+
+Executable: No
+
+## Purpose
+
+The Golden Path is the intended canonical end-to-end permit journey for the BPLS rescue. It exists to communicate the destination of the project: a complete, evidence-backed business permit lifecycle that can eventually be demonstrated, browser verified, audited, and reviewed as a single coherent milestone.
+
+This artifact is intentionally a placeholder. It is not an implementation specification, database design, route map, or substitute for the domain model.
+
+## Current Status
+
+The Golden Path is not yet executable.
+
+The project has completed a unified new-permit lifecycle scenario through the authority boundary. That scenario proves that completed vertical slices can now compose into a larger lifecycle:
+
+1. application intake;
+2. assessment;
+3. payment schedule;
+4. manual Treasury collection;
+5. official receipt visibility;
+6. clearance completion;
+7. permit artifact generation;
+8. public artifact verification;
+9. explicit authority-boundary protection.
+
+The lifecycle stops before legal issuance and release because governing policy remains unresolved.
+
+## Why This Is Intentionally Incomplete
+
+The Golden Path must emerge from verified business behavior, not from premature design. It will become executable only after the individual lifecycle scenarios agree with the domain, browser UI, generated documents, audit evidence, and accepted business policy.
+
+This placeholder exists to identify the destination without inventing the missing policy.
+
+## Current Blockers
+
+- Authority boundary: the point where software readiness becomes a human/legal authority decision remains explicit.
+- Permit issuance policy: the rules that convert a ready permit artifact into an issued permit are unresolved.
+- Permit release semantics: the relationship among generated, issued, released, and legally effective permits remains unresolved.
+- Signatory authority: the officials, authority model, and signature rules are not yet fully reconciled.
+- QR verification semantics: a QR scan must not silently imply issuance, release, validity, or legal effect until policy is accepted.
+- Receipt numbering authority: the source of authority and numbering constraints for official receipts require clarification.
+- Remaining Treasury policy: billing groups, collections, reconciliation, voiding, online payment, and related Treasury behavior require further acceptance.
+- Production configuration and production data: final financial and migration parity require verified production evidence.
+
+## Relationship To Individual Lifecycle Scenarios
+
+Individual lifecycle scenarios remain the executable acceptance assets for specific slices of behavior. They should invoke the real domain actions, services, policies, database, generated documents, browser UI, and audit evidence.
+
+The Golden Path should not replace those scenarios. It should compose them.
+
+Conceptually:
+
+```text
+Vertical Slice
+        ↓
+Vertical Slice
+        ↓
+Vertical Slice
+        ↓
+Milestone Scenario
+        ↓
+Evidence Package
+        ↓
+Engineering Program Review
+```
+
+## Milestone Scenario
+
+A Milestone Scenario is a composed, reviewable business journey made from completed vertical slices. It proves that the system works across capability boundaries, not only inside one screen or one domain action.
+
+The Unified New Permit Lifecycle Scenario is expected to become the project's first Milestone Scenario. Its current evidence package is the first step toward that milestone, but it is not yet the final Golden Path.
+
+## Authority Boundary
+
+The current rescue explicitly distinguishes:
+
+```text
+Permit Artifact
+        ↓
+Ready For Authority Review
+        ↓
+Permit Issued
+        ↓
+Permit Released
+        ↓
+Permit Legally Effective
+```
+
+The software may prove that a permit artifact exists, payment is recorded, clearances are complete, and the record is ready for review. It must not automatically claim legal issuance, release, or effect until the governing policy is known and accepted.
+
+## Evidence Package Direction
+
+The first milestone evidence package should include only artifacts that support the engineering claim being made, such as:
+
+- scenario manifest;
+- browser report;
+- screenshots;
+- audit report;
+- generated documents;
+- storyboard;
+- reviewer summary;
+- parity-ledger evidence.
+
+Evidence should remain deterministic, reviewable, and free of secrets.
+
+## Guiding Principle
+
+Discover first. Build second. Verify continuously. Let the complete business journey emerge from disciplined implementation rather than from premature abstraction.
