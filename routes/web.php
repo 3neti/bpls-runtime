@@ -43,6 +43,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.clearances.complete');
         Route::get('fee-rules', [FeeRuleController::class, 'index'])
             ->name('fee-rules.index');
+        Route::get('fee-rules/{feeRule}', [FeeRuleController::class, 'show'])
+            ->name('fee-rules.show');
         Route::get('assessments/{assessment}', [PermitApplicationAssessmentController::class, 'show'])
             ->name('permit-applications.assessments.show');
         Route::get('assessments/{assessment}/pdf', [PermitApplicationAssessmentController::class, 'pdf'])

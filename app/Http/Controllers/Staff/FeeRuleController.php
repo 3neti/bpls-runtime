@@ -53,32 +53,7 @@ class FeeRuleController extends Controller
             ->orderBy('code')
             ->paginate(25)
             ->withQueryString()
-            ->through(fn (FeeRule $feeRule): array => [
-                'id' => $feeRule->id,
-                'code' => $feeRule->code,
-                'name' => $feeRule->name,
-                'category' => $feeRule->category->value,
-                'scope' => $feeRule->scope->value,
-                'calculation_type' => $feeRule->calculation_type->value,
-                'basis' => $feeRule->basis,
-                'amount_cents' => $feeRule->amount_cents,
-                'rate_basis_points' => $feeRule->rate_basis_points,
-                'effective_from' => $feeRule->effective_from?->toDateString(),
-                'effective_until' => $feeRule->effective_until?->toDateString(),
-                'is_active' => $feeRule->is_active,
-                'legal_basis' => $feeRule->legal_basis,
-                'legacy_source_id' => $feeRule->legacy_source_id,
-                'line_of_business' => $feeRule->lineOfBusiness ? [
-                    'id' => $feeRule->lineOfBusiness->id,
-                    'code' => $feeRule->lineOfBusiness->code,
-                    'name' => $feeRule->lineOfBusiness->name,
-                ] : null,
-                'range_count' => $feeRule->ranges_count,
-                'catalog_status' => $feeRule->metadata['catalog_status'] ?? null,
-                'application_types' => $feeRule->metadata['application_types'] ?? null,
-                'policy_boundaries' => $feeRule->metadata['policy_boundaries'] ?? [],
-                'policy_note' => $feeRule->metadata['policy_note'] ?? null,
-            ]);
+            ->through(fn (FeeRule $feeRule): array => $this->feeRulePayload($feeRule));
 
         return Inertia::render('fee-rules/Index', [
             'filters' => [
@@ -103,6 +78,63 @@ class FeeRuleController extends Controller
             'scopes' => $this->options(FeeRuleScope::cases()),
             'calculationTypes' => $this->options(FeeRuleCalculationType::cases()),
         ]);
+    }
+
+    public function show(FeeRule $feeRule): Response
+    {
+        Gate::authorize(UserPermission::ViewFeeRules->value);
+
+        $feeRule->load([
+            'lineOfBusiness',
+            'ranges' => fn ($query) => $query->orderBy('min_basis_cents'),
+        ]);
+
+        return Inertia::render('fee-rules/Show', [
+            'feeRule' => [
+                ...$this->feeRulePayload($feeRule),
+                'ranges' => $feeRule->ranges->map(fn ($range): array => [
+                    'id' => $range->id,
+                    'min_basis_cents' => $range->min_basis_cents,
+                    'max_basis_cents' => $range->max_basis_cents,
+                    'amount_cents' => $range->amount_cents,
+                    'rate_basis_points' => $range->rate_basis_points,
+                ])->values()->all(),
+            ],
+            'scopeNote' => 'This detail page is read-only evidence. It exposes the persisted catalog rule, legal provenance, applicability, and unresolved policy boundaries without editing rates or inventing assessment behavior.',
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function feeRulePayload(FeeRule $feeRule): array
+    {
+        return [
+            'id' => $feeRule->id,
+            'code' => $feeRule->code,
+            'name' => $feeRule->name,
+            'category' => $feeRule->category->value,
+            'scope' => $feeRule->scope->value,
+            'calculation_type' => $feeRule->calculation_type->value,
+            'basis' => $feeRule->basis,
+            'amount_cents' => $feeRule->amount_cents,
+            'rate_basis_points' => $feeRule->rate_basis_points,
+            'effective_from' => $feeRule->effective_from?->toDateString(),
+            'effective_until' => $feeRule->effective_until?->toDateString(),
+            'is_active' => $feeRule->is_active,
+            'legal_basis' => $feeRule->legal_basis,
+            'legacy_source_id' => $feeRule->legacy_source_id,
+            'line_of_business' => $feeRule->lineOfBusiness ? [
+                'id' => $feeRule->lineOfBusiness->id,
+                'code' => $feeRule->lineOfBusiness->code,
+                'name' => $feeRule->lineOfBusiness->name,
+            ] : null,
+            'range_count' => (int) ($feeRule->ranges_count ?? $feeRule->ranges()->count()),
+            'catalog_status' => $feeRule->metadata['catalog_status'] ?? null,
+            'application_types' => $feeRule->metadata['application_types'] ?? null,
+            'policy_boundaries' => $feeRule->metadata['policy_boundaries'] ?? [],
+            'policy_note' => $feeRule->metadata['policy_note'] ?? null,
+        ];
     }
 
     /**

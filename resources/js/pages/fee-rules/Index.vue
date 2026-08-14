@@ -2,7 +2,10 @@
 import { Head, Link, router } from '@inertiajs/vue3';
 import { Search, X } from '@lucide/vue';
 import { ref } from 'vue';
-import { index } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
+import {
+    index,
+    show,
+} from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -365,15 +368,20 @@ function decodePaginationLabel(value: string): string {
                                 >
                                     Amount
                                 </th>
-                                <th class="w-[25%] px-3 py-3 font-medium">
+                                <th class="w-[20%] px-3 py-3 font-medium">
                                     Evidence
+                                </th>
+                                <th
+                                    class="w-[5%] px-3 py-3 text-right font-medium"
+                                >
+                                    Action
                                 </th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="feeRules.data.length === 0">
                                 <td
-                                    colspan="6"
+                                    colspan="7"
                                     class="px-3 py-8 text-center text-muted-foreground"
                                 >
                                     No fee rules match the current filters.
@@ -502,6 +510,16 @@ function decodePaginationLabel(value: string): string {
                                             {{ label(boundary) }}
                                         </span>
                                     </div>
+                                </td>
+                                <td class="px-3 py-3 text-right align-top">
+                                    <Button as-child size="sm" variant="outline">
+                                        <Link
+                                            :href="show(rule.id)"
+                                            :aria-label="`View ${rule.code}`"
+                                        >
+                                            View
+                                        </Link>
+                                    </Button>
                                 </td>
                             </tr>
                         </tbody>
