@@ -126,6 +126,7 @@ try {
         await inspectManualReceiptPaymentScheduleQueue(page, baseUrl);
         await inspectManualReceiptQueue(page, baseUrl);
         await inspectManualReceiptDailyCollectionReport(page, baseUrl);
+        await inspectManualReceiptRevenueSourceReport(page, baseUrl);
         await inspectManualReceiptPaymentSchedule(page, baseUrl);
         await inspectManualReceiptDetail(page, baseUrl);
         await inspectManualReceiptPermitReleaseBoundary(page, baseUrl);
@@ -1332,6 +1333,78 @@ async function inspectManualReceiptDailyCollectionReport(
     );
 }
 
+async function inspectManualReceiptRevenueSourceReport(
+    targetPage,
+    targetBaseUrl,
+) {
+    const reportUrl = `${targetBaseUrl}${manifest.resources.revenue_source_report_url}`;
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const sourceCodeVisible = await targetPage
+        .getByText(manifest.resources.revenue_source_code, { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const scopeVisible = await targetPage
+        .getByText(
+            'Receipted permit collection allocations with issued receipts only.',
+            {
+                exact: true,
+            },
+        )
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const policyVisible = await targetPage
+        .getByText('Official revenue account codes', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const csvExportVisible = await targetPage
+        .getByRole('link', { name: /export csv/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'revenue-source-report-source-visible',
+            'Revenue source report shows scenario allocation source',
+            true,
+            sourceCodeVisible,
+            {
+                url: reportUrl,
+                source_code: manifest.resources.revenue_source_code,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'revenue-source-report-scope-visible',
+            'Revenue source report keeps report scope visible',
+            true,
+            scopeVisible && policyVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'revenue-source-report-csv-visible',
+            'Revenue source report offers CSV export',
+            true,
+            csvExportVisible,
+        ),
+    );
+    reportRevenueSource(
+        manifest.resources.revenue_source_code,
+        sourceCodeVisible,
+        csvExportVisible,
+    );
+    await screenshot(
+        targetPage,
+        '02-revenue-source-report',
+        'browser/screenshots/02-revenue-source-report.png',
+    );
+}
+
 async function inspectManualReceiptDetail(targetPage, targetBaseUrl) {
     const receiptUrl = `${targetBaseUrl}${manifest.resources.receipt_url}`;
     await targetPage.goto(receiptUrl, { waitUntil: 'networkidle' });
@@ -2244,6 +2317,14 @@ function reportDailyCollection(
         receipt_number: receiptNumber,
         amount_cents: amountCents,
         scope_visible: scopeVisible,
+        csv_export_visible: csvExportVisible,
+    };
+}
+
+function reportRevenueSource(sourceCode, sourceVisible, csvExportVisible) {
+    reportEvidence.revenue_source = {
+        source_code: sourceCode,
+        source_visible: sourceVisible,
         csv_export_visible: csvExportVisible,
     };
 }

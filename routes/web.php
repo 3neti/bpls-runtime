@@ -8,6 +8,7 @@ use App\Http\Controllers\Staff\PaymentScheduleCollectionController;
 use App\Http\Controllers\Staff\PermitApplicationAssessmentController;
 use App\Http\Controllers\Staff\PermitApplicationController;
 use App\Http\Controllers\Staff\ReceiptController;
+use App\Http\Controllers\Staff\RevenueSourceReportController;
 use App\Http\Controllers\Staff\StoryboardController;
 use Illuminate\Support\Facades\Route;
 
@@ -62,6 +63,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('reports.daily-collections.index');
         Route::get('reports/daily-collections/download', [DailyCollectionReportController::class, 'download'])
             ->name('reports.daily-collections.download');
+        Route::get('reports/revenue-sources', [RevenueSourceReportController::class, 'index'])
+            ->name('reports.revenue-sources.index');
+        Route::get('reports/revenue-sources/download', [RevenueSourceReportController::class, 'download'])
+            ->name('reports.revenue-sources.download');
         Route::post('storyboards/{storyboard}/exports/pdf', [StoryboardController::class, 'exportPdf'])
             ->name('storyboards.exports.pdf');
         Route::post('storyboards/{storyboard}/exports/video', [StoryboardController::class, 'exportVideo'])

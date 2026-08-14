@@ -3,6 +3,7 @@
 namespace App\LifecycleScenarios;
 
 use App\Actions\AttemptPermitApplicationRelease;
+use App\Actions\BuildCollectionsByRevenueSourceReport;
 use App\Actions\BuildDailyCollectionsReport;
 use App\Actions\CompletePermitClearance;
 use App\Actions\CreateAssessmentForPermitApplication;
@@ -50,6 +51,7 @@ final class ManualCollectionReceiptVisibilityScenario
         private readonly CompletePermitClearance $completeClearance,
         private readonly AttemptPermitApplicationRelease $attemptRelease,
         private readonly BuildDailyCollectionsReport $buildDailyCollectionsReport,
+        private readonly BuildCollectionsByRevenueSourceReport $buildCollectionsByRevenueSourceReport,
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly DescribePermitReleaseReadiness $describeReleaseReadiness,
         private readonly DescribePermitVerificationBoundary $describeVerificationBoundary,
@@ -149,6 +151,12 @@ final class ManualCollectionReceiptVisibilityScenario
             'date_from' => $collection->received_at->toDateString(),
             'date_to' => $collection->received_at->toDateString(),
         ]);
+        $revenueSourceReport = $this->buildCollectionsByRevenueSourceReport->handle([
+            'date_from' => $collection->received_at->toDateString(),
+            'date_to' => $collection->received_at->toDateString(),
+        ]);
+        $revenueSourceRow = collect($revenueSourceReport['rows'])
+            ->firstWhere('code', 'SCENARIO-RECEIPT-APPLICATION-FEE');
         $verificationBoundary = $this->describeVerificationBoundary->handle($permitApplication);
         $receiptVoidBoundary = $this->describeReceiptVoidBoundary->handle($receipt);
 
@@ -202,6 +210,15 @@ final class ManualCollectionReceiptVisibilityScenario
                 'date_from' => $collection->received_at->toDateString(),
                 'date_to' => $collection->received_at->toDateString(),
             ], false),
+            'revenue_source_report_url' => route('staff.reports.revenue-sources.index', [
+                'date_from' => $collection->received_at->toDateString(),
+                'date_to' => $collection->received_at->toDateString(),
+            ], false),
+            'revenue_source_report_download_url' => route('staff.reports.revenue-sources.download', [
+                'date_from' => $collection->received_at->toDateString(),
+                'date_to' => $collection->received_at->toDateString(),
+            ], false),
+            'revenue_source_code' => 'SCENARIO-RECEIPT-APPLICATION-FEE',
             'receipt_void_boundary_reference' => $receiptVoidBoundary['reference'],
             'application_form_pdf_url' => route('staff.permit-applications.application-form.pdf', $permitApplication, false),
             'permit_pdf_url' => route('staff.permit-applications.permit.pdf', $permitApplication, false),
@@ -238,6 +255,13 @@ final class ManualCollectionReceiptVisibilityScenario
                 'total_amount_cents' => $dailyCollectionsReport['summary']['total_amount_cents'],
                 'receipt_number' => collect($dailyCollectionsReport['rows'])
                     ->firstWhere('receipt_number', $receipt->receipt_number)['receipt_number'] ?? null,
+            ],
+            'revenue_source_report' => [
+                'date_from' => $revenueSourceReport['filters']['date_from'],
+                'date_to' => $revenueSourceReport['filters']['date_to'],
+                'source_count' => $revenueSourceReport['summary']['source_count'],
+                'total_amount_cents' => $revenueSourceReport['summary']['total_amount_cents'],
+                'source_code' => $revenueSourceRow['code'] ?? null,
             ],
             'clearances' => $permitApplication->clearances
                 ->map(fn ($clearance): array => [
@@ -286,6 +310,12 @@ final class ManualCollectionReceiptVisibilityScenario
         ]);
         $dailyCollectionsReportRow = collect($dailyCollectionsReport['rows'])
             ->firstWhere('receipt_number', $receipt->receipt_number);
+        $revenueSourceReport = $this->buildCollectionsByRevenueSourceReport->handle([
+            'date_from' => $collection->received_at->toDateString(),
+            'date_to' => $collection->received_at->toDateString(),
+        ]);
+        $revenueSourceRow = collect($revenueSourceReport['rows'])
+            ->firstWhere('code', $manifest['resources']['revenue_source_code']);
         $releaseReadiness = $this->describeReleaseReadiness->handle($permitApplication);
         $verificationBoundary = $this->describeVerificationBoundary->handle($permitApplication);
         $receiptVoidBoundary = $this->describeReceiptVoidBoundary->handle($receipt);
@@ -304,6 +334,8 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('audit-receipt-issued', 'Manual receipt is issued', ['status' => ReceiptStatus::Issued->value, 'numbering_authority' => 'manual'], ['status' => $receipt->status->value, 'numbering_authority' => $receipt->numbering_authority]),
             $this->step('audit-daily-collection-report-row', 'Daily collection report contains the exact receipted collection', ['receipt_number' => $receipt->receipt_number, 'amount_cents' => $collection->amount_cents], ['receipt_number' => $dailyCollectionsReportRow['receipt_number'] ?? null, 'amount_cents' => $dailyCollectionsReportRow['amount_cents'] ?? null]),
             $this->step('audit-browser-daily-collection-report-row', 'Browser evidence observed the daily collection report row', ['receipt_number' => $receipt->receipt_number, 'amount_cents' => $collection->amount_cents], ['receipt_number' => data_get($browserReport, 'reports.daily_collection.receipt_number'), 'amount_cents' => data_get($browserReport, 'reports.daily_collection.amount_cents')]),
+            $this->step('audit-revenue-source-report-row', 'Revenue source report contains the scenario collection allocation source', ['source_code' => $manifest['resources']['revenue_source_code'], 'source_present' => true], ['source_code' => $revenueSourceRow['code'] ?? null, 'source_present' => $revenueSourceRow !== null]),
+            $this->step('audit-browser-revenue-source-report-row', 'Browser evidence observed the revenue source report row', ['source_code' => $manifest['resources']['revenue_source_code'], 'csv_export_visible' => true], ['source_code' => data_get($browserReport, 'reports.revenue_source.source_code'), 'csv_export_visible' => data_get($browserReport, 'reports.revenue_source.csv_export_visible')]),
             $this->step('audit-receipt-void-boundary', 'Receipt void boundary remains blocked without financial mutation', ['reference' => $receiptVoidBoundary['reference'], 'status' => 'blocked', 'can_void' => false, 'receipt_status' => ReceiptStatus::Issued->value, 'collection_status' => TreasuryCollectionStatus::Receipted->value], ['reference' => $manifest['resources']['receipt_void_boundary_reference'] ?? null, 'status' => $receiptVoidBoundary['status'], 'can_void' => $receiptVoidBoundary['can_void'], 'receipt_status' => $receipt->status->value, 'collection_status' => $collection->status->value]),
             $this->step('audit-browser-receipt-void-boundary', 'Browser evidence observed the same receipt void boundary', ['reference' => $receiptVoidBoundary['reference'], 'status' => 'blocked', 'can_void' => false], ['reference' => data_get($browserReport, 'receipt_void_boundary.reference'), 'status' => data_get($browserReport, 'receipt_void_boundary.status'), 'can_void' => data_get($browserReport, 'receipt_void_boundary.can_void')]),
             $this->step('audit-clearances-completed', 'Clearance checklist evidence is complete', ['completed_clearances' => 3, 'all_completed' => true], ['completed_clearances' => $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count(), 'all_completed' => $permitApplication->clearances->isNotEmpty() && $permitApplication->clearances->every(fn ($clearance): bool => $clearance->status === PermitClearanceStatus::Completed)]),
@@ -352,6 +384,13 @@ final class ManualCollectionReceiptVisibilityScenario
                     'row_count' => $dailyCollectionsReport['summary']['row_count'],
                     'total_amount_cents' => $dailyCollectionsReport['summary']['total_amount_cents'],
                     'receipt_number' => $dailyCollectionsReportRow['receipt_number'] ?? null,
+                ],
+                'revenue_source_report' => [
+                    'date_from' => $revenueSourceReport['filters']['date_from'],
+                    'date_to' => $revenueSourceReport['filters']['date_to'],
+                    'source_count' => $revenueSourceReport['summary']['source_count'],
+                    'total_amount_cents' => $revenueSourceReport['summary']['total_amount_cents'],
+                    'source_code' => $revenueSourceRow['code'] ?? null,
                 ],
                 'permit_application_status' => $permitApplication->status->value,
                 'clearances' => $permitApplication->clearances

@@ -4,6 +4,7 @@ import {
     BookOpen,
     Calculator,
     ChartColumn,
+    ChartNoAxesColumnIncreasing,
     FileText,
     Film,
     FolderGit2,
@@ -16,6 +17,7 @@ import { index as dailyCollectionReportIndex } from '@/actions/App/Http/Controll
 import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import { index as permitApplicationIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
+import { index as revenueSourceReportIndex } from '@/actions/App/Http/Controllers/Staff/RevenueSourceReportController';
 import { index as storyboardIndex } from '@/actions/App/Http/Controllers/Staff/StoryboardController';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
@@ -63,6 +65,11 @@ const mainNavItems: NavItem[] = [
         title: 'Daily Collections',
         href: dailyCollectionReportIndex(),
         icon: ChartColumn,
+    },
+    {
+        title: 'Revenue Sources',
+        href: revenueSourceReportIndex(),
+        icon: ChartNoAxesColumnIncreasing,
     },
     {
         title: 'Storyboards',
