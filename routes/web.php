@@ -4,6 +4,7 @@ use App\Http\Controllers\PublicPermitVerificationController;
 use App\Http\Controllers\Staff\AssessmentPaymentScheduleController;
 use App\Http\Controllers\Staff\CollectionReceiptController;
 use App\Http\Controllers\Staff\DailyCollectionReportController;
+use App\Http\Controllers\Staff\PaidEstablishmentReportController;
 use App\Http\Controllers\Staff\PaymentScheduleCollectionController;
 use App\Http\Controllers\Staff\PermitApplicationAssessmentController;
 use App\Http\Controllers\Staff\PermitApplicationController;
@@ -67,6 +68,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('reports.revenue-sources.index');
         Route::get('reports/revenue-sources/download', [RevenueSourceReportController::class, 'download'])
             ->name('reports.revenue-sources.download');
+        Route::get('reports/paid-establishments', [PaidEstablishmentReportController::class, 'index'])
+            ->name('reports.paid-establishments.index');
+        Route::get('reports/paid-establishments/download', [PaidEstablishmentReportController::class, 'download'])
+            ->name('reports.paid-establishments.download');
         Route::post('storyboards/{storyboard}/exports/pdf', [StoryboardController::class, 'exportPdf'])
             ->name('storyboards.exports.pdf');
         Route::post('storyboards/{storyboard}/exports/video', [StoryboardController::class, 'exportVideo'])

@@ -5,6 +5,7 @@ import {
     Calculator,
     ChartColumn,
     ChartNoAxesColumnIncreasing,
+    ClipboardCheck,
     FileText,
     Film,
     FolderGit2,
@@ -14,6 +15,7 @@ import {
 } from '@lucide/vue';
 import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { index as dailyCollectionReportIndex } from '@/actions/App/Http/Controllers/Staff/DailyCollectionReportController';
+import { index as paidEstablishmentReportIndex } from '@/actions/App/Http/Controllers/Staff/PaidEstablishmentReportController';
 import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import { index as permitApplicationIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
@@ -70,6 +72,11 @@ const mainNavItems: NavItem[] = [
         title: 'Revenue Sources',
         href: revenueSourceReportIndex(),
         icon: ChartNoAxesColumnIncreasing,
+    },
+    {
+        title: 'Paid Establishments',
+        href: paidEstablishmentReportIndex(),
+        icon: ClipboardCheck,
     },
     {
         title: 'Storyboards',

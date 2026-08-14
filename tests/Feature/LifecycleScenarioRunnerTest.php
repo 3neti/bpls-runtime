@@ -430,6 +430,12 @@ test('manual collection receipt scenario audit compares browser evidence with ca
                 'source_visible' => true,
                 'csv_export_visible' => true,
             ],
+            'paid_establishments' => [
+                'application_number' => $manifest['resources']['application_number'],
+                'business_name' => $manifest['resources']['paid_establishment_business_name'],
+                'application_visible' => true,
+                'csv_export_visible' => true,
+            ],
         ],
         'verification' => [
             'reference' => $verification['reference'],

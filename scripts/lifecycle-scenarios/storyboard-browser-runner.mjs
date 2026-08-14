@@ -127,6 +127,7 @@ try {
         await inspectManualReceiptQueue(page, baseUrl);
         await inspectManualReceiptDailyCollectionReport(page, baseUrl);
         await inspectManualReceiptRevenueSourceReport(page, baseUrl);
+        await inspectManualReceiptPaidEstablishmentsReport(page, baseUrl);
         await inspectManualReceiptPaymentSchedule(page, baseUrl);
         await inspectManualReceiptDetail(page, baseUrl);
         await inspectManualReceiptPermitReleaseBoundary(page, baseUrl);
@@ -1405,6 +1406,94 @@ async function inspectManualReceiptRevenueSourceReport(
     );
 }
 
+async function inspectManualReceiptPaidEstablishmentsReport(
+    targetPage,
+    targetBaseUrl,
+) {
+    const reportUrl = `${targetBaseUrl}${manifest.resources.paid_establishments_report_url}`;
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const applicationVisible = await targetPage
+        .getByText(manifest.resources.application_number, { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const businessVisible = await targetPage
+        .getByText(manifest.resources.paid_establishment_business_name, {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const scopeVisible = await targetPage
+        .getByText(
+            'Paid permit payment schedules for the selected application year.',
+            {
+                exact: true,
+            },
+        )
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const policyVisible = await targetPage
+        .getByText('does not imply permit issuance', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const csvExportVisible = await targetPage
+        .getByRole('link', { name: /export csv/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'paid-establishments-report-application-visible',
+            'Paid establishments report shows exact paid permit application',
+            true,
+            applicationVisible,
+            {
+                url: reportUrl,
+                application_number: manifest.resources.application_number,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'paid-establishments-report-business-visible',
+            'Paid establishments report shows exact business name',
+            true,
+            businessVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'paid-establishments-report-scope-visible',
+            'Paid establishments report keeps authority-boundary scope visible',
+            true,
+            scopeVisible && policyVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'paid-establishments-report-csv-visible',
+            'Paid establishments report offers CSV export',
+            true,
+            csvExportVisible,
+        ),
+    );
+    reportPaidEstablishments(
+        manifest.resources.application_number,
+        manifest.resources.paid_establishment_business_name,
+        applicationVisible,
+        csvExportVisible,
+    );
+    await screenshot(
+        targetPage,
+        '02-paid-establishments-report',
+        'browser/screenshots/02-paid-establishments-report.png',
+    );
+}
+
 async function inspectManualReceiptDetail(targetPage, targetBaseUrl) {
     const receiptUrl = `${targetBaseUrl}${manifest.resources.receipt_url}`;
     await targetPage.goto(receiptUrl, { waitUntil: 'networkidle' });
@@ -2325,6 +2414,20 @@ function reportRevenueSource(sourceCode, sourceVisible, csvExportVisible) {
     reportEvidence.revenue_source = {
         source_code: sourceCode,
         source_visible: sourceVisible,
+        csv_export_visible: csvExportVisible,
+    };
+}
+
+function reportPaidEstablishments(
+    applicationNumber,
+    businessName,
+    applicationVisible,
+    csvExportVisible,
+) {
+    reportEvidence.paid_establishments = {
+        application_number: applicationNumber,
+        business_name: businessName,
+        application_visible: applicationVisible,
         csv_export_visible: csvExportVisible,
     };
 }
