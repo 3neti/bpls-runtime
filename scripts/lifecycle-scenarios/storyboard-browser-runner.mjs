@@ -22,6 +22,7 @@ if (manifest.schema_version !== 'application.lifecycle-evidence.v1') {
 
 const supportedScenarios = [
     'assessment_policy_boundary_visibility',
+    'citizen_permit_processing_visibility',
     'citizen_permit_draft_document_visibility',
     'citizen_permit_draft_edit_visibility',
     'citizen_permit_draft_visibility',
@@ -74,6 +75,7 @@ const transferPolicyEvidence = {};
 const retirementPolicyEvidence = {};
 const feeCatalogEvidence = {};
 const citizenDraftEvidence = {};
+const citizenProcessingEvidence = {};
 
 let browser;
 
@@ -106,6 +108,10 @@ try {
     });
 
     await authenticate(page, baseUrl, email, password);
+
+    if (manifest.scenario.key === 'citizen_permit_processing_visibility') {
+        await inspectCitizenPermitProcessing(page, baseUrl);
+    }
 
     if (manifest.scenario.key === 'citizen_permit_draft_visibility') {
         await inspectCitizenPermitDraft(page, baseUrl);
@@ -225,6 +231,7 @@ const report = {
     retirement_policy: retirementPolicyEvidence,
     fee_catalog: feeCatalogEvidence,
     citizen_draft: citizenDraftEvidence,
+    citizen_processing: citizenProcessingEvidence,
     artifacts: {
         screenshots,
     },
@@ -272,6 +279,209 @@ async function authenticate(
     await targetPage.waitForURL(/dashboard|storyboards/, { timeout: 10000 });
     checks.push(
         check('authenticated', 'Authenticate as manifest actor', true, true),
+    );
+}
+
+async function inspectCitizenPermitProcessing(targetPage, targetBaseUrl) {
+    const listUrl = `${targetBaseUrl}${manifest.resources.list_url}`;
+    await targetPage.goto(listUrl, { waitUntil: 'networkidle' });
+    const listRow = targetPage.locator(
+        `[data-testid="citizen-permit-application-row"][data-application-id="${manifest.resources.record_id}"]`,
+    );
+    await listRow.waitFor();
+    const listStatus = await listRow.getAttribute('data-application-status');
+    const listReferenceVisible = await listRow
+        .getByText(manifest.resources.application_number, { exact: false })
+        .isVisible();
+    checks.push(
+        check(
+            'citizen-processing-list-record-visible',
+            'Citizen list shows the exact manifest application',
+            true,
+            true,
+            { permit_application_id: manifest.resources.record_id },
+        ),
+        check(
+            'citizen-processing-list-status-matches',
+            'Citizen list status matches canonical processing state',
+            manifest.resources.application_status,
+            listStatus,
+        ),
+        check(
+            'citizen-processing-list-reference-visible',
+            'Citizen list shows the official application reference',
+            true,
+            listReferenceVisible,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '01-citizen-processing-list',
+        'browser/screenshots/01-citizen-processing-list.png',
+    );
+
+    const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    const processing = targetPage.getByTestId('citizen-processing-status');
+    const assessment = targetPage.getByTestId('citizen-assessment-summary');
+    const payment = targetPage.getByTestId('citizen-payment-summary');
+    const onlineBoundary = targetPage.getByTestId(
+        'citizen-online-payment-boundary',
+    );
+    await processing.waitFor();
+    await assessment.waitFor();
+    await payment.waitFor();
+    await onlineBoundary.waitFor();
+
+    const browserState = {
+        application_status: await processing.getAttribute(
+            'data-application-status',
+        ),
+        assessment_id: Number(
+            await assessment.getAttribute('data-assessment-id'),
+        ),
+        assessment_status: await assessment.getAttribute(
+            'data-assessment-status',
+        ),
+        assessment_total_amount_cents: Number(
+            await assessment.getAttribute('data-assessment-total-cents'),
+        ),
+        payment_schedule_id: Number(
+            await payment.getAttribute('data-payment-schedule-id'),
+        ),
+        payment_schedule_status: await payment.getAttribute(
+            'data-payment-status',
+        ),
+        payment_total_amount_cents: Number(
+            await payment.getAttribute('data-payment-total-cents'),
+        ),
+        payment_paid_amount_cents: Number(
+            await payment.getAttribute('data-payment-paid-cents'),
+        ),
+        payment_balance_amount_cents: Number(
+            await payment.getAttribute('data-payment-balance-cents'),
+        ),
+        online_payment_status: await onlineBoundary.getAttribute(
+            'data-online-payment-status',
+        ),
+        can_pay_online:
+            (await onlineBoundary.getAttribute('data-can-pay-online')) ===
+            'true',
+    };
+    const editActionVisible = await targetPage
+        .getByRole('link', { name: 'Edit Draft', exact: true })
+        .isVisible()
+        .catch(() => false);
+    const uploadActionVisible = await targetPage
+        .getByTestId('citizen-document-upload-form')
+        .isVisible()
+        .catch(() => false);
+    const paymentActionVisible = await targetPage
+        .getByRole('button', { name: /pay online|make payment|record payment/i })
+        .isVisible()
+        .catch(() => false);
+    const expectedState = {
+        application_status: manifest.resources.application_status,
+        assessment_id: manifest.resources.assessment_id,
+        assessment_status: manifest.resources.assessment_status,
+        assessment_total_amount_cents:
+            manifest.resources.assessment_total_amount_cents,
+        payment_schedule_id: manifest.resources.payment_schedule_id,
+        payment_schedule_status:
+            manifest.resources.payment_schedule_status,
+        payment_total_amount_cents:
+            manifest.resources.payment_total_amount_cents,
+        payment_paid_amount_cents:
+            manifest.resources.payment_paid_amount_cents,
+        payment_balance_amount_cents:
+            manifest.resources.payment_balance_amount_cents,
+        online_payment_status: manifest.resources.online_payment_status,
+        can_pay_online: manifest.resources.can_pay_online,
+    };
+
+    Object.assign(citizenProcessingEvidence, browserState, {
+        payment_action_visible: paymentActionVisible,
+        edit_action_visible: editActionVisible,
+        upload_action_visible: uploadActionVisible,
+    });
+    checks.push(
+        check(
+            'citizen-processing-detail-matches-canonical',
+            'Citizen detail matches canonical assessment and payment state',
+            expectedState,
+            browserState,
+        ),
+        check(
+            'citizen-processing-edit-action-unavailable',
+            'Processing application cannot be edited as a citizen draft',
+            false,
+            editActionVisible,
+        ),
+        check(
+            'citizen-processing-upload-action-unavailable',
+            'Processing application cannot receive citizen draft uploads',
+            false,
+            uploadActionVisible,
+        ),
+        check(
+            'citizen-processing-payment-action-unavailable',
+            'Citizen view does not expose a payment mutation',
+            false,
+            paymentActionVisible,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '02-citizen-processing-detail',
+        'browser/screenshots/02-citizen-processing-detail.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    const mobileProcessingVisible = await targetPage
+        .getByTestId('citizen-processing-status')
+        .isVisible();
+    const mobileAssessmentVisible = await targetPage
+        .getByTestId('citizen-assessment-summary')
+        .isVisible();
+    const mobilePaymentVisible = await targetPage
+        .getByTestId('citizen-payment-summary')
+        .isVisible();
+    const horizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+    checks.push(
+        check(
+            'citizen-processing-mobile-status-visible',
+            'Mobile detail keeps processing status visible',
+            true,
+            mobileProcessingVisible,
+        ),
+        check(
+            'citizen-processing-mobile-assessment-visible',
+            'Mobile detail keeps assessment evidence visible',
+            true,
+            mobileAssessmentVisible,
+        ),
+        check(
+            'citizen-processing-mobile-payment-visible',
+            'Mobile detail keeps payment evidence visible',
+            true,
+            mobilePaymentVisible,
+        ),
+        check(
+            'citizen-processing-mobile-no-horizontal-overflow',
+            'Mobile processing view has no page-level horizontal overflow',
+            false,
+            horizontalOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '03-citizen-processing-mobile',
+        'browser/screenshots/03-citizen-processing-mobile.png',
     );
 }
 

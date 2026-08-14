@@ -2,6 +2,8 @@
 import { Head, Link, setLayoutProps, useForm } from '@inertiajs/vue3';
 import {
     ArrowLeft,
+    Banknote,
+    ClipboardCheck,
     Download,
     FilePenLine,
     FilePlus2,
@@ -81,9 +83,42 @@ type PermitApplication = {
         official_application_number_assigned: boolean;
         statement: string;
     };
+    processing: {
+        has_entered_municipal_processing: boolean;
+        application_status: string;
+        statement: string;
+        assessment: {
+            id: number;
+            sequence: number;
+            status: string;
+            total_amount_cents: number;
+            assessed_at: string | null;
+        } | null;
+        payment_schedule: {
+            id: number;
+            sequence: number;
+            status: string;
+            payment_mode: string;
+            due_on: string | null;
+            total_amount_cents: number;
+            paid_amount_cents: number;
+            balance_amount_cents: number;
+            payment_policy_boundary: {
+                status: string;
+                artifact_statement: string;
+            };
+            online_payment_boundary: {
+                status: string;
+                can_pay_online: boolean;
+                can_reconcile_online: boolean;
+                artifact_statement: string;
+            };
+        } | null;
+    };
     can_edit: boolean;
     can_upload_documents: boolean;
     can_view_documents: boolean;
+    can_view_financials: boolean;
 };
 
 const props = defineProps<{
@@ -197,8 +232,216 @@ function documentBoundaryError(): string | undefined {
                 :data-application-status="permitApplication.status"
                 class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
             >
-                <p class="font-medium">Citizen draft boundary</p>
+                <p class="font-medium">
+                    {{
+                        permitApplication.processing
+                            .has_entered_municipal_processing
+                            ? 'Municipal record boundary'
+                            : 'Citizen draft boundary'
+                    }}
+                </p>
                 <p class="mt-1">{{ permitApplication.draft_boundary.statement }}</p>
+            </section>
+
+            <section
+                v-if="
+                    permitApplication.can_view_financials &&
+                    permitApplication.processing.has_entered_municipal_processing
+                "
+                data-testid="citizen-processing-status"
+                :data-application-status="
+                    permitApplication.processing.application_status
+                "
+                class="grid gap-4 border-t pt-4"
+            >
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="flex items-start gap-2">
+                        <ClipboardCheck
+                            class="mt-0.5 size-4 text-muted-foreground"
+                        />
+                        <div>
+                            <h2 class="text-sm font-semibold text-foreground">
+                                Municipal processing
+                            </h2>
+                            <p class="text-xs text-muted-foreground">
+                                {{ permitApplication.processing.statement }}
+                            </p>
+                        </div>
+                    </div>
+                    <Badge variant="secondary" class="capitalize">
+                        {{
+                            permitApplication.processing.application_status.replace(
+                                '_',
+                                ' ',
+                            )
+                        }}
+                    </Badge>
+                </div>
+
+                <dl
+                    v-if="permitApplication.processing.assessment"
+                    data-testid="citizen-assessment-summary"
+                    :data-assessment-id="
+                        permitApplication.processing.assessment.id
+                    "
+                    :data-assessment-status="
+                        permitApplication.processing.assessment.status
+                    "
+                    :data-assessment-total-cents="
+                        permitApplication.processing.assessment
+                            .total_amount_cents
+                    "
+                    class="grid gap-3 border-y border-border py-4 text-sm sm:grid-cols-3"
+                >
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Assessment
+                        </dt>
+                        <dd class="font-medium">
+                            #{{ permitApplication.processing.assessment.sequence }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">Status</dt>
+                        <dd class="font-medium capitalize">
+                            {{
+                                permitApplication.processing.assessment.status.replace(
+                                    '_',
+                                    ' ',
+                                )
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Assessed amount
+                        </dt>
+                        <dd class="font-medium tabular-nums">
+                            {{
+                                money(
+                                    permitApplication.processing.assessment
+                                        .total_amount_cents,
+                                )
+                            }}
+                        </dd>
+                    </div>
+                </dl>
+
+                <div
+                    v-if="permitApplication.processing.payment_schedule"
+                    data-testid="citizen-payment-summary"
+                    :data-payment-schedule-id="
+                        permitApplication.processing.payment_schedule.id
+                    "
+                    :data-payment-status="
+                        permitApplication.processing.payment_schedule.status
+                    "
+                    :data-payment-total-cents="
+                        permitApplication.processing.payment_schedule
+                            .total_amount_cents
+                    "
+                    :data-payment-paid-cents="
+                        permitApplication.processing.payment_schedule
+                            .paid_amount_cents
+                    "
+                    :data-payment-balance-cents="
+                        permitApplication.processing.payment_schedule
+                            .balance_amount_cents
+                    "
+                    class="grid gap-4"
+                >
+                    <div class="flex items-start gap-2">
+                        <Banknote class="mt-0.5 size-4 text-muted-foreground" />
+                        <div>
+                            <h3 class="text-sm font-semibold text-foreground">
+                                Payment status
+                            </h3>
+                            <p class="text-xs text-muted-foreground">
+                                Schedule #{{
+                                    permitApplication.processing
+                                        .payment_schedule.sequence
+                                }}
+                                ·
+                                {{
+                                    permitApplication.processing
+                                        .payment_schedule.payment_mode
+                                }}
+                            </p>
+                        </div>
+                    </div>
+                    <dl class="grid gap-3 text-sm sm:grid-cols-4">
+                        <div>
+                            <dt class="text-xs text-muted-foreground">
+                                Status
+                            </dt>
+                            <dd class="font-medium capitalize">
+                                {{
+                                    permitApplication.processing.payment_schedule.status.replace(
+                                        '_',
+                                        ' ',
+                                    )
+                                }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground">Total</dt>
+                            <dd class="font-medium tabular-nums">
+                                {{
+                                    money(
+                                        permitApplication.processing
+                                            .payment_schedule
+                                            .total_amount_cents,
+                                    )
+                                }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground">Paid</dt>
+                            <dd class="font-medium tabular-nums">
+                                {{
+                                    money(
+                                        permitApplication.processing
+                                            .payment_schedule.paid_amount_cents,
+                                    )
+                                }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground">
+                                Balance
+                            </dt>
+                            <dd class="font-medium tabular-nums">
+                                {{
+                                    money(
+                                        permitApplication.processing
+                                            .payment_schedule
+                                            .balance_amount_cents,
+                                    )
+                                }}
+                            </dd>
+                        </div>
+                    </dl>
+                    <div
+                        data-testid="citizen-online-payment-boundary"
+                        :data-online-payment-status="
+                            permitApplication.processing.payment_schedule
+                                .online_payment_boundary.status
+                        "
+                        :data-can-pay-online="
+                            permitApplication.processing.payment_schedule
+                                .online_payment_boundary.can_pay_online
+                        "
+                        class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+                    >
+                        <p class="font-medium">Online payment boundary</p>
+                        <p class="mt-1">
+                            {{
+                                permitApplication.processing.payment_schedule
+                                    .online_payment_boundary.artifact_statement
+                            }}
+                        </p>
+                    </div>
+                </div>
             </section>
 
             <section class="grid gap-4 md:grid-cols-2">
@@ -255,7 +498,7 @@ function documentBoundaryError(): string | undefined {
                         Business activities
                     </h2>
                     <p class="text-xs text-muted-foreground">
-                        Declared values saved with this draft.
+                        Declared values retained with this application.
                     </p>
                 </div>
                 <div class="grid gap-3 md:hidden">
@@ -358,8 +601,8 @@ function documentBoundaryError(): string | undefined {
                                 Supporting documents
                             </h2>
                             <p class="text-xs text-muted-foreground">
-                                Attach evidence to this draft for later municipal
-                                review.
+                                Supporting evidence retained with this
+                                application.
                             </p>
                         </div>
                     </div>
@@ -455,7 +698,7 @@ function documentBoundaryError(): string | undefined {
                     v-if="permitApplication.documents.length === 0"
                     class="py-2 text-sm text-muted-foreground"
                 >
-                    No supporting documents added to this draft.
+                    No supporting documents associated with this application.
                 </p>
                 <ul v-else class="divide-y divide-border">
                     <li

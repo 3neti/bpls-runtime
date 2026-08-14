@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Citizen;
 
 use App\Actions\CreatePermitApplication;
+use App\Actions\DescribeOnlinePaymentBoundary;
+use App\Actions\DescribePaymentPolicyBoundary;
 use App\Actions\UpdateCitizenPermitApplicationDraft;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
@@ -21,6 +23,11 @@ use Inertia\Response;
 
 class PermitApplicationController extends Controller
 {
+    public function __construct(
+        private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
+        private readonly DescribePaymentPolicyBoundary $describePaymentPolicyBoundary,
+    ) {}
+
     public function index(Request $request): Response
     {
         Gate::authorize(UserPermission::ViewOwnPermitApplications->value);
@@ -119,6 +126,11 @@ class PermitApplicationController extends Controller
         $isDraft = $application->status === PermitApplicationStatus::Draft;
         $assessmentStarted = (bool) $application->assessments_exists;
         $canViewDocuments = $request->user()->can(UserPermission::ViewOwnPermitApplicationDocuments->value);
+        $canViewFinancials = $request->user()->can(UserPermission::ViewOwnPermitApplicationFinancials->value);
+        $latestAssessment = $canViewFinancials ? $application->assessments->first() : null;
+        $latestPaymentSchedule = $latestAssessment === null
+            ? null
+            : $application->paymentSchedules->firstWhere('assessment_id', $latestAssessment->id);
 
         return Inertia::render('citizen/permit-applications/Show', [
             'permitApplication' => [
@@ -176,11 +188,38 @@ class PermitApplicationController extends Controller
                         ? 'This record is a saved citizen draft. It has not been submitted for assessment or accepted as an official permit application.'
                         : 'This application has entered municipal processing. Its displayed status reflects the current authoritative application record.',
                 ],
+                'processing' => [
+                    'has_entered_municipal_processing' => ! $isDraft
+                        || $application->application_number !== null
+                        || $assessmentStarted,
+                    'application_status' => $application->status->value,
+                    'statement' => 'This view reports the current municipal processing record. It does not provide a citizen submission transition or authorize online payment.',
+                    'assessment' => $latestAssessment === null ? null : [
+                        'id' => $latestAssessment->id,
+                        'sequence' => $latestAssessment->sequence,
+                        'status' => $latestAssessment->status->value,
+                        'total_amount_cents' => $latestAssessment->total_amount_cents,
+                        'assessed_at' => $latestAssessment->assessed_at?->toIso8601String(),
+                    ],
+                    'payment_schedule' => $latestPaymentSchedule === null ? null : [
+                        'id' => $latestPaymentSchedule->id,
+                        'sequence' => $latestPaymentSchedule->sequence,
+                        'status' => $latestPaymentSchedule->status->value,
+                        'payment_mode' => $latestPaymentSchedule->payment_mode,
+                        'due_on' => $latestPaymentSchedule->due_on?->toDateString(),
+                        'total_amount_cents' => $latestPaymentSchedule->total_amount_cents,
+                        'paid_amount_cents' => $latestPaymentSchedule->paid_amount_cents,
+                        'balance_amount_cents' => max(0, $latestPaymentSchedule->total_amount_cents - $latestPaymentSchedule->paid_amount_cents),
+                        'payment_policy_boundary' => $this->describePaymentPolicyBoundary->handle($latestPaymentSchedule),
+                        'online_payment_boundary' => $this->describeOnlinePaymentBoundary->handle($latestPaymentSchedule),
+                    ],
+                ],
                 'can_edit' => $request->user()->can(UserPermission::EditOwnPermitApplications->value)
                     && $this->isEditableDraft($application),
                 'can_upload_documents' => $request->user()->can(UserPermission::UploadOwnPermitApplicationDocuments->value)
                     && $this->isCitizenDocumentUploadAvailable($application),
                 'can_view_documents' => $canViewDocuments,
+                'can_view_financials' => $canViewFinancials,
             ],
         ]);
     }
@@ -194,6 +233,8 @@ class PermitApplicationController extends Controller
                 'business.owner',
                 'lines.lineOfBusiness',
                 'documents' => fn ($query) => $query->latest('uploaded_at')->latest('id'),
+                'assessments' => fn ($query) => $query->whereNull('superseded_at')->latest('sequence'),
+                'paymentSchedules' => fn ($query) => $query->latest('sequence'),
             ])
             ->withExists('assessments')
             ->firstOrFail();

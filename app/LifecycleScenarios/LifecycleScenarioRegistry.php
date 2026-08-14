@@ -12,6 +12,42 @@ final class LifecycleScenarioRegistry
     public function all(): array
     {
         return [
+            'citizen_permit_processing_visibility' => new LifecycleScenarioDefinition(
+                key: 'citizen_permit_processing_visibility',
+                label: 'Citizen permit processing visibility',
+                mode: 'citizen_permit_processing_visibility',
+                risk: 'local transactional',
+                actors: [
+                    'applicant' => 'citizen_applicant',
+                    'operator' => 'primary_operator',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'canonical_state' => 'pending_payment',
+                    'assessment_status' => 'computed',
+                    'payment_schedule_status' => 'pending',
+                    'online_payment_status' => 'blocked',
+                    'can_pay_online' => false,
+                    'browser_is_read_only' => true,
+                    'external_calls' => 0,
+                    'irreversible_actions' => false,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
             'citizen_permit_draft_document_visibility' => new LifecycleScenarioDefinition(
                 key: 'citizen_permit_draft_document_visibility',
                 label: 'Citizen permit draft document visibility',

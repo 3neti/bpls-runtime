@@ -18,6 +18,7 @@ class EnsureCitizenRole
             UserPermission::UploadOwnPermitApplicationDocuments,
             UserPermission::ViewOwnPermitApplications,
             UserPermission::ViewOwnPermitApplicationDocuments,
+            UserPermission::ViewOwnPermitApplicationFinancials,
         ])->map(fn (UserPermission $permission): Permission => Permission::query()->firstOrCreate(
             ['code' => $permission->value],
             [

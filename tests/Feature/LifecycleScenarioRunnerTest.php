@@ -13,6 +13,7 @@ use App\Enums\UserPermission;
 use App\Jobs\GenerateStoryboardVideo;
 use App\LifecycleScenarios\AssessmentPolicyBoundaryVisibilityScenario;
 use App\LifecycleScenarios\CitizenPermitDraftVisibilityScenario;
+use App\LifecycleScenarios\CitizenPermitProcessingVisibilityScenario;
 use App\LifecycleScenarios\LifecycleScenarioRegistry;
 use App\LifecycleScenarios\ManualCollectionReceiptVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationCancelledVisibilityScenario;
@@ -75,6 +76,20 @@ test('scenario registry discovers the citizen permit draft visibility scenario',
         ->and($scenario->expectations['canonical_state'])->toBe('draft')
         ->and($scenario->expectations['official_application_number'])->toBeNull()
         ->and($scenario->expectations['assessment_count'])->toBe(0)
+        ->and($scenario->safety['external_integrations'])->toBeFalse();
+});
+
+test('scenario registry discovers the citizen permit processing visibility scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_permit_processing_visibility');
+
+    expect($scenario)
+        ->key->toBe('citizen_permit_processing_visibility')
+        ->label->toBe('Citizen permit processing visibility')
+        ->risk->toBe('local transactional')
+        ->and($scenario->expectations['canonical_state'])->toBe('pending_payment')
+        ->and($scenario->expectations['assessment_status'])->toBe('computed')
+        ->and($scenario->expectations['online_payment_status'])->toBe('blocked')
+        ->and($scenario->expectations['can_pay_online'])->toBeFalse()
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
@@ -620,6 +635,59 @@ test('citizen permit draft document audit preserves a failed report when canonic
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
 
+test('citizen permit processing scenario audits browser financial state against canonical records', function () {
+    Storage::fake('local');
+
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    $operator = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_permit_processing_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'citizen-processing-test-001');
+    $runner = app(CitizenPermitProcessingVisibilityScenario::class);
+    $manifest = $runner->prepare($scenario, 'citizen-processing-test-001', [
+        'applicant' => $citizen,
+        'operator' => $operator,
+    ], $artifactStore);
+    $artifactStore->putJson('browser/report.json', [
+        'result' => ['passed' => true],
+        'citizen_processing' => [
+            'application_status' => $manifest['resources']['application_status'],
+            'assessment_id' => $manifest['resources']['assessment_id'],
+            'assessment_status' => $manifest['resources']['assessment_status'],
+            'assessment_total_amount_cents' => $manifest['resources']['assessment_total_amount_cents'],
+            'payment_schedule_id' => $manifest['resources']['payment_schedule_id'],
+            'payment_schedule_status' => $manifest['resources']['payment_schedule_status'],
+            'payment_total_amount_cents' => $manifest['resources']['payment_total_amount_cents'],
+            'payment_paid_amount_cents' => $manifest['resources']['payment_paid_amount_cents'],
+            'payment_balance_amount_cents' => $manifest['resources']['payment_balance_amount_cents'],
+            'online_payment_status' => 'blocked',
+            'can_pay_online' => false,
+            'payment_action_visible' => false,
+        ],
+        'checks' => [],
+        'artifacts' => [
+            'screenshots' => [
+                '02-citizen-processing-detail' => 'browser/screenshots/02-citizen-processing-detail.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($manifest, $artifactStore);
+    $audit = $artifactStore->readJson('terminal/audit.json');
+
+    expect($audited['result'])
+        ->terminal->toBe('passed')
+        ->browser->toBe('passed')
+        ->audit->toBe('passed')
+        ->passed->toBeTrue()
+        ->and($audit['canonical']['submitted_by_id'])->toBe($citizen->id)
+        ->and($audit['canonical']['application_status'])->toBe(PermitApplicationStatus::PendingPayment->value)
+        ->and($audit['canonical']['assessment_total_amount_cents'])->toBeGreaterThan(0)
+        ->and($audit['canonical']['payment_balance_amount_cents'])->toBe($audit['canonical']['assessment_total_amount_cents'])
+        ->and(collect($manifest['steps'])->firstWhere('key', 'citizen-owned-application-prepared')['actor'])->toBe('applicant')
+        ->and(collect($manifest['steps'])->firstWhere('key', 'citizen-owned-application-prepared')['actual']['submitted_by_id'])->toBe($citizen->id)
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
+});
+
 test('manual collection receipt scenario executes treasury actions idempotently', function () {
     Storage::fake('local');
 
@@ -879,6 +947,30 @@ test('command prepares the citizen permit draft document visibility scenario', f
         ->and($manifest['result']['terminal'])->toBe('passed')
         ->and($manifest['resources']['expected_document']['submission_readiness'])->toBe('not_determined')
         ->and($artifactStore->exists($manifest['resources']['expected_document']['fixture_path']))->toBeTrue()
+        ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
+});
+
+test('command prepares the citizen permit processing visibility scenario', function () {
+    Storage::fake('local');
+
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    $operator = configuredScenarioUser('operator@example.test');
+    config()->set('lifecycle_scenarios.actors.citizen_applicant.email', $citizen->email);
+    config()->set('lifecycle_scenarios.actors.primary_operator.email', $operator->email);
+
+    $this->artisan('lifecycle:scenario', [
+        'scenario' => 'citizen_permit_processing_visibility',
+        '--run-id' => 'citizen-processing-command-test-001',
+        '--phase' => 'prepare',
+    ])->assertSuccessful();
+
+    $artifactStore = new ScenarioArtifactStore('citizen_permit_processing_visibility', 'citizen-processing-command-test-001');
+    $manifest = $artifactStore->readJson('manifest.json');
+
+    expect($manifest['scenario']['key'])->toBe('citizen_permit_processing_visibility')
+        ->and($manifest['result']['terminal'])->toBe('passed')
+        ->and($manifest['resources']['application_status'])->toBe(PermitApplicationStatus::PendingPayment->value)
+        ->and($manifest['resources']['payment_balance_amount_cents'])->toBe($manifest['resources']['assessment_total_amount_cents'])
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
 });
 
@@ -1791,6 +1883,7 @@ function configuredCitizenScenarioUser(string $email): User
         UserPermission::UploadOwnPermitApplicationDocuments,
         UserPermission::ViewOwnPermitApplications,
         UserPermission::ViewOwnPermitApplicationDocuments,
+        UserPermission::ViewOwnPermitApplicationFinancials,
     ])->map(fn (UserPermission $permission): int => Permission::factory()->create([
         'code' => $permission->value,
     ])->id);
