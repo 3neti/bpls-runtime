@@ -4,6 +4,7 @@ namespace App\Actions;
 
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
+use Illuminate\Support\Str;
 
 final class RenderApplicationFormPdf
 {
@@ -20,12 +21,12 @@ final class RenderApplicationFormPdf
             'Business Permit and Licensing System',
             'Application form artifact renders currently captured intake facts; full TOR field parity remains unresolved.',
         );
-        $page = $document->addPage($this->applicationLabel($permitApplication));
+        $page = $document->addPage(Str::limit($this->applicationLabel($permitApplication), 46));
         $y = SimplePdfDocument::ContentTop;
 
         $document->rectangle($page, 42, $y - 88, 511, 88, 0.94);
         $document->text($page, 'APPLICATION', 54, $y - 22, 8, true);
-        $document->text($page, $this->applicationLabel($permitApplication), 54, $y - 46, 16, true, monospace: true);
+        $document->wrappedText($page, $this->applicationLabel($permitApplication), 54, $y - 43, 320, 11, 13, true, true);
         $document->text($page, 'APPLICATION YEAR', 406, $y - 22, 8, true);
         $document->text($page, (string) $permitApplication->application_year, 541, $y - 45, 18, true, 'right');
         $document->text($page, 'Type: '.$this->label($permitApplication->type->value), 54, $y - 67, 8);
@@ -42,6 +43,7 @@ final class RenderApplicationFormPdf
         ]);
 
         $y = $this->section($document, $page, $y, 'Business Information', [
+            'Application number' => $this->applicationLabel($permitApplication),
             'Business name' => $business->name,
             'Trade name' => $business->trade_name ?? 'Not recorded',
             'Registration' => $business->registration_number ?? 'Not recorded',

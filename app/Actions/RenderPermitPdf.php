@@ -4,6 +4,7 @@ namespace App\Actions;
 
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
+use Illuminate\Support\Str;
 
 final class RenderPermitPdf
 {
@@ -32,12 +33,12 @@ final class RenderPermitPdf
             $documentConfiguration['municipality']['system_name'],
             'Permit release, QR verification, signatories, and clearance policy remain unresolved.',
         );
-        $page = $document->addPage($this->applicationLabel($permitApplication));
+        $page = $document->addPage(Str::limit($this->applicationLabel($permitApplication), 46));
         $y = SimplePdfDocument::ContentTop;
 
         $document->rectangle($page, 42, $y - 88, 511, 88, 0.94);
         $document->text($page, 'PERMIT APPLICATION', 54, $y - 22, 8, true);
-        $document->text($page, $this->applicationLabel($permitApplication), 54, $y - 46, 16, true, monospace: true);
+        $document->wrappedText($page, $this->applicationLabel($permitApplication), 54, $y - 43, 320, 11, 13, true, true);
         $document->text($page, 'APPLICATION YEAR', 406, $y - 22, 8, true);
         $document->text($page, (string) $permitApplication->application_year, 541, $y - 45, 18, true, 'right');
         $document->text($page, 'Type: '.$this->label($permitApplication->type->value), 54, $y - 67, 8);
@@ -224,6 +225,7 @@ final class RenderPermitPdf
      * @param  array{
      *     reference: string,
      *     url: string,
+     *     view_url: string,
      *     status: string,
      *     can_verify_release: bool,
      *     released: bool,
@@ -234,7 +236,8 @@ final class RenderPermitPdf
     {
         return $this->section($document, $page, $y, 'Verification Boundary', [
             'Reference' => $verificationBoundary['reference'],
-            'Public URL' => $verificationBoundary['url'],
+            'Public page' => $verificationBoundary['view_url'],
+            'Verification API' => $verificationBoundary['url'],
             'Status' => $this->label($verificationBoundary['status']),
             'Policy note' => $verificationBoundary['policy_note'],
         ]);

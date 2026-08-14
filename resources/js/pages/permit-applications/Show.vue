@@ -162,6 +162,7 @@ type PermitApplication = {
     verification_boundary: {
         reference: string;
         url: string;
+        view_url: string;
         status: string;
         can_verify_release: boolean;
         released: boolean;
@@ -1062,11 +1063,28 @@ function booleanEntries(
             <section
                 class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
             >
-                <div class="mb-3 flex items-center gap-2">
-                    <LinkIcon class="size-4 text-muted-foreground" />
-                    <h2 class="text-sm font-semibold text-foreground">
-                        Verification boundary
-                    </h2>
+                <div
+                    class="mb-3 flex flex-wrap items-center justify-between gap-3"
+                >
+                    <div class="flex items-center gap-2">
+                        <LinkIcon class="size-4 text-muted-foreground" />
+                        <h2 class="text-sm font-semibold text-foreground">
+                            Verification boundary
+                        </h2>
+                    </div>
+                    <Button as-child variant="outline">
+                        <a
+                            :href="
+                                permitApplication.verification_boundary
+                                    .view_url
+                            "
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <LinkIcon />
+                            Open public page
+                        </a>
+                    </Button>
                 </div>
                 <dl class="grid gap-3 text-sm md:grid-cols-4">
                     <div>
@@ -1114,7 +1132,18 @@ function booleanEntries(
                     </div>
                     <div class="md:col-span-4">
                         <dt class="text-xs text-muted-foreground">
-                            Public URL
+                            Public page
+                        </dt>
+                        <dd class="font-mono text-xs break-all">
+                            {{
+                                permitApplication.verification_boundary
+                                    .view_url
+                            }}
+                        </dd>
+                    </div>
+                    <div class="md:col-span-4">
+                        <dt class="text-xs text-muted-foreground">
+                            Verification API
                         </dt>
                         <dd class="font-mono text-xs break-all">
                             {{ permitApplication.verification_boundary.url }}

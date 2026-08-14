@@ -8,6 +8,7 @@ use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\EnsurePermitApplicationClearances;
 use App\Actions\RenderApplicationFormPdf;
 use App\Actions\RenderPermitPdf;
+use App\Actions\SimplePdfDocument;
 use App\Enums\AssessmentStatus;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
@@ -354,6 +355,8 @@ test('staff users with view permission can review a permit application', functio
             ->where('permitApplication.permit_artifact.can_issue', false)
             ->where('permitApplication.permit_artifact.can_release', false)
             ->where('permitApplication.permit_artifact.can_make_legally_effective', false)
+            ->where('permitApplication.verification_boundary.url', fn (string $url): bool => str_contains($url, '/permits/verify/'.$application->id.'/'))
+            ->where('permitApplication.verification_boundary.view_url', fn (string $url): bool => str_ends_with($url, '/view'))
             ->where('permitApplication.verification_boundary.can_verify_release', false)
         );
 });
@@ -815,6 +818,12 @@ test('staff users with view permission can open a permit pdf artifact', function
         ->toContain('Generated permit artifacts support authority review')
         ->toContain('VERIFICATION BOUNDARY')
         ->toContain('PVA-'.$application->id.'-')
+        ->toContain('Public page')
+        ->toContain(route('public.permits.verify.view', [
+            'permitApplication' => $application,
+            'verificationCode' => app(DescribePermitVerificationBoundary::class)->handle($application)['reference'],
+        ]))
+        ->toContain('Verification API')
         ->toContain(route('public.permits.verify', [
             'permitApplication' => $application,
             'verificationCode' => app(DescribePermitVerificationBoundary::class)->handle($application)['reference'],
@@ -843,6 +852,28 @@ test('permit verification boundary provides a deterministic public artifact refe
         ->and($verification['released'])->toBeFalse()
         ->and($verification['can_verify_release'])->toBeFalse()
         ->and(app(DescribePermitVerificationBoundary::class)->handle($application->fresh()))->toBe($verification);
+});
+
+test('permit documents keep a long application number readable and searchable', function () {
+    $application = permitDocumentFixture();
+    $application->update([
+        'application_number' => 'APP-SCENARIO-PUBLIC-VERIFICATION-URL-PROPAGATION-20260814-001',
+    ]);
+
+    $pdf = app(RenderPermitPdf::class)->handle($application->fresh());
+    $applicationFormPdf = app(RenderApplicationFormPdf::class)->handle($application->fresh());
+    $headerLines = (new SimplePdfDocument('', '', '', ''))->wrap(
+        $application->application_number,
+        320,
+        11,
+        true,
+    );
+
+    expect($headerLines)->toHaveCount(2)
+        ->and($pdf)->toContain($headerLines[0])
+        ->and($pdf)->toContain($headerLines[1])
+        ->and($applicationFormPdf)->toContain('Application number')
+        ->and($applicationFormPdf)->toContain($application->application_number);
 });
 
 test('public permit verification confirms artifact identity but not release', function () {

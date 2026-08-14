@@ -358,6 +358,7 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($firstManifest['resources']['permit_artifact_status'])->toBe('generated_artifact_available')
         ->and($firstManifest['resources']['permit_verification_reference'])->toStartWith('PVA-'.$firstManifest['resources']['permit_application_id'].'-')
         ->and($firstManifest['resources']['permit_verification_url'])->toContain($firstManifest['resources']['permit_verification_reference'])
+        ->and($firstManifest['resources']['permit_verification_view_url'])->toBe($firstManifest['resources']['permit_verification_url'].'/view')
         ->and($firstManifest['resources']['receipt_void_boundary_reference'])->toStartWith('RVB-'.$firstManifest['resources']['record_id'].'-')
         ->and(Receipt::query()->count())->toBe(1)
         ->and(TreasuryCollection::query()->count())->toBe(1)
@@ -397,6 +398,7 @@ test('new permit lifecycle scenario executes real domain actions to authority bo
         ->and($firstManifest['resources']['collection_id'])->toBe($secondManifest['resources']['collection_id'])
         ->and($firstManifest['resources']['permit_artifact_status'])->toBe('generated_artifact_available')
         ->and($firstManifest['resources']['permit_verification_reference'])->toStartWith('PVA-'.$firstManifest['resources']['permit_application_id'].'-')
+        ->and($firstManifest['resources']['permit_verification_view_url'])->toBe($firstManifest['resources']['permit_verification_url'].'/view')
         ->and($firstManifest['resources']['receipt_void_boundary_reference'])->toStartWith('RVB-'.$firstManifest['resources']['record_id'].'-')
         ->and($permitApplication->status)->toBe(PermitApplicationStatus::PendingPayment)
         ->and($permitApplication->metadata['release_policy_boundary']['blocked_transition'])->toBe(PermitApplicationStatus::Released->value)
@@ -597,6 +599,8 @@ test('manual collection receipt scenario audit compares browser evidence with ca
         ],
         'verification' => [
             'reference' => $verification['reference'],
+            'api_url' => $manifest['resources']['permit_verification_url'],
+            'public_page_url' => $manifest['resources']['permit_verification_view_url'],
             'public_status' => 'artifact_only',
             'can_verify_release' => false,
             'released' => false,

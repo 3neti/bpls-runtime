@@ -2656,8 +2656,15 @@ async function inspectManualReceiptPermitVerificationBoundary(
             .first()
             .isVisible()
             .catch(() => false));
-    const publicRouteVisible = await targetPage
-        .getByText(manifest.resources.permit_verification_url, { exact: false })
+    const publicPageRouteVisible = await targetPage
+        .getByText(manifest.resources.permit_verification_view_url, {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const verificationApiRouteVisible = await targetPage
+        .getByText(verificationUrl, { exact: true })
         .first()
         .isVisible()
         .catch(() => false);
@@ -2698,10 +2705,18 @@ async function inspectManualReceiptPermitVerificationBoundary(
     );
     checks.push(
         check(
-            'permit-verification-url-visible',
-            'Permit detail shows public verification URL',
+            'permit-verification-public-page-url-visible',
+            'Permit detail shows exact public verification page URL',
             true,
-            publicRouteVisible,
+            publicPageRouteVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'permit-verification-api-url-visible',
+            'Permit detail identifies the exact verification API URL separately',
+            true,
+            verificationApiRouteVisible,
         ),
     );
 
@@ -2795,6 +2810,8 @@ async function inspectManualReceiptPermitVerificationBoundary(
         permitPdfContentType.includes('application/pdf') &&
         permitPdfBody.startsWith('%PDF-1.4') &&
         permitPdfBody.includes(reference) &&
+        permitPdfBody.includes(verificationViewUrl) &&
+        permitPdfBody.includes(verificationUrl) &&
         permitPdfBody.includes('VERIFICATION BOUNDARY') &&
         permitPdfBody.includes('AUTHORITY BOUNDARY') &&
         permitPdfBody.includes(
@@ -2803,7 +2820,7 @@ async function inspectManualReceiptPermitVerificationBoundary(
     checks.push(
         check(
             'permit-pdf-verification-reference-visible',
-            'Permit PDF contains exact verification reference',
+            'Permit PDF contains exact verification reference, public page, and API URLs',
             true,
             permitPdfVisible,
             {
@@ -2811,6 +2828,8 @@ async function inspectManualReceiptPermitVerificationBoundary(
                 status: permitPdfResponse.status(),
                 content_type: permitPdfContentType,
                 reference,
+                public_page_url: verificationViewUrl,
+                api_url: verificationUrl,
             },
         ),
     );
@@ -2921,6 +2940,8 @@ async function inspectManualReceiptPermitVerificationBoundary(
         canVerifyRelease,
         released,
         publicPageVisible,
+        manifest.resources.permit_verification_url,
+        manifest.resources.permit_verification_view_url,
     );
     await screenshot(
         targetPage,
@@ -3091,8 +3112,12 @@ function reportVerification(
     canVerifyRelease,
     released,
     publicPageVisible = false,
+    apiUrl = null,
+    publicPageUrl = null,
 ) {
     verificationEvidence.reference = reference;
+    verificationEvidence.api_url = apiUrl;
+    verificationEvidence.public_page_url = publicPageUrl;
     verificationEvidence.public_status = publicStatus;
     verificationEvidence.can_verify_release = canVerifyRelease;
     verificationEvidence.released = released;
