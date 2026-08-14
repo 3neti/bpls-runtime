@@ -96,7 +96,24 @@ class CreateAssessmentForPermitApplication
                     ->orWhereIn('line_of_business_id', $lineOfBusinessIds);
             })
             ->orderBy('code')
-            ->get();
+            ->get()
+            ->filter(fn (FeeRule $feeRule): bool => $this->appliesToPermitApplicationType($feeRule, $permitApplication))
+            ->values();
+    }
+
+    private function appliesToPermitApplicationType(FeeRule $feeRule, PermitApplication $permitApplication): bool
+    {
+        $applicationTypes = $feeRule->metadata['application_types'] ?? null;
+
+        if ($applicationTypes === null) {
+            return true;
+        }
+
+        if (! is_array($applicationTypes)) {
+            return false;
+        }
+
+        return in_array($permitApplication->type->value, $applicationTypes, true);
     }
 
     /**
