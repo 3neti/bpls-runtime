@@ -41,12 +41,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.assessments.pdf');
         Route::post('assessments/{assessment}/payment-schedule', [AssessmentPaymentScheduleController::class, 'store'])
             ->name('assessments.payment-schedule.store');
+        Route::get('payment-schedules', [AssessmentPaymentScheduleController::class, 'index'])
+            ->name('payment-schedules.index');
         Route::get('payment-schedules/{paymentSchedule}', [AssessmentPaymentScheduleController::class, 'show'])
             ->name('payment-schedules.show');
         Route::post('payment-schedules/{paymentSchedule}/collections', [PaymentScheduleCollectionController::class, 'store'])
             ->name('payment-schedules.collections.store');
         Route::post('collections/{collection}/receipt', [CollectionReceiptController::class, 'store'])
             ->name('collections.receipt.store');
+        Route::get('receipts', [ReceiptController::class, 'index'])
+            ->name('receipts.index');
         Route::get('receipts/{receipt}', [ReceiptController::class, 'show'])
             ->name('receipts.show');
         Route::get('receipts/{receipt}/pdf', [ReceiptController::class, 'pdf'])

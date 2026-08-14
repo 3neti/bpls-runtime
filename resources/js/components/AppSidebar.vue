@@ -7,6 +7,8 @@ import {
     Film,
     FolderGit2,
     LayoutGrid,
+    ReceiptText,
+    WalletCards,
 } from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
@@ -21,8 +23,10 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import { index as permitApplicationIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
+import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
 import { index as storyboardIndex } from '@/actions/App/Http/Controllers/Staff/StoryboardController';
 import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
@@ -42,6 +46,16 @@ const mainNavItems: NavItem[] = [
         title: 'Permit Assessments',
         href: assessmentIndex(),
         icon: Calculator,
+    },
+    {
+        title: 'Payment Schedules',
+        href: paymentScheduleIndex(),
+        icon: WalletCards,
+    },
+    {
+        title: 'Receipts',
+        href: receiptIndex(),
+        icon: ReceiptText,
     },
     {
         title: 'Storyboards',

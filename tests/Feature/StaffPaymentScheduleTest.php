@@ -3,10 +3,13 @@
 use App\Enums\AssessmentStatus;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
+use App\Enums\PaymentScheduleStatus;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\UserPermission;
 use App\Models\Assessment;
 use App\Models\AssessmentLine;
+use App\Models\Business;
+use App\Models\BusinessOwner;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -151,6 +154,82 @@ test('staff users with view permission can review a payment schedule', function 
             ->where('paymentSchedule.permit_application.application_number', 'APP-PAY-002')
             ->where('paymentSchedule.lines.0.code', 'APPLICATION-FEE')
         );
+});
+
+test('staff users with view permission can search and filter payment schedule queue', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPaymentSchedules,
+    ]);
+
+    $owner = BusinessOwner::factory()->create(['name' => 'Queue Owner Alpha']);
+    $business = Business::factory()->for($owner, 'owner')->create([
+        'name' => 'Queue Hardware Alpha',
+        'trade_name' => 'Alpha Tools',
+        'registration_number' => 'QUEUE-BN-ALPHA',
+    ]);
+    $application = PermitApplication::factory()->for($business)->create([
+        'application_number' => 'APP-QUEUE-ALPHA',
+        'application_year' => 2026,
+    ]);
+    $assessment = Assessment::factory()->for($application)->create([
+        'sequence' => 4,
+        'status' => AssessmentStatus::Computed,
+    ]);
+    $matchingSchedule = PaymentSchedule::factory()
+        ->for($application, 'permitApplication')
+        ->for($assessment)
+        ->create([
+            'sequence' => 7,
+            'status' => PaymentScheduleStatus::Paid,
+            'total_amount_cents' => 50_000,
+            'paid_amount_cents' => 50_000,
+        ]);
+    PaymentSchedule::factory()->create([
+        'status' => PaymentScheduleStatus::Pending,
+        'total_amount_cents' => 10_000,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('staff.payment-schedules.index', [
+            'q' => 'QUEUE-ALPHA',
+            'status' => PaymentScheduleStatus::Paid->value,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('payment-schedules/Index')
+            ->where('filters.q', 'QUEUE-ALPHA')
+            ->where('filters.status', PaymentScheduleStatus::Paid->value)
+            ->where('paymentSchedules.data.0.id', $matchingSchedule->id)
+            ->where('paymentSchedules.data.0.permit_application.application_number', 'APP-QUEUE-ALPHA')
+            ->where('paymentSchedules.data.0.permit_application.business_name', 'Queue Hardware Alpha')
+            ->where('paymentSchedules.data.0.status', PaymentScheduleStatus::Paid->value)
+            ->where('paymentSchedules.data.0.paid_amount_cents', 50_000)
+        );
+});
+
+test('payment schedule queue rejects invalid status filters', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPaymentSchedules,
+    ]);
+
+    $this->actingAs($user)
+        ->from(route('staff.payment-schedules.index'))
+        ->get(route('staff.payment-schedules.index', ['status' => 'settled']))
+        ->assertRedirect(route('staff.payment-schedules.index'))
+        ->assertSessionHasErrors('status');
+});
+
+test('staff users without view permission cannot open payment schedule queue', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::PreparePaymentSchedules,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('staff.payment-schedules.index'))
+        ->assertForbidden();
 });
 
 test('assessment review exposes payment schedule permission state', function () {

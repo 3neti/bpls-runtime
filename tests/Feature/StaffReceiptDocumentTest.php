@@ -54,6 +54,60 @@ test('staff users with view receipt permission can view receipt detail evidence'
         );
 });
 
+test('staff users with view receipt permission can search and filter receipt queue', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewReceipts,
+    ]);
+
+    $receipt = receiptDocumentFixture();
+    Receipt::factory()->create([
+        'receipt_number' => 'UNRELATED-OR-999',
+        'status' => ReceiptStatus::Voided,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('staff.receipts.index', [
+            'q' => 'Codex Browser Payer',
+            'status' => ReceiptStatus::Issued->value,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('receipts/Index')
+            ->where('filters.q', 'Codex Browser Payer')
+            ->where('filters.status', ReceiptStatus::Issued->value)
+            ->where('receipts.data.0.id', $receipt->id)
+            ->where('receipts.data.0.receipt_number', 'LOCAL-OR-001')
+            ->where('receipts.data.0.collection.payer_name', 'Codex Browser Payer')
+            ->where('receipts.data.0.permit_application.application_number', 'LOCAL-PERMIT')
+            ->where('receipts.data.0.status', ReceiptStatus::Issued->value)
+        );
+});
+
+test('receipt queue rejects invalid status filters', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewReceipts,
+    ]);
+
+    $this->actingAs($user)
+        ->from(route('staff.receipts.index'))
+        ->get(route('staff.receipts.index', ['status' => 'reprinted']))
+        ->assertRedirect(route('staff.receipts.index'))
+        ->assertSessionHasErrors('status');
+});
+
+test('staff users without view receipt permission cannot open receipt queue', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewCollections,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('staff.receipts.index'))
+        ->assertForbidden();
+});
+
 test('receipt void boundary descriptor is deterministic and does not authorize voiding', function () {
     $receipt = receiptDocumentFixture();
 

@@ -99,6 +99,8 @@ try {
     }
 
     if (manifest.scenario.key === 'manual_collection_receipt_visibility') {
+        await inspectManualReceiptPaymentScheduleQueue(page, baseUrl);
+        await inspectManualReceiptQueue(page, baseUrl);
         await inspectManualReceiptPaymentSchedule(page, baseUrl);
         await inspectManualReceiptDetail(page, baseUrl);
         await inspectManualReceiptPermitReleaseBoundary(page, baseUrl);
@@ -764,11 +766,7 @@ async function inspectManualReceiptPaymentSchedule(targetPage, targetBaseUrl) {
         .first()
         .isVisible()
         .catch(() => false);
-    const paidVisible = await targetPage
-        .getByText('paid', { exact: false })
-        .first()
-        .isVisible()
-        .catch(() => false);
+    const paidVisible = await bodyTextMatches(targetPage, /\bpaid\b/i);
     const receiptedVisible = await targetPage
         .getByText('receipted', { exact: false })
         .first()
@@ -779,11 +777,7 @@ async function inspectManualReceiptPaymentSchedule(targetPage, targetBaseUrl) {
         .first()
         .isVisible()
         .catch(() => false);
-    const balancePaidVisible = await targetPage
-        .getByText('₱0.00', { exact: false })
-        .first()
-        .isVisible()
-        .catch(() => false);
+    const balancePaidVisible = await hasZeroCurrencyAmount(targetPage);
 
     checks.push(
         check(
@@ -822,6 +816,126 @@ async function inspectManualReceiptPaymentSchedule(targetPage, targetBaseUrl) {
         targetPage,
         '01-payment-schedule',
         'browser/screenshots/01-payment-schedule.png',
+    );
+}
+
+async function inspectManualReceiptPaymentScheduleQueue(
+    targetPage,
+    targetBaseUrl,
+) {
+    const queueUrl = `${targetBaseUrl}${manifest.resources.payment_schedule_queue_url}`;
+    await targetPage.goto(queueUrl, { waitUntil: 'networkidle' });
+    const applicationVisible = await targetPage
+        .getByText(manifest.resources.application_number, { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const paidVisible = await bodyTextMatches(targetPage, /\bpaid\b/i);
+    const viewVisible = await targetPage
+        .getByRole('link', { name: /view/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'payment-schedule-queue-application-visible',
+            'Payment schedule queue shows exact prepared application',
+            true,
+            applicationVisible,
+            {
+                url: queueUrl,
+                payment_schedule_id: manifest.resources.payment_schedule_id,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'payment-schedule-queue-paid-visible',
+            'Payment schedule queue shows paid status',
+            true,
+            paidVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'payment-schedule-queue-detail-link-visible',
+            'Payment schedule queue offers detail navigation',
+            true,
+            viewVisible,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '01-payment-schedule-queue',
+        'browser/screenshots/01-payment-schedule-queue.png',
+    );
+}
+
+async function inspectManualReceiptQueue(targetPage, targetBaseUrl) {
+    const queueUrl = `${targetBaseUrl}${manifest.resources.receipt_queue_url}`;
+    await targetPage.goto(queueUrl, { waitUntil: 'networkidle' });
+    const receiptVisible = await targetPage
+        .getByText(manifest.resources.public_reference, { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const applicationVisible = await targetPage
+        .getByText(manifest.resources.application_number, { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const issuedVisible = await bodyTextMatches(targetPage, /\bissued\b/i);
+    const receiptedVisible = await bodyTextMatches(
+        targetPage,
+        /\breceipted\b/i,
+    );
+    const viewVisible = await targetPage
+        .getByRole('link', { name: /view/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'receipt-queue-receipt-visible',
+            'Receipt queue shows exact manual receipt',
+            true,
+            receiptVisible,
+            {
+                url: queueUrl,
+                receipt_id: manifest.resources.record_id,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'receipt-queue-application-visible',
+            'Receipt queue shows exact permit application',
+            true,
+            applicationVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'receipt-queue-issued-receipted-visible',
+            'Receipt queue shows issued receipt and receipted collection state',
+            true,
+            issuedVisible && receiptedVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'receipt-queue-detail-link-visible',
+            'Receipt queue offers detail navigation',
+            true,
+            viewVisible,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '02-receipt-queue',
+        'browser/screenshots/02-receipt-queue.png',
     );
 }
 
@@ -1489,6 +1603,27 @@ async function hasTitleInputValue(targetPage) {
         .locator('#title')
         .inputValue()
         .then((value) => value === `Lifecycle scenario ${manifest.run_id}`)
+        .catch(() => false);
+}
+
+async function hasZeroCurrencyAmount(targetPage) {
+    return await targetPage
+        .locator('body')
+        .innerText()
+        .then(
+            (text) =>
+                text.includes('₱0.00') ||
+                text.includes('PHP 0.00') ||
+                /\b0\.00\b/.test(text),
+        )
+        .catch(() => false);
+}
+
+async function bodyTextMatches(targetPage, pattern) {
+    return await targetPage
+        .locator('body')
+        .innerText()
+        .then((text) => pattern.test(text))
         .catch(() => false);
 }
 

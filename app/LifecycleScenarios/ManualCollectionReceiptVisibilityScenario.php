@@ -169,7 +169,15 @@ final class ManualCollectionReceiptVisibilityScenario
             'payment_schedule_id' => $paymentSchedule->id,
             'collection_id' => $collection->id,
             'permit_application_url' => route('staff.permit-applications.show', $permitApplication, false),
+            'payment_schedule_queue_url' => route('staff.payment-schedules.index', [
+                'q' => $permitApplication->application_number,
+                'status' => PaymentScheduleStatus::Paid->value,
+            ], false),
             'payment_schedule_url' => route('staff.payment-schedules.show', $paymentSchedule, false),
+            'receipt_queue_url' => route('staff.receipts.index', [
+                'q' => $receipt->receipt_number,
+                'status' => ReceiptStatus::Issued->value,
+            ], false),
             'receipt_url' => route('staff.receipts.show', $receipt, false),
             'receipt_pdf_url' => route('staff.receipts.pdf', $receipt, false),
             'receipt_void_boundary_reference' => $receiptVoidBoundary['reference'],

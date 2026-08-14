@@ -5,14 +5,17 @@ namespace App\Http\Controllers\Staff;
 use App\Actions\DescribeReceiptVoidBoundary;
 use App\Actions\RenderReceiptPdf;
 use App\Actions\VoidReceipt;
+use App\Enums\ReceiptStatus;
 use App\Enums\UserPermission;
 use App\Exceptions\UnresolvedReceiptPolicy;
 use App\Http\Controllers\Controller;
 use App\Models\CollectionAllocation;
 use App\Models\Receipt;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -21,6 +24,63 @@ class ReceiptController extends Controller
     public function __construct(
         private readonly DescribeReceiptVoidBoundary $describeVoidBoundary,
     ) {}
+
+    public function index(Request $request): Response
+    {
+        Gate::authorize(UserPermission::ViewReceipts->value);
+
+        $filters = $request->validate([
+            'q' => ['nullable', 'string', 'max:120'],
+            'status' => ['nullable', Rule::enum(ReceiptStatus::class)],
+        ]);
+        $search = str($filters['q'] ?? '')->trim()->toString();
+        $status = $filters['status'] ?? null;
+
+        $receipts = Receipt::query()
+            ->with(['issuedBy', 'treasuryCollection', 'paymentSchedule', 'permitApplication.business.owner'])
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where(function ($query) use ($search): void {
+                    $query
+                        ->where('receipt_number', 'like', '%'.$search.'%')
+                        ->orWhereHas('treasuryCollection', function ($query) use ($search): void {
+                            $query
+                                ->where('payer_name', 'like', '%'.$search.'%')
+                                ->orWhere('reference_number', 'like', '%'.$search.'%');
+                        })
+                        ->orWhereHas('permitApplication', function ($query) use ($search): void {
+                            $query->where('application_number', 'like', '%'.$search.'%');
+                        })
+                        ->orWhereHas('permitApplication.business', function ($query) use ($search): void {
+                            $query
+                                ->where('name', 'like', '%'.$search.'%')
+                                ->orWhere('trade_name', 'like', '%'.$search.'%')
+                                ->orWhere('registration_number', 'like', '%'.$search.'%');
+                        })
+                        ->orWhereHas('permitApplication.business.owner', function ($query) use ($search): void {
+                            $query->where('name', 'like', '%'.$search.'%');
+                        });
+                });
+            })
+            ->when($status !== null, fn ($query) => $query->where('status', $status))
+            ->latest('issued_at')
+            ->paginate(15)
+            ->withQueryString()
+            ->through(fn (Receipt $receipt): array => $this->receiptQueuePayload($receipt));
+
+        return Inertia::render('receipts/Index', [
+            'receipts' => $receipts,
+            'filters' => [
+                'q' => $search,
+                'status' => $status,
+            ],
+            'statuses' => collect(ReceiptStatus::cases())
+                ->map(fn (ReceiptStatus $status): array => [
+                    'label' => str($status->value)->replace('_', ' ')->title()->toString(),
+                    'value' => $status->value,
+                ])
+                ->values(),
+        ]);
+    }
 
     public function show(Receipt $receipt): Response
     {
@@ -70,6 +130,43 @@ class ReceiptController extends Controller
                 'receipt_policy' => $exception->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function receiptQueuePayload(Receipt $receipt): array
+    {
+        return [
+            'id' => $receipt->id,
+            'status' => $receipt->status->value,
+            'numbering_authority' => $receipt->numbering_authority,
+            'receipt_number' => $receipt->receipt_number,
+            'amount_cents' => $receipt->amount_cents,
+            'issued_at' => $receipt->issued_at->toIso8601String(),
+            'issued_by' => $receipt->issuedBy?->name,
+            'collection' => [
+                'id' => $receipt->treasuryCollection->id,
+                'status' => $receipt->treasuryCollection->status->value,
+                'method' => $receipt->treasuryCollection->method->value,
+                'payer_name' => $receipt->treasuryCollection->payer_name,
+                'reference_number' => $receipt->treasuryCollection->reference_number,
+            ],
+            'payment_schedule' => [
+                'id' => $receipt->paymentSchedule->id,
+                'sequence' => $receipt->paymentSchedule->sequence,
+                'status' => $receipt->paymentSchedule->status->value,
+            ],
+            'permit_application' => [
+                'id' => $receipt->permitApplication->id,
+                'application_number' => $receipt->permitApplication->application_number,
+                'status' => $receipt->permitApplication->status->value,
+                'application_year' => $receipt->permitApplication->application_year,
+                'business_name' => $receipt->permitApplication->business->name,
+                'trade_name' => $receipt->permitApplication->business->trade_name,
+                'owner_name' => $receipt->permitApplication->business->owner->name,
+            ],
+        ];
     }
 
     /**
