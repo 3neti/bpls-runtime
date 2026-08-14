@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, Save } from '@lucide/vue';
+import { ArrowLeft, Plus, Save, Trash2 } from '@lucide/vue';
+import { ref } from 'vue';
 import {
     index,
     store,
@@ -23,11 +24,37 @@ type LineOfBusiness = {
     code: string;
 };
 
+type BusinessActivityRow = {
+    key: number;
+};
+
 defineProps<{
     currentApplicationYear: number;
     applicationTypes: Option[];
     lineOfBusinesses: LineOfBusiness[];
 }>();
+
+const businessActivities = ref<BusinessActivityRow[]>([{ key: 1 }]);
+let nextBusinessActivityKey = 2;
+
+function addBusinessActivity(): void {
+    if (businessActivities.value.length >= 20) {
+        return;
+    }
+
+    businessActivities.value.push({ key: nextBusinessActivityKey });
+    nextBusinessActivityKey += 1;
+}
+
+function removeBusinessActivity(key: number): void {
+    if (businessActivities.value.length === 1) {
+        return;
+    }
+
+    businessActivities.value = businessActivities.value.filter(
+        (activity) => activity.key !== key,
+    );
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -334,69 +361,152 @@ const breadcrumbs: BreadcrumbItem[] = [
                         </select>
                         <InputError :message="errors.type" />
                     </div>
-                    <div class="grid gap-2">
-                        <Label for="line_of_business_id">
-                            Line of business
-                        </Label>
-                        <select
-                            id="line_of_business_id"
-                            name="line_of_business_id"
-                            required
-                            class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                </section>
+
+                <section
+                    data-testid="permit-business-activity-intake"
+                    class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+                >
+                    <div
+                        class="flex flex-wrap items-center justify-between gap-3"
+                    >
+                        <h2 class="text-sm font-semibold text-foreground">
+                            Business activities
+                        </h2>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            data-testid="permit-add-business-activity"
+                            :disabled="businessActivities.length >= 20"
+                            @click="addBusinessActivity"
                         >
-                            <option
-                                v-for="lineOfBusiness in lineOfBusinesses"
-                                :key="lineOfBusiness.id"
-                                :value="lineOfBusiness.id"
+                            <Plus />
+                            Add activity
+                        </Button>
+                    </div>
+
+                    <InputError :message="errors.lines" />
+
+                    <div
+                        v-for="(activity, index) in businessActivities"
+                        :key="activity.key"
+                        data-testid="permit-business-activity-row"
+                        class="grid gap-4 border-t border-sidebar-border/70 pt-4 md:grid-cols-2 lg:grid-cols-5 dark:border-sidebar-border"
+                    >
+                        <div
+                            class="flex min-h-9 items-center justify-between gap-3 md:col-span-2 lg:col-span-5"
+                        >
+                            <h3 class="text-sm font-medium text-foreground">
+                                Activity {{ index + 1 }}
+                            </h3>
+                            <Button
+                                v-if="businessActivities.length > 1"
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                :aria-label="`Remove activity ${index + 1}`"
+                                @click="removeBusinessActivity(activity.key)"
                             >
-                                {{ lineOfBusiness.name }}
-                            </option>
-                        </select>
-                        <InputError :message="errors.line_of_business_id" />
-                    </div>
-                    <div class="grid gap-2">
-                        <Label for="declared_gross_sales_pesos">
-                            Declared gross sales
-                        </Label>
-                        <Input
-                            id="declared_gross_sales_pesos"
-                            name="declared_gross_sales_pesos"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            required
-                        />
-                        <InputError
-                            :message="errors.declared_gross_sales_pesos"
-                        />
-                    </div>
-                    <div class="grid gap-2">
-                        <Label for="capital_investment_pesos">
-                            Capital investment
-                        </Label>
-                        <Input
-                            id="capital_investment_pesos"
-                            name="capital_investment_pesos"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            required
-                        />
-                        <InputError
-                            :message="errors.capital_investment_pesos"
-                        />
-                    </div>
-                    <div class="grid gap-2">
-                        <Label for="quantity">Quantity</Label>
-                        <Input
-                            id="quantity"
-                            name="quantity"
-                            type="number"
-                            min="1"
-                            :default-value="1"
-                            required
-                        />
-                        <InputError :message="errors.quantity" />
+                                <Trash2 />
+                            </Button>
+                        </div>
+                        <div class="grid gap-2 md:col-span-2">
+                            <Label :for="`lines_${index}_line_of_business_id`">
+                                Line of business
+                            </Label>
+                            <select
+                                :id="`lines_${index}_line_of_business_id`"
+                                :name="`lines[${index}][line_of_business_id]`"
+                                required
+                                class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <option value="" disabled selected>
+                                    Select a line of business
+                                </option>
+                                <option
+                                    v-for="lineOfBusiness in lineOfBusinesses"
+                                    :key="lineOfBusiness.id"
+                                    :value="lineOfBusiness.id"
+                                >
+                                    {{ lineOfBusiness.name }}
+                                </option>
+                            </select>
+                            <InputError
+                                :message="
+                                    errors[`lines.${index}.line_of_business_id`]
+                                "
+                            />
+                        </div>
+                        <div class="grid gap-2">
+                            <Label :for="`lines_${index}_declared_gross_sales`">
+                                Declared gross sales
+                            </Label>
+                            <Input
+                                :id="`lines_${index}_declared_gross_sales`"
+                                :name="`lines[${index}][declared_gross_sales_pesos]`"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                required
+                            />
+                            <InputError
+                                :message="
+                                    errors[
+                                        `lines.${index}.declared_gross_sales_pesos`
+                                    ]
+                                "
+                            />
+                        </div>
+                        <div class="grid gap-2">
+                            <Label :for="`lines_${index}_capital_investment`">
+                                Capital investment
+                            </Label>
+                            <Input
+                                :id="`lines_${index}_capital_investment`"
+                                :name="`lines[${index}][capital_investment_pesos]`"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                required
+                            />
+                            <InputError
+                                :message="
+                                    errors[
+                                        `lines.${index}.capital_investment_pesos`
+                                    ]
+                                "
+                            />
+                        </div>
+                        <div class="grid gap-2">
+                            <Label :for="`lines_${index}_quantity`">
+                                Quantity
+                            </Label>
+                            <Input
+                                :id="`lines_${index}_quantity`"
+                                :name="`lines[${index}][quantity]`"
+                                type="number"
+                                min="1"
+                                :default-value="1"
+                                required
+                            />
+                            <InputError
+                                :message="errors[`lines.${index}.quantity`]"
+                            />
+                        </div>
+                        <div class="grid gap-2">
+                            <Label :for="`lines_${index}_started_on`">
+                                Activity started on
+                            </Label>
+                            <Input
+                                :id="`lines_${index}_started_on`"
+                                :name="`lines[${index}][started_on]`"
+                                type="date"
+                            />
+                            <InputError
+                                :message="errors[`lines.${index}.started_on`]"
+                            />
+                        </div>
                     </div>
                 </section>
 

@@ -161,6 +161,139 @@ test('staff users with create permission can record a permit application', funct
         ->and($application->lines()->sole()->quantity)->toBe(2);
 });
 
+test('staff users can record multiple business activity lines atomically', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::CreatePermitApplications,
+        UserPermission::ViewPermitApplications,
+    ]);
+    $retail = LineOfBusiness::factory()->create([
+        'name' => 'Retail Store',
+        'code' => 'RETAIL-MULTI',
+    ]);
+    $services = LineOfBusiness::factory()->create([
+        'name' => 'Repair Services',
+        'code' => 'REPAIR-MULTI',
+    ]);
+
+    $response = $this->actingAs($user)
+        ->post(route('staff.permit-applications.store'), [
+            'owner_name' => 'Multiple Activity Owner',
+            'business_name' => 'Multiple Activity Business',
+            'application_number' => 'APP-2026-MULTI-001',
+            'type' => PermitApplicationType::New->value,
+            'application_year' => 2026,
+            'lines' => [
+                [
+                    'line_of_business_id' => $retail->id,
+                    'declared_gross_sales_pesos' => '125000.50',
+                    'capital_investment_pesos' => '75000.25',
+                    'quantity' => 1,
+                    'started_on' => '2020-01-15',
+                ],
+                [
+                    'line_of_business_id' => $services->id,
+                    'declared_gross_sales_pesos' => '45000.75',
+                    'capital_investment_pesos' => '15000.50',
+                    'quantity' => 2,
+                    'started_on' => '2021-06-01',
+                ],
+            ],
+        ]);
+
+    $application = PermitApplication::query()
+        ->with('lines.lineOfBusiness')
+        ->where('application_number', 'APP-2026-MULTI-001')
+        ->sole();
+
+    $response->assertRedirect(route('staff.permit-applications.show', $application));
+
+    expect($application->lines)->toHaveCount(2)
+        ->and($application->lines[0]->lineOfBusiness->code)->toBe('RETAIL-MULTI')
+        ->and($application->lines[0]->declared_gross_sales_cents)->toBe(12_500_050)
+        ->and($application->lines[0]->capital_investment_cents)->toBe(7_500_025)
+        ->and($application->lines[0]->quantity)->toBe(1)
+        ->and($application->lines[0]->started_on?->toDateString())->toBe('2020-01-15')
+        ->and($application->lines[1]->lineOfBusiness->code)->toBe('REPAIR-MULTI')
+        ->and($application->lines[1]->declared_gross_sales_cents)->toBe(4_500_075)
+        ->and($application->lines[1]->capital_investment_cents)->toBe(1_500_050)
+        ->and($application->lines[1]->quantity)->toBe(2)
+        ->and($application->lines[1]->started_on?->toDateString())->toBe('2021-06-01');
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.show', $application))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Show')
+            ->has('permitApplication.lines', 2)
+            ->where('permitApplication.lines.0.line_of_business.code', 'RETAIL-MULTI')
+            ->where('permitApplication.lines.0.started_on', '2020-01-15')
+            ->where('permitApplication.lines.1.line_of_business.code', 'REPAIR-MULTI')
+            ->where('permitApplication.lines.1.started_on', '2021-06-01')
+        );
+});
+
+test('staff multi-line intake validates every business activity before creating records', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::CreatePermitApplications,
+    ]);
+    $lineOfBusiness = LineOfBusiness::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('staff.permit-applications.store'), [
+            'owner_name' => 'Invalid Multiple Activity Owner',
+            'business_name' => 'Invalid Multiple Activity Business',
+            'type' => PermitApplicationType::New->value,
+            'application_year' => now()->year,
+            'lines' => [
+                [
+                    'line_of_business_id' => $lineOfBusiness->id,
+                    'declared_gross_sales_pesos' => '1000.00',
+                    'capital_investment_pesos' => '500.00',
+                    'quantity' => 1,
+                ],
+                [
+                    'line_of_business_id' => 999999,
+                    'declared_gross_sales_pesos' => '-1.00',
+                    'capital_investment_pesos' => 'invalid',
+                    'quantity' => 0,
+                    'started_on' => now()->addDay()->toDateString(),
+                ],
+            ],
+        ])
+        ->assertSessionHasErrors([
+            'lines.1.line_of_business_id',
+            'lines.1.declared_gross_sales_pesos',
+            'lines.1.capital_investment_pesos',
+            'lines.1.quantity',
+            'lines.1.started_on',
+        ]);
+
+    expect(PermitApplication::query()->count())->toBe(0)
+        ->and(Business::query()->count())->toBe(0)
+        ->and(BusinessOwner::query()->count())->toBe(0);
+
+    $this->actingAs($user)
+        ->post(route('staff.permit-applications.store'), [
+            'owner_name' => 'Non-list Activity Owner',
+            'business_name' => 'Non-list Activity Business',
+            'type' => PermitApplicationType::New->value,
+            'application_year' => now()->year,
+            'lines' => [
+                1 => [
+                    'line_of_business_id' => $lineOfBusiness->id,
+                    'declared_gross_sales_pesos' => '1000.00',
+                    'capital_investment_pesos' => '500.00',
+                    'quantity' => 1,
+                ],
+            ],
+        ])
+        ->assertSessionHasErrors('lines');
+
+    expect(PermitApplication::query()->count())->toBe(0);
+});
+
 test('staff intake validates establishment profile consistency', function () {
     $user = userWithPermissions([
         UserPermission::AccessStaff,
@@ -782,6 +915,18 @@ test('staff users with view permission can open an application form pdf artifact
     ]);
 
     $application = permitDocumentFixture();
+    PermitApplicationLine::factory()
+        ->for($application)
+        ->for(LineOfBusiness::factory()->create([
+            'name' => 'Repair Services',
+            'code' => 'REPAIR',
+        ]))
+        ->create([
+            'declared_gross_sales_cents' => 4_500_075,
+            'capital_investment_cents' => 1_500_050,
+            'quantity' => 2,
+            'started_on' => '2021-06-01',
+        ]);
 
     $response = $this->actingAs($user)
         ->get(route('staff.permit-applications.application-form.pdf', $application))
@@ -800,6 +945,10 @@ test('staff users with view permission can open an application form pdf artifact
         ->toContain('permit-owner@example.test')
         ->toContain('RETAIL')
         ->toContain('PHP 125,000.00')
+        ->toContain('REPAIR')
+        ->toContain('Repair Services')
+        ->toContain('PHP 45,000.75')
+        ->toContain('Started: 2021-06-01')
         ->toContain((string) $application->business->building_name)
         ->toContain((string) $application->business->property_index_number)
         ->toContain($application->business->business_area_square_meters.' square meters')

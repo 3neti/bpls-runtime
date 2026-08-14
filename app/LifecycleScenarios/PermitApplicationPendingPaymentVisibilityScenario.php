@@ -68,10 +68,12 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             'application_number' => $applicationNumber,
             'type' => $applicationType->value,
             'application_year' => now()->year,
-            'line_of_business_id' => $lineOfBusiness->id,
-            'declared_gross_sales_cents' => 125_000_00,
-            'capital_investment_cents' => 75_000_00,
-            'quantity' => 1,
+            'lines' => [[
+                'line_of_business_id' => $lineOfBusiness->id,
+                'declared_gross_sales_cents' => 125_000_00,
+                'capital_investment_cents' => 75_000_00,
+                'quantity' => 1,
+            ]],
         ], $operator);
 
         $assessment = $this->createAssessment->handle($permitApplication, $operator);

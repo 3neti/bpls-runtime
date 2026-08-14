@@ -79,7 +79,7 @@ final class RenderApplicationFormPdf
     /**
      * @param  array<string, string>  $rows
      */
-    private function section(SimplePdfDocument $document, int $page, float $y, string $title, array $rows): float
+    private function section(SimplePdfDocument $document, int &$page, float $y, string $title, array $rows): float
     {
         $document->text($page, strtoupper($title), 42, $y, 9, true);
         $y -= 18;
@@ -92,13 +92,13 @@ final class RenderApplicationFormPdf
 
             $document->text($page, $label, 54, $y, 7.5, true);
             $y = $document->wrappedText($page, $value, 170, $y, 370, 8.5, 10);
-            $y -= 2;
+            $y -= 1;
         }
 
         return $y - 10;
     }
 
-    private function lines(SimplePdfDocument $document, int $page, float $y, PermitApplication $permitApplication): float
+    private function lines(SimplePdfDocument $document, int &$page, float $y, PermitApplication $permitApplication): float
     {
         $document->text($page, 'LINES OF BUSINESS', 42, $y, 9, true);
         $y -= 18;
@@ -117,7 +117,7 @@ final class RenderApplicationFormPdf
             }
 
             $this->line($document, $page, $y, $line);
-            $y -= 30;
+            $y -= 32;
         }
 
         if ($permitApplication->lines->isEmpty()) {
@@ -132,6 +132,7 @@ final class RenderApplicationFormPdf
     {
         $document->text($page, $line->lineOfBusiness?->code ?? 'N/A', 54, $y, 7.5, monospace: true);
         $document->wrappedText($page, $line->lineOfBusiness?->name ?? 'Unclassified', 145, $y, 210, 7.5, 9);
+        $document->text($page, 'Started: '.($line->started_on?->toDateString() ?? 'Not recorded'), 145, $y - 18, 6.5);
         $document->text($page, $this->money($line->declared_gross_sales_cents), 394, $y, 7.5, align: 'right');
         $document->text($page, $this->money($line->capital_investment_cents), 482, $y, 7.5, align: 'right');
         $document->text($page, (string) $line->quantity, 541, $y, 7.5, align: 'right');

@@ -57,6 +57,7 @@ const verificationEvidence = {};
 const timelineEvidence = {};
 const supportingDocumentEvidence = {};
 const establishmentProfileEvidence = {};
+const businessActivityEvidence = {};
 const receiptVoidBoundaryEvidence = {};
 const documentEvidence = {};
 const assessmentEvidence = {};
@@ -190,6 +191,7 @@ const report = {
     timeline: timelineEvidence,
     supporting_document: supportingDocumentEvidence,
     establishment_profile: establishmentProfileEvidence,
+    business_activities: businessActivityEvidence,
     receipt_void_boundary: receiptVoidBoundaryEvidence,
     documents: documentEvidence,
     assessment: assessmentEvidence,
@@ -2297,6 +2299,86 @@ async function inspectManualReceiptPermitReleaseBoundary(
     establishmentProfileEvidence.intake_form_visible =
         establishmentIntakeVisible && establishmentIntakeControlCount === 13;
 
+    const businessActivityIntake = targetPage.getByTestId(
+        'permit-business-activity-intake',
+    );
+    const initialBusinessActivityCount = await businessActivityIntake
+        .getByTestId('permit-business-activity-row')
+        .count();
+    await businessActivityIntake
+        .getByTestId('permit-add-business-activity')
+        .click();
+    const addedBusinessActivityCount = await businessActivityIntake
+        .getByTestId('permit-business-activity-row')
+        .count();
+    await businessActivityIntake
+        .getByRole('button', { name: 'Remove activity 2' })
+        .click();
+    const removedBusinessActivityCount = await businessActivityIntake
+        .getByTestId('permit-business-activity-row')
+        .count();
+    await businessActivityIntake
+        .getByTestId('permit-add-business-activity')
+        .click();
+    const restoredBusinessActivityCount = await businessActivityIntake
+        .getByTestId('permit-business-activity-row')
+        .count();
+    const businessActivityAddRemoveVerified =
+        initialBusinessActivityCount === 1 &&
+        addedBusinessActivityCount === 2 &&
+        removedBusinessActivityCount === 1 &&
+        restoredBusinessActivityCount === 2;
+    checks.push(
+        check(
+            'permit-business-activity-add-remove',
+            'Staff intake can add and remove bounded business activity rows without submission',
+            true,
+            businessActivityAddRemoveVerified,
+        ),
+    );
+    businessActivityEvidence.intake_add_remove_verified =
+        businessActivityAddRemoveVerified;
+    await businessActivityIntake.scrollIntoViewIfNeeded();
+    await screenshot(
+        targetPage,
+        '00c-business-activity-intake',
+        'browser/screenshots/00c-business-activity-intake.png',
+    );
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    const mobileBusinessActivityIntakeVisible = await businessActivityIntake
+        .isVisible()
+        .catch(() => false);
+    const mobileBusinessActivityIntakeOverflow = await targetPage.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth,
+    );
+    checks.push(
+        check(
+            'mobile-permit-business-activity-intake-visible',
+            'Mobile staff intake keeps repeatable business activities visible',
+            true,
+            mobileBusinessActivityIntakeVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'mobile-permit-business-activity-intake-no-overflow',
+            'Mobile repeatable business activities have no horizontal overflow',
+            false,
+            mobileBusinessActivityIntakeOverflow,
+        ),
+    );
+    businessActivityEvidence.intake_mobile_visible =
+        mobileBusinessActivityIntakeVisible;
+    businessActivityEvidence.intake_mobile_horizontal_overflow =
+        mobileBusinessActivityIntakeOverflow;
+    await businessActivityIntake.scrollIntoViewIfNeeded();
+    await screenshot(
+        targetPage,
+        '00d-mobile-business-activity-intake',
+        'browser/screenshots/00d-mobile-business-activity-intake.png',
+    );
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+
     if (establishmentIntakeVisible) {
         await establishmentIntake.scrollIntoViewIfNeeded();
         await screenshot(
@@ -2342,6 +2424,53 @@ async function inspectManualReceiptPermitReleaseBoundary(
 
     const permitUrl = `${targetBaseUrl}${manifest.resources.permit_application_url}`;
     await targetPage.goto(permitUrl, { waitUntil: 'networkidle' });
+    const businessActivities = targetPage.getByTestId(
+        'permit-business-activities',
+    );
+    const businessActivitiesVisible = await businessActivities
+        .isVisible()
+        .catch(() => false);
+    const actualBusinessActivities = await businessActivities
+        .getByTestId('permit-business-activity-row')
+        .evaluateAll((rows) =>
+            rows.map((row) => ({
+                id: Number(row.getAttribute('data-business-activity-id')),
+                code: row.getAttribute('data-business-activity-code'),
+                name: row.getAttribute('data-business-activity-name'),
+                declared_gross_sales_cents: Number(
+                    row.getAttribute('data-declared-gross-sales-cents'),
+                ),
+                capital_investment_cents: Number(
+                    row.getAttribute('data-capital-investment-cents'),
+                ),
+                quantity: Number(row.getAttribute('data-quantity')),
+                started_on: row.getAttribute('data-started-on'),
+            })),
+        );
+    const businessActivitiesMatch =
+        businessActivitiesVisible &&
+        JSON.stringify(actualBusinessActivities) ===
+            JSON.stringify(manifest.resources.business_activities);
+    checks.push(
+        check(
+            'permit-business-activities-match',
+            'Permit detail shows every exact canonical business activity',
+            true,
+            businessActivitiesMatch,
+        ),
+    );
+    businessActivityEvidence.activities = actualBusinessActivities;
+    businessActivityEvidence.detail_visible = businessActivitiesVisible;
+
+    if (businessActivitiesVisible) {
+        await businessActivities.scrollIntoViewIfNeeded();
+        await screenshot(
+            targetPage,
+            '03-business-activities',
+            'browser/screenshots/03-business-activities.png',
+        );
+    }
+
     const applicationVisible = await targetPage
         .getByText(manifest.resources.application_number, { exact: false })
         .first()
@@ -3104,6 +3233,15 @@ async function inspectManualReceiptPermitVerificationBoundary(
         ) &&
         applicationFormPdfBody.includes(
             manifest.resources.establishment_started_on,
+        ) &&
+        manifest.resources.business_activities.every(
+            (activity) =>
+                applicationFormPdfBody.includes(activity.code) &&
+                applicationFormPdfBody.includes(activity.name) &&
+                applicationFormPdfBody.includes(
+                    moneyFromCents(activity.declared_gross_sales_cents),
+                ) &&
+                applicationFormPdfBody.includes(activity.started_on),
         );
     checks.push(
         check(

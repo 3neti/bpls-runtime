@@ -52,10 +52,13 @@ class StorePermitApplicationRequest extends FormRequest
             'application_number' => ['nullable', 'string', 'max:255', Rule::unique('permit_applications', 'application_number')],
             'type' => ['required', Rule::enum(PermitApplicationType::class)],
             'application_year' => ['required', 'integer', 'min:2020', 'max:'.(now()->year + 1)],
-            'line_of_business_id' => ['required', 'integer', Rule::exists('line_of_businesses', 'id')],
-            'declared_gross_sales_pesos' => ['required', 'numeric', 'min:0', 'max:999999999.99'],
-            'capital_investment_pesos' => ['required', 'numeric', 'min:0', 'max:999999999.99'],
-            'quantity' => ['required', 'integer', 'min:1', 'max:999'],
+            'lines' => ['required', 'array', 'list', 'min:1', 'max:20'],
+            'lines.*' => ['required', 'array:line_of_business_id,declared_gross_sales_pesos,capital_investment_pesos,quantity,started_on'],
+            'lines.*.line_of_business_id' => ['required', 'integer', Rule::exists('line_of_businesses', 'id')],
+            'lines.*.declared_gross_sales_pesos' => ['required', 'numeric', 'min:0', 'max:999999999.99'],
+            'lines.*.capital_investment_pesos' => ['required', 'numeric', 'min:0', 'max:999999999.99'],
+            'lines.*.quantity' => ['required', 'integer', 'min:1', 'max:999'],
+            'lines.*.started_on' => ['nullable', 'date', 'before_or_equal:today'],
         ];
     }
 
@@ -84,12 +87,39 @@ class StorePermitApplicationRequest extends FormRequest
     {
         $validated = $this->validated();
 
-        $validated['declared_gross_sales_cents'] = $this->pesosToCents($validated['declared_gross_sales_pesos']);
-        $validated['capital_investment_cents'] = $this->pesosToCents($validated['capital_investment_pesos']);
-
-        unset($validated['declared_gross_sales_pesos'], $validated['capital_investment_pesos']);
+        $validated['lines'] = collect($validated['lines'])
+            ->map(fn (array $line): array => [
+                'line_of_business_id' => $line['line_of_business_id'],
+                'declared_gross_sales_cents' => $this->pesosToCents($line['declared_gross_sales_pesos']),
+                'capital_investment_cents' => $this->pesosToCents($line['capital_investment_pesos']),
+                'quantity' => $line['quantity'],
+                'started_on' => $line['started_on'] ?? null,
+            ])
+            ->all();
 
         return $validated;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('lines') !== null || ! $this->hasAny([
+            'line_of_business_id',
+            'declared_gross_sales_pesos',
+            'capital_investment_pesos',
+            'quantity',
+        ])) {
+            return;
+        }
+
+        $this->merge([
+            'lines' => [[
+                'line_of_business_id' => $this->input('line_of_business_id'),
+                'declared_gross_sales_pesos' => $this->input('declared_gross_sales_pesos'),
+                'capital_investment_pesos' => $this->input('capital_investment_pesos'),
+                'quantity' => $this->input('quantity'),
+                'started_on' => $this->input('line_started_on'),
+            ]],
+        ]);
     }
 
     private function pesosToCents(mixed $amount): int

@@ -87,6 +87,7 @@ final class ManualCollectionReceiptVisibilityScenario
         $operator = $actors['operator'] ?? throw new RuntimeException('Scenario operator actor was not resolved.');
         $manifest = $this->scenarioManifest->initial($scenario, $runId, $actors);
         $lineOfBusiness = $this->lineOfBusiness();
+        $secondaryLineOfBusiness = $this->secondaryLineOfBusiness();
         $this->feeRules($lineOfBusiness);
 
         $applicationNumber = 'APP-SCENARIO-'.$this->boundedRunReference($runId, 40);
@@ -115,10 +116,22 @@ final class ManualCollectionReceiptVisibilityScenario
             'application_number' => $applicationNumber,
             'type' => PermitApplicationType::New->value,
             'application_year' => now()->year,
-            'line_of_business_id' => $lineOfBusiness->id,
-            'declared_gross_sales_cents' => 125_000_00,
-            'capital_investment_cents' => 75_000_00,
-            'quantity' => 1,
+            'lines' => [
+                [
+                    'line_of_business_id' => $lineOfBusiness->id,
+                    'declared_gross_sales_cents' => 125_000_00,
+                    'capital_investment_cents' => 75_000_00,
+                    'quantity' => 1,
+                    'started_on' => '2018-02-01',
+                ],
+                [
+                    'line_of_business_id' => $secondaryLineOfBusiness->id,
+                    'declared_gross_sales_cents' => 45_000_75,
+                    'capital_investment_cents' => 15_000_50,
+                    'quantity' => 2,
+                    'started_on' => '2021-06-01',
+                ],
+            ],
         ], $operator);
 
         $supportingDocument = $this->storeScenarioDocument($permitApplication, $operator, $runId);
@@ -199,6 +212,7 @@ final class ManualCollectionReceiptVisibilityScenario
         $steps = [
             $this->step('actors-resolved', 'Resolve actual application users', ['operator_id' => $operator->id], ['operator_id' => $operator->id]),
             $this->step('permit-application-created', 'Create permit application through staff intake action', ['status' => PermitApplicationStatus::Draft->value], ['status' => PermitApplicationStatus::Draft->value, 'permit_application_id' => $permitApplication->id]),
+            $this->step('business-activities-recorded', 'Record multiple business activities through the staff intake action', ['activity_count' => 2], ['activity_count' => $permitApplication->lines->count(), 'activity_line_ids' => $permitApplication->lines->pluck('id')->all()]),
             $this->step('supporting-document-recorded', 'Record supporting evidence through permit document action', ['document_id' => $supportingDocument->id, 'storage_private' => true], ['document_id' => $supportingDocument->id, 'storage_private' => $supportingDocument->storage_disk === 'local' && Storage::disk('local')->exists($supportingDocument->path)]),
             $this->step('assessment-computed', 'Compute assessment through assessment action', ['assessment_status' => 'computed'], ['assessment_status' => $assessment->status->value, 'assessment_id' => $assessment->id]),
             $this->step('payment-schedule-prepared', 'Prepare payment schedule through payment schedule action', ['application_status' => PermitApplicationStatus::PendingPayment->value], ['application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id]),
@@ -223,6 +237,18 @@ final class ManualCollectionReceiptVisibilityScenario
             'public_reference' => $receipt->receipt_number,
             'permit_application_id' => $permitApplication->id,
             'application_number' => $permitApplication->application_number,
+            'business_activities' => $permitApplication->lines
+                ->map(fn ($line): array => [
+                    'id' => $line->id,
+                    'code' => $line->lineOfBusiness?->code,
+                    'name' => $line->lineOfBusiness?->name,
+                    'declared_gross_sales_cents' => $line->declared_gross_sales_cents,
+                    'capital_investment_cents' => $line->capital_investment_cents,
+                    'quantity' => $line->quantity,
+                    'started_on' => $line->started_on?->toDateString(),
+                ])
+                ->values()
+                ->all(),
             'establishment_ownership_type' => $permitApplication->business->ownership_type,
             'establishment_occupancy' => $permitApplication->business->occupancy,
             'establishment_building_name' => $permitApplication->business->building_name,
@@ -386,7 +412,7 @@ final class ManualCollectionReceiptVisibilityScenario
         $receipt = Receipt::query()->findOrFail($manifest['resources']['record_id']);
         $supportingDocument = PermitApplicationDocument::query()->findOrFail($manifest['resources']['supporting_document_id']);
         $permitApplication = PermitApplication::query()
-            ->with(['business', 'clearances'])
+            ->with(['business', 'clearances', 'lines.lineOfBusiness'])
             ->findOrFail($manifest['resources']['permit_application_id']);
         $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
         $dailyCollectionsReport = $this->buildDailyCollectionsReport->handle([
@@ -422,6 +448,8 @@ final class ManualCollectionReceiptVisibilityScenario
 
         $checks = [
             $this->step('audit-payment-schedule-paid', 'Payment schedule is paid', ['status' => PaymentScheduleStatus::Paid->value], ['status' => $paymentSchedule->status->value]),
+            $this->step('audit-business-activities', 'Canonical permit application retains every prepared business activity', ['activities' => $manifest['resources']['business_activities']], ['activities' => $permitApplication->lines->map(fn ($line): array => ['id' => $line->id, 'code' => $line->lineOfBusiness?->code, 'name' => $line->lineOfBusiness?->name, 'declared_gross_sales_cents' => $line->declared_gross_sales_cents, 'capital_investment_cents' => $line->capital_investment_cents, 'quantity' => $line->quantity, 'started_on' => $line->started_on?->toDateString()])->values()->all()]),
+            $this->step('audit-browser-business-activities', 'Browser intake controls and detail rows agree with canonical business activities', ['intake_add_remove_verified' => true, 'intake_mobile_visible' => true, 'activities' => $manifest['resources']['business_activities']], ['intake_add_remove_verified' => data_get($browserReport, 'business_activities.intake_add_remove_verified'), 'intake_mobile_visible' => data_get($browserReport, 'business_activities.intake_mobile_visible'), 'activities' => data_get($browserReport, 'business_activities.activities')]),
             $this->step('audit-establishment-profile', 'Structured establishment profile remains attached to the exact business', ['ownership_type' => $manifest['resources']['establishment_ownership_type'], 'occupancy' => $manifest['resources']['establishment_occupancy'], 'business_area_square_meters' => $manifest['resources']['establishment_business_area_square_meters'], 'male_employee_count' => $manifest['resources']['establishment_male_employee_count'], 'female_employee_count' => $manifest['resources']['establishment_female_employee_count'], 'started_on' => $manifest['resources']['establishment_started_on']], ['ownership_type' => $permitApplication->business->ownership_type, 'occupancy' => $permitApplication->business->occupancy, 'business_area_square_meters' => $permitApplication->business->business_area_square_meters, 'male_employee_count' => $permitApplication->business->male_employee_count, 'female_employee_count' => $permitApplication->business->female_employee_count, 'started_on' => $permitApplication->business->started_on?->toDateString()]),
             $this->step('audit-browser-establishment-profile', 'Browser evidence shows the real intake surface and exact canonical establishment profile', ['ownership_type' => $manifest['resources']['establishment_ownership_type'], 'occupancy' => $manifest['resources']['establishment_occupancy'], 'business_area_square_meters' => $manifest['resources']['establishment_business_area_square_meters'], 'male_employee_count' => $manifest['resources']['establishment_male_employee_count'], 'female_employee_count' => $manifest['resources']['establishment_female_employee_count'], 'started_on' => $manifest['resources']['establishment_started_on'], 'intake_form_visible' => true, 'intake_form_mobile_visible' => true, 'mobile_visible' => true], ['ownership_type' => data_get($browserReport, 'establishment_profile.ownership_type'), 'occupancy' => data_get($browserReport, 'establishment_profile.occupancy'), 'business_area_square_meters' => data_get($browserReport, 'establishment_profile.business_area_square_meters'), 'male_employee_count' => data_get($browserReport, 'establishment_profile.male_employee_count'), 'female_employee_count' => data_get($browserReport, 'establishment_profile.female_employee_count'), 'started_on' => data_get($browserReport, 'establishment_profile.started_on'), 'intake_form_visible' => data_get($browserReport, 'establishment_profile.intake_form_visible'), 'intake_form_mobile_visible' => data_get($browserReport, 'establishment_profile.intake_form_mobile_visible'), 'mobile_visible' => data_get($browserReport, 'establishment_profile.mobile_visible')]),
             $this->step('audit-supporting-document', 'Supporting evidence remains attached to the exact permit application in private storage', ['permit_application_id' => $permitApplication->id, 'document_id' => $manifest['resources']['supporting_document_id'], 'storage_private' => true], ['permit_application_id' => $supportingDocument->permit_application_id, 'document_id' => $supportingDocument->id, 'storage_private' => $supportingDocument->storage_disk === 'local' && Storage::disk('local')->exists($supportingDocument->path)]),
@@ -472,6 +500,18 @@ final class ManualCollectionReceiptVisibilityScenario
             'passed' => $passed,
             'canonical' => [
                 'payment_schedule_id' => $paymentSchedule->id,
+                'business_activities' => $permitApplication->lines
+                    ->map(fn ($line): array => [
+                        'id' => $line->id,
+                        'code' => $line->lineOfBusiness?->code,
+                        'name' => $line->lineOfBusiness?->name,
+                        'declared_gross_sales_cents' => $line->declared_gross_sales_cents,
+                        'capital_investment_cents' => $line->capital_investment_cents,
+                        'quantity' => $line->quantity,
+                        'started_on' => $line->started_on?->toDateString(),
+                    ])
+                    ->values()
+                    ->all(),
                 'establishment_profile' => [
                     'business_id' => $permitApplication->business->id,
                     'ownership_type' => $permitApplication->business->ownership_type,
@@ -589,6 +629,18 @@ final class ManualCollectionReceiptVisibilityScenario
             [
                 'name' => 'Scenario Retail',
                 'major_category' => 'Retail',
+                'is_active' => true,
+            ],
+        );
+    }
+
+    private function secondaryLineOfBusiness(): LineOfBusiness
+    {
+        return LineOfBusiness::query()->firstOrCreate(
+            ['code' => 'SCENARIO-REPAIR'],
+            [
+                'name' => 'Scenario Repair Services',
+                'major_category' => 'Services',
                 'is_active' => true,
             ],
         );

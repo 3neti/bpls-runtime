@@ -49,7 +49,7 @@ class PermitApplication extends Model
 
     public function lines(): HasMany
     {
-        return $this->hasMany(PermitApplicationLine::class);
+        return $this->hasMany(PermitApplicationLine::class)->orderBy('id');
     }
 
     public function assessments(): HasMany

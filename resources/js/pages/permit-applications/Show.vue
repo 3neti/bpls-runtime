@@ -78,6 +78,7 @@ type PermitApplication = {
         declared_gross_sales_cents: number;
         capital_investment_cents: number;
         quantity: number;
+        started_on: string | null;
     }[];
     latest_assessment: {
         id: number;
@@ -827,6 +828,7 @@ function fileSize(sizeBytes: number): string {
             </section>
 
             <section
+                data-testid="permit-business-activities"
                 class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
             >
                 <div class="overflow-x-auto">
@@ -853,6 +855,22 @@ function fileSize(sizeBytes: number): string {
                             <tr
                                 v-for="line in permitApplication.lines"
                                 :key="line.id"
+                                data-testid="permit-business-activity-row"
+                                :data-business-activity-id="line.id"
+                                :data-business-activity-code="
+                                    line.line_of_business.code
+                                "
+                                :data-business-activity-name="
+                                    line.line_of_business.name
+                                "
+                                :data-declared-gross-sales-cents="
+                                    line.declared_gross_sales_cents
+                                "
+                                :data-capital-investment-cents="
+                                    line.capital_investment_cents
+                                "
+                                :data-quantity="line.quantity"
+                                :data-started-on="line.started_on"
                                 class="border-b last:border-b-0"
                             >
                                 <td class="px-4 py-3">
@@ -864,6 +882,12 @@ function fileSize(sizeBytes: number): string {
                                     </div>
                                     <div class="text-xs text-muted-foreground">
                                         {{ line.line_of_business.code }}
+                                    </div>
+                                    <div
+                                        v-if="line.started_on"
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        Started {{ line.started_on }}
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 text-right">

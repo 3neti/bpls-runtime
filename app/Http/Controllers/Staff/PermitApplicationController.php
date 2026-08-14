@@ -243,6 +243,7 @@ class PermitApplicationController extends Controller
                     'declared_gross_sales_cents' => $line->declared_gross_sales_cents,
                     'capital_investment_cents' => $line->capital_investment_cents,
                     'quantity' => $line->quantity,
+                    'started_on' => $line->started_on?->toDateString(),
                 ]),
             'latest_assessment' => $latestAssessment === null ? null : [
                 'id' => $latestAssessment->id,

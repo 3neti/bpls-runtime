@@ -675,6 +675,12 @@ test('manual collection receipt scenario audit compares browser evidence with ca
             'intake_form_mobile_visible' => true,
             'mobile_visible' => true,
         ],
+        'business_activities' => [
+            'intake_add_remove_verified' => true,
+            'intake_mobile_visible' => true,
+            'detail_visible' => true,
+            'activities' => $manifest['resources']['business_activities'],
+        ],
         'permit_artifact' => [
             'permit_pdf_url' => $manifest['resources']['permit_pdf_url'],
             'verification_reference' => $verification['reference'],

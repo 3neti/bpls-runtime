@@ -7,7 +7,6 @@ use App\Enums\PermitApplicationType;
 use App\Models\Business;
 use App\Models\BusinessOwner;
 use App\Models\PermitApplication;
-use App\Models\PermitApplicationLine;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -47,10 +46,13 @@ class CreateStaffPermitApplication
      *     application_number?: string|null,
      *     type: string,
      *     application_year: int,
-     *     line_of_business_id: int,
-     *     declared_gross_sales_cents: int,
-     *     capital_investment_cents: int,
-     *     quantity: int
+     *     lines: list<array{
+     *         line_of_business_id: int,
+     *         declared_gross_sales_cents: int,
+     *         capital_investment_cents: int,
+     *         quantity: int,
+     *         started_on?: string|null
+     *     }>
      * } $data
      */
     public function handle(array $data, User $submittedBy): PermitApplication
@@ -96,13 +98,9 @@ class CreateStaffPermitApplication
                 'metadata' => $this->metadataFor(PermitApplicationType::from($data['type'])),
             ]);
 
-            PermitApplicationLine::query()->create([
-                'permit_application_id' => $permitApplication->id,
-                'line_of_business_id' => $data['line_of_business_id'],
-                'declared_gross_sales_cents' => $data['declared_gross_sales_cents'],
-                'capital_investment_cents' => $data['capital_investment_cents'],
-                'quantity' => $data['quantity'],
-            ]);
+            foreach ($data['lines'] as $line) {
+                $permitApplication->lines()->create($line);
+            }
 
             return $permitApplication->load(['business.owner', 'lines.lineOfBusiness']);
         });

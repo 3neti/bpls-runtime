@@ -51,10 +51,12 @@ final class AssessmentPolicyBoundaryVisibilityScenario
             'application_number' => $applicationNumber,
             'type' => 'new',
             'application_year' => now()->year,
-            'line_of_business_id' => $lineOfBusiness->id,
-            'declared_gross_sales_cents' => 125_000_00,
-            'capital_investment_cents' => 75_000_00,
-            'quantity' => 1,
+            'lines' => [[
+                'line_of_business_id' => $lineOfBusiness->id,
+                'declared_gross_sales_cents' => 125_000_00,
+                'capital_investment_cents' => 75_000_00,
+                'quantity' => 1,
+            ]],
         ], $operator);
 
         $expectedMessage = "Formula assessment policy is not implemented for fee rule [{$feeRule->code}].";
