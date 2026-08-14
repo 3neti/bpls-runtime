@@ -28,6 +28,7 @@ const supportedScenarios = [
     'amendment_permit_lifecycle_foundation',
     'permit_application_pending_payment_visibility',
     'renewal_permit_lifecycle_foundation',
+    'transfer_permit_lifecycle_foundation',
 ];
 
 if (!supportedScenarios.includes(manifest.scenario?.key)) {
@@ -54,6 +55,7 @@ const documentEvidence = {};
 const assessmentEvidence = {};
 const renewalPolicyEvidence = {};
 const amendmentPolicyEvidence = {};
+const transferPolicyEvidence = {};
 
 let browser;
 
@@ -100,6 +102,7 @@ try {
             'amendment_permit_lifecycle_foundation',
             'permit_application_pending_payment_visibility',
             'renewal_permit_lifecycle_foundation',
+            'transfer_permit_lifecycle_foundation',
         ].includes(manifest.scenario.key)
     ) {
         await inspectPendingPaymentPermitApplicationList(page, baseUrl);
@@ -159,6 +162,7 @@ const report = {
     assessment: assessmentEvidence,
     renewal_policy: renewalPolicyEvidence,
     amendment_policy: amendmentPolicyEvidence,
+    transfer_policy: transferPolicyEvidence,
     artifacts: {
         screenshots,
     },
@@ -635,6 +639,8 @@ async function inspectPendingPaymentPermitApplicationDetail(
         await amendmentPolicyBoundaryIsVisible(targetPage);
     const renewalPolicyBoundaryVisible =
         await renewalPolicyBoundaryIsVisible(targetPage);
+    const transferPolicyBoundaryVisible =
+        await transferPolicyBoundaryIsVisible(targetPage);
 
     checks.push(
         check(
@@ -697,6 +703,21 @@ async function inspectPendingPaymentPermitApplicationDetail(
         reportAmendmentPolicy(
             amendmentPolicyBoundaryVisible ? 'policy_boundary' : 'missing',
             amendmentPolicyBoundaryVisible,
+        );
+    }
+
+    if (manifest.resources.application_type === 'transfer') {
+        checks.push(
+            check(
+                'detail-transfer-policy-boundary-visible',
+                'Detail screen shows transfer policy boundary',
+                true,
+                transferPolicyBoundaryVisible,
+            ),
+        );
+        reportTransferPolicy(
+            transferPolicyBoundaryVisible ? 'policy_boundary' : 'missing',
+            transferPolicyBoundaryVisible,
         );
     }
 
@@ -911,6 +932,8 @@ async function inspectPendingPaymentPermitApplicationMobile(
         await amendmentPolicyBoundaryIsVisible(targetPage);
     const renewalPolicyBoundaryVisible =
         await renewalPolicyBoundaryIsVisible(targetPage);
+    const transferPolicyBoundaryVisible =
+        await transferPolicyBoundaryIsVisible(targetPage);
     const horizontalOverflow = await targetPage.evaluate(
         () =>
             document.documentElement.scrollWidth >
@@ -952,6 +975,17 @@ async function inspectPendingPaymentPermitApplicationMobile(
                 'Mobile detail keeps amendment policy boundary visible',
                 true,
                 amendmentPolicyBoundaryVisible,
+            ),
+        );
+    }
+
+    if (manifest.resources.application_type === 'transfer') {
+        checks.push(
+            check(
+                'mobile-transfer-policy-boundary-visible',
+                'Mobile detail keeps transfer policy boundary visible',
+                true,
+                transferPolicyBoundaryVisible,
             ),
         );
     }
@@ -2057,6 +2091,11 @@ function reportAmendmentPolicy(status, unresolvedVisible) {
     amendmentPolicyEvidence.unresolved_visible = unresolvedVisible;
 }
 
+function reportTransferPolicy(status, unresolvedVisible) {
+    transferPolicyEvidence.status = status;
+    transferPolicyEvidence.unresolved_visible = unresolvedVisible;
+}
+
 function moneyFromCents(amountCents) {
     return `PHP ${Number(amountCents / 100).toLocaleString('en-US', {
         minimumFractionDigits: 2,
@@ -2133,6 +2172,26 @@ async function amendmentPolicyBoundaryIsVisible(targetPage) {
         .catch(() => false);
     const policyVisible = await targetPage
         .getByText('amended-field semantics', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    return boundaryVisible && unresolvedVisible && policyVisible;
+}
+
+async function transferPolicyBoundaryIsVisible(targetPage) {
+    const boundaryVisible = await targetPage
+        .getByText('Transfer policy boundary', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const unresolvedVisible = await targetPage
+        .getByText('Unresolved transfer policy', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const policyVisible = await targetPage
+        .getByText('legal effect remain unresolved', { exact: false })
         .first()
         .isVisible()
         .catch(() => false);

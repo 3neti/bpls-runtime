@@ -227,6 +227,52 @@ test('staff users can record an amendment application with explicit amendment po
         );
 });
 
+test('staff users can record a transfer application with explicit transfer policy boundary', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::CreatePermitApplications,
+        UserPermission::ViewPermitApplications,
+    ]);
+
+    $lineOfBusiness = LineOfBusiness::factory()->create([
+        'name' => 'Transfer Retail',
+        'code' => 'TRANSFER-RETAIL',
+    ]);
+
+    $response = $this->actingAs($user)
+        ->post(route('staff.permit-applications.store'), [
+            'owner_name' => 'Transfer Owner',
+            'business_name' => 'Transfer Trading',
+            'application_number' => 'APP-TRANSFER-2026-0001',
+            'type' => PermitApplicationType::Transfer->value,
+            'application_year' => 2026,
+            'line_of_business_id' => $lineOfBusiness->id,
+            'declared_gross_sales_pesos' => '125000.00',
+            'capital_investment_pesos' => '75000.00',
+            'quantity' => 1,
+        ]);
+
+    $application = PermitApplication::query()
+        ->where('application_number', 'APP-TRANSFER-2026-0001')
+        ->sole();
+
+    $response->assertRedirect(route('staff.permit-applications.show', $application));
+
+    expect($application->type)->toBe(PermitApplicationType::Transfer)
+        ->and($application->metadata['transfer_policy_boundary']['status'])->toBe('policy_boundary')
+        ->and($application->metadata['transfer_policy_boundary']['unresolved_policy'])->toContain('whether transfer terminates, supersedes, or preserves the prior permit');
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.show', $application))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Show')
+            ->where('permitApplication.type', PermitApplicationType::Transfer->value)
+            ->where('permitApplication.transfer_policy_boundary.status', 'policy_boundary')
+            ->where('permitApplication.transfer_policy_boundary.software_knows.legal_effect_is_not_yet_automated', true)
+        );
+});
+
 test('staff users with view permission can review a permit application', function () {
     $user = userWithPermissions([
         UserPermission::AccessStaff,

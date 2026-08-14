@@ -120,6 +120,20 @@ test('scenario registry discovers the amendment permit lifecycle foundation scen
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
+test('scenario registry discovers the transfer permit lifecycle foundation scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('transfer_permit_lifecycle_foundation');
+
+    expect($scenario)
+        ->key->toBe('transfer_permit_lifecycle_foundation')
+        ->label->toBe('Transfer permit lifecycle foundation')
+        ->risk->toBe('local transactional')
+        ->and($scenario->expectations['application_type'])->toBe('transfer')
+        ->and($scenario->expectations['canonical_state'])->toBe('pending_payment')
+        ->and($scenario->expectations['payment_schedule_status'])->toBe('pending')
+        ->and($scenario->expectations['transfer_policy_status'])->toBe('policy_boundary')
+        ->and($scenario->safety['external_integrations'])->toBeFalse();
+});
+
 test('actor resolver resolves configured users through roles and permissions', function () {
     $user = configuredScenarioUser('operator@example.test');
 
@@ -573,6 +587,41 @@ test('amendment permit lifecycle foundation scenario executes through pending pa
         ->and($storyboard['record']['amendment_policy_status'])->toBe('policy_boundary');
 });
 
+test('transfer permit lifecycle foundation scenario executes through pending payment with policy boundary idempotently', function () {
+    Storage::fake('local');
+
+    $user = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('transfer_permit_lifecycle_foundation');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'transfer-foundation-test-001');
+    $runner = app(PermitApplicationPendingPaymentVisibilityScenario::class);
+
+    $firstManifest = $runner->prepare($scenario, 'transfer-foundation-test-001', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+    $secondManifest = $runner->prepare($scenario, 'transfer-foundation-test-001', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+
+    $application = PermitApplication::query()->findOrFail($firstManifest['resources']['record_id']);
+    $storyboard = $artifactStore->readJson('storyboard/storyboard.json');
+
+    expect($firstManifest['scenario']['key'])->toBe('transfer_permit_lifecycle_foundation')
+        ->and($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
+        ->and($firstManifest['resources']['application_type'])->toBe('transfer')
+        ->and($firstManifest['resources']['transfer_policy_status'])->toBe('policy_boundary')
+        ->and($firstManifest['resources']['assessment_total_amount_cents'])->toBe(30_000)
+        ->and($application->type->value)->toBe('transfer')
+        ->and($application->status)->toBe(PermitApplicationStatus::PendingPayment)
+        ->and($application->metadata['transfer_policy_boundary']['status'])->toBe('policy_boundary')
+        ->and($application->metadata['transfer_policy_boundary']['unresolved_policy'])->toContain('whether transfer terminates, supersedes, or preserves the prior permit')
+        ->and($application->paymentSchedules()->count())->toBe(1)
+        ->and($storyboard['title'])->toBe('Transfer permit lifecycle foundation')
+        ->and($storyboard['record']['application_type'])->toBe('transfer')
+        ->and($storyboard['record']['transfer_policy_status'])->toBe('policy_boundary');
+});
+
 test('permit application pending payment scenario audit compares browser evidence with canonical state', function () {
     Storage::fake('local');
 
@@ -700,6 +749,63 @@ test('amendment permit lifecycle foundation audit compares browser policy eviden
             'passed' => true,
         ],
         'amendment_policy' => [
+            'status' => 'policy_boundary',
+            'unresolved_visible' => true,
+        ],
+        'assessment' => [
+            'range_line' => [
+                'code' => $manifest['resources']['range_fee_rule_code'],
+                'calculation_type' => $manifest['resources']['range_calculation_type'],
+                'basis' => $manifest['resources']['range_basis'],
+                'basis_amount_cents' => $manifest['resources']['range_basis_amount_cents'],
+                'amount_cents' => $manifest['resources']['range_amount_cents'],
+            ],
+            'business_tax' => [
+                'code' => $manifest['resources']['business_tax_code'],
+                'name' => $manifest['resources']['business_tax_name'],
+                'category' => $manifest['resources']['business_tax_category'],
+                'line_of_business' => $manifest['resources']['business_tax_line_of_business'],
+                'basis' => $manifest['resources']['business_tax_basis'],
+                'declared_gross_sales_cents' => $manifest['resources']['business_tax_declared_gross_sales_cents'],
+                'amount_cents' => $manifest['resources']['business_tax_amount_cents'],
+            ],
+        ],
+        'checks' => [],
+        'artifacts' => [
+            'screenshots' => [
+                '02-detail' => 'browser/screenshots/02-detail.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($manifest, $artifactStore);
+
+    expect($audited['result'])
+        ->terminal->toBe('passed')
+        ->browser->toBe('passed')
+        ->audit->toBe('passed')
+        ->passed->toBeTrue()
+        ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
+});
+
+test('transfer permit lifecycle foundation audit compares browser policy evidence with canonical state', function () {
+    Storage::fake('local');
+
+    $user = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('transfer_permit_lifecycle_foundation');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'transfer-foundation-test-002');
+    $runner = app(PermitApplicationPendingPaymentVisibilityScenario::class);
+
+    $manifest = $runner->prepare($scenario, 'transfer-foundation-test-002', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+    $artifactStore->putJson('browser/report.json', [
+        'result' => [
+            'passed' => true,
+        ],
+        'transfer_policy' => [
             'status' => 'policy_boundary',
             'unresolved_visible' => true,
         ],

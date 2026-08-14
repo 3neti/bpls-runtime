@@ -16,6 +16,7 @@ class CreateStaffPermitApplication
     public function __construct(
         private readonly DescribeRenewalPolicyBoundary $describeRenewalPolicyBoundary,
         private readonly DescribeAmendmentPolicyBoundary $describeAmendmentPolicyBoundary,
+        private readonly DescribeTransferPolicyBoundary $describeTransferPolicyBoundary,
     ) {}
 
     /**
@@ -91,7 +92,15 @@ class CreateStaffPermitApplication
             $amendmentPolicyBoundary = $this->describeAmendmentPolicyBoundary->handle($type);
 
             if ($amendmentPolicyBoundary === null) {
-                return null;
+                $transferPolicyBoundary = $this->describeTransferPolicyBoundary->handle($type);
+
+                if ($transferPolicyBoundary === null) {
+                    return null;
+                }
+
+                return [
+                    'transfer_policy_boundary' => $transferPolicyBoundary,
+                ];
             }
 
             return [

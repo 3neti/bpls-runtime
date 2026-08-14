@@ -10,6 +10,7 @@ use App\Actions\DescribeAmendmentPolicyBoundary;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\DescribeRenewalPolicyBoundary;
+use App\Actions\DescribeTransferPolicyBoundary;
 use App\Actions\RenderApplicationFormPdf;
 use App\Actions\RenderPermitPdf;
 use App\Enums\PermitApplicationType;
@@ -37,6 +38,7 @@ class PermitApplicationController extends Controller
         private readonly DescribePermitVerificationBoundary $describeVerificationBoundary,
         private readonly DescribeRenewalPolicyBoundary $describeRenewalPolicyBoundary,
         private readonly DescribeAmendmentPolicyBoundary $describeAmendmentPolicyBoundary,
+        private readonly DescribeTransferPolicyBoundary $describeTransferPolicyBoundary,
     ) {}
 
     public function index(): Response
@@ -237,6 +239,8 @@ class PermitApplicationController extends Controller
                 ?? $this->describeRenewalPolicyBoundary->handle($permitApplication->type),
             'amendment_policy_boundary' => $permitApplication->metadata['amendment_policy_boundary']
                 ?? $this->describeAmendmentPolicyBoundary->handle($permitApplication->type),
+            'transfer_policy_boundary' => $permitApplication->metadata['transfer_policy_boundary']
+                ?? $this->describeTransferPolicyBoundary->handle($permitApplication->type),
             'release_policy_boundary' => $permitApplication->metadata['release_policy_boundary'] ?? null,
             'release_readiness' => $this->describeReleaseReadiness->handle($permitApplication),
             'verification_boundary' => $this->describeVerificationBoundary->handle($permitApplication),
