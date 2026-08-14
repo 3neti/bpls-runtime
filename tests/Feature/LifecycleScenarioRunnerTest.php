@@ -1096,6 +1096,7 @@ function configuredScenarioUser(string $email): User
         UserPermission::ViewReports,
         UserPermission::UpdatePermitApplicationStatus,
         UserPermission::CompletePermitClearances,
+        UserPermission::ViewFeeRules,
         UserPermission::ManageStoryboards,
     ])->map(fn (UserPermission $permission): int => Permission::factory()->create([
         'code' => $permission->value,

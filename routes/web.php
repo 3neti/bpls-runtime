@@ -4,6 +4,7 @@ use App\Http\Controllers\PublicPermitVerificationController;
 use App\Http\Controllers\Staff\AssessmentPaymentScheduleController;
 use App\Http\Controllers\Staff\CollectionReceiptController;
 use App\Http\Controllers\Staff\DailyCollectionReportController;
+use App\Http\Controllers\Staff\FeeRuleController;
 use App\Http\Controllers\Staff\PaidEstablishmentReportController;
 use App\Http\Controllers\Staff\PaymentScheduleCollectionController;
 use App\Http\Controllers\Staff\PermitApplicationAssessmentController;
@@ -40,6 +41,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.release');
         Route::post('permit-applications/{permitApplication}/clearances/{clearance}/complete', [PermitApplicationController::class, 'completeClearance'])
             ->name('permit-applications.clearances.complete');
+        Route::get('fee-rules', [FeeRuleController::class, 'index'])
+            ->name('fee-rules.index');
         Route::get('assessments/{assessment}', [PermitApplicationAssessmentController::class, 'show'])
             ->name('permit-applications.assessments.show');
         Route::get('assessments/{assessment}/pdf', [PermitApplicationAssessmentController::class, 'pdf'])

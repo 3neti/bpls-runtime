@@ -7,6 +7,7 @@ import {
     ChartNoAxesColumnIncreasing,
     ClipboardCheck,
     ClipboardX,
+    Coins,
     FileText,
     Film,
     FolderGit2,
@@ -17,6 +18,7 @@ import {
 } from '@lucide/vue';
 import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { index as dailyCollectionReportIndex } from '@/actions/App/Http/Controllers/Staff/DailyCollectionReportController';
+import { index as feeRuleIndex } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
 import { index as paidEstablishmentReportIndex } from '@/actions/App/Http/Controllers/Staff/PaidEstablishmentReportController';
 import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import { index as permitApplicationIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
@@ -66,6 +68,11 @@ const mainNavItems: NavItem[] = [
         title: 'Receipts',
         href: receiptIndex(),
         icon: ReceiptText,
+    },
+    {
+        title: 'Taxes and Fees',
+        href: feeRuleIndex(),
+        icon: Coins,
     },
     {
         title: 'Daily Collections',

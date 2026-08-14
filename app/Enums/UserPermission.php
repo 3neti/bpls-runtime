@@ -10,6 +10,7 @@ enum UserPermission: string
     case AssessPermitApplications = 'permit_applications.assess';
     case UpdatePermitApplicationStatus = 'permit_applications.status_update';
     case CompletePermitClearances = 'permit_clearances.complete';
+    case ViewFeeRules = 'fee_rules.view';
     case ViewPaymentSchedules = 'payment_schedules.view';
     case PreparePaymentSchedules = 'payment_schedules.prepare';
     case ViewCollections = 'collections.view';
