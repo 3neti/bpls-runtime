@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\CompletePermitClearance;
+use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\EnsurePermitApplicationClearances;
 use App\Actions\RenderApplicationFormPdf;
 use App\Actions\RenderPermitPdf;
@@ -17,6 +18,8 @@ use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
 use App\Models\PermitClearance;
+use App\Models\Receipt;
+use App\Models\TreasuryCollection;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -217,6 +220,56 @@ test('permit release attempt records unresolved policy boundary without releasin
         ->and($application->metadata['release_policy_boundary']['blocked_transition'])->toBe(PermitApplicationStatus::Released->value)
         ->and($application->metadata['release_policy_boundary']['is_paid'])->toBeTrue()
         ->and($application->metadata['release_policy_boundary']['reason'])->toContain('Clearance completion');
+});
+
+test('release readiness evidence can be ready for authority review without permitting release', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+        UserPermission::UpdatePermitApplicationStatus,
+    ]);
+    $application = permitDocumentFixtureWithCompletedClearances($user);
+    $paymentSchedule = PaymentSchedule::factory()->for($application, 'permitApplication')->create([
+        'status' => 'paid',
+        'total_amount_cents' => 42_000,
+        'paid_amount_cents' => 42_000,
+    ]);
+    $collection = TreasuryCollection::factory()
+        ->for($paymentSchedule, 'paymentSchedule')
+        ->for($application, 'permitApplication')
+        ->for($paymentSchedule->assessment)
+        ->create([
+            'status' => 'receipted',
+            'amount_cents' => 42_000,
+        ]);
+    Receipt::factory()
+        ->for($collection, 'treasuryCollection')
+        ->for($paymentSchedule, 'paymentSchedule')
+        ->for($application, 'permitApplication')
+        ->for($paymentSchedule->assessment)
+        ->create([
+            'receipt_number' => 'OR-RELEASE-READY',
+            'amount_cents' => 42_000,
+        ]);
+
+    $readiness = app(DescribePermitReleaseReadiness::class)->handle($application);
+
+    expect($readiness['ready_for_authority_review'])->toBeTrue()
+        ->and($readiness['can_release'])->toBeFalse()
+        ->and($readiness['prerequisites']['payment_schedule_paid'])->toBeTrue()
+        ->and($readiness['prerequisites']['receipt_issued'])->toBeTrue()
+        ->and($readiness['prerequisites']['clearances_completed'])->toBeTrue()
+        ->and($readiness['blocked_by'])->toContain('official_signatories');
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.show', $application))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Show')
+            ->where('permitApplication.release_readiness.ready_for_authority_review', true)
+            ->where('permitApplication.release_readiness.can_release', false)
+            ->where('permitApplication.release_readiness.prerequisites.receipt_issued', true)
+        );
 });
 
 test('staff users without status permission cannot attempt permit release', function () {

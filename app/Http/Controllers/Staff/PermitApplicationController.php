@@ -6,6 +6,7 @@ use App\Actions\AttemptPermitApplicationRelease;
 use App\Actions\CancelPermitApplication;
 use App\Actions\CompletePermitClearance;
 use App\Actions\CreateStaffPermitApplication;
+use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\RenderApplicationFormPdf;
 use App\Actions\RenderPermitPdf;
 use App\Enums\PermitApplicationType;
@@ -28,6 +29,8 @@ use Inertia\Response;
 
 class PermitApplicationController extends Controller
 {
+    public function __construct(private readonly DescribePermitReleaseReadiness $describeReleaseReadiness) {}
+
     public function index(): Response
     {
         Gate::authorize(UserPermission::ViewPermitApplications->value);
@@ -223,6 +226,7 @@ class PermitApplicationController extends Controller
             ],
             'terminal_state' => $permitApplication->metadata['terminal_state'] ?? null,
             'release_policy_boundary' => $permitApplication->metadata['release_policy_boundary'] ?? null,
+            'release_readiness' => $this->describeReleaseReadiness->handle($permitApplication),
             'clearance_summary' => [
                 'completed' => $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count(),
                 'total' => $permitApplication->clearances->count(),

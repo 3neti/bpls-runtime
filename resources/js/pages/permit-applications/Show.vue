@@ -78,6 +78,24 @@ type PermitApplication = {
         reason: string;
         occurred_at: string;
     } | null;
+    release_readiness: {
+        ready_for_authority_review: boolean;
+        can_release: boolean;
+        status: string;
+        prerequisites: {
+            payment_schedule_paid: boolean;
+            receipt_issued: boolean;
+            clearances_completed: boolean;
+            permit_artifact_available: boolean;
+        };
+        payment_schedule_id: number | null;
+        payment_schedule_status: string | null;
+        receipt_count: number;
+        clearances_completed: number;
+        clearances_total: number;
+        blocked_by: string[];
+        reason: string;
+    };
     clearance_summary: {
         completed: number;
         total: number;
@@ -598,6 +616,62 @@ function money(amountCents: number): string {
                     Permit release is unavailable until clearance completion,
                     issuance authority, signatories, QR verification, and legacy
                     Released status semantics are reconciled.
+                </p>
+                <div class="mt-4 grid gap-3 text-sm md:grid-cols-4">
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Authority review
+                        </dt>
+                        <dd>
+                            {{
+                                permitApplication.release_readiness
+                                    .ready_for_authority_review
+                                    ? 'Ready'
+                                    : 'Not ready'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Paid schedule
+                        </dt>
+                        <dd>
+                            {{
+                                permitApplication.release_readiness.prerequisites
+                                    .payment_schedule_paid
+                                    ? 'Yes'
+                                    : 'No'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Receipt issued
+                        </dt>
+                        <dd>
+                            {{
+                                permitApplication.release_readiness.prerequisites
+                                    .receipt_issued
+                                    ? 'Yes'
+                                    : 'No'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Can release
+                        </dt>
+                        <dd>
+                            {{
+                                permitApplication.release_readiness.can_release
+                                    ? 'Yes'
+                                    : 'No'
+                            }}
+                        </dd>
+                    </div>
+                </div>
+                <p class="mt-3 text-sm text-muted-foreground">
+                    {{ permitApplication.release_readiness.reason }}
                 </p>
                 <dl
                     v-if="permitApplication.release_policy_boundary"

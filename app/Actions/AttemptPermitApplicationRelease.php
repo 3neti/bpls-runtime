@@ -10,10 +10,13 @@ use App\Models\User;
 
 final class AttemptPermitApplicationRelease
 {
+    public function __construct(private readonly DescribePermitReleaseReadiness $describeReadiness) {}
+
     public function handle(PermitApplication $permitApplication, ?User $releasedBy = null): never
     {
         $permitApplication->loadMissing([
             'paymentSchedules.treasuryCollections.receipt',
+            'clearances',
         ]);
 
         $metadata = $permitApplication->metadata ?? [];
@@ -47,6 +50,7 @@ final class AttemptPermitApplicationRelease
             'receipt_count' => $receiptCount,
             'actor_id' => $releasedBy?->id,
             'blocked_transition' => PermitApplicationStatus::Released->value,
+            'readiness' => $this->describeReadiness->handle($permitApplication),
             'reason' => 'Clearance completion, permit issuance authority, signatories, QR verification, and legacy Released status semantics remain unresolved.',
             'occurred_at' => now()->toIso8601String(),
         ];
