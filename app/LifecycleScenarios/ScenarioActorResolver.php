@@ -50,6 +50,11 @@ final class ScenarioActorResolver
     private function requiredPermissions(string $identity): array
     {
         return match ($identity) {
+            'citizen_applicant' => [
+                UserPermission::AccessCitizen,
+                UserPermission::CreateOwnPermitApplications,
+                UserPermission::ViewOwnPermitApplications,
+            ],
             'primary_operator' => [
                 UserPermission::AccessStaff,
                 UserPermission::ViewPermitApplications,

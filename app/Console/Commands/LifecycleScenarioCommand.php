@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\LifecycleScenarios\AssessmentPolicyBoundaryVisibilityScenario;
+use App\LifecycleScenarios\CitizenPermitDraftVisibilityScenario;
 use App\LifecycleScenarios\LifecycleScenarioRegistry;
 use App\LifecycleScenarios\ManualCollectionReceiptVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationCancelledVisibilityScenario;
@@ -31,6 +32,7 @@ class LifecycleScenarioCommand extends Command
     public function handle(
         LifecycleScenarioRegistry $registry,
         ScenarioActorResolver $actorResolver,
+        CitizenPermitDraftVisibilityScenario $citizenPermitDraftVisibilityScenario,
         AssessmentPolicyBoundaryVisibilityScenario $assessmentPolicyBoundaryVisibilityScenario,
         ManualCollectionReceiptVisibilityScenario $manualCollectionReceiptScenario,
         PermitApplicationCancelledVisibilityScenario $permitApplicationCancelledScenario,
@@ -51,6 +53,7 @@ class LifecycleScenarioCommand extends Command
             if (in_array($phase, ['prepare', 'all'], true)) {
                 $actors = $actorResolver->resolve($scenario);
                 $manifest = match ($scenario->key) {
+                    'citizen_permit_draft_visibility' => $citizenPermitDraftVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'new_permit_lifecycle_authority_boundary' => $manualCollectionReceiptScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'assessment_policy_boundary_visibility' => $assessmentPolicyBoundaryVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'manual_collection_receipt_visibility' => $manualCollectionReceiptScenario->prepare($scenario, $runId, $actors, $artifactStore),
@@ -74,6 +77,7 @@ class LifecycleScenarioCommand extends Command
 
             if (in_array($phase, ['audit', 'all'], true)) {
                 $manifest = match ($scenario->key) {
+                    'citizen_permit_draft_visibility' => $citizenPermitDraftVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'new_permit_lifecycle_authority_boundary' => $manualCollectionReceiptScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'assessment_policy_boundary_visibility' => $assessmentPolicyBoundaryVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'manual_collection_receipt_visibility' => $manualCollectionReceiptScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),

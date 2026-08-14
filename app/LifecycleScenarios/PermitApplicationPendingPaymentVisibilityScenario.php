@@ -6,7 +6,7 @@ use App\Actions\BuildTopEstablishmentsTaxDueReport;
 use App\Actions\BuildUnpaidEstablishmentsReport;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
-use App\Actions\CreateStaffPermitApplication;
+use App\Actions\CreatePermitApplication;
 use App\Actions\DescribePaymentPolicyBoundary;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
@@ -27,7 +27,7 @@ use RuntimeException;
 final class PermitApplicationPendingPaymentVisibilityScenario
 {
     public function __construct(
-        private readonly CreateStaffPermitApplication $createPermitApplication,
+        private readonly CreatePermitApplication $createPermitApplication,
         private readonly CreateAssessmentForPermitApplication $createAssessment,
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
         private readonly BuildUnpaidEstablishmentsReport $buildUnpaidEstablishmentsReport,

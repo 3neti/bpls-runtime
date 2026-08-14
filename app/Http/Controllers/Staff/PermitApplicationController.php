@@ -6,7 +6,7 @@ use App\Actions\AttemptPermitApplicationRelease;
 use App\Actions\BuildPermitApplicationTimeline;
 use App\Actions\CancelPermitApplication;
 use App\Actions\CompletePermitClearance;
-use App\Actions\CreateStaffPermitApplication;
+use App\Actions\CreatePermitApplication;
 use App\Actions\DescribeAmendmentPolicyBoundary;
 use App\Actions\DescribePermitArtifact;
 use App\Actions\DescribePermitReleaseReadiness;
@@ -72,6 +72,7 @@ class PermitApplicationController extends Controller
         Gate::authorize(UserPermission::CreatePermitApplications->value);
 
         return Inertia::render('permit-applications/Create', [
+            'intakeAudience' => 'staff',
             'currentApplicationYear' => now()->year,
             'applicationTypes' => collect(PermitApplicationType::cases())
                 ->map(fn (PermitApplicationType $type): array => [
@@ -86,7 +87,7 @@ class PermitApplicationController extends Controller
         ]);
     }
 
-    public function store(StorePermitApplicationRequest $request, CreateStaffPermitApplication $createPermitApplication): RedirectResponse
+    public function store(StorePermitApplicationRequest $request, CreatePermitApplication $createPermitApplication): RedirectResponse
     {
         $permitApplication = $createPermitApplication->handle($request->validatedForCreation(), $request->user());
 

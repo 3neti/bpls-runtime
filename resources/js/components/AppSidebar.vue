@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 import {
     BookOpen,
     Calculator,
@@ -16,6 +16,8 @@ import {
     Trophy,
     WalletCards,
 } from '@lucide/vue';
+import { computed } from 'vue';
+import { index as citizenPermitApplicationIndex } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
 import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { index as dailyCollectionReportIndex } from '@/actions/App/Http/Controllers/Staff/DailyCollectionReportController';
 import { index as feeRuleIndex } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
@@ -43,7 +45,9 @@ import {
 import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
+const page = usePage();
+
+const staffNavItems: NavItem[] = [
     {
         title: 'Dashboard',
         href: dashboard(),
@@ -106,7 +110,28 @@ const mainNavItems: NavItem[] = [
     },
 ];
 
-const footerNavItems: NavItem[] = [
+const citizenNavItems: NavItem[] = [
+    {
+        title: 'Dashboard',
+        href: dashboard(),
+        icon: LayoutGrid,
+    },
+    {
+        title: 'My Permit Applications',
+        href: citizenPermitApplicationIndex(),
+        icon: FileText,
+    },
+];
+
+const authenticatedNavItems: NavItem[] = [
+    {
+        title: 'Dashboard',
+        href: dashboard(),
+        icon: LayoutGrid,
+    },
+];
+
+const staffFooterNavItems: NavItem[] = [
     {
         title: 'Repository',
         href: 'https://github.com/laravel/vue-starter-kit',
@@ -118,6 +143,21 @@ const footerNavItems: NavItem[] = [
         icon: BookOpen,
     },
 ];
+
+const mainNavItems = computed(() => {
+    if (page.props.auth.can_access_staff) {
+        return staffNavItems;
+    }
+
+    if (page.props.auth.can_access_citizen) {
+        return citizenNavItems;
+    }
+
+    return authenticatedNavItems;
+});
+const footerNavItems = computed(() =>
+    page.props.auth.can_access_staff ? staffFooterNavItems : [],
+);
 </script>
 
 <template>

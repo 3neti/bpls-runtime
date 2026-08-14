@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Actions\EnsureCitizenRole;
 use App\Enums\UserPermission;
 use App\Enums\UserRole;
 use App\Models\Permission;
@@ -15,6 +16,10 @@ use Illuminate\Support\Str;
 class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
+
+    public function __construct(
+        private readonly EnsureCitizenRole $ensureCitizenRole,
+    ) {}
 
     /**
      * Seed the application's database.
@@ -42,6 +47,8 @@ class DatabaseSeeder extends Seeder
             ],
         );
         $adminRole->permissions()->syncWithoutDetaching($permissions->pluck('id')->all());
+
+        $this->ensureCitizenRole->handle();
 
         $user = User::query()->firstOrNew(['email' => 'test@example.com']);
 

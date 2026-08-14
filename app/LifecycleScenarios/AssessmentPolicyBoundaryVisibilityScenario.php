@@ -2,7 +2,7 @@
 
 namespace App\LifecycleScenarios;
 
-use App\Actions\CreateStaffPermitApplication;
+use App\Actions\CreatePermitApplication;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
@@ -16,7 +16,7 @@ use RuntimeException;
 final class AssessmentPolicyBoundaryVisibilityScenario
 {
     public function __construct(
-        private readonly CreateStaffPermitApplication $createPermitApplication,
+        private readonly CreatePermitApplication $createPermitApplication,
         private readonly ScenarioManifest $scenarioManifest,
         private readonly ScenarioSummaryRenderer $summaryRenderer,
     ) {}

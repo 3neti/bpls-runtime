@@ -1,16 +1,19 @@
 <script setup lang="ts">
-import { Form, Head, Link } from '@inertiajs/vue3';
+import { Form, Head, Link, setLayoutProps } from '@inertiajs/vue3';
 import { ArrowLeft, Plus, Save, Trash2 } from '@lucide/vue';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import {
-    index,
-    store,
+    index as citizenIndex,
+    store as citizenStore,
+} from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
+import {
+    index as staffIndex,
+    store as staffStore,
 } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
 type Option = {
@@ -28,11 +31,24 @@ type BusinessActivityRow = {
     key: number;
 };
 
-defineProps<{
+const props = defineProps<{
+    intakeAudience: 'staff' | 'citizen';
     currentApplicationYear: number;
     applicationTypes: Option[];
     lineOfBusinesses: LineOfBusiness[];
+    applicant?: {
+        name: string;
+        email: string;
+    };
 }>();
+
+const isCitizenIntake = computed(() => props.intakeAudience === 'citizen');
+const intakeIndex = computed(() =>
+    isCitizenIntake.value ? citizenIndex() : staffIndex(),
+);
+const intakeStore = computed(() =>
+    isCitizenIntake.value ? citizenStore.form() : staffStore.form(),
+);
 
 const businessActivities = ref<BusinessActivityRow[]>([{ key: 1 }]);
 let nextBusinessActivityKey = 2;
@@ -56,34 +72,52 @@ function removeBusinessActivity(key: number): void {
     );
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
+const breadcrumbs = computed<BreadcrumbItem[]>(() => [
     {
-        title: 'Permit Applications',
-        href: index(),
+        title: isCitizenIntake.value
+            ? 'My Permit Applications'
+            : 'Permit Applications',
+        href: intakeIndex.value,
     },
     {
-        title: 'New Application',
+        title: isCitizenIntake.value ? 'New Draft' : 'New Application',
         href: '#',
     },
-];
+]);
+
+setLayoutProps({ breadcrumbs: breadcrumbs.value });
 </script>
 
 <template>
-    <AppLayout :breadcrumbs="breadcrumbs">
-        <Head title="New Permit Application" />
+    <div class="contents">
+        <Head
+            :title="
+                isCitizenIntake
+                    ? 'New Permit Application Draft'
+                    : 'New Permit Application'
+            "
+        />
 
         <main class="flex h-full flex-1 flex-col gap-4 p-4">
             <section class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold text-foreground">
-                        New Permit Application
+                        {{
+                            isCitizenIntake
+                                ? 'New Permit Application Draft'
+                                : 'New Permit Application'
+                        }}
                     </h1>
                     <p class="text-sm text-muted-foreground">
-                        Record a staff-entered business permit application.
+                        {{
+                            isCitizenIntake
+                                ? 'Record your business information for municipal review.'
+                                : 'Record a staff-entered business permit application.'
+                        }}
                     </p>
                 </div>
                 <Button as-child variant="outline">
-                    <Link :href="index()">
+                    <Link :href="intakeIndex">
                         <ArrowLeft />
                         Back
                     </Link>
@@ -91,10 +125,19 @@ const breadcrumbs: BreadcrumbItem[] = [
             </section>
 
             <Form
-                v-bind="store.form()"
+                v-bind="intakeStore"
                 v-slot="{ errors, processing }"
                 class="grid gap-4"
             >
+                <section
+                    v-if="isCitizenIntake"
+                    data-testid="citizen-draft-boundary"
+                    class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+                >
+                    Saving creates a draft only. It does not submit the
+                    application for assessment or assign an official
+                    application number.
+                </section>
                 <section
                     class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 dark:border-sidebar-border"
                 >
@@ -105,7 +148,12 @@ const breadcrumbs: BreadcrumbItem[] = [
                     </div>
                     <div class="grid gap-2">
                         <Label for="owner_name">Owner name</Label>
-                        <Input id="owner_name" name="owner_name" required />
+                        <Input
+                            id="owner_name"
+                            name="owner_name"
+                            :default-value="applicant?.name"
+                            required
+                        />
                         <InputError :message="errors.owner_name" />
                     </div>
                     <div class="grid gap-2">
@@ -114,6 +162,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                             id="owner_email"
                             name="owner_email"
                             type="email"
+                            :default-value="applicant?.email"
                         />
                         <InputError :message="errors.owner_email" />
                     </div>
@@ -320,7 +369,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                             Application
                         </h2>
                     </div>
-                    <div class="grid gap-2">
+                    <div v-if="!isCitizenIntake" class="grid gap-2">
                         <Label for="application_number">
                             Application number
                         </Label>
@@ -339,11 +388,12 @@ const breadcrumbs: BreadcrumbItem[] = [
                             min="2020"
                             :max="currentApplicationYear + 1"
                             :default-value="currentApplicationYear"
+                            :readonly="isCitizenIntake"
                             required
                         />
                         <InputError :message="errors.application_year" />
                     </div>
-                    <div class="grid gap-2">
+                    <div v-if="!isCitizenIntake" class="grid gap-2">
                         <Label for="type">Type</Label>
                         <select
                             id="type"
@@ -361,6 +411,12 @@ const breadcrumbs: BreadcrumbItem[] = [
                         </select>
                         <InputError :message="errors.type" />
                     </div>
+                    <input
+                        v-else
+                        type="hidden"
+                        name="type"
+                        value="new"
+                    />
                 </section>
 
                 <section
@@ -513,10 +569,12 @@ const breadcrumbs: BreadcrumbItem[] = [
                 <div class="flex justify-end">
                     <Button type="submit" :disabled="processing">
                         <Save />
-                        Save Application
+                        {{
+                            isCitizenIntake ? 'Save Draft' : 'Save Application'
+                        }}
                     </Button>
                 </div>
             </Form>
         </main>
-    </AppLayout>
+    </div>
 </template>

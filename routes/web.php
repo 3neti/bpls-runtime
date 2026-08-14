@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Citizen\PermitApplicationController as CitizenPermitApplicationController;
 use App\Http\Controllers\PublicPermitVerificationController;
 use App\Http\Controllers\PublicPermitVerificationPageController;
 use App\Http\Controllers\Staff\AssessmentPaymentScheduleController;
@@ -27,6 +28,11 @@ Route::get('permits/verify/{permitApplication}/{verificationCode}', PublicPermit
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+
+    Route::prefix('citizen')->name('citizen.')->middleware('can:citizen.access')->group(function () {
+        Route::resource('permit-applications', CitizenPermitApplicationController::class)
+            ->only(['index', 'create', 'store', 'show']);
+    });
 
     Route::prefix('staff')->name('staff.')->middleware('can:staff.access')->group(function () {
         Route::get('permit-applications/assessments', [PermitApplicationAssessmentController::class, 'index'])

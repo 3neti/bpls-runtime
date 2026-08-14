@@ -4,6 +4,9 @@ namespace App\Enums;
 
 enum UserPermission: string
 {
+    case AccessCitizen = 'citizen.access';
+    case CreateOwnPermitApplications = 'citizen.permit_applications.create';
+    case ViewOwnPermitApplications = 'citizen.permit_applications.view';
     case AccessStaff = 'staff.access';
     case ViewPermitApplications = 'permit_applications.view';
     case CreatePermitApplications = 'permit_applications.create';

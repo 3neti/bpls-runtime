@@ -10,7 +10,7 @@ use App\Models\PermitApplication;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
-class CreateStaffPermitApplication
+class CreatePermitApplication
 {
     public function __construct(
         private readonly DescribeRenewalPolicyBoundary $describeRenewalPolicyBoundary,

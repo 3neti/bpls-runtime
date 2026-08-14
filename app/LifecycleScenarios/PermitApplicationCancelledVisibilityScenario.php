@@ -3,7 +3,7 @@
 namespace App\LifecycleScenarios;
 
 use App\Actions\CancelPermitApplication;
-use App\Actions\CreateStaffPermitApplication;
+use App\Actions\CreatePermitApplication;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
 use App\Models\LineOfBusiness;
@@ -14,7 +14,7 @@ use RuntimeException;
 final class PermitApplicationCancelledVisibilityScenario
 {
     public function __construct(
-        private readonly CreateStaffPermitApplication $createPermitApplication,
+        private readonly CreatePermitApplication $createPermitApplication,
         private readonly CancelPermitApplication $cancelPermitApplication,
         private readonly ScenarioManifest $scenarioManifest,
         private readonly ScenarioSummaryRenderer $summaryRenderer,

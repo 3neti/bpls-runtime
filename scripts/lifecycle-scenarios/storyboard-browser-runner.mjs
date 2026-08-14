@@ -22,6 +22,7 @@ if (manifest.schema_version !== 'application.lifecycle-evidence.v1') {
 
 const supportedScenarios = [
     'assessment_policy_boundary_visibility',
+    'citizen_permit_draft_visibility',
     'new_permit_lifecycle_authority_boundary',
     'manual_collection_receipt_visibility',
     'storyboard_terminal_state_visibility',
@@ -70,6 +71,7 @@ const amendmentPolicyEvidence = {};
 const transferPolicyEvidence = {};
 const retirementPolicyEvidence = {};
 const feeCatalogEvidence = {};
+const citizenDraftEvidence = {};
 
 let browser;
 
@@ -98,6 +100,10 @@ try {
     });
 
     await authenticate(page, baseUrl, email, password);
+
+    if (manifest.scenario.key === 'citizen_permit_draft_visibility') {
+        await inspectCitizenPermitDraft(page, baseUrl);
+    }
 
     if (manifest.scenario.key === 'storyboard_terminal_state_visibility') {
         await inspectStoryboardList(page, baseUrl);
@@ -204,6 +210,7 @@ const report = {
     transfer_policy: transferPolicyEvidence,
     retirement_policy: retirementPolicyEvidence,
     fee_catalog: feeCatalogEvidence,
+    citizen_draft: citizenDraftEvidence,
     artifacts: {
         screenshots,
     },
@@ -250,7 +257,201 @@ async function authenticate(
     await targetPage.getByRole('button', { name: /log in/i }).click();
     await targetPage.waitForURL(/dashboard|storyboards/, { timeout: 10000 });
     checks.push(
-        check('authenticated', 'Authenticate as manifest operator', true, true),
+        check('authenticated', 'Authenticate as manifest actor', true, true),
+    );
+}
+
+async function inspectCitizenPermitDraft(targetPage, targetBaseUrl) {
+    const createUrl = `${targetBaseUrl}${manifest.resources.create_url}`;
+    await targetPage.goto(createUrl, { waitUntil: 'networkidle' });
+    const draftBoundaryVisible = await targetPage
+        .getByTestId('citizen-draft-boundary')
+        .isVisible()
+        .catch(() => false);
+    const officialNumberInputVisible = await targetPage
+        .locator('#application_number')
+        .isVisible()
+        .catch(() => false);
+    checks.push(
+        check(
+            'citizen-intake-draft-boundary-visible',
+            'Citizen intake explains the draft boundary',
+            true,
+            draftBoundaryVisible,
+        ),
+        check(
+            'citizen-intake-official-number-unavailable',
+            'Citizen intake does not accept an official application number',
+            false,
+            officialNumberInputVisible,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '01-citizen-intake',
+        'browser/screenshots/01-citizen-intake.png',
+    );
+
+    const listUrl = `${targetBaseUrl}${manifest.resources.list_url}`;
+    await targetPage.goto(listUrl, { waitUntil: 'networkidle' });
+    const listRow = targetPage.locator(
+        `[data-testid="citizen-permit-application-row"][data-application-id="${manifest.resources.record_id}"]`,
+    );
+    const listRowVisible = await listRow.isVisible().catch(() => false);
+    const listStatus = await listRow
+        .getAttribute('data-application-status')
+        .catch(() => null);
+    const staffNavigationVisible = await targetPage
+        .getByRole('link', { name: 'Permit Assessments', exact: true })
+        .isVisible()
+        .catch(() => false);
+    checks.push(
+        check(
+            'citizen-list-exact-draft-visible',
+            'Citizen list shows the exact manifest draft',
+            true,
+            listRowVisible,
+            { permit_application_id: manifest.resources.record_id },
+        ),
+        check(
+            'citizen-list-status-matches',
+            'Citizen list status matches canonical draft state',
+            'draft',
+            listStatus,
+        ),
+        check(
+            'citizen-staff-navigation-unavailable',
+            'Citizen does not receive staff navigation',
+            false,
+            staffNavigationVisible,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '02-citizen-list',
+        'browser/screenshots/02-citizen-list.png',
+    );
+
+    const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    const referenceVisible = await targetPage
+        .getByText(manifest.resources.public_reference, { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const detailBoundaryVisible = await targetPage
+        .getByTestId('citizen-draft-boundary')
+        .isVisible()
+        .catch(() => false);
+    const assessActionVisible = await targetPage
+        .getByRole('button', { name: /assess/i })
+        .isVisible()
+        .catch(() => false);
+    const browserActivities = await targetPage
+        .getByTestId('citizen-business-activity-row')
+        .evaluateAll((rows) =>
+            rows.map((row) => ({
+                code: row.dataset.activityCode,
+                declared_gross_sales_cents: Number(
+                    row.dataset.grossSalesCents,
+                ),
+                capital_investment_cents: Number(
+                    row.dataset.capitalInvestmentCents,
+                ),
+                quantity: Number(row.dataset.quantity),
+                started_on: row.dataset.startedOn,
+            })),
+        );
+    const expectedActivities = manifest.resources.business_activities.map(
+        (activity) => ({
+            code: activity.code,
+            declared_gross_sales_cents:
+                activity.declared_gross_sales_cents,
+            capital_investment_cents: activity.capital_investment_cents,
+            quantity: activity.quantity,
+            started_on: activity.started_on,
+        }),
+    );
+    const activitiesMatch =
+        JSON.stringify(browserActivities) === JSON.stringify(expectedActivities);
+    Object.assign(citizenDraftEvidence, {
+        permit_application_id: manifest.resources.record_id,
+        display_reference: manifest.resources.public_reference,
+        status: 'draft',
+        business_activities: browserActivities,
+        assessment_action_visible: assessActionVisible,
+    });
+    checks.push(
+        check(
+            'citizen-detail-exact-draft-visible',
+            'Citizen detail shows the exact manifest draft',
+            true,
+            referenceVisible,
+        ),
+        check(
+            'citizen-detail-draft-boundary-visible',
+            'Citizen detail preserves the draft boundary',
+            true,
+            detailBoundaryVisible,
+        ),
+        check(
+            'citizen-detail-activities-match',
+            'Citizen detail activities match manifest evidence exactly',
+            true,
+            activitiesMatch,
+            { expected: expectedActivities, actual: browserActivities },
+        ),
+        check(
+            'citizen-detail-assessment-unavailable',
+            'Citizen draft does not expose assessment action',
+            false,
+            assessActionVisible,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '03-citizen-detail',
+        'browser/screenshots/03-citizen-detail.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    const mobileBoundaryVisible = await targetPage
+        .getByTestId('citizen-draft-boundary')
+        .isVisible()
+        .catch(() => false);
+    const mobileActivityCount = await targetPage
+        .getByTestId('citizen-business-activity-mobile-row')
+        .count();
+    const horizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+    checks.push(
+        check(
+            'citizen-mobile-draft-boundary-visible',
+            'Mobile citizen detail keeps draft boundary visible',
+            true,
+            mobileBoundaryVisible,
+        ),
+        check(
+            'citizen-mobile-activities-visible',
+            'Mobile citizen detail shows every manifest activity',
+            expectedActivities.length,
+            mobileActivityCount,
+        ),
+        check(
+            'citizen-mobile-no-horizontal-overflow',
+            'Mobile citizen detail has no page-level horizontal overflow',
+            false,
+            horizontalOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '04-citizen-mobile-detail',
+        'browser/screenshots/04-citizen-mobile-detail.png',
     );
 }
 

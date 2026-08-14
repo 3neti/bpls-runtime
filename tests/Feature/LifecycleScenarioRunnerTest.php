@@ -10,6 +10,7 @@ use App\Enums\TreasuryCollectionStatus;
 use App\Enums\UserPermission;
 use App\Jobs\GenerateStoryboardVideo;
 use App\LifecycleScenarios\AssessmentPolicyBoundaryVisibilityScenario;
+use App\LifecycleScenarios\CitizenPermitDraftVisibilityScenario;
 use App\LifecycleScenarios\LifecycleScenarioRegistry;
 use App\LifecycleScenarios\ManualCollectionReceiptVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationCancelledVisibilityScenario;
@@ -59,6 +60,19 @@ test('scenario registry discovers the storyboard terminal visibility scenario', 
         ->risk->toBe('local transactional')
         ->and($scenario->safety['external_integrations'])->toBeFalse()
         ->and($scenario->safety['irreversible_actions'])->toBeFalse();
+});
+
+test('scenario registry discovers the citizen permit draft visibility scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_permit_draft_visibility');
+
+    expect($scenario)
+        ->key->toBe('citizen_permit_draft_visibility')
+        ->label->toBe('Citizen permit draft visibility')
+        ->risk->toBe('local transactional')
+        ->and($scenario->expectations['canonical_state'])->toBe('draft')
+        ->and($scenario->expectations['official_application_number'])->toBeNull()
+        ->and($scenario->expectations['assessment_count'])->toBe(0)
+        ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
 test('scenario registry discovers the manual collection receipt visibility scenario', function () {
@@ -210,6 +224,18 @@ test('actor resolver resolves configured users through roles and permissions', f
         ->and($actors['operator']->is($user))->toBeTrue();
 });
 
+test('actor resolver resolves the configured citizen applicant through citizen permissions', function () {
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    config()->set('lifecycle_scenarios.actors.citizen_applicant.email', $citizen->email);
+
+    $actors = app(ScenarioActorResolver::class)
+        ->resolve(app(LifecycleScenarioRegistry::class)->get('citizen_permit_draft_visibility'));
+
+    expect($actors)
+        ->toHaveKey('applicant')
+        ->and($actors['applicant']->is($citizen))->toBeTrue();
+});
+
 test('actor resolver fails clearly when an expected user is absent', function () {
     config()->set('lifecycle_scenarios.actors.primary_operator.email', 'missing@example.test');
     config()->set('lifecycle_scenarios.actors.sample_recipient.email', 'missing@example.test');
@@ -323,6 +349,69 @@ test('permit application cancellation scenario executes real domain action and i
         ->and($application->metadata['terminal_state']['can_continue'])->toBeFalse()
         ->and($artifactStore->exists('terminal/prepare.json'))->toBeTrue()
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
+});
+
+test('citizen permit draft scenario uses canonical creation and is idempotent', function () {
+    Storage::fake('local');
+
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_permit_draft_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'citizen-draft-test-001');
+    $runner = app(CitizenPermitDraftVisibilityScenario::class);
+
+    $firstManifest = $runner->prepare($scenario, 'citizen-draft-test-001', [
+        'applicant' => $citizen,
+    ], $artifactStore);
+    $secondManifest = $runner->prepare($scenario, 'citizen-draft-test-001', [
+        'applicant' => $citizen,
+    ], $artifactStore);
+
+    $application = PermitApplication::query()
+        ->with('lines')
+        ->findOrFail($firstManifest['resources']['record_id']);
+
+    expect($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
+        ->and(PermitApplication::query()->count())->toBe(1)
+        ->and($application->submitted_by_id)->toBe($citizen->id)
+        ->and($application->status)->toBe(PermitApplicationStatus::Draft)
+        ->and($application->application_number)->toBeNull()
+        ->and($application->assessments()->count())->toBe(0)
+        ->and($application->lines)->toHaveCount(2)
+        ->and($firstManifest['resources']['public_reference'])->toBe('Draft #'.$application->id)
+        ->and($firstManifest['actors']['applicant']['email'])->toBe('c***@example.test')
+        ->and($artifactStore->exists('terminal/prepare.json'))->toBeTrue()
+        ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
+});
+
+test('citizen permit draft scenario audit compares browser evidence with canonical ownership and state', function () {
+    Storage::fake('local');
+
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_permit_draft_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'citizen-draft-test-002');
+    $runner = app(CitizenPermitDraftVisibilityScenario::class);
+    $manifest = $runner->prepare($scenario, 'citizen-draft-test-002', [
+        'applicant' => $citizen,
+    ], $artifactStore);
+    $artifactStore->putJson('browser/report.json', [
+        'result' => ['passed' => true],
+        'checks' => [],
+        'artifacts' => [
+            'screenshots' => [
+                '03-citizen-detail' => 'browser/screenshots/03-citizen-detail.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($manifest, $artifactStore);
+
+    expect($audited['result'])
+        ->terminal->toBe('passed')
+        ->browser->toBe('passed')
+        ->audit->toBe('passed')
+        ->passed->toBeTrue()
+        ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
 
 test('manual collection receipt scenario executes treasury actions idempotently', function () {
@@ -541,6 +630,27 @@ test('command prepares the revenue code fee catalog visibility scenario', functi
     expect($manifest['scenario']['key'])->toBe('revenue_code_fee_catalog_visibility')
         ->and($manifest['result']['terminal'])->toBe('passed')
         ->and($manifest['resources']['public_reference'])->toBe('MRC-2A-02-B-RETAIL-BUSINESS-TAX')
+        ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
+});
+
+test('command prepares the citizen permit draft visibility scenario', function () {
+    Storage::fake('local');
+
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    config()->set('lifecycle_scenarios.actors.citizen_applicant.email', $citizen->email);
+
+    $this->artisan('lifecycle:scenario', [
+        'scenario' => 'citizen_permit_draft_visibility',
+        '--run-id' => 'citizen-draft-command-test-001',
+        '--phase' => 'prepare',
+    ])->assertSuccessful();
+
+    $artifactStore = new ScenarioArtifactStore('citizen_permit_draft_visibility', 'citizen-draft-command-test-001');
+    $manifest = $artifactStore->readJson('manifest.json');
+
+    expect($manifest['scenario']['key'])->toBe('citizen_permit_draft_visibility')
+        ->and($manifest['result']['terminal'])->toBe('passed')
+        ->and($manifest['resources']['public_reference'])->toStartWith('Draft #')
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
 });
 
@@ -1436,6 +1546,26 @@ function configuredScenarioUser(string $email): User
         'code' => $permission->value,
     ])->id);
     $role = Role::factory()->create();
+    $role->permissions()->sync($permissions->all());
+
+    return User::factory()->create([
+        'role_id' => $role->id,
+        'email' => $email,
+    ]);
+}
+
+function configuredCitizenScenarioUser(string $email): User
+{
+    $permissions = collect([
+        UserPermission::AccessCitizen,
+        UserPermission::CreateOwnPermitApplications,
+        UserPermission::ViewOwnPermitApplications,
+    ])->map(fn (UserPermission $permission): int => Permission::factory()->create([
+        'code' => $permission->value,
+    ])->id);
+    $role = Role::factory()->create([
+        'code' => 'citizen',
+    ]);
     $role->permissions()->sync($permissions->all());
 
     return User::factory()->create([

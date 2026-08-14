@@ -10,7 +10,7 @@ use App\Actions\BuildPermitApplicationTimeline;
 use App\Actions\CompletePermitClearance;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
-use App\Actions\CreateStaffPermitApplication;
+use App\Actions\CreatePermitApplication;
 use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Actions\DescribePermitArtifact;
 use App\Actions\DescribePermitReleaseReadiness;
@@ -50,7 +50,7 @@ use RuntimeException;
 final class ManualCollectionReceiptVisibilityScenario
 {
     public function __construct(
-        private readonly CreateStaffPermitApplication $createPermitApplication,
+        private readonly CreatePermitApplication $createPermitApplication,
         private readonly StorePermitApplicationDocument $storePermitApplicationDocument,
         private readonly CreateAssessmentForPermitApplication $createAssessment,
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,

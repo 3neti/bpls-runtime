@@ -2,6 +2,7 @@
 
 namespace App\Actions\Fortify;
 
+use App\Actions\EnsureCitizenRole;
 use App\Concerns\PasswordValidationRules;
 use App\Concerns\ProfileValidationRules;
 use App\Models\User;
@@ -11,6 +12,10 @@ use Laravel\Fortify\Contracts\CreatesNewUsers;
 class CreateNewUser implements CreatesNewUsers
 {
     use PasswordValidationRules, ProfileValidationRules;
+
+    public function __construct(
+        private readonly EnsureCitizenRole $ensureCitizenRole,
+    ) {}
 
     /**
      * Validate and create a newly registered user.
@@ -24,7 +29,10 @@ class CreateNewUser implements CreatesNewUsers
             'password' => $this->passwordRules(),
         ])->validate();
 
+        $citizenRole = $this->ensureCitizenRole->handle();
+
         return User::create([
+            'role_id' => $citizenRole->id,
             'name' => $input['name'],
             'email' => $input['email'],
             'password' => $input['password'],

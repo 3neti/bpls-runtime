@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\UserPermission;
+use App\Enums\UserRole;
 use Laravel\Fortify\Features;
 
 beforeEach(function () {
@@ -22,4 +24,8 @@ test('new users can register', function () {
 
     $this->assertAuthenticated();
     $response->assertRedirect(route('dashboard', absolute: false));
+    expect(auth()->user()->role->code)->toBe(UserRole::Citizen->value)
+        ->and(auth()->user()->can(UserPermission::AccessCitizen->value))->toBeTrue()
+        ->and(auth()->user()->can(UserPermission::CreateOwnPermitApplications->value))->toBeTrue()
+        ->and(auth()->user()->can(UserPermission::ViewOwnPermitApplications->value))->toBeTrue();
 });

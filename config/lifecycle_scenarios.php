@@ -2,6 +2,9 @@
 
 return [
     'actors' => [
+        'citizen_applicant' => [
+            'email' => env('LIFECYCLE_CITIZEN_EMAIL'),
+        ],
         'primary_operator' => [
             'email' => env('LIFECYCLE_OPERATOR_EMAIL', 'test@example.com'),
         ],
