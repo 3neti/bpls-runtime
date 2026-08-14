@@ -2,6 +2,7 @@
 
 use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\DescribeReceiptVoidBoundary;
+use App\Actions\UpdateCitizenPermitApplicationDraft;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\ReceiptStatus;
 use App\Enums\StoryboardExportFormat;
@@ -70,6 +71,19 @@ test('scenario registry discovers the citizen permit draft visibility scenario',
         ->label->toBe('Citizen permit draft visibility')
         ->risk->toBe('local transactional')
         ->and($scenario->expectations['canonical_state'])->toBe('draft')
+        ->and($scenario->expectations['official_application_number'])->toBeNull()
+        ->and($scenario->expectations['assessment_count'])->toBe(0)
+        ->and($scenario->safety['external_integrations'])->toBeFalse();
+});
+
+test('scenario registry discovers the citizen permit draft edit visibility scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_permit_draft_edit_visibility');
+
+    expect($scenario)
+        ->key->toBe('citizen_permit_draft_edit_visibility')
+        ->label->toBe('Citizen permit draft edit visibility')
+        ->risk->toBe('local transactional')
+        ->and($scenario->expectations['browser_performs_edit'])->toBeTrue()
         ->and($scenario->expectations['official_application_number'])->toBeNull()
         ->and($scenario->expectations['assessment_count'])->toBe(0)
         ->and($scenario->safety['external_integrations'])->toBeFalse();
@@ -395,6 +409,12 @@ test('citizen permit draft scenario audit compares browser evidence with canonic
     ], $artifactStore);
     $artifactStore->putJson('browser/report.json', [
         'result' => ['passed' => true],
+        'citizen_draft' => [
+            'status' => 'draft',
+            'business_activities' => collect($manifest['resources']['business_activities'])
+                ->map(fn (array $activity): array => collect($activity)->except('name')->all())
+                ->all(),
+        ],
         'checks' => [],
         'artifacts' => [
             'screenshots' => [
@@ -411,6 +431,75 @@ test('citizen permit draft scenario audit compares browser evidence with canonic
         ->audit->toBe('passed')
         ->passed->toBeTrue()
         ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
+});
+
+test('citizen permit draft edit scenario audit compares browser edits with canonical state', function () {
+    Storage::fake('local');
+
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_permit_draft_edit_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'citizen-draft-edit-test-001');
+    $runner = app(CitizenPermitDraftVisibilityScenario::class);
+    $manifest = $runner->prepare($scenario, 'citizen-draft-edit-test-001', [
+        'applicant' => $citizen,
+    ], $artifactStore);
+    $application = PermitApplication::query()
+        ->with(['business.owner', 'lines.lineOfBusiness'])
+        ->findOrFail($manifest['resources']['record_id']);
+    $expectedEdit = $manifest['resources']['expected_edit'];
+
+    app(UpdateCitizenPermitApplicationDraft::class)->handle($application, [
+        'owner_name' => $application->business->owner->name,
+        'owner_email' => $application->business->owner->email,
+        'owner_phone' => $expectedEdit['owner_phone'],
+        'owner_address' => $application->business->owner->address,
+        'business_name' => $expectedEdit['business_name'],
+        'trade_name' => $application->business->trade_name,
+        'business_address' => $application->business->address,
+        'barangay' => $application->business->barangay,
+        'type' => $application->type->value,
+        'application_year' => $application->application_year,
+        'draft_version' => $application->updated_at->toIso8601String(),
+        'lines' => collect($expectedEdit['business_activities'])->map(function (array $activity) use ($application): array {
+            $line = $application->lines->firstWhere('lineOfBusiness.code', $activity['code']);
+
+            return [
+                'line_of_business_id' => $line->line_of_business_id,
+                'declared_gross_sales_cents' => $activity['declared_gross_sales_cents'],
+                'capital_investment_cents' => $activity['capital_investment_cents'],
+                'quantity' => $activity['quantity'],
+                'started_on' => $activity['started_on'],
+            ];
+        })->all(),
+    ], $citizen);
+    $artifactStore->putJson('browser/report.json', [
+        'result' => ['passed' => true],
+        'citizen_draft' => [
+            'edit_performed_by_browser' => true,
+            'status' => 'draft',
+            'business_name' => $expectedEdit['business_name'],
+            'owner_phone' => $expectedEdit['owner_phone'],
+            'business_activities' => collect($expectedEdit['business_activities'])
+                ->map(fn (array $activity): array => collect($activity)->except('name')->all())
+                ->all(),
+        ],
+        'checks' => [],
+        'artifacts' => [
+            'screenshots' => [
+                '03-citizen-draft-after-edit' => 'browser/screenshots/03-citizen-draft-after-edit.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($manifest, $artifactStore);
+
+    expect($audited['result'])
+        ->terminal->toBe('passed')
+        ->browser->toBe('passed')
+        ->audit->toBe('passed')
+        ->passed->toBeTrue()
+        ->and($artifactStore->readJson('terminal/audit.json')['canonical']['business_name'])->toBe($expectedEdit['business_name'])
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
 
@@ -1559,6 +1648,7 @@ function configuredCitizenScenarioUser(string $email): User
     $permissions = collect([
         UserPermission::AccessCitizen,
         UserPermission::CreateOwnPermitApplications,
+        UserPermission::EditOwnPermitApplications,
         UserPermission::ViewOwnPermitApplications,
     ])->map(fn (UserPermission $permission): int => Permission::factory()->create([
         'code' => $permission->value,

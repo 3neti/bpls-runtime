@@ -3,8 +3,10 @@ import { Form, Head, Link, setLayoutProps } from '@inertiajs/vue3';
 import { ArrowLeft, Plus, Save, Trash2 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import {
+    show as citizenShow,
     index as citizenIndex,
     store as citizenStore,
+    update as citizenUpdate,
 } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
 import {
     index as staffIndex,
@@ -29,6 +31,41 @@ type LineOfBusiness = {
 
 type BusinessActivityRow = {
     key: number;
+    line_of_business_id?: number;
+    declared_gross_sales_pesos?: string;
+    capital_investment_pesos?: string;
+    quantity?: number;
+    started_on?: string | null;
+};
+
+type PermitApplicationDraft = {
+    id: number;
+    draft_version: string;
+    owner_name: string;
+    owner_email: string | null;
+    owner_phone: string | null;
+    owner_address: string | null;
+    business_name: string;
+    trade_name: string | null;
+    registration_number: string | null;
+    business_address: string | null;
+    barangay: string | null;
+    ownership_type: string | null;
+    organization_name: string | null;
+    occupancy: string | null;
+    building_name: string | null;
+    property_index_number: string | null;
+    business_area_square_meters: string | null;
+    male_employee_count: number | null;
+    female_employee_count: number | null;
+    business_contact_number: string | null;
+    business_email: string | null;
+    established_on: string | null;
+    started_on: string | null;
+    registered_on: string | null;
+    application_year: number;
+    type: string;
+    lines: (BusinessActivityRow & { id: number })[];
 };
 
 const props = defineProps<{
@@ -40,18 +77,34 @@ const props = defineProps<{
         name: string;
         email: string;
     };
+    draft?: PermitApplicationDraft;
 }>();
 
 const isCitizenIntake = computed(() => props.intakeAudience === 'citizen');
+const isEditing = computed(() => props.draft !== undefined);
 const intakeIndex = computed(() =>
     isCitizenIntake.value ? citizenIndex() : staffIndex(),
 );
-const intakeStore = computed(() =>
-    isCitizenIntake.value ? citizenStore.form() : staffStore.form(),
+const intakeAction = computed(() => {
+    if (isEditing.value && props.draft) {
+        return citizenUpdate.form(props.draft.id);
+    }
+
+    return isCitizenIntake.value ? citizenStore.form() : staffStore.form();
+});
+const intakeBack = computed(() =>
+    isEditing.value && props.draft
+        ? citizenShow(props.draft.id)
+        : intakeIndex.value,
 );
 
-const businessActivities = ref<BusinessActivityRow[]>([{ key: 1 }]);
-let nextBusinessActivityKey = 2;
+const businessActivities = ref<BusinessActivityRow[]>(
+    props.draft?.lines.map((line) => ({ ...line, key: line.id })) ?? [
+        { key: 1 },
+    ],
+);
+let nextBusinessActivityKey =
+    Math.max(0, ...businessActivities.value.map((activity) => activity.key)) + 1;
 
 function addBusinessActivity(): void {
     if (businessActivities.value.length >= 20) {
@@ -72,6 +125,12 @@ function removeBusinessActivity(key: number): void {
     );
 }
 
+function inputValue(
+    value: string | number | null | undefined,
+): string | number | undefined {
+    return value ?? undefined;
+}
+
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
     {
         title: isCitizenIntake.value
@@ -80,7 +139,11 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
         href: intakeIndex.value,
     },
     {
-        title: isCitizenIntake.value ? 'New Draft' : 'New Application',
+        title: isEditing.value
+            ? `Edit Draft #${props.draft?.id}`
+            : isCitizenIntake.value
+              ? 'New Draft'
+              : 'New Application',
         href: '#',
     },
 ]);
@@ -93,7 +156,9 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
         <Head
             :title="
                 isCitizenIntake
-                    ? 'New Permit Application Draft'
+                    ? isEditing
+                        ? `Edit Permit Application Draft #${draft?.id}`
+                        : 'New Permit Application Draft'
                     : 'New Permit Application'
             "
         />
@@ -104,20 +169,24 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     <h1 class="text-xl font-semibold text-foreground">
                         {{
                             isCitizenIntake
-                                ? 'New Permit Application Draft'
+                                ? isEditing
+                                    ? `Edit Permit Application Draft #${draft?.id}`
+                                    : 'New Permit Application Draft'
                                 : 'New Permit Application'
                         }}
                     </h1>
                     <p class="text-sm text-muted-foreground">
                         {{
                             isCitizenIntake
-                                ? 'Record your business information for municipal review.'
+                                ? isEditing
+                                    ? 'Update the saved facts in this citizen draft.'
+                                    : 'Record your business information for municipal review.'
                                 : 'Record a staff-entered business permit application.'
                         }}
                     </p>
                 </div>
                 <Button as-child variant="outline">
-                    <Link :href="intakeIndex">
+                    <Link :href="intakeBack">
                         <ArrowLeft />
                         Back
                     </Link>
@@ -125,7 +194,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
             </section>
 
             <Form
-                v-bind="intakeStore"
+                v-bind="intakeAction"
                 v-slot="{ errors, processing }"
                 class="grid gap-4"
             >
@@ -134,10 +203,17 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     data-testid="citizen-draft-boundary"
                     class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
                 >
-                    Saving creates a draft only. It does not submit the
-                    application for assessment or assign an official
-                    application number.
+                    Saving {{ isEditing ? 'updates' : 'creates' }} a draft
+                    only. It does not submit the application for assessment or
+                    assign an official application number.
                 </section>
+                <InputError :message="errors.draft" />
+                <input
+                    v-if="draft"
+                    type="hidden"
+                    name="draft_version"
+                    :value="draft.draft_version"
+                />
                 <section
                     class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 dark:border-sidebar-border"
                 >
@@ -151,7 +227,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <Input
                             id="owner_name"
                             name="owner_name"
-                            :default-value="applicant?.name"
+                            :default-value="draft?.owner_name ?? applicant?.name"
                             required
                         />
                         <InputError :message="errors.owner_name" />
@@ -162,18 +238,30 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             id="owner_email"
                             name="owner_email"
                             type="email"
-                            :default-value="applicant?.email"
+                            :default-value="
+                                isEditing
+                                    ? inputValue(draft?.owner_email)
+                                    : applicant?.email
+                            "
                         />
                         <InputError :message="errors.owner_email" />
                     </div>
                     <div class="grid gap-2">
                         <Label for="owner_phone">Phone</Label>
-                        <Input id="owner_phone" name="owner_phone" />
+                        <Input
+                            id="owner_phone"
+                            name="owner_phone"
+                            :default-value="inputValue(draft?.owner_phone)"
+                        />
                         <InputError :message="errors.owner_phone" />
                     </div>
                     <div class="grid gap-2">
                         <Label for="owner_address">Owner address</Label>
-                        <Input id="owner_address" name="owner_address" />
+                        <Input
+                            id="owner_address"
+                            name="owner_address"
+                            :default-value="inputValue(draft?.owner_address)"
+                        />
                         <InputError :message="errors.owner_address" />
                     </div>
                 </section>
@@ -192,13 +280,18 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <Input
                             id="business_name"
                             name="business_name"
+                            :default-value="inputValue(draft?.business_name)"
                             required
                         />
                         <InputError :message="errors.business_name" />
                     </div>
                     <div class="grid gap-2">
                         <Label for="trade_name">Trade name</Label>
-                        <Input id="trade_name" name="trade_name" />
+                        <Input
+                            id="trade_name"
+                            name="trade_name"
+                            :default-value="inputValue(draft?.trade_name)"
+                        />
                         <InputError :message="errors.trade_name" />
                     </div>
                     <div class="grid gap-2">
@@ -208,17 +301,26 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <Input
                             id="registration_number"
                             name="registration_number"
+                            :default-value="inputValue(draft?.registration_number)"
                         />
                         <InputError :message="errors.registration_number" />
                     </div>
                     <div class="grid gap-2">
                         <Label for="barangay">Barangay</Label>
-                        <Input id="barangay" name="barangay" />
+                        <Input
+                            id="barangay"
+                            name="barangay"
+                            :default-value="inputValue(draft?.barangay)"
+                        />
                         <InputError :message="errors.barangay" />
                     </div>
                     <div class="grid gap-2 md:col-span-2">
                         <Label for="business_address">Business address</Label>
-                        <Input id="business_address" name="business_address" />
+                        <Input
+                            id="business_address"
+                            name="business_address"
+                            :default-value="inputValue(draft?.business_address)"
+                        />
                         <InputError :message="errors.business_address" />
                     </div>
                     <div class="grid gap-2">
@@ -228,15 +330,23 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             name="ownership_type"
                             class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            <option value="">Not recorded</option>
-                            <option value="sole-proprietorship">
+                            <option
+                                value=""
+                                :selected="!draft?.ownership_type"
+                            >
+                                Not recorded
+                            </option>
+                            <option
+                                value="sole-proprietorship"
+                                :selected="draft?.ownership_type === 'sole-proprietorship'"
+                            >
                                 Sole proprietorship
                             </option>
-                            <option value="partnership">Partnership</option>
-                            <option value="corporation">Corporation</option>
-                            <option value="cooperative">Cooperative</option>
-                            <option value="religious">Religious</option>
-                            <option value="non-profit">Non-profit</option>
+                            <option value="partnership" :selected="draft?.ownership_type === 'partnership'">Partnership</option>
+                            <option value="corporation" :selected="draft?.ownership_type === 'corporation'">Corporation</option>
+                            <option value="cooperative" :selected="draft?.ownership_type === 'cooperative'">Cooperative</option>
+                            <option value="religious" :selected="draft?.ownership_type === 'religious'">Religious</option>
+                            <option value="non-profit" :selected="draft?.ownership_type === 'non-profit'">Non-profit</option>
                         </select>
                         <InputError :message="errors.ownership_type" />
                     </div>
@@ -247,6 +357,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <Input
                             id="organization_name"
                             name="organization_name"
+                            :default-value="inputValue(draft?.organization_name)"
                         />
                         <InputError :message="errors.organization_name" />
                     </div>
@@ -257,15 +368,19 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             name="occupancy"
                             class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            <option value="">Not recorded</option>
-                            <option value="owned">Owned</option>
-                            <option value="rented">Rented</option>
+                            <option value="" :selected="!draft?.occupancy">Not recorded</option>
+                            <option value="owned" :selected="draft?.occupancy === 'owned'">Owned</option>
+                            <option value="rented" :selected="draft?.occupancy === 'rented'">Rented</option>
                         </select>
                         <InputError :message="errors.occupancy" />
                     </div>
                     <div class="grid gap-2">
                         <Label for="building_name">Building name</Label>
-                        <Input id="building_name" name="building_name" />
+                        <Input
+                            id="building_name"
+                            name="building_name"
+                            :default-value="inputValue(draft?.building_name)"
+                        />
                         <InputError :message="errors.building_name" />
                     </div>
                     <div class="grid gap-2">
@@ -275,6 +390,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <Input
                             id="property_index_number"
                             name="property_index_number"
+                            :default-value="inputValue(draft?.property_index_number)"
                         />
                         <InputError :message="errors.property_index_number" />
                     </div>
@@ -288,6 +404,9 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             type="number"
                             min="0.01"
                             step="0.01"
+                            :default-value="
+                                inputValue(draft?.business_area_square_meters)
+                            "
                         />
                         <InputError
                             :message="errors.business_area_square_meters"
@@ -302,6 +421,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             name="male_employee_count"
                             type="number"
                             min="0"
+                            :default-value="inputValue(draft?.male_employee_count)"
                         />
                         <InputError :message="errors.male_employee_count" />
                     </div>
@@ -314,6 +434,9 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             name="female_employee_count"
                             type="number"
                             min="0"
+                            :default-value="
+                                inputValue(draft?.female_employee_count)
+                            "
                         />
                         <InputError :message="errors.female_employee_count" />
                     </div>
@@ -324,6 +447,9 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <Input
                             id="business_contact_number"
                             name="business_contact_number"
+                            :default-value="
+                                inputValue(draft?.business_contact_number)
+                            "
                         />
                         <InputError :message="errors.business_contact_number" />
                     </div>
@@ -333,6 +459,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             id="business_email"
                             name="business_email"
                             type="email"
+                            :default-value="inputValue(draft?.business_email)"
                         />
                         <InputError :message="errors.business_email" />
                     </div>
@@ -342,12 +469,18 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             id="established_on"
                             name="established_on"
                             type="date"
+                            :default-value="inputValue(draft?.established_on)"
                         />
                         <InputError :message="errors.established_on" />
                     </div>
                     <div class="grid gap-2">
                         <Label for="started_on">Operations started on</Label>
-                        <Input id="started_on" name="started_on" type="date" />
+                        <Input
+                            id="started_on"
+                            name="started_on"
+                            type="date"
+                            :default-value="inputValue(draft?.started_on)"
+                        />
                         <InputError :message="errors.started_on" />
                     </div>
                     <div class="grid gap-2">
@@ -356,6 +489,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             id="registered_on"
                             name="registered_on"
                             type="date"
+                            :default-value="inputValue(draft?.registered_on)"
                         />
                         <InputError :message="errors.registered_on" />
                     </div>
@@ -387,7 +521,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             type="number"
                             min="2020"
                             :max="currentApplicationYear + 1"
-                            :default-value="currentApplicationYear"
+                            :default-value="draft?.application_year ?? currentApplicationYear"
                             :readonly="isCitizenIntake"
                             required
                         />
@@ -477,13 +611,21 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 required
                                 class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                <option value="" disabled selected>
+                                <option
+                                    value=""
+                                    disabled
+                                    :selected="!activity.line_of_business_id"
+                                >
                                     Select a line of business
                                 </option>
                                 <option
                                     v-for="lineOfBusiness in lineOfBusinesses"
                                     :key="lineOfBusiness.id"
                                     :value="lineOfBusiness.id"
+                                    :selected="
+                                        activity.line_of_business_id ===
+                                        lineOfBusiness.id
+                                    "
                                 >
                                     {{ lineOfBusiness.name }}
                                 </option>
@@ -504,6 +646,9 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 type="number"
                                 min="0"
                                 step="0.01"
+                                :default-value="
+                                    activity.declared_gross_sales_pesos
+                                "
                                 required
                             />
                             <InputError
@@ -524,6 +669,9 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 type="number"
                                 min="0"
                                 step="0.01"
+                                :default-value="
+                                    activity.capital_investment_pesos
+                                "
                                 required
                             />
                             <InputError
@@ -543,7 +691,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 :name="`lines[${index}][quantity]`"
                                 type="number"
                                 min="1"
-                                :default-value="1"
+                                :default-value="activity.quantity ?? 1"
                                 required
                             />
                             <InputError
@@ -558,6 +706,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 :id="`lines_${index}_started_on`"
                                 :name="`lines[${index}][started_on]`"
                                 type="date"
+                                :default-value="inputValue(activity.started_on)"
                             />
                             <InputError
                                 :message="errors[`lines.${index}.started_on`]"
@@ -570,7 +719,11 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     <Button type="submit" :disabled="processing">
                         <Save />
                         {{
-                            isCitizenIntake ? 'Save Draft' : 'Save Application'
+                            isEditing
+                                ? 'Save Changes'
+                                : isCitizenIntake
+                                  ? 'Save Draft'
+                                  : 'Save Application'
                         }}
                     </Button>
                 </div>

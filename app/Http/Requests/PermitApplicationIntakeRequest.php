@@ -77,7 +77,7 @@ abstract class PermitApplicationIntakeRequest extends FormRequest
     /**
      * @return array<string, mixed>
      */
-    public function validatedForCreation(): array
+    public function validatedForPersistence(): array
     {
         $validated = $this->validated();
 

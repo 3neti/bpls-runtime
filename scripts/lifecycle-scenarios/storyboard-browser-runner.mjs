@@ -22,6 +22,7 @@ if (manifest.schema_version !== 'application.lifecycle-evidence.v1') {
 
 const supportedScenarios = [
     'assessment_policy_boundary_visibility',
+    'citizen_permit_draft_edit_visibility',
     'citizen_permit_draft_visibility',
     'new_permit_lifecycle_authority_boundary',
     'manual_collection_receipt_visibility',
@@ -103,6 +104,10 @@ try {
 
     if (manifest.scenario.key === 'citizen_permit_draft_visibility') {
         await inspectCitizenPermitDraft(page, baseUrl);
+    }
+
+    if (manifest.scenario.key === 'citizen_permit_draft_edit_visibility') {
+        await editCitizenPermitDraft(page, baseUrl);
     }
 
     if (manifest.scenario.key === 'storyboard_terminal_state_visibility') {
@@ -452,6 +457,249 @@ async function inspectCitizenPermitDraft(targetPage, targetBaseUrl) {
         targetPage,
         '04-citizen-mobile-detail',
         'browser/screenshots/04-citizen-mobile-detail.png',
+    );
+}
+
+async function editCitizenPermitDraft(targetPage, targetBaseUrl) {
+    const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
+    const editUrl = `${targetBaseUrl}${manifest.resources.edit_url}`;
+    const expectedEdit = manifest.resources.expected_edit;
+
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    const alreadyEdited = await targetPage
+        .getByText(expectedEdit.business_name, { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const editActionVisible = await targetPage
+        .getByRole('link', { name: 'Edit Draft', exact: true })
+        .isVisible()
+        .catch(() => false);
+    checks.push(
+        check(
+            'citizen-edit-action-available',
+            'Owned unprocessed draft exposes the edit action',
+            true,
+            editActionVisible,
+        ),
+    );
+    const beforeEditScreenshot =
+        'browser/screenshots/01-citizen-draft-before-edit.png';
+
+    if (
+        alreadyEdited &&
+        fs.existsSync(path.join(runDirectory, beforeEditScreenshot))
+    ) {
+        screenshots['01-citizen-draft-before-edit'] = beforeEditScreenshot;
+        actionLog.push(
+            stepLog(
+                '01-citizen-draft-before-edit-screenshot-retained',
+                'Retain the original pre-edit screenshot during resume',
+                { screenshot: beforeEditScreenshot },
+            ),
+        );
+    } else {
+        await screenshot(
+            targetPage,
+            '01-citizen-draft-before-edit',
+            beforeEditScreenshot,
+        );
+    }
+
+    await targetPage.goto(editUrl, { waitUntil: 'networkidle' });
+    const prefilledBusinessName = await targetPage
+        .locator('#business_name')
+        .inputValue();
+    const prefilledActivityCount = await targetPage
+        .getByTestId('permit-business-activity-row')
+        .count();
+    const draftBoundaryVisible = await targetPage
+        .getByTestId('citizen-draft-boundary')
+        .isVisible()
+        .catch(() => false);
+    checks.push(
+        check(
+            'citizen-edit-prefills-exact-business',
+            'Edit workspace prefills the exact manifest business',
+            alreadyEdited
+                ? expectedEdit.business_name
+                : manifest.resources.business_name,
+            prefilledBusinessName,
+        ),
+        check(
+            'citizen-edit-prefills-all-activities',
+            'Edit workspace prefills every manifest activity',
+            manifest.resources.business_activities.length,
+            prefilledActivityCount,
+        ),
+        check(
+            'citizen-edit-draft-boundary-visible',
+            'Edit workspace preserves the citizen draft boundary',
+            true,
+            draftBoundaryVisible,
+        ),
+    );
+
+    await targetPage.locator('#owner_phone').fill(expectedEdit.owner_phone);
+    await targetPage
+        .locator('#business_name')
+        .fill(expectedEdit.business_name);
+    await targetPage
+        .locator('#lines_0_declared_gross_sales')
+        .fill(
+            (expectedEdit.business_activities[0].declared_gross_sales_cents / 100).toFixed(2),
+        );
+    await targetPage
+        .locator('#lines_0_quantity')
+        .fill(String(expectedEdit.business_activities[0].quantity));
+    await targetPage
+        .locator('#lines_1_capital_investment')
+        .fill(
+            (expectedEdit.business_activities[1].capital_investment_cents / 100).toFixed(2),
+        );
+    await targetPage
+        .locator('#lines_1_quantity')
+        .fill(String(expectedEdit.business_activities[1].quantity));
+    await targetPage.evaluate(() => window.scrollTo(0, 0));
+    await screenshot(
+        targetPage,
+        '02-citizen-draft-edit-workspace',
+        'browser/screenshots/02-citizen-draft-edit-workspace.png',
+    );
+
+    if (alreadyEdited) {
+        actionLog.push(
+            stepLog(
+                'citizen-draft-edit-resumed',
+                'Draft already matches the expected edit; skip repeat submission',
+                { permit_application_id: manifest.resources.record_id },
+            ),
+        );
+        await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    } else {
+        actionLog.push(
+            stepLog(
+                'citizen-draft-edit-entered',
+                'Edit manifest-bound citizen draft facts through the real form',
+                { permit_application_id: manifest.resources.record_id },
+            ),
+        );
+        await targetPage.getByRole('button', { name: 'Save Changes' }).click();
+        await targetPage.waitForURL(
+            new RegExp(`/citizen/permit-applications/${manifest.resources.record_id}$`),
+            { timeout: 10000 },
+        );
+    }
+
+    await targetPage.getByText(expectedEdit.business_name, { exact: false }).first().waitFor();
+
+    const browserActivities = await targetPage
+        .getByTestId('citizen-business-activity-row')
+        .evaluateAll((rows) =>
+            rows.map((row) => ({
+                code: row.dataset.activityCode,
+                declared_gross_sales_cents: Number(row.dataset.grossSalesCents),
+                capital_investment_cents: Number(
+                    row.dataset.capitalInvestmentCents,
+                ),
+                quantity: Number(row.dataset.quantity),
+                started_on: row.dataset.startedOn,
+            })),
+        );
+    const expectedActivities = expectedEdit.business_activities.map(
+        (activity) => ({
+            code: activity.code,
+            declared_gross_sales_cents: activity.declared_gross_sales_cents,
+            capital_investment_cents: activity.capital_investment_cents,
+            quantity: activity.quantity,
+            started_on: activity.started_on,
+        }),
+    );
+    const activitiesMatch =
+        JSON.stringify(browserActivities) === JSON.stringify(expectedActivities);
+    const businessVisible = await targetPage
+        .getByText(expectedEdit.business_name, { exact: false })
+        .first()
+        .isVisible();
+    const ownerPhoneVisible = await targetPage
+        .getByText(expectedEdit.owner_phone, { exact: true })
+        .isVisible();
+    const assessmentActionVisible = await targetPage
+        .getByRole('button', { name: /assess/i })
+        .isVisible()
+        .catch(() => false);
+    Object.assign(citizenDraftEvidence, {
+        permit_application_id: manifest.resources.record_id,
+        display_reference: manifest.resources.public_reference,
+        status: 'draft',
+        business_name: expectedEdit.business_name,
+        owner_phone: expectedEdit.owner_phone,
+        business_activities: browserActivities,
+        assessment_action_visible: assessmentActionVisible,
+        edit_performed_by_browser: true,
+        edit_resumed_without_resubmit: alreadyEdited,
+    });
+    checks.push(
+        check(
+            'citizen-edited-business-visible',
+            'Updated business name is visible on the exact draft',
+            true,
+            businessVisible,
+        ),
+        check(
+            'citizen-edited-owner-visible',
+            'Updated owner contact is visible on the exact draft',
+            true,
+            ownerPhoneVisible,
+        ),
+        check(
+            'citizen-edited-activities-match',
+            'Updated activities match manifest evidence exactly',
+            true,
+            activitiesMatch,
+            { expected: expectedActivities, actual: browserActivities },
+        ),
+        check(
+            'citizen-edited-draft-remains-unassessed',
+            'Editing does not expose assessment action',
+            false,
+            assessmentActionVisible,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '03-citizen-draft-after-edit',
+        'browser/screenshots/03-citizen-draft-after-edit.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    const mobileActivityCount = await targetPage
+        .getByTestId('citizen-business-activity-mobile-row')
+        .count();
+    const horizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+    checks.push(
+        check(
+            'citizen-edited-mobile-activities-visible',
+            'Mobile detail shows every edited activity',
+            expectedActivities.length,
+            mobileActivityCount,
+        ),
+        check(
+            'citizen-edited-mobile-no-horizontal-overflow',
+            'Mobile edited draft has no page-level horizontal overflow',
+            false,
+            horizontalOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '04-citizen-draft-after-edit-mobile',
+        'browser/screenshots/04-citizen-draft-after-edit-mobile.png',
     );
 }
 

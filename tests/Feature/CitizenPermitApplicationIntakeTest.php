@@ -27,6 +27,7 @@ test('citizen permit routes require authentication and citizen permissions', fun
 
     $citizenWithoutCreatePermission = userWithPermissions([
         UserPermission::AccessCitizen,
+        UserPermission::EditOwnPermitApplications,
         UserPermission::ViewOwnPermitApplications,
     ], UserRole::Citizen);
 
@@ -51,6 +52,7 @@ test('citizens can open a new permit draft with their identity prefilled', funct
     $citizen = userWithPermissions([
         UserPermission::AccessCitizen,
         UserPermission::CreateOwnPermitApplications,
+        UserPermission::EditOwnPermitApplications,
         UserPermission::ViewOwnPermitApplications,
     ], UserRole::Citizen);
     $lineOfBusiness = LineOfBusiness::factory()->create([
@@ -84,6 +86,7 @@ test('citizens can save an owned new permit draft with multiple activities', fun
     $citizen = userWithPermissions([
         UserPermission::AccessCitizen,
         UserPermission::CreateOwnPermitApplications,
+        UserPermission::EditOwnPermitApplications,
         UserPermission::ViewOwnPermitApplications,
     ], UserRole::Citizen);
     $retail = LineOfBusiness::factory()->create([
@@ -149,6 +152,225 @@ test('citizens can save an owned new permit draft with multiple activities', fun
             ->where('permitApplication.lines.1.line_of_business.code', 'CITIZEN-MULTI-REPAIR')
         );
 });
+
+test('citizens can edit an owned draft and atomically replace its activities', function () {
+    $citizen = userWithPermissions([
+        UserPermission::AccessCitizen,
+        UserPermission::CreateOwnPermitApplications,
+        UserPermission::EditOwnPermitApplications,
+        UserPermission::ViewOwnPermitApplications,
+    ], UserRole::Citizen);
+    $retail = LineOfBusiness::factory()->create(['code' => 'EDIT-RETAIL']);
+    $services = LineOfBusiness::factory()->create(['code' => 'EDIT-SERVICES']);
+
+    $this->actingAs($citizen)
+        ->post(route('citizen.permit-applications.store'), citizenPermitDraftPayload([
+            'lines' => [[
+                'line_of_business_id' => $retail->id,
+                'declared_gross_sales_pesos' => '1000.00',
+                'capital_investment_pesos' => '500.00',
+                'quantity' => 1,
+            ]],
+        ]))
+        ->assertRedirect();
+
+    $application = PermitApplication::query()->whereBelongsTo($citizen, 'submittedBy')->sole();
+    $draftVersion = $application->updated_at->toIso8601String();
+
+    $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.edit', $application))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Create')
+            ->where('draft.id', $application->id)
+            ->where('draft.draft_version', $draftVersion)
+            ->where('draft.business_name', 'Citizen Trading')
+            ->where('draft.lines.0.line_of_business_id', $retail->id)
+            ->where('draft.lines.0.declared_gross_sales_pesos', '1000.00')
+        );
+
+    $response = $this->actingAs($citizen)
+        ->patch(route('citizen.permit-applications.update', $application), citizenPermitDraftPayload([
+            'draft_version' => $draftVersion,
+            'business_name' => 'Citizen Trading Updated',
+            'lines' => [
+                [
+                    'line_of_business_id' => $retail->id,
+                    'declared_gross_sales_pesos' => '1250.50',
+                    'capital_investment_pesos' => '600.25',
+                    'quantity' => 2,
+                    'started_on' => '2020-01-15',
+                ],
+                [
+                    'line_of_business_id' => $services->id,
+                    'declared_gross_sales_pesos' => '450.75',
+                    'capital_investment_pesos' => '150.50',
+                    'quantity' => 3,
+                    'started_on' => '2021-06-01',
+                ],
+            ],
+        ]));
+
+    $application->refresh()->load(['business', 'lines.lineOfBusiness']);
+
+    $response->assertRedirect(route('citizen.permit-applications.show', $application));
+    expect($application->business->name)->toBe('Citizen Trading Updated')
+        ->and($application->status)->toBe(PermitApplicationStatus::Draft)
+        ->and($application->application_number)->toBeNull()
+        ->and($application->assessments()->count())->toBe(0)
+        ->and($application->submitted_by_id)->toBe($citizen->id)
+        ->and($application->lines)->toHaveCount(2)
+        ->and($application->lines[0]->lineOfBusiness->code)->toBe('EDIT-RETAIL')
+        ->and($application->lines[0]->declared_gross_sales_cents)->toBe(125_050)
+        ->and($application->lines[1]->lineOfBusiness->code)->toBe('EDIT-SERVICES')
+        ->and($application->lines[1]->quantity)->toBe(3);
+});
+
+test('citizen draft editing is ownership and permission scoped', function () {
+    $citizen = userWithPermissions([
+        UserPermission::AccessCitizen,
+        UserPermission::EditOwnPermitApplications,
+        UserPermission::ViewOwnPermitApplications,
+    ], UserRole::Citizen);
+    $otherCitizen = User::factory()->create(['role_id' => $citizen->role_id]);
+    $application = PermitApplication::factory()->for($otherCitizen, 'submittedBy')->create([
+        'application_number' => null,
+        'status' => PermitApplicationStatus::Draft,
+        'type' => PermitApplicationType::New,
+    ]);
+    PermitApplicationLine::factory()->for($application)->create();
+
+    $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.edit', $application))
+        ->assertNotFound();
+
+    $citizen->role->permissions()
+        ->where('code', UserPermission::EditOwnPermitApplications->value)
+        ->detach();
+    $citizenWithoutEditPermission = User::factory()->create([
+        'role_id' => $citizen->role_id,
+    ]);
+    $ownedApplication = PermitApplication::factory()->for($citizenWithoutEditPermission, 'submittedBy')->create([
+        'application_number' => null,
+        'status' => PermitApplicationStatus::Draft,
+        'type' => PermitApplicationType::New,
+    ]);
+
+    $this->actingAs($citizenWithoutEditPermission)
+        ->get(route('citizen.permit-applications.edit', $ownedApplication))
+        ->assertForbidden();
+});
+
+test('invalid citizen draft edits preserve all existing records', function () {
+    $citizen = userWithPermissions([
+        UserPermission::AccessCitizen,
+        UserPermission::EditOwnPermitApplications,
+        UserPermission::ViewOwnPermitApplications,
+    ], UserRole::Citizen);
+    $lineOfBusiness = LineOfBusiness::factory()->create();
+    $application = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
+        'application_number' => null,
+        'status' => PermitApplicationStatus::Draft,
+        'type' => PermitApplicationType::New,
+    ]);
+    $line = PermitApplicationLine::factory()->for($application)->for($lineOfBusiness)->create([
+        'declared_gross_sales_cents' => 100_000,
+    ]);
+    $originalBusinessName = $application->business->name;
+
+    $this->actingAs($citizen)
+        ->patch(route('citizen.permit-applications.update', $application), citizenPermitDraftPayload([
+            'draft_version' => $application->updated_at->toIso8601String(),
+            'business_name' => 'Must Not Persist',
+            'lines' => [],
+        ]))
+        ->assertSessionHasErrors('lines');
+
+    expect($application->business->refresh()->name)->toBe($originalBusinessName)
+        ->and($application->lines()->count())->toBe(1)
+        ->and($line->refresh()->declared_gross_sales_cents)->toBe(100_000);
+});
+
+test('citizen draft editing refuses shared registry records without mutation', function () {
+    $citizen = userWithPermissions([
+        UserPermission::AccessCitizen,
+        UserPermission::EditOwnPermitApplications,
+        UserPermission::ViewOwnPermitApplications,
+    ], UserRole::Citizen);
+    $lineOfBusiness = LineOfBusiness::factory()->create();
+    $application = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
+        'application_number' => null,
+        'status' => PermitApplicationStatus::Draft,
+        'type' => PermitApplicationType::New,
+    ]);
+    $line = PermitApplicationLine::factory()->for($application)->for($lineOfBusiness)->create([
+        'declared_gross_sales_cents' => 100_000,
+    ]);
+    PermitApplication::factory()->for($application->business)->create();
+    Business::factory()->for($application->business->owner, 'owner')->create();
+    $originalBusinessName = $application->business->name;
+
+    $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.edit', $application))
+        ->assertConflict();
+
+    $this->actingAs($citizen)
+        ->patch(route('citizen.permit-applications.update', $application), citizenPermitDraftPayload([
+            'draft_version' => $application->updated_at->toIso8601String(),
+            'business_name' => 'Must Not Persist',
+            'lines' => [[
+                'line_of_business_id' => $lineOfBusiness->id,
+                'declared_gross_sales_pesos' => '9999.99',
+                'capital_investment_pesos' => '500.00',
+                'quantity' => 1,
+            ]],
+        ]))
+        ->assertSessionHasErrors('draft');
+
+    expect($application->business->refresh()->name)->toBe($originalBusinessName)
+        ->and($line->refresh()->declared_gross_sales_cents)->toBe(100_000);
+});
+
+test('citizen draft update refuses stale or municipally processed records without mutation', function (array $applicationOverrides, bool $stale): void {
+    $citizen = userWithPermissions([
+        UserPermission::AccessCitizen,
+        UserPermission::EditOwnPermitApplications,
+        UserPermission::ViewOwnPermitApplications,
+    ], UserRole::Citizen);
+    $lineOfBusiness = LineOfBusiness::factory()->create();
+    $application = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
+        'application_number' => null,
+        'status' => PermitApplicationStatus::Draft,
+        'type' => PermitApplicationType::New,
+        ...$applicationOverrides,
+    ]);
+    $line = PermitApplicationLine::factory()->for($application)->for($lineOfBusiness)->create([
+        'declared_gross_sales_cents' => 100_000,
+    ]);
+    $draftVersion = $stale
+        ? $application->updated_at->subSecond()->toIso8601String()
+        : $application->updated_at->toIso8601String();
+
+    $this->actingAs($citizen)
+        ->patch(route('citizen.permit-applications.update', $application), citizenPermitDraftPayload([
+            'draft_version' => $draftVersion,
+            'business_name' => 'Must Not Persist',
+            'lines' => [[
+                'line_of_business_id' => $lineOfBusiness->id,
+                'declared_gross_sales_pesos' => '9999.99',
+                'capital_investment_pesos' => '500.00',
+                'quantity' => 1,
+            ]],
+        ]))
+        ->assertSessionHasErrors('draft');
+
+    expect($application->business->refresh()->name)->not->toBe('Must Not Persist')
+        ->and($line->refresh()->declared_gross_sales_cents)->toBe(100_000);
+})->with([
+    'stale browser version' => [[], true],
+    'officially numbered application' => [['application_number' => 'APP-PROCESSED-001'], false],
+    'non-draft application' => [['status' => PermitApplicationStatus::PendingPayment], false],
+]);
 
 test('citizen application lists and details are scoped to the authenticated submitter', function () {
     $citizen = userWithPermissions([

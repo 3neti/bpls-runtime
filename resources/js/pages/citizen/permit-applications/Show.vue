@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Head, Link, setLayoutProps } from '@inertiajs/vue3';
-import { ArrowLeft, FilePlus2 } from '@lucide/vue';
+import { ArrowLeft, FilePenLine, FilePlus2 } from '@lucide/vue';
 import {
     create,
+    edit,
     index,
     show,
 } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
@@ -50,6 +51,7 @@ type PermitApplication = {
         official_application_number_assigned: boolean;
         statement: string;
     };
+    can_edit: boolean;
 };
 
 const props = defineProps<{
@@ -98,6 +100,12 @@ function money(amountCents: number): string {
                     </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
+                    <Button v-if="permitApplication.can_edit" as-child variant="outline">
+                        <Link :href="edit(permitApplication.id)">
+                            <FilePenLine />
+                            Edit Draft
+                        </Link>
+                    </Button>
                     <Button as-child variant="outline">
                         <Link :href="index()">
                             <ArrowLeft />

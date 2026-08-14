@@ -14,6 +14,7 @@ class EnsureCitizenRole
         $permissions = collect([
             UserPermission::AccessCitizen,
             UserPermission::CreateOwnPermitApplications,
+            UserPermission::EditOwnPermitApplications,
             UserPermission::ViewOwnPermitApplications,
         ])->map(fn (UserPermission $permission): Permission => Permission::query()->firstOrCreate(
             ['code' => $permission->value],

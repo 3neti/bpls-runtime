@@ -89,7 +89,7 @@ class PermitApplicationController extends Controller
 
     public function store(StorePermitApplicationRequest $request, CreatePermitApplication $createPermitApplication): RedirectResponse
     {
-        $permitApplication = $createPermitApplication->handle($request->validatedForCreation(), $request->user());
+        $permitApplication = $createPermitApplication->handle($request->validatedForPersistence(), $request->user());
 
         return to_route('staff.permit-applications.show', $permitApplication);
     }

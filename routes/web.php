@@ -31,7 +31,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::prefix('citizen')->name('citizen.')->middleware('can:citizen.access')->group(function () {
         Route::resource('permit-applications', CitizenPermitApplicationController::class)
-            ->only(['index', 'create', 'store', 'show']);
+            ->only(['index', 'create', 'store', 'show', 'edit', 'update']);
     });
 
     Route::prefix('staff')->name('staff.')->middleware('can:staff.access')->group(function () {

@@ -117,11 +117,37 @@ final class CitizenPermitDraftVisibilityScenario
             'business_name' => $businessName,
             'list_url' => route('citizen.permit-applications.index', absolute: false),
             'create_url' => route('citizen.permit-applications.create', absolute: false),
+            'edit_url' => route('citizen.permit-applications.edit', $permitApplication, false),
             'detail_url' => route('citizen.permit-applications.show', $permitApplication, false),
             'business_activities' => collect($activities)
                 ->map(fn (array $activity): array => collect($activity)->except('line_of_business_id')->all())
                 ->all(),
         ];
+
+        if ($scenario->key === 'citizen_permit_draft_edit_visibility') {
+            $manifest['resources']['expected_edit'] = [
+                'business_name' => $businessName.' Updated',
+                'owner_phone' => '09171112222',
+                'business_activities' => [
+                    [
+                        'code' => $retail->code,
+                        'name' => $retail->name,
+                        'declared_gross_sales_cents' => 13_000_050,
+                        'capital_investment_cents' => 7_500_025,
+                        'quantity' => 4,
+                        'started_on' => '2020-01-15',
+                    ],
+                    [
+                        'code' => $services->code,
+                        'name' => $services->name,
+                        'declared_gross_sales_cents' => 4_500_075,
+                        'capital_investment_cents' => 1_750_050,
+                        'quantity' => 3,
+                        'started_on' => '2021-06-01',
+                    ],
+                ],
+            ];
+        }
         $manifest['steps'] = $steps;
         $manifest['result']['terminal'] = collect($steps)->every(fn (array $step): bool => $step['passed']) ? 'passed' : 'failed';
         $manifest['result']['passed'] = $manifest['result']['terminal'] === 'passed';
@@ -140,8 +166,9 @@ final class CitizenPermitDraftVisibilityScenario
             'irreversible_actions' => false,
             'notifications' => false,
         ]);
-        $artifactStore->putJson('storyboard/storyboard.json', $this->storyboard($runId, $permitApplication));
-        $artifactStore->put('storyboard/storyboard.html', $this->storyboardHtml($runId, $permitApplication));
+        $isEditScenario = $scenario->key === 'citizen_permit_draft_edit_visibility';
+        $artifactStore->putJson('storyboard/storyboard.json', $this->storyboard($runId, $permitApplication, $isEditScenario));
+        $artifactStore->put('storyboard/storyboard.html', $this->storyboardHtml($runId, $permitApplication, $isEditScenario));
         $artifactStore->putJson('manifest.json', $manifest);
         $artifactStore->put('review.md', $this->summaryRenderer->reviewMarkdown());
 
@@ -155,7 +182,7 @@ final class CitizenPermitDraftVisibilityScenario
     public function audit(array $manifest, ScenarioArtifactStore $artifactStore): array
     {
         $permitApplication = PermitApplication::query()
-            ->with(['lines.lineOfBusiness'])
+            ->with(['business.owner', 'lines.lineOfBusiness'])
             ->withCount('assessments')
             ->findOrFail($manifest['resources']['record_id']);
         $browserReport = $artifactStore->readJson('browser/report.json') ?? ['result' => ['passed' => false]];
@@ -167,7 +194,14 @@ final class CitizenPermitDraftVisibilityScenario
             'quantity' => $line->quantity,
             'started_on' => $line->started_on?->toDateString(),
         ])->values()->all();
+        $canonicalBrowserActivities = collect($canonicalActivities)
+            ->map(fn (array $activity): array => collect($activity)->except('name')->all())
+            ->all();
 
+        $expectedEdit = data_get($manifest, 'resources.expected_edit');
+        $expectedActivities = is_array($expectedEdit)
+            ? $expectedEdit['business_activities']
+            : $manifest['resources']['business_activities'];
         $checks = [
             $this->step('audit-citizen-ownership', 'Canonical draft belongs to manifest citizen', ['submitted_by_id' => data_get($manifest, 'actors.applicant.id')], ['submitted_by_id' => $permitApplication->submitted_by_id]),
             $this->step('audit-draft-state', 'Canonical application remains an unnumbered unassessed draft', [
@@ -179,9 +213,35 @@ final class CitizenPermitDraftVisibilityScenario
                 'application_number' => $permitApplication->application_number,
                 'assessment_count' => $permitApplication->assessments_count,
             ]),
-            $this->step('audit-business-activities', 'Canonical activities match manifest activities', ['activities' => $manifest['resources']['business_activities']], ['activities' => $canonicalActivities]),
+            $this->step('audit-business-activities', 'Canonical activities match manifest activities', ['activities' => $expectedActivities], ['activities' => $canonicalActivities]),
+            $this->step('audit-browser-draft-state', 'Browser draft state matches canonical state', [
+                'status' => $permitApplication->status->value,
+                'activities' => $canonicalBrowserActivities,
+            ], [
+                'status' => data_get($browserReport, 'citizen_draft.status'),
+                'activities' => data_get($browserReport, 'citizen_draft.business_activities'),
+            ]),
             $this->step('audit-browser-result', 'Browser evidence runner passed', ['browser' => true], ['browser' => (bool) data_get($browserReport, 'result.passed')]),
         ];
+
+        if (is_array($expectedEdit)) {
+            $checks[] = $this->step('audit-edited-draft-facts', 'Canonical owner and business facts match the browser edit contract', [
+                'business_name' => $expectedEdit['business_name'],
+                'owner_phone' => $expectedEdit['owner_phone'],
+            ], [
+                'business_name' => $permitApplication->business->name,
+                'owner_phone' => $permitApplication->business->owner->phone,
+            ]);
+            $checks[] = $this->step('audit-browser-edited-draft-facts', 'Browser owner and business facts match canonical edited facts', [
+                'business_name' => $permitApplication->business->name,
+                'owner_phone' => $permitApplication->business->owner->phone,
+                'edit_performed_by_browser' => true,
+            ], [
+                'business_name' => data_get($browserReport, 'citizen_draft.business_name'),
+                'owner_phone' => data_get($browserReport, 'citizen_draft.owner_phone'),
+                'edit_performed_by_browser' => data_get($browserReport, 'citizen_draft.edit_performed_by_browser'),
+            ]);
+        }
         $passed = collect($checks)->every(fn (array $check): bool => $check['passed']);
 
         $manifest['steps'] = [...($manifest['steps'] ?? []), ...$checks];
@@ -201,6 +261,8 @@ final class CitizenPermitDraftVisibilityScenario
                 'status' => $permitApplication->status->value,
                 'application_number' => $permitApplication->application_number,
                 'assessment_count' => $permitApplication->assessments_count,
+                'business_name' => $permitApplication->business->name,
+                'owner_phone' => $permitApplication->business->owner->phone,
                 'business_activities' => $canonicalActivities,
             ],
             'browser' => $browserReport,
@@ -233,8 +295,41 @@ final class CitizenPermitDraftVisibilityScenario
     /**
      * @return array<string, mixed>
      */
-    private function storyboard(string $runId, PermitApplication $permitApplication): array
+    private function storyboard(string $runId, PermitApplication $permitApplication, bool $isEditScenario): array
     {
+        if ($isEditScenario) {
+            return [
+                'title' => 'Citizen edits a saved permit application draft',
+                'summary' => 'A citizen opens the exact owned draft, updates saved business and activity facts through the real application form, and confirms that the record remains outside municipal processing.',
+                'run_id' => $runId,
+                'record' => [
+                    'type' => 'permit_application',
+                    'id' => $permitApplication->id,
+                    'reference' => 'Draft #'.$permitApplication->id,
+                ],
+                'frames' => [
+                    [
+                        'title' => 'Citizen reviews the saved draft',
+                        'description' => 'The exact owned draft exposes editing while it remains unnumbered and unassessed.',
+                        'dialogue' => 'Only saved draft facts are mutable.',
+                        'duration_seconds' => 4,
+                    ],
+                    [
+                        'title' => 'Citizen updates declared facts',
+                        'description' => 'The browser submits owner, business, and activity changes through the production edit form.',
+                        'dialogue' => 'Saving changes does not submit the application.',
+                        'duration_seconds' => 5,
+                    ],
+                    [
+                        'title' => 'Updated draft is verified',
+                        'description' => 'Desktop, mobile, and canonical audit evidence agree on the edited facts and draft state.',
+                        'dialogue' => 'No official number or assessment is created.',
+                        'duration_seconds' => 5,
+                    ],
+                ],
+            ];
+        }
+
         return [
             'title' => 'Citizen saves a new permit application draft',
             'summary' => 'A citizen records business and activity facts, then reviews the exact saved draft without starting assessment or receiving an official application number.',
@@ -267,9 +362,9 @@ final class CitizenPermitDraftVisibilityScenario
         ];
     }
 
-    private function storyboardHtml(string $runId, PermitApplication $permitApplication): string
+    private function storyboardHtml(string $runId, PermitApplication $permitApplication, bool $isEditScenario): string
     {
-        $storyboard = $this->storyboard($runId, $permitApplication);
+        $storyboard = $this->storyboard($runId, $permitApplication, $isEditScenario);
         $frames = collect($storyboard['frames'])
             ->map(fn (array $frame): string => '<li><strong>'.e($frame['title']).'</strong><br>'.e($frame['description']).'<br><em>'.e($frame['dialogue']).'</em></li>')
             ->implode('');

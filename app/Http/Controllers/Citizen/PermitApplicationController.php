@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Citizen;
 
 use App\Actions\CreatePermitApplication;
+use App\Actions\UpdateCitizenPermitApplicationDraft;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Citizen\StorePermitApplicationRequest;
+use App\Http\Requests\Citizen\UpdatePermitApplicationRequest;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
+use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -58,22 +61,60 @@ class PermitApplicationController extends Controller
 
     public function store(StorePermitApplicationRequest $request, CreatePermitApplication $createPermitApplication): RedirectResponse
     {
-        $permitApplication = $createPermitApplication->handle($request->validatedForCreation(), $request->user());
+        $permitApplication = $createPermitApplication->handle($request->validatedForPersistence(), $request->user());
 
         return to_route('citizen.permit-applications.show', $permitApplication)
             ->with('status', 'Permit application draft saved.');
+    }
+
+    public function edit(Request $request, int $permitApplication): Response
+    {
+        Gate::authorize(UserPermission::EditOwnPermitApplications->value);
+
+        $application = $this->ownedApplication($request, $permitApplication);
+        abort_unless($this->isEditableDraft($application), 409, 'This permit application has entered municipal processing and may no longer be edited as a citizen draft.');
+
+        return Inertia::render('permit-applications/Create', [
+            'intakeAudience' => 'citizen',
+            'currentApplicationYear' => now()->year,
+            'applicationTypes' => [[
+                'label' => 'New',
+                'value' => PermitApplicationType::New->value,
+            ]],
+            'lineOfBusinesses' => LineOfBusiness::query()
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name', 'code']),
+            'applicant' => [
+                'name' => $request->user()->name,
+                'email' => $request->user()->email,
+            ],
+            'draft' => $this->draftIntakePayload($application),
+        ]);
+    }
+
+    public function update(
+        UpdatePermitApplicationRequest $request,
+        int $permitApplication,
+        UpdateCitizenPermitApplicationDraft $updateDraft,
+    ): RedirectResponse {
+        $application = $this->ownedApplication($request, $permitApplication);
+
+        try {
+            $application = $updateDraft->handle($application, $request->validatedForPersistence(), $request->user());
+        } catch (DomainException $exception) {
+            return back()->withErrors(['draft' => $exception->getMessage()]);
+        }
+
+        return to_route('citizen.permit-applications.show', $application)
+            ->with('status', 'Permit application draft updated.');
     }
 
     public function show(Request $request, int $permitApplication): Response
     {
         Gate::authorize(UserPermission::ViewOwnPermitApplications->value);
 
-        $application = PermitApplication::query()
-            ->whereKey($permitApplication)
-            ->whereBelongsTo($request->user(), 'submittedBy')
-            ->with(['business.owner', 'lines.lineOfBusiness'])
-            ->withExists('assessments')
-            ->firstOrFail();
+        $application = $this->ownedApplication($request, $permitApplication);
 
         $isDraft = $application->status === PermitApplicationStatus::Draft;
         $assessmentStarted = (bool) $application->assessments_exists;
@@ -114,8 +155,81 @@ class PermitApplicationController extends Controller
                         ? 'This record is a saved citizen draft. It has not been submitted for assessment or accepted as an official permit application.'
                         : 'This application has entered municipal processing. Its displayed status reflects the current authoritative application record.',
                 ],
+                'can_edit' => $request->user()->can(UserPermission::EditOwnPermitApplications->value)
+                    && $this->isEditableDraft($application),
             ],
         ]);
+    }
+
+    private function ownedApplication(Request $request, int $permitApplication): PermitApplication
+    {
+        return PermitApplication::query()
+            ->whereKey($permitApplication)
+            ->whereBelongsTo($request->user(), 'submittedBy')
+            ->with(['business.owner', 'lines.lineOfBusiness'])
+            ->withExists('assessments')
+            ->firstOrFail();
+    }
+
+    private function isEditableDraft(PermitApplication $permitApplication): bool
+    {
+        return $permitApplication->status === PermitApplicationStatus::Draft
+            && $permitApplication->type === PermitApplicationType::New
+            && $permitApplication->application_number === null
+            && ! $permitApplication->assessments_exists
+            && ! $permitApplication->business->permitApplications()->whereKeyNot($permitApplication->id)->exists()
+            && ! $permitApplication->business->owner->businesses()->whereKeyNot($permitApplication->business_id)->exists();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function draftIntakePayload(PermitApplication $permitApplication): array
+    {
+        $business = $permitApplication->business;
+        $owner = $business->owner;
+
+        return [
+            'id' => $permitApplication->id,
+            'draft_version' => $permitApplication->updated_at?->toIso8601String(),
+            'owner_name' => $owner->name,
+            'owner_email' => $owner->email,
+            'owner_phone' => $owner->phone,
+            'owner_address' => $owner->address,
+            'business_name' => $business->name,
+            'trade_name' => $business->trade_name,
+            'registration_number' => $business->registration_number,
+            'business_address' => $business->address,
+            'barangay' => $business->barangay,
+            'ownership_type' => $business->ownership_type,
+            'organization_name' => $business->organization_name,
+            'occupancy' => $business->occupancy,
+            'building_name' => $business->building_name,
+            'property_index_number' => $business->property_index_number,
+            'business_area_square_meters' => $business->business_area_square_meters,
+            'male_employee_count' => $business->male_employee_count,
+            'female_employee_count' => $business->female_employee_count,
+            'business_contact_number' => $business->contact_number,
+            'business_email' => $business->email,
+            'established_on' => $business->established_on?->toDateString(),
+            'started_on' => $business->started_on?->toDateString(),
+            'registered_on' => $business->registered_on?->toDateString(),
+            'application_year' => $permitApplication->application_year,
+            'type' => $permitApplication->type->value,
+            'lines' => $permitApplication->lines->map(fn ($line): array => [
+                'id' => $line->id,
+                'line_of_business_id' => $line->line_of_business_id,
+                'declared_gross_sales_pesos' => $this->centsToPesos($line->declared_gross_sales_cents),
+                'capital_investment_pesos' => $this->centsToPesos($line->capital_investment_cents),
+                'quantity' => $line->quantity,
+                'started_on' => $line->started_on?->toDateString(),
+            ])->values(),
+        ];
+    }
+
+    private function centsToPesos(int $amountCents): string
+    {
+        return number_format($amountCents / 100, 2, '.', '');
     }
 
     /**

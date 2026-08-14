@@ -53,6 +53,7 @@ final class ScenarioActorResolver
             'citizen_applicant' => [
                 UserPermission::AccessCitizen,
                 UserPermission::CreateOwnPermitApplications,
+                UserPermission::EditOwnPermitApplications,
                 UserPermission::ViewOwnPermitApplications,
             ],
             'primary_operator' => [

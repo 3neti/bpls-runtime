@@ -27,5 +27,6 @@ test('new users can register', function () {
     expect(auth()->user()->role->code)->toBe(UserRole::Citizen->value)
         ->and(auth()->user()->can(UserPermission::AccessCitizen->value))->toBeTrue()
         ->and(auth()->user()->can(UserPermission::CreateOwnPermitApplications->value))->toBeTrue()
+        ->and(auth()->user()->can(UserPermission::EditOwnPermitApplications->value))->toBeTrue()
         ->and(auth()->user()->can(UserPermission::ViewOwnPermitApplications->value))->toBeTrue();
 });
