@@ -2626,6 +2626,10 @@ async function inspectManualReceiptPermitVerificationBoundary(
     await targetPage.goto(permitUrl, { waitUntil: 'networkidle' });
     const reference = manifest.resources.permit_verification_reference;
     const verificationUrl = `${targetBaseUrl}${manifest.resources.permit_verification_url}`;
+    const verificationViewUrl = `${targetBaseUrl}${
+        manifest.resources.permit_verification_view_url ??
+        `${manifest.resources.permit_verification_url}/view`
+    }`;
     const verificationSectionVisible = await targetPage
         .getByText('Verification boundary', { exact: true })
         .first()
@@ -2869,11 +2873,100 @@ async function inspectManualReceiptPermitVerificationBoundary(
         ),
     );
 
-    reportVerification(reference, publicStatus, canVerifyRelease, released);
+    await targetPage.goto(verificationViewUrl, { waitUntil: 'networkidle' });
+    const publicPageReferenceVisible = await targetPage
+        .getByText(reference, { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const publicPageArtifactOnlyVisible = await targetPage
+        .getByText(/artifact only/i)
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const publicPageNoReleaseVisible = await targetPage
+        .getByText(/does not confirm permit release or legal effect/i)
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const publicPageAuthorityBoundaryVisible = await targetPage
+        .getByText('Authority boundary', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const publicPageVisible =
+        publicPageReferenceVisible &&
+        publicPageArtifactOnlyVisible &&
+        publicPageNoReleaseVisible &&
+        publicPageAuthorityBoundaryVisible;
+    checks.push(
+        check(
+            'public-verification-page-visible',
+            'Public verification page shows artifact-only authority boundary',
+            true,
+            publicPageVisible,
+            {
+                url: verificationViewUrl,
+                reference_visible: publicPageReferenceVisible,
+                artifact_only_visible: publicPageArtifactOnlyVisible,
+                no_release_visible: publicPageNoReleaseVisible,
+                authority_boundary_visible: publicPageAuthorityBoundaryVisible,
+            },
+        ),
+    );
+
+    reportVerification(
+        reference,
+        publicStatus,
+        canVerifyRelease,
+        released,
+        publicPageVisible,
+    );
     await screenshot(
         targetPage,
         '04-permit-verification-boundary',
         'browser/screenshots/04-permit-verification-boundary.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(verificationViewUrl, { waitUntil: 'networkidle' });
+    const publicPageMobileReferenceVisible = await targetPage
+        .getByText(reference, { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const publicPageMobileNoReleaseVisible = await targetPage
+        .getByText(/does not confirm permit release or legal effect/i)
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const publicPageMobileNoHorizontalOverflow = await targetPage.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+    );
+    const publicPageMobileVisible =
+        publicPageMobileReferenceVisible &&
+        publicPageMobileNoReleaseVisible &&
+        publicPageMobileNoHorizontalOverflow;
+    checks.push(
+        check(
+            'public-verification-page-mobile-visible',
+            'Public verification page keeps essential artifact boundary visible on mobile',
+            true,
+            publicPageMobileVisible,
+            {
+                url: verificationViewUrl,
+                reference_visible: publicPageMobileReferenceVisible,
+                no_release_visible: publicPageMobileNoReleaseVisible,
+                no_horizontal_overflow: publicPageMobileNoHorizontalOverflow,
+            },
+        ),
+    );
+    verificationEvidence.public_page_mobile_visible =
+        publicPageMobileVisible;
+    await screenshot(
+        targetPage,
+        '04b-mobile-permit-verification-boundary',
+        'browser/screenshots/04b-mobile-permit-verification-boundary.png',
     );
 }
 
@@ -2997,11 +3090,13 @@ function reportVerification(
     publicStatus,
     canVerifyRelease,
     released,
+    publicPageVisible = false,
 ) {
     verificationEvidence.reference = reference;
     verificationEvidence.public_status = publicStatus;
     verificationEvidence.can_verify_release = canVerifyRelease;
     verificationEvidence.released = released;
+    verificationEvidence.public_page_visible = publicPageVisible;
 }
 
 function reportPermitArtifact(

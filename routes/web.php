@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\PublicPermitVerificationController;
+use App\Http\Controllers\PublicPermitVerificationPageController;
 use App\Http\Controllers\Staff\AssessmentPaymentScheduleController;
 use App\Http\Controllers\Staff\CollectionReceiptController;
 use App\Http\Controllers\Staff\DailyCollectionReportController;
@@ -18,6 +19,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
 
+Route::get('permits/verify/{permitApplication}/{verificationCode}/view', PublicPermitVerificationPageController::class)
+    ->name('public.permits.verify.view');
 Route::get('permits/verify/{permitApplication}/{verificationCode}', PublicPermitVerificationController::class)
     ->name('public.permits.verify');
 

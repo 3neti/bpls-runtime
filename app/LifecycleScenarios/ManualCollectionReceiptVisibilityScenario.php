@@ -250,6 +250,10 @@ final class ManualCollectionReceiptVisibilityScenario
                 'permitApplication' => $permitApplication,
                 'verificationCode' => $verificationBoundary['reference'],
             ], false),
+            'permit_verification_view_url' => route('public.permits.verify.view', [
+                'permitApplication' => $permitApplication,
+                'verificationCode' => $verificationBoundary['reference'],
+            ], false),
         ];
         $manifest['steps'] = $steps;
         $manifest['result']['terminal'] = collect($steps)->every(fn (array $step): bool => $step['passed']) ? 'passed' : 'failed';
@@ -388,7 +392,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('audit-browser-assessment-pdf', 'Browser evidence confirms assessment artifact renders exact persisted assessment snapshot', ['assessment_id' => $assessment->id, 'total_amount_cents' => $assessment->total_amount_cents, 'available' => true], ['assessment_id' => data_get($browserReport, 'documents.assessment.assessment_id'), 'total_amount_cents' => data_get($browserReport, 'documents.assessment.total_amount_cents'), 'available' => (bool) data_get($browserReport, 'documents.assessment.available')]),
             $this->step('audit-verification-reference', 'Permit artifact verification reference matches canonical boundary', ['reference' => $verificationBoundary['reference'], 'can_verify_release' => false], ['reference' => $manifest['resources']['permit_verification_reference'] ?? null, 'can_verify_release' => $verificationBoundary['can_verify_release']]),
             $this->step('audit-browser-verification-reference', 'Browser evidence observed the same permit verification reference', ['reference' => $verificationBoundary['reference']], ['reference' => data_get($browserReport, 'verification.reference')]),
-            $this->step('audit-browser-public-verification', 'Browser evidence confirms public verification is artifact-only', ['status' => 'artifact_only', 'can_verify_release' => false], ['status' => data_get($browserReport, 'verification.public_status'), 'can_verify_release' => data_get($browserReport, 'verification.can_verify_release')]),
+            $this->step('audit-browser-public-verification', 'Browser evidence confirms public verification is artifact-only', ['status' => 'artifact_only', 'can_verify_release' => false, 'page_visible' => true, 'mobile_visible' => true], ['status' => data_get($browserReport, 'verification.public_status'), 'can_verify_release' => data_get($browserReport, 'verification.can_verify_release'), 'page_visible' => data_get($browserReport, 'verification.public_page_visible'), 'mobile_visible' => data_get($browserReport, 'verification.public_page_mobile_visible')]),
             $this->step('audit-browser-result', 'Browser evidence runner passed', ['browser' => true], ['browser' => (bool) data_get($browserReport, 'result.passed')]),
         ];
 

@@ -38,7 +38,7 @@ This is the project's first milestone scenario candidate. It is not the final Go
 | 6 | Receipt void remains blocked | Receipt policy boundary action | `RVB-13-1130cbb92bbde7b8`, audit/browser checks | BLOCKED BY POLICY |
 | 7 | Clearance checklist is completed | Clearance actions | audit checks, permit detail screenshot, `3 / 3 complete` evidence | BROWSER VERIFIED |
 | 8 | Permit artifact is generated for review | Permit document route | `/staff/permit-applications/26/permit.pdf`, browser document evidence | ARTIFACT VERIFIED |
-| 9 | Public verification confirms artifact identity only | Public verification route | `PVA-26-5843cdd5aced1d4f`, public verification screenshot | ARTIFACT VERIFIED |
+| 9 | Public verification confirms artifact identity only | Public verification route and page | `PVA-26-5843cdd5aced1d4f`, public verification screenshot; latest public page verification `PVA-42-b941419e749ba2e8` | BROWSER VERIFIED |
 | 10 | Release remains unavailable at authority boundary | Permit release boundary action | audit/browser checks, permit release boundary screenshot | BLOCKED BY POLICY |
 
 ## Authoritative Resource Identifiers
@@ -80,6 +80,7 @@ The following artifacts form the first milestone evidence package:
   - `browser/screenshots/02-receipt-detail.png`
   - `browser/screenshots/03-permit-release-boundary.png`
   - `browser/screenshots/04-permit-verification-boundary.png`
+  - `browser/screenshots/04b-mobile-permit-verification-boundary.png`
   - `browser/screenshots/05-mobile-receipt.png`
 
 Generated execution artifacts remain under `storage/app/private/**` and are not committed. This document is the committed index that tells reviewers what evidence exists and where it was generated.

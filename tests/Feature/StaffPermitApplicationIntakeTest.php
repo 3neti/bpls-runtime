@@ -835,6 +835,10 @@ test('permit verification boundary provides a deterministic public artifact refe
             'permitApplication' => $application,
             'verificationCode' => $verification['reference'],
         ]))
+        ->and($verification['view_url'])->toBe(route('public.permits.verify.view', [
+            'permitApplication' => $application,
+            'verificationCode' => $verification['reference'],
+        ]))
         ->and($verification['status'])->toBe('artifact_only')
         ->and($verification['released'])->toBeFalse()
         ->and($verification['can_verify_release'])->toBeFalse()
@@ -875,10 +879,34 @@ test('public permit verification confirms artifact identity but not release', fu
         ]);
 });
 
+test('public permit verification page renders the artifact authority boundary', function () {
+    $application = permitDocumentFixture();
+    $verification = app(DescribePermitVerificationBoundary::class)->handle($application);
+
+    $this->get($verification['view_url'])
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('public/PermitVerification')
+            ->where('verification.reference', $verification['reference'])
+            ->where('verification.status', 'artifact_only')
+            ->where('verification.can_verify_release', false)
+            ->where('verification.released', false)
+            ->where('permit.application_number', 'APP-2026-00013')
+            ->where('permit.business_name', 'Permit Artifact Store')
+            ->where('releaseReadiness.can_release', false)
+            ->where('releaseReadiness.authority_boundary.artifact_statement', 'Generated permit artifacts support authority review but do not issue, release, or make a permit legally effective.')
+        );
+});
+
 test('public permit verification refuses mismatched references', function () {
     $application = permitDocumentFixture();
 
     $this->get(route('public.permits.verify', [
+        'permitApplication' => $application,
+        'verificationCode' => 'PVA-'.$application->id.'-invalid-reference',
+    ]))->assertNotFound();
+
+    $this->get(route('public.permits.verify.view', [
         'permitApplication' => $application,
         'verificationCode' => 'PVA-'.$application->id.'-invalid-reference',
     ]))->assertNotFound();

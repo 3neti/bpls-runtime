@@ -600,6 +600,8 @@ test('manual collection receipt scenario audit compares browser evidence with ca
             'public_status' => 'artifact_only',
             'can_verify_release' => false,
             'released' => false,
+            'public_page_visible' => true,
+            'public_page_mobile_visible' => true,
         ],
         'permit_artifact' => [
             'permit_pdf_url' => $manifest['resources']['permit_pdf_url'],

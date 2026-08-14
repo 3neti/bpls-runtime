@@ -10,6 +10,7 @@ final class DescribePermitVerificationBoundary
      * @return array{
      *     reference: string,
      *     url: string,
+     *     view_url: string,
      *     status: string,
      *     can_verify_release: bool,
      *     released: bool,
@@ -23,6 +24,10 @@ final class DescribePermitVerificationBoundary
         return [
             'reference' => $reference,
             'url' => route('public.permits.verify', [
+                'permitApplication' => $permitApplication,
+                'verificationCode' => $reference,
+            ]),
+            'view_url' => route('public.permits.verify.view', [
                 'permitApplication' => $permitApplication,
                 'verificationCode' => $reference,
             ]),
