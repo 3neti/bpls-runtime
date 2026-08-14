@@ -52,6 +52,30 @@ class DescribePermitReleaseReadiness
                 'qr_verification_target',
                 'legacy_released_status_semantics',
             ],
+            'authority_boundary' => [
+                'label' => 'Authority Boundary',
+                'status' => $readyForAuthorityReview ? 'ready_for_authority_review' : 'awaiting_prerequisites',
+                'software_knows' => [
+                    'payment_completed' => $prerequisites['payment_schedule_paid'],
+                    'receipt_recorded' => $prerequisites['receipt_issued'],
+                    'clearances_completed' => $prerequisites['clearances_completed'],
+                    'permit_artifact_generated' => $prerequisites['permit_artifact_available'],
+                ],
+                'human_authority_decides' => [
+                    'permit_legally_issued',
+                    'permit_released_to_applicant',
+                    'permit_legal_effective_date',
+                    'qr_public_meaning',
+                ],
+                'software_records' => [
+                    'authority_decision',
+                    'issuance_timestamp',
+                    'release_timestamp',
+                    'effective_period',
+                    'qr_verification_status',
+                ],
+                'artifact_statement' => 'Generated permit artifacts support authority review but do not issue, release, or make a permit legally effective.',
+            ],
             'reason' => 'Payment, receipt, clearance, and permit artifact evidence may be ready for authority review, but actual release remains blocked until issuance authority, official signatories, QR verification target, and legacy Released status semantics are resolved.',
         ];
     }

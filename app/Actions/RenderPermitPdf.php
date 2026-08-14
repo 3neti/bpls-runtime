@@ -10,12 +10,14 @@ final class RenderPermitPdf
     public function __construct(
         private readonly DescribePermitDocumentConfiguration $documentConfiguration,
         private readonly DescribePermitVerificationBoundary $verificationBoundary,
+        private readonly DescribePermitReleaseReadiness $releaseReadiness,
     ) {}
 
     public function handle(PermitApplication $permitApplication): string
     {
         $documentConfiguration = $this->documentConfiguration->handle();
         $verificationBoundary = $this->verificationBoundary->handle($permitApplication);
+        $releaseReadiness = $this->releaseReadiness->handle($permitApplication);
 
         $permitApplication->loadMissing([
             'business.owner',
@@ -65,6 +67,7 @@ final class RenderPermitPdf
         $y = $this->lines($document, $page, $y, $permitApplication);
         $y = $this->clearances($document, $page, $y, $permitApplication);
         $y = $this->signatories($document, $page, $y, $documentConfiguration);
+        $y = $this->authorityBoundary($document, $page, $y, $releaseReadiness);
         $y = $this->verification($document, $page, $y, $verificationBoundary);
 
         $this->section($document, $page, $y, 'Policy Gaps', [
@@ -75,6 +78,30 @@ final class RenderPermitPdf
         ]);
 
         return $document->render();
+    }
+
+    /**
+     * @param  array{
+     *     authority_boundary: array{
+     *         status: string,
+     *         software_knows: array<string, bool>,
+     *         human_authority_decides: list<string>,
+     *         software_records: list<string>,
+     *         artifact_statement: string
+     *     }
+     * }  $releaseReadiness
+     */
+    private function authorityBoundary(SimplePdfDocument $document, int &$page, float $y, array $releaseReadiness): float
+    {
+        $boundary = $releaseReadiness['authority_boundary'];
+
+        return $this->section($document, $page, $y, 'Authority Boundary', [
+            'Boundary status' => $this->label($boundary['status']),
+            'Software knows' => $this->booleanList($boundary['software_knows']),
+            'Human authority decides' => $this->labelList($boundary['human_authority_decides']),
+            'Software records after decision' => $this->labelList($boundary['software_records']),
+            'Artifact statement' => $boundary['artifact_statement'],
+        ]);
     }
 
     /**
@@ -235,6 +262,26 @@ final class RenderPermitPdf
     private function money(int $amountCents): string
     {
         return 'PHP '.number_format($amountCents / 100, 2);
+    }
+
+    /**
+     * @param  array<string, bool>  $values
+     */
+    private function booleanList(array $values): string
+    {
+        return collect($values)
+            ->map(fn (bool $value, string $key): string => $this->label($key).': '.($value ? 'Yes' : 'No'))
+            ->implode('; ');
+    }
+
+    /**
+     * @param  list<string>  $values
+     */
+    private function labelList(array $values): string
+    {
+        return collect($values)
+            ->map(fn (string $value): string => $this->label($value))
+            ->implode('; ');
     }
 
     private function label(string $value): string

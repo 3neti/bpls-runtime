@@ -1180,6 +1180,33 @@ async function inspectManualReceiptPermitReleaseBoundary(
         .first()
         .isVisible()
         .catch(() => false);
+    const authorityBoundaryVisible = await targetPage
+        .getByText('Authority boundary', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const softwareKnowsVisible = await targetPage
+        .getByText('Software knows', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const humanAuthorityDecidesVisible = await targetPage
+        .getByText('Human authority decides', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const softwareRecordsVisible = await targetPage
+        .getByText('Software records', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const artifactStatementVisible = await targetPage
+        .getByText('Generated permit artifacts support authority review', {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
 
     checks.push(
         check(
@@ -1294,6 +1321,46 @@ async function inspectManualReceiptPermitReleaseBoundary(
             pendingPaymentVisible,
         ),
     );
+    checks.push(
+        check(
+            'permit-authority-boundary-visible',
+            'Permit detail shows the authority boundary',
+            true,
+            authorityBoundaryVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'permit-authority-boundary-software-knows-visible',
+            'Permit detail separates facts software can know',
+            true,
+            softwareKnowsVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'permit-authority-boundary-human-decides-visible',
+            'Permit detail separates human authority decisions',
+            true,
+            humanAuthorityDecidesVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'permit-authority-boundary-software-records-visible',
+            'Permit detail separates facts software records after authority decision',
+            true,
+            softwareRecordsVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'permit-authority-boundary-artifact-statement-visible',
+            'Permit detail states artifact generation does not issue or release a permit',
+            true,
+            artifactStatementVisible,
+        ),
+    );
     await screenshot(
         targetPage,
         '03-permit-release-boundary',
@@ -1395,7 +1462,11 @@ async function inspectManualReceiptPermitVerificationBoundary(
         permitPdfContentType.includes('application/pdf') &&
         permitPdfBody.startsWith('%PDF-1.4') &&
         permitPdfBody.includes(reference) &&
-        permitPdfBody.includes('VERIFICATION BOUNDARY');
+        permitPdfBody.includes('VERIFICATION BOUNDARY') &&
+        permitPdfBody.includes('AUTHORITY BOUNDARY') &&
+        permitPdfBody.includes(
+            'Generated permit artifacts support authority review',
+        );
     checks.push(
         check(
             'permit-pdf-verification-reference-visible',
@@ -1420,6 +1491,11 @@ async function inspectManualReceiptPermitVerificationBoundary(
     const canVerifyRelease =
         publicJson?.verification?.can_verify_release ?? null;
     const released = publicJson?.verification?.released ?? null;
+    const publicAuthorityBoundaryStatus =
+        publicJson?.release_readiness?.authority_boundary?.status ?? null;
+    const publicAuthorityBoundaryStatement =
+        publicJson?.release_readiness?.authority_boundary?.artifact_statement ??
+        null;
     checks.push(
         check(
             'public-verification-reference-matches',
@@ -1445,6 +1521,21 @@ async function inspectManualReceiptPermitVerificationBoundary(
                 status: publicStatus,
                 can_verify_release: canVerifyRelease,
                 released,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'public-verification-authority-boundary',
+            'Public verification route exposes artifact authority boundary',
+            true,
+            publicAuthorityBoundaryStatus === 'ready_for_authority_review' &&
+                publicAuthorityBoundaryStatement?.includes(
+                    'do not issue, release, or make a permit legally effective',
+                ),
+            {
+                authority_boundary_status: publicAuthorityBoundaryStatus,
+                authority_boundary_statement: publicAuthorityBoundaryStatement,
             },
         ),
     );

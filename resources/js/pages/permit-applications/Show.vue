@@ -105,6 +105,14 @@ type PermitApplication = {
         clearances_completed: number;
         clearances_total: number;
         blocked_by: string[];
+        authority_boundary: {
+            label: string;
+            status: string;
+            software_knows: Record<string, boolean>;
+            human_authority_decides: string[];
+            software_records: string[];
+            artifact_statement: string;
+        };
         reason: string;
     };
     verification_boundary: {
@@ -167,6 +175,16 @@ function money(amountCents: number): string {
         style: 'currency',
         currency: 'PHP',
     }).format(amountCents / 100);
+}
+
+function label(value: string): string {
+    return value.replaceAll('_', ' ');
+}
+
+function booleanEntries(
+    values: Record<string, boolean>,
+): { key: string; value: boolean }[] {
+    return Object.entries(values).map(([key, value]) => ({ key, value }));
 }
 </script>
 
@@ -756,6 +774,83 @@ function money(amountCents: number): string {
                 <p class="mt-3 text-sm text-muted-foreground">
                     {{ permitApplication.release_readiness.reason }}
                 </p>
+                <div class="mt-5 space-y-3 border-t pt-4">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="text-sm font-semibold text-foreground">
+                            Authority boundary
+                        </h3>
+                        <Badge variant="secondary" class="capitalize">
+                            {{
+                                label(
+                                    permitApplication.release_readiness
+                                        .authority_boundary.status,
+                                )
+                            }}
+                        </Badge>
+                    </div>
+                    <p class="text-sm text-muted-foreground">
+                        {{
+                            permitApplication.release_readiness
+                                .authority_boundary.artifact_statement
+                        }}
+                    </p>
+                    <div class="grid gap-4 text-sm md:grid-cols-3">
+                        <div>
+                            <h4 class="text-xs font-medium text-foreground">
+                                Software knows
+                            </h4>
+                            <ul class="mt-2 space-y-1 text-muted-foreground">
+                                <li
+                                    v-for="entry in booleanEntries(
+                                        permitApplication.release_readiness
+                                            .authority_boundary.software_knows,
+                                    )"
+                                    :key="entry.key"
+                                    class="flex items-center justify-between gap-3"
+                                >
+                                    <span class="capitalize">
+                                        {{ label(entry.key) }}
+                                    </span>
+                                    <span class="font-medium text-foreground">
+                                        {{ entry.value ? 'Yes' : 'No' }}
+                                    </span>
+                                </li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-medium text-foreground">
+                                Human authority decides
+                            </h4>
+                            <ul class="mt-2 space-y-1 text-muted-foreground">
+                                <li
+                                    v-for="item in permitApplication
+                                        .release_readiness.authority_boundary
+                                        .human_authority_decides"
+                                    :key="item"
+                                    class="capitalize"
+                                >
+                                    {{ label(item) }}
+                                </li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-medium text-foreground">
+                                Software records
+                            </h4>
+                            <ul class="mt-2 space-y-1 text-muted-foreground">
+                                <li
+                                    v-for="item in permitApplication
+                                        .release_readiness.authority_boundary
+                                        .software_records"
+                                    :key="item"
+                                    class="capitalize"
+                                >
+                                    {{ label(item) }}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
                 <dl
                     v-if="permitApplication.release_policy_boundary"
                     class="mt-4 grid gap-2 text-sm md:grid-cols-3"

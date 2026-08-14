@@ -262,7 +262,12 @@ test('release readiness evidence can be ready for authority review without permi
         ->and($readiness['prerequisites']['payment_schedule_paid'])->toBeTrue()
         ->and($readiness['prerequisites']['receipt_issued'])->toBeTrue()
         ->and($readiness['prerequisites']['clearances_completed'])->toBeTrue()
-        ->and($readiness['blocked_by'])->toContain('official_signatories');
+        ->and($readiness['blocked_by'])->toContain('official_signatories')
+        ->and($readiness['authority_boundary']['status'])->toBe('ready_for_authority_review')
+        ->and($readiness['authority_boundary']['software_knows']['payment_completed'])->toBeTrue()
+        ->and($readiness['authority_boundary']['human_authority_decides'])->toContain('permit_legally_issued')
+        ->and($readiness['authority_boundary']['software_records'])->toContain('authority_decision')
+        ->and($readiness['authority_boundary']['artifact_statement'])->toContain('do not issue, release, or make a permit legally effective');
 
     $this->actingAs($user)
         ->get(route('staff.permit-applications.show', $application))
@@ -272,6 +277,8 @@ test('release readiness evidence can be ready for authority review without permi
             ->where('permitApplication.release_readiness.ready_for_authority_review', true)
             ->where('permitApplication.release_readiness.can_release', false)
             ->where('permitApplication.release_readiness.prerequisites.receipt_issued', true)
+            ->where('permitApplication.release_readiness.authority_boundary.status', 'ready_for_authority_review')
+            ->where('permitApplication.release_readiness.authority_boundary.software_knows.payment_completed', true)
         );
 });
 
@@ -597,6 +604,10 @@ test('staff users with view permission can open a permit pdf artifact', function
         ->toContain('Hon. Ipil Mayor')
         ->toContain('Maria BPLO')
         ->toContain('Configured signatories are document evidence only')
+        ->toContain('AUTHORITY BOUNDARY')
+        ->toContain('Software knows')
+        ->toContain('Human authority decides')
+        ->toContain('Generated permit artifacts support authority review')
         ->toContain('VERIFICATION BOUNDARY')
         ->toContain('PVA-'.$application->id.'-')
         ->toContain(route('public.permits.verify', [
@@ -648,6 +659,13 @@ test('public permit verification confirms artifact identity but not release', fu
             ],
             'release_readiness' => [
                 'can_release' => false,
+                'authority_boundary' => [
+                    'status' => 'awaiting_prerequisites',
+                    'software_knows' => [
+                        'permit_artifact_generated' => true,
+                    ],
+                    'artifact_statement' => 'Generated permit artifacts support authority review but do not issue, release, or make a permit legally effective.',
+                ],
             ],
         ]);
 });

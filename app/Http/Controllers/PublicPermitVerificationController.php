@@ -35,6 +35,7 @@ class PublicPermitVerificationController extends Controller
                 'ready_for_authority_review' => $readiness['ready_for_authority_review'],
                 'can_release' => $readiness['can_release'],
                 'blocked_by' => $readiness['blocked_by'],
+                'authority_boundary' => $readiness['authority_boundary'],
                 'reason' => $readiness['reason'],
             ],
         ]);
