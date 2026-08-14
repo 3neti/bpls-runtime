@@ -1264,6 +1264,20 @@ async function inspectPendingPaymentScheduleDetail(targetPage, targetBaseUrl) {
         .first()
         .isVisible()
         .catch(() => false);
+    const installmentVisible = await targetPage
+        .getByText('annual, semiannual, and quarterly payment splitting rules', {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const dueDateVisible = await targetPage
+        .getByText('statutory due dates and renewal-specific due-date adjustments', {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
     const surchargeVisible = await targetPage
         .getByText('late-payment surcharge trigger date and base amount', {
             exact: false,
@@ -1311,13 +1325,19 @@ async function inspectPendingPaymentScheduleDetail(targetPage, targetBaseUrl) {
     checks.push(
         check(
             'payment-schedule-policy-boundary-visible',
-            'Payment schedule detail shows surcharge, interest, PIL, and deficiency boundary',
+            'Payment schedule detail shows installment, due-date, surcharge, interest, PIL, and deficiency boundary',
             true,
-            paymentPolicyBoundaryVisible && surchargeVisible && pilVisible,
+            paymentPolicyBoundaryVisible &&
+                installmentVisible &&
+                dueDateVisible &&
+                surchargeVisible &&
+                pilVisible,
         ),
     );
     reportPaymentPolicyBoundary(
         paymentPolicyBoundaryVisible ? 'policy_boundary' : 'missing',
+        installmentVisible,
+        dueDateVisible,
         surchargeVisible,
         pilVisible,
     );
@@ -3086,12 +3106,22 @@ function reportOnlinePaymentBoundary(status, unresolvedVisible) {
     onlinePaymentBoundaryEvidence.unresolved_visible = unresolvedVisible;
 }
 
-function reportPaymentPolicyBoundary(status, surchargeVisible, pilVisible) {
+function reportPaymentPolicyBoundary(
+    status,
+    installmentVisible,
+    dueDateVisible,
+    surchargeVisible,
+    pilVisible,
+) {
     paymentPolicyBoundaryEvidence.status = status;
     paymentPolicyBoundaryEvidence.can_calculate_surcharge = false;
     paymentPolicyBoundaryEvidence.can_calculate_interest = false;
     paymentPolicyBoundaryEvidence.can_validate_pil = false;
     paymentPolicyBoundaryEvidence.can_calculate_deficiency_tax = false;
+    paymentPolicyBoundaryEvidence.can_split_installments = false;
+    paymentPolicyBoundaryEvidence.can_assign_statutory_due_dates = false;
+    paymentPolicyBoundaryEvidence.installment_visible = installmentVisible;
+    paymentPolicyBoundaryEvidence.due_date_visible = dueDateVisible;
     paymentPolicyBoundaryEvidence.surcharge_visible = surchargeVisible;
     paymentPolicyBoundaryEvidence.pil_visible = pilVisible;
 }

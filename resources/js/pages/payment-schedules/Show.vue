@@ -64,8 +64,11 @@ type PaymentPolicyBoundary = {
     can_calculate_interest: boolean;
     can_validate_pil: boolean;
     can_calculate_deficiency_tax: boolean;
+    can_split_installments: boolean;
+    can_assign_statutory_due_dates: boolean;
     payment_schedule_id: number;
     payment_schedule_status: string;
+    supported_payment_modes: string[];
     blocked_calculations: string[];
     software_knows: {
         payment_schedule_exists: boolean;
@@ -351,8 +354,9 @@ function label(value: string): string {
                             Payment policy boundary
                         </h2>
                         <p class="text-xs text-muted-foreground">
-                            Surcharge, interest, PIL, and deficiency-tax behavior
-                            remain unresolved policy.
+                            Installments, statutory due dates, surcharge,
+                            interest, PIL, and deficiency-tax behavior remain
+                            unresolved policy.
                         </p>
                     </div>
                 </div>
@@ -365,6 +369,32 @@ function label(value: string): string {
                                     '_',
                                     ' ',
                                 )
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Installments
+                        </dt>
+                        <dd>
+                            {{
+                                paymentSchedule.payment_policy_boundary
+                                    .can_split_installments
+                                    ? 'Configured'
+                                    : 'Policy boundary'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Statutory due dates
+                        </dt>
+                        <dd>
+                            {{
+                                paymentSchedule.payment_policy_boundary
+                                    .can_assign_statutory_due_dates
+                                    ? 'Configured'
+                                    : 'Policy boundary'
                             }}
                         </dd>
                     </div>
@@ -405,6 +435,23 @@ function label(value: string): string {
                                     ? 'Active'
                                     : 'Policy boundary'
                             }}
+                        </dd>
+                    </div>
+                    <div class="md:col-span-2">
+                        <dt class="text-xs text-muted-foreground">
+                            Supported payment modes
+                        </dt>
+                        <dd class="mt-2 flex flex-wrap gap-2">
+                            <Badge
+                                v-for="mode in paymentSchedule
+                                    .payment_policy_boundary
+                                    .supported_payment_modes"
+                                :key="mode"
+                                variant="outline"
+                                class="capitalize"
+                            >
+                                {{ label(mode) }}
+                            </Badge>
                         </dd>
                     </div>
                     <div class="md:col-span-2">
