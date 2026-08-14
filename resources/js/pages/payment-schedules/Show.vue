@@ -2,17 +2,17 @@
 import { Form, Head, Link } from '@inertiajs/vue3';
 import { ArrowLeft, Banknote, ReceiptText } from '@lucide/vue';
 import { computed } from 'vue';
+import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
+import { store as receiptStore } from '@/actions/App/Http/Controllers/Staff/CollectionReceiptController';
+import { store as collectionStore } from '@/actions/App/Http/Controllers/Staff/PaymentScheduleCollectionController';
+import { show as assessmentShow } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
+import { show as receiptShow } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { show as assessmentShow } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
-import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
-import { show as receiptShow } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
-import { store as receiptStore } from '@/actions/App/Http/Controllers/Staff/CollectionReceiptController';
-import { store as collectionStore } from '@/actions/App/Http/Controllers/Staff/PaymentScheduleCollectionController';
 import type { BreadcrumbItem } from '@/types';
 
 type PaymentScheduleLine = {
@@ -54,6 +54,25 @@ type PaymentSchedule = {
     };
     lines: PaymentScheduleLine[];
     collections: TreasuryCollection[];
+    online_payment_boundary: OnlinePaymentBoundary;
+};
+
+type OnlinePaymentBoundary = {
+    status: string;
+    can_pay_online: boolean;
+    can_reconcile_online: boolean;
+    payment_schedule_id: number;
+    payment_schedule_status: string;
+    blocked_transitions: string[];
+    software_knows: {
+        payment_schedule_exists: boolean;
+        balance_due_cents: number;
+        otc_collection_is_available: boolean;
+        gateway_adapter_is_not_configured: boolean;
+        reconciliation_policy_is_not_resolved: boolean;
+    };
+    unresolved_policy: string[];
+    artifact_statement: string;
 };
 
 type TreasuryCollection = {
@@ -122,6 +141,10 @@ function money(amountCents: number): string {
         style: 'currency',
         currency: 'PHP',
     }).format(amountCents / 100);
+}
+
+function label(value: string): string {
+    return value.replaceAll('_', ' ');
 }
 </script>
 
@@ -295,6 +318,108 @@ function money(amountCents: number): string {
                         </Button>
                     </div>
                 </Form>
+            </section>
+
+            <section
+                class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+            >
+                <div class="mb-4 flex items-center gap-2">
+                    <Banknote class="size-4 text-muted-foreground" />
+                    <div>
+                        <h2 class="text-sm font-semibold text-foreground">
+                            Online payment boundary
+                        </h2>
+                        <p class="text-xs text-muted-foreground">
+                            Electronic payment and reconciliation are not
+                            active in this rescue path.
+                        </p>
+                    </div>
+                </div>
+                <dl class="grid gap-3 text-sm md:grid-cols-4">
+                    <div>
+                        <dt class="text-xs text-muted-foreground">Status</dt>
+                        <dd class="capitalize">
+                            {{
+                                paymentSchedule.online_payment_boundary.status.replace(
+                                    '_',
+                                    ' ',
+                                )
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Can pay online
+                        </dt>
+                        <dd>
+                            {{
+                                paymentSchedule.online_payment_boundary
+                                    .can_pay_online
+                                    ? 'Yes'
+                                    : 'No'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Can reconcile online
+                        </dt>
+                        <dd>
+                            {{
+                                paymentSchedule.online_payment_boundary
+                                    .can_reconcile_online
+                                    ? 'Yes'
+                                    : 'No'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Gateway adapter
+                        </dt>
+                        <dd>Not configured</dd>
+                    </div>
+                    <div class="md:col-span-2">
+                        <dt class="text-xs text-muted-foreground">
+                            Blocked transitions
+                        </dt>
+                        <dd class="mt-2 flex flex-wrap gap-2">
+                            <Badge
+                                v-for="transition in paymentSchedule
+                                    .online_payment_boundary
+                                    .blocked_transitions"
+                                :key="transition"
+                                variant="secondary"
+                                class="capitalize"
+                            >
+                                {{ label(transition) }}
+                            </Badge>
+                        </dd>
+                    </div>
+                    <div class="md:col-span-2">
+                        <dt class="text-xs text-muted-foreground">
+                            Unresolved reconciliation policy
+                        </dt>
+                        <dd class="mt-2">
+                            <ul class="grid gap-1">
+                                <li
+                                    v-for="gap in paymentSchedule
+                                        .online_payment_boundary
+                                        .unresolved_policy"
+                                    :key="gap"
+                                >
+                                    {{ gap }}
+                                </li>
+                            </ul>
+                        </dd>
+                    </div>
+                </dl>
+                <p class="mt-3 text-sm text-muted-foreground">
+                    {{
+                        paymentSchedule.online_payment_boundary
+                            .artifact_statement
+                    }}
+                </p>
             </section>
 
             <section

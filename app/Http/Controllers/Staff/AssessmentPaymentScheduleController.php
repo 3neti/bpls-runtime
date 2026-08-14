@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Staff;
 
 use App\Actions\CreatePaymentScheduleForAssessment;
+use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Enums\PaymentScheduleStatus;
 use App\Enums\TreasuryCollectionMethod;
 use App\Enums\UserPermission;
@@ -19,6 +20,8 @@ use Inertia\Response;
 
 class AssessmentPaymentScheduleController extends Controller
 {
+    public function __construct(private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary) {}
+
     public function index(Request $request): Response
     {
         Gate::authorize(UserPermission::ViewPaymentSchedules->value);
@@ -235,6 +238,7 @@ class AssessmentPaymentScheduleController extends Controller
                             'amount_cents' => $allocation->amount_cents,
                         ]),
                 ]),
+            'online_payment_boundary' => $this->describeOnlinePaymentBoundary->handle($paymentSchedule),
         ];
     }
 }

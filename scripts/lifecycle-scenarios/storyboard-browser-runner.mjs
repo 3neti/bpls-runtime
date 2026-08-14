@@ -54,6 +54,7 @@ const verificationEvidence = {};
 const receiptVoidBoundaryEvidence = {};
 const documentEvidence = {};
 const assessmentEvidence = {};
+const onlinePaymentBoundaryEvidence = {};
 const renewalPolicyEvidence = {};
 const amendmentPolicyEvidence = {};
 const transferPolicyEvidence = {};
@@ -163,6 +164,7 @@ const report = {
     receipt_void_boundary: receiptVoidBoundaryEvidence,
     documents: documentEvidence,
     assessment: assessmentEvidence,
+    online_payment_boundary: onlinePaymentBoundaryEvidence,
     renewal_policy: renewalPolicyEvidence,
     amendment_policy: amendmentPolicyEvidence,
     transfer_policy: transferPolicyEvidence,
@@ -1059,6 +1061,8 @@ async function inspectManualReceiptPaymentSchedule(targetPage, targetBaseUrl) {
         .isVisible()
         .catch(() => false);
     const balancePaidVisible = await hasZeroCurrencyAmount(targetPage);
+    const onlinePaymentBoundaryVisible =
+        await onlinePaymentBoundaryIsVisible(targetPage);
 
     checks.push(
         check(
@@ -1092,6 +1096,18 @@ async function inspectManualReceiptPaymentSchedule(targetPage, targetBaseUrl) {
             true,
             receiptNumberVisible,
         ),
+    );
+    checks.push(
+        check(
+            'schedule-online-payment-boundary-visible',
+            'Payment schedule shows online payment and reconciliation boundary',
+            true,
+            onlinePaymentBoundaryVisible,
+        ),
+    );
+    reportOnlinePaymentBoundary(
+        onlinePaymentBoundaryVisible ? 'blocked' : 'missing',
+        onlinePaymentBoundaryVisible,
     );
     await screenshot(
         targetPage,
@@ -2115,6 +2131,13 @@ function reportBusinessTaxAssessment(
     };
 }
 
+function reportOnlinePaymentBoundary(status, unresolvedVisible) {
+    onlinePaymentBoundaryEvidence.status = status;
+    onlinePaymentBoundaryEvidence.can_pay_online = false;
+    onlinePaymentBoundaryEvidence.can_reconcile_online = false;
+    onlinePaymentBoundaryEvidence.unresolved_visible = unresolvedVisible;
+}
+
 function reportRenewalPolicy(status, unresolvedVisible) {
     renewalPolicyEvidence.status = status;
     renewalPolicyEvidence.unresolved_visible = unresolvedVisible;
@@ -2176,6 +2199,41 @@ async function bodyTextMatches(targetPage, pattern) {
         .innerText()
         .then((text) => pattern.test(text))
         .catch(() => false);
+}
+
+async function onlinePaymentBoundaryIsVisible(targetPage) {
+    const boundaryVisible = await targetPage
+        .getByText('Online payment boundary', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const onlineNoVisible =
+        (await targetPage
+            .getByText('Can pay online', { exact: true })
+            .first()
+            .isVisible()
+            .catch(() => false)) &&
+        (await targetPage
+            .getByText('No', { exact: true })
+            .first()
+            .isVisible()
+            .catch(() => false));
+    const reconciliationVisible = await targetPage
+        .getByText('Unresolved reconciliation policy', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const policyVisible = await targetPage
+        .getByText('settlement, reconciliation, refunds, chargebacks', {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    return (
+        boundaryVisible && onlineNoVisible && reconciliationVisible && policyVisible
+    );
 }
 
 async function renewalPolicyBoundaryIsVisible(targetPage) {

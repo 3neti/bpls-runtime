@@ -302,6 +302,7 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($firstManifest['resources']['collection_id'])->toBe($secondManifest['resources']['collection_id'])
         ->and($firstManifest['resources']['payment_schedule_queue_url'])->toContain('q=APP-SCENARIO-MANUAL-RECEIPT-TEST-001')
         ->and($firstManifest['resources']['payment_schedule_queue_url'])->toContain('status=paid')
+        ->and($firstManifest['resources']['online_payment_boundary_status'])->toBe('blocked')
         ->and($firstManifest['resources']['receipt_queue_url'])->toContain('q=SCENARIO-OR-MANUAL-RECEIPT-TEST-001')
         ->and($firstManifest['resources']['receipt_queue_url'])->toContain('status=issued')
         ->and($firstManifest['resources']['application_form_pdf_url'])->toBe('/staff/permit-applications/'.$firstManifest['resources']['permit_application_id'].'/application-form.pdf')
@@ -410,6 +411,12 @@ test('manual collection receipt scenario audit compares browser evidence with ca
             'can_void' => false,
             'receipt_status' => 'issued',
             'collection_status' => 'receipted',
+        ],
+        'online_payment_boundary' => [
+            'status' => 'blocked',
+            'can_pay_online' => false,
+            'can_reconcile_online' => false,
+            'unresolved_visible' => true,
         ],
         'verification' => [
             'reference' => $verification['reference'],

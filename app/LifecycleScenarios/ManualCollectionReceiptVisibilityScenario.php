@@ -7,6 +7,7 @@ use App\Actions\CompletePermitClearance;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\CreateStaffPermitApplication;
+use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\DescribeReceiptVoidBoundary;
@@ -47,6 +48,7 @@ final class ManualCollectionReceiptVisibilityScenario
         private readonly EnsurePermitApplicationClearances $ensureClearances,
         private readonly CompletePermitClearance $completeClearance,
         private readonly AttemptPermitApplicationRelease $attemptRelease,
+        private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly DescribePermitReleaseReadiness $describeReleaseReadiness,
         private readonly DescribePermitVerificationBoundary $describeVerificationBoundary,
         private readonly DescribeReceiptVoidBoundary $describeReceiptVoidBoundary,
@@ -140,6 +142,7 @@ final class ManualCollectionReceiptVisibilityScenario
         $collection->refresh();
         $receipt->refresh();
         $permitApplication = $paymentSchedule->permitApplication()->firstOrFail();
+        $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
         $verificationBoundary = $this->describeVerificationBoundary->handle($permitApplication);
         $receiptVoidBoundary = $this->describeReceiptVoidBoundary->handle($receipt);
 
@@ -149,6 +152,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('assessment-computed', 'Compute assessment through assessment action', ['assessment_status' => 'computed'], ['assessment_status' => $assessment->status->value, 'assessment_id' => $assessment->id]),
             $this->step('payment-schedule-prepared', 'Prepare payment schedule through payment schedule action', ['application_status' => PermitApplicationStatus::PendingPayment->value], ['application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id]),
             $this->step('collection-recorded', 'Record full over-the-counter collection through Treasury action', ['payment_schedule_status' => PaymentScheduleStatus::Paid->value, 'collection_status' => TreasuryCollectionStatus::PendingReceipt->value], ['payment_schedule_status' => $paymentSchedule->status->value, 'collection_status' => $collectionStatusBeforeReceipt->value, 'collection_id' => $collection->id]),
+            $this->step('online-payment-boundary-recorded', 'Describe online payment and reconciliation boundary without calling a gateway', ['online_payment_status' => 'blocked', 'can_pay_online' => false, 'can_reconcile_online' => false], ['online_payment_status' => $onlinePaymentBoundary['status'], 'can_pay_online' => $onlinePaymentBoundary['can_pay_online'], 'can_reconcile_online' => $onlinePaymentBoundary['can_reconcile_online']]),
             $this->step('manual-receipt-issued', 'Issue manual receipt through receipt action', ['receipt_status' => ReceiptStatus::Issued->value, 'collection_status' => TreasuryCollectionStatus::Receipted->value], ['receipt_status' => $receipt->status->value, 'collection_status' => $collection->status->value, 'receipt_id' => $receipt->id]),
             $this->step('receipt-void-blocked', 'Attempt receipt void through receipt policy boundary action', ['void_blocked' => true, 'receipt_status' => ReceiptStatus::Issued->value, 'collection_status' => TreasuryCollectionStatus::Receipted->value], ['void_blocked' => $receiptVoidBlocked, 'receipt_status' => $receipt->status->value, 'collection_status' => $collection->status->value, 'receipt_id' => $receipt->id]),
             $this->step('clearance-checklist-completed', 'Complete clearance checklist through clearance actions', ['completed_clearances' => 3, 'all_completed' => true], ['completed_clearances' => $completedClearances, 'all_completed' => $permitApplication->clearances->every(fn ($clearance): bool => $clearance->status === PermitClearanceStatus::Completed)]),
@@ -170,6 +174,7 @@ final class ManualCollectionReceiptVisibilityScenario
             'assessment_total_amount_cents' => $assessment->total_amount_cents,
             'assessment_pdf_url' => route('staff.permit-applications.assessments.pdf', $assessment, false),
             'payment_schedule_id' => $paymentSchedule->id,
+            'online_payment_boundary_status' => $onlinePaymentBoundary['status'],
             'collection_id' => $collection->id,
             'permit_application_url' => route('staff.permit-applications.show', $permitApplication, false),
             'payment_schedule_queue_url' => route('staff.payment-schedules.index', [
@@ -205,6 +210,7 @@ final class ManualCollectionReceiptVisibilityScenario
             'assessment_id' => $assessment->id,
             'payment_schedule_id' => $paymentSchedule->id,
             'payment_schedule_status' => $paymentSchedule->status->value,
+            'online_payment_boundary' => $onlinePaymentBoundary,
             'collection_id' => $collection->id,
             'collection_status' => $collection->status->value,
             'receipt_id' => $receipt->id,
@@ -251,6 +257,7 @@ final class ManualCollectionReceiptVisibilityScenario
         $permitApplication = PermitApplication::query()
             ->with('clearances')
             ->findOrFail($manifest['resources']['permit_application_id']);
+        $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
         $releaseReadiness = $this->describeReleaseReadiness->handle($permitApplication);
         $verificationBoundary = $this->describeVerificationBoundary->handle($permitApplication);
         $receiptVoidBoundary = $this->describeReceiptVoidBoundary->handle($receipt);
@@ -263,6 +270,8 @@ final class ManualCollectionReceiptVisibilityScenario
 
         $checks = [
             $this->step('audit-payment-schedule-paid', 'Payment schedule is paid', ['status' => PaymentScheduleStatus::Paid->value], ['status' => $paymentSchedule->status->value]),
+            $this->step('audit-online-payment-boundary', 'Online payment and reconciliation boundary remains blocked', ['status' => 'blocked', 'can_pay_online' => false, 'can_reconcile_online' => false], ['status' => $onlinePaymentBoundary['status'], 'can_pay_online' => $onlinePaymentBoundary['can_pay_online'], 'can_reconcile_online' => $onlinePaymentBoundary['can_reconcile_online']]),
+            $this->step('audit-browser-online-payment-boundary', 'Browser evidence observed the online payment and reconciliation boundary', ['status' => 'blocked', 'can_pay_online' => false, 'can_reconcile_online' => false], ['status' => data_get($browserReport, 'online_payment_boundary.status'), 'can_pay_online' => data_get($browserReport, 'online_payment_boundary.can_pay_online'), 'can_reconcile_online' => data_get($browserReport, 'online_payment_boundary.can_reconcile_online')]),
             $this->step('audit-collection-receipted', 'Collection is receipted', ['status' => TreasuryCollectionStatus::Receipted->value], ['status' => $collection->status->value]),
             $this->step('audit-receipt-issued', 'Manual receipt is issued', ['status' => ReceiptStatus::Issued->value, 'numbering_authority' => 'manual'], ['status' => $receipt->status->value, 'numbering_authority' => $receipt->numbering_authority]),
             $this->step('audit-receipt-void-boundary', 'Receipt void boundary remains blocked without financial mutation', ['reference' => $receiptVoidBoundary['reference'], 'status' => 'blocked', 'can_void' => false, 'receipt_status' => ReceiptStatus::Issued->value, 'collection_status' => TreasuryCollectionStatus::Receipted->value], ['reference' => $manifest['resources']['receipt_void_boundary_reference'] ?? null, 'status' => $receiptVoidBoundary['status'], 'can_void' => $receiptVoidBoundary['can_void'], 'receipt_status' => $receipt->status->value, 'collection_status' => $collection->status->value]),
@@ -299,6 +308,7 @@ final class ManualCollectionReceiptVisibilityScenario
                 'payment_schedule_id' => $paymentSchedule->id,
                 'payment_schedule_status' => $paymentSchedule->status->value,
                 'paid_amount_cents' => $paymentSchedule->paid_amount_cents,
+                'online_payment_boundary' => $onlinePaymentBoundary,
                 'collection_id' => $collection->id,
                 'collection_status' => $collection->status->value,
                 'receipt_id' => $receipt->id,

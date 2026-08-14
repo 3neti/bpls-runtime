@@ -153,6 +153,11 @@ test('staff users with view permission can review a payment schedule', function 
             ->where('paymentSchedule.total_amount_cents', 25_000)
             ->where('paymentSchedule.permit_application.application_number', 'APP-PAY-002')
             ->where('paymentSchedule.lines.0.code', 'APPLICATION-FEE')
+            ->where('paymentSchedule.online_payment_boundary.status', 'blocked')
+            ->where('paymentSchedule.online_payment_boundary.can_pay_online', false)
+            ->where('paymentSchedule.online_payment_boundary.can_reconcile_online', false)
+            ->where('paymentSchedule.online_payment_boundary.software_knows.gateway_adapter_is_not_configured', true)
+            ->where('paymentSchedule.online_payment_boundary.software_knows.reconciliation_policy_is_not_resolved', true)
         );
 });
 
