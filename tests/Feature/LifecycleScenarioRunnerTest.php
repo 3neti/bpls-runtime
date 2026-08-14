@@ -13,10 +13,12 @@ use App\LifecycleScenarios\LifecycleScenarioRegistry;
 use App\LifecycleScenarios\ManualCollectionReceiptVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationCancelledVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationPendingPaymentVisibilityScenario;
+use App\LifecycleScenarios\RevenueCodeFeeCatalogVisibilityScenario;
 use App\LifecycleScenarios\ScenarioActorResolver;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\LifecycleScenarios\StoryboardTerminalStateVisibilityScenario;
 use App\Models\Assessment;
+use App\Models\FeeRule;
 use App\Models\Permission;
 use App\Models\PermitApplication;
 use App\Models\Receipt;
@@ -145,6 +147,19 @@ test('scenario registry discovers the retirement permit lifecycle foundation sce
         ->and($scenario->expectations['canonical_state'])->toBe('pending_payment')
         ->and($scenario->expectations['payment_schedule_status'])->toBe('pending')
         ->and($scenario->expectations['retirement_policy_status'])->toBe('policy_boundary')
+        ->and($scenario->safety['external_integrations'])->toBeFalse();
+});
+
+test('scenario registry discovers the revenue code fee catalog visibility scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('revenue_code_fee_catalog_visibility');
+
+    expect($scenario)
+        ->key->toBe('revenue_code_fee_catalog_visibility')
+        ->label->toBe('Revenue Code fee catalog visibility')
+        ->risk->toBe('local transactional')
+        ->and($scenario->expectations['fee_rule_code'])->toBe('MRC-2A-02-B-RETAIL-BUSINESS-TAX')
+        ->and($scenario->expectations['range_count'])->toBe(23)
+        ->and($scenario->expectations['policy_boundary'])->toBe('new_business_initial_local_business_tax_exemption')
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
@@ -362,6 +377,61 @@ test('new permit lifecycle scenario executes real domain actions to authority bo
         ->and($storyboard['record']['type'])->toBe('permit_lifecycle')
         ->and($artifactStore->exists('terminal/prepare.json'))->toBeTrue()
         ->and($artifactStore->exists('storyboard/storyboard.html'))->toBeTrue();
+});
+
+test('revenue code fee catalog visibility scenario prepares deterministic catalog evidence idempotently', function () {
+    Storage::fake('local');
+
+    $user = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('revenue_code_fee_catalog_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'fee-catalog-test-001');
+    $runner = app(RevenueCodeFeeCatalogVisibilityScenario::class);
+
+    $firstManifest = $runner->prepare($scenario, 'fee-catalog-test-001', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+    $secondManifest = $runner->prepare($scenario, 'fee-catalog-test-001', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+
+    $feeRule = FeeRule::query()->with('ranges')->findOrFail($firstManifest['resources']['record_id']);
+    $storyboard = $artifactStore->readJson('storyboard/storyboard.json');
+
+    expect($firstManifest['scenario']['key'])->toBe('revenue_code_fee_catalog_visibility')
+        ->and($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
+        ->and($firstManifest['resources']['fee_rule_code'])->toBe('MRC-2A-02-B-RETAIL-BUSINESS-TAX')
+        ->and($firstManifest['resources']['detail_url'])->toBe('/staff/fee-rules/'.$firstManifest['resources']['record_id'])
+        ->and($firstManifest['resources']['range_count'])->toBe(23)
+        ->and($firstManifest['resources']['first_range_amount_cents'])->toBe(2266)
+        ->and($firstManifest['resources']['policy_boundaries'])->toContain('new_business_initial_local_business_tax_exemption')
+        ->and($feeRule->ranges)->toHaveCount(23)
+        ->and($storyboard['title'])->toBe('Revenue Code fee catalog visibility')
+        ->and($storyboard['record']['type'])->toBe('fee_rule')
+        ->and($artifactStore->exists('terminal/prepare.json'))->toBeTrue()
+        ->and($artifactStore->exists('terminal/execution.json'))->toBeTrue()
+        ->and($artifactStore->exists('storyboard/storyboard.html'))->toBeTrue();
+});
+
+test('command prepares the revenue code fee catalog visibility scenario', function () {
+    Storage::fake('local');
+
+    configuredScenarioUser('test@example.com');
+
+    $this->artisan('lifecycle:scenario', [
+        'scenario' => 'revenue_code_fee_catalog_visibility',
+        '--run-id' => 'fee-catalog-command-test-001',
+        '--phase' => 'prepare',
+    ])->assertSuccessful();
+
+    $artifactStore = new ScenarioArtifactStore('revenue_code_fee_catalog_visibility', 'fee-catalog-command-test-001');
+    $manifest = $artifactStore->readJson('manifest.json');
+
+    expect($manifest['scenario']['key'])->toBe('revenue_code_fee_catalog_visibility')
+        ->and($manifest['result']['terminal'])->toBe('passed')
+        ->and($manifest['resources']['public_reference'])->toBe('MRC-2A-02-B-RETAIL-BUSINESS-TAX')
+        ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
 });
 
 test('command prepares the new permit lifecycle authority boundary scenario', function () {
@@ -1053,6 +1123,48 @@ test('retirement permit lifecycle foundation audit compares browser policy evide
         'artifacts' => [
             'screenshots' => [
                 '02-detail' => 'browser/screenshots/02-detail.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($manifest, $artifactStore);
+
+    expect($audited['result'])
+        ->terminal->toBe('passed')
+        ->browser->toBe('passed')
+        ->audit->toBe('passed')
+        ->passed->toBeTrue()
+        ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
+});
+
+test('revenue code fee catalog visibility audit compares browser evidence with canonical fee rule state', function () {
+    Storage::fake('local');
+
+    $user = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('revenue_code_fee_catalog_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'fee-catalog-test-002');
+    $runner = app(RevenueCodeFeeCatalogVisibilityScenario::class);
+
+    $manifest = $runner->prepare($scenario, 'fee-catalog-test-002', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+    $artifactStore->putJson('browser/report.json', [
+        'result' => [
+            'passed' => true,
+        ],
+        'fee_catalog' => [
+            'fee_rule_code' => $manifest['resources']['fee_rule_code'],
+            'detail_visible' => true,
+            'policy_boundary_visible' => true,
+            'range_amount_visible' => true,
+            'legal_basis_visible' => true,
+        ],
+        'checks' => [],
+        'artifacts' => [
+            'screenshots' => [
+                '02-fee-rule-detail' => 'browser/screenshots/02-fee-rule-detail.png',
             ],
         ],
     ]);

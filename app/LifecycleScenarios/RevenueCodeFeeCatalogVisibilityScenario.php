@@ -1,0 +1,216 @@
+<?php
+
+namespace App\LifecycleScenarios;
+
+use App\Models\FeeRule;
+use App\Models\User;
+use Database\Seeders\RevenueCodeFeeCatalogSeeder;
+use RuntimeException;
+
+final class RevenueCodeFeeCatalogVisibilityScenario
+{
+    public function __construct(
+        private readonly RevenueCodeFeeCatalogSeeder $revenueCodeFeeCatalogSeeder,
+        private readonly ScenarioManifest $scenarioManifest,
+        private readonly ScenarioSummaryRenderer $summaryRenderer,
+    ) {}
+
+    /**
+     * @param  array<string, User>  $actors
+     * @return array<string, mixed>
+     */
+    public function prepare(LifecycleScenarioDefinition $scenario, string $runId, array $actors, ScenarioArtifactStore $artifactStore): array
+    {
+        $existingManifest = $artifactStore->readJson('manifest.json');
+        if (is_array($existingManifest) && ($existingManifest['result']['terminal'] ?? null) === 'passed') {
+            return $existingManifest;
+        }
+
+        $operator = $actors['operator'] ?? throw new RuntimeException('Scenario operator actor was not resolved.');
+
+        $this->revenueCodeFeeCatalogSeeder->run();
+
+        $feeRule = $this->feeRule();
+        $feeRule->load(['lineOfBusiness', 'ranges' => fn ($query) => $query->orderBy('min_basis_cents')]);
+        $manifest = $this->scenarioManifest->initial($scenario, $runId, $actors);
+
+        $steps = [
+            $this->step('actors-resolved', 'Resolve actual application users', ['operator_id' => $operator->id], ['operator_id' => $operator->id]),
+            $this->step('fee-catalog-seeded', 'Prepare deterministic Revenue Code fee catalog evidence', ['rule_code' => 'MRC-2A-02-B-RETAIL-BUSINESS-TAX'], ['rule_code' => $feeRule->code, 'fee_rule_id' => $feeRule->id]),
+            $this->step('fee-rule-ranges-present', 'Verify persisted range brackets for the selected business tax rule', ['range_count' => 23, 'first_range_amount_cents' => 2266], ['range_count' => $feeRule->ranges->count(), 'first_range_amount_cents' => $feeRule->ranges->first()?->amount_cents]),
+            $this->step('policy-boundary-present', 'Verify unresolved Revenue Code policy boundary remains explicit', ['policy_boundary' => 'new_business_initial_local_business_tax_exemption'], ['policy_boundary' => $feeRule->metadata['policy_boundaries'][0] ?? null]),
+        ];
+
+        foreach ($steps as $step) {
+            $artifactStore->appendJsonLine('terminal/action-log.jsonl', $step);
+        }
+
+        $manifest['resources'] = [
+            'record_type' => 'fee_rule',
+            'record_id' => $feeRule->id,
+            'public_reference' => $feeRule->code,
+            'fee_rule_code' => $feeRule->code,
+            'fee_rule_name' => $feeRule->name,
+            'line_of_business' => $feeRule->lineOfBusiness?->name,
+            'legal_basis' => $feeRule->legal_basis,
+            'legacy_source_id' => $feeRule->legacy_source_id,
+            'catalog_status' => $feeRule->metadata['catalog_status'] ?? null,
+            'application_types' => $feeRule->metadata['application_types'] ?? [],
+            'policy_boundaries' => $feeRule->metadata['policy_boundaries'] ?? [],
+            'range_count' => $feeRule->ranges->count(),
+            'first_range_amount_cents' => $feeRule->ranges->first()?->amount_cents,
+            'list_url' => route('staff.fee-rules.index', absolute: false),
+            'detail_url' => route('staff.fee-rules.show', $feeRule, false),
+        ];
+        $manifest['steps'] = $steps;
+        $manifest['result']['terminal'] = collect($steps)->every(fn (array $step): bool => $step['passed']) ? 'passed' : 'failed';
+        $manifest['result']['passed'] = $manifest['result']['terminal'] === 'passed';
+        $manifest['artifacts'] = [
+            'root' => '.',
+        ];
+
+        $artifactStore->putJson('terminal/prepare.json', [
+            'fee_rule' => [
+                'id' => $feeRule->id,
+                'code' => $feeRule->code,
+                'name' => $feeRule->name,
+                'line_of_business' => $feeRule->lineOfBusiness?->name,
+                'legal_basis' => $feeRule->legal_basis,
+                'legacy_source_id' => $feeRule->legacy_source_id,
+                'metadata' => [
+                    'catalog_status' => $feeRule->metadata['catalog_status'] ?? null,
+                    'application_types' => $feeRule->metadata['application_types'] ?? [],
+                    'policy_boundaries' => $feeRule->metadata['policy_boundaries'] ?? [],
+                    'policy_note' => $feeRule->metadata['policy_note'] ?? null,
+                ],
+            ],
+            'range_count' => $feeRule->ranges->count(),
+            'first_range' => [
+                'min_basis_cents' => $feeRule->ranges->first()?->min_basis_cents,
+                'max_basis_cents' => $feeRule->ranges->first()?->max_basis_cents,
+                'amount_cents' => $feeRule->ranges->first()?->amount_cents,
+            ],
+            'run_id' => $runId,
+        ]);
+        $artifactStore->putJson('terminal/execution.json', [
+            'steps' => $steps,
+            'external_calls' => 0,
+            'irreversible_actions' => false,
+            'notifications' => false,
+        ]);
+        $artifactStore->putJson('storyboard/storyboard.json', $this->storyboard($runId, $feeRule));
+        $artifactStore->put('storyboard/storyboard.html', $this->storyboardHtml($runId, $feeRule));
+        $artifactStore->putJson('manifest.json', $manifest);
+        $artifactStore->put('review.md', $this->summaryRenderer->reviewMarkdown());
+
+        return $manifest;
+    }
+
+    /**
+     * @param  array<string, mixed>  $manifest
+     * @return array<string, mixed>
+     */
+    public function audit(array $manifest, ScenarioArtifactStore $artifactStore): array
+    {
+        $feeRule = FeeRule::query()
+            ->with(['lineOfBusiness', 'ranges' => fn ($query) => $query->orderBy('min_basis_cents')])
+            ->findOrFail($manifest['resources']['record_id']);
+        $browserReport = $artifactStore->readJson('browser/report.json') ?? [];
+
+        $checks = [
+            $this->step('audit-browser-result', 'Browser evidence runner passed', ['browser' => true], ['browser' => (bool) data_get($browserReport, 'result.passed')]),
+            $this->step('audit-canonical-fee-rule', 'Canonical fee rule still matches prepared Revenue Code evidence', ['fee_rule_code' => $manifest['resources']['fee_rule_code'], 'range_count' => $manifest['resources']['range_count']], ['fee_rule_code' => $feeRule->code, 'range_count' => $feeRule->ranges->count()]),
+            $this->step('audit-browser-fee-catalog', 'Browser evidence shows catalog and exact fee-rule detail', ['fee_rule_code' => $feeRule->code, 'detail_visible' => true, 'policy_boundary_visible' => true], ['fee_rule_code' => data_get($browserReport, 'fee_catalog.fee_rule_code'), 'detail_visible' => data_get($browserReport, 'fee_catalog.detail_visible'), 'policy_boundary_visible' => data_get($browserReport, 'fee_catalog.policy_boundary_visible')]),
+        ];
+        $passed = collect($checks)->every(fn (array $check): bool => $check['passed']);
+
+        $manifest['steps'] = [
+            ...($manifest['steps'] ?? []),
+            ...$checks,
+        ];
+        $manifest['result']['audit'] = $passed ? 'passed' : 'failed';
+        $manifest['result']['browser'] = data_get($browserReport, 'result.passed') ? 'passed' : 'failed';
+        $manifest['result']['passed'] = $manifest['result']['terminal'] === 'passed'
+            && $manifest['result']['browser'] === 'passed'
+            && $manifest['result']['audit'] === 'passed';
+        $manifest['artifacts']['screenshots'] = data_get($browserReport, 'artifacts.screenshots', []);
+
+        $artifactStore->putJson('terminal/audit.json', [
+            'checks' => $checks,
+            'passed' => $passed,
+            'canonical' => [
+                'fee_rule_id' => $feeRule->id,
+                'fee_rule_code' => $feeRule->code,
+                'range_count' => $feeRule->ranges->count(),
+                'policy_boundaries' => $feeRule->metadata['policy_boundaries'] ?? [],
+            ],
+            'browser' => $browserReport,
+        ]);
+        $artifactStore->putJson('manifest.json', $manifest);
+        $artifactStore->put('summary.html', $this->summaryRenderer->html($manifest));
+
+        return $manifest;
+    }
+
+    private function feeRule(): FeeRule
+    {
+        return FeeRule::query()
+            ->where('code', 'MRC-2A-02-B-RETAIL-BUSINESS-TAX')
+            ->sole();
+    }
+
+    /**
+     * @param  array<string, mixed>  $expected
+     * @param  array<string, mixed>  $actual
+     * @return array<string, mixed>
+     */
+    private function step(string $key, string $action, array $expected, array $actual): array
+    {
+        return [
+            'key' => $key,
+            'actor' => 'operator',
+            'action' => $action,
+            'expected' => $expected,
+            'actual' => $actual,
+            'passed' => collect($expected)->every(fn (mixed $value, string $field): bool => ($actual[$field] ?? null) === $value),
+            'occurred_at' => now()->toIso8601String(),
+            'evidence' => $actual,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function storyboard(string $runId, FeeRule $feeRule): array
+    {
+        return [
+            'title' => 'Revenue Code fee catalog visibility',
+            'summary' => 'BPLO staff verifies that the persisted Revenue Code fee catalog exposes the exact business tax rule, range brackets, legal provenance, and unresolved policy boundaries without editing or executing new financial policy.',
+            'run_id' => $runId,
+            'record' => [
+                'type' => 'fee_rule',
+                'id' => $feeRule->id,
+                'code' => $feeRule->code,
+            ],
+            'frames' => [
+                [
+                    'title' => 'Staff opens Taxes and Fees',
+                    'description' => 'The catalog lists persisted Revenue Code rules with legal provenance and policy-boundary labels.',
+                    'dialogue' => 'The fee catalog is visible evidence, not editable policy.',
+                    'duration_seconds' => 4,
+                ],
+                [
+                    'title' => 'Staff opens a fee-rule detail',
+                    'description' => 'The detail page shows the selected business tax rule, applicability, legal source, and persisted range brackets.',
+                    'dialogue' => 'Assessment can use confirmed persisted ranges while unresolved formula and policy questions remain explicit.',
+                    'duration_seconds' => 5,
+                ],
+            ],
+        ];
+    }
+
+    private function storyboardHtml(string $runId, FeeRule $feeRule): string
+    {
+        return '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Revenue Code fee catalog visibility</title></head><body><h1>Revenue Code fee catalog visibility</h1><p>Run ID: '.e($runId).'</p><p>Fee rule: '.e($feeRule->code).' - '.e($feeRule->name).'</p><p>This storyboard documents catalog visibility only. It does not define or execute assessment policy.</p></body></html>';
+    }
+}

@@ -6,6 +6,7 @@ use App\LifecycleScenarios\LifecycleScenarioRegistry;
 use App\LifecycleScenarios\ManualCollectionReceiptVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationCancelledVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationPendingPaymentVisibilityScenario;
+use App\LifecycleScenarios\RevenueCodeFeeCatalogVisibilityScenario;
 use App\LifecycleScenarios\ScenarioActorResolver;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\LifecycleScenarios\StoryboardTerminalStateVisibilityScenario;
@@ -32,6 +33,7 @@ class LifecycleScenarioCommand extends Command
         ManualCollectionReceiptVisibilityScenario $manualCollectionReceiptScenario,
         PermitApplicationCancelledVisibilityScenario $permitApplicationCancelledScenario,
         PermitApplicationPendingPaymentVisibilityScenario $permitApplicationPendingPaymentScenario,
+        RevenueCodeFeeCatalogVisibilityScenario $revenueCodeFeeCatalogVisibilityScenario,
         StoryboardTerminalStateVisibilityScenario $storyboardScenario,
     ): int {
         $scenario = $registry->get((string) $this->argument('scenario'));
@@ -50,6 +52,7 @@ class LifecycleScenarioCommand extends Command
                     'new_permit_lifecycle_authority_boundary' => $manualCollectionReceiptScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'manual_collection_receipt_visibility' => $manualCollectionReceiptScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'permit_application_cancelled_visibility' => $permitApplicationCancelledScenario->prepare($scenario, $runId, $actors, $artifactStore),
+                    'revenue_code_fee_catalog_visibility' => $revenueCodeFeeCatalogVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'amendment_permit_lifecycle_foundation' => $permitApplicationPendingPaymentScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'permit_application_pending_payment_visibility' => $permitApplicationPendingPaymentScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'renewal_permit_lifecycle_foundation' => $permitApplicationPendingPaymentScenario->prepare($scenario, $runId, $actors, $artifactStore),
@@ -71,6 +74,7 @@ class LifecycleScenarioCommand extends Command
                     'new_permit_lifecycle_authority_boundary' => $manualCollectionReceiptScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'manual_collection_receipt_visibility' => $manualCollectionReceiptScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'permit_application_cancelled_visibility' => $permitApplicationCancelledScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
+                    'revenue_code_fee_catalog_visibility' => $revenueCodeFeeCatalogVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'amendment_permit_lifecycle_foundation' => $permitApplicationPendingPaymentScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'permit_application_pending_payment_visibility' => $permitApplicationPendingPaymentScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'renewal_permit_lifecycle_foundation' => $permitApplicationPendingPaymentScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),

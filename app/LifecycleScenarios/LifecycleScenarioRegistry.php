@@ -292,6 +292,40 @@ final class LifecycleScenarioRegistry
                     ],
                 ],
             ),
+            'revenue_code_fee_catalog_visibility' => new LifecycleScenarioDefinition(
+                key: 'revenue_code_fee_catalog_visibility',
+                label: 'Revenue Code fee catalog visibility',
+                mode: 'revenue_code_fee_catalog_visibility',
+                risk: 'local transactional',
+                actors: [
+                    'operator' => 'primary_operator',
+                    'recipient' => 'sample_recipient',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'fee_rule_code' => 'MRC-2A-02-B-RETAIL-BUSINESS-TAX',
+                    'range_count' => 23,
+                    'catalog_status' => 'partial_executable_extract',
+                    'policy_boundary' => 'new_business_initial_local_business_tax_exemption',
+                    'external_calls' => 0,
+                    'irreversible_actions' => false,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
             'storyboard_terminal_state_visibility' => new LifecycleScenarioDefinition(
                 key: 'storyboard_terminal_state_visibility',
                 label: 'Storyboard terminal export visibility',

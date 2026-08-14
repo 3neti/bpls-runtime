@@ -28,6 +28,7 @@ const supportedScenarios = [
     'amendment_permit_lifecycle_foundation',
     'permit_application_pending_payment_visibility',
     'renewal_permit_lifecycle_foundation',
+    'revenue_code_fee_catalog_visibility',
     'retirement_permit_lifecycle_foundation',
     'transfer_permit_lifecycle_foundation',
 ];
@@ -61,6 +62,7 @@ const renewalPolicyEvidence = {};
 const amendmentPolicyEvidence = {};
 const transferPolicyEvidence = {};
 const retirementPolicyEvidence = {};
+const feeCatalogEvidence = {};
 
 let browser;
 
@@ -100,6 +102,12 @@ try {
         await inspectPermitApplicationList(page, baseUrl);
         await inspectPermitApplicationDetail(page, baseUrl);
         await inspectPermitApplicationMobile(page, baseUrl);
+    }
+
+    if (manifest.scenario.key === 'revenue_code_fee_catalog_visibility') {
+        await inspectRevenueCodeFeeCatalogList(page, baseUrl);
+        await inspectRevenueCodeFeeCatalogDetail(page, baseUrl);
+        await inspectRevenueCodeFeeCatalogMobile(page, baseUrl);
     }
 
     if (
@@ -178,6 +186,7 @@ const report = {
     amendment_policy: amendmentPolicyEvidence,
     transfer_policy: transferPolicyEvidence,
     retirement_policy: retirementPolicyEvidence,
+    fee_catalog: feeCatalogEvidence,
     artifacts: {
         screenshots,
     },
@@ -617,6 +626,193 @@ async function inspectPendingPaymentPermitApplicationList(
         ),
     );
     await screenshot(targetPage, '01-list', 'browser/screenshots/01-list.png');
+}
+
+async function inspectRevenueCodeFeeCatalogList(targetPage, targetBaseUrl) {
+    const listUrl = `${targetBaseUrl}${manifest.resources.list_url}`;
+    await targetPage.goto(listUrl, { waitUntil: 'networkidle' });
+    const ruleVisible = await targetPage
+        .getByText(manifest.resources.fee_rule_code, { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const policyBoundaryVisible = await targetPage
+        .getByText('new business initial local business tax exemption', {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const actionVisible = await targetPage
+        .getByRole('link', { name: `View ${manifest.resources.fee_rule_code}` })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'fee-catalog-list-rule-visible',
+            'Fee catalog list shows exact Revenue Code rule',
+            true,
+            ruleVisible,
+            {
+                url: listUrl,
+                fee_rule_id: manifest.resources.record_id,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'fee-catalog-list-policy-boundary-visible',
+            'Fee catalog list shows unresolved policy boundary label',
+            true,
+            policyBoundaryVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'fee-catalog-list-detail-action-visible',
+            'Fee catalog list links to exact rule detail',
+            true,
+            actionVisible,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '01-fee-catalog-list',
+        'browser/screenshots/01-fee-catalog-list.png',
+    );
+}
+
+async function inspectRevenueCodeFeeCatalogDetail(targetPage, targetBaseUrl) {
+    const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    const headingVisible = await targetPage
+        .getByRole('heading', { name: manifest.resources.fee_rule_code })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const nameVisible = await targetPage
+        .getByText(manifest.resources.fee_rule_name, { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const lineOfBusinessVisible = await targetPage
+        .getByText(manifest.resources.line_of_business, { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const legalBasisVisible = await targetPage
+        .getByText('Section 2A.02(b)', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const rangeAmountVisible = await targetPage
+        .getByText(uiMoneyFromCents(manifest.resources.first_range_amount_cents), {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const policyBoundaryVisible = await targetPage
+        .getByText('new business initial local business tax exemption', {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'fee-catalog-detail-rule-visible',
+            'Fee rule detail shows exact Revenue Code rule',
+            true,
+            headingVisible && nameVisible,
+            {
+                url: detailUrl,
+                fee_rule_id: manifest.resources.record_id,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'fee-catalog-detail-evidence-visible',
+            'Fee rule detail shows line of business, legal basis, and range amount',
+            true,
+            lineOfBusinessVisible && legalBasisVisible && rangeAmountVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'fee-catalog-detail-policy-boundary-visible',
+            'Fee rule detail shows policy boundary',
+            true,
+            policyBoundaryVisible,
+        ),
+    );
+
+    feeCatalogEvidence.fee_rule_code = manifest.resources.fee_rule_code;
+    feeCatalogEvidence.detail_visible = headingVisible && nameVisible;
+    feeCatalogEvidence.policy_boundary_visible = policyBoundaryVisible;
+    feeCatalogEvidence.range_amount_visible = rangeAmountVisible;
+    feeCatalogEvidence.legal_basis_visible = legalBasisVisible;
+
+    await screenshot(
+        targetPage,
+        '02-fee-rule-detail',
+        'browser/screenshots/02-fee-rule-detail.png',
+    );
+}
+
+async function inspectRevenueCodeFeeCatalogMobile(targetPage, targetBaseUrl) {
+    const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    const headingVisible = await targetPage
+        .getByRole('heading', { name: manifest.resources.fee_rule_code })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const policyBoundaryVisible = await targetPage
+        .getByText('Read-only policy boundary', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const horizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+
+    checks.push(
+        check(
+            'fee-catalog-mobile-rule-visible',
+            'Mobile fee rule detail keeps exact rule visible',
+            true,
+            headingVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'fee-catalog-mobile-policy-boundary-visible',
+            'Mobile fee rule detail keeps policy boundary visible',
+            true,
+            policyBoundaryVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'fee-catalog-mobile-no-horizontal-overflow',
+            'Mobile fee rule detail has no horizontal overflow',
+            false,
+            horizontalOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '03-fee-rule-mobile',
+        'browser/screenshots/03-fee-rule-mobile.png',
+    );
 }
 
 async function inspectPendingPaymentPermitApplicationDetail(
