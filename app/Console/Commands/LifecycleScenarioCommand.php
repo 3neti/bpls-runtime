@@ -51,6 +51,7 @@ class LifecycleScenarioCommand extends Command
                     'manual_collection_receipt_visibility' => $manualCollectionReceiptScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'permit_application_cancelled_visibility' => $permitApplicationCancelledScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'permit_application_pending_payment_visibility' => $permitApplicationPendingPaymentScenario->prepare($scenario, $runId, $actors, $artifactStore),
+                    'renewal_permit_lifecycle_foundation' => $permitApplicationPendingPaymentScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'storyboard_terminal_state_visibility' => $storyboardScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     default => throw new RuntimeException("No prepare runner is registered for lifecycle scenario [{$scenario->key}]."),
                 };
@@ -68,6 +69,7 @@ class LifecycleScenarioCommand extends Command
                     'manual_collection_receipt_visibility' => $manualCollectionReceiptScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'permit_application_cancelled_visibility' => $permitApplicationCancelledScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'permit_application_pending_payment_visibility' => $permitApplicationPendingPaymentScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
+                    'renewal_permit_lifecycle_foundation' => $permitApplicationPendingPaymentScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'storyboard_terminal_state_visibility' => $storyboardScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     default => throw new RuntimeException("No audit runner is registered for lifecycle scenario [{$scenario->key}]."),
                 };

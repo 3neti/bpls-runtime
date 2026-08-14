@@ -26,6 +26,7 @@ const supportedScenarios = [
     'storyboard_terminal_state_visibility',
     'permit_application_cancelled_visibility',
     'permit_application_pending_payment_visibility',
+    'renewal_permit_lifecycle_foundation',
 ];
 
 if (!supportedScenarios.includes(manifest.scenario?.key)) {
@@ -50,6 +51,7 @@ const verificationEvidence = {};
 const receiptVoidBoundaryEvidence = {};
 const documentEvidence = {};
 const assessmentEvidence = {};
+const renewalPolicyEvidence = {};
 
 let browser;
 
@@ -92,8 +94,10 @@ try {
     }
 
     if (
-        manifest.scenario.key ===
-        'permit_application_pending_payment_visibility'
+        [
+            'permit_application_pending_payment_visibility',
+            'renewal_permit_lifecycle_foundation',
+        ].includes(manifest.scenario.key)
     ) {
         await inspectPendingPaymentPermitApplicationList(page, baseUrl);
         await inspectPendingPaymentPermitApplicationDetail(page, baseUrl);
@@ -150,6 +154,7 @@ const report = {
     receipt_void_boundary: receiptVoidBoundaryEvidence,
     documents: documentEvidence,
     assessment: assessmentEvidence,
+    renewal_policy: renewalPolicyEvidence,
     artifacts: {
         screenshots,
     },
@@ -622,6 +627,8 @@ async function inspectPendingPaymentPermitApplicationDetail(
         .first()
         .isVisible()
         .catch(() => false);
+    const renewalPolicyBoundaryVisible =
+        await renewalPolicyBoundaryIsVisible(targetPage);
 
     checks.push(
         check(
@@ -656,6 +663,22 @@ async function inspectPendingPaymentPermitApplicationDetail(
             paymentLinkVisible,
         ),
     );
+
+    if (manifest.resources.application_type === 'renewal') {
+        checks.push(
+            check(
+                'detail-renewal-policy-boundary-visible',
+                'Detail screen shows renewal policy boundary',
+                true,
+                renewalPolicyBoundaryVisible,
+            ),
+        );
+        reportRenewalPolicy(
+            renewalPolicyBoundaryVisible ? 'policy_boundary' : 'missing',
+            renewalPolicyBoundaryVisible,
+        );
+    }
+
     await screenshot(
         targetPage,
         '02-detail',
@@ -863,6 +886,8 @@ async function inspectPendingPaymentPermitApplicationMobile(
         .first()
         .isVisible()
         .catch(() => false);
+    const renewalPolicyBoundaryVisible =
+        await renewalPolicyBoundaryIsVisible(targetPage);
     const horizontalOverflow = await targetPage.evaluate(
         () =>
             document.documentElement.scrollWidth >
@@ -885,6 +910,18 @@ async function inspectPendingPaymentPermitApplicationMobile(
             pendingPaymentVisible,
         ),
     );
+
+    if (manifest.resources.application_type === 'renewal') {
+        checks.push(
+            check(
+                'mobile-renewal-policy-boundary-visible',
+                'Mobile detail keeps renewal policy boundary visible',
+                true,
+                renewalPolicyBoundaryVisible,
+            ),
+        );
+    }
+
     checks.push(
         check(
             'mobile-no-horizontal-overflow',
@@ -1976,6 +2013,11 @@ function reportBusinessTaxAssessment(
     };
 }
 
+function reportRenewalPolicy(status, unresolvedVisible) {
+    renewalPolicyEvidence.status = status;
+    renewalPolicyEvidence.unresolved_visible = unresolvedVisible;
+}
+
 function moneyFromCents(amountCents) {
     return `PHP ${Number(amountCents / 100).toLocaleString('en-US', {
         minimumFractionDigits: 2,
@@ -2017,6 +2059,26 @@ async function bodyTextMatches(targetPage, pattern) {
         .innerText()
         .then((text) => pattern.test(text))
         .catch(() => false);
+}
+
+async function renewalPolicyBoundaryIsVisible(targetPage) {
+    const boundaryVisible = await targetPage
+        .getByText('Renewal policy boundary', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const unresolvedVisible = await targetPage
+        .getByText('Unresolved renewal policy', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const policyVisible = await targetPage
+        .getByText('PIL applicability and calculation', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    return boundaryVisible && unresolvedVisible && policyVisible;
 }
 
 function fail(message) {

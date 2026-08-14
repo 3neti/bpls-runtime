@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Enums\PermitApplicationStatus;
+use App\Enums\PermitApplicationType;
 use App\Models\Business;
 use App\Models\BusinessOwner;
 use App\Models\PermitApplication;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 
 class CreateStaffPermitApplication
 {
+    public function __construct(private readonly DescribeRenewalPolicyBoundary $describeRenewalPolicyBoundary) {}
+
     /**
      * @param  array{
      *     owner_name: string,
@@ -59,6 +62,7 @@ class CreateStaffPermitApplication
                 'status' => PermitApplicationStatus::Draft,
                 'application_year' => $data['application_year'],
                 'submitted_at' => now(),
+                'metadata' => $this->metadataFor(PermitApplicationType::from($data['type'])),
             ]);
 
             PermitApplicationLine::query()->create([
@@ -71,5 +75,21 @@ class CreateStaffPermitApplication
 
             return $permitApplication->load(['business.owner', 'lines.lineOfBusiness']);
         });
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function metadataFor(PermitApplicationType $type): ?array
+    {
+        $renewalPolicyBoundary = $this->describeRenewalPolicyBoundary->handle($type);
+
+        if ($renewalPolicyBoundary === null) {
+            return null;
+        }
+
+        return [
+            'renewal_policy_boundary' => $renewalPolicyBoundary,
+        ];
     }
 }

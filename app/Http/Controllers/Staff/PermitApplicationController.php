@@ -8,6 +8,7 @@ use App\Actions\CompletePermitClearance;
 use App\Actions\CreateStaffPermitApplication;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
+use App\Actions\DescribeRenewalPolicyBoundary;
 use App\Actions\RenderApplicationFormPdf;
 use App\Actions\RenderPermitPdf;
 use App\Enums\PermitApplicationType;
@@ -33,6 +34,7 @@ class PermitApplicationController extends Controller
     public function __construct(
         private readonly DescribePermitReleaseReadiness $describeReleaseReadiness,
         private readonly DescribePermitVerificationBoundary $describeVerificationBoundary,
+        private readonly DescribeRenewalPolicyBoundary $describeRenewalPolicyBoundary,
     ) {}
 
     public function index(): Response
@@ -229,6 +231,8 @@ class PermitApplicationController extends Controller
                 'paid_amount_cents' => $latestPaymentSchedule->paid_amount_cents,
             ],
             'terminal_state' => $permitApplication->metadata['terminal_state'] ?? null,
+            'renewal_policy_boundary' => $permitApplication->metadata['renewal_policy_boundary']
+                ?? $this->describeRenewalPolicyBoundary->handle($permitApplication->type),
             'release_policy_boundary' => $permitApplication->metadata['release_policy_boundary'] ?? null,
             'release_readiness' => $this->describeReleaseReadiness->handle($permitApplication),
             'verification_boundary' => $this->describeVerificationBoundary->handle($permitApplication),

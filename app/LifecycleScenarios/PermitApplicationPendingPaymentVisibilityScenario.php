@@ -48,18 +48,19 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         $this->feeRules($lineOfBusiness);
 
         $applicationNumber = 'APP-SCENARIO-'.str($runId)->upper()->replaceMatches('/[^A-Z0-9]+/', '-')->trim('-')->limit(40, '')->toString();
+        $applicationType = $this->applicationType($scenario);
         $permitApplication = $this->createPermitApplication->handle([
             'owner_name' => 'Scenario Owner '.$runId,
             'owner_email' => null,
             'owner_phone' => null,
             'owner_address' => 'Scenario verification address',
-            'business_name' => 'Scenario Payment Business '.$runId,
-            'trade_name' => 'Scenario Payment Trade',
+            'business_name' => $this->businessName($scenario, $runId),
+            'trade_name' => $this->tradeName($scenario),
             'registration_number' => 'SCENARIO-'.$runId,
             'business_address' => 'Scenario verification address',
             'barangay' => 'Poblacion',
             'application_number' => $applicationNumber,
-            'type' => PermitApplicationType::New->value,
+            'type' => $applicationType->value,
             'application_year' => now()->year,
             'line_of_business_id' => $lineOfBusiness->id,
             'declared_gross_sales_cents' => 125_000_00,
@@ -74,7 +75,8 @@ final class PermitApplicationPendingPaymentVisibilityScenario
 
         $steps = [
             $this->step('actors-resolved', 'Resolve actual application users', ['operator_id' => $operator->id], ['operator_id' => $operator->id]),
-            $this->step('permit-application-created', 'Create permit application through staff intake action', ['status' => PermitApplicationStatus::Draft->value], ['status' => PermitApplicationStatus::Draft->value, 'permit_application_id' => $permitApplication->id]),
+            $this->step('permit-application-created', 'Create permit application through staff intake action', ['status' => PermitApplicationStatus::Draft->value, 'application_type' => $applicationType->value], ['status' => PermitApplicationStatus::Draft->value, 'application_type' => $permitApplication->type->value, 'permit_application_id' => $permitApplication->id]),
+            ...$this->renewalPolicySteps($scenario, $permitApplication),
             $this->step('assessment-computed', 'Compute assessment through assessment action', ['assessment_status' => 'computed'], ['assessment_status' => $assessment->status->value, 'assessment_id' => $assessment->id]),
             $this->step('range-assessment-line-computed', 'Assessment action applied the gross-sales range fee rule', ['calculation_type' => FeeRuleCalculationType::Range->value, 'basis_amount_cents' => 12_500_000, 'amount_cents' => 20_000], ['calculation_type' => $rangeAssessmentLine->calculation_type->value, 'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents, 'assessment_line_id' => $rangeAssessmentLine->id]),
             $this->step('business-tax-assessment-line-computed', 'Assessment action persisted gross-sales business tax meaning', ['category' => FeeRuleCategory::Tax->value, 'basis' => 'declared_gross_sales', 'line_of_business' => $lineOfBusiness->name], ['category' => $rangeAssessmentLine->category->value, 'basis' => $rangeAssessmentLine->basis, 'line_of_business' => $rangeAssessmentLine->lineOfBusiness?->name, 'assessment_line_id' => $rangeAssessmentLine->id]),
@@ -89,6 +91,8 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             'record_type' => 'permit_application',
             'record_id' => $permitApplication->id,
             'public_reference' => $permitApplication->application_number,
+            'application_type' => $permitApplication->type->value,
+            'renewal_policy_status' => data_get($permitApplication->metadata, 'renewal_policy_boundary.status'),
             'assessment_id' => $assessment->id,
             'assessment_url' => route('staff.permit-applications.assessments.show', $assessment, false),
             'assessment_total_amount_cents' => $assessment->total_amount_cents,
@@ -121,7 +125,9 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         $artifactStore->putJson('terminal/prepare.json', [
             'permit_application_id' => $permitApplication->id,
             'application_number' => $permitApplication->application_number,
+            'application_type' => $permitApplication->type->value,
             'status' => $permitApplication->status->value,
+            'renewal_policy_boundary' => $permitApplication->metadata['renewal_policy_boundary'] ?? null,
             'assessment_id' => $assessment->id,
             'assessment_total_amount_cents' => $assessment->total_amount_cents,
             'range_assessment_line' => [
@@ -153,8 +159,8 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             'irreversible_actions' => false,
             'notifications' => false,
         ]);
-        $artifactStore->putJson('storyboard/storyboard.json', $this->storyboard($runId, $permitApplication, $assessment, $paymentSchedule));
-        $artifactStore->put('storyboard/storyboard.html', $this->storyboardHtml($runId, $permitApplication, $assessment, $paymentSchedule));
+        $artifactStore->putJson('storyboard/storyboard.json', $this->storyboard($scenario, $runId, $permitApplication, $assessment, $paymentSchedule));
+        $artifactStore->put('storyboard/storyboard.html', $this->storyboardHtml($scenario, $runId, $permitApplication, $assessment, $paymentSchedule));
         $artifactStore->putJson('manifest.json', $manifest);
         $artifactStore->put('review.md', $this->summaryRenderer->reviewMarkdown());
 
@@ -184,6 +190,8 @@ final class PermitApplicationPendingPaymentVisibilityScenario
 
         $checks = [
             $this->step('audit-canonical-status', 'Canonical permit application status is pending payment', ['status' => PermitApplicationStatus::PendingPayment->value], ['status' => $permitApplication->status->value]),
+            $this->step('audit-application-type', 'Canonical permit application type matches the scenario', ['application_type' => $manifest['resources']['application_type']], ['application_type' => $permitApplication->type->value]),
+            ...$this->renewalPolicyAuditSteps($manifest, $permitApplication, $browserReport),
             $this->step('audit-range-assessment-line', 'Canonical assessment line remains the computed gross-sales range line', ['calculation_type' => FeeRuleCalculationType::Range->value, 'basis_amount_cents' => $manifest['resources']['range_basis_amount_cents'], 'amount_cents' => $manifest['resources']['range_amount_cents']], ['calculation_type' => $rangeAssessmentLine->calculation_type->value, 'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents, 'assessment_line_id' => $rangeAssessmentLine->id]),
             $this->step('audit-browser-range-assessment-line', 'Browser evidence shows the same gross-sales range assessment line', ['code' => $rangeAssessmentLine->code, 'calculation_type' => $rangeAssessmentLine->calculation_type->value, 'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents], ['code' => data_get($browserReport, 'assessment.range_line.code'), 'calculation_type' => data_get($browserReport, 'assessment.range_line.calculation_type'), 'basis_amount_cents' => data_get($browserReport, 'assessment.range_line.basis_amount_cents'), 'amount_cents' => data_get($browserReport, 'assessment.range_line.amount_cents')]),
             $this->step('audit-business-tax-assessment-line', 'Canonical assessment line remains a gross-sales business tax', ['name' => $manifest['resources']['business_tax_name'], 'category' => FeeRuleCategory::Tax->value, 'line_of_business' => $manifest['resources']['business_tax_line_of_business'], 'declared_gross_sales_cents' => $manifest['resources']['business_tax_declared_gross_sales_cents'], 'amount_cents' => $manifest['resources']['business_tax_amount_cents']], ['name' => $rangeAssessmentLine->name, 'category' => $rangeAssessmentLine->category->value, 'line_of_business' => $rangeAssessmentLine->lineOfBusiness?->name, 'declared_gross_sales_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents]),
@@ -211,7 +219,9 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             'canonical' => [
                 'permit_application_id' => $permitApplication->id,
                 'application_number' => $permitApplication->application_number,
+                'application_type' => $permitApplication->type->value,
                 'status' => $permitApplication->status->value,
+                'renewal_policy_boundary' => $permitApplication->metadata['renewal_policy_boundary'] ?? null,
                 'assessment_id' => $manifest['resources']['assessment_id'],
                 'range_assessment_line' => [
                     'id' => $rangeAssessmentLine->id,
@@ -314,6 +324,88 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         return $line;
     }
 
+    private function applicationType(LifecycleScenarioDefinition $scenario): PermitApplicationType
+    {
+        if ($scenario->key === 'renewal_permit_lifecycle_foundation') {
+            return PermitApplicationType::Renewal;
+        }
+
+        return PermitApplicationType::New;
+    }
+
+    private function businessName(LifecycleScenarioDefinition $scenario, string $runId): string
+    {
+        if ($this->applicationType($scenario) === PermitApplicationType::Renewal) {
+            return 'Scenario Renewal Business '.$runId;
+        }
+
+        return 'Scenario Payment Business '.$runId;
+    }
+
+    private function tradeName(LifecycleScenarioDefinition $scenario): string
+    {
+        if ($this->applicationType($scenario) === PermitApplicationType::Renewal) {
+            return 'Scenario Renewal Trade';
+        }
+
+        return 'Scenario Payment Trade';
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function renewalPolicySteps(LifecycleScenarioDefinition $scenario, PermitApplication $permitApplication): array
+    {
+        if ($this->applicationType($scenario) !== PermitApplicationType::Renewal) {
+            return [];
+        }
+
+        return [
+            $this->step(
+                'renewal-policy-boundary-recorded',
+                'Record renewal policy boundary without inventing unresolved renewal tax behavior',
+                ['renewal_policy_status' => 'policy_boundary'],
+                [
+                    'renewal_policy_status' => data_get($permitApplication->metadata, 'renewal_policy_boundary.status'),
+                    'application_type' => $permitApplication->type->value,
+                ],
+            ),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $manifest
+     * @param  array<string, mixed>  $browserReport
+     * @return array<int, array<string, mixed>>
+     */
+    private function renewalPolicyAuditSteps(array $manifest, PermitApplication $permitApplication, array $browserReport): array
+    {
+        if (($manifest['resources']['application_type'] ?? null) !== PermitApplicationType::Renewal->value) {
+            return [];
+        }
+
+        return [
+            $this->step(
+                'audit-renewal-policy-boundary',
+                'Canonical renewal policy boundary remains explicit',
+                ['renewal_policy_status' => 'policy_boundary'],
+                [
+                    'renewal_policy_status' => data_get($permitApplication->metadata, 'renewal_policy_boundary.status'),
+                    'unresolved_policy_count' => count(data_get($permitApplication->metadata, 'renewal_policy_boundary.unresolved_policy', [])),
+                ],
+            ),
+            $this->step(
+                'audit-browser-renewal-policy-boundary',
+                'Browser evidence shows the renewal policy boundary',
+                ['renewal_policy_status' => 'policy_boundary'],
+                [
+                    'renewal_policy_status' => data_get($browserReport, 'renewal_policy.status'),
+                    'unresolved_visible' => data_get($browserReport, 'renewal_policy.unresolved_visible'),
+                ],
+            ),
+        ];
+    }
+
     /**
      * @param  array<string, mixed>  $expected
      * @param  array<string, mixed>  $actual
@@ -336,23 +428,31 @@ final class PermitApplicationPendingPaymentVisibilityScenario
     /**
      * @return array<string, mixed>
      */
-    private function storyboard(string $runId, PermitApplication $permitApplication, Assessment $assessment, PaymentSchedule $paymentSchedule): array
+    private function storyboard(LifecycleScenarioDefinition $scenario, string $runId, PermitApplication $permitApplication, Assessment $assessment, PaymentSchedule $paymentSchedule): array
     {
+        $isRenewal = $this->applicationType($scenario) === PermitApplicationType::Renewal;
+
         return [
-            'title' => 'Permit application pending payment visibility',
-            'summary' => 'BPLO staff records a disposable application, computes assessment, prepares a payment schedule, and verifies that staff screens show the application ready for collection.',
+            'title' => $isRenewal ? 'Renewal permit lifecycle foundation' : 'Permit application pending payment visibility',
+            'summary' => $isRenewal
+                ? 'BPLO staff records a renewal permit application, computes assessment from current persisted fee rules, prepares a payment schedule, and verifies that unresolved renewal tax policy remains visible.'
+                : 'BPLO staff records a disposable application, computes assessment, prepares a payment schedule, and verifies that staff screens show the application ready for collection.',
             'run_id' => $runId,
             'record' => [
                 'type' => 'permit_application',
                 'id' => $permitApplication->id,
                 'application_number' => $permitApplication->application_number,
+                'application_type' => $permitApplication->type->value,
+                'renewal_policy_status' => data_get($permitApplication->metadata, 'renewal_policy_boundary.status'),
                 'assessment_id' => $assessment->id,
                 'payment_schedule_id' => $paymentSchedule->id,
             ],
             'frames' => [
                 [
-                    'title' => 'Staff records application',
-                    'description' => 'BPLO staff records a new business permit application for the scenario business.',
+                    'title' => $isRenewal ? 'Staff records renewal application' : 'Staff records application',
+                    'description' => $isRenewal
+                        ? 'BPLO staff records a renewal application for the scenario business and preserves unresolved renewal policy as explicit evidence.'
+                        : 'BPLO staff records a new business permit application for the scenario business.',
                     'dialogue' => 'The application is ready for assessment.',
                     'duration_seconds' => 4,
                 ],
@@ -365,7 +465,9 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                 [
                     'title' => 'Payment schedule is prepared',
                     'description' => 'Treasury-facing schedule lines are prepared from assessment lines.',
-                    'dialogue' => 'The application is now pending payment; collection and receipt behavior remain separate scenarios.',
+                    'dialogue' => $isRenewal
+                        ? 'The renewal application is pending payment; late payment, PIL, and deficiency policy remain explicit boundaries.'
+                        : 'The application is now pending payment; collection and receipt behavior remain separate scenarios.',
                     'duration_seconds' => 5,
                 ],
                 [
@@ -378,9 +480,9 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         ];
     }
 
-    private function storyboardHtml(string $runId, PermitApplication $permitApplication, Assessment $assessment, PaymentSchedule $paymentSchedule): string
+    private function storyboardHtml(LifecycleScenarioDefinition $scenario, string $runId, PermitApplication $permitApplication, Assessment $assessment, PaymentSchedule $paymentSchedule): string
     {
-        $storyboard = $this->storyboard($runId, $permitApplication, $assessment, $paymentSchedule);
+        $storyboard = $this->storyboard($scenario, $runId, $permitApplication, $assessment, $paymentSchedule);
         $frames = collect($storyboard['frames'])
             ->map(fn (array $frame): string => '<li><strong>'.e($frame['title']).'</strong><br>'.e($frame['description']).'<br><em>'.e($frame['dialogue']).'</em></li>')
             ->implode('');
