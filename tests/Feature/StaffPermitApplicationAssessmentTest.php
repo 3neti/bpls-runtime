@@ -81,6 +81,51 @@ test('staff users with assess permission can compute an assessment from the staf
     expect($assessment->total_amount_cents)->toBe(25_000);
 });
 
+test('staff assessment surface records unsupported formula policy boundary without creating an assessment', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+        UserPermission::AssessPermitApplications,
+    ]);
+
+    $application = PermitApplication::factory()->create([
+        'application_number' => 'APP-FORMULA-BOUNDARY',
+        'application_year' => 2026,
+    ]);
+
+    FeeRule::factory()->create([
+        'code' => 'FORMULA-FEE',
+        'scope' => FeeRuleScope::Application,
+        'calculation_type' => FeeRuleCalculationType::Formula,
+        'effective_from' => '2026-01-01',
+    ]);
+
+    $expectedMessage = 'Formula assessment policy is not implemented for fee rule [FORMULA-FEE].';
+
+    $this
+        ->from(route('staff.permit-applications.assessments.index'))
+        ->actingAs($user)
+        ->post(route('staff.permit-applications.assessments.store', $application))
+        ->assertRedirectBackWithErrors(['assessment_policy']);
+
+    $application->refresh();
+
+    expect(Assessment::query()->count())->toBe(0)
+        ->and($application->metadata['assessment_policy_boundary']['status'])->toBe('blocked')
+        ->and($application->metadata['assessment_policy_boundary']['reason'])->toBe($expectedMessage);
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.assessments.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Assessments/Index')
+            ->where('permitApplications.data.0.application_number', 'APP-FORMULA-BOUNDARY')
+            ->where('permitApplications.data.0.latest_assessment', null)
+            ->where('permitApplications.data.0.assessment_policy_boundary.status', 'blocked')
+            ->where('permitApplications.data.0.assessment_policy_boundary.reason', $expectedMessage)
+        );
+});
+
 test('staff users without assess permission cannot compute an assessment', function () {
     $user = userWithPermissions([
         UserPermission::AccessStaff,

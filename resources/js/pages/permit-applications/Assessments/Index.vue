@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { Calculator, Eye } from '@lucide/vue';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import AppLayout from '@/layouts/AppLayout.vue';
+import { AlertTriangle, Calculator, Eye } from '@lucide/vue';
 import {
     index as assessmentIndex,
     show,
     store,
 } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
+import { Badge } from '@/components/ui/badge';
+import { Button, buttonVariants } from '@/components/ui/button';
+import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
 type LatestAssessment = {
@@ -29,6 +29,11 @@ type PermitApplicationRow = {
     owner_name: string;
     line_count: number;
     latest_assessment: LatestAssessment | null;
+    assessment_policy_boundary: {
+        status: string;
+        reason: string;
+        blocked_at: string | null;
+    } | null;
 };
 
 defineProps<{
@@ -37,6 +42,9 @@ defineProps<{
     };
     can: {
         assess_permit_applications: boolean;
+    };
+    errors?: {
+        assessment_policy?: string;
     };
 }>();
 
@@ -69,6 +77,21 @@ function money(amountCents: number): string {
                         <p class="text-sm text-muted-foreground">
                             Review permit applications and compute assessment
                             snapshots.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <section
+                v-if="errors?.assessment_policy"
+                class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+            >
+                <div class="flex items-start gap-3">
+                    <AlertTriangle class="mt-0.5 size-4 shrink-0" />
+                    <div>
+                        <p class="font-medium">Assessment policy boundary</p>
+                        <p class="mt-1">
+                            {{ errors.assessment_policy }}
                         </p>
                     </div>
                 </div>
@@ -115,6 +138,23 @@ function money(amountCents: number): string {
                                     </div>
                                     <div class="text-xs text-muted-foreground">
                                         {{ permitApplication.application_year }}
+                                    </div>
+                                    <div
+                                        v-if="
+                                            permitApplication.assessment_policy_boundary
+                                        "
+                                        class="mt-2 max-w-[260px] rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+                                    >
+                                        <div class="font-medium">
+                                            Assessment policy boundary
+                                        </div>
+                                        <div class="mt-1 break-words">
+                                            {{
+                                                permitApplication
+                                                    .assessment_policy_boundary
+                                                    .reason
+                                            }}
+                                        </div>
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 align-top">

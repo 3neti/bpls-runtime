@@ -21,6 +21,7 @@ if (manifest.schema_version !== 'application.lifecycle-evidence.v1') {
 }
 
 const supportedScenarios = [
+    'assessment_policy_boundary_visibility',
     'new_permit_lifecycle_authority_boundary',
     'manual_collection_receipt_visibility',
     'storyboard_terminal_state_visibility',
@@ -56,6 +57,7 @@ const verificationEvidence = {};
 const receiptVoidBoundaryEvidence = {};
 const documentEvidence = {};
 const assessmentEvidence = {};
+const assessmentPolicyBoundaryEvidence = {};
 const onlinePaymentBoundaryEvidence = {};
 const reportEvidence = {};
 const renewalPolicyEvidence = {};
@@ -108,6 +110,10 @@ try {
         await inspectRevenueCodeFeeCatalogList(page, baseUrl);
         await inspectRevenueCodeFeeCatalogDetail(page, baseUrl);
         await inspectRevenueCodeFeeCatalogMobile(page, baseUrl);
+    }
+
+    if (manifest.scenario.key === 'assessment_policy_boundary_visibility') {
+        await inspectAssessmentPolicyBoundary(page, baseUrl);
     }
 
     if (
@@ -180,6 +186,7 @@ const report = {
     receipt_void_boundary: receiptVoidBoundaryEvidence,
     documents: documentEvidence,
     assessment: assessmentEvidence,
+    assessment_policy_boundary: assessmentPolicyBoundaryEvidence,
     online_payment_boundary: onlinePaymentBoundaryEvidence,
     reports: reportEvidence,
     renewal_policy: renewalPolicyEvidence,
@@ -681,6 +688,108 @@ async function inspectRevenueCodeFeeCatalogList(targetPage, targetBaseUrl) {
         targetPage,
         '01-fee-catalog-list',
         'browser/screenshots/01-fee-catalog-list.png',
+    );
+}
+
+async function inspectAssessmentPolicyBoundary(targetPage, targetBaseUrl) {
+    const indexUrl = `${targetBaseUrl}${manifest.resources.assessment_index_url}`;
+    await targetPage.goto(indexUrl, { waitUntil: 'networkidle' });
+
+    const applicationRow = targetPage
+        .locator('tr')
+        .filter({ hasText: manifest.resources.application_number })
+        .first();
+    const applicationVisible = await applicationRow.isVisible().catch(() => false);
+
+    checks.push(
+        check(
+            'assessment-policy-boundary-application-visible',
+            'Assessment queue shows the prepared formula-boundary application',
+            true,
+            applicationVisible,
+            {
+                url: indexUrl,
+                permit_application_id: manifest.resources.record_id,
+            },
+        ),
+    );
+
+    await applicationRow
+        .getByRole('button', { name: /assess/i })
+        .click();
+    await targetPage.waitForLoadState('networkidle');
+    await targetPage
+        .waitForFunction(
+            (expectedMessage) =>
+                document.body.innerText.includes(expectedMessage),
+            manifest.resources.expected_policy_message,
+            { timeout: 10000 },
+        )
+        .catch(() => {});
+
+    const boundaryVisible = await targetPage
+        .getByText('Assessment policy boundary', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const reasonVisible = await targetPage
+        .getByText(manifest.resources.expected_policy_message, {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const updatedApplicationRow = targetPage
+        .locator('tr')
+        .filter({ hasText: manifest.resources.application_number })
+        .first();
+    const rowBoundaryVisible = await updatedApplicationRow
+        .getByText('Assessment policy boundary', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const notAssessedVisible = await updatedApplicationRow
+        .getByText('Not assessed', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'assessment-policy-boundary-visible',
+            'Assessment queue shows unsupported formula policy boundary',
+            true,
+            boundaryVisible && reasonVisible && rowBoundaryVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'assessment-policy-boundary-no-assessment-created-visible',
+            'Assessment queue still shows the application as not assessed',
+            true,
+            notAssessedVisible,
+        ),
+    );
+
+    assessmentPolicyBoundaryEvidence.application_number =
+        manifest.resources.application_number;
+    assessmentPolicyBoundaryEvidence.boundary_visible = boundaryVisible;
+    assessmentPolicyBoundaryEvidence.reason_visible = reasonVisible;
+    assessmentPolicyBoundaryEvidence.row_boundary_visible = rowBoundaryVisible;
+    assessmentPolicyBoundaryEvidence.not_assessed_visible = notAssessedVisible;
+
+    await targetPage.evaluate(() => {
+        for (const element of document.querySelectorAll('*')) {
+            if (element instanceof HTMLElement) {
+                element.scrollLeft = 0;
+            }
+        }
+    });
+
+    await screenshot(
+        targetPage,
+        '01-assessment-policy-boundary',
+        'browser/screenshots/01-assessment-policy-boundary.png',
     );
 }
 

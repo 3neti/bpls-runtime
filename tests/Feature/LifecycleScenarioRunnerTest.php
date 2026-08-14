@@ -9,6 +9,7 @@ use App\Enums\StoryboardExportStatus;
 use App\Enums\TreasuryCollectionStatus;
 use App\Enums\UserPermission;
 use App\Jobs\GenerateStoryboardVideo;
+use App\LifecycleScenarios\AssessmentPolicyBoundaryVisibilityScenario;
 use App\LifecycleScenarios\LifecycleScenarioRegistry;
 use App\LifecycleScenarios\ManualCollectionReceiptVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationCancelledVisibilityScenario;
@@ -160,6 +161,18 @@ test('scenario registry discovers the revenue code fee catalog visibility scenar
         ->and($scenario->expectations['fee_rule_code'])->toBe('MRC-2A-02-B-RETAIL-BUSINESS-TAX')
         ->and($scenario->expectations['range_count'])->toBe(23)
         ->and($scenario->expectations['policy_boundary'])->toBe('new_business_initial_local_business_tax_exemption')
+        ->and($scenario->safety['external_integrations'])->toBeFalse();
+});
+
+test('scenario registry discovers the assessment policy boundary visibility scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('assessment_policy_boundary_visibility');
+
+    expect($scenario)
+        ->key->toBe('assessment_policy_boundary_visibility')
+        ->label->toBe('Assessment policy boundary visibility')
+        ->risk->toBe('local transactional')
+        ->and($scenario->expectations['assessment_policy_status'])->toBe('blocked')
+        ->and($scenario->expectations['assessment_count'])->toBe(0)
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
@@ -414,6 +427,40 @@ test('revenue code fee catalog visibility scenario prepares deterministic catalo
         ->and($artifactStore->exists('storyboard/storyboard.html'))->toBeTrue();
 });
 
+test('assessment policy boundary visibility scenario prepares formula boundary precondition idempotently', function () {
+    Storage::fake('local');
+
+    $user = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('assessment_policy_boundary_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'assessment-policy-boundary-test-001');
+    $runner = app(AssessmentPolicyBoundaryVisibilityScenario::class);
+
+    $firstManifest = $runner->prepare($scenario, 'assessment-policy-boundary-test-001', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+    $secondManifest = $runner->prepare($scenario, 'assessment-policy-boundary-test-001', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+
+    $application = PermitApplication::query()->findOrFail($firstManifest['resources']['record_id']);
+    $feeRule = FeeRule::query()->findOrFail($firstManifest['resources']['fee_rule_id']);
+    $storyboard = $artifactStore->readJson('storyboard/storyboard.json');
+
+    expect($firstManifest['scenario']['key'])->toBe('assessment_policy_boundary_visibility')
+        ->and($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
+        ->and($firstManifest['resources']['application_number'])->toBe($application->application_number)
+        ->and($firstManifest['resources']['expected_policy_message'])->toBe('Formula assessment policy is not implemented for fee rule ['.$feeRule->code.'].')
+        ->and($application->assessments()->count())->toBe(0)
+        ->and($feeRule->calculation_type->value)->toBe('formula')
+        ->and($storyboard['title'])->toBe('Assessment policy boundary visibility')
+        ->and($storyboard['record']['type'])->toBe('permit_application')
+        ->and($artifactStore->exists('terminal/prepare.json'))->toBeTrue()
+        ->and($artifactStore->exists('terminal/execution.json'))->toBeTrue()
+        ->and($artifactStore->exists('storyboard/storyboard.html'))->toBeTrue();
+});
+
 test('command prepares the revenue code fee catalog visibility scenario', function () {
     Storage::fake('local');
 
@@ -431,6 +478,26 @@ test('command prepares the revenue code fee catalog visibility scenario', functi
     expect($manifest['scenario']['key'])->toBe('revenue_code_fee_catalog_visibility')
         ->and($manifest['result']['terminal'])->toBe('passed')
         ->and($manifest['resources']['public_reference'])->toBe('MRC-2A-02-B-RETAIL-BUSINESS-TAX')
+        ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
+});
+
+test('command prepares the assessment policy boundary visibility scenario', function () {
+    Storage::fake('local');
+
+    configuredScenarioUser('test@example.com');
+
+    $this->artisan('lifecycle:scenario', [
+        'scenario' => 'assessment_policy_boundary_visibility',
+        '--run-id' => 'assessment-policy-boundary-command-test-001',
+        '--phase' => 'prepare',
+    ])->assertSuccessful();
+
+    $artifactStore = new ScenarioArtifactStore('assessment_policy_boundary_visibility', 'assessment-policy-boundary-command-test-001');
+    $manifest = $artifactStore->readJson('manifest.json');
+
+    expect($manifest['scenario']['key'])->toBe('assessment_policy_boundary_visibility')
+        ->and($manifest['result']['terminal'])->toBe('passed')
+        ->and($manifest['resources']['expected_policy_message'])->toContain('Formula assessment policy is not implemented')
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
 });
 
@@ -1167,6 +1234,55 @@ test('revenue code fee catalog visibility audit compares browser evidence with c
         'artifacts' => [
             'screenshots' => [
                 '02-fee-rule-detail' => 'browser/screenshots/02-fee-rule-detail.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($manifest, $artifactStore);
+
+    expect($audited['result'])
+        ->terminal->toBe('passed')
+        ->browser->toBe('passed')
+        ->audit->toBe('passed')
+        ->passed->toBeTrue()
+        ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
+});
+
+test('assessment policy boundary visibility audit compares browser evidence with canonical refused assessment state', function () {
+    Storage::fake('local');
+
+    $user = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('assessment_policy_boundary_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'assessment-policy-boundary-test-002');
+    $runner = app(AssessmentPolicyBoundaryVisibilityScenario::class);
+
+    $manifest = $runner->prepare($scenario, 'assessment-policy-boundary-test-002', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+
+    $this
+        ->actingAs($user)
+        ->from(route('staff.permit-applications.assessments.index'))
+        ->post(route('staff.permit-applications.assessments.store', $manifest['resources']['record_id']))
+        ->assertRedirectBackWithErrors(['assessment_policy']);
+
+    $artifactStore->putJson('browser/report.json', [
+        'result' => [
+            'passed' => true,
+        ],
+        'assessment_policy_boundary' => [
+            'application_number' => $manifest['resources']['application_number'],
+            'boundary_visible' => true,
+            'reason_visible' => true,
+            'row_boundary_visible' => true,
+            'not_assessed_visible' => true,
+        ],
+        'checks' => [],
+        'artifacts' => [
+            'screenshots' => [
+                '01-assessment-policy-boundary' => 'browser/screenshots/01-assessment-policy-boundary.png',
             ],
         ],
     ]);

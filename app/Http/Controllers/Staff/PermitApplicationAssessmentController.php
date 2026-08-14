@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Staff;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\RenderAssessmentPdf;
 use App\Enums\UserPermission;
+use App\Exceptions\UnsupportedAssessmentPolicy;
 use App\Http\Controllers\Controller;
 use App\Models\Assessment;
 use App\Models\PermitApplication;
@@ -34,6 +35,7 @@ class PermitApplicationAssessmentController extends Controller
                 'owner_name' => $permitApplication->business->owner->name,
                 'line_count' => $permitApplication->lines->count(),
                 'latest_assessment' => $this->latestAssessmentPayload($permitApplication),
+                'assessment_policy_boundary' => $permitApplication->metadata['assessment_policy_boundary'] ?? null,
             ]);
 
         return Inertia::render('permit-applications/Assessments/Index', [
@@ -48,7 +50,22 @@ class PermitApplicationAssessmentController extends Controller
     {
         Gate::authorize(UserPermission::AssessPermitApplications->value);
 
-        $assessment = $createAssessment->handle($permitApplication, auth()->user());
+        try {
+            $assessment = $createAssessment->handle($permitApplication, auth()->user());
+        } catch (UnsupportedAssessmentPolicy $exception) {
+            $metadata = $permitApplication->metadata ?? [];
+            $metadata['assessment_policy_boundary'] = [
+                'status' => 'blocked',
+                'reason' => $exception->getMessage(),
+                'blocked_at' => now()->toIso8601String(),
+            ];
+
+            $permitApplication->update(['metadata' => $metadata]);
+
+            return back()->withErrors([
+                'assessment_policy' => $exception->getMessage(),
+            ]);
+        }
 
         return to_route('staff.permit-applications.assessments.show', $assessment);
     }

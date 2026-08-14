@@ -326,6 +326,38 @@ final class LifecycleScenarioRegistry
                     ],
                 ],
             ),
+            'assessment_policy_boundary_visibility' => new LifecycleScenarioDefinition(
+                key: 'assessment_policy_boundary_visibility',
+                label: 'Assessment policy boundary visibility',
+                mode: 'assessment_policy_boundary_visibility',
+                risk: 'local transactional',
+                actors: [
+                    'operator' => 'primary_operator',
+                    'recipient' => 'sample_recipient',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'assessment_policy_status' => 'blocked',
+                    'assessment_count' => 0,
+                    'external_calls' => 0,
+                    'irreversible_actions' => false,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
             'storyboard_terminal_state_visibility' => new LifecycleScenarioDefinition(
                 key: 'storyboard_terminal_state_visibility',
                 label: 'Storyboard terminal export visibility',

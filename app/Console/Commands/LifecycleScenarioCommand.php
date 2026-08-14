@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\LifecycleScenarios\AssessmentPolicyBoundaryVisibilityScenario;
 use App\LifecycleScenarios\LifecycleScenarioRegistry;
 use App\LifecycleScenarios\ManualCollectionReceiptVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationCancelledVisibilityScenario;
@@ -30,6 +31,7 @@ class LifecycleScenarioCommand extends Command
     public function handle(
         LifecycleScenarioRegistry $registry,
         ScenarioActorResolver $actorResolver,
+        AssessmentPolicyBoundaryVisibilityScenario $assessmentPolicyBoundaryVisibilityScenario,
         ManualCollectionReceiptVisibilityScenario $manualCollectionReceiptScenario,
         PermitApplicationCancelledVisibilityScenario $permitApplicationCancelledScenario,
         PermitApplicationPendingPaymentVisibilityScenario $permitApplicationPendingPaymentScenario,
@@ -50,6 +52,7 @@ class LifecycleScenarioCommand extends Command
                 $actors = $actorResolver->resolve($scenario);
                 $manifest = match ($scenario->key) {
                     'new_permit_lifecycle_authority_boundary' => $manualCollectionReceiptScenario->prepare($scenario, $runId, $actors, $artifactStore),
+                    'assessment_policy_boundary_visibility' => $assessmentPolicyBoundaryVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'manual_collection_receipt_visibility' => $manualCollectionReceiptScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'permit_application_cancelled_visibility' => $permitApplicationCancelledScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'revenue_code_fee_catalog_visibility' => $revenueCodeFeeCatalogVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
@@ -72,6 +75,7 @@ class LifecycleScenarioCommand extends Command
             if (in_array($phase, ['audit', 'all'], true)) {
                 $manifest = match ($scenario->key) {
                     'new_permit_lifecycle_authority_boundary' => $manualCollectionReceiptScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
+                    'assessment_policy_boundary_visibility' => $assessmentPolicyBoundaryVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'manual_collection_receipt_visibility' => $manualCollectionReceiptScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'permit_application_cancelled_visibility' => $permitApplicationCancelledScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'revenue_code_fee_catalog_visibility' => $revenueCodeFeeCatalogVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
