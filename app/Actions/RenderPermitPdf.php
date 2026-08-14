@@ -7,8 +7,14 @@ use App\Models\PermitApplicationLine;
 
 final class RenderPermitPdf
 {
+    public function __construct(
+        private readonly DescribePermitDocumentConfiguration $documentConfiguration,
+    ) {}
+
     public function handle(PermitApplication $permitApplication): string
     {
+        $documentConfiguration = $this->documentConfiguration->handle();
+
         $permitApplication->loadMissing([
             'business.owner',
             'lines.lineOfBusiness',
@@ -19,7 +25,7 @@ final class RenderPermitPdf
         $document = new SimplePdfDocument(
             "Mayor's Permit Artifact",
             $this->documentCode($permitApplication),
-            'Business Permit and Licensing System',
+            $documentConfiguration['municipality']['system_name'],
             'Permit release, QR verification, signatories, and clearance policy remain unresolved.',
         );
         $page = $document->addPage($this->applicationLabel($permitApplication));
@@ -56,12 +62,13 @@ final class RenderPermitPdf
 
         $y = $this->lines($document, $page, $y, $permitApplication);
         $y = $this->clearances($document, $page, $y, $permitApplication);
+        $y = $this->signatories($document, $page, $y, $documentConfiguration);
 
         $this->section($document, $page, $y, 'Policy Gaps', [
             'Release' => 'Permit issuance and release gating remain unresolved because source Released status precedes clearance completion.',
             'Clearances' => 'Clearance checklist evidence is represented for review only and does not release or issue a permit.',
             'Verification' => 'QR verification route and public verification behavior are not yet implemented.',
-            'Signatories' => 'Official signatories, seal placement, and final municipal layout remain unresolved.',
+            'Signatories' => 'Signatory names and titles may be configured for rendering, but official authority and final municipal layout remain unresolved.',
         ]);
 
         return $document->render();
@@ -72,6 +79,11 @@ final class RenderPermitPdf
      */
     private function section(SimplePdfDocument $document, int $page, float $y, string $title, array $rows): float
     {
+        if ($y < SimplePdfDocument::ContentBottom + 84) {
+            $page = $document->addPage($title.' continued');
+            $y = SimplePdfDocument::ContentTop;
+        }
+
         $document->text($page, strtoupper($title), 42, $y, 9, true);
         $y -= 18;
 
@@ -151,6 +163,31 @@ final class RenderPermitPdf
         $document->wrappedText($page, 'Clearance completion evidence is informational in this artifact. Actual permit release remains blocked until issuance authority, signatories, QR verification, and legacy Released status semantics are resolved.', 54, $y, 470, 8, 10);
 
         return $y - 36;
+    }
+
+    /**
+     * @param  array{
+     *     municipality: array{name: string, province: string, system_name: string},
+     *     permit_signatories: list<array{role: string, name: string, title: string, authority_status: string}>,
+     *     authority_verified: bool,
+     *     policy_note: string
+     * }  $documentConfiguration
+     */
+    private function signatories(SimplePdfDocument $document, int $page, float $y, array $documentConfiguration): float
+    {
+        $rows = [
+            'Municipality' => $documentConfiguration['municipality']['name'].', '.$documentConfiguration['municipality']['province'],
+        ];
+
+        foreach ($documentConfiguration['permit_signatories'] as $signatory) {
+            $rows[$signatory['role']] = $signatory['name'].' - '.$signatory['title'].' ('.$this->label($signatory['authority_status']).')';
+        }
+
+        $rows['Authority status'] = $documentConfiguration['authority_verified']
+            ? 'All configured permit signatories are marked verified in application configuration.'
+            : $documentConfiguration['policy_note'];
+
+        return $this->section($document, $page, $y, 'Document Signatory Configuration', $rows);
     }
 
     private function line(SimplePdfDocument $document, int $page, float $y, PermitApplicationLine $line): void

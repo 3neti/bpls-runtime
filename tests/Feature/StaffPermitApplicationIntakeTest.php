@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\CompletePermitClearance;
+use App\Actions\DescribePermitDocumentConfiguration;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\EnsurePermitApplicationClearances;
 use App\Actions\RenderApplicationFormPdf;
@@ -545,6 +546,21 @@ test('staff users without view permission cannot open application form pdf artif
 });
 
 test('staff users with view permission can open a permit pdf artifact', function () {
+    config()->set('municipality.signatories.permit', [
+        [
+            'role' => 'Municipal Mayor',
+            'name' => 'Hon. Ipil Mayor',
+            'title' => 'Municipal Mayor',
+            'authority_status' => 'unverified',
+        ],
+        [
+            'role' => 'BPLO Officer',
+            'name' => 'Maria BPLO',
+            'title' => 'BPLO Officer',
+            'authority_status' => 'unverified',
+        ],
+    ]);
+
     $user = userWithPermissions([
         UserPermission::AccessStaff,
         UserPermission::ViewPermitApplications,
@@ -575,9 +591,41 @@ test('staff users with view permission can open a permit pdf artifact', function
         ->toContain('Completed')
         ->toContain('Clearance completion evidence is informational')
         ->toContain('Actual permit release remains blocked')
+        ->toContain('DOCUMENT SIGNATORY CONFIGURATION')
+        ->toContain('Hon. Ipil Mayor')
+        ->toContain('Maria BPLO')
+        ->toContain('Configured signatories are document evidence only')
         ->toContain('Generated permit artifact; this route does not release or issue a permit.')
         ->toContain('QR verification route and public verification behavior are not yet implemented.')
-        ->and(permitPdfPageCount($pdf))->toBe(1);
+        ->and(permitPdfPageCount($pdf))->toBeGreaterThanOrEqual(1);
+});
+
+test('permit document configuration keeps signatory authority explicit', function () {
+    config()->set('municipality.name', 'Municipality of Ipil');
+    config()->set('municipality.province', 'Zamboanga Sibugay');
+    config()->set('municipality.signatories.permit', [
+        [
+            'role' => 'Municipal Mayor',
+            'name' => 'Hon. Ipil Mayor',
+            'title' => 'Municipal Mayor',
+            'authority_status' => 'verified',
+        ],
+        [
+            'role' => 'BPLO Officer',
+            'name' => 'Maria BPLO',
+            'title' => 'BPLO Officer',
+            'authority_status' => 'unverified',
+        ],
+    ]);
+
+    $configuration = app(DescribePermitDocumentConfiguration::class)->handle();
+
+    expect($configuration['municipality']['name'])->toBe('Municipality of Ipil')
+        ->and($configuration['municipality']['province'])->toBe('Zamboanga Sibugay')
+        ->and($configuration['authority_verified'])->toBeFalse()
+        ->and($configuration['permit_signatories'][0]['name'])->toBe('Hon. Ipil Mayor')
+        ->and($configuration['permit_signatories'][1]['authority_status'])->toBe('unverified')
+        ->and($configuration['policy_note'])->toContain('do not authorize permit release');
 });
 
 test('permit pdf output is deterministic for the same persisted permit facts', function () {
