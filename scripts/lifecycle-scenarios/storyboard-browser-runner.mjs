@@ -59,6 +59,7 @@ const documentEvidence = {};
 const assessmentEvidence = {};
 const assessmentPolicyBoundaryEvidence = {};
 const onlinePaymentBoundaryEvidence = {};
+const paymentPolicyBoundaryEvidence = {};
 const reportEvidence = {};
 const renewalPolicyEvidence = {};
 const amendmentPolicyEvidence = {};
@@ -187,6 +188,7 @@ const report = {
     documents: documentEvidence,
     assessment: assessmentEvidence,
     assessment_policy_boundary: assessmentPolicyBoundaryEvidence,
+    payment_policy_boundary: paymentPolicyBoundaryEvidence,
     online_payment_boundary: onlinePaymentBoundaryEvidence,
     reports: reportEvidence,
     renewal_policy: renewalPolicyEvidence,
@@ -1257,6 +1259,25 @@ async function inspectPendingPaymentScheduleDetail(targetPage, targetBaseUrl) {
         .first()
         .isVisible()
         .catch(() => false);
+    const paymentPolicyBoundaryVisible = await targetPage
+        .getByText('Payment policy boundary', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const surchargeVisible = await targetPage
+        .getByText('late-payment surcharge trigger date and base amount', {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const pilVisible = await targetPage
+        .getByText('PIL validation threshold and refusal workflow', {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
 
     checks.push(
         check(
@@ -1286,6 +1307,19 @@ async function inspectPendingPaymentScheduleDetail(targetPage, targetBaseUrl) {
                     manifest.resources.assessment_total_amount_cents,
             },
         ),
+    );
+    checks.push(
+        check(
+            'payment-schedule-policy-boundary-visible',
+            'Payment schedule detail shows surcharge, interest, PIL, and deficiency boundary',
+            true,
+            paymentPolicyBoundaryVisible && surchargeVisible && pilVisible,
+        ),
+    );
+    reportPaymentPolicyBoundary(
+        paymentPolicyBoundaryVisible ? 'policy_boundary' : 'missing',
+        surchargeVisible,
+        pilVisible,
     );
     await screenshot(
         targetPage,
@@ -3050,6 +3084,16 @@ function reportOnlinePaymentBoundary(status, unresolvedVisible) {
     onlinePaymentBoundaryEvidence.can_pay_online = false;
     onlinePaymentBoundaryEvidence.can_reconcile_online = false;
     onlinePaymentBoundaryEvidence.unresolved_visible = unresolvedVisible;
+}
+
+function reportPaymentPolicyBoundary(status, surchargeVisible, pilVisible) {
+    paymentPolicyBoundaryEvidence.status = status;
+    paymentPolicyBoundaryEvidence.can_calculate_surcharge = false;
+    paymentPolicyBoundaryEvidence.can_calculate_interest = false;
+    paymentPolicyBoundaryEvidence.can_validate_pil = false;
+    paymentPolicyBoundaryEvidence.can_calculate_deficiency_tax = false;
+    paymentPolicyBoundaryEvidence.surcharge_visible = surchargeVisible;
+    paymentPolicyBoundaryEvidence.pil_visible = pilVisible;
 }
 
 function reportDailyCollection(

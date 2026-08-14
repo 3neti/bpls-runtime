@@ -30,6 +30,21 @@ use App\Models\User;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 
+function paymentPolicyBoundaryBrowserReport(): array
+{
+    return [
+        'payment_policy_boundary' => [
+            'status' => 'policy_boundary',
+            'can_calculate_surcharge' => false,
+            'can_calculate_interest' => false,
+            'can_validate_pil' => false,
+            'can_calculate_deficiency_tax' => false,
+            'surcharge_visible' => true,
+            'pil_visible' => true,
+        ],
+    ];
+}
+
 test('scenario registry discovers the storyboard terminal visibility scenario', function () {
     $scenario = app(LifecycleScenarioRegistry::class)->get('storyboard_terminal_state_visibility');
 
@@ -865,6 +880,7 @@ test('permit application pending payment scenario audit compares browser evidenc
         'result' => [
             'passed' => true,
         ],
+        ...paymentPolicyBoundaryBrowserReport(),
         'assessment' => [
             'range_line' => [
                 'code' => $manifest['resources']['range_fee_rule_code'],
@@ -937,6 +953,7 @@ test('renewal permit lifecycle foundation audit compares browser policy evidence
             'status' => 'policy_boundary',
             'unresolved_visible' => true,
         ],
+        ...paymentPolicyBoundaryBrowserReport(),
         'assessment' => [
             'range_line' => [
                 'code' => $manifest['resources']['range_fee_rule_code'],
@@ -1009,6 +1026,7 @@ test('amendment permit lifecycle foundation audit compares browser policy eviden
             'status' => 'policy_boundary',
             'unresolved_visible' => true,
         ],
+        ...paymentPolicyBoundaryBrowserReport(),
         'assessment' => [
             'range_line' => [
                 'code' => $manifest['resources']['range_fee_rule_code'],
@@ -1081,6 +1099,7 @@ test('transfer permit lifecycle foundation audit compares browser policy evidenc
             'status' => 'policy_boundary',
             'unresolved_visible' => true,
         ],
+        ...paymentPolicyBoundaryBrowserReport(),
         'assessment' => [
             'range_line' => [
                 'code' => $manifest['resources']['range_fee_rule_code'],
@@ -1153,6 +1172,7 @@ test('retirement permit lifecycle foundation audit compares browser policy evide
             'status' => 'policy_boundary',
             'unresolved_visible' => true,
         ],
+        ...paymentPolicyBoundaryBrowserReport(),
         'assessment' => [
             'range_line' => [
                 'code' => $manifest['resources']['range_fee_rule_code'],

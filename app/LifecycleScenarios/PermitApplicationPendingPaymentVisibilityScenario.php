@@ -7,6 +7,7 @@ use App\Actions\BuildUnpaidEstablishmentsReport;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\CreateStaffPermitApplication;
+use App\Actions\DescribePaymentPolicyBoundary;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
@@ -31,6 +32,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
         private readonly BuildUnpaidEstablishmentsReport $buildUnpaidEstablishmentsReport,
         private readonly BuildTopEstablishmentsTaxDueReport $buildTopEstablishmentsTaxDueReport,
+        private readonly DescribePaymentPolicyBoundary $describePaymentPolicyBoundary,
         private readonly ScenarioManifest $scenarioManifest,
         private readonly ScenarioSummaryRenderer $summaryRenderer,
     ) {}
@@ -75,6 +77,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         $assessment = $this->createAssessment->handle($permitApplication, $operator);
         $rangeAssessmentLine = $this->rangeAssessmentLine($assessment);
         $paymentSchedule = $this->createPaymentSchedule->handle($assessment, $operator);
+        $paymentPolicyBoundary = $this->describePaymentPolicyBoundary->handle($paymentSchedule);
         $permitApplication = $paymentSchedule->permitApplication()->with(['assessments', 'paymentSchedules'])->firstOrFail();
         $unpaidEstablishmentsReport = $this->buildUnpaidEstablishmentsReport->handle([
             'year' => $permitApplication->application_year,
@@ -103,6 +106,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             $this->step('range-assessment-line-computed', 'Assessment action applied the gross-sales range fee rule', ['calculation_type' => FeeRuleCalculationType::Range->value, 'basis_amount_cents' => 12_500_000, 'amount_cents' => 20_000], ['calculation_type' => $rangeAssessmentLine->calculation_type->value, 'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents, 'assessment_line_id' => $rangeAssessmentLine->id]),
             $this->step('business-tax-assessment-line-computed', 'Assessment action persisted gross-sales business tax meaning', ['category' => FeeRuleCategory::Tax->value, 'basis' => 'declared_gross_sales', 'line_of_business' => $lineOfBusiness->name], ['category' => $rangeAssessmentLine->category->value, 'basis' => $rangeAssessmentLine->basis, 'line_of_business' => $rangeAssessmentLine->lineOfBusiness?->name, 'assessment_line_id' => $rangeAssessmentLine->id]),
             $this->step('payment-schedule-prepared', 'Prepare payment schedule through payment schedule action', ['schedule_status' => PaymentScheduleStatus::Pending->value, 'application_status' => PermitApplicationStatus::PendingPayment->value], ['schedule_status' => $paymentSchedule->status->value, 'application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id]),
+            $this->step('payment-policy-boundary-recorded', 'Expose unresolved surcharge, interest, PIL, and deficiency-tax policy without calculating them', ['payment_policy_status' => 'policy_boundary'], ['payment_policy_status' => $paymentPolicyBoundary['status'], 'blocked_calculation_count' => count($paymentPolicyBoundary['blocked_calculations'])]),
             $this->step('unpaid-establishments-report-row-projected', 'Unpaid establishments report contains the pending permit schedule', ['application_number' => $permitApplication->application_number, 'business_name' => $permitApplication->business->name], ['application_number' => $unpaidEstablishmentRow['application_number'] ?? null, 'business_name' => $unpaidEstablishmentRow['business_name'] ?? null]),
             $this->step('top-tax-due-report-row-projected', 'Top tax due report contains the pending permit assessment tax lines', ['application_number' => $permitApplication->application_number, 'tax_due_cents' => $topTaxDueCents], ['application_number' => $topTaxDueRow['application_number'] ?? null, 'tax_due_cents' => $topTaxDueRow['tax_due_cents'] ?? null]),
         ];
@@ -139,6 +143,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             'business_tax_declared_gross_sales_cents' => $rangeAssessmentLine->basis_amount_cents,
             'business_tax_amount_cents' => $rangeAssessmentLine->amount_cents,
             'payment_schedule_id' => $paymentSchedule->id,
+            'payment_policy_status' => $paymentPolicyBoundary['status'],
             'list_url' => route('staff.permit-applications.index', absolute: false),
             'detail_url' => route('staff.permit-applications.show', $permitApplication, false),
             'payment_schedule_url' => route('staff.payment-schedules.show', $paymentSchedule, false),
@@ -201,6 +206,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             ],
             'payment_schedule_id' => $paymentSchedule->id,
             'payment_schedule_status' => $paymentSchedule->status->value,
+            'payment_policy_boundary' => $paymentPolicyBoundary,
             'unpaid_establishments_report' => [
                 'year' => $unpaidEstablishmentsReport['filters']['year'],
                 'row_count' => $unpaidEstablishmentsReport['summary']['row_count'],
@@ -247,6 +253,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             ->findOrFail($manifest['resources']['assessment_id']);
         $rangeAssessmentLine = $this->rangeAssessmentLine($assessment);
         $paymentSchedule = PaymentSchedule::query()->findOrFail($manifest['resources']['payment_schedule_id']);
+        $paymentPolicyBoundary = $this->describePaymentPolicyBoundary->handle($paymentSchedule);
         $unpaidEstablishmentsReport = $this->buildUnpaidEstablishmentsReport->handle([
             'year' => $permitApplication->application_year,
             'q' => $permitApplication->application_number,
@@ -278,6 +285,8 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             $this->step('audit-business-tax-assessment-line', 'Canonical assessment line remains a gross-sales business tax', ['name' => $manifest['resources']['business_tax_name'], 'category' => FeeRuleCategory::Tax->value, 'line_of_business' => $manifest['resources']['business_tax_line_of_business'], 'declared_gross_sales_cents' => $manifest['resources']['business_tax_declared_gross_sales_cents'], 'amount_cents' => $manifest['resources']['business_tax_amount_cents']], ['name' => $rangeAssessmentLine->name, 'category' => $rangeAssessmentLine->category->value, 'line_of_business' => $rangeAssessmentLine->lineOfBusiness?->name, 'declared_gross_sales_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents]),
             $this->step('audit-browser-business-tax-line', 'Browser evidence shows the same gross-sales business tax meaning', ['name' => $rangeAssessmentLine->name, 'category' => $rangeAssessmentLine->category->value, 'line_of_business' => $rangeAssessmentLine->lineOfBusiness?->name, 'declared_gross_sales_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents], ['name' => data_get($browserReport, 'assessment.business_tax.name'), 'category' => data_get($browserReport, 'assessment.business_tax.category'), 'line_of_business' => data_get($browserReport, 'assessment.business_tax.line_of_business'), 'declared_gross_sales_cents' => data_get($browserReport, 'assessment.business_tax.declared_gross_sales_cents'), 'amount_cents' => data_get($browserReport, 'assessment.business_tax.amount_cents')]),
             $this->step('audit-payment-schedule-status', 'Payment schedule remains pending for collection', ['status' => PaymentScheduleStatus::Pending->value], ['status' => $paymentSchedule->status->value]),
+            $this->step('audit-payment-policy-boundary', 'Canonical payment policy boundary remains explicit', ['payment_policy_status' => 'policy_boundary'], ['payment_policy_status' => $paymentPolicyBoundary['status'], 'blocked_calculation_count' => count($paymentPolicyBoundary['blocked_calculations'])]),
+            $this->step('audit-browser-payment-policy-boundary', 'Browser evidence shows the payment policy boundary', ['payment_policy_status' => 'policy_boundary', 'surcharge_visible' => true, 'pil_visible' => true], ['payment_policy_status' => data_get($browserReport, 'payment_policy_boundary.status'), 'surcharge_visible' => data_get($browserReport, 'payment_policy_boundary.surcharge_visible'), 'pil_visible' => data_get($browserReport, 'payment_policy_boundary.pil_visible')]),
             $this->step('audit-unpaid-establishments-report-row', 'Unpaid establishments report contains the scenario pending permit schedule', ['application_number' => $permitApplication->application_number, 'business_name' => $permitApplication->business->name], ['application_number' => $unpaidEstablishmentRow['application_number'] ?? null, 'business_name' => $unpaidEstablishmentRow['business_name'] ?? null]),
             $this->step('audit-browser-unpaid-establishments-report-row', 'Browser evidence observed the unpaid establishments report row', ['application_number' => $permitApplication->application_number, 'csv_export_visible' => true], ['application_number' => data_get($browserReport, 'reports.unpaid_establishments.application_number'), 'csv_export_visible' => data_get($browserReport, 'reports.unpaid_establishments.csv_export_visible')]),
             $this->step('audit-top-tax-due-report-row', 'Top tax due report contains the scenario pending permit assessment tax lines', ['application_number' => $permitApplication->application_number, 'tax_due_cents' => $manifest['resources']['top_tax_due_cents']], ['application_number' => $topTaxDueRow['application_number'] ?? null, 'tax_due_cents' => $topTaxDueRow['tax_due_cents'] ?? null]),
@@ -331,6 +340,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                 ],
                 'payment_schedule_id' => $paymentSchedule->id,
                 'payment_schedule_status' => $paymentSchedule->status->value,
+                'payment_policy_boundary' => $paymentPolicyBoundary,
                 'unpaid_establishments_report' => [
                     'year' => $unpaidEstablishmentsReport['filters']['year'],
                     'row_count' => $unpaidEstablishmentsReport['summary']['row_count'],

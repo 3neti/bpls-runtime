@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Staff;
 
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\DescribeOnlinePaymentBoundary;
+use App\Actions\DescribePaymentPolicyBoundary;
 use App\Enums\PaymentScheduleStatus;
 use App\Enums\TreasuryCollectionMethod;
 use App\Enums\UserPermission;
@@ -20,7 +21,10 @@ use Inertia\Response;
 
 class AssessmentPaymentScheduleController extends Controller
 {
-    public function __construct(private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary) {}
+    public function __construct(
+        private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
+        private readonly DescribePaymentPolicyBoundary $describePaymentPolicyBoundary,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -238,6 +242,7 @@ class AssessmentPaymentScheduleController extends Controller
                             'amount_cents' => $allocation->amount_cents,
                         ]),
                 ]),
+            'payment_policy_boundary' => $this->describePaymentPolicyBoundary->handle($paymentSchedule),
             'online_payment_boundary' => $this->describeOnlinePaymentBoundary->handle($paymentSchedule),
         ];
     }

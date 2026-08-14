@@ -128,7 +128,16 @@ class CreatePaymentScheduleForAssessment
             'policy' => [
                 'payment_mode' => 'single',
                 'due_on' => null,
-                'note' => 'Prepared as a full-assessment schedule. Installment, due-date, receipt, and reconciliation policy remain explicit later decisions.',
+                'unresolved_boundaries' => [
+                    'installment_due_date_policy',
+                    'surcharge_policy',
+                    'interest_policy',
+                    'presumptive_income_level_policy',
+                    'deficiency_tax_policy',
+                    'receipt_policy',
+                    'reconciliation_policy',
+                ],
+                'note' => 'Prepared as a full-assessment schedule. Installment, due-date, surcharge, interest, PIL, deficiency tax, receipt, and reconciliation policy remain explicit later decisions.',
             ],
         ];
     }

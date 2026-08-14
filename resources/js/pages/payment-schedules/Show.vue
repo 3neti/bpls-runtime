@@ -54,7 +54,28 @@ type PaymentSchedule = {
     };
     lines: PaymentScheduleLine[];
     collections: TreasuryCollection[];
+    payment_policy_boundary: PaymentPolicyBoundary;
     online_payment_boundary: OnlinePaymentBoundary;
+};
+
+type PaymentPolicyBoundary = {
+    status: string;
+    can_calculate_surcharge: boolean;
+    can_calculate_interest: boolean;
+    can_validate_pil: boolean;
+    can_calculate_deficiency_tax: boolean;
+    payment_schedule_id: number;
+    payment_schedule_status: string;
+    blocked_calculations: string[];
+    software_knows: {
+        payment_schedule_exists: boolean;
+        assessment_snapshot_total_cents: number;
+        paid_amount_cents: number;
+        balance_due_cents: number;
+        assessment_lines_are_snapshotted: boolean;
+    };
+    unresolved_policy: string[];
+    artifact_statement: string;
 };
 
 type OnlinePaymentBoundary = {
@@ -318,6 +339,113 @@ function label(value: string): string {
                         </Button>
                     </div>
                 </Form>
+            </section>
+
+            <section
+                class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+            >
+                <div class="mb-4 flex items-center gap-2">
+                    <Banknote class="size-4 text-muted-foreground" />
+                    <div>
+                        <h2 class="text-sm font-semibold text-foreground">
+                            Payment policy boundary
+                        </h2>
+                        <p class="text-xs text-muted-foreground">
+                            Surcharge, interest, PIL, and deficiency-tax behavior
+                            remain unresolved policy.
+                        </p>
+                    </div>
+                </div>
+                <dl class="grid gap-3 text-sm md:grid-cols-4">
+                    <div>
+                        <dt class="text-xs text-muted-foreground">Status</dt>
+                        <dd class="capitalize">
+                            {{
+                                paymentSchedule.payment_policy_boundary.status.replace(
+                                    '_',
+                                    ' ',
+                                )
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Surcharge
+                        </dt>
+                        <dd>
+                            {{
+                                paymentSchedule.payment_policy_boundary
+                                    .can_calculate_surcharge
+                                    ? 'Calculated'
+                                    : 'Policy boundary'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">Interest</dt>
+                        <dd>
+                            {{
+                                paymentSchedule.payment_policy_boundary
+                                    .can_calculate_interest
+                                    ? 'Calculated'
+                                    : 'Policy boundary'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            PIL / deficiency
+                        </dt>
+                        <dd>
+                            {{
+                                paymentSchedule.payment_policy_boundary
+                                    .can_validate_pil ||
+                                paymentSchedule.payment_policy_boundary
+                                    .can_calculate_deficiency_tax
+                                    ? 'Active'
+                                    : 'Policy boundary'
+                            }}
+                        </dd>
+                    </div>
+                    <div class="md:col-span-2">
+                        <dt class="text-xs text-muted-foreground">
+                            Blocked calculations
+                        </dt>
+                        <dd class="mt-2 flex flex-wrap gap-2">
+                            <Badge
+                                v-for="calculation in paymentSchedule
+                                    .payment_policy_boundary.blocked_calculations"
+                                :key="calculation"
+                                variant="secondary"
+                                class="capitalize"
+                            >
+                                {{ label(calculation) }}
+                            </Badge>
+                        </dd>
+                    </div>
+                    <div class="md:col-span-2">
+                        <dt class="text-xs text-muted-foreground">
+                            Unresolved payment policy
+                        </dt>
+                        <dd class="mt-2">
+                            <ul class="grid gap-1">
+                                <li
+                                    v-for="gap in paymentSchedule
+                                        .payment_policy_boundary.unresolved_policy"
+                                    :key="gap"
+                                >
+                                    {{ gap }}
+                                </li>
+                            </ul>
+                        </dd>
+                    </div>
+                </dl>
+                <p class="mt-3 text-sm text-muted-foreground">
+                    {{
+                        paymentSchedule.payment_policy_boundary
+                            .artifact_statement
+                    }}
+                </p>
             </section>
 
             <section
