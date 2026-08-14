@@ -376,6 +376,13 @@ test('permit application pending payment scenario executes assessment and paymen
     expect($firstManifest['resources']['record_type'])->toBe('permit_application')
         ->and($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
         ->and($firstManifest['resources']['payment_schedule_id'])->toBe($secondManifest['resources']['payment_schedule_id'])
+        ->and($firstManifest['resources']['assessment_url'])->toBe('/staff/assessments/'.$firstManifest['resources']['assessment_id'])
+        ->and($firstManifest['resources']['assessment_total_amount_cents'])->toBe(30_000)
+        ->and($firstManifest['resources']['range_fee_rule_code'])->toBe('SCENARIO-BUSINESS-TAX')
+        ->and($firstManifest['resources']['range_calculation_type'])->toBe('range')
+        ->and($firstManifest['resources']['range_basis'])->toBe('declared_gross_sales')
+        ->and($firstManifest['resources']['range_basis_amount_cents'])->toBe(12_500_000)
+        ->and($firstManifest['resources']['range_amount_cents'])->toBe(20_000)
         ->and(PermitApplication::query()->count())->toBe(1)
         ->and($application->status)->toBe(PermitApplicationStatus::PendingPayment)
         ->and($application->paymentSchedules()->count())->toBe(1)
@@ -398,6 +405,15 @@ test('permit application pending payment scenario audit compares browser evidenc
     $artifactStore->putJson('browser/report.json', [
         'result' => [
             'passed' => true,
+        ],
+        'assessment' => [
+            'range_line' => [
+                'code' => $manifest['resources']['range_fee_rule_code'],
+                'calculation_type' => $manifest['resources']['range_calculation_type'],
+                'basis' => $manifest['resources']['range_basis'],
+                'basis_amount_cents' => $manifest['resources']['range_basis_amount_cents'],
+                'amount_cents' => $manifest['resources']['range_amount_cents'],
+            ],
         ],
         'checks' => [],
         'artifacts' => [

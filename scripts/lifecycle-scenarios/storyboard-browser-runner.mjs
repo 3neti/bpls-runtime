@@ -48,6 +48,7 @@ const screenshots = {};
 const verificationEvidence = {};
 const receiptVoidBoundaryEvidence = {};
 const documentEvidence = {};
+const assessmentEvidence = {};
 
 let browser;
 
@@ -95,6 +96,7 @@ try {
     ) {
         await inspectPendingPaymentPermitApplicationList(page, baseUrl);
         await inspectPendingPaymentPermitApplicationDetail(page, baseUrl);
+        await inspectPendingPaymentAssessmentDetail(page, baseUrl);
         await inspectPendingPaymentScheduleDetail(page, baseUrl);
         await inspectPendingPaymentPermitApplicationMobile(page, baseUrl);
     }
@@ -141,6 +143,7 @@ const report = {
     verification: verificationEvidence,
     receipt_void_boundary: receiptVoidBoundaryEvidence,
     documents: documentEvidence,
+    assessment: assessmentEvidence,
     artifacts: {
         screenshots,
     },
@@ -654,6 +657,88 @@ async function inspectPendingPaymentPermitApplicationDetail(
     );
 }
 
+async function inspectPendingPaymentAssessmentDetail(
+    targetPage,
+    targetBaseUrl,
+) {
+    const assessmentUrl = `${targetBaseUrl}${manifest.resources.assessment_url}`;
+    await targetPage.goto(assessmentUrl, { waitUntil: 'networkidle' });
+    const codeVisible = await targetPage
+        .getByText(manifest.resources.range_fee_rule_code, { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const rangeVisible = await targetPage
+        .getByText('range', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const basisVisible = await targetPage
+        .getByText('declared gross sales', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const basisAmountVisible = await targetPage
+        .getByText(
+            uiMoneyFromCents(manifest.resources.range_basis_amount_cents),
+            {
+                exact: false,
+            },
+        )
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const amountVisible = await targetPage
+        .getByText(uiMoneyFromCents(manifest.resources.range_amount_cents), {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'assessment-range-code-visible',
+            'Assessment page shows exact range fee rule code',
+            true,
+            codeVisible,
+            {
+                url: assessmentUrl,
+                assessment_id: manifest.resources.assessment_id,
+                assessment_line_id: manifest.resources.range_assessment_line_id,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'assessment-range-basis-visible',
+            'Assessment page shows range calculation and gross-sales basis',
+            true,
+            rangeVisible && basisVisible && basisAmountVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'assessment-range-amount-visible',
+            'Assessment page shows persisted range amount',
+            true,
+            amountVisible,
+        ),
+    );
+    reportAssessmentRange(
+        manifest.resources.range_fee_rule_code,
+        manifest.resources.range_calculation_type,
+        manifest.resources.range_basis,
+        manifest.resources.range_basis_amount_cents,
+        manifest.resources.range_amount_cents,
+    );
+    await screenshot(
+        targetPage,
+        '03-assessment',
+        'browser/screenshots/03-assessment.png',
+    );
+}
+
 async function inspectPendingPaymentScheduleDetail(targetPage, targetBaseUrl) {
     const scheduleUrl = `${targetBaseUrl}${manifest.resources.payment_schedule_url}`;
     await targetPage.goto(scheduleUrl, { waitUntil: 'networkidle' });
@@ -668,7 +753,12 @@ async function inspectPendingPaymentScheduleDetail(targetPage, targetBaseUrl) {
         .isVisible()
         .catch(() => false);
     const amountVisible = await targetPage
-        .getByText('₱300.00', { exact: false })
+        .getByText(
+            uiMoneyFromCents(manifest.resources.assessment_total_amount_cents),
+            {
+                exact: false,
+            },
+        )
         .first()
         .isVisible()
         .catch(() => false);
@@ -696,12 +786,16 @@ async function inspectPendingPaymentScheduleDetail(targetPage, targetBaseUrl) {
             'Payment schedule detail shows computed amount due',
             true,
             amountVisible,
+            {
+                total_amount_cents:
+                    manifest.resources.assessment_total_amount_cents,
+            },
         ),
     );
     await screenshot(
         targetPage,
-        '03-payment-schedule',
-        'browser/screenshots/03-payment-schedule.png',
+        '04-payment-schedule',
+        'browser/screenshots/04-payment-schedule.png',
     );
 }
 
@@ -755,8 +849,8 @@ async function inspectPendingPaymentPermitApplicationMobile(
     );
     await screenshot(
         targetPage,
-        '04-mobile-detail',
-        'browser/screenshots/04-mobile-detail.png',
+        '05-mobile-detail',
+        'browser/screenshots/05-mobile-detail.png',
     );
 }
 
@@ -1800,8 +1894,31 @@ function reportAssessmentPdf(
     };
 }
 
+function reportAssessmentRange(
+    code,
+    calculationType,
+    basis,
+    basisAmountCents,
+    amountCents,
+) {
+    assessmentEvidence.range_line = {
+        code,
+        calculation_type: calculationType,
+        basis,
+        basis_amount_cents: basisAmountCents,
+        amount_cents: amountCents,
+    };
+}
+
 function moneyFromCents(amountCents) {
     return `PHP ${Number(amountCents / 100).toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })}`;
+}
+
+function uiMoneyFromCents(amountCents) {
+    return `₱${Number(amountCents / 100).toLocaleString('en-US', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     })}`;

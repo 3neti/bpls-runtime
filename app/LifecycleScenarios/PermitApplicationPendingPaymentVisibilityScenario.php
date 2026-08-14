@@ -12,7 +12,9 @@ use App\Enums\PaymentScheduleStatus;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
 use App\Models\Assessment;
+use App\Models\AssessmentLine;
 use App\Models\FeeRule;
+use App\Models\FeeRuleRange;
 use App\Models\LineOfBusiness;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
@@ -66,6 +68,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         ], $operator);
 
         $assessment = $this->createAssessment->handle($permitApplication, $operator);
+        $rangeAssessmentLine = $this->rangeAssessmentLine($assessment);
         $paymentSchedule = $this->createPaymentSchedule->handle($assessment, $operator);
         $permitApplication = $paymentSchedule->permitApplication()->with(['assessments', 'paymentSchedules'])->firstOrFail();
 
@@ -73,6 +76,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             $this->step('actors-resolved', 'Resolve actual application users', ['operator_id' => $operator->id], ['operator_id' => $operator->id]),
             $this->step('permit-application-created', 'Create permit application through staff intake action', ['status' => PermitApplicationStatus::Draft->value], ['status' => PermitApplicationStatus::Draft->value, 'permit_application_id' => $permitApplication->id]),
             $this->step('assessment-computed', 'Compute assessment through assessment action', ['assessment_status' => 'computed'], ['assessment_status' => $assessment->status->value, 'assessment_id' => $assessment->id]),
+            $this->step('range-assessment-line-computed', 'Assessment action applied the gross-sales range fee rule', ['calculation_type' => FeeRuleCalculationType::Range->value, 'basis_amount_cents' => 12_500_000, 'amount_cents' => 20_000], ['calculation_type' => $rangeAssessmentLine->calculation_type->value, 'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents, 'assessment_line_id' => $rangeAssessmentLine->id]),
             $this->step('payment-schedule-prepared', 'Prepare payment schedule through payment schedule action', ['schedule_status' => PaymentScheduleStatus::Pending->value, 'application_status' => PermitApplicationStatus::PendingPayment->value], ['schedule_status' => $paymentSchedule->status->value, 'application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id]),
         ];
 
@@ -85,6 +89,14 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             'record_id' => $permitApplication->id,
             'public_reference' => $permitApplication->application_number,
             'assessment_id' => $assessment->id,
+            'assessment_url' => route('staff.permit-applications.assessments.show', $assessment, false),
+            'assessment_total_amount_cents' => $assessment->total_amount_cents,
+            'range_assessment_line_id' => $rangeAssessmentLine->id,
+            'range_fee_rule_code' => $rangeAssessmentLine->code,
+            'range_calculation_type' => $rangeAssessmentLine->calculation_type->value,
+            'range_basis' => $rangeAssessmentLine->basis,
+            'range_basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents,
+            'range_amount_cents' => $rangeAssessmentLine->amount_cents,
             'payment_schedule_id' => $paymentSchedule->id,
             'list_url' => route('staff.permit-applications.index', absolute: false),
             'detail_url' => route('staff.permit-applications.show', $permitApplication, false),
@@ -102,6 +114,16 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             'application_number' => $permitApplication->application_number,
             'status' => $permitApplication->status->value,
             'assessment_id' => $assessment->id,
+            'assessment_total_amount_cents' => $assessment->total_amount_cents,
+            'range_assessment_line' => [
+                'id' => $rangeAssessmentLine->id,
+                'code' => $rangeAssessmentLine->code,
+                'calculation_type' => $rangeAssessmentLine->calculation_type->value,
+                'basis' => $rangeAssessmentLine->basis,
+                'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents,
+                'amount_cents' => $rangeAssessmentLine->amount_cents,
+                'rule_snapshot' => $rangeAssessmentLine->rule_snapshot,
+            ],
             'payment_schedule_id' => $paymentSchedule->id,
             'payment_schedule_status' => $paymentSchedule->status->value,
             'run_id' => $runId,
@@ -129,6 +151,10 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         $permitApplication = PermitApplication::query()
             ->with(['paymentSchedules', 'assessments'])
             ->findOrFail($manifest['resources']['record_id']);
+        $assessment = Assessment::query()
+            ->with('lines')
+            ->findOrFail($manifest['resources']['assessment_id']);
+        $rangeAssessmentLine = $this->rangeAssessmentLine($assessment);
         $paymentSchedule = PaymentSchedule::query()->findOrFail($manifest['resources']['payment_schedule_id']);
         $browserReport = $artifactStore->readJson('browser/report.json') ?? [
             'result' => [
@@ -139,6 +165,8 @@ final class PermitApplicationPendingPaymentVisibilityScenario
 
         $checks = [
             $this->step('audit-canonical-status', 'Canonical permit application status is pending payment', ['status' => PermitApplicationStatus::PendingPayment->value], ['status' => $permitApplication->status->value]),
+            $this->step('audit-range-assessment-line', 'Canonical assessment line remains the computed gross-sales range line', ['calculation_type' => FeeRuleCalculationType::Range->value, 'basis_amount_cents' => $manifest['resources']['range_basis_amount_cents'], 'amount_cents' => $manifest['resources']['range_amount_cents']], ['calculation_type' => $rangeAssessmentLine->calculation_type->value, 'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents, 'assessment_line_id' => $rangeAssessmentLine->id]),
+            $this->step('audit-browser-range-assessment-line', 'Browser evidence shows the same gross-sales range assessment line', ['code' => $rangeAssessmentLine->code, 'calculation_type' => $rangeAssessmentLine->calculation_type->value, 'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents], ['code' => data_get($browserReport, 'assessment.range_line.code'), 'calculation_type' => data_get($browserReport, 'assessment.range_line.calculation_type'), 'basis_amount_cents' => data_get($browserReport, 'assessment.range_line.basis_amount_cents'), 'amount_cents' => data_get($browserReport, 'assessment.range_line.amount_cents')]),
             $this->step('audit-payment-schedule-status', 'Payment schedule remains pending for collection', ['status' => PaymentScheduleStatus::Pending->value], ['status' => $paymentSchedule->status->value]),
             $this->step('audit-browser-result', 'Browser evidence runner passed', ['browser' => true], ['browser' => (bool) data_get($browserReport, 'result.passed')]),
         ];
@@ -164,6 +192,14 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                 'application_number' => $permitApplication->application_number,
                 'status' => $permitApplication->status->value,
                 'assessment_id' => $manifest['resources']['assessment_id'],
+                'range_assessment_line' => [
+                    'id' => $rangeAssessmentLine->id,
+                    'code' => $rangeAssessmentLine->code,
+                    'calculation_type' => $rangeAssessmentLine->calculation_type->value,
+                    'basis' => $rangeAssessmentLine->basis,
+                    'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents,
+                    'amount_cents' => $rangeAssessmentLine->amount_cents,
+                ],
                 'payment_schedule_id' => $paymentSchedule->id,
                 'payment_schedule_status' => $paymentSchedule->status->value,
                 'status_history' => $permitApplication->metadata['status_history'] ?? [],
@@ -190,7 +226,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
 
     private function feeRules(LineOfBusiness $lineOfBusiness): void
     {
-        FeeRule::query()->firstOrCreate(
+        FeeRule::query()->updateOrCreate(
             ['code' => 'SCENARIO-APPLICATION-FEE'],
             [
                 'name' => 'Scenario Application Fee',
@@ -204,20 +240,47 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             ],
         );
 
-        FeeRule::query()->firstOrCreate(
+        $businessTaxRule = FeeRule::query()->updateOrCreate(
             ['code' => 'SCENARIO-BUSINESS-TAX'],
             [
                 'line_of_business_id' => $lineOfBusiness->id,
                 'name' => 'Scenario Business Tax',
                 'category' => FeeRuleCategory::Tax,
                 'scope' => FeeRuleScope::LineOfBusiness,
-                'calculation_type' => FeeRuleCalculationType::Fixed,
+                'calculation_type' => FeeRuleCalculationType::Range,
                 'basis' => 'declared_gross_sales',
-                'amount_cents' => 20_000,
+                'amount_cents' => 0,
+                'rate_basis_points' => null,
                 'effective_from' => now()->startOfYear(),
                 'is_active' => true,
             ],
         );
+
+        FeeRuleRange::query()->updateOrCreate(
+            [
+                'fee_rule_id' => $businessTaxRule->id,
+                'min_basis_cents' => 10_000_000,
+                'max_basis_cents' => 20_000_000,
+            ],
+            [
+                'amount_cents' => 20_000,
+                'rate_basis_points' => null,
+            ],
+        );
+    }
+
+    private function rangeAssessmentLine(Assessment $assessment): AssessmentLine
+    {
+        $assessment->loadMissing('lines');
+
+        $line = $assessment->lines
+            ->first(fn (AssessmentLine $assessmentLine): bool => $assessmentLine->calculation_type === FeeRuleCalculationType::Range);
+
+        if (! $line instanceof AssessmentLine) {
+            throw new RuntimeException('Scenario assessment did not produce a range-based assessment line.');
+        }
+
+        return $line;
     }
 
     /**
