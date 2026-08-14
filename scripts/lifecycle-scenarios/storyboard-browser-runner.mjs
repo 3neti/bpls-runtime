@@ -47,6 +47,7 @@ const checks = [];
 const screenshots = {};
 const verificationEvidence = {};
 const receiptVoidBoundaryEvidence = {};
+const documentEvidence = {};
 
 let browser;
 
@@ -139,6 +140,7 @@ const report = {
     failed_requests: failedRequests,
     verification: verificationEvidence,
     receipt_void_boundary: receiptVoidBoundaryEvidence,
+    documents: documentEvidence,
     artifacts: {
         screenshots,
     },
@@ -1451,6 +1453,44 @@ async function inspectManualReceiptPermitVerificationBoundary(
         ),
     );
 
+    const applicationFormPdfResponse = await targetPage.request.get(
+        `${targetBaseUrl}${manifest.resources.application_form_pdf_url}`,
+    );
+    const applicationFormPdfContentType =
+        applicationFormPdfResponse.headers()['content-type'] ?? '';
+    const applicationFormPdfBody = await applicationFormPdfResponse.text();
+    const applicationFormPdfVisible =
+        applicationFormPdfResponse.ok() &&
+        applicationFormPdfContentType.includes('application/pdf') &&
+        applicationFormPdfBody.startsWith('%PDF-1.4') &&
+        applicationFormPdfBody.includes('Business Application Form Artifact') &&
+        applicationFormPdfBody.includes(
+            manifest.resources.application_number,
+        ) &&
+        applicationFormPdfBody.includes(
+            'Application form artifact renders currently captured intake facts',
+        );
+    checks.push(
+        check(
+            'application-form-pdf-intake-facts-visible',
+            'Application form PDF contains exact prepared intake facts',
+            true,
+            applicationFormPdfVisible,
+            {
+                url: `${targetBaseUrl}${manifest.resources.application_form_pdf_url}`,
+                status: applicationFormPdfResponse.status(),
+                content_type: applicationFormPdfContentType,
+                application_number: manifest.resources.application_number,
+            },
+        ),
+    );
+    reportApplicationFormPdf(
+        applicationFormPdfVisible,
+        manifest.resources.application_number,
+        applicationFormPdfResponse.status(),
+        applicationFormPdfContentType,
+    );
+
     const permitPdfResponse = await targetPage.request.get(
         `${targetBaseUrl}${manifest.resources.permit_pdf_url}`,
     );
@@ -1687,6 +1727,20 @@ function reportReceiptVoidBoundary(
     receiptVoidBoundaryEvidence.can_void = canVoid;
     receiptVoidBoundaryEvidence.receipt_status = receiptStatus;
     receiptVoidBoundaryEvidence.collection_status = collectionStatus;
+}
+
+function reportApplicationFormPdf(
+    available,
+    applicationNumber,
+    status,
+    contentType,
+) {
+    documentEvidence.application_form = {
+        available,
+        application_number: applicationNumber,
+        status,
+        content_type: contentType,
+    };
 }
 
 async function hasTitleInputValue(targetPage) {

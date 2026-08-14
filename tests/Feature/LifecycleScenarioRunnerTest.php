@@ -230,6 +230,7 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($firstManifest['resources']['payment_schedule_queue_url'])->toContain('status=paid')
         ->and($firstManifest['resources']['receipt_queue_url'])->toContain('q=SCENARIO-OR-MANUAL-RECEIPT-TEST-001')
         ->and($firstManifest['resources']['receipt_queue_url'])->toContain('status=issued')
+        ->and($firstManifest['resources']['application_form_pdf_url'])->toBe('/staff/permit-applications/'.$firstManifest['resources']['permit_application_id'].'/application-form.pdf')
         ->and($firstManifest['resources']['permit_verification_reference'])->toStartWith('PVA-'.$firstManifest['resources']['permit_application_id'].'-')
         ->and($firstManifest['resources']['permit_verification_url'])->toContain($firstManifest['resources']['permit_verification_reference'])
         ->and($firstManifest['resources']['receipt_void_boundary_reference'])->toStartWith('RVB-'.$firstManifest['resources']['record_id'].'-')
@@ -277,6 +278,14 @@ test('manual collection receipt scenario audit compares browser evidence with ca
             'public_status' => 'artifact_only',
             'can_verify_release' => false,
             'released' => false,
+        ],
+        'documents' => [
+            'application_form' => [
+                'available' => true,
+                'application_number' => $manifest['resources']['application_number'],
+                'status' => 200,
+                'content_type' => 'application/pdf',
+            ],
         ],
         'checks' => [],
         'artifacts' => [
