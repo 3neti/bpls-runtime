@@ -86,6 +86,13 @@ type PermitApplication = {
         unresolved_policy: string[];
         artifact_statement: string;
     } | null;
+    amendment_policy_boundary: {
+        status: string;
+        application_type: string;
+        software_knows: Record<string, boolean>;
+        unresolved_policy: string[];
+        artifact_statement: string;
+    } | null;
     release_policy_boundary: {
         status: string;
         payment_schedule_id: number | null;
@@ -596,6 +603,89 @@ function booleanEntries(
                 <p class="mt-3 text-sm text-muted-foreground">
                     {{
                         permitApplication.renewal_policy_boundary
+                            .artifact_statement
+                    }}
+                </p>
+            </section>
+
+            <section
+                v-if="permitApplication.amendment_policy_boundary"
+                class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+            >
+                <h2 class="mb-3 text-sm font-semibold text-foreground">
+                    Amendment policy boundary
+                </h2>
+                <dl class="grid gap-3 text-sm md:grid-cols-3">
+                    <div>
+                        <dt class="text-xs text-muted-foreground">Status</dt>
+                        <dd class="capitalize">
+                            {{
+                                permitApplication.amendment_policy_boundary.status.replace(
+                                    '_',
+                                    ' ',
+                                )
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Application type
+                        </dt>
+                        <dd class="capitalize">
+                            {{
+                                permitApplication.amendment_policy_boundary.application_type.replace(
+                                    '_',
+                                    ' ',
+                                )
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Policy state
+                        </dt>
+                        <dd>Unresolved</dd>
+                    </div>
+                    <div class="md:col-span-3">
+                        <dt class="text-xs text-muted-foreground">
+                            Software knows
+                        </dt>
+                        <dd class="mt-2 flex flex-wrap gap-2">
+                            <Badge
+                                v-for="entry in booleanEntries(
+                                    permitApplication.amendment_policy_boundary
+                                        .software_knows,
+                                )"
+                                :key="entry.key"
+                                variant="secondary"
+                                class="capitalize"
+                            >
+                                {{ label(entry.key) }}:
+                                {{ entry.value ? 'yes' : 'no' }}
+                            </Badge>
+                        </dd>
+                    </div>
+                    <div class="md:col-span-3">
+                        <dt class="text-xs text-muted-foreground">
+                            Unresolved amendment policy
+                        </dt>
+                        <dd class="mt-2">
+                            <ul class="grid gap-1">
+                                <li
+                                    v-for="gap in permitApplication
+                                        .amendment_policy_boundary
+                                        .unresolved_policy"
+                                    :key="gap"
+                                >
+                                    {{ gap }}
+                                </li>
+                            </ul>
+                        </dd>
+                    </div>
+                </dl>
+                <p class="mt-3 text-sm text-muted-foreground">
+                    {{
+                        permitApplication.amendment_policy_boundary
                             .artifact_statement
                     }}
                 </p>

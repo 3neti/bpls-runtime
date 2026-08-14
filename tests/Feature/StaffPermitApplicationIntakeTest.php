@@ -181,6 +181,52 @@ test('staff users can record a renewal application with explicit renewal policy 
         );
 });
 
+test('staff users can record an amendment application with explicit amendment policy boundary', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::CreatePermitApplications,
+        UserPermission::ViewPermitApplications,
+    ]);
+
+    $lineOfBusiness = LineOfBusiness::factory()->create([
+        'name' => 'Amendment Retail',
+        'code' => 'AMENDMENT-RETAIL',
+    ]);
+
+    $response = $this->actingAs($user)
+        ->post(route('staff.permit-applications.store'), [
+            'owner_name' => 'Amendment Owner',
+            'business_name' => 'Amendment Trading',
+            'application_number' => 'APP-AMENDMENT-2026-0001',
+            'type' => PermitApplicationType::Amendment->value,
+            'application_year' => 2026,
+            'line_of_business_id' => $lineOfBusiness->id,
+            'declared_gross_sales_pesos' => '125000.00',
+            'capital_investment_pesos' => '75000.00',
+            'quantity' => 1,
+        ]);
+
+    $application = PermitApplication::query()
+        ->where('application_number', 'APP-AMENDMENT-2026-0001')
+        ->sole();
+
+    $response->assertRedirect(route('staff.permit-applications.show', $application));
+
+    expect($application->type)->toBe(PermitApplicationType::Amendment)
+        ->and($application->metadata['amendment_policy_boundary']['status'])->toBe('policy_boundary')
+        ->and($application->metadata['amendment_policy_boundary']['unresolved_policy'])->toContain('amendment fee and assessment basis');
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.show', $application))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Show')
+            ->where('permitApplication.type', PermitApplicationType::Amendment->value)
+            ->where('permitApplication.amendment_policy_boundary.status', 'policy_boundary')
+            ->where('permitApplication.amendment_policy_boundary.software_knows.amended_fields_are_not_yet_structured', true)
+        );
+});
+
 test('staff users with view permission can review a permit application', function () {
     $user = userWithPermissions([
         UserPermission::AccessStaff,

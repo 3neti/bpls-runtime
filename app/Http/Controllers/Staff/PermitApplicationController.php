@@ -6,6 +6,7 @@ use App\Actions\AttemptPermitApplicationRelease;
 use App\Actions\CancelPermitApplication;
 use App\Actions\CompletePermitClearance;
 use App\Actions\CreateStaffPermitApplication;
+use App\Actions\DescribeAmendmentPolicyBoundary;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\DescribeRenewalPolicyBoundary;
@@ -35,6 +36,7 @@ class PermitApplicationController extends Controller
         private readonly DescribePermitReleaseReadiness $describeReleaseReadiness,
         private readonly DescribePermitVerificationBoundary $describeVerificationBoundary,
         private readonly DescribeRenewalPolicyBoundary $describeRenewalPolicyBoundary,
+        private readonly DescribeAmendmentPolicyBoundary $describeAmendmentPolicyBoundary,
     ) {}
 
     public function index(): Response
@@ -233,6 +235,8 @@ class PermitApplicationController extends Controller
             'terminal_state' => $permitApplication->metadata['terminal_state'] ?? null,
             'renewal_policy_boundary' => $permitApplication->metadata['renewal_policy_boundary']
                 ?? $this->describeRenewalPolicyBoundary->handle($permitApplication->type),
+            'amendment_policy_boundary' => $permitApplication->metadata['amendment_policy_boundary']
+                ?? $this->describeAmendmentPolicyBoundary->handle($permitApplication->type),
             'release_policy_boundary' => $permitApplication->metadata['release_policy_boundary'] ?? null,
             'release_readiness' => $this->describeReleaseReadiness->handle($permitApplication),
             'verification_boundary' => $this->describeVerificationBoundary->handle($permitApplication),

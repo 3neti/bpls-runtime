@@ -13,7 +13,10 @@ use Illuminate\Support\Facades\DB;
 
 class CreateStaffPermitApplication
 {
-    public function __construct(private readonly DescribeRenewalPolicyBoundary $describeRenewalPolicyBoundary) {}
+    public function __construct(
+        private readonly DescribeRenewalPolicyBoundary $describeRenewalPolicyBoundary,
+        private readonly DescribeAmendmentPolicyBoundary $describeAmendmentPolicyBoundary,
+    ) {}
 
     /**
      * @param  array{
@@ -85,7 +88,15 @@ class CreateStaffPermitApplication
         $renewalPolicyBoundary = $this->describeRenewalPolicyBoundary->handle($type);
 
         if ($renewalPolicyBoundary === null) {
-            return null;
+            $amendmentPolicyBoundary = $this->describeAmendmentPolicyBoundary->handle($type);
+
+            if ($amendmentPolicyBoundary === null) {
+                return null;
+            }
+
+            return [
+                'amendment_policy_boundary' => $amendmentPolicyBoundary,
+            ];
         }
 
         return [

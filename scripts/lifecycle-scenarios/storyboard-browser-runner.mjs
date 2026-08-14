@@ -25,6 +25,7 @@ const supportedScenarios = [
     'manual_collection_receipt_visibility',
     'storyboard_terminal_state_visibility',
     'permit_application_cancelled_visibility',
+    'amendment_permit_lifecycle_foundation',
     'permit_application_pending_payment_visibility',
     'renewal_permit_lifecycle_foundation',
 ];
@@ -52,6 +53,7 @@ const receiptVoidBoundaryEvidence = {};
 const documentEvidence = {};
 const assessmentEvidence = {};
 const renewalPolicyEvidence = {};
+const amendmentPolicyEvidence = {};
 
 let browser;
 
@@ -95,6 +97,7 @@ try {
 
     if (
         [
+            'amendment_permit_lifecycle_foundation',
             'permit_application_pending_payment_visibility',
             'renewal_permit_lifecycle_foundation',
         ].includes(manifest.scenario.key)
@@ -155,6 +158,7 @@ const report = {
     documents: documentEvidence,
     assessment: assessmentEvidence,
     renewal_policy: renewalPolicyEvidence,
+    amendment_policy: amendmentPolicyEvidence,
     artifacts: {
         screenshots,
     },
@@ -627,6 +631,8 @@ async function inspectPendingPaymentPermitApplicationDetail(
         .first()
         .isVisible()
         .catch(() => false);
+    const amendmentPolicyBoundaryVisible =
+        await amendmentPolicyBoundaryIsVisible(targetPage);
     const renewalPolicyBoundaryVisible =
         await renewalPolicyBoundaryIsVisible(targetPage);
 
@@ -676,6 +682,21 @@ async function inspectPendingPaymentPermitApplicationDetail(
         reportRenewalPolicy(
             renewalPolicyBoundaryVisible ? 'policy_boundary' : 'missing',
             renewalPolicyBoundaryVisible,
+        );
+    }
+
+    if (manifest.resources.application_type === 'amendment') {
+        checks.push(
+            check(
+                'detail-amendment-policy-boundary-visible',
+                'Detail screen shows amendment policy boundary',
+                true,
+                amendmentPolicyBoundaryVisible,
+            ),
+        );
+        reportAmendmentPolicy(
+            amendmentPolicyBoundaryVisible ? 'policy_boundary' : 'missing',
+            amendmentPolicyBoundaryVisible,
         );
     }
 
@@ -886,6 +907,8 @@ async function inspectPendingPaymentPermitApplicationMobile(
         .first()
         .isVisible()
         .catch(() => false);
+    const amendmentPolicyBoundaryVisible =
+        await amendmentPolicyBoundaryIsVisible(targetPage);
     const renewalPolicyBoundaryVisible =
         await renewalPolicyBoundaryIsVisible(targetPage);
     const horizontalOverflow = await targetPage.evaluate(
@@ -918,6 +941,17 @@ async function inspectPendingPaymentPermitApplicationMobile(
                 'Mobile detail keeps renewal policy boundary visible',
                 true,
                 renewalPolicyBoundaryVisible,
+            ),
+        );
+    }
+
+    if (manifest.resources.application_type === 'amendment') {
+        checks.push(
+            check(
+                'mobile-amendment-policy-boundary-visible',
+                'Mobile detail keeps amendment policy boundary visible',
+                true,
+                amendmentPolicyBoundaryVisible,
             ),
         );
     }
@@ -2018,6 +2052,11 @@ function reportRenewalPolicy(status, unresolvedVisible) {
     renewalPolicyEvidence.unresolved_visible = unresolvedVisible;
 }
 
+function reportAmendmentPolicy(status, unresolvedVisible) {
+    amendmentPolicyEvidence.status = status;
+    amendmentPolicyEvidence.unresolved_visible = unresolvedVisible;
+}
+
 function moneyFromCents(amountCents) {
     return `PHP ${Number(amountCents / 100).toLocaleString('en-US', {
         minimumFractionDigits: 2,
@@ -2074,6 +2113,26 @@ async function renewalPolicyBoundaryIsVisible(targetPage) {
         .catch(() => false);
     const policyVisible = await targetPage
         .getByText('PIL applicability and calculation', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    return boundaryVisible && unresolvedVisible && policyVisible;
+}
+
+async function amendmentPolicyBoundaryIsVisible(targetPage) {
+    const boundaryVisible = await targetPage
+        .getByText('Amendment policy boundary', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const unresolvedVisible = await targetPage
+        .getByText('Unresolved amendment policy', { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const policyVisible = await targetPage
+        .getByText('amended-field semantics', { exact: false })
         .first()
         .isVisible()
         .catch(() => false);

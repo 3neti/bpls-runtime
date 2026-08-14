@@ -154,6 +154,41 @@ final class LifecycleScenarioRegistry
                     ],
                 ],
             ),
+            'amendment_permit_lifecycle_foundation' => new LifecycleScenarioDefinition(
+                key: 'amendment_permit_lifecycle_foundation',
+                label: 'Amendment permit lifecycle foundation',
+                mode: 'amendment_permit_lifecycle_foundation',
+                risk: 'local transactional',
+                actors: [
+                    'operator' => 'primary_operator',
+                    'recipient' => 'sample_recipient',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'application_type' => 'amendment',
+                    'canonical_state' => 'pending_payment',
+                    'display_status' => 'pending_payment',
+                    'payment_schedule_status' => 'pending',
+                    'amendment_policy_status' => 'policy_boundary',
+                    'external_calls' => 0,
+                    'can_continue' => true,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
             'permit_application_cancelled_visibility' => new LifecycleScenarioDefinition(
                 key: 'permit_application_cancelled_visibility',
                 label: 'Permit application cancelled visibility',
