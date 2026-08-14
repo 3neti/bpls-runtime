@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { Calculator, CircleX, FileText, ListChecks, LockKeyhole, WalletCards } from '@lucide/vue';
+import {
+    Calculator,
+    CircleX,
+    FileText,
+    LinkIcon,
+    ListChecks,
+    LockKeyhole,
+    WalletCards,
+} from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -13,7 +21,10 @@ import {
     release,
     show,
 } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
-import { show as showAssessment, store as assess } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
+import {
+    show as showAssessment,
+    store as assess,
+} from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import { show as showPaymentSchedule } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import type { BreadcrumbItem } from '@/types';
 
@@ -95,6 +106,14 @@ type PermitApplication = {
         clearances_total: number;
         blocked_by: string[];
         reason: string;
+    };
+    verification_boundary: {
+        reference: string;
+        url: string;
+        status: string;
+        can_verify_release: boolean;
+        released: boolean;
+        policy_note: string;
     };
     clearance_summary: {
         completed: number;
@@ -187,7 +206,10 @@ function money(amountCents: number): string {
                         as-child
                         variant="outline"
                     >
-                        <a :href="permitPdf.url(permitApplication.id)" target="_blank">
+                        <a
+                            :href="permitPdf.url(permitApplication.id)"
+                            target="_blank"
+                        >
                             <FileText />
                             Permit PDF
                         </a>
@@ -216,7 +238,8 @@ function money(amountCents: number): string {
                         <Link
                             :href="
                                 showPaymentSchedule(
-                                    permitApplication.latest_payment_schedule.id,
+                                    permitApplication.latest_payment_schedule
+                                        .id,
                                 )
                             "
                         >
@@ -321,9 +344,7 @@ function money(amountCents: number): string {
                     </Badge>
                 </div>
                 <div>
-                    <div class="text-xs text-muted-foreground">
-                        Amount due
-                    </div>
+                    <div class="text-xs text-muted-foreground">Amount due</div>
                     <div>
                         {{
                             money(
@@ -458,11 +479,7 @@ function money(amountCents: number): string {
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 text-right">
-                                    {{
-                                        money(
-                                            line.declared_gross_sales_cents,
-                                        )
-                                    }}
+                                    {{ money(line.declared_gross_sales_cents) }}
                                 </td>
                                 <td class="px-4 py-3 text-right">
                                     {{ money(line.capital_investment_cents) }}
@@ -512,6 +529,73 @@ function money(amountCents: number): string {
                         <dd>{{ permitApplication.terminal_state.reason }}</dd>
                     </div>
                 </dl>
+            </section>
+
+            <section
+                class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+            >
+                <div class="mb-3 flex items-center gap-2">
+                    <LinkIcon class="size-4 text-muted-foreground" />
+                    <h2 class="text-sm font-semibold text-foreground">
+                        Verification boundary
+                    </h2>
+                </div>
+                <dl class="grid gap-3 text-sm md:grid-cols-4">
+                    <div>
+                        <dt class="text-xs text-muted-foreground">Reference</dt>
+                        <dd class="font-mono text-xs break-all">
+                            {{
+                                permitApplication.verification_boundary
+                                    .reference
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">Status</dt>
+                        <dd class="capitalize">
+                            {{
+                                permitApplication.verification_boundary.status.replace(
+                                    '_',
+                                    ' ',
+                                )
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Can verify release
+                        </dt>
+                        <dd>
+                            {{
+                                permitApplication.verification_boundary
+                                    .can_verify_release
+                                    ? 'Yes'
+                                    : 'No'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">Released</dt>
+                        <dd>
+                            {{
+                                permitApplication.verification_boundary.released
+                                    ? 'Yes'
+                                    : 'No'
+                            }}
+                        </dd>
+                    </div>
+                    <div class="md:col-span-4">
+                        <dt class="text-xs text-muted-foreground">
+                            Public URL
+                        </dt>
+                        <dd class="font-mono text-xs break-all">
+                            {{ permitApplication.verification_boundary.url }}
+                        </dd>
+                    </div>
+                </dl>
+                <p class="mt-3 text-sm text-muted-foreground">
+                    {{ permitApplication.verification_boundary.policy_note }}
+                </p>
             </section>
 
             <section
@@ -591,8 +675,7 @@ function money(amountCents: number): string {
                             method="post"
                             as="button"
                             :data="{
-                                remarks:
-                                    'Completed from staff review surface.',
+                                remarks: 'Completed from staff review surface.',
                             }"
                             :class="buttonVariants({ variant: 'outline' })"
                         >
@@ -637,8 +720,8 @@ function money(amountCents: number): string {
                         </dt>
                         <dd>
                             {{
-                                permitApplication.release_readiness.prerequisites
-                                    .payment_schedule_paid
+                                permitApplication.release_readiness
+                                    .prerequisites.payment_schedule_paid
                                     ? 'Yes'
                                     : 'No'
                             }}
@@ -650,8 +733,8 @@ function money(amountCents: number): string {
                         </dt>
                         <dd>
                             {{
-                                permitApplication.release_readiness.prerequisites
-                                    .receipt_issued
+                                permitApplication.release_readiness
+                                    .prerequisites.receipt_issued
                                     ? 'Yes'
                                     : 'No'
                             }}
@@ -696,16 +779,15 @@ function money(amountCents: number): string {
                         </dt>
                         <dd>
                             {{
-                                permitApplication.release_policy_boundary.is_paid
+                                permitApplication.release_policy_boundary
+                                    .is_paid
                                     ? 'Yes'
                                     : 'No'
                             }}
                         </dd>
                     </div>
                     <div>
-                        <dt class="text-xs text-muted-foreground">
-                            Receipts
-                        </dt>
+                        <dt class="text-xs text-muted-foreground">Receipts</dt>
                         <dd>
                             {{
                                 permitApplication.release_policy_boundary
@@ -716,7 +798,9 @@ function money(amountCents: number): string {
                     <div class="md:col-span-3">
                         <dt class="text-xs text-muted-foreground">Reason</dt>
                         <dd>
-                            {{ permitApplication.release_policy_boundary.reason }}
+                            {{
+                                permitApplication.release_policy_boundary.reason
+                            }}
                         </dd>
                     </div>
                 </dl>
@@ -728,7 +812,9 @@ function money(amountCents: number): string {
                 <h2 class="mb-2 text-sm font-semibold text-foreground">
                     Permit document gaps
                 </h2>
-                <ul class="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                <ul
+                    class="list-disc space-y-1 pl-5 text-sm text-muted-foreground"
+                >
                     <li v-for="gap in permitDocumentGaps" :key="gap">
                         {{ gap }}
                     </li>

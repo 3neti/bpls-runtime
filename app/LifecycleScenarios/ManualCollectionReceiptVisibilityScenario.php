@@ -8,6 +8,7 @@ use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\CreateStaffPermitApplication;
 use App\Actions\DescribePermitReleaseReadiness;
+use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\EnsurePermitApplicationClearances;
 use App\Actions\IssueManualCollectionReceipt;
 use App\Actions\RecordPaymentScheduleCollection;
@@ -43,6 +44,7 @@ final class ManualCollectionReceiptVisibilityScenario
         private readonly CompletePermitClearance $completeClearance,
         private readonly AttemptPermitApplicationRelease $attemptRelease,
         private readonly DescribePermitReleaseReadiness $describeReleaseReadiness,
+        private readonly DescribePermitVerificationBoundary $describeVerificationBoundary,
         private readonly ScenarioManifest $scenarioManifest,
         private readonly ScenarioSummaryRenderer $summaryRenderer,
     ) {}
@@ -121,6 +123,7 @@ final class ManualCollectionReceiptVisibilityScenario
         $paymentSchedule->refresh();
         $collection->refresh();
         $permitApplication = $paymentSchedule->permitApplication()->firstOrFail();
+        $verificationBoundary = $this->describeVerificationBoundary->handle($permitApplication);
 
         $steps = [
             $this->step('actors-resolved', 'Resolve actual application users', ['operator_id' => $operator->id], ['operator_id' => $operator->id]),
@@ -151,6 +154,12 @@ final class ManualCollectionReceiptVisibilityScenario
             'payment_schedule_url' => route('staff.payment-schedules.show', $paymentSchedule, false),
             'receipt_url' => route('staff.receipts.show', $receipt, false),
             'receipt_pdf_url' => route('staff.receipts.pdf', $receipt, false),
+            'permit_pdf_url' => route('staff.permit-applications.permit.pdf', $permitApplication, false),
+            'permit_verification_reference' => $verificationBoundary['reference'],
+            'permit_verification_url' => route('public.permits.verify', [
+                'permitApplication' => $permitApplication,
+                'verificationCode' => $verificationBoundary['reference'],
+            ], false),
         ];
         $manifest['steps'] = $steps;
         $manifest['result']['terminal'] = collect($steps)->every(fn (array $step): bool => $step['passed']) ? 'passed' : 'failed';
@@ -180,6 +189,7 @@ final class ManualCollectionReceiptVisibilityScenario
                 ->all(),
             'release_policy_boundary' => $permitApplication->metadata['release_policy_boundary'] ?? null,
             'release_readiness' => $releaseReadiness,
+            'verification_boundary' => $verificationBoundary,
             'run_id' => $runId,
         ]);
         $artifactStore->putJson('terminal/execution.json', [
@@ -209,6 +219,7 @@ final class ManualCollectionReceiptVisibilityScenario
             ->with('clearances')
             ->findOrFail($manifest['resources']['permit_application_id']);
         $releaseReadiness = $this->describeReleaseReadiness->handle($permitApplication);
+        $verificationBoundary = $this->describeVerificationBoundary->handle($permitApplication);
         $browserReport = $artifactStore->readJson('browser/report.json') ?? [
             'result' => [
                 'passed' => false,
@@ -223,6 +234,9 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('audit-clearances-completed', 'Clearance checklist evidence is complete', ['completed_clearances' => 3, 'all_completed' => true], ['completed_clearances' => $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count(), 'all_completed' => $permitApplication->clearances->isNotEmpty() && $permitApplication->clearances->every(fn ($clearance): bool => $clearance->status === PermitClearanceStatus::Completed)]),
             $this->step('audit-release-readiness', 'Release readiness is ready for authority review but not releasable', ['ready_for_authority_review' => true, 'can_release' => false], ['ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'], 'can_release' => $releaseReadiness['can_release']]),
             $this->step('audit-release-boundary', 'Permit release remains blocked by explicit policy boundary', ['status' => PermitApplicationStatus::PendingPayment->value, 'blocked_transition' => PermitApplicationStatus::Released->value], ['status' => $permitApplication->status->value, 'blocked_transition' => $permitApplication->metadata['release_policy_boundary']['blocked_transition'] ?? null]),
+            $this->step('audit-verification-reference', 'Permit artifact verification reference matches canonical boundary', ['reference' => $verificationBoundary['reference'], 'can_verify_release' => false], ['reference' => $manifest['resources']['permit_verification_reference'] ?? null, 'can_verify_release' => $verificationBoundary['can_verify_release']]),
+            $this->step('audit-browser-verification-reference', 'Browser evidence observed the same permit verification reference', ['reference' => $verificationBoundary['reference']], ['reference' => data_get($browserReport, 'verification.reference')]),
+            $this->step('audit-browser-public-verification', 'Browser evidence confirms public verification is artifact-only', ['status' => 'artifact_only', 'can_verify_release' => false], ['status' => data_get($browserReport, 'verification.public_status'), 'can_verify_release' => data_get($browserReport, 'verification.can_verify_release')]),
             $this->step('audit-browser-result', 'Browser evidence runner passed', ['browser' => true], ['browser' => (bool) data_get($browserReport, 'result.passed')]),
         ];
 
@@ -263,6 +277,7 @@ final class ManualCollectionReceiptVisibilityScenario
                     ->all(),
                 'release_policy_boundary' => $permitApplication->metadata['release_policy_boundary'] ?? null,
                 'release_readiness' => $releaseReadiness,
+                'verification_boundary' => $verificationBoundary,
             ],
             'browser' => $browserReport,
         ]);
@@ -351,6 +366,7 @@ final class ManualCollectionReceiptVisibilityScenario
                 'application_number' => $permitApplication->application_number,
                 'payment_schedule_id' => $paymentSchedule->id,
                 'collection_id' => $collection->id,
+                'permit_verification_reference' => $this->describeVerificationBoundary->handle($permitApplication)['reference'],
             ],
             'frames' => [
                 [
@@ -390,9 +406,15 @@ final class ManualCollectionReceiptVisibilityScenario
                     'duration_seconds' => 5,
                 ],
                 [
+                    'title' => 'Permit artifact is verifiable as an artifact',
+                    'description' => 'The scenario records a public verification reference for the generated permit artifact.',
+                    'dialogue' => 'The public route confirms artifact identity only; it does not verify permit release.',
+                    'duration_seconds' => 5,
+                ],
+                [
                     'title' => 'Reviewer confirms receipt visibility',
-                    'description' => 'The browser opens the payment schedule and receipt screens for the exact manifest records.',
-                    'dialogue' => 'Visible UI state and canonical Treasury records agree.',
+                    'description' => 'The browser opens the payment schedule, receipt, permit detail, permit PDF, and public verification surfaces for the exact manifest records.',
+                    'dialogue' => 'Visible UI state, document evidence, public verification, and canonical records agree.',
                     'duration_seconds' => 5,
                 ],
             ],

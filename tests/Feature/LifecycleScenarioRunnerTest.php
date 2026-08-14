@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\DescribePermitVerificationBoundary;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\ReceiptStatus;
 use App\Enums\StoryboardExportFormat;
@@ -223,6 +224,8 @@ test('manual collection receipt scenario executes treasury actions idempotently'
     expect($firstManifest['resources']['record_type'])->toBe('receipt')
         ->and($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
         ->and($firstManifest['resources']['collection_id'])->toBe($secondManifest['resources']['collection_id'])
+        ->and($firstManifest['resources']['permit_verification_reference'])->toStartWith('PVA-'.$firstManifest['resources']['permit_application_id'].'-')
+        ->and($firstManifest['resources']['permit_verification_url'])->toContain($firstManifest['resources']['permit_verification_reference'])
         ->and(Receipt::query()->count())->toBe(1)
         ->and(TreasuryCollection::query()->count())->toBe(1)
         ->and($receipt->status)->toBe(ReceiptStatus::Issued)
@@ -245,9 +248,18 @@ test('manual collection receipt scenario audit compares browser evidence with ca
         'operator' => $user,
         'recipient' => $user,
     ], $artifactStore);
+    $verification = app(DescribePermitVerificationBoundary::class)->handle(
+        PermitApplication::query()->findOrFail($manifest['resources']['permit_application_id']),
+    );
     $artifactStore->putJson('browser/report.json', [
         'result' => [
             'passed' => true,
+        ],
+        'verification' => [
+            'reference' => $verification['reference'],
+            'public_status' => 'artifact_only',
+            'can_verify_release' => false,
+            'released' => false,
         ],
         'checks' => [],
         'artifacts' => [
@@ -264,6 +276,7 @@ test('manual collection receipt scenario audit compares browser evidence with ca
         ->browser->toBe('passed')
         ->audit->toBe('passed')
         ->passed->toBeTrue()
+        ->and($audited['resources']['permit_verification_reference'])->toBe($verification['reference'])
         ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
