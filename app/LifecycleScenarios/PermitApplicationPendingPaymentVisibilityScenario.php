@@ -77,6 +77,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             $this->step('permit-application-created', 'Create permit application through staff intake action', ['status' => PermitApplicationStatus::Draft->value], ['status' => PermitApplicationStatus::Draft->value, 'permit_application_id' => $permitApplication->id]),
             $this->step('assessment-computed', 'Compute assessment through assessment action', ['assessment_status' => 'computed'], ['assessment_status' => $assessment->status->value, 'assessment_id' => $assessment->id]),
             $this->step('range-assessment-line-computed', 'Assessment action applied the gross-sales range fee rule', ['calculation_type' => FeeRuleCalculationType::Range->value, 'basis_amount_cents' => 12_500_000, 'amount_cents' => 20_000], ['calculation_type' => $rangeAssessmentLine->calculation_type->value, 'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents, 'assessment_line_id' => $rangeAssessmentLine->id]),
+            $this->step('business-tax-assessment-line-computed', 'Assessment action persisted gross-sales business tax meaning', ['category' => FeeRuleCategory::Tax->value, 'basis' => 'declared_gross_sales', 'line_of_business' => $lineOfBusiness->name], ['category' => $rangeAssessmentLine->category->value, 'basis' => $rangeAssessmentLine->basis, 'line_of_business' => $rangeAssessmentLine->lineOfBusiness?->name, 'assessment_line_id' => $rangeAssessmentLine->id]),
             $this->step('payment-schedule-prepared', 'Prepare payment schedule through payment schedule action', ['schedule_status' => PaymentScheduleStatus::Pending->value, 'application_status' => PermitApplicationStatus::PendingPayment->value], ['schedule_status' => $paymentSchedule->status->value, 'application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id]),
         ];
 
@@ -97,6 +98,14 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             'range_basis' => $rangeAssessmentLine->basis,
             'range_basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents,
             'range_amount_cents' => $rangeAssessmentLine->amount_cents,
+            'business_tax_assessment_line_id' => $rangeAssessmentLine->id,
+            'business_tax_code' => $rangeAssessmentLine->code,
+            'business_tax_name' => $rangeAssessmentLine->name,
+            'business_tax_category' => $rangeAssessmentLine->category->value,
+            'business_tax_line_of_business' => $rangeAssessmentLine->lineOfBusiness?->name,
+            'business_tax_basis' => $rangeAssessmentLine->basis,
+            'business_tax_declared_gross_sales_cents' => $rangeAssessmentLine->basis_amount_cents,
+            'business_tax_amount_cents' => $rangeAssessmentLine->amount_cents,
             'payment_schedule_id' => $paymentSchedule->id,
             'list_url' => route('staff.permit-applications.index', absolute: false),
             'detail_url' => route('staff.permit-applications.show', $permitApplication, false),
@@ -123,6 +132,16 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                 'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents,
                 'amount_cents' => $rangeAssessmentLine->amount_cents,
                 'rule_snapshot' => $rangeAssessmentLine->rule_snapshot,
+            ],
+            'business_tax_assessment_line' => [
+                'id' => $rangeAssessmentLine->id,
+                'code' => $rangeAssessmentLine->code,
+                'name' => $rangeAssessmentLine->name,
+                'category' => $rangeAssessmentLine->category->value,
+                'line_of_business' => $rangeAssessmentLine->lineOfBusiness?->name,
+                'basis' => $rangeAssessmentLine->basis,
+                'declared_gross_sales_cents' => $rangeAssessmentLine->basis_amount_cents,
+                'amount_cents' => $rangeAssessmentLine->amount_cents,
             ],
             'payment_schedule_id' => $paymentSchedule->id,
             'payment_schedule_status' => $paymentSchedule->status->value,
@@ -167,6 +186,8 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             $this->step('audit-canonical-status', 'Canonical permit application status is pending payment', ['status' => PermitApplicationStatus::PendingPayment->value], ['status' => $permitApplication->status->value]),
             $this->step('audit-range-assessment-line', 'Canonical assessment line remains the computed gross-sales range line', ['calculation_type' => FeeRuleCalculationType::Range->value, 'basis_amount_cents' => $manifest['resources']['range_basis_amount_cents'], 'amount_cents' => $manifest['resources']['range_amount_cents']], ['calculation_type' => $rangeAssessmentLine->calculation_type->value, 'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents, 'assessment_line_id' => $rangeAssessmentLine->id]),
             $this->step('audit-browser-range-assessment-line', 'Browser evidence shows the same gross-sales range assessment line', ['code' => $rangeAssessmentLine->code, 'calculation_type' => $rangeAssessmentLine->calculation_type->value, 'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents], ['code' => data_get($browserReport, 'assessment.range_line.code'), 'calculation_type' => data_get($browserReport, 'assessment.range_line.calculation_type'), 'basis_amount_cents' => data_get($browserReport, 'assessment.range_line.basis_amount_cents'), 'amount_cents' => data_get($browserReport, 'assessment.range_line.amount_cents')]),
+            $this->step('audit-business-tax-assessment-line', 'Canonical assessment line remains a gross-sales business tax', ['name' => $manifest['resources']['business_tax_name'], 'category' => FeeRuleCategory::Tax->value, 'line_of_business' => $manifest['resources']['business_tax_line_of_business'], 'declared_gross_sales_cents' => $manifest['resources']['business_tax_declared_gross_sales_cents'], 'amount_cents' => $manifest['resources']['business_tax_amount_cents']], ['name' => $rangeAssessmentLine->name, 'category' => $rangeAssessmentLine->category->value, 'line_of_business' => $rangeAssessmentLine->lineOfBusiness?->name, 'declared_gross_sales_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents]),
+            $this->step('audit-browser-business-tax-line', 'Browser evidence shows the same gross-sales business tax meaning', ['name' => $rangeAssessmentLine->name, 'category' => $rangeAssessmentLine->category->value, 'line_of_business' => $rangeAssessmentLine->lineOfBusiness?->name, 'declared_gross_sales_cents' => $rangeAssessmentLine->basis_amount_cents, 'amount_cents' => $rangeAssessmentLine->amount_cents], ['name' => data_get($browserReport, 'assessment.business_tax.name'), 'category' => data_get($browserReport, 'assessment.business_tax.category'), 'line_of_business' => data_get($browserReport, 'assessment.business_tax.line_of_business'), 'declared_gross_sales_cents' => data_get($browserReport, 'assessment.business_tax.declared_gross_sales_cents'), 'amount_cents' => data_get($browserReport, 'assessment.business_tax.amount_cents')]),
             $this->step('audit-payment-schedule-status', 'Payment schedule remains pending for collection', ['status' => PaymentScheduleStatus::Pending->value], ['status' => $paymentSchedule->status->value]),
             $this->step('audit-browser-result', 'Browser evidence runner passed', ['browser' => true], ['browser' => (bool) data_get($browserReport, 'result.passed')]),
         ];
@@ -198,6 +219,16 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                     'calculation_type' => $rangeAssessmentLine->calculation_type->value,
                     'basis' => $rangeAssessmentLine->basis,
                     'basis_amount_cents' => $rangeAssessmentLine->basis_amount_cents,
+                    'amount_cents' => $rangeAssessmentLine->amount_cents,
+                ],
+                'business_tax_assessment_line' => [
+                    'id' => $rangeAssessmentLine->id,
+                    'code' => $rangeAssessmentLine->code,
+                    'name' => $rangeAssessmentLine->name,
+                    'category' => $rangeAssessmentLine->category->value,
+                    'line_of_business' => $rangeAssessmentLine->lineOfBusiness?->name,
+                    'basis' => $rangeAssessmentLine->basis,
+                    'declared_gross_sales_cents' => $rangeAssessmentLine->basis_amount_cents,
                     'amount_cents' => $rangeAssessmentLine->amount_cents,
                 ],
                 'payment_schedule_id' => $paymentSchedule->id,
@@ -271,7 +302,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
 
     private function rangeAssessmentLine(Assessment $assessment): AssessmentLine
     {
-        $assessment->loadMissing('lines');
+        $assessment->loadMissing('lines.lineOfBusiness');
 
         $line = $assessment->lines
             ->first(fn (AssessmentLine $assessmentLine): bool => $assessmentLine->calculation_type === FeeRuleCalculationType::Range);

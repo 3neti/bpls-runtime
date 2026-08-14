@@ -383,6 +383,13 @@ test('permit application pending payment scenario executes assessment and paymen
         ->and($firstManifest['resources']['range_basis'])->toBe('declared_gross_sales')
         ->and($firstManifest['resources']['range_basis_amount_cents'])->toBe(12_500_000)
         ->and($firstManifest['resources']['range_amount_cents'])->toBe(20_000)
+        ->and($firstManifest['resources']['business_tax_code'])->toBe('SCENARIO-BUSINESS-TAX')
+        ->and($firstManifest['resources']['business_tax_name'])->toBe('Scenario Business Tax')
+        ->and($firstManifest['resources']['business_tax_category'])->toBe('tax')
+        ->and($firstManifest['resources']['business_tax_line_of_business'])->toBe('Scenario Retail')
+        ->and($firstManifest['resources']['business_tax_basis'])->toBe('declared_gross_sales')
+        ->and($firstManifest['resources']['business_tax_declared_gross_sales_cents'])->toBe(12_500_000)
+        ->and($firstManifest['resources']['business_tax_amount_cents'])->toBe(20_000)
         ->and(PermitApplication::query()->count())->toBe(1)
         ->and($application->status)->toBe(PermitApplicationStatus::PendingPayment)
         ->and($application->paymentSchedules()->count())->toBe(1)
@@ -413,6 +420,15 @@ test('permit application pending payment scenario audit compares browser evidenc
                 'basis' => $manifest['resources']['range_basis'],
                 'basis_amount_cents' => $manifest['resources']['range_basis_amount_cents'],
                 'amount_cents' => $manifest['resources']['range_amount_cents'],
+            ],
+            'business_tax' => [
+                'code' => $manifest['resources']['business_tax_code'],
+                'name' => $manifest['resources']['business_tax_name'],
+                'category' => $manifest['resources']['business_tax_category'],
+                'line_of_business' => $manifest['resources']['business_tax_line_of_business'],
+                'basis' => $manifest['resources']['business_tax_basis'],
+                'declared_gross_sales_cents' => $manifest['resources']['business_tax_declared_gross_sales_cents'],
+                'amount_cents' => $manifest['resources']['business_tax_amount_cents'],
             ],
         ],
         'checks' => [],

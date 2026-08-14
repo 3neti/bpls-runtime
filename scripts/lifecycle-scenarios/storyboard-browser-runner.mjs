@@ -678,6 +678,22 @@ async function inspectPendingPaymentAssessmentDetail(
         .first()
         .isVisible()
         .catch(() => false);
+    const businessTaxNameVisible = await targetPage
+        .getByText(manifest.resources.business_tax_name, { exact: true })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const businessTaxCategoryVisible = await bodyTextMatches(
+        targetPage,
+        /\btax\b/i,
+    );
+    const lineOfBusinessVisible = await targetPage
+        .getByText(manifest.resources.business_tax_line_of_business, {
+            exact: true,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
     const basisAmountVisible = await targetPage
         .getByText(
             uiMoneyFromCents(manifest.resources.range_basis_amount_cents),
@@ -725,12 +741,36 @@ async function inspectPendingPaymentAssessmentDetail(
             amountVisible,
         ),
     );
+    checks.push(
+        check(
+            'assessment-business-tax-visible',
+            'Assessment page shows gross-sales business tax meaning',
+            true,
+            businessTaxNameVisible &&
+                businessTaxCategoryVisible &&
+                lineOfBusinessVisible,
+            {
+                name_visible: businessTaxNameVisible,
+                category_visible: businessTaxCategoryVisible,
+                line_of_business_visible: lineOfBusinessVisible,
+            },
+        ),
+    );
     reportAssessmentRange(
         manifest.resources.range_fee_rule_code,
         manifest.resources.range_calculation_type,
         manifest.resources.range_basis,
         manifest.resources.range_basis_amount_cents,
         manifest.resources.range_amount_cents,
+    );
+    reportBusinessTaxAssessment(
+        manifest.resources.business_tax_code,
+        manifest.resources.business_tax_name,
+        manifest.resources.business_tax_category,
+        manifest.resources.business_tax_line_of_business,
+        manifest.resources.business_tax_basis,
+        manifest.resources.business_tax_declared_gross_sales_cents,
+        manifest.resources.business_tax_amount_cents,
     );
     await screenshot(
         targetPage,
@@ -1906,6 +1946,26 @@ function reportAssessmentRange(
         calculation_type: calculationType,
         basis,
         basis_amount_cents: basisAmountCents,
+        amount_cents: amountCents,
+    };
+}
+
+function reportBusinessTaxAssessment(
+    code,
+    name,
+    category,
+    lineOfBusiness,
+    basis,
+    declaredGrossSalesCents,
+    amountCents,
+) {
+    assessmentEvidence.business_tax = {
+        code,
+        name,
+        category,
+        line_of_business: lineOfBusiness,
+        basis,
+        declared_gross_sales_cents: declaredGrossSalesCents,
         amount_cents: amountCents,
     };
 }
