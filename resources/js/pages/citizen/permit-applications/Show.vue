@@ -7,6 +7,7 @@ import {
     Download,
     FilePenLine,
     FilePlus2,
+    History,
     Paperclip,
     Upload,
 } from '@lucide/vue';
@@ -115,6 +116,14 @@ type PermitApplication = {
             };
         } | null;
     };
+    timeline: {
+        key: string;
+        category: string;
+        title: string;
+        description: string;
+        status: string;
+        occurred_at: string | null;
+    }[];
     can_edit: boolean;
     can_upload_documents: boolean;
     can_view_documents: boolean;
@@ -442,6 +451,67 @@ function documentBoundaryError(): string | undefined {
                         </p>
                     </div>
                 </div>
+            </section>
+
+            <section
+                v-if="permitApplication.timeline.length > 0"
+                data-testid="citizen-application-timeline"
+                class="border-y border-sidebar-border/70 bg-background py-4 dark:border-sidebar-border"
+            >
+                <div class="mb-4 flex items-center gap-2 px-1">
+                    <History class="size-4 text-muted-foreground" />
+                    <div>
+                        <h2 class="text-sm font-semibold text-foreground">
+                            Application timeline
+                        </h2>
+                        <p class="text-xs text-muted-foreground">
+                            Recorded progress from your application and the
+                            municipality's processing records.
+                        </p>
+                    </div>
+                </div>
+
+                <ol class="relative ml-3 border-l border-border pl-6">
+                    <li
+                        v-for="event in permitApplication.timeline"
+                        :key="event.key"
+                        data-testid="citizen-timeline-event"
+                        :data-timeline-key="event.key"
+                        :data-timeline-category="event.category"
+                        :data-timeline-status="event.status"
+                        class="relative pb-5 last:pb-0"
+                    >
+                        <span
+                            class="absolute top-1 -left-[1.77rem] size-3 rounded-full border-2 border-background bg-primary"
+                        />
+                        <div
+                            class="flex flex-wrap items-start justify-between gap-2"
+                        >
+                            <div class="min-w-0 flex-1">
+                                <h3
+                                    class="text-sm font-medium break-words text-foreground"
+                                >
+                                    {{ event.title }}
+                                </h3>
+                                <p
+                                    class="mt-1 text-sm break-words text-muted-foreground"
+                                >
+                                    {{ event.description }}
+                                </p>
+                            </div>
+                            <Badge variant="secondary" class="capitalize">
+                                {{ event.status.replace('_', ' ') }}
+                            </Badge>
+                        </div>
+                        <p class="mt-1 text-xs text-muted-foreground">
+                            {{
+                                event.occurred_at
+                                    ? dateTime(event.occurred_at)
+                                    : 'Time not recorded'
+                            }}
+                        </p>
+                    </li>
+                </ol>
             </section>
 
             <section class="grid gap-4 md:grid-cols-2">

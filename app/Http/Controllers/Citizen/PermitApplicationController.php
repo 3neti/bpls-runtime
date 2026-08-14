@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Citizen;
 
+use App\Actions\BuildPermitApplicationTimeline;
 use App\Actions\CreatePermitApplication;
 use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Actions\DescribePaymentPolicyBoundary;
@@ -24,6 +25,7 @@ use Inertia\Response;
 class PermitApplicationController extends Controller
 {
     public function __construct(
+        private readonly BuildPermitApplicationTimeline $buildPermitApplicationTimeline,
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly DescribePaymentPolicyBoundary $describePaymentPolicyBoundary,
     ) {}
@@ -214,6 +216,7 @@ class PermitApplicationController extends Controller
                         'online_payment_boundary' => $this->describeOnlinePaymentBoundary->handle($latestPaymentSchedule),
                     ],
                 ],
+                'timeline' => $this->citizenTimeline($application, $canViewDocuments, $canViewFinancials),
                 'can_edit' => $request->user()->can(UserPermission::EditOwnPermitApplications->value)
                     && $this->isEditableDraft($application),
                 'can_upload_documents' => $request->user()->can(UserPermission::UploadOwnPermitApplicationDocuments->value)
@@ -256,6 +259,29 @@ class PermitApplicationController extends Controller
             && $permitApplication->application_number === null
             && ! $permitApplication->assessments_exists
             && $permitApplication->canContinue();
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function citizenTimeline(PermitApplication $permitApplication, bool $canViewDocuments, bool $canViewFinancials): array
+    {
+        return collect($this->buildPermitApplicationTimeline->handle($permitApplication))
+            ->filter(fn (array $event): bool => match ($event['category']) {
+                'document' => $canViewDocuments,
+                'assessment', 'payment', 'treasury' => $canViewFinancials,
+                default => true,
+            })
+            ->map(fn (array $event): array => [
+                'key' => $event['key'],
+                'category' => $event['category'],
+                'title' => $event['title'],
+                'description' => $event['description'],
+                'status' => $event['status'],
+                'occurred_at' => $event['occurred_at'],
+            ])
+            ->values()
+            ->all();
     }
 
     /**

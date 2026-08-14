@@ -328,10 +328,20 @@ async function inspectCitizenPermitProcessing(targetPage, targetBaseUrl) {
     const onlineBoundary = targetPage.getByTestId(
         'citizen-online-payment-boundary',
     );
+    const timeline = targetPage.getByTestId('citizen-application-timeline');
     await processing.waitFor();
     await assessment.waitFor();
     await payment.waitFor();
     await onlineBoundary.waitFor();
+    await timeline.waitFor();
+
+    const timelineEventKeys = await timeline
+        .getByTestId('citizen-timeline-event')
+        .evaluateAll((elements) =>
+            elements.map((element) =>
+                element.getAttribute('data-timeline-key'),
+            ),
+        );
 
     const browserState = {
         application_status: await processing.getAttribute(
@@ -367,6 +377,8 @@ async function inspectCitizenPermitProcessing(targetPage, targetBaseUrl) {
         can_pay_online:
             (await onlineBoundary.getAttribute('data-can-pay-online')) ===
             'true',
+        timeline_event_count: timelineEventKeys.length,
+        timeline_event_keys: timelineEventKeys,
     };
     const editActionVisible = await targetPage
         .getByRole('link', { name: 'Edit Draft', exact: true })
@@ -397,6 +409,9 @@ async function inspectCitizenPermitProcessing(targetPage, targetBaseUrl) {
             manifest.resources.payment_balance_amount_cents,
         online_payment_status: manifest.resources.online_payment_status,
         can_pay_online: manifest.resources.can_pay_online,
+        timeline_event_count:
+            manifest.resources.citizen_timeline_event_count,
+        timeline_event_keys: manifest.resources.citizen_timeline_event_keys,
     };
 
     Object.assign(citizenProcessingEvidence, browserState, {
@@ -447,6 +462,9 @@ async function inspectCitizenPermitProcessing(targetPage, targetBaseUrl) {
     const mobilePaymentVisible = await targetPage
         .getByTestId('citizen-payment-summary')
         .isVisible();
+    const mobileTimelineVisible = await targetPage
+        .getByTestId('citizen-application-timeline')
+        .isVisible();
     const horizontalOverflow = await targetPage.evaluate(
         () =>
             document.documentElement.scrollWidth >
@@ -470,6 +488,12 @@ async function inspectCitizenPermitProcessing(targetPage, targetBaseUrl) {
             'Mobile detail keeps payment evidence visible',
             true,
             mobilePaymentVisible,
+        ),
+        check(
+            'citizen-processing-mobile-timeline-visible',
+            'Mobile detail keeps the authoritative timeline visible',
+            true,
+            mobileTimelineVisible,
         ),
         check(
             'citizen-processing-mobile-no-horizontal-overflow',

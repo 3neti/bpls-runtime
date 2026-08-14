@@ -34,6 +34,7 @@ final class LifecycleScenarioRegistry
                     'online_payment_status' => 'blocked',
                     'can_pay_online' => false,
                     'browser_is_read_only' => true,
+                    'citizen_timeline_visible' => true,
                     'external_calls' => 0,
                     'irreversible_actions' => false,
                 ],

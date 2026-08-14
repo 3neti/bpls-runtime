@@ -662,6 +662,8 @@ test('citizen permit processing scenario audits browser financial state against 
             'online_payment_status' => 'blocked',
             'can_pay_online' => false,
             'payment_action_visible' => false,
+            'timeline_event_count' => $manifest['resources']['citizen_timeline_event_count'],
+            'timeline_event_keys' => $manifest['resources']['citizen_timeline_event_keys'],
         ],
         'checks' => [],
         'artifacts' => [
@@ -683,6 +685,13 @@ test('citizen permit processing scenario audits browser financial state against 
         ->and($audit['canonical']['application_status'])->toBe(PermitApplicationStatus::PendingPayment->value)
         ->and($audit['canonical']['assessment_total_amount_cents'])->toBeGreaterThan(0)
         ->and($audit['canonical']['payment_balance_amount_cents'])->toBe($audit['canonical']['assessment_total_amount_cents'])
+        ->and($manifest['resources']['citizen_timeline_event_count'])->toBe(4)
+        ->and($manifest['resources']['citizen_timeline_event_keys'])->toBe([
+            "application-recorded:{$manifest['resources']['record_id']}",
+            "assessment-computed:{$manifest['resources']['assessment_id']}",
+            "payment-schedule-prepared:{$manifest['resources']['payment_schedule_id']}",
+            'status-transition:0',
+        ])
         ->and(collect($manifest['steps'])->firstWhere('key', 'citizen-owned-application-prepared')['actor'])->toBe('applicant')
         ->and(collect($manifest['steps'])->firstWhere('key', 'citizen-owned-application-prepared')['actual']['submitted_by_id'])->toBe($citizen->id)
         ->and($artifactStore->exists('summary.html'))->toBeTrue();

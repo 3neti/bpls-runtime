@@ -2,6 +2,7 @@
 
 namespace App\LifecycleScenarios;
 
+use App\Actions\BuildPermitApplicationTimeline;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\CreatePermitApplication;
@@ -27,6 +28,7 @@ final class CitizenPermitProcessingVisibilityScenario
         private readonly CreatePermitApplication $createPermitApplication,
         private readonly CreateAssessmentForPermitApplication $createAssessment,
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
+        private readonly BuildPermitApplicationTimeline $buildPermitApplicationTimeline,
         private readonly DescribePaymentPolicyBoundary $describePaymentPolicyBoundary,
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly ScenarioManifest $scenarioManifest,
@@ -81,6 +83,8 @@ final class CitizenPermitProcessingVisibilityScenario
         $assessment = $this->createAssessment->handle($permitApplication, $operator);
         $paymentSchedule = $this->createPaymentSchedule->handle($assessment, $operator);
         $permitApplication->refresh();
+        $timeline = $this->buildPermitApplicationTimeline->handle($permitApplication);
+        $timelineKeys = collect($timeline)->pluck('key')->all();
         $paymentPolicyBoundary = $this->describePaymentPolicyBoundary->handle($paymentSchedule);
         $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
 
@@ -127,6 +131,11 @@ final class CitizenPermitProcessingVisibilityScenario
                 'can_pay_online' => $onlinePaymentBoundary['can_pay_online'],
                 'can_reconcile_online' => $onlinePaymentBoundary['can_reconcile_online'],
             ]),
+            $this->step('citizen-timeline-projected', 'Project authoritative application events for citizen review', [
+                'event_keys' => $timelineKeys,
+            ], [
+                'event_keys' => $timelineKeys,
+            ]),
         ];
 
         foreach ($steps as $step) {
@@ -151,6 +160,8 @@ final class CitizenPermitProcessingVisibilityScenario
             'payment_policy_status' => $paymentPolicyBoundary['status'],
             'online_payment_status' => $onlinePaymentBoundary['status'],
             'can_pay_online' => $onlinePaymentBoundary['can_pay_online'],
+            'citizen_timeline_event_count' => count($timelineKeys),
+            'citizen_timeline_event_keys' => $timelineKeys,
             'list_url' => route('citizen.permit-applications.index', absolute: false),
             'detail_url' => route('citizen.permit-applications.show', $permitApplication, false),
         ];
@@ -177,6 +188,7 @@ final class CitizenPermitProcessingVisibilityScenario
             ],
             'payment_policy_boundary' => $paymentPolicyBoundary,
             'online_payment_boundary' => $onlinePaymentBoundary,
+            'timeline' => $timeline,
             'run_id' => $runId,
         ]);
         $artifactStore->putJson('terminal/execution.json', [
@@ -205,6 +217,7 @@ final class CitizenPermitProcessingVisibilityScenario
         $paymentSchedule = PaymentSchedule::query()->findOrFail($manifest['resources']['payment_schedule_id']);
         $paymentPolicyBoundary = $this->describePaymentPolicyBoundary->handle($paymentSchedule);
         $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
+        $timelineKeys = collect($this->buildPermitApplicationTimeline->handle($permitApplication))->pluck('key')->all();
         $browserReport = $artifactStore->readJson('browser/report.json') ?? ['result' => ['passed' => false]];
 
         $canonical = [
@@ -256,6 +269,20 @@ final class CitizenPermitProcessingVisibilityScenario
                 'online_payment_status' => data_get($browserReport, 'citizen_processing.online_payment_status'),
                 'can_pay_online' => data_get($browserReport, 'citizen_processing.can_pay_online'),
                 'payment_action_visible' => data_get($browserReport, 'citizen_processing.payment_action_visible'),
+            ]),
+            $this->step('audit-citizen-timeline', 'Canonical citizen timeline retains the prepared event order', [
+                'event_count' => $manifest['resources']['citizen_timeline_event_count'],
+                'event_keys' => $manifest['resources']['citizen_timeline_event_keys'],
+            ], [
+                'event_count' => count($timelineKeys),
+                'event_keys' => $timelineKeys,
+            ]),
+            $this->step('audit-browser-citizen-timeline', 'Citizen browser shows the exact canonical timeline event order', [
+                'event_count' => count($timelineKeys),
+                'event_keys' => $timelineKeys,
+            ], [
+                'event_count' => data_get($browserReport, 'citizen_processing.timeline_event_count'),
+                'event_keys' => data_get($browserReport, 'citizen_processing.timeline_event_keys'),
             ]),
             $this->step('audit-browser-result', 'Browser evidence runner passed', [
                 'browser' => true,
@@ -348,7 +375,7 @@ final class CitizenPermitProcessingVisibilityScenario
     {
         return [
             'title' => 'Citizen tracks an application in municipal processing',
-            'summary' => 'A citizen reviews the authoritative assessment and payment-schedule state for the exact owned application without receiving staff controls or an online-payment action.',
+            'summary' => 'A citizen reviews the authoritative assessment, payment-schedule state, and recorded progress for the exact owned application without receiving staff controls or an online-payment action.',
             'run_id' => $runId,
             'record' => [
                 'type' => 'permit_application',
@@ -372,6 +399,12 @@ final class CitizenPermitProcessingVisibilityScenario
                     'title' => 'Citizen sees the payment boundary',
                     'description' => 'The payment status and balance are visible while online payment and reconciliation remain unavailable.',
                     'dialogue' => 'No payment or Treasury mutation is performed.',
+                    'duration_seconds' => 5,
+                ],
+                [
+                    'title' => 'Citizen reviews recorded progress',
+                    'description' => 'The application timeline shows the same ordered lifecycle events held by the authoritative records.',
+                    'dialogue' => 'The timeline reports the journey; it does not perform a workflow transition.',
                     'duration_seconds' => 5,
                 ],
             ],
