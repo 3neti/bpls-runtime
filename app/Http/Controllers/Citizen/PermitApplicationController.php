@@ -118,6 +118,7 @@ class PermitApplicationController extends Controller
 
         $isDraft = $application->status === PermitApplicationStatus::Draft;
         $assessmentStarted = (bool) $application->assessments_exists;
+        $canViewDocuments = $request->user()->can(UserPermission::ViewOwnPermitApplicationDocuments->value);
 
         return Inertia::render('citizen/permit-applications/Show', [
             'permitApplication' => [
@@ -147,6 +148,26 @@ class PermitApplicationController extends Controller
                     'quantity' => $line->quantity,
                     'started_on' => $line->started_on?->toDateString(),
                 ])->values(),
+                'documents' => $canViewDocuments
+                    ? $application->documents->map(fn ($document): array => [
+                        'id' => $document->id,
+                        'label' => $document->label,
+                        'original_name' => $document->original_name,
+                        'mime_type' => $document->mime_type,
+                        'size_bytes' => $document->size_bytes,
+                        'remarks' => $document->remarks,
+                        'uploaded_at' => $document->uploaded_at->toIso8601String(),
+                        'uploaded_by' => $document->uploaded_by_id === $request->user()->id
+                            ? 'You'
+                            : 'Municipal staff',
+                    ])->values()
+                    : [],
+                'documentary_readiness' => [
+                    'received_document_count' => $canViewDocuments ? $application->documents->count() : 0,
+                    'requirement_catalog_status' => 'unresolved',
+                    'submission_readiness' => 'not_determined',
+                    'statement' => 'Documents are retained as supporting evidence. Their statutory sufficiency and the requirements for formal submission have not yet been determined.',
+                ],
                 'draft_boundary' => [
                     'is_draft' => $isDraft,
                     'assessment_started' => $assessmentStarted,
@@ -157,6 +178,9 @@ class PermitApplicationController extends Controller
                 ],
                 'can_edit' => $request->user()->can(UserPermission::EditOwnPermitApplications->value)
                     && $this->isEditableDraft($application),
+                'can_upload_documents' => $request->user()->can(UserPermission::UploadOwnPermitApplicationDocuments->value)
+                    && $this->isCitizenDocumentUploadAvailable($application),
+                'can_view_documents' => $canViewDocuments,
             ],
         ]);
     }
@@ -166,7 +190,11 @@ class PermitApplicationController extends Controller
         return PermitApplication::query()
             ->whereKey($permitApplication)
             ->whereBelongsTo($request->user(), 'submittedBy')
-            ->with(['business.owner', 'lines.lineOfBusiness'])
+            ->with([
+                'business.owner',
+                'lines.lineOfBusiness',
+                'documents' => fn ($query) => $query->latest('uploaded_at')->latest('id'),
+            ])
             ->withExists('assessments')
             ->firstOrFail();
     }
@@ -179,6 +207,14 @@ class PermitApplicationController extends Controller
             && ! $permitApplication->assessments_exists
             && ! $permitApplication->business->permitApplications()->whereKeyNot($permitApplication->id)->exists()
             && ! $permitApplication->business->owner->businesses()->whereKeyNot($permitApplication->business_id)->exists();
+    }
+
+    private function isCitizenDocumentUploadAvailable(PermitApplication $permitApplication): bool
+    {
+        return $permitApplication->status === PermitApplicationStatus::Draft
+            && $permitApplication->application_number === null
+            && ! $permitApplication->assessments_exists
+            && $permitApplication->canContinue();
     }
 
     /**

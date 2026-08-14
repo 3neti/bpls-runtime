@@ -1,14 +1,28 @@
 <script setup lang="ts">
-import { Head, Link, setLayoutProps } from '@inertiajs/vue3';
-import { ArrowLeft, FilePenLine, FilePlus2 } from '@lucide/vue';
+import { Head, Link, setLayoutProps, useForm } from '@inertiajs/vue3';
+import {
+    ArrowLeft,
+    Download,
+    FilePenLine,
+    FilePlus2,
+    Paperclip,
+    Upload,
+} from '@lucide/vue';
 import {
     create,
     edit,
     index,
     show,
 } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
+import {
+    download as downloadDocument,
+    store as storeDocument,
+} from '@/actions/App/Http/Controllers/Citizen/PermitApplicationDocumentController';
+import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import type { BreadcrumbItem } from '@/types';
 
 type PermitApplication = {
@@ -45,6 +59,22 @@ type PermitApplication = {
         quantity: number;
         started_on: string | null;
     }[];
+    documents: {
+        id: number;
+        label: string;
+        original_name: string;
+        mime_type: string;
+        size_bytes: number;
+        remarks: string | null;
+        uploaded_at: string;
+        uploaded_by: string;
+    }[];
+    documentary_readiness: {
+        received_document_count: number;
+        requirement_catalog_status: string;
+        submission_readiness: string;
+        statement: string;
+    };
     draft_boundary: {
         is_draft: boolean;
         assessment_started: boolean;
@@ -52,11 +82,19 @@ type PermitApplication = {
         statement: string;
     };
     can_edit: boolean;
+    can_upload_documents: boolean;
+    can_view_documents: boolean;
 };
 
 const props = defineProps<{
     permitApplication: PermitApplication;
 }>();
+
+const documentForm = useForm({
+    label: '',
+    file: null as File | null,
+    remarks: '',
+});
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -76,6 +114,39 @@ function money(amountCents: number): string {
         style: 'currency',
         currency: 'PHP',
     }).format(amountCents / 100);
+}
+
+function dateTime(value: string): string {
+    return new Intl.DateTimeFormat('en-PH', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+    }).format(new Date(value));
+}
+
+function fileSize(sizeBytes: number): string {
+    if (sizeBytes < 1024) {
+        return `${sizeBytes} B`;
+    }
+
+    return `${(sizeBytes / 1024).toFixed(1)} KB`;
+}
+
+function selectDocument(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    documentForm.file = input.files?.[0] ?? null;
+}
+
+function uploadDocument(): void {
+    documentForm.post(storeDocument.url(props.permitApplication.id), {
+        forceFormData: true,
+        preserveScroll: true,
+        onSuccess: () => documentForm.reset(),
+    });
+}
+
+function documentBoundaryError(): string | undefined {
+    return (documentForm.errors as Record<string, string | undefined>)
+        .document;
 }
 </script>
 
@@ -272,6 +343,164 @@ function money(amountCents: number): string {
                         </tbody>
                     </table>
                 </div>
+            </section>
+
+            <section
+                v-if="permitApplication.can_view_documents"
+                data-testid="citizen-supporting-documents"
+                class="grid gap-4 border-t pt-4"
+            >
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="flex items-start gap-2">
+                        <Paperclip class="mt-0.5 size-4 text-muted-foreground" />
+                        <div>
+                            <h2 class="text-sm font-semibold text-foreground">
+                                Supporting documents
+                            </h2>
+                            <p class="text-xs text-muted-foreground">
+                                Attach evidence to this draft for later municipal
+                                review.
+                            </p>
+                        </div>
+                    </div>
+                    <Badge variant="outline">
+                        {{ permitApplication.documents.length }} received
+                    </Badge>
+                </div>
+
+                <div
+                    data-testid="citizen-documentary-readiness"
+                    :data-document-count="
+                        permitApplication.documentary_readiness
+                            .received_document_count
+                    "
+                    :data-submission-readiness="
+                        permitApplication.documentary_readiness
+                            .submission_readiness
+                    "
+                    class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+                >
+                    <p class="font-medium">Documentary readiness boundary</p>
+                    <p class="mt-1">
+                        {{ permitApplication.documentary_readiness.statement }}
+                    </p>
+                </div>
+
+                <form
+                    v-if="permitApplication.can_upload_documents"
+                    data-testid="citizen-document-upload-form"
+                    class="grid gap-3 border-y border-border py-4 md:grid-cols-2"
+                    enctype="multipart/form-data"
+                    @submit.prevent="uploadDocument"
+                >
+                    <InputError
+                        :message="documentBoundaryError()"
+                        class="md:col-span-2"
+                    />
+                    <div class="grid gap-2">
+                        <Label for="citizen-document-label">Document label</Label>
+                        <Input
+                            id="citizen-document-label"
+                            v-model="documentForm.label"
+                            maxlength="120"
+                            required
+                        />
+                        <InputError :message="documentForm.errors.label" />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="citizen-document-file">File</Label>
+                        <Input
+                            id="citizen-document-file"
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            required
+                            @change="selectDocument"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            PDF, JPG, or PNG up to 10 MB.
+                        </p>
+                        <InputError :message="documentForm.errors.file" />
+                    </div>
+                    <div class="grid gap-2 md:col-span-2">
+                        <Label for="citizen-document-remarks">Remarks</Label>
+                        <textarea
+                            id="citizen-document-remarks"
+                            v-model="documentForm.remarks"
+                            rows="2"
+                            maxlength="1000"
+                            class="flex min-h-16 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                        <InputError :message="documentForm.errors.remarks" />
+                    </div>
+                    <progress
+                        v-if="documentForm.progress"
+                        class="h-2 w-full md:col-span-2"
+                        :value="documentForm.progress.percentage"
+                        max="100"
+                    >
+                        {{ documentForm.progress.percentage }}%
+                    </progress>
+                    <div class="md:col-span-2">
+                        <Button
+                            type="submit"
+                            :disabled="documentForm.processing"
+                        >
+                            <Upload />
+                            Add document
+                        </Button>
+                    </div>
+                </form>
+
+                <p
+                    v-if="permitApplication.documents.length === 0"
+                    class="py-2 text-sm text-muted-foreground"
+                >
+                    No supporting documents added to this draft.
+                </p>
+                <ul v-else class="divide-y divide-border">
+                    <li
+                        v-for="document in permitApplication.documents"
+                        :key="document.id"
+                        data-testid="citizen-supporting-document"
+                        :data-document-id="document.id"
+                        :data-document-label="document.label"
+                        class="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                    >
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-medium break-words">
+                                {{ document.label }}
+                            </p>
+                            <p class="text-xs break-all text-muted-foreground">
+                                {{ document.original_name }} ·
+                                {{ fileSize(document.size_bytes) }}
+                            </p>
+                            <p
+                                v-if="document.remarks"
+                                class="mt-1 text-sm break-words text-muted-foreground"
+                            >
+                                {{ document.remarks }}
+                            </p>
+                            <p class="mt-1 text-xs text-muted-foreground">
+                                {{ dateTime(document.uploaded_at) }} ·
+                                {{ document.uploaded_by }}
+                            </p>
+                        </div>
+                        <Button as-child variant="outline" size="sm">
+                            <a
+                                :href="
+                                    downloadDocument.url({
+                                        permitApplication:
+                                            permitApplication.id,
+                                        document: document.id,
+                                    })
+                                "
+                            >
+                                <Download />
+                                Download
+                            </a>
+                        </Button>
+                    </li>
+                </ul>
             </section>
         </main>
     </div>

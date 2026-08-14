@@ -2,6 +2,7 @@
 
 use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\DescribeReceiptVoidBoundary;
+use App\Actions\StoreCitizenPermitApplicationDocument;
 use App\Actions\UpdateCitizenPermitApplicationDraft;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\ReceiptStatus;
@@ -30,6 +31,7 @@ use App\Models\Role;
 use App\Models\Storyboard;
 use App\Models\TreasuryCollection;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 
@@ -86,6 +88,19 @@ test('scenario registry discovers the citizen permit draft edit visibility scena
         ->and($scenario->expectations['browser_performs_edit'])->toBeTrue()
         ->and($scenario->expectations['official_application_number'])->toBeNull()
         ->and($scenario->expectations['assessment_count'])->toBe(0)
+        ->and($scenario->safety['external_integrations'])->toBeFalse();
+});
+
+test('scenario registry discovers the citizen permit draft document visibility scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_permit_draft_document_visibility');
+
+    expect($scenario)
+        ->key->toBe('citizen_permit_draft_document_visibility')
+        ->label->toBe('Citizen permit draft document visibility')
+        ->risk->toBe('local transactional')
+        ->and($scenario->expectations['browser_performs_document_upload'])->toBeTrue()
+        ->and($scenario->expectations['document_count'])->toBe(1)
+        ->and($scenario->expectations['submission_readiness'])->toBe('not_determined')
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
@@ -503,6 +518,108 @@ test('citizen permit draft edit scenario audit compares browser edits with canon
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
 
+test('citizen permit draft document scenario audits browser upload against private canonical evidence', function () {
+    Storage::fake('local');
+
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_permit_draft_document_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'citizen-draft-document-test-001');
+    $runner = app(CitizenPermitDraftVisibilityScenario::class);
+    $manifest = $runner->prepare($scenario, 'citizen-draft-document-test-001', [
+        'applicant' => $citizen,
+    ], $artifactStore);
+    $application = PermitApplication::query()->findOrFail($manifest['resources']['record_id']);
+    $expectedDocument = $manifest['resources']['expected_document'];
+    $fixturePath = Storage::disk('local')->path(
+        $artifactStore->rootRelativePath().'/'.$expectedDocument['fixture_path'],
+    );
+    $document = app(StoreCitizenPermitApplicationDocument::class)->handle($application, [
+        'label' => $expectedDocument['label'],
+        'file' => new UploadedFile(
+            $fixturePath,
+            $expectedDocument['original_name'],
+            'application/pdf',
+            null,
+            true,
+        ),
+        'remarks' => $expectedDocument['remarks'],
+    ], $citizen);
+    $artifactStore->putJson('browser/report.json', [
+        'result' => ['passed' => true],
+        'citizen_draft' => [
+            'document_upload_performed_by_browser' => true,
+            'status' => 'draft',
+            'business_activities' => collect($manifest['resources']['business_activities'])
+                ->map(fn (array $activity): array => collect($activity)->except('name')->all())
+                ->all(),
+            'supporting_document' => [
+                'id' => $document->id,
+                'label' => $document->label,
+                'original_name' => $document->original_name,
+                'download_available' => true,
+            ],
+            'documentary_readiness' => [
+                'received_document_count' => 1,
+                'submission_readiness' => 'not_determined',
+            ],
+        ],
+        'checks' => [],
+        'artifacts' => [
+            'screenshots' => [
+                '03-citizen-document-after-upload' => 'browser/screenshots/03-citizen-document-after-upload.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($manifest, $artifactStore);
+    $audit = $artifactStore->readJson('terminal/audit.json');
+
+    expect($audited['result'])
+        ->terminal->toBe('passed')
+        ->browser->toBe('passed')
+        ->audit->toBe('passed')
+        ->passed->toBeTrue()
+        ->and($audit['canonical']['documents'])->toHaveCount(1)
+        ->and($audit['canonical']['documents'][0]['id'])->toBe($document->id)
+        ->and($audit['canonical']['documents'][0]['stored_privately'])->toBeTrue()
+        ->and($artifactStore->exists($expectedDocument['fixture_path']))->toBeTrue()
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
+});
+
+test('citizen permit draft document audit preserves a failed report when canonical evidence is missing', function () {
+    Storage::fake('local');
+
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_permit_draft_document_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'citizen-draft-document-missing-test-001');
+    $runner = app(CitizenPermitDraftVisibilityScenario::class);
+    $manifest = $runner->prepare($scenario, 'citizen-draft-document-missing-test-001', [
+        'applicant' => $citizen,
+    ], $artifactStore);
+    $artifactStore->putJson('browser/report.json', [
+        'result' => ['passed' => true],
+        'citizen_draft' => [
+            'document_upload_performed_by_browser' => false,
+            'status' => 'draft',
+            'business_activities' => collect($manifest['resources']['business_activities'])
+                ->map(fn (array $activity): array => collect($activity)->except('name')->all())
+                ->all(),
+        ],
+        'checks' => [],
+        'artifacts' => ['screenshots' => []],
+    ]);
+
+    $audited = $runner->audit($manifest, $artifactStore);
+    $audit = $artifactStore->readJson('terminal/audit.json');
+
+    expect($audited['result'])
+        ->audit->toBe('failed')
+        ->passed->toBeFalse()
+        ->and($audit['canonical']['documents'])->toBeEmpty()
+        ->and(collect($audit['checks'])->firstWhere('key', 'audit-citizen-supporting-document')['passed'])->toBeFalse()
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
+});
+
 test('manual collection receipt scenario executes treasury actions idempotently', function () {
     Storage::fake('local');
 
@@ -740,6 +857,28 @@ test('command prepares the citizen permit draft visibility scenario', function (
     expect($manifest['scenario']['key'])->toBe('citizen_permit_draft_visibility')
         ->and($manifest['result']['terminal'])->toBe('passed')
         ->and($manifest['resources']['public_reference'])->toStartWith('Draft #')
+        ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
+});
+
+test('command prepares the citizen permit draft document visibility scenario', function () {
+    Storage::fake('local');
+
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    config()->set('lifecycle_scenarios.actors.citizen_applicant.email', $citizen->email);
+
+    $this->artisan('lifecycle:scenario', [
+        'scenario' => 'citizen_permit_draft_document_visibility',
+        '--run-id' => 'citizen-draft-document-command-test-001',
+        '--phase' => 'prepare',
+    ])->assertSuccessful();
+
+    $artifactStore = new ScenarioArtifactStore('citizen_permit_draft_document_visibility', 'citizen-draft-document-command-test-001');
+    $manifest = $artifactStore->readJson('manifest.json');
+
+    expect($manifest['scenario']['key'])->toBe('citizen_permit_draft_document_visibility')
+        ->and($manifest['result']['terminal'])->toBe('passed')
+        ->and($manifest['resources']['expected_document']['submission_readiness'])->toBe('not_determined')
+        ->and($artifactStore->exists($manifest['resources']['expected_document']['fixture_path']))->toBeTrue()
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
 });
 
@@ -1649,7 +1788,9 @@ function configuredCitizenScenarioUser(string $email): User
         UserPermission::AccessCitizen,
         UserPermission::CreateOwnPermitApplications,
         UserPermission::EditOwnPermitApplications,
+        UserPermission::UploadOwnPermitApplicationDocuments,
         UserPermission::ViewOwnPermitApplications,
+        UserPermission::ViewOwnPermitApplicationDocuments,
     ])->map(fn (UserPermission $permission): int => Permission::factory()->create([
         'code' => $permission->value,
     ])->id);

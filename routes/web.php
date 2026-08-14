@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Citizen\PermitApplicationController as CitizenPermitApplicationController;
+use App\Http\Controllers\Citizen\PermitApplicationDocumentController as CitizenPermitApplicationDocumentController;
 use App\Http\Controllers\PublicPermitVerificationController;
 use App\Http\Controllers\PublicPermitVerificationPageController;
 use App\Http\Controllers\Staff\AssessmentPaymentScheduleController;
@@ -32,6 +33,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('citizen')->name('citizen.')->middleware('can:citizen.access')->group(function () {
         Route::resource('permit-applications', CitizenPermitApplicationController::class)
             ->only(['index', 'create', 'store', 'show', 'edit', 'update']);
+        Route::post('permit-applications/{permitApplication}/documents', [CitizenPermitApplicationDocumentController::class, 'store'])
+            ->name('permit-applications.documents.store');
+        Route::get('permit-applications/{permitApplication}/documents/{document}/download', [CitizenPermitApplicationDocumentController::class, 'download'])
+            ->name('permit-applications.documents.download');
     });
 
     Route::prefix('staff')->name('staff.')->middleware('can:staff.access')->group(function () {

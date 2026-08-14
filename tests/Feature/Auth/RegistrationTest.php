@@ -28,5 +28,7 @@ test('new users can register', function () {
         ->and(auth()->user()->can(UserPermission::AccessCitizen->value))->toBeTrue()
         ->and(auth()->user()->can(UserPermission::CreateOwnPermitApplications->value))->toBeTrue()
         ->and(auth()->user()->can(UserPermission::EditOwnPermitApplications->value))->toBeTrue()
-        ->and(auth()->user()->can(UserPermission::ViewOwnPermitApplications->value))->toBeTrue();
+        ->and(auth()->user()->can(UserPermission::UploadOwnPermitApplicationDocuments->value))->toBeTrue()
+        ->and(auth()->user()->can(UserPermission::ViewOwnPermitApplications->value))->toBeTrue()
+        ->and(auth()->user()->can(UserPermission::ViewOwnPermitApplicationDocuments->value))->toBeTrue();
 });

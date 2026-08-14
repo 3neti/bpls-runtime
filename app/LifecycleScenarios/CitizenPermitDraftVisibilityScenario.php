@@ -3,11 +3,13 @@
 namespace App\LifecycleScenarios;
 
 use App\Actions\CreatePermitApplication;
+use App\Actions\SimplePdfDocument;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\User;
+use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 final class CitizenPermitDraftVisibilityScenario
@@ -148,6 +150,19 @@ final class CitizenPermitDraftVisibilityScenario
                 ],
             ];
         }
+
+        if ($scenario->key === 'citizen_permit_draft_document_visibility') {
+            $fixturePath = $this->createDocumentFixture($artifactStore, $runId);
+            $manifest['resources']['expected_document'] = [
+                'label' => 'Business registration evidence',
+                'original_name' => 'citizen-business-registration.pdf',
+                'remarks' => 'Citizen lifecycle scenario evidence.',
+                'fixture_path' => $fixturePath,
+                'submitted_via' => 'citizen_portal',
+                'requirement_catalog_status' => 'unresolved',
+                'submission_readiness' => 'not_determined',
+            ];
+        }
         $manifest['steps'] = $steps;
         $manifest['result']['terminal'] = collect($steps)->every(fn (array $step): bool => $step['passed']) ? 'passed' : 'failed';
         $manifest['result']['passed'] = $manifest['result']['terminal'] === 'passed';
@@ -166,9 +181,8 @@ final class CitizenPermitDraftVisibilityScenario
             'irreversible_actions' => false,
             'notifications' => false,
         ]);
-        $isEditScenario = $scenario->key === 'citizen_permit_draft_edit_visibility';
-        $artifactStore->putJson('storyboard/storyboard.json', $this->storyboard($runId, $permitApplication, $isEditScenario));
-        $artifactStore->put('storyboard/storyboard.html', $this->storyboardHtml($runId, $permitApplication, $isEditScenario));
+        $artifactStore->putJson('storyboard/storyboard.json', $this->storyboard($runId, $permitApplication, $scenario->key));
+        $artifactStore->put('storyboard/storyboard.html', $this->storyboardHtml($runId, $permitApplication, $scenario->key));
         $artifactStore->putJson('manifest.json', $manifest);
         $artifactStore->put('review.md', $this->summaryRenderer->reviewMarkdown());
 
@@ -182,7 +196,7 @@ final class CitizenPermitDraftVisibilityScenario
     public function audit(array $manifest, ScenarioArtifactStore $artifactStore): array
     {
         $permitApplication = PermitApplication::query()
-            ->with(['business.owner', 'lines.lineOfBusiness'])
+            ->with(['business.owner', 'documents', 'lines.lineOfBusiness'])
             ->withCount('assessments')
             ->findOrFail($manifest['resources']['record_id']);
         $browserReport = $artifactStore->readJson('browser/report.json') ?? ['result' => ['passed' => false]];
@@ -199,6 +213,7 @@ final class CitizenPermitDraftVisibilityScenario
             ->all();
 
         $expectedEdit = data_get($manifest, 'resources.expected_edit');
+        $expectedDocument = data_get($manifest, 'resources.expected_document');
         $expectedActivities = is_array($expectedEdit)
             ? $expectedEdit['business_activities']
             : $manifest['resources']['business_activities'];
@@ -242,6 +257,38 @@ final class CitizenPermitDraftVisibilityScenario
                 'edit_performed_by_browser' => data_get($browserReport, 'citizen_draft.edit_performed_by_browser'),
             ]);
         }
+
+        if (is_array($expectedDocument)) {
+            $document = $permitApplication->documents->first();
+            $checks[] = $this->step('audit-citizen-supporting-document', 'Canonical private document matches the browser upload contract', [
+                'document_count' => 1,
+                'label' => $expectedDocument['label'],
+                'original_name' => $expectedDocument['original_name'],
+                'submitted_via' => $expectedDocument['submitted_via'],
+                'stored_privately' => true,
+            ], [
+                'document_count' => $permitApplication->documents->count(),
+                'label' => $document?->label,
+                'original_name' => $document?->original_name,
+                'submitted_via' => $document?->source_snapshot['submitted_via'] ?? null,
+                'stored_privately' => $document !== null
+                    && $document->storage_disk === 'local'
+                    && Storage::disk('local')->exists($document->path),
+            ]);
+            $checks[] = $this->step('audit-browser-citizen-supporting-document', 'Browser evidence matches the canonical private document and readiness boundary', [
+                'document_id' => $document?->id,
+                'label' => $document?->label,
+                'download_available' => true,
+                'submission_readiness' => 'not_determined',
+                'document_upload_performed_by_browser' => true,
+            ], [
+                'document_id' => data_get($browserReport, 'citizen_draft.supporting_document.id'),
+                'label' => data_get($browserReport, 'citizen_draft.supporting_document.label'),
+                'download_available' => data_get($browserReport, 'citizen_draft.supporting_document.download_available'),
+                'submission_readiness' => data_get($browserReport, 'citizen_draft.documentary_readiness.submission_readiness'),
+                'document_upload_performed_by_browser' => data_get($browserReport, 'citizen_draft.document_upload_performed_by_browser'),
+            ]);
+        }
         $passed = collect($checks)->every(fn (array $check): bool => $check['passed']);
 
         $manifest['steps'] = [...($manifest['steps'] ?? []), ...$checks];
@@ -264,6 +311,14 @@ final class CitizenPermitDraftVisibilityScenario
                 'business_name' => $permitApplication->business->name,
                 'owner_phone' => $permitApplication->business->owner->phone,
                 'business_activities' => $canonicalActivities,
+                'documents' => $permitApplication->documents->map(fn ($document): array => [
+                    'id' => $document->id,
+                    'label' => $document->label,
+                    'original_name' => $document->original_name,
+                    'submitted_via' => $document->source_snapshot['submitted_via'] ?? null,
+                    'stored_privately' => $document->storage_disk === 'local'
+                        && Storage::disk('local')->exists($document->path),
+                ])->values(),
             ],
             'browser' => $browserReport,
         ]);
@@ -295,9 +350,42 @@ final class CitizenPermitDraftVisibilityScenario
     /**
      * @return array<string, mixed>
      */
-    private function storyboard(string $runId, PermitApplication $permitApplication, bool $isEditScenario): array
+    private function storyboard(string $runId, PermitApplication $permitApplication, string $scenarioKey): array
     {
-        if ($isEditScenario) {
+        if ($scenarioKey === 'citizen_permit_draft_document_visibility') {
+            return [
+                'title' => 'Citizen adds supporting evidence to a permit draft',
+                'summary' => 'A citizen attaches private supporting evidence to the exact owned draft while the system preserves the unresolved documentary-readiness and formal-submission boundary.',
+                'run_id' => $runId,
+                'record' => [
+                    'type' => 'permit_application',
+                    'id' => $permitApplication->id,
+                    'reference' => 'Draft #'.$permitApplication->id,
+                ],
+                'frames' => [
+                    [
+                        'title' => 'Citizen reviews documentary readiness',
+                        'description' => 'The draft shows that no complete statutory requirement catalog has been accepted yet.',
+                        'dialogue' => 'Received evidence is not the same as submission readiness.',
+                        'duration_seconds' => 4,
+                    ],
+                    [
+                        'title' => 'Citizen attaches private evidence',
+                        'description' => 'The browser uploads one PDF through the production document action and private storage boundary.',
+                        'dialogue' => 'The document is retained for later municipal review.',
+                        'duration_seconds' => 5,
+                    ],
+                    [
+                        'title' => 'Evidence remains visible and downloadable',
+                        'description' => 'Desktop, mobile, download, and canonical audit evidence agree on the exact document and unchanged draft state.',
+                        'dialogue' => 'No official submission or assessment is triggered.',
+                        'duration_seconds' => 5,
+                    ],
+                ],
+            ];
+        }
+
+        if ($scenarioKey === 'citizen_permit_draft_edit_visibility') {
             return [
                 'title' => 'Citizen edits a saved permit application draft',
                 'summary' => 'A citizen opens the exact owned draft, updates saved business and activity facts through the real application form, and confirms that the record remains outside municipal processing.',
@@ -362,13 +450,31 @@ final class CitizenPermitDraftVisibilityScenario
         ];
     }
 
-    private function storyboardHtml(string $runId, PermitApplication $permitApplication, bool $isEditScenario): string
+    private function storyboardHtml(string $runId, PermitApplication $permitApplication, string $scenarioKey): string
     {
-        $storyboard = $this->storyboard($runId, $permitApplication, $isEditScenario);
+        $storyboard = $this->storyboard($runId, $permitApplication, $scenarioKey);
         $frames = collect($storyboard['frames'])
             ->map(fn (array $frame): string => '<li><strong>'.e($frame['title']).'</strong><br>'.e($frame['description']).'<br><em>'.e($frame['dialogue']).'</em></li>')
             ->implode('');
 
         return '<!doctype html><html><head><meta charset="utf-8"><title>'.e($storyboard['title']).'</title></head><body><h1>'.e($storyboard['title']).'</h1><p>'.e($storyboard['summary']).'</p><p>Run ID: '.e($runId).'</p><p>Draft #'.e((string) $permitApplication->id).'</p><ol>'.$frames.'</ol></body></html>';
+    }
+
+    private function createDocumentFixture(ScenarioArtifactStore $artifactStore, string $runId): string
+    {
+        $fixturePath = 'browser/fixtures/citizen-business-registration.pdf';
+        $document = new SimplePdfDocument(
+            title: 'Citizen Scenario Supporting Evidence',
+            documentCode: 'CITIZEN-SCENARIO-EVIDENCE',
+            subtitle: 'Permit application draft supporting document',
+            footerNote: 'Lifecycle scenario evidence only.',
+        );
+        $page = $document->addPage('Supporting evidence');
+        $document->text($page, 'Business registration evidence', 42, 710, 14, true);
+        $document->wrappedText($page, "Run ID: {$runId}", 42, 680, 511, 10);
+        $document->wrappedText($page, 'Receipt of this artifact does not establish statutory sufficiency, formal submission, or permit eligibility.', 42, 650, 511, 10);
+        $artifactStore->put($fixturePath, $document->render());
+
+        return $fixturePath;
     }
 }

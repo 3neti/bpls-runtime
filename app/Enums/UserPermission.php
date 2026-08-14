@@ -7,7 +7,9 @@ enum UserPermission: string
     case AccessCitizen = 'citizen.access';
     case CreateOwnPermitApplications = 'citizen.permit_applications.create';
     case EditOwnPermitApplications = 'citizen.permit_applications.edit';
+    case UploadOwnPermitApplicationDocuments = 'citizen.permit_application_documents.create';
     case ViewOwnPermitApplications = 'citizen.permit_applications.view';
+    case ViewOwnPermitApplicationDocuments = 'citizen.permit_application_documents.view';
     case AccessStaff = 'staff.access';
     case ViewPermitApplications = 'permit_applications.view';
     case CreatePermitApplications = 'permit_applications.create';

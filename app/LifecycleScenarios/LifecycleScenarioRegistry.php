@@ -12,6 +12,41 @@ final class LifecycleScenarioRegistry
     public function all(): array
     {
         return [
+            'citizen_permit_draft_document_visibility' => new LifecycleScenarioDefinition(
+                key: 'citizen_permit_draft_document_visibility',
+                label: 'Citizen permit draft document visibility',
+                mode: 'citizen_permit_draft_document_visibility',
+                risk: 'local transactional',
+                actors: [
+                    'applicant' => 'citizen_applicant',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'canonical_state' => 'draft',
+                    'browser_performs_document_upload' => true,
+                    'document_count' => 1,
+                    'submission_readiness' => 'not_determined',
+                    'official_application_number' => null,
+                    'assessment_count' => 0,
+                    'external_calls' => 0,
+                    'irreversible_actions' => false,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
             'citizen_permit_draft_edit_visibility' => new LifecycleScenarioDefinition(
                 key: 'citizen_permit_draft_edit_visibility',
                 label: 'Citizen permit draft edit visibility',

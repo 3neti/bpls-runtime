@@ -22,6 +22,7 @@ if (manifest.schema_version !== 'application.lifecycle-evidence.v1') {
 
 const supportedScenarios = [
     'assessment_policy_boundary_visibility',
+    'citizen_permit_draft_document_visibility',
     'citizen_permit_draft_edit_visibility',
     'citizen_permit_draft_visibility',
     'new_permit_lifecycle_authority_boundary',
@@ -93,6 +94,10 @@ try {
     });
 
     page.on('requestfailed', (request) => {
+        if (isExpectedDownloadAbort(request)) {
+            return;
+        }
+
         failedRequests.push({
             url: request.url(),
             method: request.method(),
@@ -108,6 +113,10 @@ try {
 
     if (manifest.scenario.key === 'citizen_permit_draft_edit_visibility') {
         await editCitizenPermitDraft(page, baseUrl);
+    }
+
+    if (manifest.scenario.key === 'citizen_permit_draft_document_visibility') {
+        await uploadCitizenPermitDraftDocument(page, baseUrl);
     }
 
     if (manifest.scenario.key === 'storyboard_terminal_state_visibility') {
@@ -700,6 +709,257 @@ async function editCitizenPermitDraft(targetPage, targetBaseUrl) {
         targetPage,
         '04-citizen-draft-after-edit-mobile',
         'browser/screenshots/04-citizen-draft-after-edit-mobile.png',
+    );
+}
+
+async function uploadCitizenPermitDraftDocument(targetPage, targetBaseUrl) {
+    const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
+    const expectedDocument = manifest.resources.expected_document;
+    const fixturePath = path.join(
+        runDirectory,
+        expectedDocument.fixture_path,
+    );
+
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    const existingDocument = targetPage.locator(
+        `[data-testid="citizen-supporting-document"][data-document-label="${expectedDocument.label}"]`,
+    );
+    const alreadyUploaded = await existingDocument
+        .isVisible()
+        .catch(() => false);
+    const beforeUploadScreenshot =
+        'browser/screenshots/01-citizen-document-before-upload.png';
+
+    if (
+        alreadyUploaded &&
+        fs.existsSync(path.join(runDirectory, beforeUploadScreenshot))
+    ) {
+        screenshots['01-citizen-document-before-upload'] =
+            beforeUploadScreenshot;
+        actionLog.push(
+            stepLog(
+                '01-citizen-document-before-upload-screenshot-retained',
+                'Retain the original pre-upload screenshot during resume',
+                { screenshot: beforeUploadScreenshot },
+            ),
+        );
+    } else {
+        await screenshot(
+            targetPage,
+            '01-citizen-document-before-upload',
+            beforeUploadScreenshot,
+        );
+    }
+
+    const uploadFormVisible = await targetPage
+        .getByTestId('citizen-document-upload-form')
+        .isVisible()
+        .catch(() => false);
+    const readinessBefore = await targetPage
+        .getByTestId('citizen-documentary-readiness')
+        .getAttribute('data-submission-readiness');
+    checks.push(
+        check(
+            'citizen-document-upload-form-available',
+            'Owned unprocessed draft exposes supporting evidence upload',
+            true,
+            uploadFormVisible,
+        ),
+        check(
+            'citizen-document-readiness-boundary-visible',
+            'Documentary readiness remains explicitly undetermined',
+            expectedDocument.submission_readiness,
+            readinessBefore,
+        ),
+    );
+
+    await targetPage
+        .locator('#citizen-document-label')
+        .fill(expectedDocument.label);
+    await targetPage
+        .locator('#citizen-document-remarks')
+        .fill(expectedDocument.remarks);
+    await targetPage.locator('#citizen-document-file').setInputFiles(fixturePath);
+    await screenshot(
+        targetPage,
+        '02-citizen-document-upload-workspace',
+        'browser/screenshots/02-citizen-document-upload-workspace.png',
+    );
+
+    if (alreadyUploaded) {
+        actionLog.push(
+            stepLog(
+                'citizen-document-upload-resumed',
+                'Exact supporting document already exists; skip repeat upload',
+                { permit_application_id: manifest.resources.record_id },
+            ),
+        );
+        await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    } else {
+        actionLog.push(
+            stepLog(
+                'citizen-document-upload-entered',
+                'Upload manifest-bound supporting evidence through the real form',
+                { permit_application_id: manifest.resources.record_id },
+            ),
+        );
+        await targetPage.getByRole('button', { name: 'Add document' }).click();
+        await targetPage.waitForURL(
+            new RegExp(`/citizen/permit-applications/${manifest.resources.record_id}$`),
+            { timeout: 10000 },
+        );
+    }
+
+    const documentRow = targetPage.locator(
+        `[data-testid="citizen-supporting-document"][data-document-label="${expectedDocument.label}"]`,
+    );
+    await documentRow.waitFor();
+    const documentId = Number(await documentRow.getAttribute('data-document-id'));
+    const documentCount = await targetPage
+        .getByTestId('citizen-supporting-document')
+        .count();
+    const originalNameVisible = await documentRow
+        .getByText(expectedDocument.original_name, { exact: false })
+        .isVisible();
+    const readiness = targetPage.getByTestId('citizen-documentary-readiness');
+    const readinessDocumentCount = Number(
+        await readiness.getAttribute('data-document-count'),
+    );
+    const submissionReadiness = await readiness.getAttribute(
+        'data-submission-readiness',
+    );
+    const draftStatus = await targetPage
+        .getByTestId('citizen-draft-boundary')
+        .getAttribute('data-application-status');
+    const assessmentActionVisible = await targetPage
+        .getByRole('button', { name: /assess/i })
+        .isVisible()
+        .catch(() => false);
+    const downloadsDirectory = path.join(runDirectory, 'browser', 'downloads');
+    fs.mkdirSync(downloadsDirectory, { recursive: true });
+    const [downloadedFile] = await Promise.all([
+        targetPage.waitForEvent('download'),
+        documentRow.getByRole('link', { name: 'Download' }).click(),
+    ]);
+    const downloadedPath = path.join(
+        downloadsDirectory,
+        expectedDocument.original_name,
+    );
+    await downloadedFile.saveAs(downloadedPath);
+    const downloadAvailable =
+        downloadedFile.suggestedFilename() === expectedDocument.original_name &&
+        fs.existsSync(downloadedPath) &&
+        fs.statSync(downloadedPath).size > 0;
+
+    Object.assign(citizenDraftEvidence, {
+        permit_application_id: manifest.resources.record_id,
+        display_reference: manifest.resources.public_reference,
+        status: draftStatus,
+        business_activities: manifest.resources.business_activities.map(
+            (activity) => ({
+                code: activity.code,
+                declared_gross_sales_cents:
+                    activity.declared_gross_sales_cents,
+                capital_investment_cents:
+                    activity.capital_investment_cents,
+                quantity: activity.quantity,
+                started_on: activity.started_on,
+            }),
+        ),
+        supporting_document: {
+            id: documentId,
+            label: expectedDocument.label,
+            original_name: expectedDocument.original_name,
+            download_available: downloadAvailable,
+            download_artifact:
+                'browser/downloads/' + expectedDocument.original_name,
+        },
+        documentary_readiness: {
+            received_document_count: readinessDocumentCount,
+            submission_readiness: submissionReadiness,
+        },
+        assessment_action_visible: assessmentActionVisible,
+        document_upload_performed_by_browser: true,
+        document_upload_resumed_without_resubmit: alreadyUploaded,
+    });
+    Object.assign(supportingDocumentEvidence, {
+        id: documentId,
+        label: expectedDocument.label,
+        original_name: expectedDocument.original_name,
+        download_available: downloadAvailable,
+    });
+    checks.push(
+        check(
+            'citizen-supporting-document-count-matches',
+            'Exact supporting document appears once on the draft',
+            1,
+            documentCount,
+        ),
+        check(
+            'citizen-supporting-document-name-visible',
+            'Original supporting document name remains visible',
+            true,
+            originalNameVisible,
+        ),
+        check(
+            'citizen-supporting-document-downloads',
+            'Exact private supporting document downloads successfully',
+            true,
+            downloadAvailable,
+        ),
+        check(
+            'citizen-supporting-document-readiness-count-matches',
+            'Visible documentary evidence count matches the exact record',
+            1,
+            readinessDocumentCount,
+        ),
+        check(
+            'citizen-supporting-document-keeps-draft-state',
+            'Document upload does not change the permit application state',
+            'draft',
+            draftStatus,
+        ),
+        check(
+            'citizen-supporting-document-keeps-assessment-unavailable',
+            'Document upload does not expose citizen assessment',
+            false,
+            assessmentActionVisible,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '03-citizen-document-after-upload',
+        'browser/screenshots/03-citizen-document-after-upload.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    const mobileDocumentCount = await targetPage
+        .getByTestId('citizen-supporting-document')
+        .count();
+    const horizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+    checks.push(
+        check(
+            'citizen-supporting-document-mobile-visible',
+            'Mobile detail keeps the exact supporting document visible',
+            1,
+            mobileDocumentCount,
+        ),
+        check(
+            'citizen-supporting-document-mobile-no-horizontal-overflow',
+            'Mobile supporting evidence has no page-level horizontal overflow',
+            false,
+            horizontalOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '04-citizen-document-mobile',
+        'browser/screenshots/04-citizen-document-mobile.png',
     );
 }
 
@@ -4310,6 +4570,17 @@ function normalizedText(value) {
     return String(value ?? '')
         .replaceAll(/\s+/g, ' ')
         .trim();
+}
+
+function isExpectedDownloadAbort(request) {
+    if (
+        request.method() !== 'GET' ||
+        request.failure()?.errorText !== 'net::ERR_ABORTED'
+    ) {
+        return false;
+    }
+
+    return new URL(request.url()).pathname.endsWith('/download');
 }
 
 async function hasTitleInputValue(targetPage) {

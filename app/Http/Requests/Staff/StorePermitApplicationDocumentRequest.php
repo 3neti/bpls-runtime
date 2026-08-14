@@ -3,12 +3,10 @@
 namespace App\Http\Requests\Staff;
 
 use App\Enums\UserPermission;
+use App\Http\Requests\PermitApplicationDocumentRequest;
 use App\Models\PermitApplication;
-use Illuminate\Contracts\Validation\ValidationRule;
-use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rules\File;
 
-class StorePermitApplicationDocumentRequest extends FormRequest
+class StorePermitApplicationDocumentRequest extends PermitApplicationDocumentRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -20,19 +18,5 @@ class StorePermitApplicationDocumentRequest extends FormRequest
         return $permitApplication instanceof PermitApplication
             && $permitApplication->canContinue()
             && ($this->user()?->can(UserPermission::CreatePermitApplications->value) ?? false);
-    }
-
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, ValidationRule|array<mixed>|string>
-     */
-    public function rules(): array
-    {
-        return [
-            'label' => ['required', 'string', 'max:120'],
-            'file' => ['required', File::types(['pdf', 'jpg', 'jpeg', 'png'])->max(10 * 1024)],
-            'remarks' => ['nullable', 'string', 'max:1000'],
-        ];
     }
 }

@@ -54,7 +54,9 @@ final class ScenarioActorResolver
                 UserPermission::AccessCitizen,
                 UserPermission::CreateOwnPermitApplications,
                 UserPermission::EditOwnPermitApplications,
+                UserPermission::UploadOwnPermitApplicationDocuments,
                 UserPermission::ViewOwnPermitApplications,
+                UserPermission::ViewOwnPermitApplicationDocuments,
             ],
             'primary_operator' => [
                 UserPermission::AccessStaff,
