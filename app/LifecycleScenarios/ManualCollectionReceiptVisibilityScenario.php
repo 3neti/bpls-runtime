@@ -26,6 +26,7 @@ use App\Enums\TreasuryCollectionMethod;
 use App\Enums\TreasuryCollectionStatus;
 use App\Exceptions\UnresolvedPermitReleasePolicy;
 use App\Exceptions\UnresolvedReceiptPolicy;
+use App\Models\Assessment;
 use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
 use App\Models\PaymentSchedule;
@@ -166,6 +167,8 @@ final class ManualCollectionReceiptVisibilityScenario
             'permit_application_id' => $permitApplication->id,
             'application_number' => $permitApplication->application_number,
             'assessment_id' => $assessment->id,
+            'assessment_total_amount_cents' => $assessment->total_amount_cents,
+            'assessment_pdf_url' => route('staff.permit-applications.assessments.pdf', $assessment, false),
             'payment_schedule_id' => $paymentSchedule->id,
             'collection_id' => $collection->id,
             'permit_application_url' => route('staff.permit-applications.show', $permitApplication, false),
@@ -242,6 +245,7 @@ final class ManualCollectionReceiptVisibilityScenario
     public function audit(array $manifest, ScenarioArtifactStore $artifactStore): array
     {
         $paymentSchedule = PaymentSchedule::query()->findOrFail($manifest['resources']['payment_schedule_id']);
+        $assessment = Assessment::query()->findOrFail($manifest['resources']['assessment_id']);
         $collection = TreasuryCollection::query()->with('receipt')->findOrFail($manifest['resources']['collection_id']);
         $receipt = Receipt::query()->findOrFail($manifest['resources']['record_id']);
         $permitApplication = PermitApplication::query()
@@ -268,6 +272,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('audit-authority-boundary', 'Authority boundary separates software evidence from human issuance authority', ['status' => 'ready_for_authority_review', 'artifact_statement' => 'Generated permit artifacts support authority review but do not issue, release, or make a permit legally effective.'], ['status' => $releaseReadiness['authority_boundary']['status'], 'artifact_statement' => $releaseReadiness['authority_boundary']['artifact_statement']]),
             $this->step('audit-release-boundary', 'Permit release remains blocked by explicit policy boundary', ['status' => PermitApplicationStatus::PendingPayment->value, 'blocked_transition' => PermitApplicationStatus::Released->value], ['status' => $permitApplication->status->value, 'blocked_transition' => $permitApplication->metadata['release_policy_boundary']['blocked_transition'] ?? null]),
             $this->step('audit-browser-application-form-pdf', 'Browser evidence confirms application form artifact renders exact intake facts', ['application_number' => $permitApplication->application_number, 'available' => true], ['application_number' => data_get($browserReport, 'documents.application_form.application_number'), 'available' => (bool) data_get($browserReport, 'documents.application_form.available')]),
+            $this->step('audit-browser-assessment-pdf', 'Browser evidence confirms assessment artifact renders exact persisted assessment snapshot', ['assessment_id' => $assessment->id, 'total_amount_cents' => $assessment->total_amount_cents, 'available' => true], ['assessment_id' => data_get($browserReport, 'documents.assessment.assessment_id'), 'total_amount_cents' => data_get($browserReport, 'documents.assessment.total_amount_cents'), 'available' => (bool) data_get($browserReport, 'documents.assessment.available')]),
             $this->step('audit-verification-reference', 'Permit artifact verification reference matches canonical boundary', ['reference' => $verificationBoundary['reference'], 'can_verify_release' => false], ['reference' => $manifest['resources']['permit_verification_reference'] ?? null, 'can_verify_release' => $verificationBoundary['can_verify_release']]),
             $this->step('audit-browser-verification-reference', 'Browser evidence observed the same permit verification reference', ['reference' => $verificationBoundary['reference']], ['reference' => data_get($browserReport, 'verification.reference')]),
             $this->step('audit-browser-public-verification', 'Browser evidence confirms public verification is artifact-only', ['status' => 'artifact_only', 'can_verify_release' => false], ['status' => data_get($browserReport, 'verification.public_status'), 'can_verify_release' => data_get($browserReport, 'verification.can_verify_release')]),

@@ -16,6 +16,7 @@ use App\LifecycleScenarios\PermitApplicationPendingPaymentVisibilityScenario;
 use App\LifecycleScenarios\ScenarioActorResolver;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\LifecycleScenarios\StoryboardTerminalStateVisibilityScenario;
+use App\Models\Assessment;
 use App\Models\Permission;
 use App\Models\PermitApplication;
 use App\Models\Receipt;
@@ -231,6 +232,8 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($firstManifest['resources']['receipt_queue_url'])->toContain('q=SCENARIO-OR-MANUAL-RECEIPT-TEST-001')
         ->and($firstManifest['resources']['receipt_queue_url'])->toContain('status=issued')
         ->and($firstManifest['resources']['application_form_pdf_url'])->toBe('/staff/permit-applications/'.$firstManifest['resources']['permit_application_id'].'/application-form.pdf')
+        ->and($firstManifest['resources']['assessment_pdf_url'])->toBe('/staff/assessments/'.$firstManifest['resources']['assessment_id'].'/pdf')
+        ->and($firstManifest['resources']['assessment_total_amount_cents'])->toBe(PermitApplication::query()->findOrFail($firstManifest['resources']['permit_application_id'])->assessments()->firstOrFail()->total_amount_cents)
         ->and($firstManifest['resources']['permit_verification_reference'])->toStartWith('PVA-'.$firstManifest['resources']['permit_application_id'].'-')
         ->and($firstManifest['resources']['permit_verification_url'])->toContain($firstManifest['resources']['permit_verification_reference'])
         ->and($firstManifest['resources']['receipt_void_boundary_reference'])->toStartWith('RVB-'.$firstManifest['resources']['record_id'].'-')
@@ -259,6 +262,7 @@ test('manual collection receipt scenario audit compares browser evidence with ca
     $verification = app(DescribePermitVerificationBoundary::class)->handle(
         PermitApplication::query()->findOrFail($manifest['resources']['permit_application_id']),
     );
+    $assessment = Assessment::query()->findOrFail($manifest['resources']['assessment_id']);
     $voidBoundary = app(DescribeReceiptVoidBoundary::class)->handle(
         Receipt::query()->findOrFail($manifest['resources']['record_id']),
     );
@@ -283,6 +287,13 @@ test('manual collection receipt scenario audit compares browser evidence with ca
             'application_form' => [
                 'available' => true,
                 'application_number' => $manifest['resources']['application_number'],
+                'status' => 200,
+                'content_type' => 'application/pdf',
+            ],
+            'assessment' => [
+                'available' => true,
+                'assessment_id' => $manifest['resources']['assessment_id'],
+                'total_amount_cents' => $assessment->total_amount_cents,
                 'status' => 200,
                 'content_type' => 'application/pdf',
             ],

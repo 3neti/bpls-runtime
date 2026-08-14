@@ -1491,6 +1491,47 @@ async function inspectManualReceiptPermitVerificationBoundary(
         applicationFormPdfContentType,
     );
 
+    const assessmentPdfResponse = await targetPage.request.get(
+        `${targetBaseUrl}${manifest.resources.assessment_pdf_url}`,
+    );
+    const assessmentPdfContentType =
+        assessmentPdfResponse.headers()['content-type'] ?? '';
+    const assessmentPdfBody = await assessmentPdfResponse.text();
+    const assessmentPdfVisible =
+        assessmentPdfResponse.ok() &&
+        assessmentPdfContentType.includes('application/pdf') &&
+        assessmentPdfBody.startsWith('%PDF-1.4') &&
+        assessmentPdfBody.includes('Assessment Sheet Artifact') &&
+        assessmentPdfBody.includes(manifest.resources.application_number) &&
+        assessmentPdfBody.includes(
+            moneyFromCents(manifest.resources.assessment_total_amount_cents),
+        ) &&
+        assessmentPdfBody.includes(
+            'This artifact renders persisted assessment lines and does not recalculate fees or',
+        );
+    checks.push(
+        check(
+            'assessment-pdf-snapshot-visible',
+            'Assessment PDF contains exact prepared persisted assessment snapshot',
+            true,
+            assessmentPdfVisible,
+            {
+                url: `${targetBaseUrl}${manifest.resources.assessment_pdf_url}`,
+                status: assessmentPdfResponse.status(),
+                content_type: assessmentPdfContentType,
+                assessment_id: manifest.resources.assessment_id,
+                application_number: manifest.resources.application_number,
+            },
+        ),
+    );
+    reportAssessmentPdf(
+        assessmentPdfVisible,
+        manifest.resources.assessment_id,
+        manifest.resources.assessment_total_amount_cents,
+        assessmentPdfResponse.status(),
+        assessmentPdfContentType,
+    );
+
     const permitPdfResponse = await targetPage.request.get(
         `${targetBaseUrl}${manifest.resources.permit_pdf_url}`,
     );
@@ -1741,6 +1782,29 @@ function reportApplicationFormPdf(
         status,
         content_type: contentType,
     };
+}
+
+function reportAssessmentPdf(
+    available,
+    assessmentId,
+    totalAmountCents,
+    status,
+    contentType,
+) {
+    documentEvidence.assessment = {
+        available,
+        assessment_id: assessmentId,
+        total_amount_cents: totalAmountCents,
+        status,
+        content_type: contentType,
+    };
+}
+
+function moneyFromCents(amountCents) {
+    return `PHP ${Number(amountCents / 100).toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })}`;
 }
 
 async function hasTitleInputValue(targetPage) {
