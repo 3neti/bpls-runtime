@@ -21,6 +21,7 @@ if (manifest.schema_version !== 'application.lifecycle-evidence.v1') {
 }
 
 const supportedScenarios = [
+    'new_permit_lifecycle_authority_boundary',
     'manual_collection_receipt_visibility',
     'storyboard_terminal_state_visibility',
     'permit_application_cancelled_visibility',
@@ -101,7 +102,12 @@ try {
         await inspectPendingPaymentPermitApplicationMobile(page, baseUrl);
     }
 
-    if (manifest.scenario.key === 'manual_collection_receipt_visibility') {
+    if (
+        [
+            'new_permit_lifecycle_authority_boundary',
+            'manual_collection_receipt_visibility',
+        ].includes(manifest.scenario.key)
+    ) {
         await inspectManualReceiptPaymentScheduleQueue(page, baseUrl);
         await inspectManualReceiptQueue(page, baseUrl);
         await inspectManualReceiptPaymentSchedule(page, baseUrl);

@@ -47,6 +47,7 @@ class LifecycleScenarioCommand extends Command
             if (in_array($phase, ['prepare', 'all'], true)) {
                 $actors = $actorResolver->resolve($scenario);
                 $manifest = match ($scenario->key) {
+                    'new_permit_lifecycle_authority_boundary' => $manualCollectionReceiptScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'manual_collection_receipt_visibility' => $manualCollectionReceiptScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'permit_application_cancelled_visibility' => $permitApplicationCancelledScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'permit_application_pending_payment_visibility' => $permitApplicationPendingPaymentScenario->prepare($scenario, $runId, $actors, $artifactStore),
@@ -63,6 +64,7 @@ class LifecycleScenarioCommand extends Command
 
             if (in_array($phase, ['audit', 'all'], true)) {
                 $manifest = match ($scenario->key) {
+                    'new_permit_lifecycle_authority_boundary' => $manualCollectionReceiptScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'manual_collection_receipt_visibility' => $manualCollectionReceiptScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'permit_application_cancelled_visibility' => $permitApplicationCancelledScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'permit_application_pending_payment_visibility' => $permitApplicationPendingPaymentScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),

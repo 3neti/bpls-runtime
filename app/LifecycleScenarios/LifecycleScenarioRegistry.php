@@ -12,6 +12,45 @@ final class LifecycleScenarioRegistry
     public function all(): array
     {
         return [
+            'new_permit_lifecycle_authority_boundary' => new LifecycleScenarioDefinition(
+                key: 'new_permit_lifecycle_authority_boundary',
+                label: 'New permit lifecycle to authority boundary',
+                mode: 'new_permit_lifecycle_authority_boundary',
+                risk: 'local transactional',
+                actors: [
+                    'operator' => 'primary_operator',
+                    'recipient' => 'sample_recipient',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'application_type' => 'new',
+                    'payment_schedule_status' => 'paid',
+                    'collection_status' => 'receipted',
+                    'receipt_status' => 'issued',
+                    'clearances_completed' => true,
+                    'ready_for_authority_review' => true,
+                    'can_release' => false,
+                    'permit_release_status' => 'blocked',
+                    'public_verification_status' => 'artifact_only',
+                    'external_calls' => 0,
+                    'irreversible_actions' => false,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
             'manual_collection_receipt_visibility' => new LifecycleScenarioDefinition(
                 key: 'manual_collection_receipt_visibility',
                 label: 'Manual collection receipt visibility',

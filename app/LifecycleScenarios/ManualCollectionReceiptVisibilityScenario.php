@@ -230,8 +230,8 @@ final class ManualCollectionReceiptVisibilityScenario
             'irreversible_actions' => false,
             'notifications' => false,
         ]);
-        $artifactStore->putJson('storyboard/storyboard.json', $this->storyboard($runId, $permitApplication, $paymentSchedule, $collection, $receipt));
-        $artifactStore->put('storyboard/storyboard.html', $this->storyboardHtml($runId, $permitApplication, $paymentSchedule, $collection, $receipt));
+        $artifactStore->putJson('storyboard/storyboard.json', $this->storyboard($scenario, $runId, $permitApplication, $paymentSchedule, $collection, $receipt));
+        $artifactStore->put('storyboard/storyboard.html', $this->storyboardHtml($scenario, $runId, $permitApplication, $paymentSchedule, $collection, $receipt));
         $artifactStore->putJson('manifest.json', $manifest);
         $artifactStore->put('review.md', $this->summaryRenderer->reviewMarkdown());
 
@@ -393,14 +393,18 @@ final class ManualCollectionReceiptVisibilityScenario
     /**
      * @return array<string, mixed>
      */
-    private function storyboard(string $runId, PermitApplication $permitApplication, PaymentSchedule $paymentSchedule, TreasuryCollection $collection, Receipt $receipt): array
+    private function storyboard(LifecycleScenarioDefinition $scenario, string $runId, PermitApplication $permitApplication, PaymentSchedule $paymentSchedule, TreasuryCollection $collection, Receipt $receipt): array
     {
+        $isUnifiedPermitLifecycle = $scenario->key === 'new_permit_lifecycle_authority_boundary';
+
         return [
-            'title' => 'Manual collection receipt visibility',
-            'summary' => 'BPLO/Treasury staff prepare a collectible assessment, record full over-the-counter payment, issue a manual receipt, and verify the receipt is visible from Treasury surfaces.',
+            'title' => $isUnifiedPermitLifecycle ? 'New permit lifecycle to authority boundary' : 'Manual collection receipt visibility',
+            'summary' => $isUnifiedPermitLifecycle
+                ? 'BPLO/Treasury staff execute a new permit lifecycle through intake, assessment, payment schedule, collection, receipt, clearances, permit artifact generation, public verification, and the explicit authority boundary without legally issuing or releasing the permit.'
+                : 'BPLO/Treasury staff prepare a collectible assessment, record full over-the-counter payment, issue a manual receipt, and verify the receipt is visible from Treasury surfaces.',
             'run_id' => $runId,
             'record' => [
-                'type' => 'receipt',
+                'type' => $isUnifiedPermitLifecycle ? 'permit_lifecycle' : 'receipt',
                 'id' => $receipt->id,
                 'receipt_number' => $receipt->receipt_number,
                 'application_number' => $permitApplication->application_number,
@@ -411,8 +415,8 @@ final class ManualCollectionReceiptVisibilityScenario
             ],
             'frames' => [
                 [
-                    'title' => 'Assessment becomes collectible',
-                    'description' => 'Staff records an application, computes assessment, and prepares a payment schedule.',
+                    'title' => 'Staff records new permit application',
+                    'description' => 'Staff records a new business permit application, computes assessment, and prepares a payment schedule.',
                     'dialogue' => 'The application is pending payment and ready for Treasury collection.',
                     'duration_seconds' => 5,
                 ],
@@ -459,7 +463,7 @@ final class ManualCollectionReceiptVisibilityScenario
                     'duration_seconds' => 5,
                 ],
                 [
-                    'title' => 'Reviewer confirms receipt visibility',
+                    'title' => $isUnifiedPermitLifecycle ? 'Reviewer confirms lifecycle evidence' : 'Reviewer confirms receipt visibility',
                     'description' => 'The browser opens the payment schedule, receipt, permit detail, permit PDF, and public verification surfaces for the exact manifest records.',
                     'dialogue' => 'Visible UI state, document evidence, public verification, and canonical records agree.',
                     'duration_seconds' => 5,
@@ -468,9 +472,9 @@ final class ManualCollectionReceiptVisibilityScenario
         ];
     }
 
-    private function storyboardHtml(string $runId, PermitApplication $permitApplication, PaymentSchedule $paymentSchedule, TreasuryCollection $collection, Receipt $receipt): string
+    private function storyboardHtml(LifecycleScenarioDefinition $scenario, string $runId, PermitApplication $permitApplication, PaymentSchedule $paymentSchedule, TreasuryCollection $collection, Receipt $receipt): string
     {
-        $storyboard = $this->storyboard($runId, $permitApplication, $paymentSchedule, $collection, $receipt);
+        $storyboard = $this->storyboard($scenario, $runId, $permitApplication, $paymentSchedule, $collection, $receipt);
         $frames = collect($storyboard['frames'])
             ->map(fn (array $frame): string => '<li><strong>'.e($frame['title']).'</strong><br>'.e($frame['description']).'<br><em>'.e($frame['dialogue']).'</em></li>')
             ->implode('');

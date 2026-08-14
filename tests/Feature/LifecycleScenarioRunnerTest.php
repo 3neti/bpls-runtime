@@ -52,6 +52,23 @@ test('scenario registry discovers the manual collection receipt visibility scena
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
+test('scenario registry discovers the new permit lifecycle authority boundary scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('new_permit_lifecycle_authority_boundary');
+
+    expect($scenario)
+        ->key->toBe('new_permit_lifecycle_authority_boundary')
+        ->label->toBe('New permit lifecycle to authority boundary')
+        ->risk->toBe('local transactional')
+        ->and($scenario->expectations['payment_schedule_status'])->toBe('paid')
+        ->and($scenario->expectations['collection_status'])->toBe('receipted')
+        ->and($scenario->expectations['receipt_status'])->toBe('issued')
+        ->and($scenario->expectations['clearances_completed'])->toBeTrue()
+        ->and($scenario->expectations['ready_for_authority_review'])->toBeTrue()
+        ->and($scenario->expectations['can_release'])->toBeFalse()
+        ->and($scenario->expectations['permit_release_status'])->toBe('blocked')
+        ->and($scenario->safety['external_integrations'])->toBeFalse();
+});
+
 test('scenario registry discovers the permit application cancelled visibility scenario', function () {
     $scenario = app(LifecycleScenarioRegistry::class)->get('permit_application_cancelled_visibility');
 
@@ -244,6 +261,67 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($collection->status)->toBe(TreasuryCollectionStatus::Receipted)
         ->and(PermitApplication::query()->findOrFail($firstManifest['resources']['permit_application_id'])->metadata['release_policy_boundary']['blocked_transition'])->toBe(PermitApplicationStatus::Released->value)
         ->and($artifactStore->exists('terminal/prepare.json'))->toBeTrue()
+        ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
+});
+
+test('new permit lifecycle scenario executes real domain actions to authority boundary idempotently', function () {
+    Storage::fake('local');
+
+    $user = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('new_permit_lifecycle_authority_boundary');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'new-permit-lifecycle-test-001');
+    $runner = app(ManualCollectionReceiptVisibilityScenario::class);
+
+    $firstManifest = $runner->prepare($scenario, 'new-permit-lifecycle-test-001', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+    $secondManifest = $runner->prepare($scenario, 'new-permit-lifecycle-test-001', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+
+    $permitApplication = PermitApplication::query()->findOrFail($firstManifest['resources']['permit_application_id']);
+    $receipt = Receipt::query()->findOrFail($firstManifest['resources']['record_id']);
+    $collection = TreasuryCollection::query()->findOrFail($firstManifest['resources']['collection_id']);
+    $storyboard = $artifactStore->readJson('storyboard/storyboard.json');
+
+    expect($firstManifest['scenario']['key'])->toBe('new_permit_lifecycle_authority_boundary')
+        ->and($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
+        ->and($firstManifest['resources']['permit_application_id'])->toBe($secondManifest['resources']['permit_application_id'])
+        ->and($firstManifest['resources']['collection_id'])->toBe($secondManifest['resources']['collection_id'])
+        ->and($firstManifest['resources']['permit_verification_reference'])->toStartWith('PVA-'.$firstManifest['resources']['permit_application_id'].'-')
+        ->and($firstManifest['resources']['receipt_void_boundary_reference'])->toStartWith('RVB-'.$firstManifest['resources']['record_id'].'-')
+        ->and($permitApplication->status)->toBe(PermitApplicationStatus::PendingPayment)
+        ->and($permitApplication->metadata['release_policy_boundary']['blocked_transition'])->toBe(PermitApplicationStatus::Released->value)
+        ->and($permitApplication->clearances()->count())->toBe(3)
+        ->and($permitApplication->clearances()->where('status', 'completed')->count())->toBe(3)
+        ->and($receipt->status)->toBe(ReceiptStatus::Issued)
+        ->and($receipt->numbering_authority)->toBe('manual')
+        ->and($collection->status)->toBe(TreasuryCollectionStatus::Receipted)
+        ->and($storyboard['title'])->toBe('New permit lifecycle to authority boundary')
+        ->and($storyboard['record']['type'])->toBe('permit_lifecycle')
+        ->and($artifactStore->exists('terminal/prepare.json'))->toBeTrue()
+        ->and($artifactStore->exists('storyboard/storyboard.html'))->toBeTrue();
+});
+
+test('command prepares the new permit lifecycle authority boundary scenario', function () {
+    Storage::fake('local');
+
+    configuredScenarioUser('test@example.com');
+
+    $this->artisan('lifecycle:scenario', [
+        'scenario' => 'new_permit_lifecycle_authority_boundary',
+        '--run-id' => 'new-permit-command-test-001',
+        '--phase' => 'prepare',
+    ])->assertSuccessful();
+
+    $artifactStore = new ScenarioArtifactStore('new_permit_lifecycle_authority_boundary', 'new-permit-command-test-001');
+    $manifest = $artifactStore->readJson('manifest.json');
+
+    expect($manifest['scenario']['key'])->toBe('new_permit_lifecycle_authority_boundary')
+        ->and($manifest['result']['terminal'])->toBe('passed')
+        ->and($manifest['resources']['application_number'])->toBe('APP-SCENARIO-NEW-PERMIT-COMMAND-TEST-001')
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
 });
 
