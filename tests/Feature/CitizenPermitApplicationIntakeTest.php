@@ -126,9 +126,11 @@ test('citizens can save an owned new permit draft with multiple activities', fun
     $response->assertRedirect(route('citizen.permit-applications.show', $application));
 
     expect($application->application_number)->toBeNull()
+        ->and($application->submitted_at)->toBeNull()
         ->and($application->type)->toBe(PermitApplicationType::New)
         ->and($application->status)->toBe(PermitApplicationStatus::Draft)
         ->and($application->submitted_by_id)->toBe($citizen->id)
+        ->and($citizen->refresh()->business_owner_id)->toBe($application->business->business_owner_id)
         ->and($application->assessments()->count())->toBe(0)
         ->and($application->lines)->toHaveCount(2)
         ->and($application->lines[0]->lineOfBusiness->code)->toBe('CITIZEN-MULTI-RETAIL')
@@ -153,6 +155,42 @@ test('citizens can save an owned new permit draft with multiple activities', fun
         );
 });
 
+test('citizens can create a draft for an existing linked business without mutating registry facts', function () {
+    $citizen = userWithPermissions([
+        UserPermission::AccessCitizen,
+        UserPermission::CreateOwnPermitApplications,
+        UserPermission::ViewOwnPermitApplications,
+    ], UserRole::Citizen);
+    $owner = BusinessOwner::factory()->create(['name' => 'Durable Legal Owner']);
+    $business = Business::factory()->for($owner, 'owner')->create(['name' => 'Durable Registry Business']);
+    $citizen->forceFill(['business_owner_id' => $owner->id])->save();
+    $lineOfBusiness = LineOfBusiness::factory()->create();
+
+    $this->actingAs($citizen)
+        ->post(route('citizen.permit-applications.store'), citizenPermitDraftPayload([
+            'business_id' => $business->id,
+            'owner_name' => 'Must Not Replace Owner',
+            'business_name' => 'Must Not Replace Business',
+            'lines' => [[
+                'line_of_business_id' => $lineOfBusiness->id,
+                'declared_gross_sales_pesos' => '1000.00',
+                'capital_investment_pesos' => '500.00',
+                'quantity' => 1,
+            ]],
+        ]))
+        ->assertRedirect();
+
+    $application = PermitApplication::query()->whereBelongsTo($citizen, 'submittedBy')->sole();
+
+    expect($application->business_id)->toBe($business->id)
+        ->and($application->submitted_at)->toBeNull()
+        ->and($application->application_number)->toBeNull()
+        ->and($owner->refresh()->name)->toBe('Durable Legal Owner')
+        ->and($business->refresh()->name)->toBe('Durable Registry Business')
+        ->and(BusinessOwner::query()->count())->toBe(1)
+        ->and(Business::query()->count())->toBe(1);
+});
+
 test('citizens can edit an owned draft and atomically replace its activities', function () {
     $citizen = userWithPermissions([
         UserPermission::AccessCitizen,
@@ -175,6 +213,7 @@ test('citizens can edit an owned draft and atomically replace its activities', f
         ->assertRedirect();
 
     $application = PermitApplication::query()->whereBelongsTo($citizen, 'submittedBy')->sole();
+    $citizen->refresh();
     $draftVersion = $application->updated_at->toIso8601String();
 
     $this->actingAs($citizen)
@@ -192,7 +231,7 @@ test('citizens can edit an owned draft and atomically replace its activities', f
     $response = $this->actingAs($citizen)
         ->patch(route('citizen.permit-applications.update', $application), citizenPermitDraftPayload([
             'draft_version' => $draftVersion,
-            'business_name' => 'Citizen Trading Updated',
+            'business_name' => 'Citizen Trading Must Remain Unchanged',
             'lines' => [
                 [
                     'line_of_business_id' => $retail->id,
@@ -214,7 +253,7 @@ test('citizens can edit an owned draft and atomically replace its activities', f
     $application->refresh()->load(['business', 'lines.lineOfBusiness']);
 
     $response->assertRedirect(route('citizen.permit-applications.show', $application));
-    expect($application->business->name)->toBe('Citizen Trading Updated')
+    expect($application->business->name)->toBe('Citizen Trading')
         ->and($application->status)->toBe(PermitApplicationStatus::Draft)
         ->and($application->application_number)->toBeNull()
         ->and($application->assessments()->count())->toBe(0)

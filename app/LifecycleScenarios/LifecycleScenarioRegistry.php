@@ -12,6 +12,41 @@ final class LifecycleScenarioRegistry
     public function all(): array
     {
         return [
+            'citizen_permit_submission_visibility' => new LifecycleScenarioDefinition(
+                key: 'citizen_permit_submission_visibility',
+                label: 'Citizen permit formal submission visibility',
+                mode: 'citizen_permit_submission_visibility',
+                risk: 'local transactional',
+                actors: [
+                    'applicant' => 'citizen_applicant',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'prepared_state' => 'draft',
+                    'browser_performs_submission' => true,
+                    'canonical_state' => 'assessment',
+                    'official_application_number' => null,
+                    'assessment_count' => 0,
+                    'payment_schedule_count' => 0,
+                    'external_calls' => 0,
+                    'irreversible_actions' => false,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
             'citizen_permit_authority_review_visibility' => new LifecycleScenarioDefinition(
                 key: 'citizen_permit_authority_review_visibility',
                 label: 'Citizen permit authority review visibility',

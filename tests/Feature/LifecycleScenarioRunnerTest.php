@@ -3,6 +3,7 @@
 use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\DescribeReceiptVoidBoundary;
 use App\Actions\StoreCitizenPermitApplicationDocument;
+use App\Actions\SubmitCitizenPermitApplication;
 use App\Actions\UpdateCitizenPermitApplicationDraft;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\ReceiptStatus;
@@ -77,6 +78,20 @@ test('scenario registry discovers the citizen permit draft visibility scenario',
         ->and($scenario->expectations['canonical_state'])->toBe('draft')
         ->and($scenario->expectations['official_application_number'])->toBeNull()
         ->and($scenario->expectations['assessment_count'])->toBe(0)
+        ->and($scenario->safety['external_integrations'])->toBeFalse();
+});
+
+test('scenario registry discovers the citizen formal submission visibility scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_permit_submission_visibility');
+
+    expect($scenario)
+        ->key->toBe('citizen_permit_submission_visibility')
+        ->label->toBe('Citizen permit formal submission visibility')
+        ->risk->toBe('local transactional')
+        ->and($scenario->expectations['prepared_state'])->toBe('draft')
+        ->and($scenario->expectations['browser_performs_submission'])->toBeTrue()
+        ->and($scenario->expectations['canonical_state'])->toBe('assessment')
+        ->and($scenario->expectations['official_application_number'])->toBeNull()
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
@@ -484,6 +499,53 @@ test('citizen permit draft scenario audit compares browser evidence with canonic
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
 
+test('citizen formal submission scenario audits the browser transition against canonical receipt evidence', function () {
+    Storage::fake('local');
+
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_permit_submission_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'citizen-submission-test-001');
+    $runner = app(CitizenPermitDraftVisibilityScenario::class);
+    $manifest = $runner->prepare($scenario, 'citizen-submission-test-001', [
+        'applicant' => $citizen,
+    ], $artifactStore);
+    $application = PermitApplication::query()->findOrFail($manifest['resources']['record_id']);
+
+    expect($application->status)->toBe(PermitApplicationStatus::Draft)
+        ->and($application->submitted_at)->toBeNull()
+        ->and($application->application_number)->toBeNull()
+        ->and($citizen->business_owner_id)->toBe($application->business->business_owner_id);
+
+    app(SubmitCitizenPermitApplication::class)->handle($application, $citizen);
+    $artifactStore->putJson('browser/report.json', [
+        'result' => ['passed' => true],
+        'citizen_submission' => [
+            'status' => PermitApplicationStatus::Assessment->value,
+            'citizen_submitted' => true,
+            'municipality_received' => true,
+            'submit_action_available' => false,
+            'edit_action_available' => false,
+        ],
+        'checks' => [],
+        'artifacts' => [
+            'screenshots' => [
+                '02-citizen-after-submission' => 'browser/screenshots/02-citizen-after-submission.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($manifest, $artifactStore);
+
+    expect($audited['result'])
+        ->terminal->toBe('passed')
+        ->browser->toBe('passed')
+        ->audit->toBe('passed')
+        ->passed->toBeTrue()
+        ->and($application->refresh()->metadata['status_history'])->toHaveCount(1)
+        ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
+});
+
 test('citizen permit draft edit scenario audit compares browser edits with canonical state', function () {
     Storage::fake('local');
 
@@ -530,6 +592,7 @@ test('citizen permit draft edit scenario audit compares browser edits with canon
             'status' => 'draft',
             'business_name' => $expectedEdit['business_name'],
             'owner_phone' => $expectedEdit['owner_phone'],
+            'registry_facts_read_only' => true,
             'business_activities' => collect($expectedEdit['business_activities'])
                 ->map(fn (array $activity): array => collect($activity)->except('name')->all())
                 ->all(),

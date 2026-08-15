@@ -34,6 +34,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('citizen')->name('citizen.')->middleware('can:citizen.access')->group(function () {
         Route::resource('permit-applications', CitizenPermitApplicationController::class)
             ->only(['index', 'create', 'store', 'show', 'edit', 'update']);
+        Route::post('permit-applications/{permitApplication}/submit', [CitizenPermitApplicationController::class, 'submit'])
+            ->name('permit-applications.submit');
         Route::post('permit-applications/{permitApplication}/documents', [CitizenPermitApplicationDocumentController::class, 'store'])
             ->name('permit-applications.documents.store');
         Route::get('permit-applications/{permitApplication}/documents/{document}/download', [CitizenPermitApplicationDocumentController::class, 'download'])

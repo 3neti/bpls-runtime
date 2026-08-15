@@ -21,6 +21,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 /**
  * @property int $id
  * @property int|null $role_id
+ * @property int|null $business_owner_id
  * @property string $name
  * @property string $email
  * @property Carbon|null $email_verified_at
@@ -42,6 +43,11 @@ class User extends Authenticatable implements PasskeyUser
     public function role(): BelongsTo
     {
         return $this->belongsTo(Role::class);
+    }
+
+    public function businessOwner(): BelongsTo
+    {
+        return $this->belongsTo(BusinessOwner::class);
     }
 
     public function permitApplications(): HasMany

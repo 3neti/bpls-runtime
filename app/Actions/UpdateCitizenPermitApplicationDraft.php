@@ -73,43 +73,15 @@ class UpdateCitizenPermitApplicationDraft
             }
 
             if (
-                $draft->business->permitApplications()->whereKeyNot($draft->id)->exists()
-                || $draft->business->owner->businesses()->whereKeyNot($draft->business_id)->exists()
+                $editedBy->business_owner_id === null
+                || $draft->business->business_owner_id !== $editedBy->business_owner_id
             ) {
-                throw new DomainException('This draft uses shared registry records and cannot be edited through citizen intake.');
+                throw new DomainException('This draft is not linked to the citizen registry identity.');
             }
 
             if (! CarbonImmutable::parse($data['draft_version'])->equalTo($draft->updated_at)) {
                 throw new DomainException('This draft changed after it was opened. Reload the latest version before saving.');
             }
-
-            $draft->business->owner->update([
-                'name' => $data['owner_name'],
-                'email' => $data['owner_email'] ?? null,
-                'phone' => $data['owner_phone'] ?? null,
-                'address' => $data['owner_address'] ?? null,
-            ]);
-
-            $draft->business->update([
-                'name' => $data['business_name'],
-                'trade_name' => $data['trade_name'] ?? null,
-                'registration_number' => $data['registration_number'] ?? null,
-                'address' => $data['business_address'] ?? null,
-                'barangay' => $data['barangay'] ?? null,
-                'ownership_type' => $data['ownership_type'] ?? null,
-                'organization_name' => $data['organization_name'] ?? null,
-                'occupancy' => $data['occupancy'] ?? null,
-                'building_name' => $data['building_name'] ?? null,
-                'property_index_number' => $data['property_index_number'] ?? null,
-                'business_area_square_meters' => $data['business_area_square_meters'] ?? null,
-                'male_employee_count' => $data['male_employee_count'] ?? null,
-                'female_employee_count' => $data['female_employee_count'] ?? null,
-                'contact_number' => $data['business_contact_number'] ?? null,
-                'email' => $data['business_email'] ?? null,
-                'established_on' => $data['established_on'] ?? null,
-                'started_on' => $data['started_on'] ?? null,
-                'registered_on' => $data['registered_on'] ?? null,
-            ]);
 
             $draft->lines()->delete();
 

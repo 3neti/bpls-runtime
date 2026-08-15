@@ -24,6 +24,7 @@ const supportedScenarios = [
     'assessment_policy_boundary_visibility',
     'citizen_permit_authority_review_visibility',
     'citizen_permit_processing_visibility',
+    'citizen_permit_submission_visibility',
     'citizen_permit_draft_document_visibility',
     'citizen_permit_draft_edit_visibility',
     'citizen_permit_draft_visibility',
@@ -78,6 +79,7 @@ const feeCatalogEvidence = {};
 const citizenDraftEvidence = {};
 const citizenProcessingEvidence = {};
 const citizenAuthorityReviewEvidence = {};
+const citizenSubmissionEvidence = {};
 
 let browser;
 
@@ -121,14 +123,17 @@ try {
     }
 
     if (
-        manifest.scenario.key ===
-        'citizen_permit_authority_review_visibility'
+        manifest.scenario.key === 'citizen_permit_authority_review_visibility'
     ) {
         await inspectCitizenPermitAuthorityReview(page, baseUrl);
     }
 
     if (manifest.scenario.key === 'citizen_permit_draft_visibility') {
         await inspectCitizenPermitDraft(page, baseUrl);
+    }
+
+    if (manifest.scenario.key === 'citizen_permit_submission_visibility') {
+        await submitCitizenPermitApplication(page, baseUrl);
     }
 
     if (manifest.scenario.key === 'citizen_permit_draft_edit_visibility') {
@@ -247,6 +252,7 @@ const report = {
     citizen_draft: citizenDraftEvidence,
     citizen_processing: citizenProcessingEvidence,
     citizen_authority_review: citizenAuthorityReviewEvidence,
+    citizen_submission: citizenSubmissionEvidence,
     artifacts: {
         screenshots,
     },
@@ -404,7 +410,9 @@ async function inspectCitizenPermitProcessing(targetPage, targetBaseUrl) {
         .isVisible()
         .catch(() => false);
     const paymentActionVisible = await targetPage
-        .getByRole('button', { name: /pay online|make payment|record payment/i })
+        .getByRole('button', {
+            name: /pay online|make payment|record payment/i,
+        })
         .isVisible()
         .catch(() => false);
     const expectedState = {
@@ -414,18 +422,15 @@ async function inspectCitizenPermitProcessing(targetPage, targetBaseUrl) {
         assessment_total_amount_cents:
             manifest.resources.assessment_total_amount_cents,
         payment_schedule_id: manifest.resources.payment_schedule_id,
-        payment_schedule_status:
-            manifest.resources.payment_schedule_status,
+        payment_schedule_status: manifest.resources.payment_schedule_status,
         payment_total_amount_cents:
             manifest.resources.payment_total_amount_cents,
-        payment_paid_amount_cents:
-            manifest.resources.payment_paid_amount_cents,
+        payment_paid_amount_cents: manifest.resources.payment_paid_amount_cents,
         payment_balance_amount_cents:
             manifest.resources.payment_balance_amount_cents,
         online_payment_status: manifest.resources.online_payment_status,
         can_pay_online: manifest.resources.can_pay_online,
-        timeline_event_count:
-            manifest.resources.citizen_timeline_event_count,
+        timeline_event_count: manifest.resources.citizen_timeline_event_count,
         timeline_event_keys: manifest.resources.citizen_timeline_event_keys,
     };
 
@@ -608,12 +613,10 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
             await verificationLink.getAttribute('href'),
             targetBaseUrl,
         ).pathname,
-        can_issue:
-            (await artifact.getAttribute('data-can-issue')) === 'true',
+        can_issue: (await artifact.getAttribute('data-can-issue')) === 'true',
         can_make_legally_effective:
-            (await artifact.getAttribute(
-                'data-can-make-legally-effective',
-            )) === 'true',
+            (await artifact.getAttribute('data-can-make-legally-effective')) ===
+            'true',
         payment_detail_url: new URL(
             await paymentDetailLink.getAttribute('href'),
             targetBaseUrl,
@@ -645,8 +648,7 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
         can_make_legally_effective:
             manifest.resources.can_make_legally_effective,
         payment_detail_url: manifest.resources.payment_detail_url,
-        timeline_event_count:
-            manifest.resources.citizen_timeline_event_count,
+        timeline_event_count: manifest.resources.citizen_timeline_event_count,
         timeline_event_keys: manifest.resources.citizen_timeline_event_keys,
     };
     const releaseActionVisible = await targetPage
@@ -654,7 +656,9 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
         .isVisible()
         .catch(() => false);
     const paymentActionVisible = await targetPage
-        .getByRole('button', { name: /pay online|make payment|record payment/i })
+        .getByRole('button', {
+            name: /pay online|make payment|record payment/i,
+        })
         .isVisible()
         .catch(() => false);
 
@@ -824,9 +828,8 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
             'data-online-payment-status',
         ),
         can_pay_online:
-            (await onlinePaymentPolicy.getAttribute(
-                'data-can-pay-online',
-            )) === 'true',
+            (await onlinePaymentPolicy.getAttribute('data-can-pay-online')) ===
+            'true',
         can_reconcile_online:
             (await onlinePaymentPolicy.getAttribute(
                 'data-can-reconcile-online',
@@ -847,8 +850,7 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
         payment_schedule_status: manifest.resources.payment_schedule_status,
         payment_total_amount_cents:
             manifest.resources.payment_total_amount_cents,
-        payment_paid_amount_cents:
-            manifest.resources.payment_paid_amount_cents,
+        payment_paid_amount_cents: manifest.resources.payment_paid_amount_cents,
         payment_balance_amount_cents:
             manifest.resources.payment_balance_amount_cents,
         payment_line_count: manifest.resources.payment_line_count,
@@ -1099,9 +1101,7 @@ async function inspectCitizenPermitDraft(targetPage, targetBaseUrl) {
         .evaluateAll((rows) =>
             rows.map((row) => ({
                 code: row.dataset.activityCode,
-                declared_gross_sales_cents: Number(
-                    row.dataset.grossSalesCents,
-                ),
+                declared_gross_sales_cents: Number(row.dataset.grossSalesCents),
                 capital_investment_cents: Number(
                     row.dataset.capitalInvestmentCents,
                 ),
@@ -1112,15 +1112,15 @@ async function inspectCitizenPermitDraft(targetPage, targetBaseUrl) {
     const expectedActivities = manifest.resources.business_activities.map(
         (activity) => ({
             code: activity.code,
-            declared_gross_sales_cents:
-                activity.declared_gross_sales_cents,
+            declared_gross_sales_cents: activity.declared_gross_sales_cents,
             capital_investment_cents: activity.capital_investment_cents,
             quantity: activity.quantity,
             started_on: activity.started_on,
         }),
     );
     const activitiesMatch =
-        JSON.stringify(browserActivities) === JSON.stringify(expectedActivities);
+        JSON.stringify(browserActivities) ===
+        JSON.stringify(expectedActivities);
     Object.assign(citizenDraftEvidence, {
         permit_application_id: manifest.resources.record_id,
         display_reference: manifest.resources.public_reference,
@@ -1202,17 +1202,202 @@ async function inspectCitizenPermitDraft(targetPage, targetBaseUrl) {
     );
 }
 
+async function submitCitizenPermitApplication(targetPage, targetBaseUrl) {
+    const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
+    const listUrl = `${targetBaseUrl}${manifest.resources.list_url}`;
+
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    const currentStatus = await targetPage
+        .getByTestId('citizen-draft-boundary')
+        .getAttribute('data-application-status');
+    const alreadySubmitted = currentStatus === 'assessment';
+    const submitButton = targetPage.getByTestId('citizen-submit-application');
+    const submitActionVisible = await submitButton
+        .isVisible()
+        .catch(() => false);
+    const editActionVisibleBefore = await targetPage
+        .getByRole('link', { name: 'Edit Draft', exact: true })
+        .isVisible()
+        .catch(() => false);
+    checks.push(
+        check(
+            'citizen-submission-action-available',
+            'Owned registry-linked draft exposes formal submission',
+            true,
+            submitActionVisible || alreadySubmitted,
+        ),
+        check(
+            'citizen-submission-edit-available-before',
+            'Draft remains editable before formal submission',
+            true,
+            editActionVisibleBefore || alreadySubmitted,
+        ),
+    );
+    const beforeScreenshot =
+        'browser/screenshots/01-citizen-before-submission.png';
+
+    if (!alreadySubmitted) {
+        await screenshot(
+            targetPage,
+            '01-citizen-before-submission',
+            beforeScreenshot,
+        );
+        actionLog.push(
+            stepLog(
+                'citizen-formal-submission-entered',
+                'Submit the exact manifest-bound citizen draft through the real UI action',
+                { permit_application_id: manifest.resources.record_id },
+            ),
+        );
+        await submitButton.click();
+    } else {
+        if (fs.existsSync(path.join(runDirectory, beforeScreenshot))) {
+            screenshots['01-citizen-before-submission'] = beforeScreenshot;
+        }
+
+        actionLog.push(
+            stepLog(
+                'citizen-formal-submission-resumed',
+                'Submission already completed; inspect the same manifest-bound record without repeating it',
+                { permit_application_id: manifest.resources.record_id },
+            ),
+        );
+    }
+
+    const processingBoundary = targetPage.locator(
+        '[data-testid="citizen-draft-boundary"][data-application-status="assessment"]',
+    );
+    await processingBoundary.waitFor({ timeout: 10000 });
+
+    const submissionEvidence = targetPage.getByTestId(
+        'citizen-submission-evidence',
+    );
+    await submissionEvidence.waitFor();
+    const submissionEvidenceText = await submissionEvidence.innerText();
+    const citizenSubmitted =
+        submissionEvidenceText.includes('Citizen submitted');
+    const municipalityReceived = submissionEvidenceText.includes(
+        'Municipality received',
+    );
+    const submitActionAvailable = await targetPage
+        .getByTestId('citizen-submit-application')
+        .isVisible()
+        .catch(() => false);
+    const editActionAvailable = await targetPage
+        .getByRole('link', { name: 'Edit Draft', exact: true })
+        .isVisible()
+        .catch(() => false);
+    const postSubmissionReferenceVisible = await targetPage
+        .getByRole('heading', {
+            name: manifest.resources.post_submission_reference,
+            exact: true,
+        })
+        .isVisible();
+    const breadcrumbReferenceVisible = await targetPage
+        .getByRole('navigation', { name: 'breadcrumb' })
+        .getByText(manifest.resources.post_submission_reference, {
+            exact: true,
+        })
+        .isVisible()
+        .catch(() => false);
+
+    Object.assign(citizenSubmissionEvidence, {
+        permit_application_id: manifest.resources.record_id,
+        status: 'assessment',
+        citizen_submitted: citizenSubmitted,
+        municipality_received: municipalityReceived,
+        submit_action_available: submitActionAvailable,
+        edit_action_available: editActionAvailable,
+        post_submission_reference: manifest.resources.post_submission_reference,
+    });
+    checks.push(
+        check(
+            'citizen-submission-facts-visible',
+            'Citizen submission and municipal receipt are both visible',
+            true,
+            citizenSubmitted && municipalityReceived,
+        ),
+        check(
+            'citizen-submission-actions-closed',
+            'Submit and draft-edit actions are unavailable after receipt',
+            true,
+            !submitActionAvailable && !editActionAvailable,
+        ),
+        check(
+            'citizen-submission-internal-reference-visible',
+            'Unnumbered submitted record uses an internal application reference',
+            true,
+            postSubmissionReferenceVisible,
+        ),
+        check(
+            'citizen-submission-breadcrumb-reference-current',
+            'Persistent breadcrumb agrees with the submitted record reference',
+            true,
+            breadcrumbReferenceVisible,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '02-citizen-after-submission',
+        'browser/screenshots/02-citizen-after-submission.png',
+    );
+
+    await targetPage.goto(listUrl, { waitUntil: 'networkidle' });
+    const listRow = targetPage.locator(
+        `[data-testid="citizen-permit-application-row"][data-application-id="${manifest.resources.record_id}"]`,
+    );
+    await listRow.waitFor();
+    const listStatus = await listRow.getAttribute('data-application-status');
+    checks.push(
+        check(
+            'citizen-submission-list-status-matches',
+            'Citizen list shows the exact record in municipal assessment processing',
+            'assessment',
+            listStatus,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '03-citizen-submitted-list',
+        'browser/screenshots/03-citizen-submitted-list.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    await targetPage.getByTestId('citizen-submission-evidence').waitFor();
+    const horizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+    checks.push(
+        check(
+            'citizen-submission-mobile-no-horizontal-overflow',
+            'Submitted application remains usable without mobile overflow',
+            false,
+            horizontalOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '04-citizen-submission-mobile',
+        'browser/screenshots/04-citizen-submission-mobile.png',
+    );
+}
+
 async function editCitizenPermitDraft(targetPage, targetBaseUrl) {
     const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
     const editUrl = `${targetBaseUrl}${manifest.resources.edit_url}`;
     const expectedEdit = manifest.resources.expected_edit;
 
     await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
-    const alreadyEdited = await targetPage
-        .getByText(expectedEdit.business_name, { exact: false })
+    const currentFirstActivityGross = await targetPage
+        .getByTestId('citizen-business-activity-row')
         .first()
-        .isVisible()
-        .catch(() => false);
+        .getAttribute('data-gross-sales-cents');
+    const alreadyEdited =
+        Number(currentFirstActivityGross) ===
+        expectedEdit.business_activities[0].declared_gross_sales_cents;
     const editActionVisible = await targetPage
         .getByRole('link', { name: 'Edit Draft', exact: true })
         .isVisible()
@@ -1259,6 +1444,12 @@ async function editCitizenPermitDraft(targetPage, targetBaseUrl) {
         .getByTestId('citizen-draft-boundary')
         .isVisible()
         .catch(() => false);
+    const ownerPhoneReadOnly = await targetPage
+        .locator('#owner_phone')
+        .isDisabled();
+    const businessNameReadOnly = await targetPage
+        .locator('#business_name')
+        .isDisabled();
     checks.push(
         check(
             'citizen-edit-prefills-exact-business',
@@ -1280,16 +1471,21 @@ async function editCitizenPermitDraft(targetPage, targetBaseUrl) {
             true,
             draftBoundaryVisible,
         ),
+        check(
+            'citizen-edit-registry-facts-read-only',
+            'Owner and business registry facts are read-only in application editing',
+            true,
+            ownerPhoneReadOnly && businessNameReadOnly,
+        ),
     );
 
-    await targetPage.locator('#owner_phone').fill(expectedEdit.owner_phone);
-    await targetPage
-        .locator('#business_name')
-        .fill(expectedEdit.business_name);
     await targetPage
         .locator('#lines_0_declared_gross_sales')
         .fill(
-            (expectedEdit.business_activities[0].declared_gross_sales_cents / 100).toFixed(2),
+            (
+                expectedEdit.business_activities[0].declared_gross_sales_cents /
+                100
+            ).toFixed(2),
         );
     await targetPage
         .locator('#lines_0_quantity')
@@ -1297,7 +1493,10 @@ async function editCitizenPermitDraft(targetPage, targetBaseUrl) {
     await targetPage
         .locator('#lines_1_capital_investment')
         .fill(
-            (expectedEdit.business_activities[1].capital_investment_cents / 100).toFixed(2),
+            (
+                expectedEdit.business_activities[1].capital_investment_cents /
+                100
+            ).toFixed(2),
         );
     await targetPage
         .locator('#lines_1_quantity')
@@ -1328,12 +1527,17 @@ async function editCitizenPermitDraft(targetPage, targetBaseUrl) {
         );
         await targetPage.getByRole('button', { name: 'Save Changes' }).click();
         await targetPage.waitForURL(
-            new RegExp(`/citizen/permit-applications/${manifest.resources.record_id}$`),
+            new RegExp(
+                `/citizen/permit-applications/${manifest.resources.record_id}$`,
+            ),
             { timeout: 10000 },
         );
     }
 
-    await targetPage.getByText(expectedEdit.business_name, { exact: false }).first().waitFor();
+    await targetPage
+        .getByText(expectedEdit.business_name, { exact: false })
+        .first()
+        .waitFor();
 
     const browserActivities = await targetPage
         .getByTestId('citizen-business-activity-row')
@@ -1358,7 +1562,8 @@ async function editCitizenPermitDraft(targetPage, targetBaseUrl) {
         }),
     );
     const activitiesMatch =
-        JSON.stringify(browserActivities) === JSON.stringify(expectedActivities);
+        JSON.stringify(browserActivities) ===
+        JSON.stringify(expectedActivities);
     const businessVisible = await targetPage
         .getByText(expectedEdit.business_name, { exact: false })
         .first()
@@ -1376,6 +1581,7 @@ async function editCitizenPermitDraft(targetPage, targetBaseUrl) {
         status: 'draft',
         business_name: expectedEdit.business_name,
         owner_phone: expectedEdit.owner_phone,
+        registry_facts_read_only: ownerPhoneReadOnly && businessNameReadOnly,
         business_activities: browserActivities,
         assessment_action_visible: assessmentActionVisible,
         edit_performed_by_browser: true,
@@ -1384,13 +1590,13 @@ async function editCitizenPermitDraft(targetPage, targetBaseUrl) {
     checks.push(
         check(
             'citizen-edited-business-visible',
-            'Updated business name is visible on the exact draft',
+            'Unchanged registry business is visible on the exact draft',
             true,
             businessVisible,
         ),
         check(
             'citizen-edited-owner-visible',
-            'Updated owner contact is visible on the exact draft',
+            'Unchanged registry owner contact is visible on the exact draft',
             true,
             ownerPhoneVisible,
         ),
@@ -1448,10 +1654,7 @@ async function editCitizenPermitDraft(targetPage, targetBaseUrl) {
 async function uploadCitizenPermitDraftDocument(targetPage, targetBaseUrl) {
     const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
     const expectedDocument = manifest.resources.expected_document;
-    const fixturePath = path.join(
-        runDirectory,
-        expectedDocument.fixture_path,
-    );
+    const fixturePath = path.join(runDirectory, expectedDocument.fixture_path);
 
     await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
     const existingDocument = targetPage.locator(
@@ -1512,7 +1715,9 @@ async function uploadCitizenPermitDraftDocument(targetPage, targetBaseUrl) {
     await targetPage
         .locator('#citizen-document-remarks')
         .fill(expectedDocument.remarks);
-    await targetPage.locator('#citizen-document-file').setInputFiles(fixturePath);
+    await targetPage
+        .locator('#citizen-document-file')
+        .setInputFiles(fixturePath);
     await screenshot(
         targetPage,
         '02-citizen-document-upload-workspace',
@@ -1538,7 +1743,9 @@ async function uploadCitizenPermitDraftDocument(targetPage, targetBaseUrl) {
         );
         await targetPage.getByRole('button', { name: 'Add document' }).click();
         await targetPage.waitForURL(
-            new RegExp(`/citizen/permit-applications/${manifest.resources.record_id}$`),
+            new RegExp(
+                `/citizen/permit-applications/${manifest.resources.record_id}$`,
+            ),
             { timeout: 10000 },
         );
     }
@@ -1547,7 +1754,9 @@ async function uploadCitizenPermitDraftDocument(targetPage, targetBaseUrl) {
         `[data-testid="citizen-supporting-document"][data-document-label="${expectedDocument.label}"]`,
     );
     await documentRow.waitFor();
-    const documentId = Number(await documentRow.getAttribute('data-document-id'));
+    const documentId = Number(
+        await documentRow.getAttribute('data-document-id'),
+    );
     const documentCount = await targetPage
         .getByTestId('citizen-supporting-document')
         .count();
@@ -1591,10 +1800,8 @@ async function uploadCitizenPermitDraftDocument(targetPage, targetBaseUrl) {
         business_activities: manifest.resources.business_activities.map(
             (activity) => ({
                 code: activity.code,
-                declared_gross_sales_cents:
-                    activity.declared_gross_sales_cents,
-                capital_investment_cents:
-                    activity.capital_investment_cents,
+                declared_gross_sales_cents: activity.declared_gross_sales_cents,
+                capital_investment_cents: activity.capital_investment_cents,
                 quantity: activity.quantity,
                 started_on: activity.started_on,
             }),

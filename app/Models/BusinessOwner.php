@@ -31,6 +31,11 @@ class BusinessOwner extends Model
         return $this->hasMany(Business::class);
     }
 
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class);
+    }
+
     /**
      * @return array<string, string>
      */

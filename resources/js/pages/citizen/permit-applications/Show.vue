@@ -12,15 +12,18 @@ import {
     History,
     Paperclip,
     ReceiptText,
+    Send,
     ShieldCheck,
     Upload,
 } from '@lucide/vue';
+import { watch } from 'vue';
 import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Citizen/PaymentScheduleController';
 import {
     create,
     edit,
     index,
     show,
+    submit,
 } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
 import {
     download as downloadDocument,
@@ -87,6 +90,12 @@ type PermitApplication = {
         is_draft: boolean;
         assessment_started: boolean;
         official_application_number_assigned: boolean;
+        statement: string;
+    };
+    submission_boundary: {
+        citizen_submitted_at: string | null;
+        municipality_received_at: string | null;
+        documentary_sufficiency_determined: boolean;
         statement: string;
     };
     processing: {
@@ -186,6 +195,7 @@ type PermitApplication = {
         occurred_at: string | null;
     }[];
     can_edit: boolean;
+    can_submit: boolean;
     can_upload_documents: boolean;
     can_view_documents: boolean;
     can_view_financials: boolean;
@@ -200,19 +210,26 @@ const documentForm = useForm({
     file: null as File | null,
     remarks: '',
 });
+const submissionForm = useForm({});
 
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'My Permit Applications',
-        href: index(),
-    },
-    {
-        title: props.permitApplication.display_reference,
-        href: show(props.permitApplication.id),
-    },
-];
+watch(
+    () => props.permitApplication.display_reference,
+    (displayReference) => {
+        const breadcrumbs: BreadcrumbItem[] = [
+            {
+                title: 'My Permit Applications',
+                href: index(),
+            },
+            {
+                title: displayReference,
+                href: show(props.permitApplication.id),
+            },
+        ];
 
-setLayoutProps({ breadcrumbs });
+        setLayoutProps({ breadcrumbs });
+    },
+    { immediate: true },
+);
 
 function money(amountCents: number): string {
     return new Intl.NumberFormat('en-PH', {
@@ -250,8 +267,18 @@ function uploadDocument(): void {
 }
 
 function documentBoundaryError(): string | undefined {
-    return (documentForm.errors as Record<string, string | undefined>)
-        .document;
+    return (documentForm.errors as Record<string, string | undefined>).document;
+}
+
+function submitApplication(): void {
+    submissionForm.post(submit.url(props.permitApplication.id), {
+        preserveScroll: true,
+    });
+}
+
+function submissionBoundaryError(): string | undefined {
+    return (submissionForm.errors as Record<string, string | undefined>)
+        .submission;
 }
 </script>
 
@@ -276,7 +303,21 @@ function documentBoundaryError(): string | undefined {
                     </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                    <Button v-if="permitApplication.can_edit" as-child variant="outline">
+                    <Button
+                        v-if="permitApplication.can_submit"
+                        type="button"
+                        data-testid="citizen-submit-application"
+                        :disabled="submissionForm.processing"
+                        @click="submitApplication"
+                    >
+                        <Send />
+                        Submit Application
+                    </Button>
+                    <Button
+                        v-if="permitApplication.can_edit"
+                        as-child
+                        variant="outline"
+                    >
                         <Link :href="edit(permitApplication.id)">
                             <FilePenLine />
                             Edit Draft
@@ -310,13 +351,56 @@ function documentBoundaryError(): string | undefined {
                             : 'Citizen draft boundary'
                     }}
                 </p>
-                <p class="mt-1">{{ permitApplication.draft_boundary.statement }}</p>
+                <p class="mt-1">
+                    {{ permitApplication.draft_boundary.statement }}
+                </p>
+                <p
+                    class="mt-2 border-t border-amber-200 pt-2 dark:border-amber-800"
+                >
+                    {{ permitApplication.submission_boundary.statement }}
+                </p>
+                <dl
+                    v-if="
+                        permitApplication.submission_boundary
+                            .citizen_submitted_at
+                    "
+                    data-testid="citizen-submission-evidence"
+                    class="mt-2 grid gap-2 text-xs sm:grid-cols-2"
+                >
+                    <div>
+                        <dt class="font-medium">Citizen submitted</dt>
+                        <dd>
+                            {{
+                                dateTime(
+                                    permitApplication.submission_boundary
+                                        .citizen_submitted_at,
+                                )
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-medium">Municipality received</dt>
+                        <dd>
+                            {{
+                                permitApplication.submission_boundary
+                                    .municipality_received_at
+                                    ? dateTime(
+                                          permitApplication.submission_boundary
+                                              .municipality_received_at,
+                                      )
+                                    : 'Pending'
+                            }}
+                        </dd>
+                    </div>
+                </dl>
+                <InputError class="mt-2" :message="submissionBoundaryError()" />
             </section>
 
             <section
                 v-if="
                     permitApplication.can_view_financials &&
-                    permitApplication.processing.has_entered_municipal_processing
+                    permitApplication.processing
+                        .has_entered_municipal_processing
                 "
                 data-testid="citizen-processing-status"
                 :data-application-status="
@@ -368,7 +452,9 @@ function documentBoundaryError(): string | undefined {
                             Assessment
                         </dt>
                         <dd class="font-medium">
-                            #{{ permitApplication.processing.assessment.sequence }}
+                            #{{
+                                permitApplication.processing.assessment.sequence
+                            }}
                         </dd>
                     </div>
                     <div>
@@ -420,11 +506,17 @@ function documentBoundaryError(): string | undefined {
                     "
                     class="grid gap-4"
                 >
-                    <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div
+                        class="flex flex-wrap items-start justify-between gap-3"
+                    >
                         <div class="flex items-start gap-2">
-                            <Banknote class="mt-0.5 size-4 text-muted-foreground" />
+                            <Banknote
+                                class="mt-0.5 size-4 text-muted-foreground"
+                            />
                             <div>
-                                <h3 class="text-sm font-semibold text-foreground">
+                                <h3
+                                    class="text-sm font-semibold text-foreground"
+                                >
                                     Payment status
                                 </h3>
                                 <p class="text-xs text-muted-foreground">
@@ -532,7 +624,9 @@ function documentBoundaryError(): string | undefined {
                 <div
                     v-if="permitApplication.processing.collection"
                     data-testid="citizen-collection-summary"
-                    :data-collection-id="permitApplication.processing.collection.id"
+                    :data-collection-id="
+                        permitApplication.processing.collection.id
+                    "
                     :data-collection-status="
                         permitApplication.processing.collection.status
                     "
@@ -542,7 +636,9 @@ function documentBoundaryError(): string | undefined {
                     class="grid gap-4 border-t border-border pt-4"
                 >
                     <div class="flex items-start gap-2">
-                        <ReceiptText class="mt-0.5 size-4 text-muted-foreground" />
+                        <ReceiptText
+                            class="mt-0.5 size-4 text-muted-foreground"
+                        />
                         <div>
                             <h3 class="text-sm font-semibold text-foreground">
                                 Treasury collection
@@ -555,13 +651,18 @@ function documentBoundaryError(): string | undefined {
                                     )
                                 }}
                                 ·
-                                {{ permitApplication.processing.collection.method }}
+                                {{
+                                    permitApplication.processing.collection
+                                        .method
+                                }}
                             </p>
                         </div>
                     </div>
                     <dl class="grid gap-3 text-sm sm:grid-cols-3">
                         <div>
-                            <dt class="text-xs text-muted-foreground">Status</dt>
+                            <dt class="text-xs text-muted-foreground">
+                                Status
+                            </dt>
                             <dd class="font-medium capitalize">
                                 {{
                                     permitApplication.processing.collection.status.replace(
@@ -572,7 +673,9 @@ function documentBoundaryError(): string | undefined {
                             </dd>
                         </div>
                         <div>
-                            <dt class="text-xs text-muted-foreground">Amount</dt>
+                            <dt class="text-xs text-muted-foreground">
+                                Amount
+                            </dt>
                             <dd class="font-medium tabular-nums">
                                 {{
                                     money(
@@ -583,14 +686,16 @@ function documentBoundaryError(): string | undefined {
                             </dd>
                         </div>
                         <div>
-                            <dt class="text-xs text-muted-foreground">Received</dt>
+                            <dt class="text-xs text-muted-foreground">
+                                Received
+                            </dt>
                             <dd class="font-medium">
                                 {{
                                     permitApplication.processing.collection
                                         .received_at
                                         ? dateTime(
-                                              permitApplication.processing.collection
-                                                  .received_at,
+                                              permitApplication.processing
+                                                  .collection.received_at,
                                           )
                                         : 'Not recorded'
                                 }}
@@ -605,7 +710,8 @@ function documentBoundaryError(): string | undefined {
                             permitApplication.processing.collection.receipt.id
                         "
                         :data-receipt-status="
-                            permitApplication.processing.collection.receipt.status
+                            permitApplication.processing.collection.receipt
+                                .status
                         "
                         :data-receipt-number="
                             permitApplication.processing.collection.receipt
@@ -614,16 +720,20 @@ function documentBoundaryError(): string | undefined {
                         class="grid gap-3 border-t border-border pt-4 text-sm sm:grid-cols-4"
                     >
                         <div>
-                            <dt class="text-xs text-muted-foreground">Receipt</dt>
+                            <dt class="text-xs text-muted-foreground">
+                                Receipt
+                            </dt>
                             <dd class="font-medium break-all">
                                 {{
-                                    permitApplication.processing.collection.receipt
-                                        .receipt_number
+                                    permitApplication.processing.collection
+                                        .receipt.receipt_number
                                 }}
                             </dd>
                         </div>
                         <div>
-                            <dt class="text-xs text-muted-foreground">Status</dt>
+                            <dt class="text-xs text-muted-foreground">
+                                Status
+                            </dt>
                             <dd class="font-medium capitalize">
                                 {{
                                     permitApplication.processing.collection.receipt.status.replace(
@@ -634,7 +744,9 @@ function documentBoundaryError(): string | undefined {
                             </dd>
                         </div>
                         <div>
-                            <dt class="text-xs text-muted-foreground">Amount</dt>
+                            <dt class="text-xs text-muted-foreground">
+                                Amount
+                            </dt>
                             <dd class="font-medium tabular-nums">
                                 {{
                                     money(
@@ -645,14 +757,16 @@ function documentBoundaryError(): string | undefined {
                             </dd>
                         </div>
                         <div>
-                            <dt class="text-xs text-muted-foreground">Issued</dt>
+                            <dt class="text-xs text-muted-foreground">
+                                Issued
+                            </dt>
                             <dd class="font-medium">
                                 {{
-                                    permitApplication.processing.collection.receipt
-                                        .issued_at
+                                    permitApplication.processing.collection
+                                        .receipt.issued_at
                                         ? dateTime(
-                                              permitApplication.processing.collection
-                                                  .receipt.issued_at,
+                                              permitApplication.processing
+                                                  .collection.receipt.issued_at,
                                           )
                                         : 'Not recorded'
                                 }}
@@ -673,25 +787,28 @@ function documentBoundaryError(): string | undefined {
                         permitApplication.processing.clearance_summary.total
                     "
                     :data-all-clearances-completed="
-                        permitApplication.processing.clearance_summary.all_completed
+                        permitApplication.processing.clearance_summary
+                            .all_completed
                     "
                     class="grid gap-3 border-t border-border pt-4"
                 >
                     <div class="flex items-start gap-2">
-                        <ShieldCheck class="mt-0.5 size-4 text-muted-foreground" />
+                        <ShieldCheck
+                            class="mt-0.5 size-4 text-muted-foreground"
+                        />
                         <div>
                             <h3 class="text-sm font-semibold text-foreground">
                                 Clearance progress
                             </h3>
                             <p class="text-xs text-muted-foreground">
                                 {{
-                                    permitApplication.processing.clearance_summary
-                                        .completed
+                                    permitApplication.processing
+                                        .clearance_summary.completed
                                 }}
                                 of
                                 {{
-                                    permitApplication.processing.clearance_summary
-                                        .total
+                                    permitApplication.processing
+                                        .clearance_summary.total
                                 }}
                                 checklist items recorded complete
                             </p>
@@ -707,7 +824,9 @@ function documentBoundaryError(): string | undefined {
                             :data-clearance-status="clearance.status"
                             class="flex flex-wrap items-center justify-between gap-2 py-2 first:pt-0 last:pb-0"
                         >
-                            <span class="font-medium">{{ clearance.label }}</span>
+                            <span class="font-medium">{{
+                                clearance.label
+                            }}</span>
                             <Badge variant="secondary" class="capitalize">
                                 {{ clearance.status.replace('_', ' ') }}
                             </Badge>
@@ -726,31 +845,43 @@ function documentBoundaryError(): string | undefined {
                             .ready_for_authority_review
                     "
                     :data-can-release="
-                        permitApplication.processing.authority_review.can_release
+                        permitApplication.processing.authority_review
+                            .can_release
                     "
                     class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
                 >
                     <p class="font-medium">Authority review boundary</p>
                     <p class="mt-1">
-                        {{ permitApplication.processing.authority_review.statement }}
+                        {{
+                            permitApplication.processing.authority_review
+                                .statement
+                        }}
                     </p>
                     <p class="mt-2 text-xs">
-                        {{ permitApplication.processing.authority_review.reason }}
+                        {{
+                            permitApplication.processing.authority_review.reason
+                        }}
                     </p>
                 </div>
 
                 <div
                     v-if="permitApplication.permit_artifact"
                     data-testid="citizen-permit-artifact"
-                    :data-artifact-status="permitApplication.permit_artifact.status"
+                    :data-artifact-status="
+                        permitApplication.permit_artifact.status
+                    "
                     :data-verification-reference="
                         permitApplication.permit_artifact.verification_reference
                     "
                     :data-verification-status="
                         permitApplication.permit_artifact.verification_status
                     "
-                    :data-can-issue="permitApplication.permit_artifact.can_issue"
-                    :data-can-release="permitApplication.permit_artifact.can_release"
+                    :data-can-issue="
+                        permitApplication.permit_artifact.can_issue
+                    "
+                    :data-can-release="
+                        permitApplication.permit_artifact.can_release
+                    "
                     :data-can-make-legally-effective="
                         permitApplication.permit_artifact
                             .can_make_legally_effective
@@ -765,11 +896,15 @@ function documentBoundaryError(): string | undefined {
                                 class="mt-0.5 size-4 text-muted-foreground"
                             />
                             <div>
-                                <h3 class="text-sm font-semibold text-foreground">
+                                <h3
+                                    class="text-sm font-semibold text-foreground"
+                                >
                                     Permit artifact identity
                                 </h3>
                                 <p class="text-xs text-muted-foreground">
-                                    {{ permitApplication.permit_artifact.label }}
+                                    {{
+                                        permitApplication.permit_artifact.label
+                                    }}
                                 </p>
                             </div>
                         </div>
@@ -791,7 +926,9 @@ function documentBoundaryError(): string | undefined {
 
                     <dl class="grid gap-3 text-sm sm:grid-cols-3">
                         <div>
-                            <dt class="text-xs text-muted-foreground">Status</dt>
+                            <dt class="text-xs text-muted-foreground">
+                                Status
+                            </dt>
                             <dd class="font-medium capitalize">
                                 {{
                                     permitApplication.permit_artifact.status.replaceAll(
@@ -843,7 +980,9 @@ function documentBoundaryError(): string | undefined {
                     <div
                         class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
                     >
-                        <p>{{ permitApplication.permit_artifact.policy_note }}</p>
+                        <p>
+                            {{ permitApplication.permit_artifact.policy_note }}
+                        </p>
                         <p class="mt-2 text-xs">
                             {{
                                 permitApplication.permit_artifact
@@ -933,40 +1072,80 @@ function documentBoundaryError(): string | undefined {
                     <dl class="grid gap-2 text-sm">
                         <div>
                             <dt class="text-muted-foreground">Name</dt>
-                            <dd class="font-medium">{{ permitApplication.owner.name }}</dd>
+                            <dd class="font-medium">
+                                {{ permitApplication.owner.name }}
+                            </dd>
                         </div>
                         <div>
                             <dt class="text-muted-foreground">Contact</dt>
-                            <dd>{{ permitApplication.owner.email || 'Not recorded' }}</dd>
-                            <dd>{{ permitApplication.owner.phone || 'Not recorded' }}</dd>
+                            <dd>
+                                {{
+                                    permitApplication.owner.email ||
+                                    'Not recorded'
+                                }}
+                            </dd>
+                            <dd>
+                                {{
+                                    permitApplication.owner.phone ||
+                                    'Not recorded'
+                                }}
+                            </dd>
                         </div>
                         <div>
                             <dt class="text-muted-foreground">Address</dt>
-                            <dd>{{ permitApplication.owner.address || 'Not recorded' }}</dd>
+                            <dd>
+                                {{
+                                    permitApplication.owner.address ||
+                                    'Not recorded'
+                                }}
+                            </dd>
                         </div>
                     </dl>
                 </div>
 
                 <div class="grid content-start gap-3 border-t pt-4">
-                    <h2 class="text-sm font-semibold text-foreground">Business</h2>
+                    <h2 class="text-sm font-semibold text-foreground">
+                        Business
+                    </h2>
                     <dl class="grid gap-2 text-sm">
                         <div>
-                            <dt class="text-muted-foreground">Registered name</dt>
-                            <dd class="font-medium">{{ permitApplication.business.name }}</dd>
+                            <dt class="text-muted-foreground">
+                                Registered name
+                            </dt>
+                            <dd class="font-medium">
+                                {{ permitApplication.business.name }}
+                            </dd>
                         </div>
                         <div>
                             <dt class="text-muted-foreground">Trade name</dt>
-                            <dd>{{ permitApplication.business.trade_name || 'Not recorded' }}</dd>
+                            <dd>
+                                {{
+                                    permitApplication.business.trade_name ||
+                                    'Not recorded'
+                                }}
+                            </dd>
                         </div>
                         <div>
-                            <dt class="text-muted-foreground">Registration number</dt>
-                            <dd>{{ permitApplication.business.registration_number || 'Not recorded' }}</dd>
+                            <dt class="text-muted-foreground">
+                                Registration number
+                            </dt>
+                            <dd>
+                                {{
+                                    permitApplication.business
+                                        .registration_number || 'Not recorded'
+                                }}
+                            </dd>
                         </div>
                         <div>
                             <dt class="text-muted-foreground">Address</dt>
                             <dd>
-                                {{ permitApplication.business.address || 'Not recorded' }}
-                                <span v-if="permitApplication.business.barangay">
+                                {{
+                                    permitApplication.business.address ||
+                                    'Not recorded'
+                                }}
+                                <span
+                                    v-if="permitApplication.business.barangay"
+                                >
                                     · {{ permitApplication.business.barangay }}
                                 </span>
                             </dd>
@@ -991,35 +1170,54 @@ function documentBoundaryError(): string | undefined {
                         data-testid="citizen-business-activity-mobile-row"
                         :data-activity-id="line.id"
                         :data-activity-code="line.line_of_business.code"
-                        :data-gross-sales-cents="line.declared_gross_sales_cents"
-                        :data-capital-investment-cents="line.capital_investment_cents"
+                        :data-gross-sales-cents="
+                            line.declared_gross_sales_cents
+                        "
+                        :data-capital-investment-cents="
+                            line.capital_investment_cents
+                        "
                         :data-quantity="line.quantity"
                         :data-started-on="line.started_on"
                         class="grid gap-3 border-t pt-3 text-sm first:border-t-0 first:pt-0"
                     >
                         <div>
                             <p class="font-medium text-foreground">
-                                {{ line.line_of_business.name || 'Unknown activity' }}
+                                {{
+                                    line.line_of_business.name ||
+                                    'Unknown activity'
+                                }}
                             </p>
-                            <p class="break-all text-xs text-muted-foreground">
+                            <p class="text-xs break-all text-muted-foreground">
                                 {{ line.line_of_business.code || 'No code' }}
                             </p>
                         </div>
                         <dl class="grid grid-cols-2 gap-x-4 gap-y-2">
                             <div>
-                                <dt class="text-xs text-muted-foreground">Gross sales</dt>
-                                <dd>{{ money(line.declared_gross_sales_cents) }}</dd>
+                                <dt class="text-xs text-muted-foreground">
+                                    Gross sales
+                                </dt>
+                                <dd>
+                                    {{ money(line.declared_gross_sales_cents) }}
+                                </dd>
                             </div>
                             <div>
-                                <dt class="text-xs text-muted-foreground">Capital</dt>
-                                <dd>{{ money(line.capital_investment_cents) }}</dd>
+                                <dt class="text-xs text-muted-foreground">
+                                    Capital
+                                </dt>
+                                <dd>
+                                    {{ money(line.capital_investment_cents) }}
+                                </dd>
                             </div>
                             <div>
-                                <dt class="text-xs text-muted-foreground">Quantity</dt>
+                                <dt class="text-xs text-muted-foreground">
+                                    Quantity
+                                </dt>
                                 <dd>{{ line.quantity }}</dd>
                             </div>
                             <div>
-                                <dt class="text-xs text-muted-foreground">Started</dt>
+                                <dt class="text-xs text-muted-foreground">
+                                    Started
+                                </dt>
                                 <dd>{{ line.started_on || 'Not recorded' }}</dd>
                             </div>
                         </dl>
@@ -1027,12 +1225,20 @@ function documentBoundaryError(): string | undefined {
                 </div>
                 <div class="hidden overflow-x-auto md:block">
                     <table class="w-full min-w-[720px] text-sm">
-                        <thead class="border-b text-left text-xs text-muted-foreground uppercase">
+                        <thead
+                            class="border-b text-left text-xs text-muted-foreground uppercase"
+                        >
                             <tr>
                                 <th class="py-2 pr-4 font-medium">Activity</th>
-                                <th class="px-4 py-2 text-right font-medium">Gross sales</th>
-                                <th class="px-4 py-2 text-right font-medium">Capital</th>
-                                <th class="px-4 py-2 text-right font-medium">Quantity</th>
+                                <th class="px-4 py-2 text-right font-medium">
+                                    Gross sales
+                                </th>
+                                <th class="px-4 py-2 text-right font-medium">
+                                    Capital
+                                </th>
+                                <th class="px-4 py-2 text-right font-medium">
+                                    Quantity
+                                </th>
                                 <th class="py-2 pl-4 font-medium">Started</th>
                             </tr>
                         </thead>
@@ -1043,18 +1249,28 @@ function documentBoundaryError(): string | undefined {
                                 data-testid="citizen-business-activity-row"
                                 :data-activity-id="line.id"
                                 :data-activity-code="line.line_of_business.code"
-                                :data-gross-sales-cents="line.declared_gross_sales_cents"
-                                :data-capital-investment-cents="line.capital_investment_cents"
+                                :data-gross-sales-cents="
+                                    line.declared_gross_sales_cents
+                                "
+                                :data-capital-investment-cents="
+                                    line.capital_investment_cents
+                                "
                                 :data-quantity="line.quantity"
                                 :data-started-on="line.started_on"
                                 class="border-b last:border-b-0"
                             >
                                 <td class="py-3 pr-4">
                                     <div class="font-medium">
-                                        {{ line.line_of_business.name || 'Unknown activity' }}
+                                        {{
+                                            line.line_of_business.name ||
+                                            'Unknown activity'
+                                        }}
                                     </div>
                                     <div class="text-xs text-muted-foreground">
-                                        {{ line.line_of_business.code || 'No code' }}
+                                        {{
+                                            line.line_of_business.code ||
+                                            'No code'
+                                        }}
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 text-right">
@@ -1063,8 +1279,12 @@ function documentBoundaryError(): string | undefined {
                                 <td class="px-4 py-3 text-right">
                                     {{ money(line.capital_investment_cents) }}
                                 </td>
-                                <td class="px-4 py-3 text-right">{{ line.quantity }}</td>
-                                <td class="py-3 pl-4">{{ line.started_on || 'Not recorded' }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    {{ line.quantity }}
+                                </td>
+                                <td class="py-3 pl-4">
+                                    {{ line.started_on || 'Not recorded' }}
+                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -1078,7 +1298,9 @@ function documentBoundaryError(): string | undefined {
             >
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div class="flex items-start gap-2">
-                        <Paperclip class="mt-0.5 size-4 text-muted-foreground" />
+                        <Paperclip
+                            class="mt-0.5 size-4 text-muted-foreground"
+                        />
                         <div>
                             <h2 class="text-sm font-semibold text-foreground">
                                 Supporting documents
@@ -1124,7 +1346,9 @@ function documentBoundaryError(): string | undefined {
                         class="md:col-span-2"
                     />
                     <div class="grid gap-2">
-                        <Label for="citizen-document-label">Document label</Label>
+                        <Label for="citizen-document-label"
+                            >Document label</Label
+                        >
                         <Input
                             id="citizen-document-label"
                             v-model="documentForm.label"
@@ -1215,8 +1439,7 @@ function documentBoundaryError(): string | undefined {
                             <a
                                 :href="
                                     downloadDocument.url({
-                                        permitApplication:
-                                            permitApplication.id,
+                                        permitApplication: permitApplication.id,
                                         document: document.id,
                                     })
                                 "

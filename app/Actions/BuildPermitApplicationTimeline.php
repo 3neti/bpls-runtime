@@ -39,10 +39,43 @@ class BuildPermitApplicationTimeline
             description: sprintf('%s application recorded for %s.', str($permitApplication->type->value)->replace('_', ' ')->title(), $permitApplication->business->name),
             status: 'recorded',
             actor: $this->actor($permitApplication->submittedBy),
-            occurredAt: $permitApplication->submitted_at ?? $permitApplication->created_at,
+            occurredAt: $permitApplication->created_at,
             sourceType: 'permit_application',
             sourceId: $permitApplication->id,
         ));
+
+        $citizenSubmission = $permitApplication->metadata['citizen_submission'] ?? null;
+
+        if (is_array($citizenSubmission)) {
+            $actorId = isset($citizenSubmission['actor_id']) ? (int) $citizenSubmission['actor_id'] : null;
+            $events->push($this->event(
+                key: "citizen-submitted:{$permitApplication->id}",
+                category: 'application',
+                title: 'Citizen submitted application',
+                description: 'Citizen formally submitted the application to the municipal processing queue.',
+                status: 'submitted',
+                actor: $this->actor($actorId === null ? null : $metadataActors->get($actorId)),
+                occurredAt: $this->date($citizenSubmission['submitted_at'] ?? null),
+                sourceType: 'citizen_submission',
+                sourceId: $permitApplication->id,
+            ));
+        }
+
+        $municipalReceipt = $permitApplication->metadata['municipal_receipt'] ?? null;
+
+        if (is_array($municipalReceipt)) {
+            $events->push($this->event(
+                key: "municipality-received:{$permitApplication->id}",
+                category: 'application',
+                title: 'Municipality received application',
+                description: 'Municipality received the application into its assessment queue.',
+                status: 'received',
+                actor: null,
+                occurredAt: $this->date($municipalReceipt['received_at'] ?? null),
+                sourceType: 'municipal_receipt',
+                sourceId: $permitApplication->id,
+            ));
+        }
 
         foreach ($permitApplication->assessments as $assessment) {
             $events->push($this->event(
@@ -174,8 +207,10 @@ class BuildPermitApplicationTimeline
     {
         $statusActorIds = collect($permitApplication->metadata['status_history'] ?? [])
             ->pluck('actor_id');
+        $submissionActorId = data_get($permitApplication->metadata, 'citizen_submission.actor_id');
         $releaseActorId = data_get($permitApplication->metadata, 'release_policy_boundary.actor_id');
         $actorIds = $statusActorIds
+            ->push($submissionActorId)
             ->push($releaseActorId)
             ->filter()
             ->map(fn (mixed $actorId): int => (int) $actorId)
@@ -243,6 +278,8 @@ class BuildPermitApplicationTimeline
     {
         return match ($sourceType) {
             'permit_application' => 10,
+            'citizen_submission' => 11,
+            'municipal_receipt' => 12,
             'permit_application_document' => 15,
             'assessment' => 20,
             'payment_schedule' => 30,

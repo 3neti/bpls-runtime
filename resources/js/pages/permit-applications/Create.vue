@@ -40,6 +40,7 @@ type BusinessActivityRow = {
 
 type PermitApplicationDraft = {
     id: number;
+    business_id: number;
     draft_version: string;
     owner_name: string;
     owner_email: string | null;
@@ -68,6 +69,23 @@ type PermitApplicationDraft = {
     lines: (BusinessActivityRow & { id: number })[];
 };
 
+type Registry = {
+    linked: boolean;
+    owner: {
+        id: number;
+        name: string;
+        email: string | null;
+        phone: string | null;
+        address: string | null;
+    } | null;
+    businesses: {
+        id: number;
+        name: string;
+        trade_name: string | null;
+        address: string | null;
+    }[];
+};
+
 const props = defineProps<{
     intakeAudience: 'staff' | 'citizen';
     currentApplicationYear: number;
@@ -77,11 +95,19 @@ const props = defineProps<{
         name: string;
         email: string;
     };
+    registry?: Registry;
     draft?: PermitApplicationDraft;
 }>();
 
 const isCitizenIntake = computed(() => props.intakeAudience === 'citizen');
 const isEditing = computed(() => props.draft !== undefined);
+const selectedBusinessId = ref<number | ''>(props.draft?.business_id ?? '');
+const usesExistingBusiness = computed(
+    () => isCitizenIntake.value && selectedBusinessId.value !== '',
+);
+const registryBusinessReadOnly = computed(
+    () => isEditing.value || usesExistingBusiness.value,
+);
 const intakeIndex = computed(() =>
     isCitizenIntake.value ? citizenIndex() : staffIndex(),
 );
@@ -104,7 +130,8 @@ const businessActivities = ref<BusinessActivityRow[]>(
     ],
 );
 let nextBusinessActivityKey =
-    Math.max(0, ...businessActivities.value.map((activity) => activity.key)) + 1;
+    Math.max(0, ...businessActivities.value.map((activity) => activity.key)) +
+    1;
 
 function addBusinessActivity(): void {
     if (businessActivities.value.length >= 20) {
@@ -203,9 +230,9 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     data-testid="citizen-draft-boundary"
                     class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
                 >
-                    Saving {{ isEditing ? 'updates' : 'creates' }} a draft
-                    only. It does not submit the application for assessment or
-                    assign an official application number.
+                    Saving {{ isEditing ? 'updates' : 'creates' }} a draft only.
+                    It does not submit the application for assessment or assign
+                    an official application number.
                 </section>
                 <InputError :message="errors.draft" />
                 <input
@@ -214,20 +241,32 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     name="draft_version"
                     :value="draft.draft_version"
                 />
-                <section
+                <fieldset
+                    :disabled="isCitizenIntake && registry?.linked"
                     class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 dark:border-sidebar-border"
                 >
                     <div class="md:col-span-2">
                         <h2 class="text-sm font-semibold text-foreground">
-                            Owner
+                            Legal business owner
                         </h2>
+                        <p
+                            v-if="isCitizenIntake && registry?.linked"
+                            class="mt-1 text-xs text-muted-foreground"
+                        >
+                            Linked registry identity. Changes require a separate
+                            registry-maintenance action.
+                        </p>
                     </div>
                     <div class="grid gap-2">
                         <Label for="owner_name">Owner name</Label>
                         <Input
                             id="owner_name"
                             name="owner_name"
-                            :default-value="draft?.owner_name ?? applicant?.name"
+                            :default-value="
+                                draft?.owner_name ??
+                                registry?.owner?.name ??
+                                applicant?.name
+                            "
                             required
                         />
                         <InputError :message="errors.owner_name" />
@@ -241,7 +280,10 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             :default-value="
                                 isEditing
                                     ? inputValue(draft?.owner_email)
-                                    : applicant?.email
+                                    : inputValue(
+                                          registry?.owner?.email ??
+                                              applicant?.email,
+                                      )
                             "
                         />
                         <InputError :message="errors.owner_email" />
@@ -251,7 +293,12 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <Input
                             id="owner_phone"
                             name="owner_phone"
-                            :default-value="inputValue(draft?.owner_phone)"
+                            :default-value="
+                                inputValue(
+                                    draft?.owner_phone ??
+                                        registry?.owner?.phone,
+                                )
+                            "
                         />
                         <InputError :message="errors.owner_phone" />
                     </div>
@@ -260,13 +307,53 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <Input
                             id="owner_address"
                             name="owner_address"
-                            :default-value="inputValue(draft?.owner_address)"
+                            :default-value="
+                                inputValue(
+                                    draft?.owner_address ??
+                                        registry?.owner?.address,
+                                )
+                            "
                         />
                         <InputError :message="errors.owner_address" />
                     </div>
-                </section>
+                </fieldset>
 
-                <section
+                <div
+                    v-if="isCitizenIntake && registry?.linked && !isEditing"
+                    class="grid gap-2 rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+                >
+                    <Label for="business_id">Registered business</Label>
+                    <select
+                        id="business_id"
+                        v-model="selectedBusinessId"
+                        name="business_id"
+                        data-testid="citizen-registry-business-select"
+                        class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+                    >
+                        <option value="">Register a new business</option>
+                        <option
+                            v-for="business in registry.businesses"
+                            :key="business.id"
+                            :value="business.id"
+                        >
+                            {{ business.name }}
+                        </option>
+                    </select>
+                    <InputError :message="errors.business_id" />
+                    <p class="text-xs text-muted-foreground">
+                        Selecting a registered business reuses its legal
+                        registry facts without changing them.
+                    </p>
+                </div>
+                <input
+                    v-else-if="isCitizenIntake && draft"
+                    type="hidden"
+                    name="business_id"
+                    :value="draft.business_id"
+                />
+
+                <fieldset
+                    :disabled="registryBusinessReadOnly"
                     data-testid="permit-establishment-intake"
                     class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 lg:grid-cols-3 dark:border-sidebar-border"
                 >
@@ -274,6 +361,13 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <h2 class="text-sm font-semibold text-foreground">
                             Business and establishment
                         </h2>
+                        <p
+                            v-if="registryBusinessReadOnly"
+                            class="mt-1 text-xs text-muted-foreground"
+                        >
+                            Registry facts are read-only in a permit
+                            application.
+                        </p>
                     </div>
                     <div class="grid gap-2">
                         <Label for="business_name">Business name</Label>
@@ -301,7 +395,9 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <Input
                             id="registration_number"
                             name="registration_number"
-                            :default-value="inputValue(draft?.registration_number)"
+                            :default-value="
+                                inputValue(draft?.registration_number)
+                            "
                         />
                         <InputError :message="errors.registration_number" />
                     </div>
@@ -330,23 +426,58 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             name="ownership_type"
                             class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            <option
-                                value=""
-                                :selected="!draft?.ownership_type"
-                            >
+                            <option value="" :selected="!draft?.ownership_type">
                                 Not recorded
                             </option>
                             <option
                                 value="sole-proprietorship"
-                                :selected="draft?.ownership_type === 'sole-proprietorship'"
+                                :selected="
+                                    draft?.ownership_type ===
+                                    'sole-proprietorship'
+                                "
                             >
                                 Sole proprietorship
                             </option>
-                            <option value="partnership" :selected="draft?.ownership_type === 'partnership'">Partnership</option>
-                            <option value="corporation" :selected="draft?.ownership_type === 'corporation'">Corporation</option>
-                            <option value="cooperative" :selected="draft?.ownership_type === 'cooperative'">Cooperative</option>
-                            <option value="religious" :selected="draft?.ownership_type === 'religious'">Religious</option>
-                            <option value="non-profit" :selected="draft?.ownership_type === 'non-profit'">Non-profit</option>
+                            <option
+                                value="partnership"
+                                :selected="
+                                    draft?.ownership_type === 'partnership'
+                                "
+                            >
+                                Partnership
+                            </option>
+                            <option
+                                value="corporation"
+                                :selected="
+                                    draft?.ownership_type === 'corporation'
+                                "
+                            >
+                                Corporation
+                            </option>
+                            <option
+                                value="cooperative"
+                                :selected="
+                                    draft?.ownership_type === 'cooperative'
+                                "
+                            >
+                                Cooperative
+                            </option>
+                            <option
+                                value="religious"
+                                :selected="
+                                    draft?.ownership_type === 'religious'
+                                "
+                            >
+                                Religious
+                            </option>
+                            <option
+                                value="non-profit"
+                                :selected="
+                                    draft?.ownership_type === 'non-profit'
+                                "
+                            >
+                                Non-profit
+                            </option>
                         </select>
                         <InputError :message="errors.ownership_type" />
                     </div>
@@ -357,7 +488,9 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <Input
                             id="organization_name"
                             name="organization_name"
-                            :default-value="inputValue(draft?.organization_name)"
+                            :default-value="
+                                inputValue(draft?.organization_name)
+                            "
                         />
                         <InputError :message="errors.organization_name" />
                     </div>
@@ -368,9 +501,21 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             name="occupancy"
                             class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            <option value="" :selected="!draft?.occupancy">Not recorded</option>
-                            <option value="owned" :selected="draft?.occupancy === 'owned'">Owned</option>
-                            <option value="rented" :selected="draft?.occupancy === 'rented'">Rented</option>
+                            <option value="" :selected="!draft?.occupancy">
+                                Not recorded
+                            </option>
+                            <option
+                                value="owned"
+                                :selected="draft?.occupancy === 'owned'"
+                            >
+                                Owned
+                            </option>
+                            <option
+                                value="rented"
+                                :selected="draft?.occupancy === 'rented'"
+                            >
+                                Rented
+                            </option>
                         </select>
                         <InputError :message="errors.occupancy" />
                     </div>
@@ -390,7 +535,9 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <Input
                             id="property_index_number"
                             name="property_index_number"
-                            :default-value="inputValue(draft?.property_index_number)"
+                            :default-value="
+                                inputValue(draft?.property_index_number)
+                            "
                         />
                         <InputError :message="errors.property_index_number" />
                     </div>
@@ -421,7 +568,9 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             name="male_employee_count"
                             type="number"
                             min="0"
-                            :default-value="inputValue(draft?.male_employee_count)"
+                            :default-value="
+                                inputValue(draft?.male_employee_count)
+                            "
                         />
                         <InputError :message="errors.male_employee_count" />
                     </div>
@@ -493,7 +642,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         />
                         <InputError :message="errors.registered_on" />
                     </div>
-                </section>
+                </fieldset>
 
                 <section
                     class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 dark:border-sidebar-border"
@@ -521,7 +670,10 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             type="number"
                             min="2020"
                             :max="currentApplicationYear + 1"
-                            :default-value="draft?.application_year ?? currentApplicationYear"
+                            :default-value="
+                                draft?.application_year ??
+                                currentApplicationYear
+                            "
                             :readonly="isCitizenIntake"
                             required
                         />
@@ -545,12 +697,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         </select>
                         <InputError :message="errors.type" />
                     </div>
-                    <input
-                        v-else
-                        type="hidden"
-                        name="type"
-                        value="new"
-                    />
+                    <input v-else type="hidden" name="type" value="new" />
                 </section>
 
                 <section

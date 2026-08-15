@@ -3,11 +3,12 @@
 namespace App\Http\Controllers\Citizen;
 
 use App\Actions\BuildPermitApplicationTimeline;
-use App\Actions\CreatePermitApplication;
+use App\Actions\CreateCitizenPermitApplicationDraft;
 use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Actions\DescribePaymentPolicyBoundary;
 use App\Actions\DescribePermitArtifact;
 use App\Actions\DescribePermitReleaseReadiness;
+use App\Actions\SubmitCitizenPermitApplication;
 use App\Actions\UpdateCitizenPermitApplicationDraft;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
@@ -15,6 +16,7 @@ use App\Enums\PermitClearanceStatus;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Citizen\StorePermitApplicationRequest;
+use App\Http\Requests\Citizen\SubmitPermitApplicationRequest;
 use App\Http\Requests\Citizen\UpdatePermitApplicationRequest;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
@@ -70,12 +72,17 @@ class PermitApplicationController extends Controller
                 'name' => $request->user()->name,
                 'email' => $request->user()->email,
             ],
+            'registry' => $this->registryPayload($request),
         ]);
     }
 
-    public function store(StorePermitApplicationRequest $request, CreatePermitApplication $createPermitApplication): RedirectResponse
+    public function store(StorePermitApplicationRequest $request, CreateCitizenPermitApplicationDraft $createDraft): RedirectResponse
     {
-        $permitApplication = $createPermitApplication->handle($request->validatedForPersistence(), $request->user());
+        try {
+            $permitApplication = $createDraft->handle($request->validatedForPersistence(), $request->user());
+        } catch (DomainException $exception) {
+            return back()->withErrors(['business_id' => $exception->getMessage()]);
+        }
 
         return to_route('citizen.permit-applications.show', $permitApplication)
             ->with('status', 'Permit application draft saved.');
@@ -103,6 +110,7 @@ class PermitApplicationController extends Controller
                 'name' => $request->user()->name,
                 'email' => $request->user()->email,
             ],
+            'registry' => $this->registryPayload($request),
             'draft' => $this->draftIntakePayload($application),
         ]);
     }
@@ -122,6 +130,23 @@ class PermitApplicationController extends Controller
 
         return to_route('citizen.permit-applications.show', $application)
             ->with('status', 'Permit application draft updated.');
+    }
+
+    public function submit(
+        SubmitPermitApplicationRequest $request,
+        int $permitApplication,
+        SubmitCitizenPermitApplication $submitApplication,
+    ): RedirectResponse {
+        $application = $this->ownedApplication($request, $permitApplication);
+
+        try {
+            $application = $submitApplication->handle($application, $request->user());
+        } catch (DomainException $exception) {
+            return back()->withErrors(['submission' => $exception->getMessage()]);
+        }
+
+        return to_route('citizen.permit-applications.show', $application)
+            ->with('status', 'Permit application submitted and received for municipal processing.');
     }
 
     public function show(Request $request, int $permitApplication): Response
@@ -205,12 +230,20 @@ class PermitApplicationController extends Controller
                         ? 'This record is a saved citizen draft. It has not been submitted for assessment or accepted as an official permit application.'
                         : 'This application has entered municipal processing. Its displayed status reflects the current authoritative application record.',
                 ],
+                'submission_boundary' => [
+                    'citizen_submitted_at' => data_get($application->metadata, 'citizen_submission.submitted_at'),
+                    'municipality_received_at' => data_get($application->metadata, 'municipal_receipt.received_at'),
+                    'documentary_sufficiency_determined' => (bool) data_get($application->metadata, 'submission_policy_boundary.documentary_sufficiency_determined', false),
+                    'statement' => $isDraft
+                        ? 'Formal submission places this draft in the municipal processing queue. It does not confirm documentary sufficiency, approval, assessment acceptance, payment, or permit issuance.'
+                        : 'The citizen submitted this application and the municipality received it into the processing queue. Later determinations remain separate municipal actions.',
+                ],
                 'processing' => [
                     'has_entered_municipal_processing' => ! $isDraft
                         || $application->application_number !== null
                         || $assessmentStarted,
                     'application_status' => $application->status->value,
-                    'statement' => 'This view reports the current municipal processing record. It does not provide a citizen submission transition or authorize online payment.',
+                    'statement' => 'This view reports the current municipal processing record. Submission does not authorize online payment or determine documentary sufficiency.',
                     'assessment' => $latestAssessment === null ? null : [
                         'id' => $latestAssessment->id,
                         'sequence' => $latestAssessment->sequence,
@@ -286,6 +319,8 @@ class PermitApplicationController extends Controller
                 'timeline' => $this->citizenTimeline($application, $canViewDocuments, $canViewFinancials),
                 'can_edit' => $request->user()->can(UserPermission::EditOwnPermitApplications->value)
                     && $this->isEditableDraft($application),
+                'can_submit' => $request->user()->can(UserPermission::SubmitOwnPermitApplications->value)
+                    && $this->isSubmittableDraft($application, $request->user()->business_owner_id),
                 'can_upload_documents' => $request->user()->can(UserPermission::UploadOwnPermitApplicationDocuments->value)
                     && $this->isCitizenDocumentUploadAvailable($application),
                 'can_view_documents' => $canViewDocuments,
@@ -301,6 +336,7 @@ class PermitApplicationController extends Controller
             ->whereBelongsTo($request->user(), 'submittedBy')
             ->with([
                 'business.owner',
+                'submittedBy',
                 'lines.lineOfBusiness',
                 'documents' => fn ($query) => $query->latest('uploaded_at')->latest('id'),
                 'assessments' => fn ($query) => $query->whereNull('superseded_at')->latest('sequence'),
@@ -319,8 +355,18 @@ class PermitApplicationController extends Controller
             && $permitApplication->type === PermitApplicationType::New
             && $permitApplication->application_number === null
             && ! $permitApplication->assessments_exists
-            && ! $permitApplication->business->permitApplications()->whereKeyNot($permitApplication->id)->exists()
-            && ! $permitApplication->business->owner->businesses()->whereKeyNot($permitApplication->business_id)->exists();
+            && $permitApplication->submittedBy?->business_owner_id !== null
+            && $permitApplication->business->business_owner_id === $permitApplication->submittedBy->business_owner_id;
+    }
+
+    private function isSubmittableDraft(PermitApplication $permitApplication, ?int $businessOwnerId): bool
+    {
+        return $permitApplication->status === PermitApplicationStatus::Draft
+            && $permitApplication->type === PermitApplicationType::New
+            && $permitApplication->application_number === null
+            && ! $permitApplication->assessments_exists
+            && $businessOwnerId !== null
+            && $permitApplication->business->business_owner_id === $businessOwnerId;
     }
 
     private function isCitizenDocumentUploadAvailable(PermitApplication $permitApplication): bool
@@ -364,6 +410,7 @@ class PermitApplicationController extends Controller
 
         return [
             'id' => $permitApplication->id,
+            'business_id' => $business->id,
             'draft_version' => $permitApplication->updated_at?->toIso8601String(),
             'owner_name' => $owner->name,
             'owner_email' => $owner->email,
@@ -400,6 +447,33 @@ class PermitApplicationController extends Controller
         ];
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    private function registryPayload(Request $request): array
+    {
+        $owner = $request->user()->businessOwner()
+            ->with(['businesses' => fn ($query) => $query->orderBy('name')])
+            ->first();
+
+        return [
+            'linked' => $owner !== null,
+            'owner' => $owner === null ? null : [
+                'id' => $owner->id,
+                'name' => $owner->name,
+                'email' => $owner->email,
+                'phone' => $owner->phone,
+                'address' => $owner->address,
+            ],
+            'businesses' => $owner?->businesses->map(fn ($business): array => [
+                'id' => $business->id,
+                'name' => $business->name,
+                'trade_name' => $business->trade_name,
+                'address' => $business->address,
+            ])->values() ?? [],
+        ];
+    }
+
     private function centsToPesos(int $amountCents): string
     {
         return number_format($amountCents / 100, 2, '.', '');
@@ -412,7 +486,10 @@ class PermitApplicationController extends Controller
     {
         return [
             'id' => $permitApplication->id,
-            'display_reference' => $permitApplication->application_number ?? 'Draft #'.$permitApplication->id,
+            'display_reference' => $permitApplication->application_number
+                ?? ($permitApplication->status === PermitApplicationStatus::Draft
+                    ? 'Draft #'.$permitApplication->id
+                    : 'Application record #'.$permitApplication->id),
             'application_number' => $permitApplication->application_number,
             'type' => $permitApplication->type->value,
             'status' => $permitApplication->status->value,

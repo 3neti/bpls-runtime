@@ -2,10 +2,9 @@
 
 namespace App\LifecycleScenarios;
 
-use App\Actions\CreatePermitApplication;
+use App\Actions\CreateCitizenPermitApplicationDraft;
 use App\Actions\SimplePdfDocument;
 use App\Enums\PermitApplicationStatus;
-use App\Enums\PermitApplicationType;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\User;
@@ -15,7 +14,7 @@ use RuntimeException;
 final class CitizenPermitDraftVisibilityScenario
 {
     public function __construct(
-        private readonly CreatePermitApplication $createPermitApplication,
+        private readonly CreateCitizenPermitApplicationDraft $createPermitApplicationDraft,
         private readonly ScenarioManifest $scenarioManifest,
         private readonly ScenarioSummaryRenderer $summaryRenderer,
     ) {}
@@ -71,7 +70,7 @@ final class CitizenPermitDraftVisibilityScenario
             ],
         ];
 
-        $permitApplication = $this->createPermitApplication->handle([
+        $permitApplication = $this->createPermitApplicationDraft->handle([
             'owner_name' => $applicant->name,
             'owner_email' => $applicant->email,
             'owner_phone' => '09170000000',
@@ -80,8 +79,6 @@ final class CitizenPermitDraftVisibilityScenario
             'trade_name' => 'Citizen Scenario Trade',
             'business_address' => 'Scenario citizen business address',
             'barangay' => 'Poblacion',
-            'application_number' => null,
-            'type' => PermitApplicationType::New->value,
             'application_year' => now()->year,
             'lines' => collect($activities)
                 ->map(fn (array $activity): array => collect($activity)->except(['code', 'name'])->all())
@@ -116,6 +113,7 @@ final class CitizenPermitDraftVisibilityScenario
             'record_type' => 'permit_application',
             'record_id' => $permitApplication->id,
             'public_reference' => 'Draft #'.$permitApplication->id,
+            'post_submission_reference' => 'Application record #'.$permitApplication->id,
             'business_name' => $businessName,
             'list_url' => route('citizen.permit-applications.index', absolute: false),
             'create_url' => route('citizen.permit-applications.create', absolute: false),
@@ -128,8 +126,9 @@ final class CitizenPermitDraftVisibilityScenario
 
         if ($scenario->key === 'citizen_permit_draft_edit_visibility') {
             $manifest['resources']['expected_edit'] = [
-                'business_name' => $businessName.' Updated',
-                'owner_phone' => '09171112222',
+                'business_name' => $businessName,
+                'owner_phone' => $permitApplication->business->owner->phone,
+                'registry_facts_read_only' => true,
                 'business_activities' => [
                     [
                         'code' => $retail->code,
@@ -148,6 +147,16 @@ final class CitizenPermitDraftVisibilityScenario
                         'started_on' => '2021-06-01',
                     ],
                 ],
+            ];
+        }
+
+        if ($scenario->key === 'citizen_permit_submission_visibility') {
+            $manifest['resources']['expected_submission'] = [
+                'status' => PermitApplicationStatus::Assessment->value,
+                'application_number' => null,
+                'assessment_count' => 0,
+                'payment_schedule_count' => 0,
+                'browser_performs_submission' => true,
             ];
         }
 
@@ -200,6 +209,10 @@ final class CitizenPermitDraftVisibilityScenario
             ->withCount('assessments')
             ->findOrFail($manifest['resources']['record_id']);
         $browserReport = $artifactStore->readJson('browser/report.json') ?? ['result' => ['passed' => false]];
+
+        if (($manifest['scenario']['key'] ?? null) === 'citizen_permit_submission_visibility') {
+            return $this->auditSubmission($manifest, $permitApplication, $browserReport, $artifactStore);
+        }
         $canonicalActivities = $permitApplication->lines->map(fn ($line): array => [
             'code' => $line->lineOfBusiness?->code,
             'name' => $line->lineOfBusiness?->name,
@@ -240,21 +253,23 @@ final class CitizenPermitDraftVisibilityScenario
         ];
 
         if (is_array($expectedEdit)) {
-            $checks[] = $this->step('audit-edited-draft-facts', 'Canonical owner and business facts match the browser edit contract', [
+            $checks[] = $this->step('audit-edited-draft-facts', 'Canonical owner and business registry facts remain unchanged by the browser edit', [
                 'business_name' => $expectedEdit['business_name'],
                 'owner_phone' => $expectedEdit['owner_phone'],
             ], [
                 'business_name' => $permitApplication->business->name,
                 'owner_phone' => $permitApplication->business->owner->phone,
             ]);
-            $checks[] = $this->step('audit-browser-edited-draft-facts', 'Browser owner and business facts match canonical edited facts', [
+            $checks[] = $this->step('audit-browser-edited-draft-facts', 'Browser reports immutable registry facts and application-specific edits', [
                 'business_name' => $permitApplication->business->name,
                 'owner_phone' => $permitApplication->business->owner->phone,
                 'edit_performed_by_browser' => true,
+                'registry_facts_read_only' => true,
             ], [
                 'business_name' => data_get($browserReport, 'citizen_draft.business_name'),
                 'owner_phone' => data_get($browserReport, 'citizen_draft.owner_phone'),
                 'edit_performed_by_browser' => data_get($browserReport, 'citizen_draft.edit_performed_by_browser'),
+                'registry_facts_read_only' => data_get($browserReport, 'citizen_draft.registry_facts_read_only'),
             ]);
         }
 
@@ -329,6 +344,89 @@ final class CitizenPermitDraftVisibilityScenario
     }
 
     /**
+     * @param  array<string, mixed>  $manifest
+     * @param  array<string, mixed>  $browserReport
+     * @return array<string, mixed>
+     */
+    private function auditSubmission(array $manifest, PermitApplication $permitApplication, array $browserReport, ScenarioArtifactStore $artifactStore): array
+    {
+        $checks = [
+            $this->step('audit-citizen-submitted', 'Canonical application records the citizen submission fact', [
+                'status' => PermitApplicationStatus::Assessment->value,
+                'submitted' => true,
+                'actor_id' => data_get($manifest, 'actors.applicant.id'),
+            ], [
+                'status' => $permitApplication->status->value,
+                'submitted' => data_get($permitApplication->metadata, 'citizen_submission.submitted_at') !== null,
+                'actor_id' => data_get($permitApplication->metadata, 'citizen_submission.actor_id'),
+            ]),
+            $this->step('audit-municipality-received', 'Canonical application records municipal receipt into the processing queue', [
+                'received' => true,
+                'processing_status' => PermitApplicationStatus::Assessment->value,
+            ], [
+                'received' => data_get($permitApplication->metadata, 'municipal_receipt.received_at') !== null,
+                'processing_status' => data_get($permitApplication->metadata, 'municipal_receipt.processing_status'),
+            ]),
+            $this->step('audit-submission-policy-seams', 'Submission leaves unresolved policy and downstream financial behavior untouched', [
+                'application_number' => null,
+                'assessment_count' => 0,
+                'payment_schedule_count' => 0,
+                'documentary_sufficiency_determined' => false,
+                'payment_mode_committed' => false,
+            ], [
+                'application_number' => $permitApplication->application_number,
+                'assessment_count' => $permitApplication->assessments()->count(),
+                'payment_schedule_count' => $permitApplication->paymentSchedules()->count(),
+                'documentary_sufficiency_determined' => (bool) data_get($permitApplication->metadata, 'submission_policy_boundary.documentary_sufficiency_determined'),
+                'payment_mode_committed' => (bool) data_get($permitApplication->metadata, 'submission_policy_boundary.payment_mode_committed'),
+            ]),
+            $this->step('audit-browser-submission', 'Browser UI agrees with the canonical submission and receipt facts', [
+                'status' => $permitApplication->status->value,
+                'citizen_submitted' => true,
+                'municipality_received' => true,
+                'submit_action_available' => false,
+                'edit_action_available' => false,
+            ], [
+                'status' => data_get($browserReport, 'citizen_submission.status'),
+                'citizen_submitted' => data_get($browserReport, 'citizen_submission.citizen_submitted'),
+                'municipality_received' => data_get($browserReport, 'citizen_submission.municipality_received'),
+                'submit_action_available' => data_get($browserReport, 'citizen_submission.submit_action_available'),
+                'edit_action_available' => data_get($browserReport, 'citizen_submission.edit_action_available'),
+            ]),
+            $this->step('audit-browser-result', 'Browser evidence runner passed', ['browser' => true], ['browser' => (bool) data_get($browserReport, 'result.passed')]),
+        ];
+        $passed = collect($checks)->every(fn (array $check): bool => $check['passed']);
+
+        $manifest['steps'] = [...($manifest['steps'] ?? []), ...$checks];
+        $manifest['result']['audit'] = $passed ? 'passed' : 'failed';
+        $manifest['result']['browser'] = data_get($browserReport, 'result.passed') ? 'passed' : 'failed';
+        $manifest['result']['passed'] = $manifest['result']['terminal'] === 'passed'
+            && $manifest['result']['browser'] === 'passed'
+            && $manifest['result']['audit'] === 'passed';
+        $manifest['artifacts']['screenshots'] = data_get($browserReport, 'artifacts.screenshots', []);
+
+        $artifactStore->putJson('terminal/audit.json', [
+            'checks' => $checks,
+            'passed' => $passed,
+            'canonical' => [
+                'permit_application_id' => $permitApplication->id,
+                'status' => $permitApplication->status->value,
+                'application_number' => $permitApplication->application_number,
+                'submitted_at' => $permitApplication->submitted_at?->toIso8601String(),
+                'citizen_submission' => data_get($permitApplication->metadata, 'citizen_submission'),
+                'municipal_receipt' => data_get($permitApplication->metadata, 'municipal_receipt'),
+                'assessment_count' => $permitApplication->assessments()->count(),
+                'payment_schedule_count' => $permitApplication->paymentSchedules()->count(),
+            ],
+            'browser' => $browserReport,
+        ]);
+        $artifactStore->putJson('manifest.json', $manifest);
+        $artifactStore->put('summary.html', $this->summaryRenderer->html($manifest));
+
+        return $manifest;
+    }
+
+    /**
      * @param  array<string, mixed>  $expected
      * @param  array<string, mixed>  $actual
      * @return array<string, mixed>
@@ -352,6 +450,39 @@ final class CitizenPermitDraftVisibilityScenario
      */
     private function storyboard(string $runId, PermitApplication $permitApplication, string $scenarioKey): array
     {
+        if ($scenarioKey === 'citizen_permit_submission_visibility') {
+            return [
+                'title' => 'Citizen formally submits a new permit application',
+                'summary' => 'A citizen submits the exact saved draft through the real portal; the municipality receives it into the processing queue without assigning an official number or triggering financial behavior.',
+                'run_id' => $runId,
+                'record' => [
+                    'type' => 'permit_application',
+                    'id' => $permitApplication->id,
+                    'reference' => 'Draft #'.$permitApplication->id,
+                ],
+                'frames' => [
+                    [
+                        'title' => 'Citizen reviews the saved draft',
+                        'description' => 'The draft remains unnumbered, editable, and outside municipal processing.',
+                        'dialogue' => 'Submission is a separate citizen action.',
+                        'duration_seconds' => 4,
+                    ],
+                    [
+                        'title' => 'Citizen submits the application',
+                        'description' => 'The browser invokes the production submission action for the exact manifest record.',
+                        'dialogue' => 'The municipality receives the application into its processing queue.',
+                        'duration_seconds' => 5,
+                    ],
+                    [
+                        'title' => 'Submission and receipt are verified',
+                        'description' => 'UI and canonical audit evidence agree while numbering, documentary sufficiency, assessment computation, and payment remain subsequent decisions.',
+                        'dialogue' => 'Submitted and received do not mean approved or issued.',
+                        'duration_seconds' => 5,
+                    ],
+                ],
+            ];
+        }
+
         if ($scenarioKey === 'citizen_permit_draft_document_visibility') {
             return [
                 'title' => 'Citizen adds supporting evidence to a permit draft',
