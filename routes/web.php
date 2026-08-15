@@ -5,6 +5,7 @@ use App\Http\Controllers\Citizen\PermitApplicationController as CitizenPermitApp
 use App\Http\Controllers\Citizen\PermitApplicationDocumentController as CitizenPermitApplicationDocumentController;
 use App\Http\Controllers\PublicPermitVerificationController;
 use App\Http\Controllers\PublicPermitVerificationPageController;
+use App\Http\Controllers\Staff\AnnexCDnfbpReportController;
 use App\Http\Controllers\Staff\AssessmentPaymentScheduleController;
 use App\Http\Controllers\Staff\AssessmentSummaryReportController;
 use App\Http\Controllers\Staff\BspReportController;
@@ -125,6 +126,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('reports.plds.index');
         Route::get('reports/bsp', [BspReportController::class, 'index'])
             ->name('reports.bsp.index');
+        Route::get('reports/annex-c-dnfbp', [AnnexCDnfbpReportController::class, 'index'])
+            ->name('reports.annex-c-dnfbp.index');
         Route::get('reports/daily-collections', [DailyCollectionReportController::class, 'index'])
             ->name('reports.daily-collections.index');
         Route::get('reports/daily-collections/download', [DailyCollectionReportController::class, 'download'])

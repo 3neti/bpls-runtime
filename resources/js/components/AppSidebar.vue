@@ -19,6 +19,7 @@ import {
 } from '@lucide/vue';
 import { computed } from 'vue';
 import { index as citizenPermitApplicationIndex } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
+import { index as annexCDnfbpReportIndex } from '@/actions/App/Http/Controllers/Staff/AnnexCDnfbpReportController';
 import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { index as assessmentSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentSummaryReportController';
 import { index as bspReportIndex } from '@/actions/App/Http/Controllers/Staff/BspReportController';
@@ -130,6 +131,11 @@ const staffNavItems: NavItem[] = [
     {
         title: 'BSP Non-Bank Entities',
         href: bspReportIndex(),
+        icon: TableProperties,
+    },
+    {
+        title: 'ANNEX C - DNFBP',
+        href: annexCDnfbpReportIndex(),
         icon: TableProperties,
     },
     {

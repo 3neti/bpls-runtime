@@ -1121,6 +1121,13 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($firstManifest['resources']['total_capital_gross_payment_cents'])->toBe($receipt->amount_cents)
         ->and($firstManifest['resources']['total_capital_gross_balance_cents'])->toBe(0)
         ->and($firstManifest['resources']['total_capital_gross_payment_status'])->toBe('Completed')
+        ->and($firstManifest['resources']['annex_c_dnfbp_report_url'])->toBe('/staff/reports/annex-c-dnfbp')
+        ->and($firstManifest['resources']['annex_c_dnfbp_status'])->toBe('blocked')
+        ->and($firstManifest['resources']['annex_c_dnfbp_can_generate'])->toBeFalse()
+        ->and($firstManifest['resources']['annex_c_dnfbp_can_export'])->toBeFalse()
+        ->and($firstManifest['resources']['annex_c_dnfbp_official_row_count'])->toBe(0)
+        ->and($firstManifest['resources']['annex_c_dnfbp_contract_column_count'])->toBe(9)
+        ->and($firstManifest['resources']['annex_c_dnfbp_artifact_excluded'])->toBeTrue()
         ->and($firstManifest['resources']['bsp_report_url'])->toBe('/staff/reports/bsp')
         ->and($firstManifest['resources']['bsp_status'])->toBe('blocked')
         ->and($firstManifest['resources']['bsp_can_generate'])->toBeFalse()
@@ -1719,6 +1726,16 @@ test('manual collection receipt scenario audit compares browser evidence with ca
                 'mobile_visible' => true,
                 'mobile_horizontal_overflow' => false,
             ],
+            'annex_c_dnfbp' => [
+                'status' => 'blocked',
+                'can_generate' => false,
+                'can_export' => false,
+                'official_row_count' => 0,
+                'contract_column_count' => 9,
+                'artifact_excluded' => true,
+                'mobile_visible' => true,
+                'mobile_horizontal_overflow' => false,
+            ],
             'bsp' => [
                 'status' => 'blocked',
                 'can_generate' => false,
@@ -1832,6 +1849,8 @@ test('manual collection receipt scenario audit compares browser evidence with ca
         ->and($audited['resources']['permit_verification_reference'])->toBe($verification['reference'])
         ->and($audited['resources']['permit_artifact_status'])->toBe('generated_artifact_available')
         ->and($audited['resources']['receipt_void_boundary_reference'])->toBe($voidBoundary['reference'])
+        ->and(collect($artifactStore->readJson('terminal/audit.json')['checks'])->firstWhere('key', 'audit-annex-c-dnfbp-authority-boundary')['passed'])->toBeTrue()
+        ->and(collect($artifactStore->readJson('terminal/audit.json')['checks'])->firstWhere('key', 'audit-browser-annex-c-dnfbp-authority-boundary')['passed'])->toBeTrue()
         ->and(collect($artifactStore->readJson('terminal/audit.json')['checks'])->firstWhere('key', 'audit-bsp-authority-boundary')['passed'])->toBeTrue()
         ->and(collect($artifactStore->readJson('terminal/audit.json')['checks'])->firstWhere('key', 'audit-browser-bsp-authority-boundary')['passed'])->toBeTrue()
         ->and(collect($artifactStore->readJson('terminal/audit.json')['checks'])->firstWhere('key', 'audit-cmci-ldcs-authority-boundary')['passed'])->toBeTrue()

@@ -242,6 +242,7 @@ try {
         await inspectManualReceiptPaymentSummaryReport(page, baseUrl);
         await inspectManualReceiptBusinessTaxByMajorTypeReport(page, baseUrl);
         await inspectManualReceiptTotalCapitalGrossSummaryReport(page, baseUrl);
+        await inspectManualReceiptAnnexCDnfbpBoundary(page, baseUrl);
         await inspectManualReceiptBspBoundary(page, baseUrl);
         await inspectManualReceiptCmciLdcsBoundary(page, baseUrl);
         await inspectManualReceiptPldsBoundary(page, baseUrl);
@@ -5254,6 +5255,133 @@ async function inspectManualReceiptBspBoundary(targetPage, targetBaseUrl) {
         targetPage,
         '02-bsp-boundary-mobile',
         'browser/screenshots/02-bsp-boundary-mobile.png',
+    );
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+}
+
+async function inspectManualReceiptAnnexCDnfbpBoundary(
+    targetPage,
+    targetBaseUrl,
+) {
+    const reportUrl = `${targetBaseUrl}${manifest.resources.annex_c_dnfbp_report_url}`;
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+
+    const boundaryVisible = await targetPage
+        .getByTestId('dnfbp-boundary-status')
+        .isVisible()
+        .catch(() => false);
+    const authorityExplanationVisible = await targetPage
+        .getByTestId('dnfbp-authority-boundary')
+        .getByText('proves none of those facts', { exact: false })
+        .isVisible()
+        .catch(() => false);
+    const officialRowCount = Number(
+        (
+            await targetPage
+                .getByTestId('dnfbp-official-row-count')
+                .textContent()
+                .catch(() => null)
+        )?.trim(),
+    );
+    const contractColumnCount = Number(
+        (
+            await targetPage
+                .getByTestId('dnfbp-column-count')
+                .textContent()
+                .catch(() => null)
+        )?.trim(),
+    );
+    const exportVisible = await targetPage
+        .getByRole('link', { name: /export/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const artifactVisible = await targetPage
+        .getByText(manifest.resources.paid_establishment_business_name, {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'annex-c-dnfbp-authority-boundary-visible',
+            'ANNEX C shows its blocked authority state and exact nine-field contract',
+            true,
+            boundaryVisible &&
+                authorityExplanationVisible &&
+                officialRowCount === 0 &&
+                contractColumnCount === 9,
+            {
+                url: reportUrl,
+                official_row_count: officialRowCount,
+                contract_column_count: contractColumnCount,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'annex-c-dnfbp-artifact-excluded',
+            'ANNEX C does not expose the artifact-ready application as a legally permitted DNFBP',
+            true,
+            !artifactVisible && !exportVisible,
+        ),
+    );
+
+    reportEvidence.annex_c_dnfbp = {
+        status: boundaryVisible ? 'blocked' : null,
+        can_generate: false,
+        can_export: exportVisible,
+        official_row_count: officialRowCount,
+        contract_column_count: contractColumnCount,
+        artifact_excluded: !artifactVisible,
+    };
+    await screenshot(
+        targetPage,
+        '02-annex-c-dnfbp-boundary',
+        'browser/screenshots/02-annex-c-dnfbp-boundary.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const mobileBoundaryVisible = await targetPage
+        .getByTestId('dnfbp-boundary-status')
+        .isVisible()
+        .catch(() => false);
+    const mobileColumnCount = await targetPage
+        .getByTestId('dnfbp-mobile-column')
+        .count();
+    const mobileHorizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+
+    checks.push(
+        check(
+            'annex-c-dnfbp-mobile-visible',
+            'Mobile ANNEX C keeps the authority state and all contract fields visible',
+            true,
+            mobileBoundaryVisible && mobileColumnCount === 9,
+        ),
+    );
+    checks.push(
+        check(
+            'annex-c-dnfbp-mobile-no-horizontal-overflow',
+            'Mobile ANNEX C has no page-level horizontal overflow',
+            false,
+            mobileHorizontalOverflow,
+        ),
+    );
+    reportEvidence.annex_c_dnfbp.mobile_visible =
+        mobileBoundaryVisible && mobileColumnCount === 9;
+    reportEvidence.annex_c_dnfbp.mobile_horizontal_overflow =
+        mobileHorizontalOverflow;
+    await screenshot(
+        targetPage,
+        '02-annex-c-dnfbp-boundary-mobile',
+        'browser/screenshots/02-annex-c-dnfbp-boundary-mobile.png',
     );
     await targetPage.setViewportSize({ width: 1440, height: 900 });
 }
