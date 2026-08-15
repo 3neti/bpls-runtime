@@ -271,7 +271,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 code: 'MRC-2A-02-A-MANUFACTURERS',
                 section: 'Section 2A.02(a)',
                 title: 'Manufacturers, producers, assemblers, and processors',
-                type: RevenueCodeProvisionType::TaxSchedule,
+                type: RevenueCodeProvisionType::FixedFee,
                 excerpt: 'Graduated annual business-tax schedule for manufacturers and related producers, ending with a percentage rate for gross sales of PHP 6,500,000.00 or more.',
                 notes: 'The schedule contains the malformed value "4,000,0000.00" and an upper percentage expressed as "not exceeding"; municipal reconciliation and production configuration are required.',
                 metadata: ['chapter' => 2, 'article' => 'A', 'schedule_row_count' => 20, 'known_ambiguities' => ['malformed_numeric_value', 'statutory_ceiling']],
@@ -280,7 +280,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 code: 'MRC-2A-02-B-WHOLESALERS',
                 section: 'Section 2A.02(b)',
                 title: 'Wholesalers, distributors, and dealers',
-                type: RevenueCodeProvisionType::TaxSchedule,
+                type: RevenueCodeProvisionType::FixedFee,
                 excerpt: 'Graduated annual business-tax schedule for wholesalers, distributors, or dealers, ending with a percentage rate for gross sales of PHP 2,000,000.00 or more.',
                 notes: 'The source has overlapping PHP 6,000.00-7,500.00 and PHP 7,000.00-8,000.00 rows plus malformed values including "150,0000.00" and "5000,000.00".',
                 metadata: ['chapter' => 2, 'article' => 'A', 'schedule_row_count' => 24, 'known_ambiguities' => ['overlapping_ranges', 'malformed_numeric_values', 'statutory_ceiling']],
@@ -422,14 +422,50 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 metadata: ['chapter' => 2, 'article' => 'D', 'known_ambiguities' => ['source_article_reference_defect', 'exporter_facility_nexus', 'route_inventory_origin', 'sale_and_delivery_situs', 'inter_lgu_allocation']],
             ),
             $this->provision(
+                code: 'MRC-3A-01-02-PERMIT-SCOPE-ENTERPRISE-SCALE',
+                section: 'Section 3A.01-3A.02',
+                title: "Mayor's Permit scope and enterprise-scale definitions",
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: "The ordinance requires a Mayor's Permit for covered businesses and adopts five enterprise scales using stated asset-limit and workforce descriptions.",
+                notes: 'Asset-boundary overlap, the relationship between asset and workforce criteria, source wording defects, business/activity scope, and separate-establishment identity require municipal reconciliation.',
+                metadata: ['chapter' => 3, 'article' => 'A', 'known_ambiguities' => ['covered_business_and_activity_scope', 'separate_establishment_identity', 'asset_boundary_overlap', 'asset_and_workforce_relationship', 'workforce_wording_defects']],
+            ),
+            $this->provision(
+                code: 'MRC-3A-02-A-01-06-GENERAL-PERMIT-FEES',
+                section: 'Section 3A.02(a), items 1-6',
+                title: "Annual Mayor's Permit fees for general business categories",
+                type: RevenueCodeProvisionType::TaxSchedule,
+                excerpt: 'The ordinance states annual permit amounts for manufacturers, banks, financial institutions, contractors, service establishments, and wholesalers or retailers.',
+                notes: 'Business-category and enterprise-scale mapping require accepted policy. The service-establishment table contains an unlabeled PHP 500.00 row and a large-scale row with no aligned amount; those defects are preserved and not normalized.',
+                metadata: ['chapter' => 3, 'article' => 'A', 'schedule_clause_count' => 27, 'known_ambiguities' => ['business_category_mapping', 'enterprise_scale_eligibility', 'service_schedule_unlabeled_amount', 'service_schedule_missing_large_amount']],
+            ),
+            $this->provision(
+                code: 'MRC-3A-02-A-07-13-SPECIAL-PERMIT-FEES',
+                section: 'Section 3A.02(a), items 7-13',
+                title: "Annual Mayor's Permit fees for regulated and special business categories",
+                type: RevenueCodeProvisionType::TaxSchedule,
+                excerpt: 'The ordinance states annual permit amounts for liquor and tobacco businesses, trans-loading, other businesses, fuel dealers, trucking or hauling, cooperatives, educational institutions, and unlisted businesses.',
+                notes: 'Category, scale, nozzle, unit-count, and residual-business mapping require accepted policy. The gasoline-station table contains an unlabeled PHP 5,000.00 row and a large row with no aligned amount; DOE compliance is an external authority boundary.',
+                metadata: ['chapter' => 3, 'article' => 'A', 'schedule_clause_count' => 29, 'known_ambiguities' => ['business_category_mapping', 'enterprise_scale_eligibility', 'gasoline_schedule_unlabeled_amount', 'gasoline_schedule_missing_large_amount', 'doe_compliance_authority', 'residual_business_scope']],
+            ),
+            $this->provision(
                 code: 'MRC-3A-02-B-NEW-MICRO-PERMIT',
                 section: 'Section 3A.02(b)',
-                title: "New-business micro-industry Mayor's Permit fee",
+                title: "New-business Mayor's Permit fee schedule",
                 type: RevenueCodeProvisionType::FixedFee,
-                excerpt: 'For new business, Micro-Industry - P 200.00.',
-                notes: 'Municipal enterprise-scale eligibility remains unresolved.',
-                metadata: ['chapter' => 3, 'article' => 'A', 'known_ambiguities' => ['enterprise_scale_eligibility']],
+                excerpt: 'For new business, the ordinance states permit amounts from PHP 200.00 for micro-industry through PHP 2,000.00 for large-scale industries.',
+                notes: 'Municipal enterprise-scale eligibility, business identity, separate-establishment scope, and operational schedule acceptance remain unresolved. The stable provision code is retained from the first extracted micro row.',
+                metadata: ['chapter' => 3, 'article' => 'A', 'schedule_clause_count' => 5, 'known_ambiguities' => ['enterprise_scale_eligibility', 'new_business_identity', 'separate_establishment_identity']],
                 feeRule: $newBusinessPermitFee,
+            ),
+            $this->provision(
+                code: 'MRC-3A-03-PAYMENT-PRORATION',
+                section: 'Section 3A.03',
+                title: "Mayor's Permit payment, proration, and abandonment",
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance places payment with the Municipal Treasurer upon application, states a January renewal period, reckons newly started businesses from the beginning of a calendar quarter, and limits abandoned-business fees without refunding unexpired quarters.',
+                notes: 'Payment-versus-issuance ordering, renewal due-date procedure, quarter reckoning, abandonment evidence, fee allocation, and the duplicated abandonment wording require operational reconciliation.',
+                metadata: ['chapter' => 3, 'article' => 'A', 'known_ambiguities' => ['payment_and_issuance_order', 'renewal_due_date_procedure', 'calendar_quarter_reckoning', 'abandonment_evidence', 'no_refund_scope', 'duplicated_source_wording']],
             ),
             $this->provision(
                 code: 'MRC-3A-04-INSPECTION',
@@ -1510,6 +1546,8 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             ),
         ]);
 
+        $this->seedMayorsPermitArticleAClauses();
+
         $this->persistPolicyBoundaryClauses('MRC-2F-01-PIL', [
             $this->pilThresholdClause(1, 'SARI-SARI', '1', 'Sari-Sari Stores', '61,600.00', 6_160_000),
             $this->pilThresholdClause(2, 'SARI-SARI-LIQUOR-CIGARETTES', '1', 'Sari-Sari Stores with Liquors & Cigarettes', '308,000.00', 30_800_000),
@@ -1548,6 +1586,117 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 executionBlocker: 'Classification mapping, valid-data criteria, discrepancy handling, substitution authority, taxpayer notice and challenge, approval, effective version, and audit requirements are unresolved.',
                 metadata: ['candidate_uses' => ['validate_declared_gross_receipts', 'establish_taxable_gross_receipts_when_valid_data_unavailable']],
             ),
+        ]);
+    }
+
+    private function seedMayorsPermitArticleAClauses(): void
+    {
+        $this->persistPolicyBoundaryClauses('MRC-3A-01-02-PERMIT-SCOPE-ENTERPRISE-SCALE', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-3A-01-MAYORS-PERMIT-REQUIREMENT',
+                type: RevenueCodeProvisionClauseType::PermitRequirement,
+                sourceText: 'It shall be unlawful for any person or entity to conduct or engaged in any business, trade or occupation within the territorial jurisdiction of the municipality of Ipil for which a permit is required for the proper supervision and enforcement of existing laws and ordinances governing the sanitation, security and welfare of the public and the health of the employees engaged in business, trade or occupation specified in this Code and other ordinances that may hereafter be enacted, without first having secured a permit therefore from the Municipal Mayor.',
+                candidateInterpretation: "Candidate scope: covered businesses, trades, occupations, and activities operating in Ipil require a Mayor's Permit before operation.",
+                executionBlocker: 'The covered activity catalog, exemptions, territorial facts, prerequisite evidence, and authority procedure require accepted municipal policy.',
+                metadata: ['candidate_authority' => 'Municipal Mayor', 'candidate_timing' => 'before_operation'],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 2,
+                code: 'MRC-3A-02-SEPARATE-BUSINESS-PLACE-FEE',
+                type: RevenueCodeProvisionClauseType::SeparateEstablishment,
+                sourceText: 'The permit fee is payable for every distinct or separate business or place where the business or trade is conducted. One line of business or trade does not become exempt by being conducted with some other business or trade for which the permit fee has been obtained and the corresponding fee paid for.',
+                candidateInterpretation: 'Candidate scope: assess each distinct business, place, and non-exempt line of business separately.',
+                executionBlocker: 'Business, establishment, branch, place, co-located line, and fee-combination identity require accepted policy and production-data mapping.',
+                metadata: ['candidate_dimensions' => ['business', 'place', 'line_of_business']],
+            ),
+            $this->enterpriseScaleClause(3, 'MICRO', 'Micro-Industry', 'P 150,000 and below', 'No specific', 0, 15_000_000),
+            $this->enterpriseScaleClause(4, 'COTTAGE', 'Cottage Industries', 'Above P 150,000 to P 1.5M', 'Less than 10', 15_000_000, 150_000_000),
+            $this->enterpriseScaleClause(5, 'SMALL', 'Small-scale Industries', 'P 1.5M to P 15M', '10-99', 150_000_000, 1_500_000_000),
+            $this->enterpriseScaleClause(6, 'MEDIUM', 'Medium-scale Industries', 'P 15M to P 60M', '100-199', 1_500_000_000, 6_000_000_000),
+            $this->enterpriseScaleClause(7, 'LARGE', 'Large-scale Industries', 'Above P 60M', '200 more', 6_000_000_000, null),
+        ]);
+
+        $this->persistPermitFeeScheduleClauses('MRC-3A-02-A-01-06-GENERAL-PERMIT-FEES', [
+            ['MRC-3A-02-A-01-MANUFACTURER-MICRO', 'Manufacturers/Importers/Producers', 'Micro-Industry', '300.00', 30_000],
+            ['MRC-3A-02-A-01-MANUFACTURER-COTTAGE', 'Manufacturers/Importers/Producers', 'Cottage Industries', '500.00', 50_000],
+            ['MRC-3A-02-A-01-MANUFACTURER-SMALL', 'Manufacturers/Importers/Producers', 'Small-scale Industries', '1,000.00', 100_000],
+            ['MRC-3A-02-A-01-MANUFACTURER-MEDIUM', 'Manufacturers/Importers/Producers', 'Medium-Scale Industries', '1,500.00', 150_000],
+            ['MRC-3A-02-A-01-MANUFACTURER-LARGE', 'Manufacturers/Importers/Producers', 'Large-Scale Industries', '2,000.00', 200_000],
+            ['MRC-3A-02-A-02-BANK-RURAL', 'Banks', 'Rural, Thrift and Savings Banks', '5,000.00', 500_000],
+            ['MRC-3A-02-A-02-BANK-COMMERCIAL', 'Banks', 'Commercial, Industrial and Development Banks', '15,000.00', 1_500_000],
+            ['MRC-3A-02-A-02-BANK-UNIVERSAL', 'Banks', 'Universal Banks', '20,000.00', 2_000_000],
+            ['MRC-3A-02-A-03-FINANCIAL-SMALL', 'Other Financial Institutions', 'Small', '3,000.00', 300_000],
+            ['MRC-3A-02-A-03-FINANCIAL-MEDIUM', 'Other Financial Institutions', 'Medium', '5,000.00', 500_000],
+            ['MRC-3A-02-A-03-FINANCIAL-LARGE', 'Other Financial Institutions', 'Large', '15,000.00', 1_500_000],
+            ['MRC-3A-02-A-04-CONTRACTOR-MICRO', 'Contractors', 'Micro-Industry', '1,000.00', 100_000],
+            ['MRC-3A-02-A-04-CONTRACTOR-COTTAGE', 'Contractors', 'Cottage Industries', '2,000.00', 200_000],
+            ['MRC-3A-02-A-04-CONTRACTOR-SMALL', 'Contractors', 'Small-scale Industries', '3,000.00', 300_000],
+            ['MRC-3A-02-A-04-CONTRACTOR-MEDIUM', 'Contractors', 'Medium-Scale Industries', '4,000.00', 400_000],
+            ['MRC-3A-02-A-04-CONTRACTOR-LARGE', 'Contractors', 'Large-Scale Industries', '5,000.00', 500_000],
+            ['MRC-3A-02-A-05-SERVICE-MICRO', 'Service Establishments', 'Micro-Industry', '300.00', 30_000],
+            ['MRC-3A-02-A-05-SERVICE-UNLABELED', 'Service Establishments', null, '500.00', 50_000, 'The source table contains an unlabeled PHP 500.00 row; no enterprise-scale assignment is authorized.'],
+            ['MRC-3A-02-A-05-SERVICE-COTTAGE', 'Service Establishments', 'Cottage Industries', '1,000.00', 100_000],
+            ['MRC-3A-02-A-05-SERVICE-SMALL', 'Service Establishments', 'Small-scale Industries', '1,500.00', 150_000],
+            ['MRC-3A-02-A-05-SERVICE-MEDIUM', 'Service Establishments', 'Medium-Scale Industries', '2,000.00', 200_000],
+            ['MRC-3A-02-A-05-SERVICE-LARGE', 'Service Establishments', 'Large-Scale Industries', null, null, 'The source table prints Large-Scale Industries without an aligned amount; no value is inferred from neighboring rows.'],
+            ['MRC-3A-02-A-06-WHOLESALE-MICRO', 'Wholesalers/Retailers/Dealers or Distributors', 'Micro-Industry', '300.00', 30_000],
+            ['MRC-3A-02-A-06-WHOLESALE-COTTAGE', 'Wholesalers/Retailers/Dealers or Distributors', 'Cottage Industries', '500.00', 50_000],
+            ['MRC-3A-02-A-06-WHOLESALE-SMALL', 'Wholesalers/Retailers/Dealers or Distributors', 'Small-scale Industries', '1,000.00', 100_000],
+            ['MRC-3A-02-A-06-WHOLESALE-MEDIUM', 'Wholesalers/Retailers/Dealers or Distributors', 'Medium-Scale Industries', '1,500.00', 150_000],
+            ['MRC-3A-02-A-06-WHOLESALE-LARGE', 'Wholesalers/Retailers/Dealers or Distributors', 'Large-Scale Industries', '2,000.00', 200_000],
+        ]);
+
+        $this->persistPermitFeeScheduleClauses('MRC-3A-02-A-07-13-SPECIAL-PERMIT-FEES', [
+            ['MRC-3A-02-A-07-LIQUOR-MICRO', 'Liquors, Distilled Spirits and Manufactured Tobacco', 'Micro-Industry', '1,000.00', 100_000],
+            ['MRC-3A-02-A-07-LIQUOR-COTTAGE', 'Liquors, Distilled Spirits and Manufactured Tobacco', 'Cottage Industries', '2,000.00', 200_000],
+            ['MRC-3A-02-A-07-LIQUOR-SMALL', 'Liquors, Distilled Spirits and Manufactured Tobacco', 'Small-scale Industries', '3,000.00', 300_000],
+            ['MRC-3A-02-A-07-LIQUOR-MEDIUM', 'Liquors, Distilled Spirits and Manufactured Tobacco', 'Medium-Scale Industries', '4,000.00', 400_000],
+            ['MRC-3A-02-A-07-LIQUOR-LARGE', 'Liquors, Distilled Spirits and Manufactured Tobacco', 'Large-Scale Industries', '5,000.00', 500_000],
+            ['MRC-3A-02-A-08-TRANSLOADING-MEDIUM', 'Trans-loading Operations', 'Medium', '2,000.00', 200_000],
+            ['MRC-3A-02-A-08-TRANSLOADING-LARGE', 'Trans-loading Operations', 'Large', '4,000.00', 400_000],
+            ['MRC-3A-02-A-09-OTHER-MICRO', 'Other Businesses', 'Micro-Industry', '300.00', 30_000],
+            ['MRC-3A-02-A-09-OTHER-COTTAGE', 'Other Businesses', 'Cottage Industries', '500.00', 50_000],
+            ['MRC-3A-02-A-09-OTHER-SMALL', 'Other Businesses', 'Small-scale Industries', '1,000.00', 100_000],
+            ['MRC-3A-02-A-09-OTHER-MEDIUM', 'Other Businesses', 'Medium-Scale Industries', '1,500.00', 150_000],
+            ['MRC-3A-02-A-09-OTHER-LARGE', 'Other Businesses', 'Large-Scale Industries', '2,000.00', 200_000],
+            ['MRC-3A-02-A-10-GASOLINE-UNLABELED', 'Gasoline Station', null, '5,000.00', 500_000, 'The source table aligns PHP 5,000.00 with the category heading rather than a nozzle classification; no classification assignment is authorized.'],
+            ['MRC-3A-02-A-10-GASOLINE-SMALL', 'Gasoline Station', 'Small (1-5 nozzles)', '10,000.00', 1_000_000],
+            ['MRC-3A-02-A-10-GASOLINE-MEDIUM', 'Gasoline Station', 'Medium (6-10 nozzles)', '15,000.00', 1_500_000],
+            ['MRC-3A-02-A-10-GASOLINE-LARGE', 'Gasoline Station', 'Large (11 nozzles and up)', null, null, 'The source table prints the large nozzle classification without an aligned amount; no value is inferred from neighboring rows.'],
+            ['MRC-3A-02-A-10-LPG-COTTAGE', 'LPG Dealers', 'Cottage', '3,000.00', 300_000],
+            ['MRC-3A-02-A-10-LPG-SMALL', 'LPG Dealers', 'Small', '5,000.00', 500_000],
+            ['MRC-3A-02-A-10-LPG-MEDIUM', 'LPG Dealers', 'Medium', '10,000.00', 1_000_000],
+            ['MRC-3A-02-A-10-LPG-LARGE', 'LPG Dealers', 'Large', '20,000.00', 2_000_000],
+            ['MRC-3A-02-A-10-DOE-COMPLIANCE', 'Gasoline Station / LPG Dealers', 'DOE Certificate of Compliance', null, null, 'DOE certificate issuance, applicability, verification, continuing validity, and enforcement remain external-authority and municipal-policy questions.', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'Sec. 9 of DOE DC No. 2003-011-10: CERTIFICATE OF COMPLIANCE - The DOE, through the OIMB, shall issue a Certificate of Compliance upon the complete submission of and full compliance by the Retail Outlet owner and/or operator with the requirements provided in the foregoing Sections of this Rule. No Retail Outlet shall operate until a Certificate of Compliance is so secured from the DOE. The owner and/or operator shall be deemed to be engaged in the ILLEGAL TRADING of Liquid Petroleum Products if he/she operates without the Certificate of Compliance and/or violates any of the foregoing Sections.'],
+            ['MRC-3A-02-A-11-TRUCKING-BELOW-5', 'Trucking/Hauling', 'Below 5 units', '1,000.00', 100_000],
+            ['MRC-3A-02-A-11-TRUCKING-5-10', 'Trucking/Hauling', '5 to 10 units', '3,000.00', 300_000],
+            ['MRC-3A-02-A-11-TRUCKING-11-UP', 'Trucking/Hauling', '11 units and above', '5,000.00', 500_000],
+            ['MRC-3A-02-A-12-COOPERATIVES', 'Cooperatives', null, '1,000.00', 100_000],
+            ['MRC-3A-02-A-13-EDUCATION-COTTAGE', 'Educational Institutions and any other business not mention in the chapter', 'Cottage', '1,000.00', 100_000],
+            ['MRC-3A-02-A-13-EDUCATION-SMALL', 'Educational Institutions and any other business not mention in the chapter', 'Small', '5,000.00', 500_000],
+            ['MRC-3A-02-A-13-EDUCATION-MEDIUM', 'Educational Institutions and any other business not mention in the chapter', 'Medium', '10,000.00', 1_000_000],
+            ['MRC-3A-02-A-13-EDUCATION-LARGE', 'Educational Institutions and any other business not mention in the chapter', 'Large', '20,000.00', 2_000_000],
+        ]);
+
+        $this->persistPermitFeeScheduleClauses('MRC-3A-02-B-NEW-MICRO-PERMIT', [
+            ['MRC-3A-02-B-NEW-MICRO', 'New Business', 'Micro-Industry', '200.00', 20_000],
+            ['MRC-3A-02-B-NEW-COTTAGE', 'New Business', 'Cottage Industries', '500.00', 50_000],
+            ['MRC-3A-02-B-NEW-SMALL', 'New Business', 'Small-scale Industries', '1,000.00', 100_000],
+            ['MRC-3A-02-B-NEW-MEDIUM', 'New Business', 'Medium-Scale Industries', '1,500.00', 150_000],
+            ['MRC-3A-02-B-NEW-LARGE', 'New Business', 'Large-Scale Industries', '2,000.00', 200_000],
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3A-03-PAYMENT-PRORATION', [
+            $this->policyBoundaryClause(1, 'MRC-3A-03-PAYMENT-UPON-APPLICATION', RevenueCodeProvisionClauseType::PaymentTiming, "The fee for the issuance of the Mayor's Permit shall be paid to the Municipal Treasurer upon application before any business or undertaking can be lawfully begun or pursued.", 'Candidate timing: collect the permit fee upon application and before lawful operation.', 'Payment, receipt, issuance, and authority sequencing require accepted municipal procedure.', ['candidate_collector' => 'Municipal Treasurer', 'candidate_timing' => 'upon_application_before_operation']),
+            $this->policyBoundaryClause(2, 'MRC-3A-03-RENEWAL-JANUARY-20', RevenueCodeProvisionClauseType::PaymentTiming, 'Within the first twenty (20) days of January of each year in case of renewal thereof.', 'Candidate renewal deadline: within the first 20 days of January.', 'Calendar, non-business-day, extension, late-payment, surcharge, and receipt rules require accepted policy.', ['candidate_month' => 1, 'candidate_day' => 20]),
+            $this->policyBoundaryClause(3, 'MRC-3A-03-NEW-BUSINESS-QUARTER-RECKONING', RevenueCodeProvisionClauseType::PaymentTiming, 'For a newly-started business or activity that starts to operate after January 20, the fee shall be reckoned from the beginning of the calendar quarter.', 'Candidate proration boundary: reckon the fee from the beginning of the calendar quarter for a newly started business operating after January 20.', 'The calculation method, quarter boundaries, start-date evidence, annual-versus-quarter allocation, and rounding are not stated sufficiently for execution.', ['candidate_trigger' => 'operation_after_january_20', 'candidate_period' => 'calendar_quarter']),
+            $this->policyBoundaryClause(4, 'MRC-3A-03-ABANDONMENT-NO-REFUND', RevenueCodeProvisionClauseType::TaxSettlement, 'When the business or activity is abandoned, the fee shall not be exacted for a period longer than the current quarter and the business activity is abandoned, no refund of the fee corresponding to the unexpired quarter or quarters shall be made.', 'Candidate abandonment treatment: stop exacting beyond the current quarter and do not refund fees for unexpired quarters.', 'The source repeats the abandonment phrase; abandonment evidence, effective date, fee allocation, already-paid treatment, and interaction with retirement policy require accepted procedure.', ['candidate_tax_effects' => ['no_fee_beyond_current_quarter', 'no_refund_for_unexpired_quarters'], 'known_source_defect' => 'duplicated_abandonment_phrase']),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3A-05-REGISTRATION-PLATE', [
+            $this->policyBoundaryClause(1, 'MRC-3A-05-REGISTRATION-PLATE-CEILING', RevenueCodeProvisionClauseType::AmountCeiling, 'Applicants shall pay an amount not to exceed Three Hundred Pesos (P300.00) for the Business Permit Registration Plate and handling.', 'Candidate ceiling: the registration plate and handling charge may not exceed PHP 300.00.', 'The ordinance states a ceiling rather than the Municipality-confirmed exact operational amount.', ['candidate_charge' => 'registration_plate_and_handling'], 30_000, isCeiling: true),
+            $this->policyBoundaryClause(2, 'MRC-3A-05-PLATE-STICKER-COVERAGE', RevenueCodeProvisionClauseType::PermitRequirement, 'The payment shall include the new plate and the corresponding annual or quarterly renewal sticker.', 'Candidate coverage: the charge includes a new plate and the corresponding annual or quarterly renewal sticker.', 'Plate eligibility, annual-versus-quarterly sticker issue, replacement, validity, custody, and audit procedure require accepted policy.', ['candidate_inclusions' => ['new_plate', 'annual_or_quarterly_renewal_sticker']]),
         ]);
     }
 
@@ -1604,6 +1753,79 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 'candidate_values_are_non_executable' => true,
             ],
         ];
+    }
+
+    /** @return array<string, mixed> */
+    private function enterpriseScaleClause(
+        int $sequence,
+        string $codeSuffix,
+        string $scale,
+        string $sourceAssetLimit,
+        string $sourceWorkforce,
+        ?int $candidateAssetFromCents,
+        ?int $candidateAssetToCents,
+    ): array {
+        return $this->policyBoundaryClause(
+            sequence: $sequence,
+            code: 'MRC-3A-02-ENTERPRISE-'.$codeSuffix,
+            type: RevenueCodeProvisionClauseType::Eligibility,
+            sourceText: $scale.' — Asset Limit: '.$sourceAssetLimit.'; Workforce: '.$sourceWorkforce.'.',
+            candidateInterpretation: 'Candidate enterprise scale: '.$scale.' using the source asset-limit and workforce descriptions.',
+            executionBlocker: 'Asset boundary inclusivity overlaps at stated thresholds, the relationship between asset and workforce criteria is not defined, and source workforce wording requires municipal reconciliation.',
+            metadata: [
+                'enterprise_scale' => $scale,
+                'source_asset_limit' => $sourceAssetLimit,
+                'source_workforce' => $sourceWorkforce,
+                'candidate_asset_from_cents' => $candidateAssetFromCents,
+                'candidate_asset_to_cents' => $candidateAssetToCents,
+            ],
+        );
+    }
+
+    /**
+     * @param  list<array{0: string, 1: string, 2: ?string, 3: ?string, 4: ?int, 5?: string, 6?: RevenueCodeProvisionClauseType, 7?: string}>  $rows
+     */
+    private function persistPermitFeeScheduleClauses(string $provisionCode, array $rows): void
+    {
+        $clauses = [];
+
+        foreach ($rows as $index => $row) {
+            [$code, $category, $classification, $sourceValueText, $amountCents] = $row;
+            $executionBlocker = $row[5] ?? 'Business-category, enterprise-scale, application-type, establishment, and operational schedule mapping require accepted municipal policy.';
+            $type = $row[6] ?? RevenueCodeProvisionClauseType::DependentRate;
+            $sourceRowIsUnlabeled = str_ends_with($code, '-UNLABELED');
+            $sourceClassification = match (true) {
+                $classification !== null => ' — '.$classification,
+                $sourceRowIsUnlabeled => ' — [unlabeled source row]',
+                default => '',
+            };
+            $sourceValue = $sourceValueText === null ? '[no aligned amount in source]' : 'P '.$sourceValueText;
+            $sourceText = $row[7] ?? $category.$sourceClassification.' — '.$sourceValue.'.';
+            $candidateInterpretation = match (true) {
+                $type === RevenueCodeProvisionClauseType::DocumentaryRequirement => 'Candidate evidence requirement: a covered retail outlet holds a DOE Certificate of Compliance before operation.',
+                $amountCents === null => 'No executable numeric interpretation is recorded for this source row.',
+                default => 'Candidate source amount: PHP '.number_format($amountCents / 100, 2, '.', ',').'.',
+            };
+
+            $clauses[] = $this->policyBoundaryClause(
+                sequence: $index + 1,
+                code: $code,
+                type: $type,
+                sourceText: $sourceText,
+                candidateInterpretation: $candidateInterpretation,
+                executionBlocker: $executionBlocker,
+                metadata: [
+                    'business_category' => $category,
+                    'source_classification' => $classification,
+                    'source_value_text' => $sourceValueText,
+                    'source_row_is_unlabeled' => $sourceRowIsUnlabeled,
+                    'source_amount_is_missing' => $sourceValueText === null && $type === RevenueCodeProvisionClauseType::DependentRate,
+                ],
+                amountCents: $amountCents,
+            );
+        }
+
+        $this->persistPolicyBoundaryClauses($provisionCode, $clauses);
     }
 
     /** @return array<string, mixed> */
