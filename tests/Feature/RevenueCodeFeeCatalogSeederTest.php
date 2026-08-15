@@ -58,7 +58,7 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
     expect(FeeRuleRange::query()->whereBelongsTo($retailTax)->count())->toBe(23);
     expect(FeeRuleReconciliation::query()->count())->toBe(4);
 
-    expect(RevenueCodeProvision::query()->count())->toBe(58)
+    expect(RevenueCodeProvision::query()->count())->toBe(61)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2A.02%')->count())->toBe(8)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2B.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2C.%')->count())->toBe(2)
@@ -69,8 +69,9 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3D.%')->count())->toBe(6)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3E.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3F.%')->count())->toBe(5)
+        ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3G.%')->count())->toBe(3)
         ->and(RevenueCodeProvision::query()->whereNotNull('fee_rule_id')->count())->toBe(4)
-        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(57);
+        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(60);
 
     $wholesaleProvision = RevenueCodeProvision::query()
         ->with('feeRule.currentReconciliation')
@@ -93,11 +94,21 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->reconciliation_status->toBe(RevenueCodeProvisionStatus::Reconciled)
         ->feeRule->currentReconciliation->execution_status->toBe(FeeRuleExecutionStatus::Executable);
 
+    $excavationProvision = RevenueCodeProvision::query()
+        ->where('code', 'MRC-3G-01-EXCAVATION-FEES')
+        ->sole();
+
+    expect($excavationProvision)
+        ->reconciliation_status->toBe(RevenueCodeProvisionStatus::ReconciliationRequired)
+        ->fee_rule_id->toBeNull()
+        ->metadata->legacy_mock_evidence->amount_cents->toBe(90_000)
+        ->metadata->legacy_mock_evidence->status->toBe('mock_data_not_operational_authority');
+
     expect(RevenueCodeProvisionRow::query()->count())->toBe(82);
-    expect(RevenueCodeProvisionClause::query()->count())->toBe(302)
+    expect(RevenueCodeProvisionClause::query()->count())->toBe(318)
         ->and(RevenueCodeProvisionClause::query()
             ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
-            ->count())->toBe(302);
+            ->count())->toBe(318);
 
     $dependentRate = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2A-02-C-DEPENDENT-HALF-RATE')
@@ -302,6 +313,30 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->sole();
     $originalTitleDocuments = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-3F-04-ORIGINAL-TITLE-DOCUMENTS')
+        ->sole();
+    $concreteExcavationMinimum = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3G-01-CONCRETE-MINIMUM')
+        ->sole();
+    $gravelExcavationRate = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3G-01-GRAVEL-PER-METER')
+        ->sole();
+    $excavationDelayRate = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3G-01-DELAY-PER-DAY')
+        ->sole();
+    $excavationRestoration = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3G-01-RESTORE-ORIGINAL-FORM')
+        ->sole();
+    $excavationDeposit = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3G-02-CASH-DEPOSIT-EQUAL-FEE')
+        ->sole();
+    $excavationForfeiture = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3G-02-DEPOSIT-FORFEITURE-SEVEN-DAYS')
+        ->sole();
+    $excavationPermit = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3G-03-MAYOR-PERMIT-WITH-DURATION')
+        ->sole();
+    $excavationSafetySigns = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3G-03-PUBLIC-SAFETY-SIGNS')
         ->sole();
 
     expect($dependentRate)
@@ -529,7 +564,33 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->metadata->candidate_applies_regardless_of_age->toBeTrue()
         ->metadata->known_field_difference->toContain('color')
         ->and($originalTitleDocuments)
-        ->metadata->known_sequence_ambiguity->toContain('before certificate of transfer issuance');
+        ->metadata->known_sequence_ambiguity->toContain('before certificate of transfer issuance')
+        ->and($concreteExcavationMinimum)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::PermitRequirement)
+        ->amount_cents->toBe(250_000)
+        ->metadata->source_measurement_text->toBe('2.00x600m,12sq.m.')
+        ->metadata->known_mathematical_conflict->toBeTrue()
+        ->and($gravelExcavationRate)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::RateBand)
+        ->amount_cents->toBe(20_000)
+        ->metadata->known_scope_difference->toBe(['crossing', 'parallel'])
+        ->and($excavationDelayRate)
+        ->amount_cents->toBe(20_000)
+        ->metadata->candidate_unit->toBe('delay_day')
+        ->and($excavationRestoration)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::RestorationRequirement)
+        ->amount_cents->toBeNull()
+        ->and($excavationDeposit)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::SecurityDeposit)
+        ->metadata->candidate_amount_basis->toBe('equal_to_fee_imposed')
+        ->and($excavationForfeiture)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::Forfeiture)
+        ->metadata->source_restoration_days->toBe(7)
+        ->and($excavationPermit)
+        ->metadata->known_scope_difference->toBe(['public_or_private_streets', 'municipal_streets'])
+        ->and($excavationSafetySigns)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::OperatingRestriction)
+        ->metadata->known_source_wording->toBe('arena where work is being done');
 
     $overlappingRow = RevenueCodeProvisionRow::query()
         ->where('code', 'MRC-2A-02-B-ROW-08')

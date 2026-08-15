@@ -44,4 +44,7 @@ enum RevenueCodeProvisionClauseType: string
     case ActualCost = 'actual_cost';
     case CustodyProcedure = 'custody_procedure';
     case DispositionProcedure = 'disposition_procedure';
+    case SecurityDeposit = 'security_deposit';
+    case Forfeiture = 'forfeiture';
+    case RestorationRequirement = 'restoration_requirement';
 }
