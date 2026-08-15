@@ -58,7 +58,7 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
     expect(FeeRuleRange::query()->whereBelongsTo($retailTax)->count())->toBe(23);
     expect(FeeRuleReconciliation::query()->count())->toBe(4);
 
-    expect(RevenueCodeProvision::query()->count())->toBe(43)
+    expect(RevenueCodeProvision::query()->count())->toBe(49)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2A.02%')->count())->toBe(8)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2B.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2C.%')->count())->toBe(2)
@@ -66,8 +66,9 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3A.%')->count())->toBe(7)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3B.%')->count())->toBe(6)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3C.%')->count())->toBe(4)
+        ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3D.%')->count())->toBe(6)
         ->and(RevenueCodeProvision::query()->whereNotNull('fee_rule_id')->count())->toBe(4)
-        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(42);
+        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(48);
 
     $wholesaleProvision = RevenueCodeProvision::query()
         ->with('feeRule.currentReconciliation')
@@ -91,10 +92,10 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->feeRule->currentReconciliation->execution_status->toBe(FeeRuleExecutionStatus::Executable);
 
     expect(RevenueCodeProvisionRow::query()->count())->toBe(82);
-    expect(RevenueCodeProvisionClause::query()->count())->toBe(262)
+    expect(RevenueCodeProvisionClause::query()->count())->toBe(280)
         ->and(RevenueCodeProvisionClause::query()
             ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
-            ->count())->toBe(262);
+            ->count())->toBe(280);
 
     $dependentRate = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2A-02-C-DEPENDENT-HALF-RATE')
@@ -245,6 +246,24 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->sole();
     $specialCockfightPayment = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-3C-03-PAY-BEFORE-EVENT')
+        ->sole();
+    $impoundingExpenses = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3D-02-ACTUAL-IMPOUNDING-EXPENSES')
+        ->sole();
+    $municipalHallNotice = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3D-04-MUNICIPAL-HALL-NOTICE-CLAIM')
+        ->sole();
+    $auctionDisposition = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3D-04-UNCLAIMED-FIVE-DAY-AUCTION')
+        ->sole();
+    $municipalSale = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3D-04-DEEMED-MUNICIPAL-SALE')
+        ->sole();
+    $thirdOffenseFine = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3D-05-THIRD-SUBSEQUENT-FINE')
+        ->sole();
+    $actualPropertyDamage = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3D-05-ACTUAL-PROPERTY-DAMAGE')
         ->sole();
 
     expect($dependentRate)
@@ -411,7 +430,30 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->and($specialCockfightPayment)
         ->clause_type->toBe(RevenueCodeProvisionClauseType::PaymentTiming)
         ->metadata->source_collector->toBe('City/Municipal Treasurer')
-        ->metadata->candidate_timing->toBe('before_event');
+        ->metadata->candidate_timing->toBe('before_event')
+        ->and($impoundingExpenses)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::ActualCost)
+        ->amount_cents->toBeNull()
+        ->metadata->source_amount_basis->toBe('actual_incurred_expenses')
+        ->metadata->candidate_units->toBe(['animal_head', 'day_or_fraction'])
+        ->and($municipalHallNotice)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::CustodyProcedure)
+        ->metadata->source_notice_days->toBe(3)
+        ->metadata->known_actor_ambiguity->toBe('He')
+        ->and($auctionDisposition)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::DispositionProcedure)
+        ->metadata->source_unclaimed_days->toBe(5)
+        ->and($municipalSale)
+        ->metadata->source_days_from_auction_notice->toBe(10)
+        ->metadata->known_terminology_conflict->toBe(['impounding_fee', 'poundage_fees'])
+        ->and($thirdOffenseFine)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::Penalty)
+        ->amount_cents->toBe(30_000)
+        ->metadata->candidate_offense_from->toBe(3)
+        ->and($actualPropertyDamage)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::ActualCost)
+        ->amount_cents->toBeNull()
+        ->metadata->candidate_payee->toBe('property_owner');
 
     $overlappingRow = RevenueCodeProvisionRow::query()
         ->where('code', 'MRC-2A-02-B-ROW-08')

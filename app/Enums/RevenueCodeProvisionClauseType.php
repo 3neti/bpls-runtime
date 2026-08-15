@@ -41,4 +41,7 @@ enum RevenueCodeProvisionClauseType: string
     case Definition = 'definition';
     case OperatingRestriction = 'operating_restriction';
     case Penalty = 'penalty';
+    case ActualCost = 'actual_cost';
+    case CustodyProcedure = 'custody_procedure';
+    case DispositionProcedure = 'disposition_procedure';
 }

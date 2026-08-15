@@ -579,6 +579,60 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 metadata: ['chapter' => 3, 'article' => 'C', 'known_ambiguities' => ['external_law_currency', 'institutional_succession', 'law_precedence', 'incorporated_requirements', 'enforcement_authority']],
             ),
             $this->provision(
+                code: 'MRC-3D-01-DEFINITIONS',
+                section: 'Section 3D.01',
+                title: 'Astray-animal, place, and large-cattle definitions',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance defines astray animal, public place, private place, and large cattle for the impounding article.',
+                notes: 'Animal classification, control and possession evidence, public/private place boundaries, property-owner identity, and the relationship to other animal laws require operational and legal reconciliation.',
+                metadata: ['chapter' => 3, 'article' => 'D', 'known_ambiguities' => ['animal_classification', 'control_and_possession_evidence', 'place_boundary', 'property_owner_identity', 'other_animal_law_alignment']],
+            ),
+            $this->provision(
+                code: 'MRC-3D-02-IMPOUNDING-EXPENSES',
+                section: 'Section 3D.02',
+                title: 'Astray-animal impounding expense charge',
+                type: RevenueCodeProvisionType::FixedFee,
+                excerpt: 'The ordinance imposes actual incurred expenses during impounding for each day or fraction thereof on each head of large cattle and other animals found astray.',
+                notes: 'The source provides no fixed amount or expense catalog. Eligible costs, evidence, daily/fraction allocation, per-head treatment, approval, accounting, and rounding require municipal reconciliation; no numeric charge is executable.',
+                metadata: ['chapter' => 3, 'article' => 'D', 'known_ambiguities' => ['eligible_expense_catalog', 'expense_evidence', 'day_fraction_allocation', 'per_head_allocation', 'cost_approval', 'accounting_and_rounding']],
+            ),
+            $this->provision(
+                code: 'MRC-3D-03-RELEASE-PAYMENT',
+                section: 'Section 3D.03',
+                title: 'Impounding-fee payment before release',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance requires payment of the impounding fee to the Municipal Treasurer before release of the animal to its owner.',
+                notes: 'Ownership proof, charge finalization, receipt evidence, release authority, disputes, third-party claimants, and terminology alignment with poundage fees require accepted procedure.',
+                metadata: ['chapter' => 3, 'article' => 'D', 'known_ambiguities' => ['ownership_proof', 'charge_finalization', 'receipt_evidence', 'release_authority', 'dispute_and_claimant_procedure', 'impounding_or_poundage_terminology']],
+            ),
+            $this->provision(
+                code: 'MRC-3D-04-CUSTODY-NOTICE',
+                section: 'Section 3D.04(a)',
+                title: 'Astray-animal apprehension, custody, notice, and claim',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance authorizes Barangay Tanods to apprehend and impound astray animals, requires a three-day Municipal Hall notice starting one day after impounding, and requires notice to the Municipal Mayor and Treasurer.',
+                notes: 'Authorized personnel, designated facilities, humane custody, record identity, notice timing and content, ownership proof, notifications, and audit evidence require accepted operational procedure.',
+                metadata: ['chapter' => 3, 'article' => 'D', 'known_ambiguities' => ['authorized_personnel', 'designated_facility', 'humane_custody', 'animal_record_identity', 'notice_timing_and_content', 'ownership_proof', 'official_notification_and_audit']],
+            ),
+            $this->provision(
+                code: 'MRC-3D-04-AUCTION-DISPOSITION',
+                section: 'Section 3D.04(b)',
+                title: 'Unclaimed-animal auction, redemption, proceeds, and municipal disposition',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance sends animals unclaimed after five days to public auction, prescribes notice and reporting, permits owner redemption before or during sale, allocates proceeds and surplus, and deems an unsold animal sold to the Municipality after ten days from auction notice.',
+                notes: 'Interacting deadlines, auction authority, publication places, valuation, bidding, owner redemption, cost proof, surplus treatment, municipal acquisition, custody after disposition, and legal due process require reconciliation.',
+                metadata: ['chapter' => 3, 'article' => 'D', 'known_ambiguities' => ['interacting_notice_deadlines', 'auction_authority_and_places', 'valuation_and_bidding', 'owner_redemption', 'cost_evidence', 'surplus_to_general_fund', 'municipal_acquisition', 'post_disposition_custody', 'due_process']],
+            ),
+            $this->provision(
+                code: 'MRC-3D-05-PENALTIES-DAMAGES',
+                section: 'Section 3D.05',
+                title: 'Astray-animal property-damage fines and reimbursement',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance prints escalating PHP 100.00, PHP 200.00, and PHP 300.00 fines for animals caught astray and causing plant or property damage, plus payment of actual damage to the property owner.',
+                notes: 'Damage trigger and proof, offense counting, owner identity, enforcement authority, due process, collection and receipt treatment, actual-damage valuation, and payment to the property owner require legal and operational reconciliation.',
+                metadata: ['chapter' => 3, 'article' => 'D', 'known_ambiguities' => ['damage_trigger_and_proof', 'offense_counting', 'animal_owner_identity', 'enforcement_authority', 'due_process', 'collection_and_receipt', 'damage_valuation', 'property_owner_payment']],
+            ),
+            $this->provision(
                 code: 'MRC-2E-01-BUSINESS-TAX-SCOPE',
                 section: 'Section 2E.01',
                 title: 'Payment scope for multiple establishments and businesses',
@@ -1639,6 +1693,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
         $this->seedMayorsPermitArticleAClauses();
         $this->seedCockpitArticleBClauses();
         $this->seedSpecialCockfightingArticleCClauses();
+        $this->seedAstrayAnimalArticleDClauses();
 
         $this->persistPolicyBoundaryClauses('MRC-2F-01-PIL', [
             $this->pilThresholdClause(1, 'SARI-SARI', '1', 'Sari-Sari Stores', '61,600.00', 6_160_000),
@@ -1935,6 +1990,53 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             $this->policyBoundaryClause(1, 'MRC-3C-04-PD-449-APPLICABILITY', RevenueCodeProvisionClauseType::AuthorityBoundary, 'The provision of PD 449, otherwise known as the Cockfighting Law of 1974 ... shall apply to all matters regarding the operation of cockpits and the holding of cockfights in this municipality.', 'Candidate external authority: Presidential Decree 449 applies to cockpit operation and cockfight holding.', 'Current legal force, amendments, precedence, incorporated requirements, and enforcement authority require legal validation.', ['external_authority' => 'Presidential Decree 449']),
             $this->policyBoundaryClause(2, 'MRC-3C-04-PD-1802-APPLICABILITY', RevenueCodeProvisionClauseType::AuthorityBoundary, 'PD 1802 (Creating the Philippine Game fowl Commission) ... shall apply to all matters regarding the operation of cockpits and the holding of cockfights in this municipality.', 'Candidate external authority: Presidential Decree 1802 applies to cockpit operation and cockfight holding.', 'Current legal force, institutional succession, amendments, incorporated requirements, and enforcement authority require legal validation.', ['external_authority' => 'Presidential Decree 1802', 'source_institution' => 'Philippine Game fowl Commission']),
             $this->policyBoundaryClause(3, 'MRC-3C-04-OTHER-LAWS-APPLICABILITY', RevenueCodeProvisionClauseType::AuthorityBoundary, 'Such other pertinent laws shall apply to all matters regarding the operation of cockpits and the holding of cockfights in this municipality.', 'Candidate external authority boundary: other pertinent laws may govern cockpit operation and cockfight holding.', 'The applicable-law catalog, precedence, effective versions, and operational consequences are not enumerated and require legal validation.', ['external_authority' => 'other pertinent laws']),
+        ]);
+    }
+
+    private function seedAstrayAnimalArticleDClauses(): void
+    {
+        $this->persistPolicyBoundaryClauses('MRC-3D-01-DEFINITIONS', [
+            $this->policyBoundaryClause(1, 'MRC-3D-01-ASTRAY-ANIMAL', RevenueCodeProvisionClauseType::Definition, 'Astray Animal means an animal which is set loose unrestrained, and not under the complete control of its owner, or the charge or in possession thereof, found roaming at-large in public or private places whether fettered or not.', 'Candidate meaning: an astray animal is unrestrained or not under complete control and found at large in a public or private place, whether fettered or not.', 'Control, possession, restraint, at-large status, observation evidence, animal identity, responsible person, and current animal law require accepted interpretation.', ['definition_code' => 'astray_animal']),
+            $this->policyBoundaryClause(2, 'MRC-3D-01-PUBLIC-PLACE', RevenueCodeProvisionClauseType::Definition, 'Public Place includes national, provincial, municipal, or barangay streets, parks, places, and such other places open to the public.', 'Candidate meaning: public place includes the listed government streets and parks plus other places open to the public.', 'Ownership, public-access status, temporary closure, jurisdiction, boundary evidence, and other-place classification require accepted interpretation.', ['definition_code' => 'public_place']),
+            $this->policyBoundaryClause(3, 'MRC-3D-01-PRIVATE-PLACE', RevenueCodeProvisionClauseType::Definition, 'Private Place includes privately-owned streets or yards, rice fields or farmlands, or lots owned by an individual other than the owner of the animal.', 'Candidate meaning: private place includes listed privately owned locations belonging to someone other than the animal owner.', 'Property ownership, occupier authority, animal-owner identity, common areas, boundary evidence, and complainant standing require accepted interpretation.', ['definition_code' => 'private_place']),
+            $this->policyBoundaryClause(4, 'MRC-3D-01-LARGE-CATTLE', RevenueCodeProvisionClauseType::Definition, 'Large Cattle includes horses, mules, asses, carabaos, cows, and other domestic members of the bovine family.', 'Candidate meaning: large cattle includes the listed animals and other domestic bovine-family members.', 'Species classification, age, ownership marks, cross-reference to Article F, and current livestock law require accepted interpretation.', ['definition_code' => 'large_cattle', 'source_animals' => ['horses', 'mules', 'asses', 'carabaos', 'cows', 'other domestic bovine family members']]),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3D-02-IMPOUNDING-EXPENSES', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-3D-02-ACTUAL-IMPOUNDING-EXPENSES',
+                type: RevenueCodeProvisionClauseType::ActualCost,
+                sourceText: 'For each day or fraction thereof on each head of astray animal ... Large Cattle and other animals - Actual Incurred expenses during impounding.',
+                candidateInterpretation: 'Candidate amount basis: recover actual incurred impounding expenses for each animal head for each day or fraction of a day.',
+                executionBlocker: 'The source states no numeric amount or eligible-cost catalog; expense evidence, approval, allocation by animal and day/fraction, overhead, accounting, disputes, and rounding require accepted policy.',
+                metadata: ['source_amount_basis' => 'actual_incurred_expenses', 'candidate_units' => ['animal_head', 'day_or_fraction'], 'numeric_candidate_is_missing' => true],
+            ),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3D-03-RELEASE-PAYMENT', [
+            $this->policyBoundaryClause(1, 'MRC-3D-03-PAY-BEFORE-RELEASE', RevenueCodeProvisionClauseType::PaymentTiming, 'The impounding fee shall be paid to the Municipal Treasurer prior to the release of the impounded animal to its owner.', 'Candidate timing: pay the impounding charge to the Municipal Treasurer before releasing the animal to its owner.', 'Ownership proof, final charge and expense evidence, official receipt, authorized release, disputes, third-party claims, and impounding-versus-poundage terminology require accepted procedure.', ['candidate_collector' => 'Municipal Treasurer', 'candidate_timing' => 'before_release', 'candidate_release_to' => 'animal_owner']),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3D-04-CUSTODY-NOTICE', [
+            $this->policyBoundaryClause(1, 'MRC-3D-04-BARANGAY-TANOD-APPREHENSION', RevenueCodeProvisionClauseType::AuthorityBoundary, 'The Barangay Tanods of the Municipality are hereby authorized to apprehend and impound astray animals in the municipal corral or a place duly designated for such purpose.', 'Candidate authority: municipal Barangay Tanods apprehend and impound astray animals in the municipal corral or a duly designated place.', 'Current authority, territorial assignment, apprehension evidence, animal welfare, transport, designated-place approval, custody handoff, and incident records require accepted procedure.', ['candidate_actor' => 'Barangay Tanods of the Municipality', 'candidate_facilities' => ['municipal_corral', 'duly_designated_place']]),
+            $this->policyBoundaryClause(2, 'MRC-3D-04-MUNICIPAL-HALL-NOTICE-CLAIM', RevenueCodeProvisionClauseType::CustodyProcedure, 'He shall also cause the posting of notice of the impounded astray animal in the Municipal Hall for three [3] consecutive days, starting one day after the animal is impounded, within which the owner is required to claim and establish ownership of the impounded animal.', 'Candidate notice and claim period: post at Municipal Hall for three consecutive days beginning one day after impounding, during which the owner claims and establishes ownership.', 'The responsible “He” is ambiguous; posting time, day counting, notice content and proof, owner notification, ownership evidence, late claims, and relationship to the five-day auction trigger require accepted procedure.', ['source_notice_days' => 3, 'candidate_notice_start' => 'one_day_after_impounding', 'candidate_notice_place' => 'Municipal Hall', 'known_actor_ambiguity' => 'He']),
+            $this->policyBoundaryClause(3, 'MRC-3D-04-MAYOR-TREASURER-INFORMED', RevenueCodeProvisionClauseType::CustodyProcedure, 'The Municipal Mayor and Municipal Treasurer shall be informed of the impounding.', 'Candidate notification: inform the Municipal Mayor and Municipal Treasurer of each impounding.', 'Responsible sender, timing, method, required data, acknowledgement, delegation, and retained audit evidence require accepted procedure.', ['candidate_recipients' => ['Municipal Mayor', 'Municipal Treasurer']]),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3D-04-AUCTION-DISPOSITION', [
+            $this->policyBoundaryClause(1, 'MRC-3D-04-UNCLAIMED-FIVE-DAY-AUCTION', RevenueCodeProvisionClauseType::DispositionProcedure, 'Impounded animals not claimed within five (5) days after the date of impounding shall be sold at public auction under the following procedures.', 'Candidate disposition trigger: send an animal unclaimed for five days after impounding to public auction.', 'Calendar and cutoff, valid claim attempts, notice sufficiency, ownership disputes, welfare status, auction authorization, and relationship to the three-day posting period require accepted procedure.', ['source_unclaimed_days' => 5, 'candidate_disposition' => 'public_auction']),
+            $this->policyBoundaryClause(2, 'MRC-3D-04-AUCTION-NOTICE-SALE-REPORT', RevenueCodeProvisionClauseType::DispositionProcedure, 'The Municipal Treasurer shall post notice for three (3) days in three (3) conspicuous places including the main door of the Municipal Hall and the public markets. The animal shall be sold to the highest bidder. Within three (3) days after the auction sale, the Municipal Treasurer shall make a report of the proceedings in writing to the Municipal Mayor.', 'Candidate auction procedure: Treasurer posts three-day notice in three conspicuous places, sells to the highest bidder, and reports the proceedings in writing to the Mayor within three days after sale.', 'Notice-place selection, multiple public markets, posting proof, bid rules, reserve and valuation, bidder eligibility, sale record, payment, report content, and deadline counting require accepted policy.', ['candidate_actor' => 'Municipal Treasurer', 'source_notice_days' => 3, 'source_notice_place_count' => 3, 'source_included_places' => ['main door of Municipal Hall', 'public markets'], 'candidate_award' => 'highest_bidder', 'source_report_days_after_sale' => 3, 'candidate_report_recipient' => 'Municipal Mayor']),
+            $this->policyBoundaryClause(3, 'MRC-3D-04-OWNER-STOPS-SALE', RevenueCodeProvisionClauseType::PaymentTiming, 'The owner may stop the sale by paying at any time before or during the auction sale, the impounding fees due and the cost of the advertisement and conduct of sale to the Municipal Treasurer, otherwise, the sale shall proceed.', 'Candidate redemption: before or during auction, the owner may stop sale by paying impounding charges plus advertisement and sale-conduct costs to the Treasurer.', 'Ownership proof, exact cutoff during auction, eligible and evidenced costs, final charge, receipt, competing bidder rights, animal release, and dispute handling require accepted procedure.', ['candidate_collector' => 'Municipal Treasurer', 'candidate_redemption_window' => 'before_or_during_auction', 'candidate_redemption_costs' => ['impounding_fees_due', 'advertisement_cost', 'conduct_of_sale_cost']]),
+            $this->policyBoundaryClause(4, 'MRC-3D-04-SALE-PROCEEDS-ALLOCATION', RevenueCodeProvisionClauseType::DispositionProcedure, 'The proceeds of the sale shall be applied to satisfy the cost of impounding, advertisement and conduct of sale. The residue over the cost shall accrue to the General Fund of the Municipality.', 'Candidate allocation: auction proceeds first satisfy stated impounding and sale costs, with the residue accruing to the Municipal General Fund.', 'Cost priority, eligible expenses, shortfall treatment, accounting codes, remittance, receipt and liquidation, owner claim to surplus, and legal authority for General Fund treatment require reconciliation.', ['candidate_cost_priority' => ['impounding', 'advertisement', 'conduct_of_sale'], 'candidate_residue_destination' => 'Municipality General Fund']),
+            $this->policyBoundaryClause(5, 'MRC-3D-04-DEEMED-MUNICIPAL-SALE', RevenueCodeProvisionClauseType::DispositionProcedure, 'In case the impounded animal is not disposed of within ten (10) days from the date of notice of public auction, the same shall be considered sold to the Municipal Government for the amount equivalent to the poundage fees due.', 'Candidate terminal disposition: after ten days from auction notice without disposal, deem the animal sold to the Municipal Government for the amount of poundage charges due.', 'Which notice date starts the period, failed-sale evidence, valuation, impounding-versus-poundage terminology, title transfer, accounting entry, authority, animal custody/use/disposal, owner rights, and due process require legal and operational reconciliation.', ['source_days_from_auction_notice' => 10, 'candidate_buyer' => 'Municipal Government', 'candidate_consideration' => 'poundage_fees_due', 'known_terminology_conflict' => ['impounding_fee', 'poundage_fees']]),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3D-05-PENALTIES-DAMAGES', [
+            $this->policyBoundaryClause(1, 'MRC-3D-05-FIRST-OFFENSE-FINE', RevenueCodeProvisionClauseType::Penalty, 'Owners whose animals are caught astray and incurring damages to plants and properties shall pay: First offense - P 100.00.', 'Candidate source fine: PHP 100.00 for a first damage-causing astray-animal offense.', 'Damage and causation proof, offense identity and history, owner responsibility, notice and hearing, imposing authority, collection, receipt, appeal, and current legal authority require reconciliation.', ['candidate_offense_number' => 1, 'candidate_damage_required' => true], 10_000),
+            $this->policyBoundaryClause(2, 'MRC-3D-05-SECOND-OFFENSE-FINE', RevenueCodeProvisionClauseType::Penalty, 'Owners whose animals are caught astray and incurring damages to plants and properties shall pay: Second offense - P 200.00.', 'Candidate source fine: PHP 200.00 for a second damage-causing astray-animal offense.', 'Damage and causation proof, offense counting period and linkage, owner responsibility, notice and hearing, imposing authority, collection, receipt, appeal, and current legal authority require reconciliation.', ['candidate_offense_number' => 2, 'candidate_damage_required' => true], 20_000),
+            $this->policyBoundaryClause(3, 'MRC-3D-05-THIRD-SUBSEQUENT-FINE', RevenueCodeProvisionClauseType::Penalty, 'Owners whose animals are caught astray and incurring damages to plants and properties shall pay: For the third offense and each subsequent offense - P 300.00.', 'Candidate source fine: PHP 300.00 for the third and each subsequent damage-causing astray-animal offense.', 'Damage and causation proof, offense counting period and linkage, subsequent-offense treatment, owner responsibility, notice and hearing, imposing authority, collection, receipt, appeal, and current legal authority require reconciliation.', ['candidate_offense_from' => 3, 'candidate_damage_required' => true], 30_000),
+            $this->policyBoundaryClause(4, 'MRC-3D-05-ACTUAL-PROPERTY-DAMAGE', RevenueCodeProvisionClauseType::ActualCost, 'In addition to the fine, the owners shall pay the amount of damage incurred, if any, to the property owner.', 'Candidate compensation: in addition to the fine, the animal owner pays actual property damage to the property owner.', 'Damage valuation, causation and ownership proof, agreement or adjudication authority, payer and payee identity, direct-versus-municipal collection, receipt, disputes, partial payment, and relationship to civil remedies require accepted legal procedure.', ['source_amount_basis' => 'actual_property_damage', 'candidate_payer' => 'animal_owner', 'candidate_payee' => 'property_owner', 'numeric_candidate_is_missing' => true]),
         ]);
     }
 
