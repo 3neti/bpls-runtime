@@ -2,6 +2,7 @@
 
 namespace App\LifecycleScenarios;
 
+use App\Actions\AnalyzeRevenueCodeSchedule;
 use App\Models\FeeRule;
 use App\Models\RevenueCodeProvision;
 use App\Models\User;
@@ -11,6 +12,7 @@ use RuntimeException;
 final class RevenueCodeFeeCatalogVisibilityScenario
 {
     public function __construct(
+        private readonly AnalyzeRevenueCodeSchedule $analyzeRevenueCodeSchedule,
         private readonly RevenueCodeFeeCatalogSeeder $revenueCodeFeeCatalogSeeder,
         private readonly ScenarioManifest $scenarioManifest,
         private readonly ScenarioSummaryRenderer $summaryRenderer,
@@ -34,6 +36,7 @@ final class RevenueCodeFeeCatalogVisibilityScenario
         $feeRule = $this->feeRule();
         $feeRule->load(['lineOfBusiness', 'ranges' => fn ($query) => $query->orderBy('min_basis_cents')]);
         $provision = $this->provision();
+        $scheduleAnalysis = $this->analyzeRevenueCodeSchedule->handle($provision);
         $manifest = $this->scenarioManifest->initial($scenario, $runId, $actors);
 
         $steps = [
@@ -43,6 +46,7 @@ final class RevenueCodeFeeCatalogVisibilityScenario
             $this->step('policy-boundary-present', 'Verify unresolved Revenue Code policy boundary remains explicit', ['policy_boundary' => 'new_business_initial_local_business_tax_exemption'], ['policy_boundary' => $feeRule->metadata['policy_boundaries'][0] ?? null]),
             $this->step('provision-coverage-recorded', 'Verify provision coverage is distinct from executable policy', ['provision_count' => 11, 'reconciliation_required_count' => 10], ['provision_count' => RevenueCodeProvision::query()->count(), 'reconciliation_required_count' => RevenueCodeProvision::query()->where('reconciliation_status', 'reconciliation_required')->count()]),
             $this->step('ambiguous-provision-linked', 'Link the disputed legal provision to its blocked fee rule without authorizing execution', ['provision_code' => 'MRC-2A-02-B-WHOLESALERS', 'reconciliation_status' => 'reconciliation_required', 'fee_rule_code' => $feeRule->code], ['provision_code' => $provision->code, 'reconciliation_status' => $provision->reconciliation_status->value, 'fee_rule_code' => $provision->feeRule?->code]),
+            $this->step('schedule-matrix-analyzed', 'Analyze exact source rows for mechanical reconciliation findings', ['row_count' => 24, 'overlap_count' => 1, 'gap_count' => 0, 'reconciliation_required_count' => 3, 'ceiling_count' => 1, 'execution_ready' => false], $scheduleAnalysis['summary']),
         ];
 
         foreach ($steps as $step) {
@@ -68,6 +72,10 @@ final class RevenueCodeFeeCatalogVisibilityScenario
             'provision_status' => $provision->reconciliation_status->value,
             'provision_count' => RevenueCodeProvision::query()->count(),
             'reconciliation_required_count' => RevenueCodeProvision::query()->where('reconciliation_status', 'reconciliation_required')->count(),
+            'schedule_matrix' => $scheduleAnalysis['summary'],
+            'overlap_row_code' => 'MRC-2A-02-B-ROW-08',
+            'malformed_row_code' => 'MRC-2A-02-B-ROW-18',
+            'ceiling_row_code' => 'MRC-2A-02-B-ROW-24',
             'list_url' => route('staff.fee-rules.index', absolute: false),
             'detail_url' => route('staff.fee-rules.show', $feeRule, false),
         ];
@@ -107,6 +115,10 @@ final class RevenueCodeFeeCatalogVisibilityScenario
                 'reconciliation_notes' => $provision->reconciliation_notes,
                 'fee_rule_code' => $provision->feeRule?->code,
             ],
+            'schedule_matrix' => [
+                'summary' => $scheduleAnalysis['summary'],
+                'rows' => $scheduleAnalysis['rows'],
+            ],
             'run_id' => $runId,
         ]);
         $artifactStore->putJson('terminal/execution.json', [
@@ -132,6 +144,7 @@ final class RevenueCodeFeeCatalogVisibilityScenario
         $feeRule = $this->feeRuleById((int) $manifest['resources']['record_id']);
         $browserReport = $artifactStore->readJson('browser/report.json') ?? [];
         $provision = $this->provisionById((int) $manifest['resources']['provision_id']);
+        $scheduleAnalysis = $this->analyzeRevenueCodeSchedule->handle($provision);
         $applicationTypes = array_values($feeRule->metadata['application_types'] ?? []);
         $policyBoundaries = array_values($feeRule->metadata['policy_boundaries'] ?? []);
 
@@ -143,6 +156,8 @@ final class RevenueCodeFeeCatalogVisibilityScenario
             $this->step('audit-browser-fee-catalog-policy-boundaries', 'Browser evidence shows every persisted unresolved policy boundary', ['policy_boundaries' => $policyBoundaries], ['policy_boundaries' => data_get($browserReport, 'fee_catalog.policy_boundaries_visible', [])]),
             $this->step('audit-provision-coverage', 'Canonical provision register retains the prepared coverage and policy boundary', ['provision_code' => $manifest['resources']['provision_code'], 'reconciliation_status' => 'reconciliation_required', 'fee_rule_code' => $feeRule->code], ['provision_code' => $provision->code, 'reconciliation_status' => $provision->reconciliation_status->value, 'fee_rule_code' => $provision->feeRule?->code]),
             $this->step('audit-browser-provision-coverage', 'Browser evidence shows the legal provision separately from executable policy', ['provision_visible' => true, 'reconciliation_required_visible' => true, 'linked_rule_visible' => true], ['provision_visible' => data_get($browserReport, 'fee_catalog.provision_visible'), 'reconciliation_required_visible' => data_get($browserReport, 'fee_catalog.reconciliation_required_visible'), 'linked_rule_visible' => data_get($browserReport, 'fee_catalog.linked_rule_visible')]),
+            $this->step('audit-schedule-matrix', 'Canonical row analysis retains the exact prepared findings', $manifest['resources']['schedule_matrix'], $scheduleAnalysis['summary']),
+            $this->step('audit-browser-schedule-matrix', 'Browser matrix shows the exact overlap, malformed row, ceiling row, and execution refusal', ['matrix_visible' => true, 'overlap_visible' => true, 'malformed_visible' => true, 'ceiling_visible' => true, 'execution_refused_visible' => true], ['matrix_visible' => data_get($browserReport, 'fee_catalog.matrix_visible'), 'overlap_visible' => data_get($browserReport, 'fee_catalog.overlap_visible'), 'malformed_visible' => data_get($browserReport, 'fee_catalog.malformed_visible'), 'ceiling_visible' => data_get($browserReport, 'fee_catalog.ceiling_visible'), 'execution_refused_visible' => data_get($browserReport, 'fee_catalog.execution_refused_visible')]),
         ];
         $passed = collect($checks)->every(fn (array $check): bool => $check['passed']);
 
@@ -170,6 +185,7 @@ final class RevenueCodeFeeCatalogVisibilityScenario
                 'provision_code' => $provision->code,
                 'provision_status' => $provision->reconciliation_status->value,
                 'provision_fee_rule_id' => $provision->fee_rule_id,
+                'schedule_matrix' => $scheduleAnalysis,
             ],
             'browser' => $browserReport,
         ]);
@@ -257,6 +273,12 @@ final class RevenueCodeFeeCatalogVisibilityScenario
                     'duration_seconds' => 5,
                 ],
                 [
+                    'title' => 'Staff reviews row-level findings',
+                    'description' => 'The matrix preserves 24 source rows and identifies one overlap, two malformed numeric rows, and one ceiling row without authorizing any candidate value.',
+                    'dialogue' => 'Mechanical findings support municipal reconciliation; they do not decide policy.',
+                    'duration_seconds' => 5,
+                ],
+                [
                     'title' => 'Staff opens a fee-rule detail',
                     'description' => 'The detail page shows the selected business tax rule, applicability, legal source, and persisted range brackets.',
                     'dialogue' => 'The disputed brackets remain visible evidence but cannot execute until the Municipality accepts a reconciliation.',
@@ -268,6 +290,6 @@ final class RevenueCodeFeeCatalogVisibilityScenario
 
     private function storyboardHtml(string $runId, FeeRule $feeRule): string
     {
-        return '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Revenue Code fee catalog visibility</title></head><body><h1>Revenue Code fee catalog visibility</h1><p>Run ID: '.e($runId).'</p><p>Fee rule: '.e($feeRule->code).' - '.e($feeRule->name).'</p><p>This storyboard documents catalog visibility only. It does not define or execute assessment policy.</p></body></html>';
+        return '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Revenue Code fee catalog visibility</title></head><body><h1>Revenue Code fee catalog visibility</h1><p>Run ID: '.e($runId).'</p><p>Fee rule: '.e($feeRule->code).' - '.e($feeRule->name).'</p><p>The row-level matrix records source evidence and mechanical findings only. It does not define or execute assessment policy.</p></body></html>';
     }
 }

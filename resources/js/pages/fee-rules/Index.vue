@@ -73,6 +73,27 @@ type RevenueCodeProvision = {
     } | null;
 };
 
+type RevenueCodeScheduleIssue = {
+    type: string;
+    related_row_code?: string;
+};
+
+type RevenueCodeScheduleRow = {
+    id: number;
+    sequence: number;
+    code: string;
+    source_basis_text: string;
+    source_value_text: string;
+    basis_from_cents: number | null;
+    basis_below_cents: number | null;
+    amount_cents: number | null;
+    rate_basis_points: string | null;
+    is_ceiling: boolean;
+    normalization_status: string;
+    normalization_notes: string | null;
+    issues: RevenueCodeScheduleIssue[];
+};
+
 const props = defineProps<{
     filters: {
         q: string;
@@ -89,6 +110,27 @@ const props = defineProps<{
         total: number;
     };
     revenueCodeProvisions: RevenueCodeProvision[];
+    revenueCodeScheduleMatrix: {
+        provision: {
+            id: number;
+            code: string;
+            section_reference: string;
+            title: string;
+            reconciliation_status: string;
+            linked_fee_rule_code: string | null;
+            linked_fee_rule_execution_status: string | null;
+        };
+        summary: {
+            row_count: number;
+            exact_row_count: number;
+            reconciliation_required_count: number;
+            overlap_count: number;
+            gap_count: number;
+            ceiling_count: number;
+            execution_ready: boolean;
+        };
+        rows: RevenueCodeScheduleRow[];
+    };
     summary: {
         total_rules: number;
         active_rules: number;
@@ -159,6 +201,37 @@ function money(amountCents: number): string {
         style: 'currency',
         currency: 'PHP',
     }).format(amountCents / 100);
+}
+
+function candidateBasis(row: RevenueCodeScheduleRow): string {
+    const from = row.basis_from_cents;
+    const below = row.basis_below_cents;
+
+    if (from === null && below === null) {
+        return '-';
+    }
+
+    if (from === 0 && below !== null) {
+        return `Below ${money(below)}`;
+    }
+
+    if (from !== null && below === null) {
+        return `${money(from)} and above`;
+    }
+
+    return `${money(from ?? 0)} to below ${money(below ?? 0)}`;
+}
+
+function candidateValue(row: RevenueCodeScheduleRow): string {
+    if (row.amount_cents !== null) {
+        return money(row.amount_cents);
+    }
+
+    if (row.rate_basis_points !== null) {
+        return `${row.rate_basis_points} basis points ceiling`;
+    }
+
+    return '-';
 }
 
 function label(value: string | null): string {
@@ -537,6 +610,167 @@ function decodePaginationLabel(value: string): string {
                                     >
                                         No executable rule
                                     </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section
+                class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
+                aria-labelledby="revenue-code-matrix-heading"
+                data-testid="revenue-code-schedule-matrix"
+            >
+                <div
+                    class="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3"
+                >
+                    <div>
+                        <h2
+                            id="revenue-code-matrix-heading"
+                            class="font-semibold"
+                        >
+                            Section 2A.02(b) reconciliation matrix
+                        </h2>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                            Source rows and non-executable candidate values for
+                            wholesalers, distributors, and dealers.
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap gap-2 text-xs">
+                        <Badge variant="outline">
+                            {{ revenueCodeScheduleMatrix.summary.row_count }}
+                            source rows
+                        </Badge>
+                        <Badge variant="destructive">
+                            {{
+                                revenueCodeScheduleMatrix.summary.overlap_count
+                            }}
+                            overlap
+                        </Badge>
+                        <Badge variant="destructive">
+                            {{
+                                revenueCodeScheduleMatrix.summary
+                                    .reconciliation_required_count
+                            }}
+                            require normalization
+                        </Badge>
+                        <Badge variant="outline">
+                            {{ revenueCodeScheduleMatrix.summary.gap_count }}
+                            gaps
+                        </Badge>
+                    </div>
+                </div>
+
+                <div
+                    class="border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+                >
+                    <span class="font-medium">Execution refused.</span>
+                    Candidate bounds and values support reconciliation review;
+                    they are not accepted municipal policy and are not used by
+                    assessment calculation.
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full min-w-[1080px] table-fixed text-sm">
+                        <thead
+                            class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
+                        >
+                            <tr>
+                                <th class="w-[7%] px-3 py-3 font-medium">
+                                    Row
+                                </th>
+                                <th class="w-[25%] px-3 py-3 font-medium">
+                                    Ordinance basis text
+                                </th>
+                                <th class="w-[18%] px-3 py-3 font-medium">
+                                    Ordinance value text
+                                </th>
+                                <th class="w-[18%] px-3 py-3 font-medium">
+                                    Candidate basis
+                                </th>
+                                <th class="w-[12%] px-3 py-3 font-medium">
+                                    Candidate value
+                                </th>
+                                <th class="w-[20%] px-3 py-3 font-medium">
+                                    Reconciliation finding
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr
+                                v-for="row in revenueCodeScheduleMatrix.rows"
+                                :key="row.id"
+                                class="border-b last:border-0"
+                                :class="
+                                    row.issues.length > 0
+                                        ? 'bg-red-50/60 dark:bg-red-950/10'
+                                        : ''
+                                "
+                                :data-schedule-row-code="row.code"
+                            >
+                                <td class="px-3 py-3 align-top">
+                                    <div class="font-medium">
+                                        {{ row.sequence }}
+                                    </div>
+                                    <div
+                                        class="mt-1 text-xs text-muted-foreground"
+                                    >
+                                        {{ row.code }}
+                                    </div>
+                                </td>
+                                <td class="px-3 py-3 align-top">
+                                    {{ row.source_basis_text }}
+                                </td>
+                                <td class="px-3 py-3 align-top">
+                                    {{ row.source_value_text }}
+                                </td>
+                                <td class="px-3 py-3 align-top">
+                                    {{ candidateBasis(row) }}
+                                </td>
+                                <td class="px-3 py-3 align-top font-medium">
+                                    {{ candidateValue(row) }}
+                                </td>
+                                <td class="px-3 py-3 align-top">
+                                    <Badge
+                                        :variant="
+                                            row.issues.length === 0
+                                                ? 'outline'
+                                                : 'destructive'
+                                        "
+                                    >
+                                        {{
+                                            row.issues.length === 0
+                                                ? 'No mechanical issue'
+                                                : label(
+                                                      row.normalization_status,
+                                                  )
+                                        }}
+                                    </Badge>
+                                    <div
+                                        v-if="row.issues.length > 0"
+                                        class="mt-2 flex flex-wrap gap-1"
+                                    >
+                                        <span
+                                            v-for="issue in row.issues"
+                                            :key="`${row.code}-${issue.type}`"
+                                            class="rounded-md border border-red-300 px-2 py-0.5 text-xs text-red-800 dark:border-red-700 dark:text-red-200"
+                                        >
+                                            {{ label(issue.type) }}
+                                            <template
+                                                v-if="issue.related_row_code"
+                                            >
+                                                with
+                                                {{ issue.related_row_code }}
+                                            </template>
+                                        </span>
+                                    </div>
+                                    <p
+                                        v-if="row.normalization_notes"
+                                        class="mt-2 text-xs text-muted-foreground"
+                                    >
+                                        {{ row.normalization_notes }}
+                                    </p>
                                 </td>
                             </tr>
                         </tbody>

@@ -9,7 +9,9 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * @property int $id
@@ -25,6 +27,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon $effective_from
  * @property array<string, mixed>|null $metadata
  * @property-read FeeRule|null $feeRule
+ * @property-read Collection<int, RevenueCodeProvisionRow> $rows
  */
 #[Fillable(['fee_rule_id', 'code', 'source_id', 'section_reference', 'title', 'provision_type', 'evidence_summary', 'reconciliation_status', 'reconciliation_notes', 'effective_from', 'metadata'])]
 class RevenueCodeProvision extends Model
@@ -36,6 +39,12 @@ class RevenueCodeProvision extends Model
     public function feeRule(): BelongsTo
     {
         return $this->belongsTo(FeeRule::class);
+    }
+
+    /** @return HasMany<RevenueCodeProvisionRow, $this> */
+    public function rows(): HasMany
+    {
+        return $this->hasMany(RevenueCodeProvisionRow::class)->orderBy('sequence');
     }
 
     /** @return array<string, string> */

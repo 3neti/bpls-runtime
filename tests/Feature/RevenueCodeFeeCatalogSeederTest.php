@@ -15,6 +15,7 @@ use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
 use App\Models\RevenueCodeProvision;
+use App\Models\RevenueCodeProvisionRow;
 use Database\Seeders\RevenueCodeFeeCatalogSeeder;
 
 it('seeds a deterministic revenue code fee catalog foundation with legal provenance', function () {
@@ -80,6 +81,30 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
     expect($inspectionProvision)
         ->reconciliation_status->toBe(RevenueCodeProvisionStatus::Reconciled)
         ->feeRule->currentReconciliation->execution_status->toBe(FeeRuleExecutionStatus::Executable);
+
+    expect(RevenueCodeProvisionRow::query()->count())->toBe(24);
+
+    $overlappingRow = RevenueCodeProvisionRow::query()
+        ->where('code', 'MRC-2A-02-B-ROW-08')
+        ->sole();
+    $malformedRow = RevenueCodeProvisionRow::query()
+        ->where('code', 'MRC-2A-02-B-ROW-18')
+        ->sole();
+    $ceilingRow = RevenueCodeProvisionRow::query()
+        ->where('code', 'MRC-2A-02-B-ROW-24')
+        ->sole();
+
+    expect($overlappingRow)
+        ->source_basis_text->toBe('7,000.00 or more but less than 8,000.00')
+        ->basis_from_cents->toBe(700_000)
+        ->basis_below_cents->toBe(800_000)
+        ->and($malformedRow)
+        ->source_basis_text->toStartWith('150,0000.00')
+        ->normalization_notes->toContain('malformed source value')
+        ->and($ceilingRow)
+        ->source_value_text->toContain('not exceeding')
+        ->rate_basis_points->toBe('62.9500')
+        ->is_ceiling->toBeTrue();
 });
 
 it('executes the exact annual business inspection fee with reconciliation provenance', function () {

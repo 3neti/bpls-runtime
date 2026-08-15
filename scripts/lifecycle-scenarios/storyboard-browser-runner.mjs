@@ -2499,6 +2499,35 @@ async function inspectRevenueCodeFeeCatalogList(targetPage, targetBaseUrl) {
         .getByText(manifest.resources.fee_rule_code, { exact: true })
         .isVisible()
         .catch(() => false);
+    const scheduleMatrix = targetPage.getByTestId(
+        'revenue-code-schedule-matrix',
+    );
+    const matrixVisible = await scheduleMatrix.isVisible().catch(() => false);
+    const overlapRow = targetPage.locator(
+        `[data-schedule-row-code="${manifest.resources.overlap_row_code}"]`,
+    );
+    const malformedRow = targetPage.locator(
+        `[data-schedule-row-code="${manifest.resources.malformed_row_code}"]`,
+    );
+    const ceilingRow = targetPage.locator(
+        `[data-schedule-row-code="${manifest.resources.ceiling_row_code}"]`,
+    );
+    const overlapVisible = await overlapRow
+        .getByText('overlap', { exact: false })
+        .isVisible()
+        .catch(() => false);
+    const malformedVisible = await malformedRow
+        .getByText('normalization required', { exact: true })
+        .isVisible()
+        .catch(() => false);
+    const ceilingVisible = await ceilingRow
+        .getByText('ceiling not exact', { exact: true })
+        .isVisible()
+        .catch(() => false);
+    const executionRefusedVisible = await scheduleMatrix
+        .getByText('Execution refused.', { exact: true })
+        .isVisible()
+        .catch(() => false);
 
     checks.push(
         check(
@@ -2530,6 +2559,28 @@ async function inspectRevenueCodeFeeCatalogList(targetPage, targetBaseUrl) {
     feeCatalogEvidence.reconciliation_required_visible =
         reconciliationRequiredVisible;
     feeCatalogEvidence.linked_rule_visible = linkedRuleVisible;
+    checks.push(
+        check(
+            'fee-catalog-row-matrix-visible',
+            'Fee catalog shows exact row-level reconciliation findings without authorizing execution',
+            true,
+            matrixVisible &&
+                overlapVisible &&
+                malformedVisible &&
+                ceilingVisible &&
+                executionRefusedVisible,
+            {
+                overlap_row_code: manifest.resources.overlap_row_code,
+                malformed_row_code: manifest.resources.malformed_row_code,
+                ceiling_row_code: manifest.resources.ceiling_row_code,
+            },
+        ),
+    );
+    feeCatalogEvidence.matrix_visible = matrixVisible;
+    feeCatalogEvidence.overlap_visible = overlapVisible;
+    feeCatalogEvidence.malformed_visible = malformedVisible;
+    feeCatalogEvidence.ceiling_visible = ceilingVisible;
+    feeCatalogEvidence.execution_refused_visible = executionRefusedVisible;
     checks.push(
         check(
             'fee-catalog-list-policy-boundary-visible',
@@ -3020,6 +3071,10 @@ async function inspectRevenueCodeFeeCatalogMobile(targetPage, targetBaseUrl) {
         .getByTestId('revenue-code-provision-register')
         .isVisible()
         .catch(() => false);
+    const scheduleMatrixVisible = await targetPage
+        .getByTestId('revenue-code-schedule-matrix')
+        .isVisible()
+        .catch(() => false);
     const listHorizontalOverflow = await targetPage.evaluate(
         () =>
             document.documentElement.scrollWidth >
@@ -3032,6 +3087,12 @@ async function inspectRevenueCodeFeeCatalogMobile(targetPage, targetBaseUrl) {
             'Mobile catalog keeps Revenue Code provision coverage visible',
             true,
             provisionRegisterVisible,
+        ),
+        check(
+            'fee-catalog-mobile-schedule-matrix-visible',
+            'Mobile catalog keeps the row-level reconciliation matrix visible',
+            true,
+            scheduleMatrixVisible,
         ),
         check(
             'fee-catalog-mobile-list-no-horizontal-overflow',

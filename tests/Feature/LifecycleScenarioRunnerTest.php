@@ -1253,6 +1253,11 @@ test('revenue code fee catalog visibility scenario prepares deterministic catalo
         ->and($firstManifest['resources']['provision_status'])->toBe('reconciliation_required')
         ->and($firstManifest['resources']['provision_count'])->toBe(11)
         ->and($firstManifest['resources']['reconciliation_required_count'])->toBe(10)
+        ->and($firstManifest['resources']['schedule_matrix']['row_count'])->toBe(24)
+        ->and($firstManifest['resources']['schedule_matrix']['overlap_count'])->toBe(1)
+        ->and($firstManifest['resources']['schedule_matrix']['gap_count'])->toBe(0)
+        ->and($firstManifest['resources']['schedule_matrix']['execution_ready'])->toBeFalse()
+        ->and($firstManifest['resources']['overlap_row_code'])->toBe('MRC-2A-02-B-ROW-08')
         ->and($firstManifest['resources']['policy_boundaries'])->toContain('new_business_initial_local_business_tax_exemption')
         ->and($feeRule->ranges)->toHaveCount(23)
         ->and($storyboard['title'])->toBe('Revenue Code fee catalog visibility')
@@ -2315,6 +2320,11 @@ test('revenue code fee catalog visibility audit compares browser evidence with c
             'provision_visible' => true,
             'reconciliation_required_visible' => true,
             'linked_rule_visible' => true,
+            'matrix_visible' => true,
+            'overlap_visible' => true,
+            'malformed_visible' => true,
+            'ceiling_visible' => true,
+            'execution_refused_visible' => true,
         ],
         'checks' => [],
         'artifacts' => [

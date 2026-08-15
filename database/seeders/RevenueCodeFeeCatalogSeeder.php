@@ -6,6 +6,7 @@ use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleExecutionStatus;
 use App\Enums\FeeRuleScope;
+use App\Enums\RevenueCodeProvisionRowStatus;
 use App\Enums\RevenueCodeProvisionStatus;
 use App\Enums\RevenueCodeProvisionType;
 use App\Models\FeeRule;
@@ -13,6 +14,7 @@ use App\Models\FeeRuleRange;
 use App\Models\FeeRuleReconciliation;
 use App\Models\LineOfBusiness;
 use App\Models\RevenueCodeProvision;
+use App\Models\RevenueCodeProvisionRow;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -196,6 +198,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             registrationPlateFee: $registrationPlateFee,
             retailTax: $retailTax,
         );
+        $this->seedWholesaleScheduleRows();
     }
 
     /**
@@ -399,6 +402,81 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             'reconciliation_notes' => $notes,
             'effective_from' => '2023-01-01',
             'metadata' => $metadata,
+        ];
+    }
+
+    private function seedWholesaleScheduleRows(): void
+    {
+        $provision = RevenueCodeProvision::query()
+            ->where('code', 'MRC-2A-02-B-WHOLESALERS')
+            ->sole();
+
+        $rows = [
+            $this->scheduleRow(1, 'Less than Php1,000.00', '22.66', 0, 100_000, 2_266),
+            $this->scheduleRow(2, '1,000.00 or more but less than 2,000.00', '41.55', 100_000, 200_000, 4_155),
+            $this->scheduleRow(3, '2,000.00 or more but less than 3,000.00', '62.95', 200_000, 300_000, 6_295),
+            $this->scheduleRow(4, '3,000.00 or more but less than 4,000.00', '90.64', 300_000, 400_000, 9_064),
+            $this->scheduleRow(5, '4,000.00 or more but less than 5,000.00', '125.90', 400_000, 500_000, 12_590),
+            $this->scheduleRow(6, '5,000.00 or more but less than 6,000.00', '152.34', 500_000, 600_000, 15_234),
+            $this->scheduleRow(7, '6,000.00 or more but less than 7,500.00', '180.04', 600_000, 750_000, 18_004),
+            $this->scheduleRow(8, '7,000.00 or more but less than 8,000.00', '232.91', 700_000, 800_000, 23_291),
+            $this->scheduleRow(9, '8,000.00 or more but less than 10,000.00', '235.43', 800_000, 1_000_000, 23_543),
+            $this->scheduleRow(10, '10,000.00 or more but less than 15,000.00', '276.97', 1_000_000, 1_500_000, 27_697),
+            $this->scheduleRow(11, '15,000.00 or more but less than 20,000.00', '346.22', 1_500_000, 2_000_000, 34_622),
+            $this->scheduleRow(12, '20,000.00 or more but less than 30,000.00', '415.45', 2_000_000, 3_000_000, 41_545),
+            $this->scheduleRow(13, '30,000.00 or more but less than 40,000.00', '553.94', 3_000_000, 4_000_000, 55_394),
+            $this->scheduleRow(14, '40,000.00 or more but less than 50,000.00', '830.91', 4_000_000, 5_000_000, 83_091),
+            $this->scheduleRow(15, '50,000.00 or more but less than 75,000.00', '1,246.36', 5_000_000, 7_500_000, 124_636),
+            $this->scheduleRow(16, '75,000.00 or more but less than 100,000.00', '1,661.81', 7_500_000, 10_000_000, 166_181),
+            $this->scheduleRow(17, '100,000.00 or more but less than 150,000.00', '2,354.24', 10_000_000, 15_000_000, 235_424),
+            $this->scheduleRow(18, '150,0000.00 or more but less than 200,000.00', '3,046.66', 15_000_000, 20_000_000, 304_666, RevenueCodeProvisionRowStatus::ReconciliationRequired, 'Candidate lower bound assumes the malformed source value "150,0000.00" means PHP 150,000.00.'),
+            $this->scheduleRow(19, '200,000.00 or more but less than 300,000.00', '4,154.54', 20_000_000, 30_000_000, 415_454),
+            $this->scheduleRow(20, '300,000.00 or more but less than 500,000.00', '5,539.38', 30_000_000, 50_000_000, 553_938),
+            $this->scheduleRow(21, '5000,000.00 or more but less than 750,000.00', '8,309.07', 50_000_000, 75_000_000, 830_907, RevenueCodeProvisionRowStatus::ReconciliationRequired, 'Candidate lower bound assumes the malformed source value "5000,000.00" means PHP 500,000.00.'),
+            $this->scheduleRow(22, '750,000.00 or more but less than 1,000,000.00', '11,078.76', 75_000_000, 100_000_000, 1_107_876),
+            $this->scheduleRow(23, '1,000,000.00 or more but less than 2,000,000.00', '12,589.50', 100_000_000, 200_000_000, 1_258_950),
+            $this->scheduleRow(24, '2,000,000.00 or more', 'at rate not exceeding sixty-two and ninety-five percent (62.95%) of one percent (1%)', 200_000_000, null, null, RevenueCodeProvisionRowStatus::ReconciliationRequired, 'The ordinance provides a maximum percentage, not an exact accepted operational rate.', '62.9500', true),
+        ];
+
+        foreach ($rows as $row) {
+            RevenueCodeProvisionRow::query()->updateOrCreate(
+                [
+                    'revenue_code_provision_id' => $provision->id,
+                    'sequence' => $row['sequence'],
+                ],
+                $row,
+            );
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function scheduleRow(
+        int $sequence,
+        string $sourceBasisText,
+        string $sourceValueText,
+        ?int $basisFromCents,
+        ?int $basisBelowCents,
+        ?int $amountCents,
+        RevenueCodeProvisionRowStatus $status = RevenueCodeProvisionRowStatus::Exact,
+        ?string $normalizationNotes = null,
+        ?string $rateBasisPoints = null,
+        bool $isCeiling = false,
+    ): array {
+        return [
+            'sequence' => $sequence,
+            'code' => 'MRC-2A-02-B-ROW-'.str_pad((string) $sequence, 2, '0', STR_PAD_LEFT),
+            'source_basis_text' => $sourceBasisText,
+            'source_value_text' => $sourceValueText,
+            'basis_from_cents' => $basisFromCents,
+            'basis_below_cents' => $basisBelowCents,
+            'amount_cents' => $amountCents,
+            'rate_basis_points' => $rateBasisPoints,
+            'is_ceiling' => $isCeiling,
+            'normalization_status' => $status,
+            'normalization_notes' => $normalizationNotes,
+            'metadata' => [
+                'candidate_values_are_non_executable' => true,
+            ],
         ];
     }
 }

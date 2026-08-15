@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Staff;
 
+use App\Actions\AnalyzeRevenueCodeSchedule;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleExecutionStatus;
@@ -12,6 +13,7 @@ use App\Http\Controllers\Controller;
 use App\Models\FeeRule;
 use App\Models\FeeRuleRange;
 use App\Models\RevenueCodeProvision;
+use App\Models\RevenueCodeProvisionRow;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -20,6 +22,10 @@ use Inertia\Response;
 
 class FeeRuleController extends Controller
 {
+    public function __construct(
+        private readonly AnalyzeRevenueCodeSchedule $analyzeRevenueCodeSchedule,
+    ) {}
+
     public function index(Request $request): Response
     {
         Gate::authorize(UserPermission::ViewFeeRules->value);
@@ -91,6 +97,7 @@ class FeeRuleController extends Controller
                 ])
                 ->values()
                 ->all(),
+            'revenueCodeScheduleMatrix' => $this->scheduleMatrixPayload(),
             'summary' => [
                 'total_rules' => FeeRule::query()->count(),
                 'active_rules' => FeeRule::query()->where('is_active', true)->count(),
@@ -184,6 +191,47 @@ class FeeRuleController extends Controller
                 'execution_reason' => $feeRule->currentReconciliation->execution_reason,
                 'decided_at' => $feeRule->currentReconciliation->decided_at?->toIso8601String(),
             ] : null,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function scheduleMatrixPayload(): array
+    {
+        $provision = RevenueCodeProvision::query()
+            ->with('feeRule.currentReconciliation')
+            ->where('code', 'MRC-2A-02-B-WHOLESALERS')
+            ->sole();
+        $analysis = $this->analyzeRevenueCodeSchedule->handle($provision);
+        $analysisRows = collect($analysis['rows'])->keyBy('code');
+
+        return [
+            'provision' => [
+                'id' => $provision->id,
+                'code' => $provision->code,
+                'section_reference' => $provision->section_reference,
+                'title' => $provision->title,
+                'reconciliation_status' => $provision->reconciliation_status->value,
+                'linked_fee_rule_code' => $provision->feeRule?->code,
+                'linked_fee_rule_execution_status' => $provision->feeRule?->currentReconciliation?->execution_status->value,
+            ],
+            'summary' => $analysis['summary'],
+            'rows' => $provision->rows()->orderBy('sequence')->get()->map(
+                fn (RevenueCodeProvisionRow $row): array => [
+                    'id' => $row->id,
+                    'sequence' => $row->sequence,
+                    'code' => $row->code,
+                    'source_basis_text' => $row->source_basis_text,
+                    'source_value_text' => $row->source_value_text,
+                    'basis_from_cents' => $row->basis_from_cents,
+                    'basis_below_cents' => $row->basis_below_cents,
+                    'amount_cents' => $row->amount_cents,
+                    'rate_basis_points' => $row->rate_basis_points,
+                    'is_ceiling' => $row->is_ceiling,
+                    'normalization_status' => $row->normalization_status->value,
+                    'normalization_notes' => $row->normalization_notes,
+                    'issues' => $analysisRows->get($row->code)['issues'] ?? [],
+                ],
+            )->values()->all(),
         ];
     }
 
