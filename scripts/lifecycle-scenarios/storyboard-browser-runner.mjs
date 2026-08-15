@@ -242,6 +242,7 @@ try {
         await inspectManualReceiptPaymentSummaryReport(page, baseUrl);
         await inspectManualReceiptBusinessTaxByMajorTypeReport(page, baseUrl);
         await inspectManualReceiptTotalCapitalGrossSummaryReport(page, baseUrl);
+        await inspectManualReceiptAllAbstractBoundary(page, baseUrl);
         await inspectManualReceiptAnnexCDnfbpBoundary(page, baseUrl);
         await inspectManualReceiptBspBoundary(page, baseUrl);
         await inspectManualReceiptCmciLdcsBoundary(page, baseUrl);
@@ -5132,6 +5133,154 @@ async function inspectManualReceiptTotalCapitalGrossSummaryReport(
         targetPage,
         '02-total-capital-gross-summary-report-mobile',
         'browser/screenshots/02-total-capital-gross-summary-report-mobile.png',
+    );
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+}
+
+async function inspectManualReceiptAllAbstractBoundary(
+    targetPage,
+    targetBaseUrl,
+) {
+    const reportUrl = `${targetBaseUrl}${manifest.resources.all_abstract_report_url}`;
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+
+    const boundaryVisible = await targetPage
+        .getByTestId('all-abstract-boundary-status')
+        .isVisible()
+        .catch(() => false);
+    const completenessExplanationVisible = await targetPage
+        .getByTestId('all-abstract-completeness-boundary')
+        .getByText('materially overstate Treasury coverage', { exact: false })
+        .isVisible()
+        .catch(() => false);
+    const officialRowCount = Number(
+        (
+            await targetPage
+                .getByTestId('all-abstract-official-row-count')
+                .textContent()
+                .catch(() => null)
+        )?.trim(),
+    );
+    const coverageCount = Number(
+        (
+            await targetPage
+                .getByTestId('all-abstract-coverage-count')
+                .textContent()
+                .catch(() => null)
+        )?.trim(),
+    );
+    const controlCount = Number(
+        (
+            await targetPage
+                .getByTestId('all-abstract-control-count')
+                .textContent()
+                .catch(() => null)
+        )?.trim(),
+    );
+    const exportVisible = await targetPage
+        .getByRole('link', { name: /export/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const permitCollectionVisible = await targetPage
+        .getByText(manifest.resources.public_reference, { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'all-abstract-completeness-boundary-visible',
+            'All Abstract shows its blocked completeness state, five revenue domains, and seven TOR controls',
+            true,
+            boundaryVisible &&
+                completenessExplanationVisible &&
+                officialRowCount === 0 &&
+                coverageCount === 5 &&
+                controlCount === 7,
+            {
+                url: reportUrl,
+                official_row_count: officialRowCount,
+                coverage_count: coverageCount,
+                control_count: controlCount,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'all-abstract-permit-collection-excluded',
+            'All Abstract does not publish the real permit receipt as complete Treasury coverage',
+            true,
+            !permitCollectionVisible && !exportVisible,
+        ),
+    );
+
+    reportEvidence.all_abstract = {
+        status: boundaryVisible ? 'blocked' : null,
+        can_generate: false,
+        can_export: exportVisible,
+        official_row_count: officialRowCount,
+        coverage_count: coverageCount,
+        control_count: controlCount,
+        permit_collection_excluded: !permitCollectionVisible,
+    };
+    await screenshot(
+        targetPage,
+        '02-all-abstract-boundary',
+        'browser/screenshots/02-all-abstract-boundary.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const mobileBoundaryVisible = await targetPage
+        .getByTestId('all-abstract-boundary-status')
+        .isVisible()
+        .catch(() => false);
+    const mobileCoverageCount = await targetPage
+        .getByTestId('all-abstract-coverage-item')
+        .count();
+    const mobileControlCount = await targetPage
+        .getByTestId('all-abstract-control-item')
+        .count();
+    const mobileColumnCount = await targetPage
+        .getByTestId('all-abstract-mobile-column')
+        .count();
+    const mobileHorizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+
+    checks.push(
+        check(
+            'all-abstract-mobile-visible',
+            'Mobile All Abstract keeps every coverage domain, TOR control, and base field visible',
+            true,
+            mobileBoundaryVisible &&
+                mobileCoverageCount === 5 &&
+                mobileControlCount === 7 &&
+                mobileColumnCount === 5,
+        ),
+    );
+    checks.push(
+        check(
+            'all-abstract-mobile-no-horizontal-overflow',
+            'Mobile All Abstract has no page-level horizontal overflow',
+            false,
+            mobileHorizontalOverflow,
+        ),
+    );
+    reportEvidence.all_abstract.mobile_visible =
+        mobileBoundaryVisible &&
+        mobileCoverageCount === 5 &&
+        mobileControlCount === 7 &&
+        mobileColumnCount === 5;
+    reportEvidence.all_abstract.mobile_horizontal_overflow =
+        mobileHorizontalOverflow;
+    await screenshot(
+        targetPage,
+        '02-all-abstract-boundary-mobile',
+        'browser/screenshots/02-all-abstract-boundary-mobile.png',
     );
     await targetPage.setViewportSize({ width: 1440, height: 900 });
 }

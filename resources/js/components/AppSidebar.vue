@@ -19,6 +19,7 @@ import {
 } from '@lucide/vue';
 import { computed } from 'vue';
 import { index as citizenPermitApplicationIndex } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
+import { index as allAbstractReportIndex } from '@/actions/App/Http/Controllers/Staff/AllAbstractReportController';
 import { index as annexCDnfbpReportIndex } from '@/actions/App/Http/Controllers/Staff/AnnexCDnfbpReportController';
 import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { index as assessmentSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentSummaryReportController';
@@ -136,6 +137,11 @@ const staffNavItems: NavItem[] = [
     {
         title: 'ANNEX C - DNFBP',
         href: annexCDnfbpReportIndex(),
+        icon: TableProperties,
+    },
+    {
+        title: 'All Abstract',
+        href: allAbstractReportIndex(),
         icon: TableProperties,
     },
     {

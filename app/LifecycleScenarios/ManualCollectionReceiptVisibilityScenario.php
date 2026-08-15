@@ -15,6 +15,7 @@ use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreateCitizenPermitApplicationDraft;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\CreatePermitApplication;
+use App\Actions\DescribeAllAbstractReportBoundary;
 use App\Actions\DescribeAnnexCDnfbpReportBoundary;
 use App\Actions\DescribeBspReportBoundary;
 use App\Actions\DescribeCitizenPaymentSchedule;
@@ -79,6 +80,7 @@ final class ManualCollectionReceiptVisibilityScenario
         private readonly BuildDailyCollectionsReport $buildDailyCollectionsReport,
         private readonly BuildBusinessTaxByMajorTypeReport $buildBusinessTaxByMajorTypeReport,
         private readonly BuildTotalCapitalGrossSummaryReport $buildTotalCapitalGrossSummaryReport,
+        private readonly DescribeAllAbstractReportBoundary $describeAllAbstractReportBoundary,
         private readonly DescribeAnnexCDnfbpReportBoundary $describeAnnexCDnfbpReportBoundary,
         private readonly DescribeBspReportBoundary $describeBspReportBoundary,
         private readonly DescribeCmciLdcsReportBoundary $describeCmciLdcsReportBoundary,
@@ -253,6 +255,7 @@ final class ManualCollectionReceiptVisibilityScenario
         ]);
         $totalCapitalGrossSummaryRow = collect($totalCapitalGrossSummaryReport['rows'])
             ->firstWhere('application_id', $permitApplication->id);
+        $allAbstractReport = $this->describeAllAbstractReportBoundary->handle();
         $annexCDnfbpReport = $this->describeAnnexCDnfbpReportBoundary->handle();
         $bspReport = $this->describeBspReportBoundary->handle();
         $cmciLdcsReport = $this->describeCmciLdcsReportBoundary->handle();
@@ -290,6 +293,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('payment-summary-report-row-projected', 'Payment summary contains the exact paid schedule and receipted collection evidence', ['payment_schedule_id' => $paymentSchedule->id, 'paid_amount_cents' => $paymentSchedule->paid_amount_cents, 'receipted_amount_cents' => $receipt->amount_cents], ['payment_schedule_id' => $paymentSummaryRow['payment_schedule_id'] ?? null, 'paid_amount_cents' => $paymentSummaryRow['paid_amount_cents'] ?? null, 'receipted_amount_cents' => $paymentSummaryRow['receipted_amount_cents'] ?? null]),
             $this->step('business-tax-by-major-type-report-row-projected', 'Business tax by major type contains the exact receipted Tax allocation under the first activity classification', ['major_type' => 'Retail', 'amount_cents' => 20_000], ['major_type' => $businessTaxByMajorTypeRow['major_type'] ?? null, 'amount_cents' => $businessTaxByMajorTypeRow['amount_cents'] ?? null]),
             $this->step('total-capital-gross-summary-report-row-projected', 'Total capital and gross summary contains declarations once and the exact lifetime receipted collection', ['application_id' => $permitApplication->id, 'capital_investment_cents' => 9_000_050, 'gross_sales_cents' => 17_000_075, 'payment_amount_cents' => $receipt->amount_cents, 'remaining_balance_cents' => 0, 'payment_status' => 'Completed'], ['application_id' => $totalCapitalGrossSummaryRow['application_id'] ?? null, 'capital_investment_cents' => $totalCapitalGrossSummaryRow['capital_investment_cents'] ?? null, 'gross_sales_cents' => $totalCapitalGrossSummaryRow['gross_sales_cents'] ?? null, 'payment_amount_cents' => $totalCapitalGrossSummaryRow['payment_amount_cents'] ?? null, 'remaining_balance_cents' => $totalCapitalGrossSummaryRow['remaining_balance_cents'] ?? null, 'payment_status' => $totalCapitalGrossSummaryRow['payment_status'] ?? null]),
+            $this->step('all-abstract-completeness-boundary-recorded', 'Refuse to label the permit-only evidence set as an All Abstract until non-permit Treasury coverage and reconciliation controls exist', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'permit_collection_excluded' => true], ['status' => $allAbstractReport['status'], 'can_generate' => $allAbstractReport['can_generate'], 'can_export' => $allAbstractReport['can_export'], 'official_row_count' => $allAbstractReport['row_count'], 'permit_collection_excluded' => ! collect($allAbstractReport['rows'])->contains('collection_id', $collection->id)]),
             $this->step('annex-c-dnfbp-authority-boundary-recorded', 'Keep the artifact-ready application out of ANNEX C until permit, DNFBP classification, and semester authority exist', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'artifact_excluded' => true], ['status' => $annexCDnfbpReport['status'], 'can_generate' => $annexCDnfbpReport['can_generate'], 'can_export' => $annexCDnfbpReport['can_export'], 'official_row_count' => $annexCDnfbpReport['row_count'], 'artifact_excluded' => ! collect($annexCDnfbpReport['rows'])->contains('application_id', $permitApplication->id)]),
             $this->step('bsp-authority-boundary-recorded', 'Keep the artifact-ready application out of official BSP output until permit and regulatory classification authority exist', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'artifact_excluded' => true], ['status' => $bspReport['status'], 'can_generate' => $bspReport['can_generate'], 'can_export' => $bspReport['can_export'], 'official_row_count' => $bspReport['row_count'], 'artifact_excluded' => ! collect($bspReport['rows'])->contains('application_id', $permitApplication->id)]),
             $this->step('cmci-ldcs-authority-boundary-recorded', 'Keep the artifact-ready application out of official CMCI output until legal permit release exists', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'artifact_excluded' => true], ['status' => $cmciLdcsReport['status'], 'can_generate' => $cmciLdcsReport['can_generate'], 'can_export' => $cmciLdcsReport['can_export'], 'official_row_count' => $cmciLdcsReport['row_count'], 'artifact_excluded' => ! collect($cmciLdcsReport['rows'])->contains('application_id', $permitApplication->id)]),
@@ -432,6 +436,14 @@ final class ManualCollectionReceiptVisibilityScenario
             'total_capital_gross_payment_cents' => $receipt->amount_cents,
             'total_capital_gross_balance_cents' => 0,
             'total_capital_gross_payment_status' => 'Completed',
+            'all_abstract_report_url' => route('staff.reports.all-abstract.index', absolute: false),
+            'all_abstract_status' => $allAbstractReport['status'],
+            'all_abstract_can_generate' => $allAbstractReport['can_generate'],
+            'all_abstract_can_export' => $allAbstractReport['can_export'],
+            'all_abstract_official_row_count' => $allAbstractReport['row_count'],
+            'all_abstract_coverage_count' => count($allAbstractReport['coverage']),
+            'all_abstract_control_count' => count($allAbstractReport['reconciliation_controls']),
+            'all_abstract_permit_collection_excluded' => ! collect($allAbstractReport['rows'])->contains('collection_id', $collection->id),
             'annex_c_dnfbp_report_url' => route('staff.reports.annex-c-dnfbp.index', absolute: false),
             'annex_c_dnfbp_status' => $annexCDnfbpReport['status'],
             'annex_c_dnfbp_can_generate' => $annexCDnfbpReport['can_generate'],
@@ -579,6 +591,16 @@ final class ManualCollectionReceiptVisibilityScenario
                 'remaining_balance_cents' => $totalCapitalGrossSummaryRow['remaining_balance_cents'] ?? null,
                 'payment_status' => $totalCapitalGrossSummaryRow['payment_status'] ?? null,
             ],
+            'all_abstract_report' => [
+                'status' => $allAbstractReport['status'],
+                'can_generate' => $allAbstractReport['can_generate'],
+                'can_export' => $allAbstractReport['can_export'],
+                'official_row_count' => $allAbstractReport['row_count'],
+                'coverage_count' => count($allAbstractReport['coverage']),
+                'control_count' => count($allAbstractReport['reconciliation_controls']),
+                'permit_collection_excluded' => ! collect($allAbstractReport['rows'])->contains('collection_id', $collection->id),
+                'blocked_by' => $allAbstractReport['blocked_by'],
+            ],
             'annex_c_dnfbp_report' => [
                 'status' => $annexCDnfbpReport['status'],
                 'can_generate' => $annexCDnfbpReport['can_generate'],
@@ -685,6 +707,7 @@ final class ManualCollectionReceiptVisibilityScenario
         ]);
         $totalCapitalGrossSummaryRow = collect($totalCapitalGrossSummaryReport['rows'])
             ->firstWhere('application_id', $permitApplication->id);
+        $allAbstractReport = $this->describeAllAbstractReportBoundary->handle();
         $annexCDnfbpReport = $this->describeAnnexCDnfbpReportBoundary->handle();
         $bspReport = $this->describeBspReportBoundary->handle();
         $cmciLdcsReport = $this->describeCmciLdcsReportBoundary->handle();
@@ -742,6 +765,8 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('audit-browser-business-tax-by-major-type-report-row', 'Browser evidence observed the same major type amount on desktop and mobile', ['major_type' => $manifest['resources']['business_tax_major_type'], 'amount_cents' => $manifest['resources']['business_tax_major_amount_cents'], 'csv_export_visible' => true, 'mobile_visible' => true, 'mobile_horizontal_overflow' => false], ['major_type' => data_get($browserReport, 'reports.business_tax_by_major_type.major_type'), 'amount_cents' => data_get($browserReport, 'reports.business_tax_by_major_type.amount_cents'), 'csv_export_visible' => data_get($browserReport, 'reports.business_tax_by_major_type.csv_export_visible'), 'mobile_visible' => data_get($browserReport, 'reports.business_tax_by_major_type.mobile_visible'), 'mobile_horizontal_overflow' => data_get($browserReport, 'reports.business_tax_by_major_type.mobile_horizontal_overflow')]),
             $this->step('audit-total-capital-gross-summary-report-row', 'Total capital and gross summary agrees with canonical declaration and collection records', ['application_id' => $permitApplication->id, 'capital_investment_cents' => $manifest['resources']['total_capital_gross_capital_cents'], 'gross_sales_cents' => $manifest['resources']['total_capital_gross_gross_cents'], 'payment_amount_cents' => $manifest['resources']['total_capital_gross_payment_cents'], 'remaining_balance_cents' => $manifest['resources']['total_capital_gross_balance_cents'], 'payment_status' => $manifest['resources']['total_capital_gross_payment_status']], ['application_id' => $totalCapitalGrossSummaryRow['application_id'] ?? null, 'capital_investment_cents' => $totalCapitalGrossSummaryRow['capital_investment_cents'] ?? null, 'gross_sales_cents' => $totalCapitalGrossSummaryRow['gross_sales_cents'] ?? null, 'payment_amount_cents' => $totalCapitalGrossSummaryRow['payment_amount_cents'] ?? null, 'remaining_balance_cents' => $totalCapitalGrossSummaryRow['remaining_balance_cents'] ?? null, 'payment_status' => $totalCapitalGrossSummaryRow['payment_status'] ?? null]),
             $this->step('audit-browser-total-capital-gross-summary-report-row', 'Browser evidence observed the same application and lifetime payment on desktop and mobile', ['application_id' => $permitApplication->id, 'payment_amount_cents' => $manifest['resources']['total_capital_gross_payment_cents'], 'csv_export_visible' => true, 'mobile_visible' => true, 'mobile_horizontal_overflow' => false], ['application_id' => data_get($browserReport, 'reports.total_capital_gross_summary.application_id'), 'payment_amount_cents' => data_get($browserReport, 'reports.total_capital_gross_summary.payment_amount_cents'), 'csv_export_visible' => data_get($browserReport, 'reports.total_capital_gross_summary.csv_export_visible'), 'mobile_visible' => data_get($browserReport, 'reports.total_capital_gross_summary.mobile_visible'), 'mobile_horizontal_overflow' => data_get($browserReport, 'reports.total_capital_gross_summary.mobile_horizontal_overflow')]),
+            $this->step('audit-all-abstract-completeness-boundary', 'All Abstract contract excludes the real permit collection rather than overstating complete Treasury coverage', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'coverage_count' => 5, 'control_count' => 7, 'permit_collection_excluded' => true], ['status' => $allAbstractReport['status'], 'can_generate' => $allAbstractReport['can_generate'], 'can_export' => $allAbstractReport['can_export'], 'official_row_count' => $allAbstractReport['row_count'], 'coverage_count' => count($allAbstractReport['coverage']), 'control_count' => count($allAbstractReport['reconciliation_controls']), 'permit_collection_excluded' => ! collect($allAbstractReport['rows'])->contains('collection_id', $collection->id)]),
+            $this->step('audit-browser-all-abstract-completeness-boundary', 'Browser evidence shows the same All Abstract refusal and coverage gaps on desktop and mobile', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'permit_collection_excluded' => true, 'mobile_visible' => true, 'mobile_horizontal_overflow' => false], ['status' => data_get($browserReport, 'reports.all_abstract.status'), 'can_generate' => data_get($browserReport, 'reports.all_abstract.can_generate'), 'can_export' => data_get($browserReport, 'reports.all_abstract.can_export'), 'official_row_count' => data_get($browserReport, 'reports.all_abstract.official_row_count'), 'permit_collection_excluded' => data_get($browserReport, 'reports.all_abstract.permit_collection_excluded'), 'mobile_visible' => data_get($browserReport, 'reports.all_abstract.mobile_visible'), 'mobile_horizontal_overflow' => data_get($browserReport, 'reports.all_abstract.mobile_horizontal_overflow')]),
             $this->step('audit-annex-c-dnfbp-authority-boundary', 'ANNEX C contract refuses to classify the artifact-ready application as a legally permitted DNFBP', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'contract_column_count' => 9, 'artifact_excluded' => true], ['status' => $annexCDnfbpReport['status'], 'can_generate' => $annexCDnfbpReport['can_generate'], 'can_export' => $annexCDnfbpReport['can_export'], 'official_row_count' => $annexCDnfbpReport['row_count'], 'contract_column_count' => count($annexCDnfbpReport['columns']), 'artifact_excluded' => ! collect($annexCDnfbpReport['rows'])->contains('application_id', $permitApplication->id)]),
             $this->step('audit-browser-annex-c-dnfbp-authority-boundary', 'Browser evidence shows the same ANNEX C refusal on desktop and mobile', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'artifact_excluded' => true, 'mobile_visible' => true, 'mobile_horizontal_overflow' => false], ['status' => data_get($browserReport, 'reports.annex_c_dnfbp.status'), 'can_generate' => data_get($browserReport, 'reports.annex_c_dnfbp.can_generate'), 'can_export' => data_get($browserReport, 'reports.annex_c_dnfbp.can_export'), 'official_row_count' => data_get($browserReport, 'reports.annex_c_dnfbp.official_row_count'), 'artifact_excluded' => data_get($browserReport, 'reports.annex_c_dnfbp.artifact_excluded'), 'mobile_visible' => data_get($browserReport, 'reports.annex_c_dnfbp.mobile_visible'), 'mobile_horizontal_overflow' => data_get($browserReport, 'reports.annex_c_dnfbp.mobile_horizontal_overflow')]),
             $this->step('audit-bsp-authority-boundary', 'BSP contract refuses to classify the artifact-ready application as a legally permitted regulated entity', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'contract_column_count' => 16, 'artifact_excluded' => true], ['status' => $bspReport['status'], 'can_generate' => $bspReport['can_generate'], 'can_export' => $bspReport['can_export'], 'official_row_count' => $bspReport['row_count'], 'contract_column_count' => count($bspReport['columns']), 'artifact_excluded' => ! collect($bspReport['rows'])->contains('application_id', $permitApplication->id)]),
@@ -875,6 +900,16 @@ final class ManualCollectionReceiptVisibilityScenario
                     'payment_amount_cents' => $totalCapitalGrossSummaryRow['payment_amount_cents'] ?? null,
                     'remaining_balance_cents' => $totalCapitalGrossSummaryRow['remaining_balance_cents'] ?? null,
                     'payment_status' => $totalCapitalGrossSummaryRow['payment_status'] ?? null,
+                ],
+                'all_abstract_report' => [
+                    'status' => $allAbstractReport['status'],
+                    'can_generate' => $allAbstractReport['can_generate'],
+                    'can_export' => $allAbstractReport['can_export'],
+                    'official_row_count' => $allAbstractReport['row_count'],
+                    'coverage_count' => count($allAbstractReport['coverage']),
+                    'control_count' => count($allAbstractReport['reconciliation_controls']),
+                    'permit_collection_excluded' => ! collect($allAbstractReport['rows'])->contains('collection_id', $collection->id),
+                    'blocked_by' => $allAbstractReport['blocked_by'],
                 ],
                 'annex_c_dnfbp_report' => [
                     'status' => $annexCDnfbpReport['status'],
