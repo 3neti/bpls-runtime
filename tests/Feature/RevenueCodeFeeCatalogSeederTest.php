@@ -58,7 +58,7 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
     expect(FeeRuleRange::query()->whereBelongsTo($retailTax)->count())->toBe(23);
     expect(FeeRuleReconciliation::query()->count())->toBe(4);
 
-    expect(RevenueCodeProvision::query()->count())->toBe(61)
+    expect(RevenueCodeProvision::query()->count())->toBe(71)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2A.02%')->count())->toBe(8)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2B.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2C.%')->count())->toBe(2)
@@ -70,8 +70,9 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3E.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3F.%')->count())->toBe(5)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3G.%')->count())->toBe(3)
+        ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3H.%')->count())->toBe(10)
         ->and(RevenueCodeProvision::query()->whereNotNull('fee_rule_id')->count())->toBe(4)
-        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(60);
+        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(70);
 
     $wholesaleProvision = RevenueCodeProvision::query()
         ->with('feeRule.currentReconciliation')
@@ -104,11 +105,21 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->metadata->legacy_mock_evidence->amount_cents->toBe(90_000)
         ->metadata->legacy_mock_evidence->status->toBe('mock_data_not_operational_authority');
 
+    $weightsMeasuresFeesProvision = RevenueCodeProvision::query()
+        ->where('code', 'MRC-3H-03-FEES')
+        ->sole();
+
+    expect($weightsMeasuresFeesProvision)
+        ->reconciliation_status->toBe(RevenueCodeProvisionStatus::ReconciliationRequired)
+        ->fee_rule_id->toBeNull()
+        ->metadata->schedule_clause_count->toBe(17)
+        ->metadata->known_ambiguities->toContain('gasoline_pump_article_i_overlap');
+
     expect(RevenueCodeProvisionRow::query()->count())->toBe(82);
-    expect(RevenueCodeProvisionClause::query()->count())->toBe(318)
+    expect(RevenueCodeProvisionClause::query()->count())->toBe(373)
         ->and(RevenueCodeProvisionClause::query()
             ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
-            ->count())->toBe(318);
+            ->count())->toBe(373);
 
     $dependentRate = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2A-02-C-DEPENDENT-HALF-RATE')
@@ -337,6 +348,39 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->sole();
     $excavationSafetySigns = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-3G-03-PUBLIC-SAFETY-SIGNS')
+        ->sole();
+    $weightsMeasuresSixMonthCycle = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3H-02-SIX-MONTH-TEST-CALIBRATE-SEAL')
+        ->sole();
+    $weightsMeasuresAnnualLicense = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3H-03-SEAL-LICENSE-ANNUALLY-BEFORE-USE')
+        ->sole();
+    $largestPlatformScaleFee = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3H-03-PLATFORM-OVER-2000KG')
+        ->sole();
+    $offsiteRetestFee = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3H-03-OFFSITE-RETEST-RESEAL-SERVICE')
+        ->sole();
+    $lateRetestSurcharge = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3H-04-LATE-RETEST-FIVE-HUNDRED-PERCENT')
+        ->sole();
+    $dealerExemption = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3H-06-DEALER-INSTRUMENTS-FOR-SALE')
+        ->sole();
+    $secondaryStandards = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3H-07-SECONDARY-STANDARDS-DOST-COMPARISON')
+        ->sole();
+    $counterfeitPractice = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3H-08-COUNTERFEIT-SEAL-CERTIFICATE-LICENSE')
+        ->sole();
+    $resealSurcharge = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3H-08-TWO-TIMES-RESEAL-SURCHARGE')
+        ->sole();
+    $malformedPenalty = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3H-09-A-F-PENALTY')
+        ->sole();
+    $compromisePenalty = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3H-10-NON-FRAUD-COMPROMISE-MINIMUM')
         ->sole();
 
     expect($dependentRate)
@@ -590,7 +634,43 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->metadata->known_scope_difference->toBe(['public_or_private_streets', 'municipal_streets'])
         ->and($excavationSafetySigns)
         ->clause_type->toBe(RevenueCodeProvisionClauseType::OperatingRestriction)
-        ->metadata->known_source_wording->toBe('arena where work is being done');
+        ->metadata->known_source_wording->toBe('arena where work is being done')
+        ->and($weightsMeasuresSixMonthCycle)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::CalibrationRequirement)
+        ->metadata->source_interval_months->toBe(6)
+        ->and($weightsMeasuresAnnualLicense)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::LicenseRequirement)
+        ->metadata->candidate_license_interval_months->toBe(12)
+        ->and($largestPlatformScaleFee)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::RateBand)
+        ->amount_cents->toBe(100_000)
+        ->metadata->candidate_capacity_min_grams->toBe(2_000_000)
+        ->metadata->candidate_min_inclusive->toBeFalse()
+        ->and($offsiteRetestFee)
+        ->amount_cents->toBe(5_000)
+        ->metadata->candidate_includes->toBe('gasoline_pumps')
+        ->and($lateRetestSurcharge)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::SurchargeInterest)
+        ->metadata->stated_surcharge_percent->toBe('500.00')
+        ->and($dealerExemption)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::Exemption)
+        ->metadata->known_source_fragment->toBeTrue()
+        ->and($secondaryStandards)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::CustodyProcedure)
+        ->metadata->candidate_comparison_authority->toBe('Department of Science and Technology')
+        ->and($counterfeitPractice)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::ProhibitedPractice)
+        ->and($resealSurcharge)
+        ->metadata->stated_surcharge_multiple->toBe('2')
+        ->metadata->known_wording_conflict->toBe('without_penalty_except_surcharge')
+        ->and($malformedPenalty)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::Penalty)
+        ->metadata->known_duration_conflict->toBeTrue()
+        ->metadata->candidate_minimum_fine_cents->toBe(50_000)
+        ->and($compromisePenalty)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::CompromisePenalty)
+        ->metadata->candidate_minimum_amount_cents->toBe(50_000)
+        ->metadata->candidate_exclusion->toBe('fraud');
 
     $overlappingRow = RevenueCodeProvisionRow::query()
         ->where('code', 'MRC-2A-02-B-ROW-08')

@@ -741,6 +741,96 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 metadata: ['chapter' => 3, 'article' => 'G', 'known_ambiguities' => ['street_and_excavation_scope', 'permit_identity_and_authority', 'duration_approval', 'engineer_or_building_official_responsibility', 'measurement_and_inspection_evidence', 'delay_determination', 'treasurer_notification', 'safety_sign_standard', 'arena_or_area_wording', 'enforcement_and_audit']],
             ),
             $this->provision(
+                code: 'MRC-3H-01-IMPLEMENTING-AGENCY',
+                section: 'Section 3H.01',
+                title: 'Weights-and-measures implementing authority',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance assigns strict enforcement of weights-and-measures practices under Chapter II of Republic Act No. 7394 to the Municipal Treasurer.',
+                notes: 'The incorporated national-law provisions, current amendments, division of municipal and national authority, delegation, enforcement procedure, and evidence require legal and operational validation. No operational implementation was found in the studied legacy archive.',
+                metadata: ['chapter' => 3, 'article' => 'H', 'known_ambiguities' => ['incorporated_consumer_act_provisions', 'external_law_currency', 'municipal_and_national_authority', 'delegation', 'enforcement_procedure', 'legacy_implementation_not_found']],
+            ),
+            $this->provision(
+                code: 'MRC-3H-02-SEALING-TESTING',
+                section: 'Section 3H.02',
+                title: 'Testing, calibration, sealing, and continuing inspection',
+                type: RevenueCodeProvisionType::EvidenceRequirement,
+                excerpt: 'Consumer-transaction instruments are to be tested, calibrated, and sealed every six months by the Municipal Treasurer or an authorized representative, continuously inspected, and marked using an official LGU sticker or sealing wax.',
+                notes: 'Instrument scope, consumer-related transaction scope, six-month cycle, annual-license relationship, testing standards, calibration tolerance, official-sealer delegation, payment prerequisite, inspection cadence, sticker control and identity, and evidence retention require accepted policy.',
+                metadata: ['chapter' => 3, 'article' => 'H', 'known_ambiguities' => ['covered_instrument_scope', 'consumer_related_transaction_scope', 'six_month_cycle', 'annual_license_cadence_difference', 'testing_and_calibration_standard', 'official_sealer_delegation', 'payment_prerequisite', 'continuous_inspection_cadence', 'sticker_or_wax_control', 'evidence_retention']],
+            ),
+            $this->provision(
+                code: 'MRC-3H-03-FEES',
+                section: 'Section 3H.03',
+                title: 'Weights-and-measures sealing and licensing fees',
+                type: RevenueCodeProvisionType::FixedFee,
+                excerpt: 'The ordinance prints annual sealing and licensing amounts for linear measures, four classes of weighing instruments by capacity, bronze wire seals, and requested off-site retesting and resealing.',
+                notes: 'Instrument classification, capacity boundary units and inclusivity, per-instrument identity, sealing-versus-licensing fee identity, annual and six-month cadence, bronze-wire-seal applicability, office-versus-field service, gasoline-pump overlap with Article I, payer, and accepted operational amounts require reconciliation. All values remain non-executable.',
+                metadata: ['chapter' => 3, 'article' => 'H', 'schedule_clause_count' => 17, 'known_ambiguities' => ['instrument_classification', 'capacity_units_and_boundaries', 'per_instrument_identity', 'sealing_or_licensing_fee_identity', 'annual_or_six_month_cadence', 'bronze_wire_seal_applicability', 'office_or_field_service', 'gasoline_pump_article_i_overlap', 'payer_and_collector', 'operational_amount_acceptance']],
+            ),
+            $this->provision(
+                code: 'MRC-3H-04-PAYMENT-SURCHARGE',
+                section: 'Section 3H.04',
+                title: 'Payment timing, receipt-license validity, and late retesting surcharge',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'Fees are collected by the Treasurer at sealing before use and by each anniversary; the receipt serves as a one-year license unless the instrument becomes defective, while late retesting incurs a printed 500% surcharge without interest.',
+                notes: 'Sealing, payment and use sequence, anniversary computation, six-month testing relationship, receipt and license identity, defect event, retest trigger, 500% arithmetic and base, grace or notice, collection authority, no-interest treatment, and operational enforcement require accepted policy.',
+                metadata: ['chapter' => 3, 'article' => 'H', 'known_ambiguities' => ['sealing_payment_use_sequence', 'anniversary_date', 'six_month_testing_relationship', 'receipt_license_identity', 'defect_event', 'retest_trigger', 'five_hundred_percent_surcharge_base', 'grace_and_notice', 'no_interest_treatment', 'enforcement']],
+            ),
+            $this->provision(
+                code: 'MRC-3H-05-PLACE-OF-PAYMENT',
+                section: 'Section 3H.05',
+                title: 'Weights-and-measures payment situs',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'Business users pay where the business is conducted, while a peddler or itinerant vendor using one instrument pays where the vendor resides.',
+                notes: 'Business situs, municipality and residence evidence, peddler or itinerant-vendor identity, one-instrument condition, multiple municipalities, mobile use, duplicate payment prevention, and migration require accepted procedure.',
+                metadata: ['chapter' => 3, 'article' => 'H', 'known_ambiguities' => ['business_situs', 'municipality_and_residence_evidence', 'peddler_or_itinerant_vendor_identity', 'one_instrument_condition', 'multi_municipality_use', 'mobile_use', 'duplicate_payment_prevention']],
+            ),
+            $this->provision(
+                code: 'MRC-3H-06-EXEMPTIONS',
+                section: 'Section 3H.06',
+                title: 'Weights-and-measures fee exemptions',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'Government-work and public-use instruments are tested and sealed free, and dealers holding weights-and-measures instruments intended for sale are listed as exempt.',
+                notes: 'Government instrumentality and public-use scope, fee-versus-procedure exemption, dealer identity, sale inventory versus demonstration or use, mixed use, proof, approval, and audit require accepted policy.',
+                metadata: ['chapter' => 3, 'article' => 'H', 'known_ambiguities' => ['government_instrumentality_scope', 'public_use_scope', 'fee_or_procedure_exemption', 'dealer_identity', 'inventory_or_operational_use', 'mixed_use', 'proof_and_approval']],
+            ),
+            $this->provision(
+                code: 'MRC-3H-07-ADMINISTRATION',
+                section: 'Section 3H.07',
+                title: 'License evidence, standards, inspection, confiscation, and destruction',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance governs receipt-license custody and exhibition, annual DOST comparison of secondary standards, periodic inspection, and confiscation and witnessed destruction of irreparable instruments.',
+                notes: 'License identity and display, secondary-standard custody and certification, DOST authority and current process, acceptable variation, destruction criteria, periodic inspection cadence, defect and repairability determination, confiscation authority and due process, Provincial Auditor participation, disposition records, and appeals require accepted procedure.',
+                metadata: ['chapter' => 3, 'article' => 'H', 'known_ambiguities' => ['license_identity_and_display', 'secondary_standard_custody', 'dost_comparison_and_certificate', 'acceptable_variation', 'standard_destruction_criteria', 'inspection_cadence', 'defect_and_repairability', 'confiscation_authority_and_due_process', 'provincial_auditor_participation', 'disposition_and_appeal']],
+            ),
+            $this->provision(
+                code: 'MRC-3H-08-PROHIBITED-PRACTICES',
+                section: 'Section 3H.08',
+                title: 'Prohibited weights-and-measures practices and resealing surcharge',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance lists twelve prohibited practices involving unauthorized or counterfeit seals, altered evidence or instruments, expired licenses, false or short measures, misrepresentation, and procuring offenses; it then prints a resealing condition and two-times surcharge.',
+                notes: 'Offense elements, intent standards, actor and instrument identity, evidence, authorized-sealer boundary, counterfeit and alteration definitions, license status, prosecution referral, the placement of the resealing rule under paragraph (l), “without penalty except” wording, two-times surcharge base, and relationship to Section 3H.04 require legal and municipal interpretation.',
+                metadata: ['chapter' => 3, 'article' => 'H', 'known_ambiguities' => ['offense_elements_and_intent', 'actor_and_instrument_identity', 'authorized_sealer_boundary', 'counterfeit_and_alteration_evidence', 'license_status', 'prosecution_referral', 'resealing_rule_paragraph_placement', 'without_penalty_except_wording', 'two_times_surcharge_base', 'section_3h04_surcharge_relationship']],
+            ),
+            $this->provision(
+                code: 'MRC-3H-09-PENALTIES',
+                section: 'Section 3H.09',
+                title: 'Weights-and-measures judicial penalties',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance prints separate fine and imprisonment treatments for Section 3H.08 paragraphs (a)-(f), first violation of paragraph (g), and paragraphs (h)-(l).',
+                notes: 'The first imprisonment range says not more than one month and not more than six months; paragraph (g) prints a five-year maximum; fine maxima are absent in two bands. Offense counting, conviction authority, current statutory ceilings, judicial discretion, imprisonment wording, and legal validity require counsel and municipal confirmation.',
+                metadata: ['chapter' => 3, 'article' => 'H', 'known_ambiguities' => ['contradictory_first_imprisonment_maximum', 'paragraph_g_five_year_maximum', 'missing_fine_maxima', 'first_offense_counting', 'conviction_authority', 'current_statutory_ceiling', 'judicial_discretion', 'legal_validity']],
+            ),
+            $this->provision(
+                code: 'MRC-3H-10-COMPROMISE',
+                section: 'Section 3H.10',
+                title: 'Treasurer compromise authority for non-fraud violations',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'After apprehension and before court filing, the ordinance authorizes the Municipal Treasurer to impose at least PHP 500.00 as a compromise penalty for Article H violations not involving fraud.',
+                notes: 'Apprehension event, fraud exclusion, complaint-filing boundary, Treasurer discretion, minimum with no printed maximum, offense eligibility, taxpayer consent, settlement effect, receipt and accounting, referral, audit, and current legal authority require accepted procedure.',
+                metadata: ['chapter' => 3, 'article' => 'H', 'known_ambiguities' => ['apprehension_event', 'fraud_exclusion', 'complaint_filing_boundary', 'treasurer_discretion', 'minimum_without_maximum', 'offense_eligibility', 'taxpayer_consent', 'settlement_effect', 'receipt_and_accounting', 'current_legal_authority']],
+            ),
+            $this->provision(
                 code: 'MRC-2E-01-BUSINESS-TAX-SCOPE',
                 section: 'Section 2E.01',
                 title: 'Payment scope for multiple establishments and businesses',
@@ -1805,6 +1895,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
         $this->seedCircusParadeArticleEClauses();
         $this->seedLargeCattleArticleFClauses();
         $this->seedExcavationArticleGClauses();
+        $this->seedWeightsMeasuresArticleHClauses();
 
         $this->persistPolicyBoundaryClauses('MRC-2F-01-PIL', [
             $this->pilThresholdClause(1, 'SARI-SARI', '1', 'Sari-Sari Stores', '61,600.00', 6_160_000),
@@ -2265,6 +2356,143 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             $this->policyBoundaryClause(3, 'MRC-3G-03-DELAY-NOTICE-TO-TREASURER', RevenueCodeProvisionClauseType::AuthorityBoundary, 'Said official shall likewise inform the Municipal Treasurer of any delay in the completion of the excavation work for purposes of collection of the additional fee.', 'Candidate handoff: the responsible engineering/building official informs the Municipal Treasurer of completion delay for additional-fee collection.', 'Responsible official, completion and delay determination, approved extensions, notice content and timing, measured delay days, evidence, acknowledgement, assessment authority, disputes, and audit correlation require accepted procedure.', ['candidate_recipient' => 'Municipal Treasurer', 'candidate_purpose' => 'additional_delay_fee_collection']),
             $this->policyBoundaryClause(4, 'MRC-3G-03-PUBLIC-SAFETY-SIGNS', RevenueCodeProvisionClauseType::OperatingRestriction, 'In order to protect the public from any danger, appropriate signs must be placed in the arena where work is being done.', 'Candidate safety condition: place appropriate warning signs where excavation work is underway to protect the public.', 'The source says arena, likely rather than area; sign type, number, placement, visibility, lighting, barriers, responsible party, timing, inspection, other safety law, and enforcement require accepted procedure.', ['candidate_purpose' => 'public_safety', 'known_source_wording' => 'arena where work is being done']),
         ]);
+    }
+
+    private function seedWeightsMeasuresArticleHClauses(): void
+    {
+        $this->persistPolicyBoundaryClauses('MRC-3H-01-IMPLEMENTING-AGENCY', [
+            $this->policyBoundaryClause(1, 'MRC-3H-01-TREASURER-CONSUMER-ACT-ENFORCEMENT', RevenueCodeProvisionClauseType::AuthorityBoundary, 'The Municipal Treasurer shall strictly enforce the provisions of the Regulation of Practices Relative to Weights and Measures, as provided in Chapter II of the Consumer Act, Republic Act No. 7394.', 'Candidate authority: the Municipal Treasurer enforces the incorporated weights-and-measures provisions of Republic Act No. 7394.', 'The incorporated provisions, current amendments, national and local jurisdiction, delegation, investigation, enforcement action, referral, due process, and audit evidence require legal and municipal validation.', ['candidate_authority' => 'Municipal Treasurer', 'external_authority' => 'Republic Act No. 7394, Chapter II']),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3H-02-SEALING-TESTING', [
+            $this->policyBoundaryClause(1, 'MRC-3H-02-CONSUMER-TRANSACTION-INSTRUMENTS', RevenueCodeProvisionClauseType::Eligibility, 'All instruments for determining weights and measures in all consumer and consumer related transactions shall be tested, calibrated and sealed.', 'Candidate scope: instruments determining weights or measures in consumer and consumer-related transactions.', 'Instrument taxonomy, transaction scope, excluded scientific or industrial instruments, location, owner, operator, and shared-instrument treatment require accepted policy.', ['candidate_instrument_scope' => 'consumer_and_consumer_related_transactions']),
+            $this->policyBoundaryClause(2, 'MRC-3H-02-SIX-MONTH-TEST-CALIBRATE-SEAL', RevenueCodeProvisionClauseType::CalibrationRequirement, 'All covered instruments shall be tested, calibrated and sealed every six (6) months.', 'Candidate cadence: test, calibrate, and seal every six months.', 'Cycle start, calendar computation, grace periods, defect-triggered retesting, annual-license relationship, calibration standard, tolerance, pass or fail criteria, and evidence require accepted procedure.', ['source_interval_months' => 6, 'candidate_actions' => ['test', 'calibrate', 'seal']]),
+            $this->policyBoundaryClause(3, 'MRC-3H-02-OFFICIAL-SEALER', RevenueCodeProvisionClauseType::AuthorityBoundary, 'The official sealer shall be the Municipal Treasurer or his duly authorized representative upon payment of fees required under this Article.', 'Candidate authority: the Municipal Treasurer or a duly authorized representative seals covered instruments after required payment.', 'Delegation instrument, representative identity, segregation of duties, fee finalization, payment evidence, failed calibration, seal inventory, and audit require accepted procedure.', ['candidate_authorities' => ['Municipal Treasurer', 'duly authorized representative'], 'candidate_payment_prerequisite' => true]),
+            $this->policyBoundaryClause(4, 'MRC-3H-02-CONTINUOUS-INSPECTION', RevenueCodeProvisionClauseType::InspectionRequirement, 'All instruments of weights and measures shall continuously be inspected for compliance with the provisions of this Article.', 'Candidate control: covered instruments remain subject to continuing compliance inspection.', 'The meaning and cadence of continuous inspection, risk selection, inspection authority, entry and access, evidence, defects, notices, corrective action, seizure, and appeal require accepted procedure.', ['candidate_inspection_cadence' => 'continuous']),
+            $this->policyBoundaryClause(5, 'MRC-3H-02-IPIL-STICKER-IN-LIEU-OF-WAX', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'Sticker officially printed for LGU of Ipil may be used in sealing weight and measure in lieu of sealing wax.', 'Candidate seal evidence: an officially printed LGU of Ipil sticker may replace sealing wax.', 'Sticker design, printer and custody authority, serial identity, issuance, placement, tamper evidence, replacement, cancellation, inventory reconciliation, counterfeit controls, and relationship to receipt-license evidence require accepted policy.', ['candidate_marker_options' => ['official_ipil_sticker', 'sealing_wax']]),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3H-03-FEES', [
+            $this->policyBoundaryClause(1, 'MRC-3H-03-SEAL-LICENSE-ANNUALLY-BEFORE-USE', RevenueCodeProvisionClauseType::LicenseRequirement, 'Every person before using instruments of weights and measures within this municipality shall first have them sealed and licensed annually and pay therefore to the Municipal Treasurer.', 'Candidate prerequisite: before municipal use, seal and license each covered instrument annually and pay the Municipal Treasurer.', 'Person and instrument identity, municipal-use boundary, annual-cycle start, six-month testing relationship, fee identity, collector, receipt-license, failed calibration, and use prohibition require accepted procedure.', ['candidate_timing' => 'before_use', 'candidate_license_interval_months' => 12, 'candidate_collector' => 'Municipal Treasurer']),
+            $this->weightsMeasureFeeClause(2, 'LINEAR-METRIC-MEASURES', 'For sealing linear metric measures for meter sticks chains, and tapes - P 25.00.', 'linear_metric_measure', 2_500, ['candidate_examples' => ['meter_sticks', 'chains', 'tapes']]),
+            $this->weightsMeasureFeeClause(3, 'APOTHECARY-UP-TO-1000G', 'Apothecary Balances of Precision: 1,000 grams or less - P 50.00.', 'apothecary_balance_of_precision', 5_000, ['candidate_capacity_max_grams' => 1_000, 'candidate_max_inclusive' => true]),
+            $this->weightsMeasureFeeClause(4, 'APOTHECARY-OVER-1000G', 'Apothecary Balances of Precision: Over 1,000 grams - P 100.00.', 'apothecary_balance_of_precision', 10_000, ['candidate_capacity_min_grams' => 1_000, 'candidate_min_inclusive' => false]),
+            $this->weightsMeasureFeeClause(5, 'PLATFORM-UP-TO-25KG', 'Platform Scales: 25 kgs or less - P 50.00.', 'platform_scale', 5_000, ['candidate_capacity_max_grams' => 25_000, 'candidate_max_inclusive' => true]),
+            $this->weightsMeasureFeeClause(6, 'PLATFORM-OVER-25-TO-100KG', 'Platform Scales: over 25 up to 100 kgs - P 100.00.', 'platform_scale', 10_000, ['candidate_capacity_min_grams' => 25_000, 'candidate_min_inclusive' => false, 'candidate_capacity_max_grams' => 100_000, 'candidate_max_inclusive' => true]),
+            $this->weightsMeasureFeeClause(7, 'PLATFORM-OVER-100-TO-500KG', 'Platform Scales: over 100 up to 500 kgs - P 150.00.', 'platform_scale', 15_000, ['candidate_capacity_min_grams' => 100_000, 'candidate_min_inclusive' => false, 'candidate_capacity_max_grams' => 500_000, 'candidate_max_inclusive' => true]),
+            $this->weightsMeasureFeeClause(8, 'PLATFORM-OVER-500-TO-2000KG', 'Platform Scales: over 500 up to 2,000 kgs - P 500.00.', 'platform_scale', 50_000, ['candidate_capacity_min_grams' => 500_000, 'candidate_min_inclusive' => false, 'candidate_capacity_max_grams' => 2_000_000, 'candidate_max_inclusive' => true]),
+            $this->weightsMeasureFeeClause(9, 'PLATFORM-OVER-2000KG', 'Platform Scales: over 2,000 kgs - P 1,000.00.', 'platform_scale', 100_000, ['candidate_capacity_min_grams' => 2_000_000, 'candidate_min_inclusive' => false]),
+            $this->weightsMeasureFeeClause(10, 'STEELYARD-UP-TO-25KG', 'Steelyards or Espada Type Scales: 25 kgs or less - P 25.00.', 'steelyard_or_espada_scale', 2_500, ['candidate_capacity_max_grams' => 25_000, 'candidate_max_inclusive' => true]),
+            $this->weightsMeasureFeeClause(11, 'STEELYARD-OVER-25-TO-100KG', 'Steelyards or Espada Type Scales: over 25 up to 100 kgs - P 50.00.', 'steelyard_or_espada_scale', 5_000, ['candidate_capacity_min_grams' => 25_000, 'candidate_min_inclusive' => false, 'candidate_capacity_max_grams' => 100_000, 'candidate_max_inclusive' => true]),
+            $this->weightsMeasureFeeClause(12, 'STEELYARD-OVER-100KG', 'Steelyards or Espada Type Scales: over 100 kgs - P 100.00.', 'steelyard_or_espada_scale', 10_000, ['candidate_capacity_min_grams' => 100_000, 'candidate_min_inclusive' => false]),
+            $this->weightsMeasureFeeClause(13, 'CLOCK-UP-TO-5KG', 'Clock Type Scales: 5 kgs or less - P 40.00.', 'clock_type_scale', 4_000, ['candidate_capacity_max_grams' => 5_000, 'candidate_max_inclusive' => true]),
+            $this->weightsMeasureFeeClause(14, 'CLOCK-OVER-5-TO-10KG', 'Clock Type Scales: over 5 up to 10 kgs - P 60.00.', 'clock_type_scale', 6_000, ['candidate_capacity_min_grams' => 5_000, 'candidate_min_inclusive' => false, 'candidate_capacity_max_grams' => 10_000, 'candidate_max_inclusive' => true]),
+            $this->weightsMeasureFeeClause(15, 'CLOCK-ABOVE-10KG', 'Clock Type Scales: Above 10 kgs - P 100.00.', 'clock_type_scale', 10_000, ['candidate_capacity_min_grams' => 10_000, 'candidate_min_inclusive' => false]),
+            $this->weightsMeasureFeeClause(16, 'BRONZE-WIRE-SEAL', 'Bronze Wire Seal - P 100.00.', 'bronze_wire_seal', 10_000, ['candidate_charge_object' => 'seal']),
+            $this->policyBoundaryClause(17, 'MRC-3H-03-OFFSITE-RETEST-RESEAL-SERVICE', RevenueCodeProvisionClauseType::RateBand, 'For each and every re-testing and re-sealing of weights measures instruments including gasoline pumps outside the office upon request of the owner or operator, an additional service charge of fifty (50.00) pesos for each instrument shall be collected.', 'Candidate service charge: PHP 50.00 for each owner-requested instrument retested and resealed outside the office, including a gasoline pump.', 'Request authority, outside-office boundary, instrument identity and count, failed test, travel and repeat visits, base-fee interaction, gasoline-pump overlap with Article I, payer, collector, receipt, and operational amount require reconciliation.', ['candidate_service' => ['retest', 'reseal'], 'candidate_location' => 'outside_office', 'candidate_unit' => 'instrument', 'candidate_includes' => 'gasoline_pumps'], 5_000),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3H-04-PAYMENT-SURCHARGE', [
+            $this->policyBoundaryClause(1, 'MRC-3H-04-PAY-AT-SEALING-BEFORE-USE-ANNIVERSARY', RevenueCodeProvisionClauseType::PaymentTiming, 'The fees herein imposed shall be paid and collected by the Municipal Treasurer when the weights or measuring instruments are sealed, before their use and thereafter, on or before the anniversary date thereof.', 'Candidate timing: the Treasurer collects at sealing before first use and by each anniversary thereafter.', 'Sealing and payment sequence, first-use evidence, anniversary computation, six-month test events, early or late processing, failed calibration, collector assignment, receipt, and renewal require accepted procedure.', ['candidate_collector' => 'Municipal Treasurer', 'candidate_timing' => ['at_sealing', 'before_first_use', 'on_or_before_anniversary']]),
+            $this->policyBoundaryClause(2, 'MRC-3H-04-RECEIPT-LICENSE-ONE-YEAR-UNLESS-DEFECTIVE', RevenueCodeProvisionClauseType::LicenseRequirement, 'The official receipt serving as license to use the instrument is valid for one (1) year from the date of sealing unless such instrument becomes defective before the expiration period.', 'Candidate license evidence: the sealing-fee official receipt authorizes use for one year unless the instrument becomes defective earlier.', 'Receipt identity and numbering, instrument linkage, date of sealing, defect determination, suspension and reactivation, replacement evidence, transfer, display, and audit require accepted procedure.', ['candidate_license_evidence' => 'official_receipt', 'source_validity_years' => 1, 'candidate_early_expiry_trigger' => 'instrument_defective']),
+            $this->policyBoundaryClause(3, 'MRC-3H-04-LATE-RETEST-FIVE-HUNDRED-PERCENT', RevenueCodeProvisionClauseType::SurchargeInterest, 'Failure to have the instrument re-tested and the corresponding fees therefore paid within the prescribed period shall subject the owner or user to a surcharge of five hundred percent (500%) of the prescribed fees.', 'Candidate late-treatment: charge 500 percent of prescribed fees when retesting and payment do not occur within the prescribed period.', 'Trigger date, owner or user liability, prescribed-fee base, meaning of 500 percent as surcharge versus total, six-month or annual period, grace, notices, partial compliance, multiple instruments, rounding, collection, and relationship to Section 3H.08 require legal and Treasury reconciliation.', ['stated_surcharge_percent' => '500.00', 'candidate_trigger' => 'retest_and_payment_not_completed_within_prescribed_period']),
+            $this->policyBoundaryClause(4, 'MRC-3H-04-SURCHARGE-NO-INTEREST', RevenueCodeProvisionClauseType::SurchargeInterest, 'The five hundred percent surcharge shall no longer be subject to interest.', 'Candidate exclusion: do not add interest to the stated Article H late-retesting surcharge.', 'Whether only the surcharge or the underlying fee is interest-free, other Code interest provisions, payment allocation, partial payment, judgment obligations, and current legal authority require accepted policy.', ['candidate_interest_exclusion' => 'five_hundred_percent_surcharge']),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3H-05-PLACE-OF-PAYMENT', [
+            $this->policyBoundaryClause(1, 'MRC-3H-05-BUSINESS-MUNICIPALITY', RevenueCodeProvisionClauseType::SitusDefinition, 'The fees herein levied shall be paid in the municipality where the business is conducted by persons conducting their business therein.', 'Candidate situs: a business user pays in the municipality where the business is conducted.', 'Business and establishment identity, instrument location and mobility, branch operations, temporary use, multiple municipalities, proof of prior payment, and inter-LGU recognition require accepted policy.', ['candidate_situs' => 'municipality_where_business_is_conducted']),
+            $this->policyBoundaryClause(2, 'MRC-3H-05-ITINERANT-ONE-INSTRUMENT-RESIDENCE', RevenueCodeProvisionClauseType::SitusDefinition, 'A peddler or itinerant vendor using only one (1) instrument of weight or measure shall pay the fee in the municipality where he maintains his residence.', 'Candidate special situs: a peddler or itinerant vendor using one instrument pays in the municipality of residence.', 'Vendor classification, residence evidence, one-instrument counting, replacement instruments, business entities, changing residence, route municipalities, proof of payment, and more-than-one-instrument treatment require accepted policy.', ['candidate_actor' => 'peddler_or_itinerant_vendor', 'candidate_maximum_instruments' => 1, 'candidate_situs' => 'municipality_of_residence']),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3H-06-EXEMPTIONS', [
+            $this->policyBoundaryClause(1, 'MRC-3H-06-GOVERNMENT-PUBLIC-USE-FREE', RevenueCodeProvisionClauseType::Exemption, 'All instruments for weights and measures used in government work or maintained for public use by any instrumentality of the government shall be tested and sealed free.', 'Candidate fee exemption: test and seal qualifying government-work or government-instrumentality public-use instruments without charge.', 'Government instrumentality, ownership, government-work and public-use definitions, mixed use, contractor instruments, proof, approval, whether licensing remains required, and audit require accepted policy.', ['candidate_fee_amount_cents' => 0, 'candidate_uses' => ['government_work', 'government_instrumentality_public_use']]),
+            $this->policyBoundaryClause(2, 'MRC-3H-06-DEALER-INSTRUMENTS-FOR-SALE', RevenueCodeProvisionClauseType::Exemption, 'Dealers of weights and measures instruments intended for sale.', 'Candidate exemption: qualifying dealers are exempt for instruments held as inventory for sale.', 'The source is a sentence fragment; dealer identity, fee-versus-test exemption, inventory evidence, demonstration use, rental, consignment, repair, used instruments, conversion to operational use, and audit require accepted interpretation.', ['candidate_actor' => 'weights_and_measures_instrument_dealer', 'candidate_instrument_purpose' => 'intended_for_sale', 'known_source_fragment' => true]),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3H-07-ADMINISTRATION', [
+            $this->policyBoundaryClause(1, 'MRC-3H-07-RECEIPT-LICENSE-EXPIRY', RevenueCodeProvisionClauseType::LicenseRequirement, 'The official receipt for the fee issued for the sealing of a weight or measure shall serves as a license to use such instrument for one year from the date of sealing, unless deterioration or damage renders the weight or measure inaccurate within that period. The license shall expire on the day and the month of the year following its original issuance.', 'Candidate license rule: the sealing receipt licenses one instrument until the corresponding day and month in the following year unless deterioration or damage causes inaccuracy earlier.', 'Receipt and instrument identity, grammatical defect, anniversary behavior, leap day, deterioration or damage finding, accuracy threshold, suspension, retest, and replacement evidence require accepted procedure.', ['candidate_license_evidence' => 'official_receipt', 'source_validity_years' => 1, 'candidate_early_expiry_triggers' => ['deterioration', 'damage_causing_inaccuracy']]),
+            $this->policyBoundaryClause(2, 'MRC-3H-07-PRESERVE-EXHIBIT-LICENSE-INSTRUMENT', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'Such license shall be preserved by the owner and together with the weight or measure covered by the license, shall be exhibited on demand by the Municipal Treasurer or his deputies.', 'Candidate evidence duty: preserve the receipt-license and exhibit it with its instrument on authorized demand.', 'Owner and custodian identity, physical or electronic evidence, instrument linkage, demand authority, inspection location, lost or damaged evidence, replacement, privacy, and enforcement require accepted procedure.', ['candidate_demand_authorities' => ['Municipal Treasurer', 'deputies']]),
+            $this->policyBoundaryClause(3, 'MRC-3H-07-SECONDARY-STANDARDS-DOST-COMPARISON', RevenueCodeProvisionClauseType::CustodyProcedure, 'The Municipal Treasurer is hereby required to keep full sets of secondary standards, which shall be compared with the fundamental standards in the Department of Science and Technology annually.', 'Candidate standards control: the Treasurer keeps complete secondary standards and compares them annually with DOST fundamental standards.', 'Required set composition, custody, calibration chain, current DOST office and process, annual due date, transport, environmental conditions, traceability, cost, and continuity require accepted procedure.', ['candidate_custodian' => 'Municipal Treasurer', 'candidate_comparison_authority' => 'Department of Science and Technology', 'source_interval_months' => 12]),
+            $this->policyBoundaryClause(4, 'MRC-3H-07-STANDARD-LABEL-CERTIFICATE-DESTRUCTION', RevenueCodeProvisionClauseType::DispositionProcedure, 'Sufficiently accurate secondary standards shall be distinguished by label, tag or seal and accompanied by a certificate showing variation from fundamental standards. If variation impairs utility, the instrument shall be destroyed at the Department of Science and Technology.', 'Candidate disposition: label and certify usable secondary standards with their variation; destroy a standard at DOST when variation impairs utility.', 'Accuracy tolerance, certificate format, identifier, authorized signatory, impairment threshold, quarantine, destruction authority and witness, replacement, disposal record, and audit require accepted procedure.', ['candidate_usable_markers' => ['label', 'tag', 'seal'], 'candidate_certificate_fact' => 'variation_from_fundamental_standard', 'candidate_destruction_location' => 'Department of Science and Technology']),
+            $this->policyBoundaryClause(5, 'MRC-3H-07-PERIODIC-PHYSICAL-INSPECTION-TEST', RevenueCodeProvisionClauseType::InspectionRequirement, 'The Municipal Treasurer or his deputies shall conduct periodic physical inspection and test weight and measure instruments within the locality.', 'Candidate inspection authority: the Treasurer or deputies periodically inspect and test local instruments.', 'Deputy authorization, inspection cadence and selection, location access, notice, instrument registry, test standard, evidence, findings, corrective action, seizure, and appeal require accepted procedure.', ['candidate_authorities' => ['Municipal Treasurer', 'deputies'], 'candidate_actions' => ['physical_inspection', 'test']]),
+            $this->policyBoundaryClause(6, 'MRC-3H-07-IRREPARABLE-CONFISCATE-DESTROY', RevenueCodeProvisionClauseType::DispositionProcedure, 'Instruments of weight and measures found to be defective and such defect is beyond repair shall be confiscated in favor of the government and shall be destroyed by the Municipal Treasurer in the presence of the Provincial Auditor or his representative.', 'Candidate disposition: confiscate an instrument determined defective beyond repair and destroy it with the stated officials present.', 'Defect and repairability standard, qualified determination, owner notice, hearing, custody, confiscation authority, appeal, government title, destruction method, Provincial Auditor role, evidence, and replacement require legal and municipal procedure.', ['candidate_trigger' => 'defective_beyond_repair', 'candidate_beneficiary' => 'government', 'candidate_destruction_authority' => 'Municipal Treasurer', 'candidate_witnesses' => ['Provincial Auditor', 'Provincial Auditor representative']]),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3H-08-PROHIBITED-PRACTICES', [
+            $this->weightsMeasureProhibitedPracticeClause(1, 'UNAUTHORIZED-OFFICIAL-MARK', 'For any person other than the official sealer or his duly authorized representative to place an official tag, seal, sticker, mark, stamp, brand or other characteristic sign used to indicate official testing, calibration, sealing or inspection.', 'placing an official testing or sealing mark without official-sealer authority'),
+            $this->weightsMeasureProhibitedPracticeClause(2, 'IMITATE-OFFICIAL-MARK', 'For any person to imitate any seal, sticker, mark stamp, brand, tag or other characteristic design used to indicate official testing, calibration, sealing or inspection.', 'imitating an official testing or sealing mark'),
+            $this->weightsMeasureProhibitedPracticeClause(3, 'UNAUTHORIZED-ALTER-CERTIFICATE-RECEIPT', 'For any person other than the official sealer or his duly authorized representative to alter in any way the certificate or receipt given as acknowledgement that the instrument has been fully rested, calibrated, sealed or inspected.', 'altering official certificate or receipt evidence without official-sealer authority', ['known_source_wording' => 'fully rested, calibrated, sealed or inspected']),
+            $this->weightsMeasureProhibitedPracticeClause(4, 'COUNTERFEIT-SEAL-CERTIFICATE-LICENSE', 'For any person to make or knowingly sell or use any false or counterfeit seal, sticker, brand, stamp, tag, certificate or license or any dye for printing or making the same.', 'making, knowingly selling, or using counterfeit sealing evidence or production tools'),
+            $this->weightsMeasureProhibitedPracticeClause(5, 'UNAUTHORIZED-ALTER-OFFICIAL-FIGURES', 'For any person other than the official sealer or his duly authorized representative to alter the written or printed figures, letters or symbols on an official seal, sticker, receipt, stamp, tag, certificate or license.', 'altering figures, letters, or symbols on official evidence without official-sealer authority'),
+            $this->weightsMeasureProhibitedPracticeClause(6, 'USE-RESTORED-ALTERED-EXPIRED-DAMAGED-EVIDENCE', 'For any person to use or reuse any restored, altered, expired, damaged stamp, damaged certificate or license to make it appear that the instrument has been tested, calibrated, sealed or inspected.', 'using or reusing compromised or expired evidence to represent official compliance'),
+            $this->weightsMeasureProhibitedPracticeClause(7, 'USE-UNSEALED-OR-EXPIRED-INSTRUMENT', 'For a person buying or selling consumer products or furnishing services valued by weight or measure to possess, use or maintain with intention to use any scale, balance, weight or measure that has not been sealed or whose license has expired and was not renewed in due time.', 'commercial possession, use, or intended use of an unsealed or expired instrument'),
+            $this->weightsMeasureProhibitedPracticeClause(8, 'ALTER-INSTRUMENT-AFTER-SEALING', 'For any person to fraudulently alter any scale, balance, weight or measure after it is officially sealed.', 'fraudulently altering an instrument after official sealing'),
+            $this->weightsMeasureProhibitedPracticeClause(9, 'KNOWINGLY-USE-FALSE-INSTRUMENT', 'For any person to knowingly use any false scale, balance, weight or measure, whether sealed or not.', 'knowingly using a false instrument regardless of sealing'),
+            $this->weightsMeasureProhibitedPracticeClause(10, 'GIVE-SHORT-WEIGHT-MEASURE', 'For any person to fraudulently give short weight or measure in the making of a scale.', 'fraudulently giving short weight or measure', ['known_source_wording' => 'in the making of a scale']),
+            $this->weightsMeasureProhibitedPracticeClause(11, 'MISREPRESENT-WEIGHT-MEASURE', 'For any person, assuming to determine truly the weight or measure of an article bought or sold by weight or measure, to fraudulently misrepresent its weight or measure.', 'fraudulently misrepresenting an article weight or measure'),
+            $this->weightsMeasureProhibitedPracticeClause(12, 'PROCURE-OFFENSE', 'For any person to procure the commission of any such offense above mentioned by another.', 'procuring another person to commit an Article H prohibited practice'),
+            $this->policyBoundaryClause(13, 'MRC-3H-08-INTACT-ACCURATE-PROMPT-RESEAL', RevenueCodeProvisionClauseType::CalibrationRequirement, 'Instruments officially sealed at some previous time which have remained unaltered and accurate and whose seal or tag remains intact and in the same position and condition shall, if presented for sealing, be sealed promptly on demand by the official sealer or authorized representative.', 'Candidate resealing treatment: promptly reseal a previously sealed instrument that remains accurate, unaltered, and bears an intact unchanged official marker.', 'Accuracy evidence, unchanged condition, seal identity, presentation timing, demand handling, test requirement, official-sealer availability, record linkage, and relationship to six-month and annual cycles require accepted procedure.', ['candidate_conditions' => ['previously_officially_sealed', 'unaltered', 'accurate', 'seal_or_tag_intact_and_unchanged']]),
+            $this->policyBoundaryClause(14, 'MRC-3H-08-TWO-TIMES-RESEAL-SURCHARGE', RevenueCodeProvisionClauseType::SurchargeInterest, 'Such an instrument shall be sealed promptly without penalty except a surcharge equal to two (2) times the regular fee fixed by law for sealing an instrument of its class, collected and accounted for by the Municipal Treasurer as regular sealing fees.', 'Candidate surcharge: collect two times the regular class sealing fee for the stated resealing condition.', 'The source says without penalty except a surcharge; trigger, regular-fee version and class, whether two times is additional or total, relationship to the 500% Section 3H.04 surcharge, payment timing, accounting, rounding, waiver, and legal authority require reconciliation.', ['stated_surcharge_multiple' => '2', 'candidate_base' => 'regular_sealing_fee_for_instrument_class', 'candidate_collector' => 'Municipal Treasurer', 'known_wording_conflict' => 'without_penalty_except_surcharge']),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3H-09-PENALTIES', [
+            $this->policyBoundaryClause(1, 'MRC-3H-09-A-F-PENALTY', RevenueCodeProvisionClauseType::Penalty, 'A violation of paragraphs (a) to (f) of Section 3H.08 shall, upon conviction, be subject to a fine of not less than P500.00 but not more than P1,000.00 or imprisonment of not more than one (1) month, but not more than six (6) months.', 'Candidate judicial band: for paragraphs (a)-(f), fine PHP 500.00 to PHP 1,000.00 or imprisonment under the malformed printed duration.', 'The imprisonment text has two different maxima; offense classification, conviction, fine boundary inclusivity, imprisonment range, election or combination, court discretion, current national law, municipal penalty ceiling, and legal validity require counsel confirmation.', ['candidate_paragraphs' => ['a', 'b', 'c', 'd', 'e', 'f'], 'candidate_minimum_fine_cents' => 50_000, 'candidate_maximum_fine_cents' => 100_000, 'source_imprisonment_text' => 'not more than one (1) month, but not more than six (6) months', 'known_duration_conflict' => true]),
+            $this->policyBoundaryClause(2, 'MRC-3H-09-G-FIRST-OFFENSE-PENALTY', RevenueCodeProvisionClauseType::Penalty, 'A first violation of paragraph (g) of Section 3H.08 shall be subject to a fine of not less than P500.00 or imprisonment of not less than one (1) month but not more than five (5) years, or both, upon discretion of the court.', 'Candidate judicial band: first paragraph (g) offense carries at least PHP 500.00 fine, imprisonment from one month to five years, or both.', 'No maximum fine is printed; first-offense identity, conviction, imprisonment scale and statutory authority, court discretion, municipal penalty ceiling, successor offenses, and legal validity require counsel confirmation.', ['candidate_paragraphs' => ['g'], 'candidate_offense_ordinal' => 1, 'candidate_minimum_fine_cents' => 50_000, 'candidate_maximum_fine_cents' => null, 'source_imprisonment_minimum_months' => 1, 'source_imprisonment_maximum_months' => 60]),
+            $this->policyBoundaryClause(3, 'MRC-3H-09-H-L-PENALTY', RevenueCodeProvisionClauseType::Penalty, 'The owner-possessor or user of an instrument enumerated in paragraphs (h) to (l) of Section 3H.08 shall, upon conviction, be subject to a fine of not less than P500.00 or imprisonment not exceeding one (1) year, or both, upon discretion of the court.', 'Candidate judicial band: a covered owner, possessor, or user convicted under paragraphs (h)-(l) faces at least PHP 500.00 fine, up to one year imprisonment, or both.', 'The actor wording may not fit every paragraph and no maximum fine is printed; offense and actor mapping, conviction, court discretion, municipal penalty ceiling, imprisonment authority, and legal validity require counsel confirmation.', ['candidate_paragraphs' => ['h', 'i', 'j', 'k', 'l'], 'candidate_actors' => ['owner', 'possessor', 'user'], 'candidate_minimum_fine_cents' => 50_000, 'candidate_maximum_fine_cents' => null, 'source_imprisonment_maximum_months' => 12]),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3H-10-COMPROMISE', [
+            $this->policyBoundaryClause(1, 'MRC-3H-10-NON-FRAUD-COMPROMISE-MINIMUM', RevenueCodeProvisionClauseType::CompromisePenalty, 'At any time after apprehension of a taxpayer for violation of this article not involving fraud, before complaints are filed in the proper court, the Municipal Treasurer is authorized to impose a compromise penalty of not less than P500.00.', 'Candidate compromise boundary: after apprehension and before court filing, the Treasurer may impose at least PHP 500.00 for an eligible non-fraud Article H violation.', 'Apprehension and complaint-filing timestamps, taxpayer and offense identity, fraud determination, eligible violations, Treasurer discretion, absent maximum, taxpayer consent, settlement effect, repeat offenses, receipt and fund accounting, audit, referral, and current legal authority require accepted policy.', ['candidate_authority' => 'Municipal Treasurer', 'candidate_minimum_amount_cents' => 50_000, 'candidate_maximum_amount_cents' => null, 'candidate_window' => ['after_apprehension', 'before_court_complaint'], 'candidate_exclusion' => 'fraud']),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function weightsMeasureFeeClause(
+        int $sequence,
+        string $codeSuffix,
+        string $sourceText,
+        string $instrumentClass,
+        int $amountCents,
+        array $metadata,
+    ): array {
+        return $this->policyBoundaryClause(
+            sequence: $sequence,
+            code: 'MRC-3H-03-'.$codeSuffix,
+            type: RevenueCodeProvisionClauseType::RateBand,
+            sourceText: $sourceText,
+            candidateInterpretation: 'Candidate source amount: PHP '.number_format($amountCents / 100, 2, '.', ',').' for the stated instrument class or item.',
+            executionBlocker: 'Instrument classification, technical capacity evidence, boundary eligibility, instrument count and identity, sealing and licensing cadence, payer, collector, failed calibration, exemptions, and accepted operational amount require municipal reconciliation.',
+            metadata: [
+                'candidate_instrument_class' => $instrumentClass,
+                ...$metadata,
+            ],
+            amountCents: $amountCents,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function weightsMeasureProhibitedPracticeClause(
+        int $sequence,
+        string $codeSuffix,
+        string $sourceText,
+        string $candidatePractice,
+        array $metadata = [],
+    ): array {
+        return $this->policyBoundaryClause(
+            sequence: $sequence,
+            code: 'MRC-3H-08-'.$codeSuffix,
+            type: RevenueCodeProvisionClauseType::ProhibitedPractice,
+            sourceText: $sourceText,
+            candidateInterpretation: 'Candidate prohibited practice: '.$candidatePractice.'.',
+            executionBlocker: 'Actor and instrument identity, prohibited act, intent or knowledge standard, official authority, evidence, apprehension, due process, enforcement action, prosecution referral, and penalty mapping require accepted legal and municipal procedure.',
+            metadata: $metadata,
+        );
     }
 
     /**

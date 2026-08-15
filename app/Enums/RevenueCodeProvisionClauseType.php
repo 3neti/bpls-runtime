@@ -47,4 +47,9 @@ enum RevenueCodeProvisionClauseType: string
     case SecurityDeposit = 'security_deposit';
     case Forfeiture = 'forfeiture';
     case RestorationRequirement = 'restoration_requirement';
+    case CalibrationRequirement = 'calibration_requirement';
+    case LicenseRequirement = 'license_requirement';
+    case InspectionRequirement = 'inspection_requirement';
+    case ProhibitedPractice = 'prohibited_practice';
+    case CompromisePenalty = 'compromise_penalty';
 }
