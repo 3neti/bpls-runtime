@@ -58,7 +58,7 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
     expect(FeeRuleRange::query()->whereBelongsTo($retailTax)->count())->toBe(23);
     expect(FeeRuleReconciliation::query()->count())->toBe(4);
 
-    expect(RevenueCodeProvision::query()->count())->toBe(75)
+    expect(RevenueCodeProvision::query()->count())->toBe(77)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2A.02%')->count())->toBe(8)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2B.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2C.%')->count())->toBe(2)
@@ -72,8 +72,9 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3G.%')->count())->toBe(3)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3H.%')->count())->toBe(10)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3I.%')->count())->toBe(4)
+        ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3J.%')->count())->toBe(2)
         ->and(RevenueCodeProvision::query()->whereNotNull('fee_rule_id')->count())->toBe(4)
-        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(74);
+        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(76);
 
     $wholesaleProvision = RevenueCodeProvision::query()
         ->with('feeRule.currentReconciliation')
@@ -126,11 +127,22 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->metadata->schedule_clause_count->toBe(3)
         ->metadata->known_ambiguities->toContain('calibration_amount_missing');
 
+    $filmingFeesProvision = RevenueCodeProvision::query()
+        ->where('code', 'MRC-3J-01-FILMING-FEES')
+        ->sole();
+
+    expect($filmingFeesProvision)
+        ->reconciliation_status->toBe(RevenueCodeProvisionStatus::ReconciliationRequired)
+        ->fee_rule_id->toBeNull()
+        ->metadata->schedule_clause_count->toBe(6)
+        ->metadata->known_ambiguities->toContain('extension_duration_and_amount')
+        ->metadata->known_ambiguities->toContain('legacy_implementation_not_found');
+
     expect(RevenueCodeProvisionRow::query()->count())->toBe(82);
-    expect(RevenueCodeProvisionClause::query()->count())->toBe(392)
+    expect(RevenueCodeProvisionClause::query()->count())->toBe(399)
         ->and(RevenueCodeProvisionClause::query()
             ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
-            ->count())->toBe(392);
+            ->count())->toBe(399);
 
     $dependentRate = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2A-02-C-DEPENDENT-HALF-RATE')
@@ -797,6 +809,37 @@ it('refuses unresolved new-business eligibility instead of assessing every new b
         ->toThrow(UnsupportedAssessmentPolicy::class, 'Municipal enterprise-scale eligibility is unresolved');
 
     expect($application->assessments()->count())->toBe(0);
+});
+
+it('preserves filming and video coverage fees as non executable ordinance evidence', function () {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+
+    $scope = RevenueCodeProvisionClause::query()->where('code', 'MRC-3J-01-LOCATION-FILMING-PERMIT-SCOPE')->sole();
+    $commercialMovie = RevenueCodeProvisionClause::query()->where('code', 'MRC-3J-01-COMMERCIAL-MOVIE-PER-FILM')->sole();
+    $commercialAdvertisement = RevenueCodeProvisionClause::query()->where('code', 'MRC-3J-01-COMMERCIAL-ADVERTISEMENT-PER-FILM')->sole();
+    $documentary = RevenueCodeProvisionClause::query()->where('code', 'MRC-3J-01-DOCUMENTARY-PER-FILM')->sole();
+    $videoCoverage = RevenueCodeProvisionClause::query()->where('code', 'MRC-3J-01-VIDEO-PER-COVERAGE')->sole();
+    $extension = RevenueCodeProvisionClause::query()->where('code', 'MRC-3J-01-EXTENSION-ADDITIONAL-PREPAYMENT')->sole();
+    $advancePayment = RevenueCodeProvisionClause::query()->where('code', 'MRC-3J-02-TREASURER-SEVEN-DAYS-BEFORE')->sole();
+
+    expect($scope)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::PermitRequirement)
+        ->metadata->candidate_activity->toBe('location_filming')
+        ->metadata->candidate_values_are_non_executable->toBeTrue()
+        ->and($commercialMovie->amount_cents)->toBe(50_000)
+        ->and($commercialMovie->metadata['candidate_unit'])->toBe('film')
+        ->and($commercialAdvertisement->amount_cents)->toBe(30_000)
+        ->and($commercialAdvertisement->metadata['known_category_wording_ambiguity'])->toBeTrue()
+        ->and($documentary->amount_cents)->toBe(20_000)
+        ->and($videoCoverage->amount_cents)->toBe(15_000)
+        ->and($videoCoverage->metadata['candidate_unit'])->toBe('coverage')
+        ->and($extension->clause_type)->toBe(RevenueCodeProvisionClauseType::PaymentTiming)
+        ->and($extension->metadata['source_extension_unit'])->toBeNull()
+        ->and($extension->metadata['source_additional_amount_formula'])->toBeNull()
+        ->and($advancePayment->clause_type)->toBe(RevenueCodeProvisionClauseType::PaymentTiming)
+        ->and($advancePayment->metadata['candidate_payee'])->toBe('Municipal Treasurer')
+        ->and($advancePayment->metadata['source_lead_days'])->toBe(7)
+        ->and($advancePayment->metadata['known_timing_attachment_ambiguity'])->toBeTrue();
 });
 
 it('preserves dispensing pump requirements fees and sanctions as non executable ordinance evidence', function () {
