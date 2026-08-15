@@ -243,6 +243,7 @@ try {
         await inspectManualReceiptBusinessTaxByMajorTypeReport(page, baseUrl);
         await inspectManualReceiptTotalCapitalGrossSummaryReport(page, baseUrl);
         await inspectManualReceiptCmciLdcsBoundary(page, baseUrl);
+        await inspectManualReceiptPldsBoundary(page, baseUrl);
         await inspectManualReceiptPaymentSchedule(page, baseUrl);
         await inspectManualReceiptDetail(page, baseUrl);
         await inspectManualReceiptPermitReleaseBoundary(page, baseUrl);
@@ -5253,6 +5254,129 @@ async function inspectManualReceiptCmciLdcsBoundary(targetPage, targetBaseUrl) {
         targetPage,
         '02-cmci-ldcs-boundary-mobile',
         'browser/screenshots/02-cmci-ldcs-boundary-mobile.png',
+    );
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+}
+
+async function inspectManualReceiptPldsBoundary(targetPage, targetBaseUrl) {
+    const reportUrl = `${targetBaseUrl}${manifest.resources.plds_report_url}`;
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+
+    const boundaryVisible = await targetPage
+        .getByTestId('plds-boundary-status')
+        .isVisible()
+        .catch(() => false);
+    const authorityExplanationVisible = await targetPage
+        .getByTestId('plds-authority-boundary')
+        .getByText('Neither a permit artifact', { exact: false })
+        .isVisible()
+        .catch(() => false);
+    const officialRowCount = Number(
+        (
+            await targetPage
+                .getByTestId('plds-official-row-count')
+                .textContent()
+                .catch(() => null)
+        )?.trim(),
+    );
+    const contractColumnCount = Number(
+        (
+            await targetPage
+                .getByTestId('plds-column-count')
+                .textContent()
+                .catch(() => null)
+        )?.trim(),
+    );
+    const exportVisible = await targetPage
+        .getByRole('link', { name: /export/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const artifactVisible = await targetPage
+        .getByText(manifest.resources.paid_establishment_business_name, {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'plds-authority-boundary-visible',
+            'PLDS shows its blocked authority state and exact 23-field contract',
+            true,
+            boundaryVisible &&
+                authorityExplanationVisible &&
+                officialRowCount === 0 &&
+                contractColumnCount === 23,
+            {
+                url: reportUrl,
+                official_row_count: officialRowCount,
+                contract_column_count: contractColumnCount,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'plds-artifact-excluded',
+            'PLDS does not expose the artifact-ready application as an official released permit',
+            true,
+            !artifactVisible && !exportVisible,
+        ),
+    );
+
+    reportEvidence.plds = {
+        status: boundaryVisible ? 'blocked' : null,
+        can_generate: false,
+        can_export: exportVisible,
+        official_row_count: officialRowCount,
+        contract_column_count: contractColumnCount,
+        artifact_excluded: !artifactVisible,
+    };
+    await screenshot(
+        targetPage,
+        '02-plds-boundary',
+        'browser/screenshots/02-plds-boundary.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const mobileBoundaryVisible = await targetPage
+        .getByTestId('plds-boundary-status')
+        .isVisible()
+        .catch(() => false);
+    const mobileColumnCount = await targetPage
+        .getByTestId('plds-mobile-column')
+        .count();
+    const mobileHorizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+
+    checks.push(
+        check(
+            'plds-mobile-visible',
+            'Mobile PLDS keeps the authority state and all contract fields visible',
+            true,
+            mobileBoundaryVisible && mobileColumnCount === 23,
+        ),
+    );
+    checks.push(
+        check(
+            'plds-mobile-no-horizontal-overflow',
+            'Mobile PLDS has no page-level horizontal overflow',
+            false,
+            mobileHorizontalOverflow,
+        ),
+    );
+    reportEvidence.plds.mobile_visible =
+        mobileBoundaryVisible && mobileColumnCount === 23;
+    reportEvidence.plds.mobile_horizontal_overflow = mobileHorizontalOverflow;
+    await screenshot(
+        targetPage,
+        '02-plds-boundary-mobile',
+        'browser/screenshots/02-plds-boundary-mobile.png',
     );
     await targetPage.setViewportSize({ width: 1440, height: 900 });
 }

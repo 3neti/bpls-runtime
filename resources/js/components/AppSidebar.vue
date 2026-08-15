@@ -30,6 +30,7 @@ import { index as paidEstablishmentReportIndex } from '@/actions/App/Http/Contro
 import { index as paymentSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/PaymentSummaryReportController';
 import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import { index as permitApplicationIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
+import { index as pldsReportIndex } from '@/actions/App/Http/Controllers/Staff/PldsReportController';
 import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
 import { index as revenueSourceReportIndex } from '@/actions/App/Http/Controllers/Staff/RevenueSourceReportController';
 import { index as storyboardIndex } from '@/actions/App/Http/Controllers/Staff/StoryboardController';
@@ -118,6 +119,11 @@ const staffNavItems: NavItem[] = [
     {
         title: 'CMCI LDCS',
         href: cmciLdcsReportIndex(),
+        icon: TableProperties,
+    },
+    {
+        title: 'PLDS',
+        href: pldsReportIndex(),
         icon: TableProperties,
     },
     {
