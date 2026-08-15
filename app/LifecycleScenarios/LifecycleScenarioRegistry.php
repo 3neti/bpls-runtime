@@ -701,6 +701,39 @@ final class LifecycleScenarioRegistry
                     ],
                 ],
             ),
+            'billing_group_draft_visibility' => new LifecycleScenarioDefinition(
+                key: 'billing_group_draft_visibility',
+                label: 'Provisional billing group draft visibility',
+                mode: 'billing_group_draft_visibility',
+                risk: 'local transactional',
+                actors: [
+                    'operator' => 'primary_operator',
+                    'recipient' => 'sample_recipient',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'acceptance_status' => 'provisional',
+                    'record_status' => 'draft',
+                    'financial_effect' => 'none',
+                    'external_calls' => 0,
+                    'irreversible_actions' => false,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
             'storyboard_terminal_state_visibility' => new LifecycleScenarioDefinition(
                 key: 'storyboard_terminal_state_visibility',
                 label: 'Storyboard terminal export visibility',

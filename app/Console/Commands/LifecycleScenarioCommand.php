@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\LifecycleScenarios\AssessmentPolicyBoundaryVisibilityScenario;
+use App\LifecycleScenarios\BillingGroupDraftVisibilityScenario;
 use App\LifecycleScenarios\CitizenPermitAuthorityReviewVisibilityScenario;
 use App\LifecycleScenarios\CitizenPermitDraftVisibilityScenario;
 use App\LifecycleScenarios\CitizenPermitProcessingVisibilityScenario;
@@ -39,6 +40,7 @@ class LifecycleScenarioCommand extends Command
         CitizenPermitDraftVisibilityScenario $citizenPermitDraftVisibilityScenario,
         CitizenPermitProcessingVisibilityScenario $citizenPermitProcessingVisibilityScenario,
         AssessmentPolicyBoundaryVisibilityScenario $assessmentPolicyBoundaryVisibilityScenario,
+        BillingGroupDraftVisibilityScenario $billingGroupDraftVisibilityScenario,
         ManualCollectionReceiptVisibilityScenario $manualCollectionReceiptScenario,
         PermitApplicationCancelledVisibilityScenario $permitApplicationCancelledScenario,
         PermitApplicationPendingPaymentVisibilityScenario $permitApplicationPendingPaymentScenario,
@@ -59,6 +61,7 @@ class LifecycleScenarioCommand extends Command
             if (in_array($phase, ['prepare', 'all'], true)) {
                 $actors = $actorResolver->resolve($scenario);
                 $manifest = match ($scenario->key) {
+                    'billing_group_draft_visibility' => $billingGroupDraftVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'citizen_permit_authority_review_visibility' => $citizenPermitAuthorityReviewVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'citizen_permit_processing_visibility' => $citizenPermitProcessingVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'citizen_existing_business_registry_safety', 'citizen_permit_draft_document_visibility', 'citizen_permit_draft_edit_visibility', 'citizen_permit_draft_visibility', 'citizen_permit_submission_visibility' => $citizenPermitDraftVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
@@ -86,6 +89,7 @@ class LifecycleScenarioCommand extends Command
 
             if (in_array($phase, ['audit', 'all'], true)) {
                 $manifest = match ($scenario->key) {
+                    'billing_group_draft_visibility' => $billingGroupDraftVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'citizen_permit_authority_review_visibility' => $citizenPermitAuthorityReviewVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'citizen_permit_processing_visibility' => $citizenPermitProcessingVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'citizen_existing_business_registry_safety', 'citizen_permit_draft_document_visibility', 'citizen_permit_draft_edit_visibility', 'citizen_permit_draft_visibility', 'citizen_permit_submission_visibility' => $citizenPermitDraftVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),

@@ -14,6 +14,7 @@ use App\Enums\TreasuryCollectionStatus;
 use App\Enums\UserPermission;
 use App\Jobs\GenerateStoryboardVideo;
 use App\LifecycleScenarios\AssessmentPolicyBoundaryVisibilityScenario;
+use App\LifecycleScenarios\BillingGroupDraftVisibilityScenario;
 use App\LifecycleScenarios\CitizenPermitAuthorityReviewVisibilityScenario;
 use App\LifecycleScenarios\CitizenPermitDraftVisibilityScenario;
 use App\LifecycleScenarios\CitizenPermitProcessingVisibilityScenario;
@@ -27,6 +28,8 @@ use App\LifecycleScenarios\ScenarioActorResolver;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\LifecycleScenarios\StoryboardTerminalStateVisibilityScenario;
 use App\Models\Assessment;
+use App\Models\BillingGroup;
+use App\Models\BillingGroupRecord;
 use App\Models\Business;
 use App\Models\BusinessOwner;
 use App\Models\FeeRule;
@@ -93,6 +96,18 @@ test('scenario registry discovers the storyboard terminal visibility scenario', 
         ->risk->toBe('local transactional')
         ->and($scenario->safety['external_integrations'])->toBeFalse()
         ->and($scenario->safety['irreversible_actions'])->toBeFalse();
+});
+
+test('scenario registry discovers the provisional billing group draft scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('billing_group_draft_visibility');
+
+    expect($scenario)
+        ->key->toBe('billing_group_draft_visibility')
+        ->label->toBe('Provisional billing group draft visibility')
+        ->risk->toBe('local transactional')
+        ->and($scenario->expectations['acceptance_status'])->toBe('provisional')
+        ->and($scenario->expectations['financial_effect'])->toBe('none')
+        ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
 test('scenario registry discovers the citizen permit draft visibility scenario', function () {
@@ -2646,6 +2661,55 @@ test('assessment policy boundary visibility audit compares browser evidence with
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
 
+test('billing group draft scenario is idempotent and audits exact browser evidence', function () {
+    Storage::fake('local');
+
+    $user = configuredScenarioUser('billing-group-operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('billing_group_draft_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'billing-group-draft-test-001');
+    $runner = app(BillingGroupDraftVisibilityScenario::class);
+
+    $first = $runner->prepare($scenario, 'billing-group-draft-test-001', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+    $second = $runner->prepare($scenario, 'billing-group-draft-test-001', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+
+    expect($first['resources']['record_id'])->toBe($second['resources']['record_id'])
+        ->and(BillingGroup::query()->count())->toBe(1)
+        ->and(BillingGroupRecord::query()->count())->toBe(1)
+        ->and($first['result']['terminal'])->toBe('passed')
+        ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue()
+        ->and($artifactStore->exists('storyboard/storyboard.html'))->toBeTrue();
+
+    $artifactStore->putJson('browser/report.json', [
+        'result' => ['passed' => true],
+        'billing_group' => [
+            'definition_visible' => true,
+            'draft_visible' => true,
+            'policy_boundary_visible' => true,
+        ],
+        'artifacts' => [
+            'screenshots' => [
+                'detail' => 'browser/screenshots/02-billing-group-detail.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($first, $artifactStore);
+
+    expect($audited['result'])
+        ->terminal->toBe('passed')
+        ->browser->toBe('passed')
+        ->audit->toBe('passed')
+        ->passed->toBeTrue()
+        ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
+});
+
 test('command refuses unsafe environments before preparing records', function () {
     app()->detectEnvironment(fn (): string => 'production');
 
@@ -2675,6 +2739,10 @@ function configuredScenarioUser(string $email): User
         UserPermission::UpdatePermitApplicationStatus,
         UserPermission::CompletePermitClearances,
         UserPermission::ViewFeeRules,
+        UserPermission::ViewBillingGroups,
+        UserPermission::ManageBillingGroups,
+        UserPermission::ViewBillingGroupRecords,
+        UserPermission::CreateBillingGroupRecords,
         UserPermission::ManageStoryboards,
     ])->map(fn (UserPermission $permission): int => Permission::factory()->create([
         'code' => $permission->value,

@@ -23,6 +23,7 @@ import { index as allAbstractReportIndex } from '@/actions/App/Http/Controllers/
 import { index as annexCDnfbpReportIndex } from '@/actions/App/Http/Controllers/Staff/AnnexCDnfbpReportController';
 import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { index as assessmentSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentSummaryReportController';
+import { index as billingGroupIndex } from '@/actions/App/Http/Controllers/Staff/BillingGroupController';
 import { index as bspReportIndex } from '@/actions/App/Http/Controllers/Staff/BspReportController';
 import { index as businessTaxByMajorTypeReportIndex } from '@/actions/App/Http/Controllers/Staff/BusinessTaxByMajorTypeReportController';
 import { index as cmciLdcsReportIndex } from '@/actions/App/Http/Controllers/Staff/CmciLdcsReportController';
@@ -88,6 +89,11 @@ const staffNavItems: NavItem[] = [
         title: 'Taxes and Fees',
         href: feeRuleIndex(),
         icon: Coins,
+    },
+    {
+        title: 'Billing Groups',
+        href: billingGroupIndex(),
+        icon: WalletCards,
     },
     {
         title: 'Daily Collections',

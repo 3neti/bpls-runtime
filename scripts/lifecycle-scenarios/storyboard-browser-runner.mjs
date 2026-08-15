@@ -23,6 +23,7 @@ if (manifest.schema_version !== 'application.lifecycle-evidence.v1') {
 
 const supportedScenarios = [
     'assessment_policy_boundary_visibility',
+    'billing_group_draft_visibility',
     'citizen_existing_business_registry_safety',
     'citizen_new_permit_lifecycle_authority_boundary',
     'citizen_permit_authority_review_visibility',
@@ -98,6 +99,7 @@ const citizenRegistryEvidence = {};
 const citizenProcessingEvidence = {};
 const citizenAuthorityReviewEvidence = {};
 const citizenSubmissionEvidence = {};
+const billingGroupEvidence = {};
 
 let browser;
 
@@ -207,6 +209,10 @@ try {
         await inspectAssessmentPolicyBoundary(page, baseUrl);
     }
 
+    if (manifest.scenario.key === 'billing_group_draft_visibility') {
+        await inspectBillingGroupDraft(page, baseUrl);
+    }
+
     if (
         [
             'amendment_permit_lifecycle_foundation',
@@ -307,6 +313,7 @@ const report = {
     citizen_processing: citizenProcessingEvidence,
     citizen_authority_review: citizenAuthorityReviewEvidence,
     citizen_submission: citizenSubmissionEvidence,
+    billing_group: billingGroupEvidence,
     artifacts: {
         screenshots,
     },
@@ -2084,6 +2091,117 @@ async function uploadCitizenPermitDraftDocument(targetPage, targetBaseUrl) {
         '04-citizen-document-mobile',
         'browser/screenshots/04-citizen-document-mobile.png',
     );
+}
+
+async function inspectBillingGroupDraft(targetPage, targetBaseUrl) {
+    const listUrl = `${targetBaseUrl}${manifest.resources.list_url}`;
+    await targetPage.goto(listUrl, { waitUntil: 'networkidle' });
+    const definitionVisible = await targetPage
+        .getByText(manifest.resources.billing_group_name, { exact: true })
+        .isVisible()
+        .catch(() => false);
+    const listBoundaryVisible = await targetPage
+        .getByTestId('billing-group-policy-boundary')
+        .isVisible()
+        .catch(() => false);
+    checks.push(
+        check(
+            'billing-group-definition-visible',
+            'Billing-group list shows the exact manifest definition',
+            true,
+            definitionVisible,
+            { billing_group_id: manifest.resources.billing_group_id },
+        ),
+        check(
+            'billing-group-list-policy-boundary-visible',
+            'Billing-group list shows the provisional policy boundary',
+            true,
+            listBoundaryVisible,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '01-billing-group-list',
+        'browser/screenshots/01-billing-group-list.png',
+    );
+
+    const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    const draftVisible = await targetPage
+        .getByText(manifest.resources.public_reference, { exact: true })
+        .isVisible()
+        .catch(() => false);
+    const detailBoundaryVisible = await targetPage
+        .getByTestId('billing-record-policy-boundary')
+        .isVisible()
+        .catch(() => false);
+    const draftActionVisible = await targetPage
+        .getByRole('button', { name: 'Prepare draft' })
+        .isVisible()
+        .catch(() => false);
+    checks.push(
+        check(
+            'billing-group-draft-visible',
+            'Billing-group detail shows the exact manifest draft',
+            true,
+            draftVisible,
+            { billing_group_record_id: manifest.resources.record_id },
+        ),
+        check(
+            'billing-group-detail-policy-boundary-visible',
+            'Billing-group detail shows the draft-only financial boundary',
+            true,
+            detailBoundaryVisible,
+        ),
+        check(
+            'billing-group-only-draft-action-visible',
+            'Billing-group detail offers draft preparation without a collection action',
+            true,
+            draftActionVisible,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '02-billing-group-detail',
+        'browser/screenshots/02-billing-group-detail.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
+    const mobileDraftVisible = await targetPage
+        .getByText(manifest.resources.public_reference, { exact: true })
+        .isVisible()
+        .catch(() => false);
+    const horizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+    checks.push(
+        check(
+            'billing-group-mobile-draft-visible',
+            'Mobile detail keeps the exact draft reference visible',
+            true,
+            mobileDraftVisible,
+        ),
+        check(
+            'billing-group-mobile-no-horizontal-overflow',
+            'Mobile detail has no page-level horizontal overflow',
+            false,
+            horizontalOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '03-billing-group-mobile',
+        'browser/screenshots/03-billing-group-mobile.png',
+    );
+
+    billingGroupEvidence.definition_visible = definitionVisible;
+    billingGroupEvidence.draft_visible = draftVisible;
+    billingGroupEvidence.policy_boundary_visible =
+        listBoundaryVisible && detailBoundaryVisible;
+    billingGroupEvidence.draft_reference = manifest.resources.public_reference;
 }
 
 async function inspectStoryboardList(targetPage, targetBaseUrl) {
