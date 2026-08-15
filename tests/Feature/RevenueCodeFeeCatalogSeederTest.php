@@ -58,10 +58,10 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
     expect(FeeRuleRange::query()->whereBelongsTo($retailTax)->count())->toBe(23);
     expect(FeeRuleReconciliation::query()->count())->toBe(4);
 
-    expect(RevenueCodeProvision::query()->count())->toBe(15)
+    expect(RevenueCodeProvision::query()->count())->toBe(20)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2A.02%')->count())->toBe(8)
         ->and(RevenueCodeProvision::query()->whereNotNull('fee_rule_id')->count())->toBe(4)
-        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(14);
+        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(19);
 
     $wholesaleProvision = RevenueCodeProvision::query()
         ->with('feeRule.currentReconciliation')
@@ -85,10 +85,10 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->feeRule->currentReconciliation->execution_status->toBe(FeeRuleExecutionStatus::Executable);
 
     expect(RevenueCodeProvisionRow::query()->count())->toBe(82);
-    expect(RevenueCodeProvisionClause::query()->count())->toBe(62)
+    expect(RevenueCodeProvisionClause::query()->count())->toBe(87)
         ->and(RevenueCodeProvisionClause::query()
             ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
-            ->count())->toBe(62);
+            ->count())->toBe(87);
 
     $dependentRate = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2A-02-C-DEPENDENT-HALF-RATE')
@@ -137,6 +137,21 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->sole();
     $pilUsage = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2F-01-PIL-VALIDATION-FALLBACK')
+        ->sole();
+    $receiptCertification = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2E-04-F-PAID-TAX-CERTIFICATION')
+        ->sole();
+    $locationTransfer = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2E-04-G-PAID-PERIOD-LOCATION-TRANSFER')
+        ->sole();
+    $retirementFine = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2E-04-RETIREMENT-LATE-FINE')
+        ->sole();
+    $permitCancellation = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2E-04-RETIREMENT-PERMIT-CANCELLATION')
+        ->sole();
+    $estateContinuation = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2E-04-DEATH-ESTATE-CONTINUATION')
         ->sole();
 
     expect($dependentRate)
@@ -191,7 +206,24 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->metadata->normalization_question->toContain('Malformed decimal precision')
         ->and($pilUsage)
         ->clause_type->toBe(RevenueCodeProvisionClauseType::ValidationFallback)
-        ->metadata->candidate_uses->toBe(['validate_declared_gross_receipts', 'establish_taxable_gross_receipts_when_valid_data_unavailable']);
+        ->metadata->candidate_uses->toBe(['validate_declared_gross_receipts', 'establish_taxable_gross_receipts_when_valid_data_unavailable'])
+        ->and($receiptCertification)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::ReceiptCertification)
+        ->amount_cents->toBe(10_000)
+        ->metadata->candidate_values_are_non_executable->toBeTrue()
+        ->and($locationTransfer)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::LocationTransfer)
+        ->metadata->candidate_tax_effect->toBe('no_additional_tax_for_paid_period')
+        ->and($retirementFine)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::TaxSettlement)
+        ->amount_cents->toBe(100_000)
+        ->metadata->candidate_values_are_non_executable->toBeTrue()
+        ->and($permitCancellation)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::PermitCancellation)
+        ->metadata->candidate_actions->toBe(['permit_surrender', 'permit_cancellation', 'cancellation_record'])
+        ->and($estateContinuation)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::EstateContinuation)
+        ->metadata->candidate_tax_effect->toBe('no_additional_payment_for_paid_term_remainder');
 
     $overlappingRow = RevenueCodeProvisionRow::query()
         ->where('code', 'MRC-2A-02-B-ROW-08')

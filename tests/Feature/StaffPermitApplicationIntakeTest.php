@@ -456,6 +456,11 @@ test('staff users can record a transfer application with explicit transfer polic
 
     expect($application->type)->toBe(PermitApplicationType::Transfer)
         ->and($application->metadata['transfer_policy_boundary']['status'])->toBe('policy_boundary')
+        ->and($application->metadata['transfer_policy_boundary']['legal_evidence']['section_references'])->toBe([
+            'Section 2E.04(g)',
+            'Section 2E.04(f) retirement procedures',
+        ])
+        ->and($application->metadata['transfer_policy_boundary']['legal_evidence']['execution_status'])->toBe('recorded_non_executable')
         ->and($application->metadata['transfer_policy_boundary']['unresolved_policy'])->toContain('whether transfer terminates, supersedes, or preserves the prior permit');
 
     $this->actingAs($user)
@@ -465,6 +470,8 @@ test('staff users can record a transfer application with explicit transfer polic
             ->component('permit-applications/Show')
             ->where('permitApplication.type', PermitApplicationType::Transfer->value)
             ->where('permitApplication.transfer_policy_boundary.status', 'policy_boundary')
+            ->where('permitApplication.transfer_policy_boundary.legal_evidence.source_id', 'LEGAL-MRC-001')
+            ->where('permitApplication.transfer_policy_boundary.legal_evidence.execution_status', 'recorded_non_executable')
             ->where('permitApplication.transfer_policy_boundary.software_knows.legal_effect_is_not_yet_automated', true)
         );
 });
@@ -502,7 +509,12 @@ test('staff users can record a retirement application with explicit retirement p
 
     expect($application->type)->toBe(PermitApplicationType::Retirement)
         ->and($application->metadata['retirement_policy_boundary']['status'])->toBe('policy_boundary')
-        ->and($application->metadata['retirement_policy_boundary']['unresolved_policy'])->toContain('retirement effective date and legal closure effect');
+        ->and($application->metadata['retirement_policy_boundary']['legal_evidence']['section_references'])->toBe([
+            'Section 2E.04(f) retirement provisions',
+            'Section 2E.04 retirement procedures (a)-(c)',
+        ])
+        ->and($application->metadata['retirement_policy_boundary']['legal_evidence']['execution_status'])->toBe('recorded_non_executable')
+        ->and($application->metadata['retirement_policy_boundary']['unresolved_policy'])->toContain('authority and evidence for the actual cessation date and legal retirement effect');
 
     $this->actingAs($user)
         ->get(route('staff.permit-applications.show', $application))
@@ -511,6 +523,8 @@ test('staff users can record a retirement application with explicit retirement p
             ->component('permit-applications/Show')
             ->where('permitApplication.type', PermitApplicationType::Retirement->value)
             ->where('permitApplication.retirement_policy_boundary.status', 'policy_boundary')
+            ->where('permitApplication.retirement_policy_boundary.legal_evidence.source_id', 'LEGAL-MRC-001')
+            ->where('permitApplication.retirement_policy_boundary.legal_evidence.execution_status', 'recorded_non_executable')
             ->where('permitApplication.retirement_policy_boundary.software_knows.legal_retirement_effect_is_not_yet_automated', true)
         );
 });

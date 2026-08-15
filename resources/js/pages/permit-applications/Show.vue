@@ -119,6 +119,12 @@ type PermitApplication = {
         status: string;
         application_type: string;
         software_knows: Record<string, boolean>;
+        legal_evidence: {
+            source_id: string;
+            section_references: string[];
+            ordinance_facts: string[];
+            execution_status: string;
+        };
         unresolved_policy: string[];
         artifact_statement: string;
     } | null;
@@ -126,6 +132,12 @@ type PermitApplication = {
         status: string;
         application_type: string;
         software_knows: Record<string, boolean>;
+        legal_evidence: {
+            source_id: string;
+            section_references: string[];
+            ordinance_facts: string[];
+            execution_status: string;
+        };
         unresolved_policy: string[];
         artifact_statement: string;
     } | null;
@@ -1301,6 +1313,47 @@ function fileSize(sizeBytes: number): string {
                     </div>
                     <div class="md:col-span-3">
                         <dt class="text-xs text-muted-foreground">
+                            Ordinance evidence
+                        </dt>
+                        <dd class="mt-2 grid gap-2">
+                            <div class="flex flex-wrap gap-2">
+                                <Badge variant="secondary">
+                                    {{
+                                        permitApplication
+                                            .transfer_policy_boundary
+                                            .legal_evidence.source_id
+                                    }}
+                                </Badge>
+                                <Badge variant="outline" class="capitalize">
+                                    {{
+                                        permitApplication.transfer_policy_boundary.legal_evidence.execution_status.replaceAll(
+                                            '_',
+                                            ' ',
+                                        )
+                                    }}
+                                </Badge>
+                            </div>
+                            <p class="text-xs text-muted-foreground">
+                                {{
+                                    permitApplication.transfer_policy_boundary.legal_evidence.section_references.join(
+                                        ' · ',
+                                    )
+                                }}
+                            </p>
+                            <ul class="grid list-disc gap-1 pl-5">
+                                <li
+                                    v-for="fact in permitApplication
+                                        .transfer_policy_boundary.legal_evidence
+                                        .ordinance_facts"
+                                    :key="fact"
+                                >
+                                    {{ fact }}
+                                </li>
+                            </ul>
+                        </dd>
+                    </div>
+                    <div class="md:col-span-3">
+                        <dt class="text-xs text-muted-foreground">
                             Unresolved transfer policy
                         </dt>
                         <dd class="mt-2">
@@ -1380,6 +1433,47 @@ function fileSize(sizeBytes: number): string {
                                 {{ label(entry.key) }}:
                                 {{ entry.value ? 'yes' : 'no' }}
                             </Badge>
+                        </dd>
+                    </div>
+                    <div class="md:col-span-3">
+                        <dt class="text-xs text-muted-foreground">
+                            Ordinance evidence
+                        </dt>
+                        <dd class="mt-2 grid gap-2">
+                            <div class="flex flex-wrap gap-2">
+                                <Badge variant="secondary">
+                                    {{
+                                        permitApplication
+                                            .retirement_policy_boundary
+                                            .legal_evidence.source_id
+                                    }}
+                                </Badge>
+                                <Badge variant="outline" class="capitalize">
+                                    {{
+                                        permitApplication.retirement_policy_boundary.legal_evidence.execution_status.replaceAll(
+                                            '_',
+                                            ' ',
+                                        )
+                                    }}
+                                </Badge>
+                            </div>
+                            <p class="text-xs text-muted-foreground">
+                                {{
+                                    permitApplication.retirement_policy_boundary.legal_evidence.section_references.join(
+                                        ' · ',
+                                    )
+                                }}
+                            </p>
+                            <ul class="grid list-disc gap-1 pl-5">
+                                <li
+                                    v-for="fact in permitApplication
+                                        .retirement_policy_boundary
+                                        .legal_evidence.ordinance_facts"
+                                    :key="fact"
+                                >
+                                    {{ fact }}
+                                </li>
+                            </ul>
                         </dd>
                     </div>
                     <div class="md:col-span-3">

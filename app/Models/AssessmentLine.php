@@ -35,21 +35,25 @@ class AssessmentLine extends Model
     /** @use HasFactory<AssessmentLineFactory> */
     use HasFactory;
 
+    /** @return BelongsTo<Assessment, $this> */
     public function assessment(): BelongsTo
     {
         return $this->belongsTo(Assessment::class);
     }
 
+    /** @return BelongsTo<PermitApplicationLine, $this> */
     public function permitApplicationLine(): BelongsTo
     {
         return $this->belongsTo(PermitApplicationLine::class);
     }
 
+    /** @return BelongsTo<FeeRule, $this> */
     public function feeRule(): BelongsTo
     {
         return $this->belongsTo(FeeRule::class);
     }
 
+    /** @return BelongsTo<LineOfBusiness, $this> */
     public function lineOfBusiness(): BelongsTo
     {
         return $this->belongsTo(LineOfBusiness::class);

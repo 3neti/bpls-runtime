@@ -1254,8 +1254,8 @@ test('revenue code fee catalog visibility scenario prepares deterministic catalo
         ->and($firstManifest['resources']['first_range_amount_cents'])->toBe(2266)
         ->and($firstManifest['resources']['provision_code'])->toBe('MRC-2A-02-B-WHOLESALERS')
         ->and($firstManifest['resources']['provision_status'])->toBe('reconciliation_required')
-        ->and($firstManifest['resources']['provision_count'])->toBe(15)
-        ->and($firstManifest['resources']['reconciliation_required_count'])->toBe(14)
+        ->and($firstManifest['resources']['provision_count'])->toBe(20)
+        ->and($firstManifest['resources']['reconciliation_required_count'])->toBe(19)
         ->and($firstManifest['resources']['schedule_matrix']['row_count'])->toBe(24)
         ->and($firstManifest['resources']['schedule_matrix']['overlap_count'])->toBe(1)
         ->and($firstManifest['resources']['schedule_matrix']['gap_count'])->toBe(0)
@@ -1273,13 +1273,13 @@ test('revenue code fee catalog visibility scenario prepares deterministic catalo
         ->and($firstManifest['resources']['schedule_matrices']['MRC-2A-02-G-ENUMERATED-SERVICES']['ceiling_count'])->toBe(1)
         ->and($firstManifest['resources']['schedule_findings'])->toHaveCount(4)
         ->and($firstManifest['resources']['policy_boundary_summary'])->toBe([
-            'provision_count' => 11,
-            'clause_count' => 62,
-            'reconciliation_required_count' => 62,
+            'provision_count' => 16,
+            'clause_count' => 87,
+            'reconciliation_required_count' => 87,
             'ceiling_count' => 2,
             'execution_ready_count' => 0,
         ])
-        ->and($firstManifest['resources']['policy_boundary_clause_codes'])->toHaveCount(62)
+        ->and($firstManifest['resources']['policy_boundary_clause_codes'])->toHaveCount(87)
         ->and($firstManifest['resources']['overlap_row_code'])->toBe('MRC-2A-02-B-ROW-08')
         ->and($firstManifest['resources']['policy_boundaries'])->toContain('new_business_initial_local_business_tax_exemption')
         ->and($feeRule->ranges)->toHaveCount(23)
@@ -1909,6 +1909,11 @@ test('transfer permit lifecycle foundation scenario executes through pending pay
         ->and($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
         ->and($firstManifest['resources']['application_type'])->toBe('transfer')
         ->and($firstManifest['resources']['transfer_policy_status'])->toBe('policy_boundary')
+        ->and($firstManifest['resources']['transfer_legal_section_references'])->toBe([
+            'Section 2E.04(g)',
+            'Section 2E.04(f) retirement procedures',
+        ])
+        ->and($firstManifest['resources']['transfer_legal_execution_status'])->toBe('recorded_non_executable')
         ->and($firstManifest['resources']['assessment_total_amount_cents'])->toBe(30_000)
         ->and($application->type->value)->toBe('transfer')
         ->and($application->status)->toBe(PermitApplicationStatus::PendingPayment)
@@ -1944,11 +1949,16 @@ test('retirement permit lifecycle foundation scenario executes through pending p
         ->and($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
         ->and($firstManifest['resources']['application_type'])->toBe('retirement')
         ->and($firstManifest['resources']['retirement_policy_status'])->toBe('policy_boundary')
+        ->and($firstManifest['resources']['retirement_legal_section_references'])->toBe([
+            'Section 2E.04(f) retirement provisions',
+            'Section 2E.04 retirement procedures (a)-(c)',
+        ])
+        ->and($firstManifest['resources']['retirement_legal_execution_status'])->toBe('recorded_non_executable')
         ->and($firstManifest['resources']['assessment_total_amount_cents'])->toBe(30_000)
         ->and($application->type->value)->toBe('retirement')
         ->and($application->status)->toBe(PermitApplicationStatus::PendingPayment)
         ->and($application->metadata['retirement_policy_boundary']['status'])->toBe('policy_boundary')
-        ->and($application->metadata['retirement_policy_boundary']['unresolved_policy'])->toContain('retirement effective date and legal closure effect')
+        ->and($application->metadata['retirement_policy_boundary']['unresolved_policy'])->toContain('authority and evidence for the actual cessation date and legal retirement effect')
         ->and($application->paymentSchedules()->count())->toBe(1)
         ->and($storyboard['title'])->toBe('Retirement permit lifecycle foundation')
         ->and($storyboard['record']['application_type'])->toBe('retirement')
@@ -2189,6 +2199,8 @@ test('transfer permit lifecycle foundation audit compares browser policy evidenc
         'transfer_policy' => [
             'status' => 'policy_boundary',
             'unresolved_visible' => true,
+            'legal_evidence_visible' => true,
+            'legal_section_references' => $manifest['resources']['transfer_legal_section_references'],
         ],
         ...paymentPolicyBoundaryBrowserReport(),
         'assessment' => [
@@ -2262,6 +2274,8 @@ test('retirement permit lifecycle foundation audit compares browser policy evide
         'retirement_policy' => [
             'status' => 'policy_boundary',
             'unresolved_visible' => true,
+            'legal_evidence_visible' => true,
+            'legal_section_references' => $manifest['resources']['retirement_legal_section_references'],
         ],
         ...paymentPolicyBoundaryBrowserReport(),
         'assessment' => [

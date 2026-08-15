@@ -27,4 +27,13 @@ enum RevenueCodeProvisionClauseType: string
     case PresumptiveIncomeThreshold = 'presumptive_income_threshold';
     case ValidationFallback = 'validation_fallback';
     case PermitRequirement = 'permit_requirement';
+    case ReceiptRequirement = 'receipt_requirement';
+    case RecordRetention = 'record_retention';
+    case ReceiptCertification = 'receipt_certification';
+    case LocationTransfer = 'location_transfer';
+    case RetirementRequirement = 'retirement_requirement';
+    case TaxSettlement = 'tax_settlement';
+    case PermitCancellation = 'permit_cancellation';
+    case EstateContinuation = 'estate_continuation';
+    case TaxMapping = 'tax_mapping';
 }

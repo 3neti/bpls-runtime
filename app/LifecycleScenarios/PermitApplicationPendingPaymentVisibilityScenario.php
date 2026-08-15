@@ -80,7 +80,10 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         $rangeAssessmentLine = $this->rangeAssessmentLine($assessment);
         $paymentSchedule = $this->createPaymentSchedule->handle($assessment, $operator);
         $paymentPolicyBoundary = $this->describePaymentPolicyBoundary->handle($paymentSchedule);
-        $permitApplication = $paymentSchedule->permitApplication()->with(['assessments', 'paymentSchedules'])->firstOrFail();
+        $permitApplication = PermitApplication::query()
+            ->with(['assessments', 'paymentSchedules'])
+            ->whereKey($paymentSchedule->permit_application_id)
+            ->sole();
         $unpaidEstablishmentsReport = $this->buildUnpaidEstablishmentsReport->handle([
             'year' => $permitApplication->application_year,
             'q' => $permitApplication->application_number,
@@ -127,6 +130,10 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             'amendment_policy_status' => data_get($permitApplication->metadata, 'amendment_policy_boundary.status'),
             'transfer_policy_status' => data_get($permitApplication->metadata, 'transfer_policy_boundary.status'),
             'retirement_policy_status' => data_get($permitApplication->metadata, 'retirement_policy_boundary.status'),
+            'transfer_legal_section_references' => data_get($permitApplication->metadata, 'transfer_policy_boundary.legal_evidence.section_references', []),
+            'transfer_legal_execution_status' => data_get($permitApplication->metadata, 'transfer_policy_boundary.legal_evidence.execution_status'),
+            'retirement_legal_section_references' => data_get($permitApplication->metadata, 'retirement_policy_boundary.legal_evidence.section_references', []),
+            'retirement_legal_execution_status' => data_get($permitApplication->metadata, 'retirement_policy_boundary.legal_evidence.execution_status'),
             'assessment_id' => $assessment->id,
             'assessment_url' => route('staff.permit-applications.assessments.show', $assessment, false),
             'assessment_total_amount_cents' => $assessment->total_amount_cents,
@@ -249,12 +256,16 @@ final class PermitApplicationPendingPaymentVisibilityScenario
     {
         $permitApplication = PermitApplication::query()
             ->with(['paymentSchedules', 'assessments'])
-            ->findOrFail($manifest['resources']['record_id']);
+            ->whereKey((int) $manifest['resources']['record_id'])
+            ->sole();
         $assessment = Assessment::query()
             ->with('lines')
-            ->findOrFail($manifest['resources']['assessment_id']);
+            ->whereKey((int) $manifest['resources']['assessment_id'])
+            ->sole();
         $rangeAssessmentLine = $this->rangeAssessmentLine($assessment);
-        $paymentSchedule = PaymentSchedule::query()->findOrFail($manifest['resources']['payment_schedule_id']);
+        $paymentSchedule = PaymentSchedule::query()
+            ->whereKey((int) $manifest['resources']['payment_schedule_id'])
+            ->sole();
         $paymentPolicyBoundary = $this->describePaymentPolicyBoundary->handle($paymentSchedule);
         $unpaidEstablishmentsReport = $this->buildUnpaidEstablishmentsReport->handle([
             'year' => $permitApplication->application_year,
@@ -560,9 +571,10 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             $this->step(
                 'transfer-policy-boundary-recorded',
                 'Record transfer policy boundary without executing unresolved legal transfer behavior',
-                ['transfer_policy_status' => 'policy_boundary'],
+                ['transfer_policy_status' => 'policy_boundary', 'legal_execution_status' => 'recorded_non_executable'],
                 [
                     'transfer_policy_status' => data_get($permitApplication->metadata, 'transfer_policy_boundary.status'),
+                    'legal_execution_status' => data_get($permitApplication->metadata, 'transfer_policy_boundary.legal_evidence.execution_status'),
                     'application_type' => $permitApplication->type->value,
                 ],
             ),
@@ -582,9 +594,10 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             $this->step(
                 'retirement-policy-boundary-recorded',
                 'Record retirement policy boundary without executing unresolved closure behavior',
-                ['retirement_policy_status' => 'policy_boundary'],
+                ['retirement_policy_status' => 'policy_boundary', 'legal_execution_status' => 'recorded_non_executable'],
                 [
                     'retirement_policy_status' => data_get($permitApplication->metadata, 'retirement_policy_boundary.status'),
+                    'legal_execution_status' => data_get($permitApplication->metadata, 'retirement_policy_boundary.legal_evidence.execution_status'),
                     'application_type' => $permitApplication->type->value,
                 ],
             ),
@@ -672,19 +685,29 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             $this->step(
                 'audit-transfer-policy-boundary',
                 'Canonical transfer policy boundary remains explicit',
-                ['transfer_policy_status' => 'policy_boundary'],
+                [
+                    'transfer_policy_status' => 'policy_boundary',
+                    'legal_section_references' => $manifest['resources']['transfer_legal_section_references'],
+                    'legal_execution_status' => 'recorded_non_executable',
+                ],
                 [
                     'transfer_policy_status' => data_get($permitApplication->metadata, 'transfer_policy_boundary.status'),
-                    'unresolved_policy_count' => count(data_get($permitApplication->metadata, 'transfer_policy_boundary.unresolved_policy', [])),
+                    'legal_section_references' => data_get($permitApplication->metadata, 'transfer_policy_boundary.legal_evidence.section_references', []),
+                    'legal_execution_status' => data_get($permitApplication->metadata, 'transfer_policy_boundary.legal_evidence.execution_status'),
                 ],
             ),
             $this->step(
                 'audit-browser-transfer-policy-boundary',
                 'Browser evidence shows the transfer policy boundary',
-                ['transfer_policy_status' => 'policy_boundary'],
+                [
+                    'transfer_policy_status' => 'policy_boundary',
+                    'legal_section_references' => $manifest['resources']['transfer_legal_section_references'],
+                    'legal_evidence_visible' => true,
+                ],
                 [
                     'transfer_policy_status' => data_get($browserReport, 'transfer_policy.status'),
-                    'unresolved_visible' => data_get($browserReport, 'transfer_policy.unresolved_visible'),
+                    'legal_section_references' => data_get($browserReport, 'transfer_policy.legal_section_references', []),
+                    'legal_evidence_visible' => data_get($browserReport, 'transfer_policy.legal_evidence_visible'),
                 ],
             ),
         ];
@@ -705,19 +728,29 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             $this->step(
                 'audit-retirement-policy-boundary',
                 'Canonical retirement policy boundary remains explicit',
-                ['retirement_policy_status' => 'policy_boundary'],
+                [
+                    'retirement_policy_status' => 'policy_boundary',
+                    'legal_section_references' => $manifest['resources']['retirement_legal_section_references'],
+                    'legal_execution_status' => 'recorded_non_executable',
+                ],
                 [
                     'retirement_policy_status' => data_get($permitApplication->metadata, 'retirement_policy_boundary.status'),
-                    'unresolved_policy_count' => count(data_get($permitApplication->metadata, 'retirement_policy_boundary.unresolved_policy', [])),
+                    'legal_section_references' => data_get($permitApplication->metadata, 'retirement_policy_boundary.legal_evidence.section_references', []),
+                    'legal_execution_status' => data_get($permitApplication->metadata, 'retirement_policy_boundary.legal_evidence.execution_status'),
                 ],
             ),
             $this->step(
                 'audit-browser-retirement-policy-boundary',
                 'Browser evidence shows the retirement policy boundary',
-                ['retirement_policy_status' => 'policy_boundary'],
+                [
+                    'retirement_policy_status' => 'policy_boundary',
+                    'legal_section_references' => $manifest['resources']['retirement_legal_section_references'],
+                    'legal_evidence_visible' => true,
+                ],
                 [
                     'retirement_policy_status' => data_get($browserReport, 'retirement_policy.status'),
-                    'unresolved_visible' => data_get($browserReport, 'retirement_policy.unresolved_visible'),
+                    'legal_section_references' => data_get($browserReport, 'retirement_policy.legal_section_references', []),
+                    'legal_evidence_visible' => data_get($browserReport, 'retirement_policy.legal_evidence_visible'),
                 ],
             ),
         ];
@@ -743,7 +776,13 @@ final class PermitApplicationPendingPaymentVisibilityScenario
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{
+     *     title: string,
+     *     summary: string,
+     *     run_id: string,
+     *     record: array<string, mixed>,
+     *     frames: list<array{title: string, description: string, dialogue: string, duration_seconds: int}>
+     * }
      */
     private function storyboard(LifecycleScenarioDefinition $scenario, string $runId, PermitApplication $permitApplication, Assessment $assessment, PaymentSchedule $paymentSchedule): array
     {

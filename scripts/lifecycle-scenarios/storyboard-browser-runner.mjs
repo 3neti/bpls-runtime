@@ -3295,9 +3295,9 @@ async function inspectPendingPaymentPermitApplicationDetail(
         await amendmentPolicyBoundaryIsVisible(targetPage);
     const renewalPolicyBoundaryVisible =
         await renewalPolicyBoundaryIsVisible(targetPage);
-    const transferPolicyBoundaryVisible =
+    const transferPolicyBoundary =
         await transferPolicyBoundaryIsVisible(targetPage);
-    const retirementPolicyBoundaryVisible =
+    const retirementPolicyBoundary =
         await retirementPolicyBoundaryIsVisible(targetPage);
 
     checks.push(
@@ -3370,12 +3370,16 @@ async function inspectPendingPaymentPermitApplicationDetail(
                 'detail-transfer-policy-boundary-visible',
                 'Detail screen shows transfer policy boundary',
                 true,
-                transferPolicyBoundaryVisible,
+                transferPolicyBoundary.visible,
             ),
         );
         reportTransferPolicy(
-            transferPolicyBoundaryVisible ? 'policy_boundary' : 'missing',
-            transferPolicyBoundaryVisible,
+            transferPolicyBoundary.visible ? 'policy_boundary' : 'missing',
+            transferPolicyBoundary.unresolved_visible,
+            transferPolicyBoundary.legal_evidence_visible,
+            transferPolicyBoundary.legal_evidence_visible
+                ? manifest.resources.transfer_legal_section_references
+                : [],
         );
     }
 
@@ -3385,12 +3389,16 @@ async function inspectPendingPaymentPermitApplicationDetail(
                 'detail-retirement-policy-boundary-visible',
                 'Detail screen shows retirement policy boundary',
                 true,
-                retirementPolicyBoundaryVisible,
+                retirementPolicyBoundary.visible,
             ),
         );
         reportRetirementPolicy(
-            retirementPolicyBoundaryVisible ? 'policy_boundary' : 'missing',
-            retirementPolicyBoundaryVisible,
+            retirementPolicyBoundary.visible ? 'policy_boundary' : 'missing',
+            retirementPolicyBoundary.unresolved_visible,
+            retirementPolicyBoundary.legal_evidence_visible,
+            retirementPolicyBoundary.legal_evidence_visible
+                ? manifest.resources.retirement_legal_section_references
+                : [],
         );
     }
 
@@ -3855,9 +3863,9 @@ async function inspectPendingPaymentPermitApplicationMobile(
         await amendmentPolicyBoundaryIsVisible(targetPage);
     const renewalPolicyBoundaryVisible =
         await renewalPolicyBoundaryIsVisible(targetPage);
-    const transferPolicyBoundaryVisible =
+    const transferPolicyBoundary =
         await transferPolicyBoundaryIsVisible(targetPage);
-    const retirementPolicyBoundaryVisible =
+    const retirementPolicyBoundary =
         await retirementPolicyBoundaryIsVisible(targetPage);
     const horizontalOverflow = await targetPage.evaluate(
         () =>
@@ -3910,7 +3918,9 @@ async function inspectPendingPaymentPermitApplicationMobile(
                 'mobile-transfer-policy-boundary-visible',
                 'Mobile detail keeps transfer policy boundary visible',
                 true,
-                transferPolicyBoundaryVisible,
+                transferPolicyBoundary.visible &&
+                    transferPolicyBoundary.unresolved_visible &&
+                    transferPolicyBoundary.legal_evidence_visible,
             ),
         );
     }
@@ -3921,7 +3931,9 @@ async function inspectPendingPaymentPermitApplicationMobile(
                 'mobile-retirement-policy-boundary-visible',
                 'Mobile detail keeps retirement policy boundary visible',
                 true,
-                retirementPolicyBoundaryVisible,
+                retirementPolicyBoundary.visible &&
+                    retirementPolicyBoundary.unresolved_visible &&
+                    retirementPolicyBoundary.legal_evidence_visible,
             ),
         );
     }
@@ -6103,14 +6115,28 @@ function reportAmendmentPolicy(status, unresolvedVisible) {
     amendmentPolicyEvidence.unresolved_visible = unresolvedVisible;
 }
 
-function reportTransferPolicy(status, unresolvedVisible) {
+function reportTransferPolicy(
+    status,
+    unresolvedVisible,
+    legalEvidenceVisible,
+    legalSectionReferences,
+) {
     transferPolicyEvidence.status = status;
     transferPolicyEvidence.unresolved_visible = unresolvedVisible;
+    transferPolicyEvidence.legal_evidence_visible = legalEvidenceVisible;
+    transferPolicyEvidence.legal_section_references = legalSectionReferences;
 }
 
-function reportRetirementPolicy(status, unresolvedVisible) {
+function reportRetirementPolicy(
+    status,
+    unresolvedVisible,
+    legalEvidenceVisible,
+    legalSectionReferences,
+) {
     retirementPolicyEvidence.status = status;
     retirementPolicyEvidence.unresolved_visible = unresolvedVisible;
+    retirementPolicyEvidence.legal_evidence_visible = legalEvidenceVisible;
+    retirementPolicyEvidence.legal_section_references = legalSectionReferences;
 }
 
 function moneyFromCents(amountCents) {
@@ -6296,12 +6322,39 @@ async function transferPolicyBoundaryIsVisible(targetPage) {
         .isVisible()
         .catch(() => false);
     const policyVisible = await targetPage
-        .getByText('legal effect remain unresolved', { exact: false })
+        .getByText('Ordinance evidence distinguishes', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const legalSectionReferences =
+        manifest.resources.transfer_legal_section_references ?? [];
+    const legalSectionsVisible = (
+        await Promise.all(
+            legalSectionReferences.map((sectionReference) =>
+                targetPage
+                    .getByText(sectionReference, { exact: false })
+                    .first()
+                    .isVisible()
+                    .catch(() => false),
+            ),
+        )
+    ).every(Boolean);
+    const legalStatusVisible = await targetPage
+        .getByText('recorded non executable', { exact: true })
         .first()
         .isVisible()
         .catch(() => false);
 
-    return boundaryVisible && unresolvedVisible && policyVisible;
+    return {
+        visible:
+            boundaryVisible &&
+            unresolvedVisible &&
+            policyVisible &&
+            legalSectionsVisible &&
+            legalStatusVisible,
+        unresolved_visible: unresolvedVisible,
+        legal_evidence_visible: legalSectionsVisible && legalStatusVisible,
+    };
 }
 
 async function retirementPolicyBoundaryIsVisible(targetPage) {
@@ -6316,14 +6369,39 @@ async function retirementPolicyBoundaryIsVisible(targetPage) {
         .isVisible()
         .catch(() => false);
     const policyVisible = await targetPage
-        .getByText('legal retirement effect remain unresolved', {
-            exact: false,
-        })
+        .getByText('ordinance describes closure evidence', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const legalSectionReferences =
+        manifest.resources.retirement_legal_section_references ?? [];
+    const legalSectionsVisible = (
+        await Promise.all(
+            legalSectionReferences.map((sectionReference) =>
+                targetPage
+                    .getByText(sectionReference, { exact: false })
+                    .first()
+                    .isVisible()
+                    .catch(() => false),
+            ),
+        )
+    ).every(Boolean);
+    const legalStatusVisible = await targetPage
+        .getByText('recorded non executable', { exact: true })
         .first()
         .isVisible()
         .catch(() => false);
 
-    return boundaryVisible && unresolvedVisible && policyVisible;
+    return {
+        visible:
+            boundaryVisible &&
+            unresolvedVisible &&
+            policyVisible &&
+            legalSectionsVisible &&
+            legalStatusVisible,
+        unresolved_visible: unresolvedVisible,
+        legal_evidence_visible: legalSectionsVisible && legalStatusVisible,
+    };
 }
 
 function fail(message) {
