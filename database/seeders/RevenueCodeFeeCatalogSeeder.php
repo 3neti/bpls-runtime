@@ -371,6 +371,42 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 metadata: ['chapter' => 3, 'article' => 'A', 'known_ambiguities' => ['statutory_ceiling']],
                 feeRule: $registrationPlateFee,
             ),
+            $this->provision(
+                code: 'MRC-2E-01-BUSINESS-TAX-SCOPE',
+                section: 'Section 2E.01',
+                title: 'Payment scope for multiple establishments and businesses',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'Business taxes are assigned by establishment, taxpayer, and line of business, with combined or independent gross-receipts treatment depending on whether rates are the same.',
+                notes: 'Establishment identity, related-business classification, rate equivalence, and gross-receipts allocation require accepted municipal policy and production-data mapping.',
+                metadata: ['chapter' => 2, 'article' => 'E', 'known_ambiguities' => ['separate_establishment_identity', 'related_business_classification', 'combined_or_independent_tax_base']],
+            ),
+            $this->provision(
+                code: 'MRC-2E-02-03-ACCRUAL-PAYMENT',
+                section: 'Section 2E.02-2E.03',
+                title: 'Business-tax accrual, payment dates, and extension authority',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'Business taxes accrue on January 1 and may be paid annually or quarterly on stated dates, subject to a bounded Sangguniang Bayan extension authority.',
+                notes: 'Payment election, installment allocation, due-date behavior, extension approval, and effects on surcharge or penalty require operational reconciliation.',
+                metadata: ['chapter' => 2, 'article' => 'E', 'known_ambiguities' => ['annual_or_quarterly_election', 'installment_allocation', 'extension_authority_and_evidence']],
+            ),
+            $this->provision(
+                code: 'MRC-2E-04-D-E-DECLARATIONS-DEFICIENCY',
+                section: 'Section 2E.04(d)-(e)',
+                title: 'Sworn declarations, evidence, and deficiency tax',
+                type: RevenueCodeProvisionType::EvidenceRequirement,
+                excerpt: 'Taxpayers submit sworn capital and gross-receipts declarations plus certified income-tax-return evidence; the Treasurer may use best available evidence and collect stated deficiency, surcharge, and interest amounts.',
+                notes: 'Form, documentary sufficiency, verification authority, discrepancy basis, interest arithmetic, trigger dates, rounding, and collection procedure require municipal reconciliation.',
+                metadata: ['chapter' => 2, 'article' => 'E', 'known_ambiguities' => ['declaration_form_and_sufficiency', 'best_available_evidence_method', 'deficiency_tax_basis', 'interest_and_surcharge_arithmetic']],
+            ),
+            $this->provision(
+                code: 'MRC-2F-01-PIL',
+                section: 'Section 2F.01',
+                title: 'Presumptive Income Level schedule and use',
+                type: RevenueCodeProvisionType::PresumptiveIncomeSchedule,
+                excerpt: 'A stratified schedule of minimum gross sales or receipts supports PIL validation and may establish taxable gross receipts where valid data is unavailable.',
+                notes: 'The source contains duplicate item numbering and malformed amounts; classification mapping, evidence precedence, review authority, and taxpayer challenge procedure require municipal reconciliation.',
+                metadata: ['chapter' => 2, 'article' => 'F', 'schedule_row_count' => 28, 'known_ambiguities' => ['duplicate_item_number_5', 'malformed_numeric_values', 'classification_mapping', 'validation_vs_substitution_authority']],
+            ),
         ];
 
         foreach ($provisions as $provision) {
@@ -617,6 +653,181 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 metadata: ['annual_due_month' => 1, 'annual_due_day' => 20, 'new_entrant_proration' => false],
             ),
         ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-2E-01-BUSINESS-TAX-SCOPE', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-2E-01-SEPARATE-ESTABLISHMENT',
+                type: RevenueCodeProvisionClauseType::SeparateEstablishment,
+                sourceText: 'The taxes imposed under Section 2A.02 and 2B.01, Chapter II of this Ordinance shall be payable for every separate or distinct establishment or place where the business subject to the tax is conducted and one line of business does not become exempt by being conducted with some other businesses for which such tax has been paid. The tax on a business must be paid by the person conducting the same.',
+                candidateInterpretation: 'Candidate scope: tax liability is determined per distinct establishment and line of business and belongs to the person conducting the business.',
+                executionBlocker: 'Distinct-establishment identity, shared premises, taxpayer identity, and multi-line allocation require accepted municipal rules and production-data mapping.',
+                metadata: ['applies_to_sections' => ['2A.02', '2B.01'], 'candidate_scope' => 'distinct_establishment_and_line_of_business'],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 2,
+                code: 'MRC-2E-01-SEPARATE-PERMITS',
+                type: RevenueCodeProvisionClauseType::PermitRequirement,
+                sourceText: 'The conduct or operation of two or more related businesses provided for under Section 2A.02, Chapter II of this Ordinance any one person, natural or juridical, shall require the issuance of a separate permit or license to each business.',
+                candidateInterpretation: 'Candidate permit boundary: each related business operated by one natural or juridical person requires a separate permit or license.',
+                executionBlocker: 'The meaning of related business, business-versus-line identity, and legacy permit grouping require municipal acceptance before permit creation can enforce this rule.',
+                metadata: ['candidate_permit_scope' => 'each_related_business', 'actor_types' => ['natural_person', 'juridical_person']],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 3,
+                code: 'MRC-2E-01-SAME-RATE-COMBINED-BASE',
+                type: RevenueCodeProvisionClauseType::CombinedTaxBase,
+                sourceText: 'In case where a person conducts or operates two (2) or more of the businesses mentioned in Section 2A.02, Chapter II of this Ordinance which are subject to the same rate of imposition, the tax shall be computed on the combined total gross sales or receipts of the said two (2) or more related businesses.',
+                candidateInterpretation: 'Candidate basis: combine gross sales or receipts of related businesses when their accepted tax rate is the same.',
+                executionBlocker: 'Related-business identity, rate equivalence, period alignment, and gross-receipts allocation are not operationally reconciled.',
+                metadata: ['combination_condition' => 'same_rate', 'candidate_basis' => 'combined_gross_sales_or_receipts'],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 4,
+                code: 'MRC-2E-01-DIFFERENT-RATE-INDEPENDENT-BASE',
+                type: RevenueCodeProvisionClauseType::TaxBase,
+                sourceText: 'In cases where a person conducts or operates two (2) or more businesses mentioned in Section 2A.02, Chapter II of this Ordinance which are subject to different rates of imposition, the taxable gross sales or receipts of each business shall be reported independently and tax thereon shall be computed on the basis of the pertinent schedule.',
+                candidateInterpretation: 'Candidate basis: report and assess each business independently when accepted rates differ.',
+                executionBlocker: 'Business-line allocation, rate determination, shared receipts, and pertinent-schedule selection require accepted municipal policy.',
+                metadata: ['separation_condition' => 'different_rates', 'candidate_basis' => 'independent_gross_sales_or_receipts'],
+            ),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-2E-02-03-ACCRUAL-PAYMENT', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-2E-02-JANUARY-ACCRUAL',
+                type: RevenueCodeProvisionClauseType::PaymentTiming,
+                sourceText: 'Unless specifically provided in this Article, the taxes imposed herein shall accrue on the first day of January of each year.',
+                candidateInterpretation: 'Candidate accrual date: January 1 of each tax year unless a specific provision controls.',
+                executionBlocker: 'Exceptions, timezone, newly started businesses, closure, and the legal consequence of accrual require operational reconciliation.',
+                metadata: ['candidate_accrual_month' => 1, 'candidate_accrual_day' => 1],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 2,
+                code: 'MRC-2E-03-ANNUAL-PAYMENT',
+                type: RevenueCodeProvisionClauseType::PaymentTiming,
+                sourceText: 'The tax shall be paid once within the first twenty (20) days of January.',
+                candidateInterpretation: 'Candidate annual due date: January 20.',
+                executionBlocker: 'Payment election, non-business days, newly started businesses, extension records, and delinquency trigger semantics require municipal policy.',
+                metadata: ['candidate_due_month' => 1, 'candidate_due_day' => 20, 'frequency' => 'annual'],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 3,
+                code: 'MRC-2E-03-QUARTERLY-INSTALLMENTS',
+                type: RevenueCodeProvisionClauseType::InstallmentSchedule,
+                sourceText: 'The tax shall be paid once within the first twenty (20) days of January or in quarterly installments within the first twenty (20) days of January, April, July and October of each year.',
+                candidateInterpretation: 'Candidate quarterly due dates: January 20, April 20, July 20, and October 20.',
+                executionBlocker: 'Election timing, installment allocation, rounding remainders, partial payments, and delinquency per installment require accepted policy.',
+                metadata: ['frequency' => 'quarterly', 'candidate_due_dates' => ['01-20', '04-20', '07-20', '10-20']],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 4,
+                code: 'MRC-2E-03-EXTENSION-AUTHORITY',
+                type: RevenueCodeProvisionClauseType::AuthorityBoundary,
+                sourceText: 'The Sangguniang Bayan may, for a justifiable reason or cause, extend the time for payment of such taxes without surcharges or penalties, but only for the period not exceeding six (6) months.',
+                candidateInterpretation: 'Candidate authority boundary: the Sangguniang Bayan may approve a justified extension of no more than six months without surcharge or penalty.',
+                executionBlocker: 'Approval evidence, resolution identity, covered taxpayers, extension start and end dates, and interaction with installment deadlines require municipal authority.',
+                metadata: ['decision_authority' => 'Sangguniang Bayan', 'maximum_extension_months' => 6, 'waives_during_extension' => ['surcharge', 'penalty']],
+            ),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-2E-04-D-E-DECLARATIONS-DEFICIENCY', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-2E-04-D-CAPITAL-STATEMENT',
+                type: RevenueCodeProvisionClauseType::DocumentaryRequirement,
+                sourceText: 'Operators of business subject to the taxes on business shall submit a sworn statement of the capital investment before the start of their business operations and upon application for a Mayor’s permit to operate the business.',
+                candidateInterpretation: 'Candidate evidence: a sworn capital-investment statement accompanies pre-operation and Mayor’s Permit application activity.',
+                executionBlocker: 'Form, oath authority, documentary sufficiency, amendment handling, and applicability by business type require municipal acceptance.',
+                metadata: ['declared_measure' => 'capital_investment', 'candidate_submission_points' => ['before_operations', 'mayors_permit_application']],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 2,
+                code: 'MRC-2E-04-D-GROSS-RECEIPTS-STATEMENT',
+                type: RevenueCodeProvisionClauseType::DocumentaryRequirement,
+                sourceText: 'Upon payment of the tax levied in this Chapter, any person engaged in business subject to the business tax paid based on gross sales and/or receipts shall submit a sworn statement of his gross sales/receipts for the preceding calendar year or quarter in such manner and form as may be prescribed by the Municipal Treasurer.',
+                candidateInterpretation: 'Candidate evidence: gross-sales-based taxpayers submit a sworn statement for the preceding year or quarter in the Treasurer-prescribed form.',
+                executionBlocker: 'Annual-versus-quarterly applicability, prescribed form, amendment handling, reviewer authority, and documentary sufficiency remain unresolved.',
+                metadata: ['declared_measure' => 'gross_sales_or_receipts', 'candidate_periods' => ['preceding_calendar_year', 'preceding_quarter'], 'form_authority' => 'Municipal Treasurer'],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 3,
+                code: 'MRC-2E-04-D-BEST-AVAILABLE-EVIDENCE',
+                type: RevenueCodeProvisionClauseType::BestAvailableEvidence,
+                sourceText: 'Should the taxpayer fail to submit a sworn statement of gross sales or receipts, due among others to his failure to have a book of accounts, records or subsidiaries for his business, the Municipal Treasurer or his authorized representatives may verify or assess the gross sales or receipts of the taxpayer under the best available evidence upon which the tax may be based.',
+                candidateInterpretation: 'Candidate authority boundary: the Treasurer or authorized representative may establish gross receipts from best available evidence when the sworn statement or supporting records are unavailable.',
+                executionBlocker: 'Evidence hierarchy, estimation method, authorization, notice, taxpayer challenge, approval, and audit requirements are not defined operationally.',
+                metadata: ['decision_authority' => ['Municipal Treasurer', 'authorized_representative'], 'trigger' => 'sworn_statement_or_records_unavailable'],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 4,
+                code: 'MRC-2E-04-E-ITR-DEADLINE',
+                type: RevenueCodeProvisionClauseType::DocumentaryRequirement,
+                sourceText: 'All persons who are granted a permit to conduct an activity or business and who are liable to pay the business tax provided in this Code shall submit a certified photocopy of their income tax returns (ITR) on or before April 30 of each year to the Municipal Treasurer.',
+                candidateInterpretation: 'Candidate evidence deadline: a certified ITR copy is due to the Municipal Treasurer by April 30 for permitted business-tax payers.',
+                executionBlocker: 'Certification standard, covered return period, extensions, non-calendar fiscal years, exemptions, and documentary-sufficiency review require municipal policy.',
+                metadata: ['candidate_due_month' => 4, 'candidate_due_day' => 30, 'recipient' => 'Municipal Treasurer'],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 5,
+                code: 'MRC-2E-04-E-DEFICIENCY-BY-MAY-20',
+                type: RevenueCodeProvisionClauseType::DeficiencyTax,
+                sourceText: 'The deficiency in the business tax arising out of the difference in gross receipts or sales declared in the application for Mayor’s Permit/Declaration of gross sales or receipts and the gross receipts or sales declared in the ITR shall be payable on or before May 20 of the same year with interest at the rate of ten percent (10%) corresponding to the two percent (2%) per month from January to May.',
+                candidateInterpretation: 'Candidate deficiency basis: compare permit/declaration gross receipts with ITR gross receipts; payment by May 20 carries the stated 10 percent interest described as 2 percent per month from January to May.',
+                executionBlocker: 'The taxable difference, tax recomputation basis, interest base, inclusive month counting, discrepancy review, notice, rounding, and collection authority require reconciliation.',
+                metadata: ['candidate_due_month' => 5, 'candidate_due_day' => 20, 'stated_interest_percent' => '10.00', 'stated_monthly_interest_percent' => '2.00', 'stated_interest_period' => 'January_to_May'],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 6,
+                code: 'MRC-2E-04-E-AFTER-MAY-20-SURCHARGE-INTEREST',
+                type: RevenueCodeProvisionClauseType::SurchargeInterest,
+                sourceText: 'Payments of the deficiency tax made after May 20 shall be subject to the twenty-five percent (25%) surcharge and two Percent (2%) interest for every month counted from January up to the month payment is made.',
+                candidateInterpretation: 'Candidate late-deficiency treatment: add a 25 percent surcharge and 2 percent interest for each month from January through the payment month.',
+                executionBlocker: 'Surcharge and interest bases, inclusive counting, partial months, compounding, caps, rounding, extensions, payment allocation, and notice require accepted municipal policy.',
+                metadata: ['trigger' => 'payment_after_May_20', 'stated_surcharge_percent' => '25.00', 'stated_monthly_interest_percent' => '2.00', 'stated_interest_start_month' => 1],
+            ),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-2F-01-PIL', [
+            $this->pilThresholdClause(1, 'SARI-SARI', '1', 'Sari-Sari Stores', '61,600.00', 6_160_000),
+            $this->pilThresholdClause(2, 'SARI-SARI-LIQUOR-CIGARETTES', '1', 'Sari-Sari Stores with Liquors & Cigarettes', '308,000.00', 30_800_000),
+            $this->pilThresholdClause(3, 'GROCERY', '1', 'Grocery Stores', '6,160,000.00', 616_000_000),
+            $this->pilThresholdClause(4, 'SUPERMARKET', '1', 'Supermarket', '15,400,000.00', 1_540_000_000),
+            $this->pilThresholdClause(5, 'RETAILERS', '2', 'Retailers', '616,000.00', 61_600_000),
+            $this->pilThresholdClause(6, 'EATERY-CARENDERIA', '3', 'Eatery/Carenderia', '924,000.00', 92_400_000),
+            $this->pilThresholdClause(7, 'RESTAURANTS', '3', 'Restaurants', '3,080,000.00', 308_000_000),
+            $this->pilThresholdClause(8, 'FASTFOODS', '3', 'Fastfoods', '9,240,000.00', 924_000_000),
+            $this->pilThresholdClause(9, 'MANUFACTURERS', '4', 'Manufacturers', '3,080,000.00', 308_000_000),
+            $this->pilThresholdClause(10, 'REFILLING-STATIONS', '5', 'Refilling Stations', '770,000.00', 77_000_000),
+            $this->pilThresholdClause(11, 'WHOLESALERS-DEALERS-DISTRIBUTORS', '5', 'Wholesalers/Dealers/Distributors', '6,1600,000.00', null, 'Malformed source value; no numeric candidate is authorized.'),
+            $this->pilThresholdClause(12, 'CONTRACTORS', '6', 'Contractors', '5,000,000.00', 500_000_000),
+            $this->pilThresholdClause(13, 'PAWNSHOPS-LENDING', '7', 'Pawnshops/Lending Institutions', '2,000,000.00', 200_000_000),
+            $this->pilThresholdClause(14, 'BEAUTY-PARLOR', '8', 'Beauty Parlor', '616,000.00', 61_600_000),
+            $this->pilThresholdClause(15, 'BEER-HOUSE-GARDENS', '9', 'Beer House/Beer Gardens', '3,080,000.00', 308_000_000),
+            $this->pilThresholdClause(16, 'BARBER-SHOPS', '10', 'Barber Shops', '308,000.00', 30_800_000),
+            $this->pilThresholdClause(17, 'SMALL-REPAIR-SHOPS', '11', 'Small Scale Repair Shops and the like', '100,000.000', null, 'Malformed decimal precision; no numeric candidate is authorized.'),
+            $this->pilThresholdClause(18, 'REFRESHMENT-COCKTAIL', '12', 'Refreshment Parlor/Cocktail Lounge', '1,540,000.00', 154_000_000),
+            $this->pilThresholdClause(19, 'BAKERY', '13', 'Bakery (Wholesale and Retail)', '1,000,000.00', 100_000_000),
+            $this->pilThresholdClause(20, 'TAILORING-DRESS', '14', 'Tailoring/Dress Shop', '770,000.00', 77_000_000),
+            $this->pilThresholdClause(21, 'BANKS', '15', 'Banks', '5,000,000.00', 500_000_000),
+            $this->pilThresholdClause(22, 'LODGING-PENSION', '16', 'Lodging/Pension House', '547,500.00', 54_750_000),
+            $this->pilThresholdClause(23, 'BOARDING-HOUSE', '16', 'Boarding House', '120,000.00', 12_000_000),
+            $this->pilThresholdClause(24, 'HOTEL', '16', 'Hotel', '4,927,500.00', 492_750_000),
+            $this->pilThresholdClause(25, 'REAL-ESTATE-LESSOR', '17', 'Real Estate Lessor', '420,000.00', 42_000_000),
+            $this->pilThresholdClause(26, 'MASSAGE-BEAUTY-SPA', '18', 'Massage Parlor/Beauty Spa', '924,000.00', 92_400_000),
+            $this->pilThresholdClause(27, 'INTERNET-CAFE', '19', 'Internet Cafe', '246,400.00', 24_640_000),
+            $this->pilThresholdClause(28, 'RICE-CORN-MILL', '20', 'Rice/Corn Mill', '2,772,000.00', 277_200_000),
+            $this->policyBoundaryClause(
+                sequence: 29,
+                code: 'MRC-2F-01-PIL-VALIDATION-FALLBACK',
+                type: RevenueCodeProvisionClauseType::ValidationFallback,
+                sourceText: 'The Presumptive Income Level (PIL) of gross receipts shall be used to validate the gross receipts declared by taxpayers and/or for establishing the taxable gross receipts where no valid data is otherwise available.',
+                candidateInterpretation: 'Candidate two-part use: compare declared receipts with PIL for validation, or establish taxable receipts from PIL only where valid data is unavailable.',
+                executionBlocker: 'Classification mapping, valid-data criteria, discrepancy handling, substitution authority, taxpayer notice and challenge, approval, effective version, and audit requirements are unresolved.',
+                metadata: ['candidate_uses' => ['validate_declared_gross_receipts', 'establish_taxable_gross_receipts_when_valid_data_unavailable']],
+            ),
+        ]);
     }
 
     /**
@@ -672,6 +883,35 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 'candidate_values_are_non_executable' => true,
             ],
         ];
+    }
+
+    /** @return array<string, mixed> */
+    private function pilThresholdClause(
+        int $sequence,
+        string $codeSuffix,
+        string $sourceItem,
+        string $classification,
+        string $sourceValueText,
+        ?int $amountCents,
+        ?string $normalizationQuestion = null,
+    ): array {
+        return $this->policyBoundaryClause(
+            sequence: $sequence,
+            code: 'MRC-2F-01-PIL-'.$codeSuffix,
+            type: RevenueCodeProvisionClauseType::PresumptiveIncomeThreshold,
+            sourceText: $classification.' — '.$sourceValueText,
+            candidateInterpretation: $amountCents === null
+                ? 'No numeric candidate is recorded from the malformed source value.'
+                : 'Candidate minimum gross sales or receipts: PHP '.number_format($amountCents / 100, 2, '.', ',').'.',
+            executionBlocker: $normalizationQuestion ?? 'The amount remains non-executable until classification mapping, PIL use, effective version, and municipal acceptance are established.',
+            metadata: [
+                'source_item' => $sourceItem,
+                'classification' => $classification,
+                'source_value_text' => $sourceValueText,
+                'normalization_question' => $normalizationQuestion,
+            ],
+            amountCents: $amountCents,
+        );
     }
 
     private function seedManufacturerScheduleRows(): void

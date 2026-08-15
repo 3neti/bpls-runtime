@@ -19,4 +19,12 @@ enum RevenueCodeProvisionClauseType: string
     case InitialTaxBasis = 'initial_tax_basis';
     case InstallmentSchedule = 'installment_schedule';
     case CompletionRecomputation = 'completion_recomputation';
+    case SeparateEstablishment = 'separate_establishment';
+    case CombinedTaxBase = 'combined_tax_base';
+    case BestAvailableEvidence = 'best_available_evidence';
+    case DeficiencyTax = 'deficiency_tax';
+    case SurchargeInterest = 'surcharge_interest';
+    case PresumptiveIncomeThreshold = 'presumptive_income_threshold';
+    case ValidationFallback = 'validation_fallback';
+    case PermitRequirement = 'permit_requirement';
 }

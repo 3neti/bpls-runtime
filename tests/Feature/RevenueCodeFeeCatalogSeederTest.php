@@ -58,10 +58,10 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
     expect(FeeRuleRange::query()->whereBelongsTo($retailTax)->count())->toBe(23);
     expect(FeeRuleReconciliation::query()->count())->toBe(4);
 
-    expect(RevenueCodeProvision::query()->count())->toBe(11)
+    expect(RevenueCodeProvision::query()->count())->toBe(15)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2A.02%')->count())->toBe(8)
         ->and(RevenueCodeProvision::query()->whereNotNull('fee_rule_id')->count())->toBe(4)
-        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(10);
+        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(14);
 
     $wholesaleProvision = RevenueCodeProvision::query()
         ->with('feeRule.currentReconciliation')
@@ -85,10 +85,10 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->feeRule->currentReconciliation->execution_status->toBe(FeeRuleExecutionStatus::Executable);
 
     expect(RevenueCodeProvisionRow::query()->count())->toBe(82);
-    expect(RevenueCodeProvisionClause::query()->count())->toBe(19)
+    expect(RevenueCodeProvisionClause::query()->count())->toBe(62)
         ->and(RevenueCodeProvisionClause::query()
             ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
-            ->count())->toBe(19);
+            ->count())->toBe(62);
 
     $dependentRate = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2A-02-C-DEPENDENT-HALF-RATE')
@@ -119,6 +119,24 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->sole();
     $serviceMinimum = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2A-02-G-MINIMUM-TAX')
+        ->sole();
+    $quarterlyInstallments = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2E-03-QUARTERLY-INSTALLMENTS')
+        ->sole();
+    $lateDeficiency = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2E-04-E-AFTER-MAY-20-SURCHARGE-INTEREST')
+        ->sole();
+    $groceryPil = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2F-01-PIL-GROCERY')
+        ->sole();
+    $malformedWholesalePil = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2F-01-PIL-WHOLESALERS-DEALERS-DISTRIBUTORS')
+        ->sole();
+    $malformedRepairPil = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2F-01-PIL-SMALL-REPAIR-SHOPS')
+        ->sole();
+    $pilUsage = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2F-01-PIL-VALIDATION-FALLBACK')
         ->sole();
 
     expect($dependentRate)
@@ -153,7 +171,27 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->metadata->known_ambiguity->toBe('enumeration_starts_at_14')
         ->and($serviceMinimum)
         ->clause_type->toBe(RevenueCodeProvisionClauseType::MinimumTax)
-        ->amount_cents->toBe(1_447_793);
+        ->amount_cents->toBe(1_447_793)
+        ->and($quarterlyInstallments)
+        ->metadata->candidate_due_dates->toBe(['01-20', '04-20', '07-20', '10-20'])
+        ->and($lateDeficiency)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::SurchargeInterest)
+        ->metadata->stated_surcharge_percent->toBe('25.00')
+        ->and($groceryPil)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::PresumptiveIncomeThreshold)
+        ->amount_cents->toBe(616_000_000)
+        ->metadata->source_value_text->toBe('6,160,000.00')
+        ->and($malformedWholesalePil)
+        ->amount_cents->toBeNull()
+        ->metadata->source_value_text->toBe('6,1600,000.00')
+        ->metadata->normalization_question->toContain('Malformed source value')
+        ->and($malformedRepairPil)
+        ->amount_cents->toBeNull()
+        ->metadata->source_value_text->toBe('100,000.000')
+        ->metadata->normalization_question->toContain('Malformed decimal precision')
+        ->and($pilUsage)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::ValidationFallback)
+        ->metadata->candidate_uses->toBe(['validate_declared_gross_receipts', 'establish_taxable_gross_receipts_when_valid_data_unavailable']);
 
     $overlappingRow = RevenueCodeProvisionRow::query()
         ->where('code', 'MRC-2A-02-B-ROW-08')
