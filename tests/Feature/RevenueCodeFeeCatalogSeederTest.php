@@ -58,7 +58,7 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
     expect(FeeRuleRange::query()->whereBelongsTo($retailTax)->count())->toBe(23);
     expect(FeeRuleReconciliation::query()->count())->toBe(4);
 
-    expect(RevenueCodeProvision::query()->count())->toBe(81)
+    expect(RevenueCodeProvision::query()->count())->toBe(102)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2A.02%')->count())->toBe(8)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2B.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2C.%')->count())->toBe(2)
@@ -74,8 +74,9 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3I.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3J.%')->count())->toBe(2)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3K.%')->count())->toBe(4)
+        ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3L.%')->count())->toBe(21)
         ->and(RevenueCodeProvision::query()->whereNotNull('fee_rule_id')->count())->toBe(4)
-        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(80);
+        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(101);
 
     $wholesaleProvision = RevenueCodeProvision::query()
         ->with('feeRule.currentReconciliation')
@@ -152,10 +153,10 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->metadata->known_ambiguities->toContain('legacy_implementation_not_found');
 
     expect(RevenueCodeProvisionRow::query()->count())->toBe(82);
-    expect(RevenueCodeProvisionClause::query()->count())->toBe(425)
+    expect(RevenueCodeProvisionClause::query()->count())->toBe(498)
         ->and(RevenueCodeProvisionClause::query()
             ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
-            ->count())->toBe(425);
+            ->count())->toBe(498);
 
     $dependentRate = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2A-02-C-DEPENDENT-HALF-RATE')
@@ -893,6 +894,48 @@ it('preserves agricultural machinery and heavy equipment rules as non executable
         ->and($penalty->metadata['candidate_maximum_fine_cents'])->toBe(100_000)
         ->and($penalty->metadata['source_imprisonment_minimum_months'])->toBe(1)
         ->and($penalty->metadata['source_imprisonment_maximum_months'])->toBe(6);
+});
+
+it('preserves MTOP foundation operating policy and enforcement as non executable ordinance evidence', function () {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+
+    $mtop = RevenueCodeProvisionClause::query()->where('code', 'MRC-3L-02-DEFINITIONS-MTOP')->sole();
+    $board = RevenueCodeProvisionClause::query()->where('code', 'MRC-3L-03-REGULATORY-BOARD-RECOMMEND-FARES-FEES')->sole();
+    $automaticIssuance = RevenueCodeProvisionClause::query()->where('code', 'MRC-3L-04-GRANTING-MTOP-AUTOMATIC-ISSUANCE')->sole();
+    $singleMtopFee = RevenueCodeProvisionClause::query()->where('code', 'MRC-3L-05-SINGLE-MTOP')->sole();
+    $cabTotal = RevenueCodeProvisionClause::query()->where('code', 'MRC-3L-05-CAB-TOTAL')->sole();
+    $dayOff = RevenueCodeProvisionClause::query()->where('code', 'MRC-3L-10-DAY-OFF-DIGIT-DAY-MATRIX')->sole();
+    $fare = RevenueCodeProvisionClause::query()->where('code', 'MRC-3L-11-FARE-BASE-DISTANCE-FARE')->sole();
+    $route = RevenueCodeProvisionClause::query()->where('code', 'MRC-3L-13-ROUTES-ROUTE-A')->sole();
+    $thirdOffense = RevenueCodeProvisionClause::query()->where('code', 'MRC-3L-18-THIRD-OFFENSE')->sole();
+    $fineDisposition = RevenueCodeProvisionClause::query()->where('code', 'MRC-3L-19-FINE-DISPOSITION-TREASURER-GENERAL-FUND')->sole();
+
+    expect($mtop)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::Definition)
+        ->metadata->candidate_term->toBe('mtop')
+        ->metadata->candidate_values_are_non_executable->toBeTrue()
+        ->and($board->clause_type)->toBe(RevenueCodeProvisionClauseType::AuthorityBoundary)
+        ->and($board->metadata['candidate_decision_authority'])->toBe('Sangguniang Bayan')
+        ->and($automaticIssuance->metadata['known_authority_tension'])->toBeTrue()
+        ->and($singleMtopFee->amount_cents)->toBe(62_000)
+        ->and($singleMtopFee->metadata['candidate_vehicle_class'])->toBe('single_wheeled_sidecar')
+        ->and($cabTotal->amount_cents)->toBe(180_000)
+        ->and($dayOff->metadata['known_last_digit_conflict'])->toBeTrue()
+        ->and($fare->amount_cents)->toBe(1_000)
+        ->and($fare->metadata['candidate_succeeding_kilometer_cents'])->toBe(200)
+        ->and($route->metadata['candidate_route'])->toBe('A')
+        ->and($thirdOffense->amount_cents)->toBe(250_000)
+        ->and($thirdOffense->metadata['candidate_additional_sanctions'])->toBe(['renewal_denial', 'impoundment'])
+        ->and($fineDisposition->clause_type)->toBe(RevenueCodeProvisionClauseType::DispositionProcedure)
+        ->and($fineDisposition->metadata['candidate_fund'])->toBe('General Fund');
+
+    expect(RevenueCodeProvisionClause::query()
+        ->whereHas('provision', fn ($query) => $query->where('section_reference', 'like', 'Section 3L.%'))
+        ->count())->toBe(73)
+        ->and(RevenueCodeProvisionClause::query()
+            ->whereHas('provision', fn ($query) => $query->where('section_reference', 'like', 'Section 3L.%'))
+            ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
+            ->count())->toBe(73);
 });
 
 it('preserves dispensing pump requirements fees and sanctions as non executable ordinance evidence', function () {
