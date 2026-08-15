@@ -20,6 +20,7 @@ import { computed } from 'vue';
 import { index as citizenPermitApplicationIndex } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
 import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { index as assessmentSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentSummaryReportController';
+import { index as businessTaxByMajorTypeReportIndex } from '@/actions/App/Http/Controllers/Staff/BusinessTaxByMajorTypeReportController';
 import { index as collectiblesReportIndex } from '@/actions/App/Http/Controllers/Staff/CollectiblesReportController';
 import { index as dailyCollectionReportIndex } from '@/actions/App/Http/Controllers/Staff/DailyCollectionReportController';
 import { index as feeRuleIndex } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
@@ -100,6 +101,11 @@ const staffNavItems: NavItem[] = [
         title: 'Collectibles',
         href: collectiblesReportIndex(),
         icon: ChartColumn,
+    },
+    {
+        title: 'Tax by Major Type',
+        href: businessTaxByMajorTypeReportIndex(),
+        icon: ChartNoAxesColumnIncreasing,
     },
     {
         title: 'Revenue Sources',

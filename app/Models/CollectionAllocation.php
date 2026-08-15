@@ -17,6 +17,8 @@ use Illuminate\Support\Carbon;
  * @property array<string, mixed> $source_snapshot
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read PaymentScheduleLine $paymentScheduleLine
+ * @property-read TreasuryCollection $treasuryCollection
  */
 #[Fillable(['treasury_collection_id', 'payment_schedule_line_id', 'amount_cents', 'source_snapshot'])]
 class CollectionAllocation extends Model
@@ -24,11 +26,13 @@ class CollectionAllocation extends Model
     /** @use HasFactory<CollectionAllocationFactory> */
     use HasFactory;
 
+    /** @return BelongsTo<TreasuryCollection, $this> */
     public function treasuryCollection(): BelongsTo
     {
         return $this->belongsTo(TreasuryCollection::class);
     }
 
+    /** @return BelongsTo<PaymentScheduleLine, $this> */
     public function paymentScheduleLine(): BelongsTo
     {
         return $this->belongsTo(PaymentScheduleLine::class);

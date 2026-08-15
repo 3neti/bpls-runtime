@@ -240,6 +240,7 @@ try {
         await inspectManualReceiptRevenueSourceReport(page, baseUrl);
         await inspectManualReceiptPaidEstablishmentsReport(page, baseUrl);
         await inspectManualReceiptPaymentSummaryReport(page, baseUrl);
+        await inspectManualReceiptBusinessTaxByMajorTypeReport(page, baseUrl);
         await inspectManualReceiptPaymentSchedule(page, baseUrl);
         await inspectManualReceiptDetail(page, baseUrl);
         await inspectManualReceiptPermitReleaseBoundary(page, baseUrl);
@@ -4872,6 +4873,136 @@ async function inspectManualReceiptPaymentSummaryReport(
     await targetPage.setViewportSize({ width: 1440, height: 900 });
 }
 
+async function inspectManualReceiptBusinessTaxByMajorTypeReport(
+    targetPage,
+    targetBaseUrl,
+) {
+    const reportUrl = `${targetBaseUrl}${manifest.resources.business_tax_by_major_type_report_url}`;
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const row = targetPage.locator(
+        `[data-testid="business-tax-major-row"][data-major-type="${manifest.resources.business_tax_major_type}"]`,
+    );
+    const rowVisible = await row.isVisible().catch(() => false);
+    const expectedAmount = uiMoneyFromCents(
+        manifest.resources.business_tax_major_amount_cents,
+    );
+    const amountText = rowVisible
+        ? await row
+              .getByTestId('business-tax-major-amount')
+              .textContent()
+              .catch(() => null)
+        : null;
+    const scopeVisible = await targetPage
+        .getByText(
+            'Receipted business-tax collection allocations with issued receipts, grouped by the first declared business activity major category.',
+            { exact: true },
+        )
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const policyVisible = await targetPage
+        .getByText('excludes fee allocations', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const classificationVisible = await targetPage
+        .getByText('Unclassified', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const csvExportVisible = await targetPage
+        .getByRole('link', { name: /export csv/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'business-tax-by-major-type-report-row-visible',
+            'Business tax by major type shows the exact primary classification and receipted Tax allocation',
+            true,
+            rowVisible && amountText?.trim() === expectedAmount,
+            {
+                url: reportUrl,
+                major_type: manifest.resources.business_tax_major_type,
+                amount_text: amountText,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'business-tax-by-major-type-report-boundary-visible',
+            'Business tax by major type exposes collection and classification boundaries',
+            true,
+            scopeVisible && policyVisible && classificationVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'business-tax-by-major-type-report-csv-visible',
+            'Business tax by major type offers CSV export',
+            true,
+            csvExportVisible,
+        ),
+    );
+    reportBusinessTaxByMajorType(
+        rowVisible ? manifest.resources.business_tax_major_type : null,
+        amountText?.trim() === expectedAmount
+            ? manifest.resources.business_tax_major_amount_cents
+            : null,
+        csvExportVisible,
+    );
+    await screenshot(
+        targetPage,
+        '02-business-tax-by-major-type-report',
+        'browser/screenshots/02-business-tax-by-major-type-report.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const mobileRow = targetPage.locator(
+        `[data-testid="business-tax-major-mobile-row"][data-major-type="${manifest.resources.business_tax_major_type}"]`,
+    );
+    const mobileRowVisible = await mobileRow.isVisible().catch(() => false);
+    const mobileAmountText = mobileRowVisible
+        ? await mobileRow
+              .getByTestId('business-tax-major-mobile-amount')
+              .textContent()
+              .catch(() => null)
+        : null;
+    const mobileHorizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+
+    checks.push(
+        check(
+            'business-tax-by-major-type-report-mobile-visible',
+            'Mobile business tax by major type keeps exact classification and amount visible',
+            true,
+            mobileRowVisible && mobileAmountText?.trim() === expectedAmount,
+        ),
+    );
+    checks.push(
+        check(
+            'business-tax-by-major-type-report-mobile-no-horizontal-overflow',
+            'Mobile business tax by major type has no page-level horizontal overflow',
+            false,
+            mobileHorizontalOverflow,
+        ),
+    );
+    reportEvidence.business_tax_by_major_type.mobile_visible = mobileRowVisible;
+    reportEvidence.business_tax_by_major_type.mobile_horizontal_overflow =
+        mobileHorizontalOverflow;
+    await screenshot(
+        targetPage,
+        '02-business-tax-by-major-type-report-mobile',
+        'browser/screenshots/02-business-tax-by-major-type-report-mobile.png',
+    );
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+}
+
 async function inspectManualReceiptDetail(targetPage, targetBaseUrl) {
     const receiptUrl = `${targetBaseUrl}${manifest.resources.receipt_url}`;
     await targetPage.goto(receiptUrl, { waitUntil: 'networkidle' });
@@ -6569,6 +6700,18 @@ function reportPaymentSummary(
     reportEvidence.payment_summary = {
         payment_schedule_id: paymentScheduleId,
         paid_amount_cents: paidAmountCents,
+        csv_export_visible: csvExportVisible,
+    };
+}
+
+function reportBusinessTaxByMajorType(
+    majorType,
+    amountCents,
+    csvExportVisible,
+) {
+    reportEvidence.business_tax_by_major_type = {
+        major_type: majorType,
+        amount_cents: amountCents,
         csv_export_visible: csvExportVisible,
     };
 }

@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property array<string, mixed>|null $metadata
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read LineOfBusiness|null $lineOfBusiness
  */
 #[Fillable(['permit_application_id', 'line_of_business_id', 'declared_gross_sales_cents', 'capital_investment_cents', 'quantity', 'started_on', 'metadata'])]
 class PermitApplicationLine extends Model
@@ -28,16 +29,19 @@ class PermitApplicationLine extends Model
     /** @use HasFactory<PermitApplicationLineFactory> */
     use HasFactory;
 
+    /** @return BelongsTo<PermitApplication, $this> */
     public function permitApplication(): BelongsTo
     {
         return $this->belongsTo(PermitApplication::class);
     }
 
+    /** @return BelongsTo<LineOfBusiness, $this> */
     public function lineOfBusiness(): BelongsTo
     {
         return $this->belongsTo(LineOfBusiness::class);
     }
 
+    /** @return HasMany<AssessmentLine, $this> */
     public function assessmentLines(): HasMany
     {
         return $this->hasMany(AssessmentLine::class);

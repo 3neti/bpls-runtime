@@ -32,6 +32,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $legacy_source_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read PermitApplication $permitApplication
+ * @property-read Receipt|null $receipt
  */
 #[Fillable(['payment_schedule_id', 'permit_application_id', 'assessment_id', 'received_by_id', 'status', 'channel', 'method', 'amount_cents', 'payer_name', 'reference_number', 'remarks', 'received_at', 'source_snapshot', 'legacy_source_id'])]
 class TreasuryCollection extends Model
@@ -44,31 +46,37 @@ class TreasuryCollection extends Model
         'channel' => 'over_the_counter',
     ];
 
+    /** @return BelongsTo<PaymentSchedule, $this> */
     public function paymentSchedule(): BelongsTo
     {
         return $this->belongsTo(PaymentSchedule::class);
     }
 
+    /** @return BelongsTo<PermitApplication, $this> */
     public function permitApplication(): BelongsTo
     {
         return $this->belongsTo(PermitApplication::class);
     }
 
+    /** @return BelongsTo<Assessment, $this> */
     public function assessment(): BelongsTo
     {
         return $this->belongsTo(Assessment::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function receivedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'received_by_id');
     }
 
+    /** @return HasMany<CollectionAllocation, $this> */
     public function allocations(): HasMany
     {
         return $this->hasMany(CollectionAllocation::class);
     }
 
+    /** @return HasOne<Receipt, $this> */
     public function receipt(): HasOne
     {
         return $this->hasOne(Receipt::class);

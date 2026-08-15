@@ -28,6 +28,7 @@ use Illuminate\Support\Collection;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Collection<int, Assessment> $assessments
+ * @property-read Collection<int, PermitApplicationLine> $lines
  */
 #[Fillable(['business_id', 'submitted_by_id', 'application_number', 'type', 'status', 'application_year', 'submitted_at', 'assessed_at', 'legacy_source_id', 'metadata'])]
 class PermitApplication extends Model

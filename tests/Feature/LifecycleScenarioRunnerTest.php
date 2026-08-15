@@ -1112,6 +1112,9 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($firstManifest['resources']['online_payment_boundary_status'])->toBe('blocked')
         ->and($firstManifest['resources']['receipt_queue_url'])->toContain('q=SCENARIO-OR-MANUAL-RECEIPT-TEST-001')
         ->and($firstManifest['resources']['receipt_queue_url'])->toContain('status=issued')
+        ->and($firstManifest['resources']['business_tax_by_major_type_report_url'])->toContain('receipt_from=SCENARIO-OR-MANUAL-RECEIPT-TEST-001')
+        ->and($firstManifest['resources']['business_tax_major_type'])->toBe('Retail')
+        ->and($firstManifest['resources']['business_tax_major_amount_cents'])->toBe(20_000)
         ->and($firstManifest['resources']['application_form_pdf_url'])->toBe('/staff/permit-applications/'.$firstManifest['resources']['permit_application_id'].'/application-form.pdf')
         ->and($firstManifest['resources']['assessment_pdf_url'])->toBe('/staff/assessments/'.$firstManifest['resources']['assessment_id'].'/pdf')
         ->and($firstManifest['resources']['assessment_total_amount_cents'])->toBe(PermitApplication::query()->findOrFail($firstManifest['resources']['permit_application_id'])->assessments()->firstOrFail()->total_amount_cents)
@@ -1671,6 +1674,13 @@ test('manual collection receipt scenario audit compares browser evidence with ca
             'payment_summary' => [
                 'payment_schedule_id' => $manifest['resources']['payment_schedule_id'],
                 'paid_amount_cents' => $manifest['resources']['payment_paid_amount_cents'],
+                'csv_export_visible' => true,
+                'mobile_visible' => true,
+                'mobile_horizontal_overflow' => false,
+            ],
+            'business_tax_by_major_type' => [
+                'major_type' => $manifest['resources']['business_tax_major_type'],
+                'amount_cents' => $manifest['resources']['business_tax_major_amount_cents'],
                 'csv_export_visible' => true,
                 'mobile_visible' => true,
                 'mobile_horizontal_overflow' => false,
