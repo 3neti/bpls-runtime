@@ -21,6 +21,7 @@ import { computed } from 'vue';
 import { index as citizenPermitApplicationIndex } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
 import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { index as assessmentSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentSummaryReportController';
+import { index as bspReportIndex } from '@/actions/App/Http/Controllers/Staff/BspReportController';
 import { index as businessTaxByMajorTypeReportIndex } from '@/actions/App/Http/Controllers/Staff/BusinessTaxByMajorTypeReportController';
 import { index as cmciLdcsReportIndex } from '@/actions/App/Http/Controllers/Staff/CmciLdcsReportController';
 import { index as collectiblesReportIndex } from '@/actions/App/Http/Controllers/Staff/CollectiblesReportController';
@@ -124,6 +125,11 @@ const staffNavItems: NavItem[] = [
     {
         title: 'PLDS',
         href: pldsReportIndex(),
+        icon: TableProperties,
+    },
+    {
+        title: 'BSP Non-Bank Entities',
+        href: bspReportIndex(),
         icon: TableProperties,
     },
     {

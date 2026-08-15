@@ -15,6 +15,7 @@ use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreateCitizenPermitApplicationDraft;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\CreatePermitApplication;
+use App\Actions\DescribeBspReportBoundary;
 use App\Actions\DescribeCitizenPaymentSchedule;
 use App\Actions\DescribeCmciLdcsReportBoundary;
 use App\Actions\DescribeOnlinePaymentBoundary;
@@ -77,6 +78,7 @@ final class ManualCollectionReceiptVisibilityScenario
         private readonly BuildDailyCollectionsReport $buildDailyCollectionsReport,
         private readonly BuildBusinessTaxByMajorTypeReport $buildBusinessTaxByMajorTypeReport,
         private readonly BuildTotalCapitalGrossSummaryReport $buildTotalCapitalGrossSummaryReport,
+        private readonly DescribeBspReportBoundary $describeBspReportBoundary,
         private readonly DescribeCmciLdcsReportBoundary $describeCmciLdcsReportBoundary,
         private readonly DescribePldsReportBoundary $describePldsReportBoundary,
         private readonly BuildCollectionsByRevenueSourceReport $buildCollectionsByRevenueSourceReport,
@@ -249,6 +251,7 @@ final class ManualCollectionReceiptVisibilityScenario
         ]);
         $totalCapitalGrossSummaryRow = collect($totalCapitalGrossSummaryReport['rows'])
             ->firstWhere('application_id', $permitApplication->id);
+        $bspReport = $this->describeBspReportBoundary->handle();
         $cmciLdcsReport = $this->describeCmciLdcsReportBoundary->handle();
         $pldsReport = $this->describePldsReportBoundary->handle();
         $paidEstablishmentsReport = $this->buildPaidEstablishmentsReport->handle([
@@ -284,6 +287,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('payment-summary-report-row-projected', 'Payment summary contains the exact paid schedule and receipted collection evidence', ['payment_schedule_id' => $paymentSchedule->id, 'paid_amount_cents' => $paymentSchedule->paid_amount_cents, 'receipted_amount_cents' => $receipt->amount_cents], ['payment_schedule_id' => $paymentSummaryRow['payment_schedule_id'] ?? null, 'paid_amount_cents' => $paymentSummaryRow['paid_amount_cents'] ?? null, 'receipted_amount_cents' => $paymentSummaryRow['receipted_amount_cents'] ?? null]),
             $this->step('business-tax-by-major-type-report-row-projected', 'Business tax by major type contains the exact receipted Tax allocation under the first activity classification', ['major_type' => 'Retail', 'amount_cents' => 20_000], ['major_type' => $businessTaxByMajorTypeRow['major_type'] ?? null, 'amount_cents' => $businessTaxByMajorTypeRow['amount_cents'] ?? null]),
             $this->step('total-capital-gross-summary-report-row-projected', 'Total capital and gross summary contains declarations once and the exact lifetime receipted collection', ['application_id' => $permitApplication->id, 'capital_investment_cents' => 9_000_050, 'gross_sales_cents' => 17_000_075, 'payment_amount_cents' => $receipt->amount_cents, 'remaining_balance_cents' => 0, 'payment_status' => 'Completed'], ['application_id' => $totalCapitalGrossSummaryRow['application_id'] ?? null, 'capital_investment_cents' => $totalCapitalGrossSummaryRow['capital_investment_cents'] ?? null, 'gross_sales_cents' => $totalCapitalGrossSummaryRow['gross_sales_cents'] ?? null, 'payment_amount_cents' => $totalCapitalGrossSummaryRow['payment_amount_cents'] ?? null, 'remaining_balance_cents' => $totalCapitalGrossSummaryRow['remaining_balance_cents'] ?? null, 'payment_status' => $totalCapitalGrossSummaryRow['payment_status'] ?? null]),
+            $this->step('bsp-authority-boundary-recorded', 'Keep the artifact-ready application out of official BSP output until permit and regulatory classification authority exist', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'artifact_excluded' => true], ['status' => $bspReport['status'], 'can_generate' => $bspReport['can_generate'], 'can_export' => $bspReport['can_export'], 'official_row_count' => $bspReport['row_count'], 'artifact_excluded' => ! collect($bspReport['rows'])->contains('application_id', $permitApplication->id)]),
             $this->step('cmci-ldcs-authority-boundary-recorded', 'Keep the artifact-ready application out of official CMCI output until legal permit release exists', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'artifact_excluded' => true], ['status' => $cmciLdcsReport['status'], 'can_generate' => $cmciLdcsReport['can_generate'], 'can_export' => $cmciLdcsReport['can_export'], 'official_row_count' => $cmciLdcsReport['row_count'], 'artifact_excluded' => ! collect($cmciLdcsReport['rows'])->contains('application_id', $permitApplication->id)]),
             $this->step('plds-authority-boundary-recorded', 'Keep the artifact-ready application out of official PLDS output until permit authority and report mappings exist', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'artifact_excluded' => true], ['status' => $pldsReport['status'], 'can_generate' => $pldsReport['can_generate'], 'can_export' => $pldsReport['can_export'], 'official_row_count' => $pldsReport['row_count'], 'artifact_excluded' => ! collect($pldsReport['rows'])->contains('application_id', $permitApplication->id)]),
             $this->step('receipt-void-blocked', 'Attempt receipt void through receipt policy boundary action', ['void_blocked' => true, 'receipt_status' => ReceiptStatus::Issued->value, 'collection_status' => TreasuryCollectionStatus::Receipted->value], ['void_blocked' => $receiptVoidBlocked, 'receipt_status' => $receipt->status->value, 'collection_status' => $collection->status->value, 'receipt_id' => $receipt->id]),
@@ -424,6 +428,13 @@ final class ManualCollectionReceiptVisibilityScenario
             'total_capital_gross_payment_cents' => $receipt->amount_cents,
             'total_capital_gross_balance_cents' => 0,
             'total_capital_gross_payment_status' => 'Completed',
+            'bsp_report_url' => route('staff.reports.bsp.index', absolute: false),
+            'bsp_status' => $bspReport['status'],
+            'bsp_can_generate' => $bspReport['can_generate'],
+            'bsp_can_export' => $bspReport['can_export'],
+            'bsp_official_row_count' => $bspReport['row_count'],
+            'bsp_contract_column_count' => count($bspReport['columns']),
+            'bsp_artifact_excluded' => ! collect($bspReport['rows'])->contains('application_id', $permitApplication->id),
             'cmci_ldcs_report_url' => route('staff.reports.cmci-ldcs.index', absolute: false),
             'cmci_ldcs_status' => $cmciLdcsReport['status'],
             'cmci_ldcs_can_generate' => $cmciLdcsReport['can_generate'],
@@ -557,6 +568,15 @@ final class ManualCollectionReceiptVisibilityScenario
                 'remaining_balance_cents' => $totalCapitalGrossSummaryRow['remaining_balance_cents'] ?? null,
                 'payment_status' => $totalCapitalGrossSummaryRow['payment_status'] ?? null,
             ],
+            'bsp_report' => [
+                'status' => $bspReport['status'],
+                'can_generate' => $bspReport['can_generate'],
+                'can_export' => $bspReport['can_export'],
+                'official_row_count' => $bspReport['row_count'],
+                'contract_column_count' => count($bspReport['columns']),
+                'artifact_excluded' => ! collect($bspReport['rows'])->contains('application_id', $permitApplication->id),
+                'blocked_by' => $bspReport['blocked_by'],
+            ],
             'cmci_ldcs_report' => [
                 'status' => $cmciLdcsReport['status'],
                 'can_generate' => $cmciLdcsReport['can_generate'],
@@ -645,6 +665,7 @@ final class ManualCollectionReceiptVisibilityScenario
         ]);
         $totalCapitalGrossSummaryRow = collect($totalCapitalGrossSummaryReport['rows'])
             ->firstWhere('application_id', $permitApplication->id);
+        $bspReport = $this->describeBspReportBoundary->handle();
         $cmciLdcsReport = $this->describeCmciLdcsReportBoundary->handle();
         $pldsReport = $this->describePldsReportBoundary->handle();
         $paidEstablishmentsReport = $this->buildPaidEstablishmentsReport->handle([
@@ -700,6 +721,8 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('audit-browser-business-tax-by-major-type-report-row', 'Browser evidence observed the same major type amount on desktop and mobile', ['major_type' => $manifest['resources']['business_tax_major_type'], 'amount_cents' => $manifest['resources']['business_tax_major_amount_cents'], 'csv_export_visible' => true, 'mobile_visible' => true, 'mobile_horizontal_overflow' => false], ['major_type' => data_get($browserReport, 'reports.business_tax_by_major_type.major_type'), 'amount_cents' => data_get($browserReport, 'reports.business_tax_by_major_type.amount_cents'), 'csv_export_visible' => data_get($browserReport, 'reports.business_tax_by_major_type.csv_export_visible'), 'mobile_visible' => data_get($browserReport, 'reports.business_tax_by_major_type.mobile_visible'), 'mobile_horizontal_overflow' => data_get($browserReport, 'reports.business_tax_by_major_type.mobile_horizontal_overflow')]),
             $this->step('audit-total-capital-gross-summary-report-row', 'Total capital and gross summary agrees with canonical declaration and collection records', ['application_id' => $permitApplication->id, 'capital_investment_cents' => $manifest['resources']['total_capital_gross_capital_cents'], 'gross_sales_cents' => $manifest['resources']['total_capital_gross_gross_cents'], 'payment_amount_cents' => $manifest['resources']['total_capital_gross_payment_cents'], 'remaining_balance_cents' => $manifest['resources']['total_capital_gross_balance_cents'], 'payment_status' => $manifest['resources']['total_capital_gross_payment_status']], ['application_id' => $totalCapitalGrossSummaryRow['application_id'] ?? null, 'capital_investment_cents' => $totalCapitalGrossSummaryRow['capital_investment_cents'] ?? null, 'gross_sales_cents' => $totalCapitalGrossSummaryRow['gross_sales_cents'] ?? null, 'payment_amount_cents' => $totalCapitalGrossSummaryRow['payment_amount_cents'] ?? null, 'remaining_balance_cents' => $totalCapitalGrossSummaryRow['remaining_balance_cents'] ?? null, 'payment_status' => $totalCapitalGrossSummaryRow['payment_status'] ?? null]),
             $this->step('audit-browser-total-capital-gross-summary-report-row', 'Browser evidence observed the same application and lifetime payment on desktop and mobile', ['application_id' => $permitApplication->id, 'payment_amount_cents' => $manifest['resources']['total_capital_gross_payment_cents'], 'csv_export_visible' => true, 'mobile_visible' => true, 'mobile_horizontal_overflow' => false], ['application_id' => data_get($browserReport, 'reports.total_capital_gross_summary.application_id'), 'payment_amount_cents' => data_get($browserReport, 'reports.total_capital_gross_summary.payment_amount_cents'), 'csv_export_visible' => data_get($browserReport, 'reports.total_capital_gross_summary.csv_export_visible'), 'mobile_visible' => data_get($browserReport, 'reports.total_capital_gross_summary.mobile_visible'), 'mobile_horizontal_overflow' => data_get($browserReport, 'reports.total_capital_gross_summary.mobile_horizontal_overflow')]),
+            $this->step('audit-bsp-authority-boundary', 'BSP contract refuses to classify the artifact-ready application as a legally permitted regulated entity', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'contract_column_count' => 16, 'artifact_excluded' => true], ['status' => $bspReport['status'], 'can_generate' => $bspReport['can_generate'], 'can_export' => $bspReport['can_export'], 'official_row_count' => $bspReport['row_count'], 'contract_column_count' => count($bspReport['columns']), 'artifact_excluded' => ! collect($bspReport['rows'])->contains('application_id', $permitApplication->id)]),
+            $this->step('audit-browser-bsp-authority-boundary', 'Browser evidence shows the same BSP refusal on desktop and mobile', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'artifact_excluded' => true, 'mobile_visible' => true, 'mobile_horizontal_overflow' => false], ['status' => data_get($browserReport, 'reports.bsp.status'), 'can_generate' => data_get($browserReport, 'reports.bsp.can_generate'), 'can_export' => data_get($browserReport, 'reports.bsp.can_export'), 'official_row_count' => data_get($browserReport, 'reports.bsp.official_row_count'), 'artifact_excluded' => data_get($browserReport, 'reports.bsp.artifact_excluded'), 'mobile_visible' => data_get($browserReport, 'reports.bsp.mobile_visible'), 'mobile_horizontal_overflow' => data_get($browserReport, 'reports.bsp.mobile_horizontal_overflow')]),
             $this->step('audit-cmci-ldcs-authority-boundary', 'CMCI contract refuses to classify the artifact-ready application as an official released permit', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'contract_column_count' => 18, 'artifact_excluded' => true], ['status' => $cmciLdcsReport['status'], 'can_generate' => $cmciLdcsReport['can_generate'], 'can_export' => $cmciLdcsReport['can_export'], 'official_row_count' => $cmciLdcsReport['row_count'], 'contract_column_count' => count($cmciLdcsReport['columns']), 'artifact_excluded' => ! collect($cmciLdcsReport['rows'])->contains('application_id', $permitApplication->id)]),
             $this->step('audit-browser-cmci-ldcs-authority-boundary', 'Browser evidence shows the same CMCI refusal on desktop and mobile', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'artifact_excluded' => true, 'mobile_visible' => true, 'mobile_horizontal_overflow' => false], ['status' => data_get($browserReport, 'reports.cmci_ldcs.status'), 'can_generate' => data_get($browserReport, 'reports.cmci_ldcs.can_generate'), 'can_export' => data_get($browserReport, 'reports.cmci_ldcs.can_export'), 'official_row_count' => data_get($browserReport, 'reports.cmci_ldcs.official_row_count'), 'artifact_excluded' => data_get($browserReport, 'reports.cmci_ldcs.artifact_excluded'), 'mobile_visible' => data_get($browserReport, 'reports.cmci_ldcs.mobile_visible'), 'mobile_horizontal_overflow' => data_get($browserReport, 'reports.cmci_ldcs.mobile_horizontal_overflow')]),
             $this->step('audit-plds-authority-boundary', 'PLDS contract refuses to classify the artifact-ready application as an official released permit', ['status' => 'blocked', 'can_generate' => false, 'can_export' => false, 'official_row_count' => 0, 'contract_column_count' => 23, 'artifact_excluded' => true], ['status' => $pldsReport['status'], 'can_generate' => $pldsReport['can_generate'], 'can_export' => $pldsReport['can_export'], 'official_row_count' => $pldsReport['row_count'], 'contract_column_count' => count($pldsReport['columns']), 'artifact_excluded' => ! collect($pldsReport['rows'])->contains('application_id', $permitApplication->id)]),
@@ -829,6 +852,15 @@ final class ManualCollectionReceiptVisibilityScenario
                     'payment_amount_cents' => $totalCapitalGrossSummaryRow['payment_amount_cents'] ?? null,
                     'remaining_balance_cents' => $totalCapitalGrossSummaryRow['remaining_balance_cents'] ?? null,
                     'payment_status' => $totalCapitalGrossSummaryRow['payment_status'] ?? null,
+                ],
+                'bsp_report' => [
+                    'status' => $bspReport['status'],
+                    'can_generate' => $bspReport['can_generate'],
+                    'can_export' => $bspReport['can_export'],
+                    'official_row_count' => $bspReport['row_count'],
+                    'contract_column_count' => count($bspReport['columns']),
+                    'artifact_excluded' => ! collect($bspReport['rows'])->contains('application_id', $permitApplication->id),
+                    'blocked_by' => $bspReport['blocked_by'],
                 ],
                 'cmci_ldcs_report' => [
                     'status' => $cmciLdcsReport['status'],

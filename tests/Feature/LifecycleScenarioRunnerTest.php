@@ -1121,6 +1121,13 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($firstManifest['resources']['total_capital_gross_payment_cents'])->toBe($receipt->amount_cents)
         ->and($firstManifest['resources']['total_capital_gross_balance_cents'])->toBe(0)
         ->and($firstManifest['resources']['total_capital_gross_payment_status'])->toBe('Completed')
+        ->and($firstManifest['resources']['bsp_report_url'])->toBe('/staff/reports/bsp')
+        ->and($firstManifest['resources']['bsp_status'])->toBe('blocked')
+        ->and($firstManifest['resources']['bsp_can_generate'])->toBeFalse()
+        ->and($firstManifest['resources']['bsp_can_export'])->toBeFalse()
+        ->and($firstManifest['resources']['bsp_official_row_count'])->toBe(0)
+        ->and($firstManifest['resources']['bsp_contract_column_count'])->toBe(16)
+        ->and($firstManifest['resources']['bsp_artifact_excluded'])->toBeTrue()
         ->and($firstManifest['resources']['cmci_ldcs_report_url'])->toBe('/staff/reports/cmci-ldcs')
         ->and($firstManifest['resources']['cmci_ldcs_status'])->toBe('blocked')
         ->and($firstManifest['resources']['cmci_ldcs_can_generate'])->toBeFalse()
@@ -1712,6 +1719,16 @@ test('manual collection receipt scenario audit compares browser evidence with ca
                 'mobile_visible' => true,
                 'mobile_horizontal_overflow' => false,
             ],
+            'bsp' => [
+                'status' => 'blocked',
+                'can_generate' => false,
+                'can_export' => false,
+                'official_row_count' => 0,
+                'contract_column_count' => 16,
+                'artifact_excluded' => true,
+                'mobile_visible' => true,
+                'mobile_horizontal_overflow' => false,
+            ],
             'cmci_ldcs' => [
                 'status' => 'blocked',
                 'can_generate' => false,
@@ -1815,6 +1832,8 @@ test('manual collection receipt scenario audit compares browser evidence with ca
         ->and($audited['resources']['permit_verification_reference'])->toBe($verification['reference'])
         ->and($audited['resources']['permit_artifact_status'])->toBe('generated_artifact_available')
         ->and($audited['resources']['receipt_void_boundary_reference'])->toBe($voidBoundary['reference'])
+        ->and(collect($artifactStore->readJson('terminal/audit.json')['checks'])->firstWhere('key', 'audit-bsp-authority-boundary')['passed'])->toBeTrue()
+        ->and(collect($artifactStore->readJson('terminal/audit.json')['checks'])->firstWhere('key', 'audit-browser-bsp-authority-boundary')['passed'])->toBeTrue()
         ->and(collect($artifactStore->readJson('terminal/audit.json')['checks'])->firstWhere('key', 'audit-cmci-ldcs-authority-boundary')['passed'])->toBeTrue()
         ->and(collect($artifactStore->readJson('terminal/audit.json')['checks'])->firstWhere('key', 'audit-browser-cmci-ldcs-authority-boundary')['passed'])->toBeTrue()
         ->and(collect($artifactStore->readJson('terminal/audit.json')['checks'])->firstWhere('key', 'audit-plds-authority-boundary')['passed'])->toBeTrue()

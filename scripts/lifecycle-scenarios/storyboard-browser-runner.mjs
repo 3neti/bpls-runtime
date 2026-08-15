@@ -242,6 +242,7 @@ try {
         await inspectManualReceiptPaymentSummaryReport(page, baseUrl);
         await inspectManualReceiptBusinessTaxByMajorTypeReport(page, baseUrl);
         await inspectManualReceiptTotalCapitalGrossSummaryReport(page, baseUrl);
+        await inspectManualReceiptBspBoundary(page, baseUrl);
         await inspectManualReceiptCmciLdcsBoundary(page, baseUrl);
         await inspectManualReceiptPldsBoundary(page, baseUrl);
         await inspectManualReceiptPaymentSchedule(page, baseUrl);
@@ -5130,6 +5131,129 @@ async function inspectManualReceiptTotalCapitalGrossSummaryReport(
         targetPage,
         '02-total-capital-gross-summary-report-mobile',
         'browser/screenshots/02-total-capital-gross-summary-report-mobile.png',
+    );
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+}
+
+async function inspectManualReceiptBspBoundary(targetPage, targetBaseUrl) {
+    const reportUrl = `${targetBaseUrl}${manifest.resources.bsp_report_url}`;
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+
+    const boundaryVisible = await targetPage
+        .getByTestId('bsp-boundary-status')
+        .isVisible()
+        .catch(() => false);
+    const authorityExplanationVisible = await targetPage
+        .getByTestId('bsp-authority-boundary')
+        .getByText('proves neither assertion', { exact: false })
+        .isVisible()
+        .catch(() => false);
+    const officialRowCount = Number(
+        (
+            await targetPage
+                .getByTestId('bsp-official-row-count')
+                .textContent()
+                .catch(() => null)
+        )?.trim(),
+    );
+    const contractColumnCount = Number(
+        (
+            await targetPage
+                .getByTestId('bsp-column-count')
+                .textContent()
+                .catch(() => null)
+        )?.trim(),
+    );
+    const exportVisible = await targetPage
+        .getByRole('link', { name: /export/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const artifactVisible = await targetPage
+        .getByText(manifest.resources.paid_establishment_business_name, {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'bsp-authority-boundary-visible',
+            'BSP shows its blocked authority state and exact 16-field contract',
+            true,
+            boundaryVisible &&
+                authorityExplanationVisible &&
+                officialRowCount === 0 &&
+                contractColumnCount === 16,
+            {
+                url: reportUrl,
+                official_row_count: officialRowCount,
+                contract_column_count: contractColumnCount,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'bsp-artifact-excluded',
+            'BSP does not expose the artifact-ready application as a legally permitted regulated entity',
+            true,
+            !artifactVisible && !exportVisible,
+        ),
+    );
+
+    reportEvidence.bsp = {
+        status: boundaryVisible ? 'blocked' : null,
+        can_generate: false,
+        can_export: exportVisible,
+        official_row_count: officialRowCount,
+        contract_column_count: contractColumnCount,
+        artifact_excluded: !artifactVisible,
+    };
+    await screenshot(
+        targetPage,
+        '02-bsp-boundary',
+        'browser/screenshots/02-bsp-boundary.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const mobileBoundaryVisible = await targetPage
+        .getByTestId('bsp-boundary-status')
+        .isVisible()
+        .catch(() => false);
+    const mobileColumnCount = await targetPage
+        .getByTestId('bsp-mobile-column')
+        .count();
+    const mobileHorizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+
+    checks.push(
+        check(
+            'bsp-mobile-visible',
+            'Mobile BSP keeps the authority state and all contract fields visible',
+            true,
+            mobileBoundaryVisible && mobileColumnCount === 16,
+        ),
+    );
+    checks.push(
+        check(
+            'bsp-mobile-no-horizontal-overflow',
+            'Mobile BSP has no page-level horizontal overflow',
+            false,
+            mobileHorizontalOverflow,
+        ),
+    );
+    reportEvidence.bsp.mobile_visible =
+        mobileBoundaryVisible && mobileColumnCount === 16;
+    reportEvidence.bsp.mobile_horizontal_overflow = mobileHorizontalOverflow;
+    await screenshot(
+        targetPage,
+        '02-bsp-boundary-mobile',
+        'browser/screenshots/02-bsp-boundary-mobile.png',
     );
     await targetPage.setViewportSize({ width: 1440, height: 900 });
 }
