@@ -543,6 +543,42 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 metadata: ['chapter' => 3, 'article' => 'B', 'known_ambiguities' => ['penal_authority_and_currency', 'offender_classification', 'court_discretion', 'subsidiary_imprisonment', 'section_49_reference', 'source_wording_defects']],
             ),
             $this->provision(
+                code: 'MRC-3C-01-SPECIAL-DERBY-FEES',
+                section: 'Section 3C.01',
+                title: 'Special cockfighting permit fees',
+                type: RevenueCodeProvisionType::FixedFee,
+                excerpt: 'The ordinance prints a PHP 2,000.00 per-day fee for National/Local Derby and a PHP 4,000.00 per-day fee for International Derby.',
+                notes: 'Special-event classification, the undefined National Derby term, event-day counting, permit identity, and the direct conflict with the Section 3C.02 international-Derby exclusion require municipal reconciliation. Neither amount is executable.',
+                metadata: ['chapter' => 3, 'article' => 'C', 'schedule_clause_count' => 2, 'known_ambiguities' => ['national_derby_definition', 'special_event_classification', 'event_day_counting', 'permit_identity', 'international_derby_exclusion_conflict']],
+            ),
+            $this->provision(
+                code: 'MRC-3C-02-EXCLUSIONS',
+                section: 'Section 3C.02',
+                title: 'Special cockfighting fee exclusions',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance excludes regular cockfights held during Sundays, legal holidays, and local fiestas, and also states that international derbies are excluded from the Article C fees.',
+                notes: 'The international-Derby exclusion directly contradicts the preceding PHP 4,000.00/day fee row. Regular-versus-special classification, calendar authority, and the scope of each exclusion require authoritative reconciliation.',
+                metadata: ['chapter' => 3, 'article' => 'C', 'known_ambiguities' => ['regular_cockfight_definition', 'calendar_authority', 'local_fiesta_scope', 'international_derby_fee_conflict']],
+            ),
+            $this->provision(
+                code: 'MRC-3C-03-PAYMENT-TIMING',
+                section: 'Section 3C.03',
+                title: 'Special cockfighting fee payment timing',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance states that the fees are payable to the City/Municipal Treasurer before special cockfights and derbies can lawfully be held.',
+                notes: 'The City/Municipal wording, collector identity, payment and permit sequence, event authorization, receipt evidence, and treatment of cancelled or shortened events require operational reconciliation.',
+                metadata: ['chapter' => 3, 'article' => 'C', 'known_ambiguities' => ['city_or_municipal_wording', 'collector_authority', 'payment_and_permit_sequence', 'event_authorization', 'cancelled_or_shortened_event_treatment']],
+            ),
+            $this->provision(
+                code: 'MRC-3C-04-APPLICABILITY',
+                section: 'Section 3C.04',
+                title: 'Special cockfighting external-law applicability',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance applies Presidential Decrees 449 and 1802 and other pertinent laws to cockpit operation and cockfight holding.',
+                notes: 'Current legal force, amendments, institutional succession, precedence, incorporated requirements, and enforcement authority require legal validation.',
+                metadata: ['chapter' => 3, 'article' => 'C', 'known_ambiguities' => ['external_law_currency', 'institutional_succession', 'law_precedence', 'incorporated_requirements', 'enforcement_authority']],
+            ),
+            $this->provision(
                 code: 'MRC-2E-01-BUSINESS-TAX-SCOPE',
                 section: 'Section 2E.01',
                 title: 'Payment scope for multiple establishments and businesses',
@@ -1602,6 +1638,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
 
         $this->seedMayorsPermitArticleAClauses();
         $this->seedCockpitArticleBClauses();
+        $this->seedSpecialCockfightingArticleCClauses();
 
         $this->persistPolicyBoundaryClauses('MRC-2F-01-PIL', [
             $this->pilThresholdClause(1, 'SARI-SARI', '1', 'Sari-Sari Stores', '61,600.00', 6_160_000),
@@ -1834,6 +1871,73 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
         ]);
     }
 
+    private function seedSpecialCockfightingArticleCClauses(): void
+    {
+        $this->persistFixedFeeScheduleClauses('MRC-3C-01-SPECIAL-DERBY-FEES', [
+            [
+                'MRC-3C-01-NATIONAL-LOCAL-DERBY',
+                'Special Cockfighting',
+                'National/Local Derby',
+                '2,000.00/day',
+                200_000,
+                'National Derby is not defined in Article B; National/Local classification, special-event eligibility, permit scope, event-day counting, and operational acceptance require municipal policy.',
+                RevenueCodeProvisionClauseType::DependentRate,
+                'National/Local Derby - P 2,000.00/day.',
+                ['candidate_unit' => 'event_day', 'candidate_event_types' => ['national_derby', 'local_derby']],
+            ],
+            [
+                'MRC-3C-01-INTERNATIONAL-DERBY',
+                'Special Cockfighting',
+                'International Derby',
+                '4,000.00/day',
+                400_000,
+                'Section 3C.02 expressly excludes international derbies from these fees; the direct contradiction must be resolved by authorized municipal interpretation before execution.',
+                RevenueCodeProvisionClauseType::DependentRate,
+                'International Derby - P 4,000.00/day.',
+                ['candidate_unit' => 'event_day', 'candidate_event_types' => ['international_derby'], 'contradicted_by_clause' => 'MRC-3C-02-INTERNATIONAL-DERBY-EXCLUSION'],
+            ],
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3C-02-EXCLUSIONS', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-3C-02-REGULAR-COCKFIGHT-EXCLUSION',
+                type: RevenueCodeProvisionClauseType::Exemption,
+                sourceText: 'Regular cockfights i.e., those held during Sunday, legal holidays and local fiestas ... shall be excluded from the payment of fees herein imposed.',
+                candidateInterpretation: 'Candidate exclusion: regular cockfights held on Sundays, legal holidays, or during local fiestas are outside the Article C special-permit fees.',
+                executionBlocker: 'Regular-versus-special event classification, authoritative calendars, local-fiesta dates, overlap with Article B schedules, and permit evidence require accepted policy.',
+                metadata: ['candidate_excluded_schedules' => ['sunday', 'legal_holiday', 'local_fiesta']],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 2,
+                code: 'MRC-3C-02-INTERNATIONAL-DERBY-EXCLUSION',
+                type: RevenueCodeProvisionClauseType::Exemption,
+                sourceText: 'International derbies shall be excluded from the payment of fees herein imposed.',
+                candidateInterpretation: 'Candidate exclusion: international derbies are outside the Article C special-permit fees.',
+                executionBlocker: 'This sentence directly contradicts the PHP 4,000.00/day International Derby row in Section 3C.01; no financial interpretation is authorized until the Municipality resolves the conflict.',
+                metadata: ['contradicts_clause' => 'MRC-3C-01-INTERNATIONAL-DERBY', 'known_direct_source_contradiction' => true],
+            ),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3C-03-PAYMENT-TIMING', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-3C-03-PAY-BEFORE-EVENT',
+                type: RevenueCodeProvisionClauseType::PaymentTiming,
+                sourceText: 'The fees herein imposed shall be payable to the City/Municipal Treasurer before the special cockfights and derbies can lawfully held.',
+                candidateInterpretation: 'Candidate timing: pay the applicable special-cockfighting fee before the event or derby may lawfully be held.',
+                executionBlocker: 'The source says City/Municipal Treasurer and omits “be” in the final phrase; collector authority, payment and permit sequence, event identity, receipt evidence, cancellation, and refund treatment require accepted procedure.',
+                metadata: ['source_collector' => 'City/Municipal Treasurer', 'candidate_timing' => 'before_event', 'known_source_wording' => 'can lawfully held'],
+            ),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3C-04-APPLICABILITY', [
+            $this->policyBoundaryClause(1, 'MRC-3C-04-PD-449-APPLICABILITY', RevenueCodeProvisionClauseType::AuthorityBoundary, 'The provision of PD 449, otherwise known as the Cockfighting Law of 1974 ... shall apply to all matters regarding the operation of cockpits and the holding of cockfights in this municipality.', 'Candidate external authority: Presidential Decree 449 applies to cockpit operation and cockfight holding.', 'Current legal force, amendments, precedence, incorporated requirements, and enforcement authority require legal validation.', ['external_authority' => 'Presidential Decree 449']),
+            $this->policyBoundaryClause(2, 'MRC-3C-04-PD-1802-APPLICABILITY', RevenueCodeProvisionClauseType::AuthorityBoundary, 'PD 1802 (Creating the Philippine Game fowl Commission) ... shall apply to all matters regarding the operation of cockpits and the holding of cockfights in this municipality.', 'Candidate external authority: Presidential Decree 1802 applies to cockpit operation and cockfight holding.', 'Current legal force, institutional succession, amendments, incorporated requirements, and enforcement authority require legal validation.', ['external_authority' => 'Presidential Decree 1802', 'source_institution' => 'Philippine Game fowl Commission']),
+            $this->policyBoundaryClause(3, 'MRC-3C-04-OTHER-LAWS-APPLICABILITY', RevenueCodeProvisionClauseType::AuthorityBoundary, 'Such other pertinent laws shall apply to all matters regarding the operation of cockpits and the holding of cockfights in this municipality.', 'Candidate external authority boundary: other pertinent laws may govern cockpit operation and cockfight holding.', 'The applicable-law catalog, precedence, effective versions, and operational consequences are not enumerated and require legal validation.', ['external_authority' => 'other pertinent laws']),
+        ]);
+    }
+
     /**
      * @param  array<int, array<string, mixed>>  $clauses
      */
@@ -1917,7 +2021,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
     }
 
     /**
-     * @param  list<array{0: string, 1: string, 2: ?string, 3: ?string, 4: ?int, 5?: string, 6?: RevenueCodeProvisionClauseType, 7?: string}>  $rows
+     * @param  list<array{0: string, 1: string, 2: ?string, 3: ?string, 4: ?int, 5?: string, 6?: RevenueCodeProvisionClauseType, 7?: string, 8?: array<string, mixed>}>  $rows
      */
     private function persistFixedFeeScheduleClauses(string $provisionCode, array $rows): void
     {
@@ -1948,13 +2052,13 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 sourceText: $sourceText,
                 candidateInterpretation: $candidateInterpretation,
                 executionBlocker: $executionBlocker,
-                metadata: [
+                metadata: array_merge([
                     'business_category' => $category,
                     'source_classification' => $classification,
                     'source_value_text' => $sourceValueText,
                     'source_row_is_unlabeled' => $sourceRowIsUnlabeled,
                     'source_amount_is_missing' => $sourceValueText === null && $type === RevenueCodeProvisionClauseType::DependentRate,
-                ],
+                ], $row[8] ?? []),
                 amountCents: $amountCents,
             );
         }

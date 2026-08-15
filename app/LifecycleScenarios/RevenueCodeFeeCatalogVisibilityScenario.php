@@ -67,6 +67,10 @@ final class RevenueCodeFeeCatalogVisibilityScenario
         'MRC-3B-05-06-PAYMENT-APPLICABILITY',
         'MRC-3B-07-OPERATIONS',
         'MRC-3B-08-PENALTIES',
+        'MRC-3C-01-SPECIAL-DERBY-FEES',
+        'MRC-3C-02-EXCLUSIONS',
+        'MRC-3C-03-PAYMENT-TIMING',
+        'MRC-3C-04-APPLICABILITY',
     ];
 
     public function __construct(
@@ -106,11 +110,11 @@ final class RevenueCodeFeeCatalogVisibilityScenario
             $this->step('fee-catalog-seeded', 'Prepare deterministic Revenue Code fee catalog evidence', ['rule_code' => 'MRC-2A-02-B-RETAIL-BUSINESS-TAX'], ['rule_code' => $feeRule->code, 'fee_rule_id' => $feeRule->id]),
             $this->step('fee-rule-ranges-present', 'Verify persisted range brackets for the selected business tax rule', ['range_count' => 23, 'first_range_amount_cents' => 2266], ['range_count' => $feeRule->ranges->count(), 'first_range_amount_cents' => $feeRule->ranges->first()?->amount_cents]),
             $this->step('policy-boundary-present', 'Verify unresolved Revenue Code policy boundary remains explicit', ['policy_boundary' => 'new_business_initial_local_business_tax_exemption'], ['policy_boundary' => $feeRule->metadata['policy_boundaries'][0] ?? null]),
-            $this->step('provision-coverage-recorded', 'Verify provision coverage is distinct from executable policy', ['provision_count' => 39, 'reconciliation_required_count' => 38], ['provision_count' => RevenueCodeProvision::query()->count(), 'reconciliation_required_count' => RevenueCodeProvision::query()->where('reconciliation_status', 'reconciliation_required')->count()]),
+            $this->step('provision-coverage-recorded', 'Verify provision coverage is distinct from executable policy', ['provision_count' => 43, 'reconciliation_required_count' => 42], ['provision_count' => RevenueCodeProvision::query()->count(), 'reconciliation_required_count' => RevenueCodeProvision::query()->where('reconciliation_status', 'reconciliation_required')->count()]),
             $this->step('ambiguous-provision-linked', 'Link the disputed legal provision to its blocked fee rule without authorizing execution', ['provision_code' => 'MRC-2A-02-B-WHOLESALERS', 'reconciliation_status' => 'reconciliation_required', 'fee_rule_code' => $feeRule->code], ['provision_code' => $provision->code, 'reconciliation_status' => $provision->reconciliation_status->value, 'fee_rule_code' => $provision->feeRule?->code]),
             $this->step('schedule-matrix-analyzed', 'Analyze exact source rows for mechanical reconciliation findings', ['row_count' => 24, 'overlap_count' => 1, 'gap_count' => 0, 'reconciliation_required_count' => 3, 'ceiling_count' => 1, 'execution_ready' => false], $scheduleAnalysis['summary']),
             $this->step('schedule-matrices-analyzed', 'Analyze every extracted Section 2A.02 schedule without authorizing execution', ['schedule_count' => 4, 'row_count' => 82, 'overlap_count' => 3, 'gap_count' => 0, 'reconciliation_required_count' => 7, 'ceiling_count' => 4, 'execution_ready_count' => 0], $scheduleSummary),
-            $this->step('policy-boundary-clauses-recorded', 'Record non-schedule legal clauses without authorizing financial execution', ['provision_count' => 37, 'clause_count' => 254, 'reconciliation_required_count' => 254, 'ceiling_count' => 5, 'execution_ready_count' => 0], $policyBoundarySummary),
+            $this->step('policy-boundary-clauses-recorded', 'Record non-schedule legal clauses without authorizing financial execution', ['provision_count' => 41, 'clause_count' => 262, 'reconciliation_required_count' => 262, 'ceiling_count' => 5, 'execution_ready_count' => 0], $policyBoundarySummary),
         ];
 
         foreach ($steps as $step) {
