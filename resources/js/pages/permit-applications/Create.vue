@@ -82,7 +82,9 @@ type Registry = {
         id: number;
         name: string;
         trade_name: string | null;
+        registration_number: string | null;
         address: string | null;
+        barangay: string | null;
     }[];
 };
 
@@ -104,6 +106,12 @@ const isEditing = computed(() => props.draft !== undefined);
 const selectedBusinessId = ref<number | ''>(props.draft?.business_id ?? '');
 const usesExistingBusiness = computed(
     () => isCitizenIntake.value && selectedBusinessId.value !== '',
+);
+const selectedRegistryBusiness = computed(
+    () =>
+        props.registry?.businesses.find(
+            (business) => business.id === selectedBusinessId.value,
+        ) ?? null,
 );
 const registryBusinessReadOnly = computed(
     () => isEditing.value || usesExistingBusiness.value,
@@ -344,6 +352,58 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         Selecting a registered business reuses its legal
                         registry facts without changing them.
                     </p>
+                    <dl
+                        v-if="selectedRegistryBusiness"
+                        data-testid="citizen-selected-registry-business"
+                        :data-business-id="selectedRegistryBusiness.id"
+                        class="grid gap-3 border-t border-sidebar-border/70 pt-3 text-sm sm:grid-cols-2 dark:border-sidebar-border"
+                    >
+                        <div class="grid gap-1">
+                            <dt class="text-xs text-muted-foreground">
+                                Legal business name
+                            </dt>
+                            <dd class="font-medium text-foreground">
+                                {{ selectedRegistryBusiness.name }}
+                            </dd>
+                        </div>
+                        <div class="grid gap-1">
+                            <dt class="text-xs text-muted-foreground">
+                                Trade name
+                            </dt>
+                            <dd class="text-foreground">
+                                {{
+                                    selectedRegistryBusiness.trade_name ??
+                                    'Not recorded'
+                                }}
+                            </dd>
+                        </div>
+                        <div class="grid gap-1">
+                            <dt class="text-xs text-muted-foreground">
+                                Registration number
+                            </dt>
+                            <dd class="text-foreground">
+                                {{
+                                    selectedRegistryBusiness.registration_number ??
+                                    'Not recorded'
+                                }}
+                            </dd>
+                        </div>
+                        <div class="grid gap-1">
+                            <dt class="text-xs text-muted-foreground">
+                                Registered address
+                            </dt>
+                            <dd class="text-foreground">
+                                {{
+                                    [
+                                        selectedRegistryBusiness.address,
+                                        selectedRegistryBusiness.barangay,
+                                    ]
+                                        .filter(Boolean)
+                                        .join(', ') || 'Not recorded'
+                                }}
+                            </dd>
+                        </div>
+                    </dl>
                 </div>
                 <input
                     v-else-if="isCitizenIntake && draft"
@@ -353,6 +413,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                 />
 
                 <fieldset
+                    v-if="!usesExistingBusiness || isEditing"
                     :disabled="registryBusinessReadOnly"
                     data-testid="permit-establishment-intake"
                     class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 lg:grid-cols-3 dark:border-sidebar-border"

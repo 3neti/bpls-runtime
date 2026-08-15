@@ -191,6 +191,48 @@ test('citizens can create a draft for an existing linked business without mutati
         ->and(Business::query()->count())->toBe(1);
 });
 
+test('citizen existing-business selection is server scoped to the linked legal owner', function () {
+    $citizen = userWithPermissions([
+        UserPermission::AccessCitizen,
+        UserPermission::CreateOwnPermitApplications,
+    ], UserRole::Citizen);
+    $owner = BusinessOwner::factory()->create();
+    $ownedBusiness = Business::factory()->for($owner, 'owner')->create([
+        'name' => 'Owned Registry Business',
+    ]);
+    $otherBusiness = Business::factory()->create([
+        'name' => 'Other Owner Business',
+    ]);
+    $citizen->forceFill(['business_owner_id' => $owner->id])->save();
+    $lineOfBusiness = LineOfBusiness::factory()->create();
+
+    $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Create')
+            ->has('registry.businesses', 1)
+            ->where('registry.businesses.0.id', $ownedBusiness->id)
+            ->where('registry.businesses.0.name', 'Owned Registry Business')
+        );
+
+    $this->actingAs($citizen)
+        ->post(route('citizen.permit-applications.store'), citizenPermitDraftPayload([
+            'business_id' => $otherBusiness->id,
+            'lines' => [[
+                'line_of_business_id' => $lineOfBusiness->id,
+                'declared_gross_sales_pesos' => '1000.00',
+                'capital_investment_pesos' => '500.00',
+                'quantity' => 1,
+            ]],
+        ]))
+        ->assertSessionHasErrors('business_id');
+
+    expect(PermitApplication::query()->count())->toBe(0)
+        ->and($ownedBusiness->refresh()->business_owner_id)->toBe($owner->id)
+        ->and($otherBusiness->refresh()->business_owner_id)->not->toBe($owner->id);
+});
+
 test('citizens can edit an owned draft and atomically replace its activities', function () {
     $citizen = userWithPermissions([
         UserPermission::AccessCitizen,

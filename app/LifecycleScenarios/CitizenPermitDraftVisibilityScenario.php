@@ -5,9 +5,12 @@ namespace App\LifecycleScenarios;
 use App\Actions\CreateCitizenPermitApplicationDraft;
 use App\Actions\SimplePdfDocument;
 use App\Enums\PermitApplicationStatus;
+use App\Models\Business;
+use App\Models\BusinessOwner;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\User;
+use DomainException;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
@@ -48,6 +51,7 @@ final class CitizenPermitDraftVisibilityScenario
                 'is_active' => true,
             ],
         );
+        $isExistingBusinessScenario = $scenario->key === 'citizen_existing_business_registry_safety';
         $businessName = 'Citizen Scenario Business '.$runId;
         $activities = [
             [
@@ -70,7 +74,7 @@ final class CitizenPermitDraftVisibilityScenario
             ],
         ];
 
-        $permitApplication = $this->createPermitApplicationDraft->handle([
+        $draftData = [
             'owner_name' => $applicant->name,
             'owner_email' => $applicant->email,
             'owner_phone' => '09170000000',
@@ -83,7 +87,63 @@ final class CitizenPermitDraftVisibilityScenario
             'lines' => collect($activities)
                 ->map(fn (array $activity): array => collect($activity)->except(['code', 'name'])->all())
                 ->all(),
-        ], $applicant);
+        ];
+        $registryEvidence = null;
+
+        if ($isExistingBusinessScenario) {
+            $bootstrapApplication = $this->createPermitApplicationDraft->handle($draftData, $applicant);
+            $registryBusiness = $bootstrapApplication->business()->with('owner')->firstOrFail();
+            $otherOwner = BusinessOwner::query()->firstOrCreate(
+                ['legacy_source_id' => 'scenario-other-owner:'.$runId],
+                [
+                    'name' => 'Unrelated Scenario Owner',
+                    'metadata' => ['scenario_fixture' => true],
+                ],
+            );
+            $otherBusiness = Business::query()->firstOrCreate(
+                ['legacy_source_id' => 'scenario-other-business:'.$runId],
+                [
+                    'business_owner_id' => $otherOwner->id,
+                    'name' => 'Unrelated Scenario Business '.$runId,
+                    'metadata' => ['scenario_fixture' => true],
+                ],
+            );
+            $crossOwnerRejected = false;
+
+            try {
+                $this->createPermitApplicationDraft->handle([
+                    ...$draftData,
+                    'business_id' => $otherBusiness->id,
+                ], $applicant);
+            } catch (DomainException) {
+                $crossOwnerRejected = true;
+            }
+
+            $permitApplication = $this->createPermitApplicationDraft->handle([
+                ...$draftData,
+                'business_id' => $registryBusiness->id,
+            ], $applicant);
+            $businessName = $registryBusiness->name;
+            $registryEvidence = [
+                'owner_id' => $registryBusiness->business_owner_id,
+                'owner_name' => $registryBusiness->owner->name,
+                'owner_phone_sha256' => hash('sha256', (string) $registryBusiness->owner->phone),
+                'owner_address_sha256' => hash('sha256', (string) $registryBusiness->owner->address),
+                'business_id' => $registryBusiness->id,
+                'business_name' => $registryBusiness->name,
+                'trade_name' => $registryBusiness->trade_name,
+                'registration_number' => $registryBusiness->registration_number,
+                'business_address' => $registryBusiness->address,
+                'barangay' => $registryBusiness->barangay,
+                'bootstrap_application_id' => $bootstrapApplication->id,
+                'other_owner_id' => $otherOwner->id,
+                'other_business_id' => $otherBusiness->id,
+                'other_business_name' => $otherBusiness->name,
+                'cross_owner_rejected' => $crossOwnerRejected,
+            ];
+        } else {
+            $permitApplication = $this->createPermitApplicationDraft->handle($draftData, $applicant);
+        }
 
         $steps = [
             $this->step('citizen-resolved', 'Resolve actual citizen applicant', ['applicant_id' => $applicant->id], ['applicant_id' => $applicant->id]),
@@ -102,6 +162,27 @@ final class CitizenPermitDraftVisibilityScenario
             ], [
                 'assessment_count' => $permitApplication->assessments()->count(),
                 'submitted_by_id' => $permitApplication->submitted_by_id,
+            ]),
+            ...($registryEvidence === null ? [] : [
+                $this->step('existing-business-reused', 'Reuse an existing business through the canonical citizen draft action', [
+                    'business_id' => $registryEvidence['business_id'],
+                    'business_owner_id' => $registryEvidence['owner_id'],
+                    'shared_application_count' => 2,
+                ], [
+                    'business_id' => $permitApplication->business_id,
+                    'business_owner_id' => $permitApplication->business->business_owner_id,
+                    'shared_application_count' => $permitApplication->business->permitApplications()->count(),
+                ]),
+                $this->step('cross-owner-business-rejected', 'Refuse another owner business through the canonical citizen draft action', [
+                    'rejected' => true,
+                    'created_application_count' => 0,
+                ], [
+                    'rejected' => $registryEvidence['cross_owner_rejected'],
+                    'created_application_count' => PermitApplication::query()
+                        ->whereBelongsTo($applicant, 'submittedBy')
+                        ->whereBelongsTo($otherBusiness, 'business')
+                        ->count(),
+                ]),
             ]),
         ];
 
@@ -122,12 +203,15 @@ final class CitizenPermitDraftVisibilityScenario
             'business_activities' => collect($activities)
                 ->map(fn (array $activity): array => collect($activity)->except('line_of_business_id')->all())
                 ->all(),
+            ...($registryEvidence === null ? [] : [
+                'registry_safety' => $registryEvidence,
+            ]),
         ];
 
-        if ($scenario->key === 'citizen_permit_draft_edit_visibility') {
+        if (in_array($scenario->key, ['citizen_existing_business_registry_safety', 'citizen_permit_draft_edit_visibility'], true)) {
             $manifest['resources']['expected_edit'] = [
                 'business_name' => $businessName,
-                'owner_phone' => $permitApplication->business->owner->phone,
+                'owner_phone_sha256' => hash('sha256', (string) $permitApplication->business->owner->phone),
                 'registry_facts_read_only' => true,
                 'business_activities' => [
                     [
@@ -181,6 +265,7 @@ final class CitizenPermitDraftVisibilityScenario
             'permit_application_id' => $permitApplication->id,
             'status' => $permitApplication->status->value,
             'submitted_by_id' => $permitApplication->submitted_by_id,
+            'registry_safety' => $registryEvidence,
             'business_activities' => $manifest['resources']['business_activities'],
             'run_id' => $runId,
         ]);
@@ -227,6 +312,7 @@ final class CitizenPermitDraftVisibilityScenario
 
         $expectedEdit = data_get($manifest, 'resources.expected_edit');
         $expectedDocument = data_get($manifest, 'resources.expected_document');
+        $expectedRegistry = data_get($manifest, 'resources.registry_safety');
         $expectedActivities = is_array($expectedEdit)
             ? $expectedEdit['business_activities']
             : $manifest['resources']['business_activities'];
@@ -255,20 +341,76 @@ final class CitizenPermitDraftVisibilityScenario
         if (is_array($expectedEdit)) {
             $checks[] = $this->step('audit-edited-draft-facts', 'Canonical owner and business registry facts remain unchanged by the browser edit', [
                 'business_name' => $expectedEdit['business_name'],
-                'owner_phone' => $expectedEdit['owner_phone'],
+                'owner_phone_sha256' => $expectedEdit['owner_phone_sha256'],
             ], [
                 'business_name' => $permitApplication->business->name,
-                'owner_phone' => $permitApplication->business->owner->phone,
+                'owner_phone_sha256' => hash('sha256', (string) $permitApplication->business->owner->phone),
             ]);
             $checks[] = $this->step('audit-browser-edited-draft-facts', 'Browser reports immutable registry facts and application-specific edits', [
                 'business_name' => $permitApplication->business->name,
-                'owner_phone' => $permitApplication->business->owner->phone,
+                'owner_phone_sha256' => hash('sha256', (string) $permitApplication->business->owner->phone),
                 'edit_performed_by_browser' => true,
                 'registry_facts_read_only' => true,
             ], [
                 'business_name' => data_get($browserReport, 'citizen_draft.business_name'),
-                'owner_phone' => data_get($browserReport, 'citizen_draft.owner_phone'),
+                'owner_phone_sha256' => data_get($browserReport, 'citizen_draft.owner_phone_sha256'),
                 'edit_performed_by_browser' => data_get($browserReport, 'citizen_draft.edit_performed_by_browser'),
+                'registry_facts_read_only' => data_get($browserReport, 'citizen_draft.registry_facts_read_only'),
+            ]);
+        }
+
+        if (is_array($expectedRegistry)) {
+            $checks[] = $this->step('audit-existing-business-reuse', 'Canonical draft retains the exact linked owner and existing business', [
+                'owner_id' => $expectedRegistry['owner_id'],
+                'business_id' => $expectedRegistry['business_id'],
+                'submitted_by_id' => data_get($manifest, 'actors.applicant.id'),
+                'shared_application_count' => 2,
+            ], [
+                'owner_id' => $permitApplication->business->business_owner_id,
+                'business_id' => $permitApplication->business_id,
+                'submitted_by_id' => $permitApplication->submitted_by_id,
+                'shared_application_count' => $permitApplication->business->permitApplications()->count(),
+            ]);
+            $checks[] = $this->step('audit-registry-facts-unchanged', 'Owner and business registry facts remain unchanged after application editing', [
+                'owner_name' => $expectedRegistry['owner_name'],
+                'owner_phone_sha256' => $expectedRegistry['owner_phone_sha256'],
+                'owner_address_sha256' => $expectedRegistry['owner_address_sha256'],
+                'business_name' => $expectedRegistry['business_name'],
+                'trade_name' => $expectedRegistry['trade_name'],
+                'registration_number' => $expectedRegistry['registration_number'],
+                'business_address' => $expectedRegistry['business_address'],
+                'barangay' => $expectedRegistry['barangay'],
+            ], [
+                'owner_name' => $permitApplication->business->owner->name,
+                'owner_phone_sha256' => hash('sha256', (string) $permitApplication->business->owner->phone),
+                'owner_address_sha256' => hash('sha256', (string) $permitApplication->business->owner->address),
+                'business_name' => $permitApplication->business->name,
+                'trade_name' => $permitApplication->business->trade_name,
+                'registration_number' => $permitApplication->business->registration_number,
+                'business_address' => $permitApplication->business->address,
+                'barangay' => $permitApplication->business->barangay,
+            ]);
+            $checks[] = $this->step('audit-cross-owner-boundary', 'Other owner business remains unassociated with the citizen application', [
+                'cross_owner_rejected' => true,
+                'other_business_application_count' => 0,
+            ], [
+                'cross_owner_rejected' => $expectedRegistry['cross_owner_rejected'],
+                'other_business_application_count' => PermitApplication::query()
+                    ->where('submitted_by_id', $permitApplication->submitted_by_id)
+                    ->where('business_id', $expectedRegistry['other_business_id'])
+                    ->count(),
+            ]);
+            $checks[] = $this->step('audit-browser-registry-boundary', 'Browser exposes only owned selection and preserves registry facts during draft editing', [
+                'selected_business_id' => $expectedRegistry['business_id'],
+                'owned_option_visible' => true,
+                'other_owner_option_visible' => false,
+                'selected_summary_visible' => true,
+                'registry_facts_read_only' => true,
+            ], [
+                'selected_business_id' => data_get($browserReport, 'citizen_registry.selected_business_id'),
+                'owned_option_visible' => data_get($browserReport, 'citizen_registry.owned_option_visible'),
+                'other_owner_option_visible' => data_get($browserReport, 'citizen_registry.other_owner_option_visible'),
+                'selected_summary_visible' => data_get($browserReport, 'citizen_registry.selected_summary_visible'),
                 'registry_facts_read_only' => data_get($browserReport, 'citizen_draft.registry_facts_read_only'),
             ]);
         }
@@ -324,7 +466,19 @@ final class CitizenPermitDraftVisibilityScenario
                 'application_number' => $permitApplication->application_number,
                 'assessment_count' => $permitApplication->assessments_count,
                 'business_name' => $permitApplication->business->name,
-                'owner_phone' => $permitApplication->business->owner->phone,
+                'owner_phone_sha256' => hash('sha256', (string) $permitApplication->business->owner->phone),
+                'registry_safety' => is_array($expectedRegistry) ? [
+                    'owner_id' => $permitApplication->business->business_owner_id,
+                    'business_id' => $permitApplication->business_id,
+                    'bootstrap_application_id' => $expectedRegistry['bootstrap_application_id'],
+                    'shared_application_count' => $permitApplication->business->permitApplications()->count(),
+                    'other_owner_id' => $expectedRegistry['other_owner_id'],
+                    'other_business_id' => $expectedRegistry['other_business_id'],
+                    'other_business_application_count' => PermitApplication::query()
+                        ->where('submitted_by_id', $permitApplication->submitted_by_id)
+                        ->where('business_id', $expectedRegistry['other_business_id'])
+                        ->count(),
+                ] : null,
                 'business_activities' => $canonicalActivities,
                 'documents' => $permitApplication->documents->map(fn ($document): array => [
                     'id' => $document->id,
@@ -450,6 +604,39 @@ final class CitizenPermitDraftVisibilityScenario
      */
     private function storyboard(string $runId, PermitApplication $permitApplication, string $scenarioKey): array
     {
+        if ($scenarioKey === 'citizen_existing_business_registry_safety') {
+            return [
+                'title' => 'Citizen reuses an existing registered business safely',
+                'summary' => 'A citizen selects an existing business belonging to the linked legal owner, creates another application-specific draft, and edits declared activities without changing shared registry identity.',
+                'run_id' => $runId,
+                'record' => [
+                    'type' => 'permit_application',
+                    'id' => $permitApplication->id,
+                    'reference' => 'Draft #'.$permitApplication->id,
+                ],
+                'frames' => [
+                    [
+                        'title' => 'Citizen selects an owned business',
+                        'description' => 'The intake exposes businesses belonging to the linked legal owner and omits another owner business.',
+                        'dialogue' => 'Ownership is enforced by the server, not inferred by the browser.',
+                        'duration_seconds' => 4,
+                    ],
+                    [
+                        'title' => 'Application reuses registry identity',
+                        'description' => 'The canonical draft action attaches the exact existing business without creating or rewriting owner and business records.',
+                        'dialogue' => 'Registry identity remains durable across applications.',
+                        'duration_seconds' => 5,
+                    ],
+                    [
+                        'title' => 'Citizen edits application declarations',
+                        'description' => 'The browser updates activity facts while registry owner and business facts remain read-only and unchanged.',
+                        'dialogue' => 'Application editing is not registry maintenance.',
+                        'duration_seconds' => 5,
+                    ],
+                ],
+            ];
+        }
+
         if ($scenarioKey === 'citizen_permit_submission_visibility') {
             return [
                 'title' => 'Citizen formally submits a new permit application',

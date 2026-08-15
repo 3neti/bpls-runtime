@@ -469,7 +469,9 @@ class PermitApplicationController extends Controller
                 'id' => $business->id,
                 'name' => $business->name,
                 'trade_name' => $business->trade_name,
+                'registration_number' => $business->registration_number,
                 'address' => $business->address,
+                'barangay' => $business->barangay,
             ])->values() ?? [],
         ];
     }

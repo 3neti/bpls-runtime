@@ -26,6 +26,8 @@ use App\LifecycleScenarios\ScenarioActorResolver;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\LifecycleScenarios\StoryboardTerminalStateVisibilityScenario;
 use App\Models\Assessment;
+use App\Models\Business;
+use App\Models\BusinessOwner;
 use App\Models\FeeRule;
 use App\Models\Permission;
 use App\Models\PermitApplication;
@@ -79,6 +81,19 @@ test('scenario registry discovers the citizen permit draft visibility scenario',
         ->and($scenario->expectations['canonical_state'])->toBe('draft')
         ->and($scenario->expectations['official_application_number'])->toBeNull()
         ->and($scenario->expectations['assessment_count'])->toBe(0)
+        ->and($scenario->safety['external_integrations'])->toBeFalse();
+});
+
+test('scenario registry discovers citizen existing-business registry safety', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_existing_business_registry_safety');
+
+    expect($scenario)
+        ->key->toBe('citizen_existing_business_registry_safety')
+        ->label->toBe('Citizen existing-business reuse and registry safety')
+        ->risk->toBe('local transactional')
+        ->and($scenario->expectations['existing_business_reused'])->toBeTrue()
+        ->and($scenario->expectations['cross_owner_business_rejected'])->toBeTrue()
+        ->and($scenario->expectations['registry_facts_read_only'])->toBeTrue()
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
@@ -518,6 +533,98 @@ test('citizen permit draft scenario audit compares browser evidence with canonic
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
 
+test('citizen existing-business scenario proves registry reuse and immutable shared identity', function () {
+    Storage::fake('local');
+
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_existing_business_registry_safety');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'citizen-existing-business-test-001');
+    $runner = app(CitizenPermitDraftVisibilityScenario::class);
+    $manifest = $runner->prepare($scenario, 'citizen-existing-business-test-001', [
+        'applicant' => $citizen,
+    ], $artifactStore);
+    $resumedManifest = $runner->prepare($scenario, 'citizen-existing-business-test-001', [
+        'applicant' => $citizen,
+    ], $artifactStore);
+    $application = PermitApplication::query()
+        ->with(['business.owner', 'lines.lineOfBusiness'])
+        ->findOrFail($manifest['resources']['record_id']);
+    $registry = $manifest['resources']['registry_safety'];
+    $expectedEdit = $manifest['resources']['expected_edit'];
+
+    expect($resumedManifest['resources']['record_id'])->toBe($application->id)
+        ->and(PermitApplication::query()->count())->toBe(2)
+        ->and($application->business_id)->toBe($registry['business_id'])
+        ->and($application->business->business_owner_id)->toBe($citizen->refresh()->business_owner_id)
+        ->and($application->business->permitApplications()->count())->toBe(2)
+        ->and(PermitApplication::query()->where('business_id', $registry['other_business_id'])->count())->toBe(0)
+        ->and($registry['cross_owner_rejected'])->toBeTrue()
+        ->and(BusinessOwner::query()->findOrFail($registry['other_owner_id'])->id)->not->toBe($citizen->business_owner_id)
+        ->and(Business::query()->findOrFail($registry['other_business_id'])->business_owner_id)->toBe($registry['other_owner_id']);
+
+    app(UpdateCitizenPermitApplicationDraft::class)->handle($application, [
+        'owner_name' => $application->business->owner->name,
+        'owner_phone_sha256' => hash('sha256', (string) $application->business->owner->phone),
+        'owner_address' => $application->business->owner->address,
+        'business_name' => $application->business->name,
+        'trade_name' => $application->business->trade_name,
+        'registration_number' => $application->business->registration_number,
+        'business_address' => $application->business->address,
+        'barangay' => $application->business->barangay,
+        'type' => $application->type->value,
+        'application_year' => $application->application_year,
+        'draft_version' => $application->updated_at->toIso8601String(),
+        'lines' => collect($expectedEdit['business_activities'])->map(function (array $activity) use ($application): array {
+            $line = $application->lines->firstWhere('lineOfBusiness.code', $activity['code']);
+
+            return [
+                'line_of_business_id' => $line->line_of_business_id,
+                'declared_gross_sales_cents' => $activity['declared_gross_sales_cents'],
+                'capital_investment_cents' => $activity['capital_investment_cents'],
+                'quantity' => $activity['quantity'],
+                'started_on' => $activity['started_on'],
+            ];
+        })->all(),
+    ], $citizen);
+    $artifactStore->putJson('browser/report.json', [
+        'result' => ['passed' => true],
+        'citizen_registry' => [
+            'selected_business_id' => $registry['business_id'],
+            'owned_option_visible' => true,
+            'other_owner_option_visible' => false,
+            'selected_summary_visible' => true,
+        ],
+        'citizen_draft' => [
+            'edit_performed_by_browser' => true,
+            'status' => PermitApplicationStatus::Draft->value,
+            'business_name' => $registry['business_name'],
+            'owner_phone_sha256' => $registry['owner_phone_sha256'],
+            'registry_facts_read_only' => true,
+            'business_activities' => collect($expectedEdit['business_activities'])
+                ->map(fn (array $activity): array => collect($activity)->except('name')->all())
+                ->all(),
+        ],
+        'checks' => [],
+        'artifacts' => [
+            'screenshots' => [
+                '01-citizen-existing-business-selection' => 'browser/screenshots/01-citizen-existing-business-selection.png',
+                '03-citizen-draft-after-edit' => 'browser/screenshots/03-citizen-draft-after-edit.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($manifest, $artifactStore);
+
+    expect($audited['result'])
+        ->terminal->toBe('passed')
+        ->browser->toBe('passed')
+        ->audit->toBe('passed')
+        ->passed->toBeTrue()
+        ->and($application->business->refresh()->name)->toBe($registry['business_name'])
+        ->and($application->business->owner->refresh()->name)->toBe($registry['owner_name'])
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
+});
+
 test('citizen formal submission scenario audits the browser transition against canonical receipt evidence', function () {
     Storage::fake('local');
 
@@ -583,7 +690,7 @@ test('citizen permit draft edit scenario audit compares browser edits with canon
     app(UpdateCitizenPermitApplicationDraft::class)->handle($application, [
         'owner_name' => $application->business->owner->name,
         'owner_email' => $application->business->owner->email,
-        'owner_phone' => $expectedEdit['owner_phone'],
+        'owner_phone_sha256' => $expectedEdit['owner_phone_sha256'],
         'owner_address' => $application->business->owner->address,
         'business_name' => $expectedEdit['business_name'],
         'trade_name' => $application->business->trade_name,
@@ -610,7 +717,7 @@ test('citizen permit draft edit scenario audit compares browser edits with canon
             'edit_performed_by_browser' => true,
             'status' => 'draft',
             'business_name' => $expectedEdit['business_name'],
-            'owner_phone' => $expectedEdit['owner_phone'],
+            'owner_phone_sha256' => $expectedEdit['owner_phone_sha256'],
             'registry_facts_read_only' => true,
             'business_activities' => collect($expectedEdit['business_activities'])
                 ->map(fn (array $activity): array => collect($activity)->except('name')->all())
@@ -1208,6 +1315,28 @@ test('command prepares the citizen permit draft visibility scenario', function (
     expect($manifest['scenario']['key'])->toBe('citizen_permit_draft_visibility')
         ->and($manifest['result']['terminal'])->toBe('passed')
         ->and($manifest['resources']['public_reference'])->toStartWith('Draft #')
+        ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
+});
+
+test('command prepares citizen existing-business registry safety', function () {
+    Storage::fake('local');
+
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    config()->set('lifecycle_scenarios.actors.citizen_applicant.email', $citizen->email);
+
+    $this->artisan('lifecycle:scenario', [
+        'scenario' => 'citizen_existing_business_registry_safety',
+        '--run-id' => 'citizen-existing-business-command-test-001',
+        '--phase' => 'prepare',
+    ])->assertSuccessful();
+
+    $artifactStore = new ScenarioArtifactStore('citizen_existing_business_registry_safety', 'citizen-existing-business-command-test-001');
+    $manifest = $artifactStore->readJson('manifest.json');
+
+    expect($manifest['scenario']['key'])->toBe('citizen_existing_business_registry_safety')
+        ->and($manifest['result']['terminal'])->toBe('passed')
+        ->and($manifest['resources']['registry_safety']['cross_owner_rejected'])->toBeTrue()
+        ->and($manifest['resources']['record_id'])->not->toBe($manifest['resources']['registry_safety']['bootstrap_application_id'])
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
 });
 

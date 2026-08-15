@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
@@ -22,6 +23,7 @@ if (manifest.schema_version !== 'application.lifecycle-evidence.v1') {
 
 const supportedScenarios = [
     'assessment_policy_boundary_visibility',
+    'citizen_existing_business_registry_safety',
     'citizen_new_permit_lifecycle_authority_boundary',
     'citizen_permit_authority_review_visibility',
     'citizen_permit_processing_visibility',
@@ -90,6 +92,7 @@ const transferPolicyEvidence = {};
 const retirementPolicyEvidence = {};
 const feeCatalogEvidence = {};
 const citizenDraftEvidence = {};
+const citizenRegistryEvidence = {};
 const citizenProcessingEvidence = {};
 const citizenAuthorityReviewEvidence = {};
 const citizenSubmissionEvidence = {};
@@ -156,6 +159,14 @@ try {
 
     if (manifest.scenario.key === 'citizen_permit_draft_visibility') {
         await inspectCitizenPermitDraft(page, baseUrl);
+    }
+
+    if (
+        manifest.scenario.key === 'citizen_existing_business_registry_safety'
+    ) {
+        await inspectCitizenExistingBusinessRegistrySafety(page, baseUrl);
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await editCitizenPermitDraft(page, baseUrl);
     }
 
     if (manifest.scenario.key === 'citizen_permit_submission_visibility') {
@@ -277,6 +288,7 @@ const report = {
     retirement_policy: retirementPolicyEvidence,
     fee_catalog: feeCatalogEvidence,
     citizen_draft: citizenDraftEvidence,
+    citizen_registry: citizenRegistryEvidence,
     citizen_processing: citizenProcessingEvidence,
     citizen_authority_review: citizenAuthorityReviewEvidence,
     citizen_submission: citizenSubmissionEvidence,
@@ -1037,6 +1049,128 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
     );
 }
 
+async function inspectCitizenExistingBusinessRegistrySafety(
+    targetPage,
+    targetBaseUrl,
+) {
+    const registry = manifest.resources.registry_safety;
+    const createUrl = `${targetBaseUrl}${manifest.resources.create_url}`;
+    await targetPage.goto(createUrl, { waitUntil: 'networkidle' });
+
+    const businessSelect = targetPage.getByTestId(
+        'citizen-registry-business-select',
+    );
+    await businessSelect.waitFor();
+    const options = await businessSelect.locator('option').evaluateAll((items) =>
+        items.map((item) => ({
+            value: item.value,
+            label: item.textContent?.trim() ?? '',
+        })),
+    );
+    const ownedOptionVisible = options.some(
+        (option) =>
+            option.value === String(registry.business_id) &&
+            option.label === registry.business_name,
+    );
+    const otherOwnerOptionVisible = options.some(
+        (option) => option.value === String(registry.other_business_id),
+    );
+
+    await businessSelect.selectOption(String(registry.business_id));
+    const selectedSummary = targetPage.getByTestId(
+        'citizen-selected-registry-business',
+    );
+    await selectedSummary.waitFor();
+    const selectedBusinessId = Number(
+        await selectedSummary.getAttribute('data-business-id'),
+    );
+    const summaryText = await selectedSummary.innerText();
+    const selectedSummaryVisible =
+        summaryText.includes(registry.business_name) &&
+        (registry.trade_name === null ||
+            summaryText.includes(registry.trade_name)) &&
+        (registry.registration_number === null ||
+            summaryText.includes(registry.registration_number));
+    const newRegistryFieldsVisible = await targetPage
+        .getByTestId('permit-establishment-intake')
+        .isVisible()
+        .catch(() => false);
+
+    Object.assign(citizenRegistryEvidence, {
+        owner_id: registry.owner_id,
+        selected_business_id: selectedBusinessId,
+        owned_option_visible: ownedOptionVisible,
+        other_owner_option_visible: otherOwnerOptionVisible,
+        selected_summary_visible: selectedSummaryVisible,
+        new_registry_fields_visible: newRegistryFieldsVisible,
+    });
+    checks.push(
+        check(
+            'citizen-registry-owned-option-visible',
+            'Citizen intake exposes the exact linked-owner business',
+            true,
+            ownedOptionVisible,
+        ),
+        check(
+            'citizen-registry-other-owner-option-absent',
+            'Citizen intake omits another owner business',
+            false,
+            otherOwnerOptionVisible,
+        ),
+        check(
+            'citizen-registry-selection-exact',
+            'Selected registry summary identifies the exact manifest business',
+            registry.business_id,
+            selectedBusinessId,
+        ),
+        check(
+            'citizen-registry-summary-visible',
+            'Selected legal registry facts remain visible without editable inputs',
+            true,
+            selectedSummaryVisible && !newRegistryFieldsVisible,
+        ),
+    );
+    actionLog.push(
+        stepLog(
+            'citizen-existing-business-selected',
+            'Select the exact manifest-owned business in citizen intake',
+            { business_id: registry.business_id },
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '01-citizen-existing-business-selection',
+        'browser/screenshots/01-citizen-existing-business-selection.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    const mobileSummaryVisible = await selectedSummary.isVisible();
+    const horizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+    checks.push(
+        check(
+            'citizen-registry-mobile-summary-visible',
+            'Mobile intake keeps selected registry identity visible',
+            true,
+            mobileSummaryVisible,
+        ),
+        check(
+            'citizen-registry-mobile-no-horizontal-overflow',
+            'Mobile registry selection has no page-level horizontal overflow',
+            false,
+            horizontalOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '02-citizen-existing-business-selection-mobile',
+        'browser/screenshots/02-citizen-existing-business-selection-mobile.png',
+    );
+}
+
 async function inspectCitizenPermitDraft(targetPage, targetBaseUrl) {
     const createUrl = `${targetBaseUrl}${manifest.resources.create_url}`;
     await targetPage.goto(createUrl, { waitUntil: 'networkidle' });
@@ -1474,6 +1608,9 @@ async function editCitizenPermitDraft(targetPage, targetBaseUrl) {
     const ownerPhoneReadOnly = await targetPage
         .locator('#owner_phone')
         .isDisabled();
+    const prefilledOwnerPhone = await targetPage
+        .locator('#owner_phone')
+        .inputValue();
     const businessNameReadOnly = await targetPage
         .locator('#business_name')
         .isDisabled();
@@ -1596,7 +1733,7 @@ async function editCitizenPermitDraft(targetPage, targetBaseUrl) {
         .first()
         .isVisible();
     const ownerPhoneVisible = await targetPage
-        .getByText(expectedEdit.owner_phone, { exact: true })
+        .getByText(prefilledOwnerPhone, { exact: true })
         .isVisible();
     const assessmentActionVisible = await targetPage
         .getByRole('button', { name: /assess/i })
@@ -1607,7 +1744,9 @@ async function editCitizenPermitDraft(targetPage, targetBaseUrl) {
         display_reference: manifest.resources.public_reference,
         status: 'draft',
         business_name: expectedEdit.business_name,
-        owner_phone: expectedEdit.owner_phone,
+        owner_phone_sha256: createHash('sha256')
+            .update(prefilledOwnerPhone)
+            .digest('hex'),
         registry_facts_read_only: ownerPhoneReadOnly && businessNameReadOnly,
         business_activities: browserActivities,
         assessment_action_visible: assessmentActionVisible,

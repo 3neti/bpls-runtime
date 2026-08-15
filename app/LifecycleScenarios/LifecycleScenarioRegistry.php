@@ -170,6 +170,41 @@ final class LifecycleScenarioRegistry
                     ],
                 ],
             ),
+            'citizen_existing_business_registry_safety' => new LifecycleScenarioDefinition(
+                key: 'citizen_existing_business_registry_safety',
+                label: 'Citizen existing-business reuse and registry safety',
+                mode: 'citizen_existing_business_registry_safety',
+                risk: 'local transactional',
+                actors: [
+                    'applicant' => 'citizen_applicant',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'canonical_state' => 'draft',
+                    'existing_business_reused' => true,
+                    'cross_owner_business_rejected' => true,
+                    'registry_facts_read_only' => true,
+                    'official_application_number' => null,
+                    'assessment_count' => 0,
+                    'external_calls' => 0,
+                    'irreversible_actions' => false,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
             'citizen_permit_draft_document_visibility' => new LifecycleScenarioDefinition(
                 key: 'citizen_permit_draft_document_visibility',
                 label: 'Citizen permit draft document visibility',
