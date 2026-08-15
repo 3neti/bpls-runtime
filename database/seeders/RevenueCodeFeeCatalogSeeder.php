@@ -633,6 +633,42 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 metadata: ['chapter' => 3, 'article' => 'D', 'known_ambiguities' => ['damage_trigger_and_proof', 'offense_counting', 'animal_owner_identity', 'enforcement_authority', 'due_process', 'collection_and_receipt', 'damage_valuation', 'property_owner_payment']],
             ),
             $this->provision(
+                code: 'MRC-3E-01-DAILY-PERMIT-FEE',
+                section: 'Section 3E.01',
+                title: 'Circus and parade daily Mayor permit fee',
+                type: RevenueCodeProvisionType::FixedFee,
+                excerpt: 'The ordinance prints a PHP 500.00 per-day Mayor permit fee for every circus and other parade using banners, floats, or musical instruments in the Municipality.',
+                notes: 'Circus and parade classification, whether the listed equipment is conjunctive or illustrative, event identity, event-day counting, partial days, route scope, cancellations, and operational fee acceptance require municipal reconciliation. The printed amount is not executable.',
+                metadata: ['chapter' => 3, 'article' => 'E', 'known_ambiguities' => ['circus_or_parade_classification', 'banner_float_instrument_scope', 'event_identity', 'event_day_counting', 'partial_day_treatment', 'route_scope', 'cancellation_and_refund', 'operational_fee_acceptance']],
+            ),
+            $this->provision(
+                code: 'MRC-3E-02-PAYMENT-TIMING',
+                section: 'Section 3E.02',
+                title: 'Circus and parade application and payment timing',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance makes the fee payable to the Municipal Treasurer upon permit application to the Municipal Mayor at least three days before the scheduled circus or parade, followed by grammatically defective activity-timing text.',
+                notes: 'The final source phrase is malformed. Filing and payment sequence, deadline counting, collector and application receiver, late applications, event changes, receipt evidence, permit issuance, and whether payment must precede activity require accepted procedure.',
+                metadata: ['chapter' => 3, 'article' => 'E', 'known_ambiguities' => ['malformed_activity_timing_text', 'application_and_payment_sequence', 'three_day_deadline_counting', 'late_application', 'event_change', 'receipt_evidence', 'permit_issuance_sequence']],
+            ),
+            $this->provision(
+                code: 'MRC-3E-03-EXEMPTIONS',
+                section: 'Section 3E.03',
+                title: 'Circus and parade permit-fee exemptions',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance exempts civic and military parades and religious processions from the Article E permit fee.',
+                notes: 'Event classification, mixed-purpose events, organizer and sponsorship evidence, exemption approval, permit-versus-fee treatment, and current legal authority require accepted municipal policy.',
+                metadata: ['chapter' => 3, 'article' => 'E', 'known_ambiguities' => ['event_classification', 'mixed_purpose_event', 'organizer_and_sponsorship_evidence', 'exemption_approval', 'permit_or_fee_exemption_scope', 'current_legal_authority']],
+            ),
+            $this->provision(
+                code: 'MRC-3E-04-ADMINISTRATION',
+                section: 'Section 3E.04',
+                title: 'Parade permit application and public-order administration',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance requires a Municipal Mayor permit and prescribed written application before a parade, and assigns public-order rules and lawful-activity boundaries to the Philippine National Police Station Commander.',
+                notes: 'Applicant identity, prescribed form, required information, route and place detail, issuing authority, review and approval, current PNP title and authority, rule publication, boundary definition, inter-office coordination, and enforcement require accepted procedure.',
+                metadata: ['chapter' => 3, 'article' => 'E', 'known_ambiguities' => ['applicant_identity', 'prescribed_form', 'required_information', 'route_and_place_detail', 'mayor_permit_authority', 'review_and_approval', 'current_pnp_title_and_authority', 'rule_publication', 'lawful_boundary_definition', 'inter_office_coordination']],
+            ),
+            $this->provision(
                 code: 'MRC-2E-01-BUSINESS-TAX-SCOPE',
                 section: 'Section 2E.01',
                 title: 'Payment scope for multiple establishments and businesses',
@@ -1694,6 +1730,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
         $this->seedCockpitArticleBClauses();
         $this->seedSpecialCockfightingArticleCClauses();
         $this->seedAstrayAnimalArticleDClauses();
+        $this->seedCircusParadeArticleEClauses();
 
         $this->persistPolicyBoundaryClauses('MRC-2F-01-PIL', [
             $this->pilThresholdClause(1, 'SARI-SARI', '1', 'Sari-Sari Stores', '61,600.00', 6_160_000),
@@ -2037,6 +2074,47 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             $this->policyBoundaryClause(2, 'MRC-3D-05-SECOND-OFFENSE-FINE', RevenueCodeProvisionClauseType::Penalty, 'Owners whose animals are caught astray and incurring damages to plants and properties shall pay: Second offense - P 200.00.', 'Candidate source fine: PHP 200.00 for a second damage-causing astray-animal offense.', 'Damage and causation proof, offense counting period and linkage, owner responsibility, notice and hearing, imposing authority, collection, receipt, appeal, and current legal authority require reconciliation.', ['candidate_offense_number' => 2, 'candidate_damage_required' => true], 20_000),
             $this->policyBoundaryClause(3, 'MRC-3D-05-THIRD-SUBSEQUENT-FINE', RevenueCodeProvisionClauseType::Penalty, 'Owners whose animals are caught astray and incurring damages to plants and properties shall pay: For the third offense and each subsequent offense - P 300.00.', 'Candidate source fine: PHP 300.00 for the third and each subsequent damage-causing astray-animal offense.', 'Damage and causation proof, offense counting period and linkage, subsequent-offense treatment, owner responsibility, notice and hearing, imposing authority, collection, receipt, appeal, and current legal authority require reconciliation.', ['candidate_offense_from' => 3, 'candidate_damage_required' => true], 30_000),
             $this->policyBoundaryClause(4, 'MRC-3D-05-ACTUAL-PROPERTY-DAMAGE', RevenueCodeProvisionClauseType::ActualCost, 'In addition to the fine, the owners shall pay the amount of damage incurred, if any, to the property owner.', 'Candidate compensation: in addition to the fine, the animal owner pays actual property damage to the property owner.', 'Damage valuation, causation and ownership proof, agreement or adjudication authority, payer and payee identity, direct-versus-municipal collection, receipt, disputes, partial payment, and relationship to civil remedies require accepted legal procedure.', ['source_amount_basis' => 'actual_property_damage', 'candidate_payer' => 'animal_owner', 'candidate_payee' => 'property_owner', 'numeric_candidate_is_missing' => true]),
+        ]);
+    }
+
+    private function seedCircusParadeArticleEClauses(): void
+    {
+        $this->persistPolicyBoundaryClauses('MRC-3E-01-DAILY-PERMIT-FEE', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-3E-01-CIRCUS-PARADE-DAILY-FEE',
+                type: RevenueCodeProvisionClauseType::PermitRequirement,
+                sourceText: 'There shall be collected a Mayor’s Permit Fee of Five Hundred (P500.00) pesos per day on every circus and other parades using banners, floats or musical instruments carried on in this municipality.',
+                candidateInterpretation: 'Candidate source fee: PHP 500.00 for each day of a qualifying circus or other parade using banners, floats, or musical instruments in the Municipality.',
+                executionBlocker: 'Event classification, the relationship among circus, parade, banners, floats, and instruments, event and permit identity, day and partial-day counting, route scope, cancellation, refund, and operational acceptance require municipal policy.',
+                metadata: ['candidate_unit' => 'event_day', 'candidate_activity_types' => ['circus', 'other_parade'], 'source_activity_features' => ['banners', 'floats', 'musical_instruments']],
+                amountCents: 50_000,
+            ),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3E-02-PAYMENT-TIMING', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-3E-02-APPLY-PAY-THREE-DAYS-BEFORE',
+                type: RevenueCodeProvisionClauseType::PaymentTiming,
+                sourceText: 'The fee imposed herein shall be due and payable to the Municipal Treasurer upon application for a permit to the Municipal Mayor at least three (3) days before the scheduled date of the circus or parade and on such activity shall be held.',
+                candidateInterpretation: 'Candidate timing: apply to the Municipal Mayor and pay the Municipal Treasurer at least three days before the scheduled circus or parade.',
+                executionBlocker: 'The final phrase “and on such activity shall be held” is grammatically defective; filing/payment sequence, deadline counting, late applications, event rescheduling, receipt evidence, permit issuance, and activity authorization require accepted procedure.',
+                metadata: ['candidate_application_receiver' => 'Municipal Mayor', 'candidate_collector' => 'Municipal Treasurer', 'source_advance_days' => 3, 'known_source_wording' => 'and on such activity shall be held'],
+            ),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3E-03-EXEMPTIONS', [
+            $this->policyBoundaryClause(1, 'MRC-3E-03-CIVIC-PARADE-EXEMPTION', RevenueCodeProvisionClauseType::Exemption, 'Civic ... parades ... shall not be required to pay the permit fee imposed in this Article.', 'Candidate exemption: civic parades do not pay the Article E permit fee.', 'Civic-event classification, organizer and sponsorship evidence, mixed-purpose events, approval authority, and whether only payment or also permit requirements are affected require accepted policy.', ['candidate_exempt_activity' => 'civic_parade']),
+            $this->policyBoundaryClause(2, 'MRC-3E-03-MILITARY-PARADE-EXEMPTION', RevenueCodeProvisionClauseType::Exemption, 'Military parades ... shall not be required to pay the permit fee imposed in this Article.', 'Candidate exemption: military parades do not pay the Article E permit fee.', 'Military-event and organizer identity, joint or ceremonial events, evidence, approval authority, and whether only payment or also permit requirements are affected require accepted policy.', ['candidate_exempt_activity' => 'military_parade']),
+            $this->policyBoundaryClause(3, 'MRC-3E-03-RELIGIOUS-PROCESSION-EXEMPTION', RevenueCodeProvisionClauseType::Exemption, 'Religious processions shall not be required to pay the permit fee imposed in this Article.', 'Candidate exemption: religious processions do not pay the Article E permit fee.', 'Religious-procession and organizer identity, mixed religious/commercial events, evidence, approval authority, constitutional treatment, and whether only payment or also permit requirements are affected require legal and municipal policy.', ['candidate_exempt_activity' => 'religious_procession']),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3E-04-ADMINISTRATION', [
+            $this->policyBoundaryClause(1, 'MRC-3E-04-MAYOR-PERMIT-BEFORE-PARADE', RevenueCodeProvisionClauseType::PermitRequirement, 'Any persons who shall hold a parade within this municipality shall first obtain from the Municipal Mayor before undertaking the activity.', 'Candidate prerequisite: obtain a permit from the Municipal Mayor before holding a parade in the Municipality.', 'The source omits the object after “obtain”; applicant and responsible-person identity, permit identity, issuing authority, approval criteria, exemptions, validity, event changes, and enforcement require accepted procedure.', ['candidate_authority' => 'Municipal Mayor', 'candidate_timing' => 'before_activity', 'known_source_omission' => 'object after obtain']),
+            $this->policyBoundaryClause(2, 'MRC-3E-04-WRITTEN-APPLICATION-CONTENTS', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'A written application in a prescribed form shall indicate the name, address of the applicant, the description of the activity, the place or places where the same will be conducted and such other pertinent information as may be required.', 'Candidate application evidence: prescribed written form containing applicant name and address, activity description, activity places, and other required pertinent information.', 'The prescribed form, applicant identity, address standard, route and place detail, additional-information authority, filing channel, signature, attachments, retention, and sufficiency require accepted procedure.', ['candidate_fields' => ['applicant_name', 'applicant_address', 'activity_description', 'activity_places', 'other_pertinent_information']]),
+            $this->policyBoundaryClause(3, 'MRC-3E-04-PNP-ORDER-RULES', RevenueCodeProvisionClauseType::AuthorityBoundary, 'The Station Commander of the Philippine National Police shall promulgate the necessary rules and regulations to maintain an orderly and peaceful conduct of the activities mentioned in this Article.', 'Candidate authority: the Philippine National Police Station Commander establishes rules for orderly and peaceful conduct of Article E activities.', 'Current office title and jurisdiction, delegation, rule identity and publication, consistency with other law, permit conditions, coordination, enforcement, and audit evidence require legal and operational validation.', ['candidate_authority' => 'Station Commander of the Philippine National Police', 'candidate_purpose' => 'orderly_and_peaceful_conduct']),
+            $this->policyBoundaryClause(4, 'MRC-3E-04-PNP-LAWFUL-BOUNDARY', RevenueCodeProvisionClauseType::OperatingRestriction, 'He shall also define the boundary within which such activities may be lawfully conducted.', 'Candidate operating boundary: the PNP Station Commander defines where the covered activities may lawfully occur.', 'The pronoun refers to the preceding Station Commander, but current authority, route and geographic representation, issuance and publication, conflict with Mayor permit places, changes, enforcement, and evidence require accepted procedure.', ['candidate_authority' => 'Station Commander of the Philippine National Police', 'candidate_boundary_type' => 'lawful_activity_area', 'source_actor_pronoun' => 'He']),
         ]);
     }
 
