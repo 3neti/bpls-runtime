@@ -36,4 +36,6 @@ enum RevenueCodeProvisionClauseType: string
     case PermitCancellation = 'permit_cancellation';
     case EstateContinuation = 'estate_continuation';
     case TaxMapping = 'tax_mapping';
+    case SitusDefinition = 'situs_definition';
+    case SalesAllocation = 'sales_allocation';
 }

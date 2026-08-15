@@ -58,10 +58,13 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
     expect(FeeRuleRange::query()->whereBelongsTo($retailTax)->count())->toBe(23);
     expect(FeeRuleReconciliation::query()->count())->toBe(4);
 
-    expect(RevenueCodeProvision::query()->count())->toBe(20)
+    expect(RevenueCodeProvision::query()->count())->toBe(29)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2A.02%')->count())->toBe(8)
+        ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2B.%')->count())->toBe(4)
+        ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2C.%')->count())->toBe(2)
+        ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2D.%')->count())->toBe(3)
         ->and(RevenueCodeProvision::query()->whereNotNull('fee_rule_id')->count())->toBe(4)
-        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(19);
+        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(28);
 
     $wholesaleProvision = RevenueCodeProvision::query()
         ->with('feeRule.currentReconciliation')
@@ -85,10 +88,10 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->feeRule->currentReconciliation->execution_status->toBe(FeeRuleExecutionStatus::Executable);
 
     expect(RevenueCodeProvisionRow::query()->count())->toBe(82);
-    expect(RevenueCodeProvisionClause::query()->count())->toBe(87)
+    expect(RevenueCodeProvisionClause::query()->count())->toBe(122)
         ->and(RevenueCodeProvisionClause::query()
             ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
-            ->count())->toBe(87);
+            ->count())->toBe(122);
 
     $dependentRate = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2A-02-C-DEPENDENT-HALF-RATE')
@@ -152,6 +155,33 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->sole();
     $estateContinuation = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2E-04-DEATH-ESTATE-CONTINUATION')
+        ->sole();
+    $mobileTraderRate = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2B-02-MOBILE-TRADER-GROSS-RECEIPTS-RATE')
+        ->sole();
+    $publicUtilityVanRate = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2B-05-VAN')
+        ->sole();
+    $amusementDailyRate = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2B-07-AMUSEMENT-CONTRIVANCE-DAILY-RATE')
+        ->sole();
+    $otherBusinessCeiling = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2B-08-NATIONAL-TAX-BUSINESS-CEILING')
+        ->sole();
+    $petroleumExemption = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2C-01-PETROLEUM-LOCAL-TAX-EXEMPTION')
+        ->sole();
+    $newBusinessExemption = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2C-02-INITIAL-LOCAL-BUSINESS-TAX-EXEMPTION')
+        ->sole();
+    $principalOfficeSitus = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2D-01-A-PRINCIPAL-OFFICE')
+        ->sole();
+    $salesAllocation = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2D-01-B-THIRTY-SEVENTY-ALLOCATION')
+        ->sole();
+    $portOfLoading = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2D-01-C-PORT-OF-LOADING')
         ->sole();
 
     expect($dependentRate)
@@ -223,7 +253,36 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->metadata->candidate_actions->toBe(['permit_surrender', 'permit_cancellation', 'cancellation_record'])
         ->and($estateContinuation)
         ->clause_type->toBe(RevenueCodeProvisionClauseType::EstateContinuation)
-        ->metadata->candidate_tax_effect->toBe('no_additional_payment_for_paid_term_remainder');
+        ->metadata->candidate_tax_effect->toBe('no_additional_payment_for_paid_term_remainder')
+        ->and($mobileTraderRate)
+        ->rate_basis_points->toBe('100.0000')
+        ->metadata->candidate_values_are_non_executable->toBeTrue()
+        ->and($publicUtilityVanRate)
+        ->amount_cents->toBe(114_450)
+        ->metadata->candidate_unit->toBe('vehicle')
+        ->and($amusementDailyRate)
+        ->amount_cents->toBe(54_500)
+        ->metadata->candidate_unit->toBe('operating_day')
+        ->and($otherBusinessCeiling)
+        ->rate_basis_points->toBe('200.0000')
+        ->is_ceiling->toBeTrue()
+        ->and($petroleumExemption)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::Exemption)
+        ->metadata->covered_articles->toBe(['A', 'B'])
+        ->and($newBusinessExemption)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::Exemption)
+        ->metadata->candidate_remaining_charges->toBe(['business_permit', 'regulatory_fees_and_charges'])
+        ->and($principalOfficeSitus)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::SitusDefinition)
+        ->metadata->source_notice_days->toBe(15)
+        ->and($salesAllocation)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::SalesAllocation)
+        ->metadata->source_item->toBe('2 [second occurrence]')
+        ->metadata->candidate_principal_office_percent->toBe('30.00')
+        ->metadata->candidate_operating_facility_percent->toBe('70.00')
+        ->and($portOfLoading)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::SalesAllocation)
+        ->metadata->known_cross_reference_question->toBeTrue();
 
     $overlappingRow = RevenueCodeProvisionRow::query()
         ->where('code', 'MRC-2A-02-B-ROW-08')
