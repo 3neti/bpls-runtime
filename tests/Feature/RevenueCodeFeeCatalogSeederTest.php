@@ -58,7 +58,7 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
     expect(FeeRuleRange::query()->whereBelongsTo($retailTax)->count())->toBe(23);
     expect(FeeRuleReconciliation::query()->count())->toBe(4);
 
-    expect(RevenueCodeProvision::query()->count())->toBe(53)
+    expect(RevenueCodeProvision::query()->count())->toBe(58)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2A.02%')->count())->toBe(8)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2B.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2C.%')->count())->toBe(2)
@@ -68,8 +68,9 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3C.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3D.%')->count())->toBe(6)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3E.%')->count())->toBe(4)
+        ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3F.%')->count())->toBe(5)
         ->and(RevenueCodeProvision::query()->whereNotNull('fee_rule_id')->count())->toBe(4)
-        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(52);
+        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(57);
 
     $wholesaleProvision = RevenueCodeProvision::query()
         ->with('feeRule.currentReconciliation')
@@ -93,10 +94,10 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->feeRule->currentReconciliation->execution_status->toBe(FeeRuleExecutionStatus::Executable);
 
     expect(RevenueCodeProvisionRow::query()->count())->toBe(82);
-    expect(RevenueCodeProvisionClause::query()->count())->toBe(289)
+    expect(RevenueCodeProvisionClause::query()->count())->toBe(302)
         ->and(RevenueCodeProvisionClause::query()
             ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
-            ->count())->toBe(289);
+            ->count())->toBe(302);
 
     $dependentRate = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2A-02-C-DEPENDENT-HALF-RATE')
@@ -280,6 +281,27 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->sole();
     $pnpLawfulBoundary = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-3E-04-PNP-LAWFUL-BOUNDARY')
+        ->sole();
+    $largeCattleDefinition = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3F-01-TWO-YEAR-LARGE-CATTLE')
+        ->sole();
+    $ownershipCertificateFee = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3F-02-CERTIFICATE-OWNERSHIP-FEE')
+        ->sole();
+    $transferFeeFrequency = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3F-02-TRANSFER-FEE-ONCE-PER-DAY')
+        ->sole();
+    $largeCattlePayment = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3F-03-PAY-UPON-REGISTRATION-TRANSFER')
+        ->sole();
+    $ownershipRegistryData = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3F-04-OWNERSHIP-REGISTRY-CERTIFICATE-DATA')
+        ->sole();
+    $transferRegistryData = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3F-04-TRANSFER-REGISTRY-DATA')
+        ->sole();
+    $originalTitleDocuments = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3F-04-ORIGINAL-TITLE-DOCUMENTS')
         ->sole();
 
     expect($dependentRate)
@@ -486,7 +508,28 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->metadata->candidate_fields->toBe(['applicant_name', 'applicant_address', 'activity_description', 'activity_places', 'other_pertinent_information'])
         ->and($pnpLawfulBoundary)
         ->clause_type->toBe(RevenueCodeProvisionClauseType::OperatingRestriction)
-        ->metadata->source_actor_pronoun->toBe('He');
+        ->metadata->source_actor_pronoun->toBe('He')
+        ->and($largeCattleDefinition)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::Definition)
+        ->metadata->candidate_minimum_age_years->toBe(2)
+        ->metadata->scope_contrast_clause->toBe('MRC-3D-01-LARGE-CATTLE')
+        ->and($ownershipCertificateFee)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::PermitRequirement)
+        ->amount_cents->toBe(10_000)
+        ->metadata->candidate_service->toBe('certificate_of_ownership')
+        ->and($transferFeeFrequency)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::PaymentTiming)
+        ->metadata->candidate_frequency->toBe('once_per_animal_per_day')
+        ->and($largeCattlePayment)
+        ->metadata->known_terminology_conflict->toBe(['registration_fee', 'service_fee'])
+        ->and($ownershipRegistryData)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::DocumentaryRequirement)
+        ->metadata->candidate_registry_fields->toContain('color')
+        ->and($transferRegistryData)
+        ->metadata->candidate_applies_regardless_of_age->toBeTrue()
+        ->metadata->known_field_difference->toContain('color')
+        ->and($originalTitleDocuments)
+        ->metadata->known_sequence_ambiguity->toContain('before certificate of transfer issuance');
 
     $overlappingRow = RevenueCodeProvisionRow::query()
         ->where('code', 'MRC-2A-02-B-ROW-08')

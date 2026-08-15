@@ -669,6 +669,51 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 metadata: ['chapter' => 3, 'article' => 'E', 'known_ambiguities' => ['applicant_identity', 'prescribed_form', 'required_information', 'route_and_place_detail', 'mayor_permit_authority', 'review_and_approval', 'current_pnp_title_and_authority', 'rule_publication', 'lawful_boundary_definition', 'inter_office_coordination']],
             ),
             $this->provision(
+                code: 'MRC-3F-01-DEFINITION',
+                section: 'Section 3F.01',
+                title: 'Article F large-cattle definition',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'For Article F, the ordinance defines large cattle using a two-year age qualifier and a list of horses, mule or ass, carabao, cow, and other domesticated bovine-family members.',
+                notes: 'The source punctuation is defective and its age qualifier differs from the Article D impounding definition. Species, age evidence, article scope, and alignment with external livestock law require accepted interpretation.',
+                metadata: ['chapter' => 3, 'article' => 'F', 'known_ambiguities' => ['two_year_age_qualifier_scope', 'mule_ass_punctuation', 'species_classification', 'age_evidence', 'article_d_definition_difference', 'external_livestock_law_alignment']],
+            ),
+            $this->provision(
+                code: 'MRC-3F-02-FEES',
+                section: 'Section 3F.02',
+                title: 'Large-cattle registration, transfer, and private-brand service fees',
+                type: RevenueCodeProvisionType::FixedFee,
+                excerpt: 'The ordinance prints service fees of PHP 100.00 for a certificate of ownership, PHP 100.00 for a certificate of transfer, and PHP 200.00 for registration of a private brand, with a once-per-day transfer-fee limitation.',
+                notes: 'Fee identity, certificate and brand eligibility, cattle identity, ownership proof, transfer chain, same-day transfer counting, payer, receipt and certificate sequence, numbering, and operational amounts require municipal reconciliation. None of the values is executable.',
+                metadata: ['chapter' => 3, 'article' => 'F', 'schedule_clause_count' => 4, 'known_ambiguities' => ['fee_identity', 'certificate_eligibility', 'private_brand_registration', 'cattle_identity', 'ownership_and_transfer_evidence', 'same_day_transfer_counting', 'payer_and_collector', 'receipt_certificate_sequence', 'certificate_numbering', 'operational_amount_acceptance']],
+            ),
+            $this->provision(
+                code: 'MRC-3F-03-PAYMENT',
+                section: 'Section 3F.03',
+                title: 'Large-cattle registration-fee payment timing',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance requires payment of the registration fee to the Municipal Treasurer upon registration or transfer of ownership of large cattle.',
+                notes: 'The section says registration fee while Section 3F.02 lists ownership-certificate, transfer-certificate, and private-brand service fees. Charge identity, event and payment sequence, payer, collector, receipt, and certificate release require accepted procedure.',
+                metadata: ['chapter' => 3, 'article' => 'F', 'known_ambiguities' => ['registration_or_service_fee_terminology', 'charge_identity', 'registration_or_transfer_event', 'payment_sequence', 'payer', 'collector', 'receipt_evidence', 'certificate_release']],
+            ),
+            $this->provision(
+                code: 'MRC-3F-04-REGISTRY',
+                section: 'Section 3F.04',
+                title: 'Large-cattle ownership and transfer registry administration',
+                type: RevenueCodeProvisionType::EvidenceRequirement,
+                excerpt: 'The ordinance requires registration at age two, registration of ownership and transfers, detailed ownership and transfer registry entries, certificate data, and original title documents before transfer entry or certificate issuance.',
+                notes: 'Registry identity, cattle identification, age and ownership proof, record and certificate fields, municipality references, original-document handling, transfer chain, numbering, corrections, duplicates, retention, access, and migration require accepted procedure.',
+                metadata: ['chapter' => 3, 'article' => 'F', 'known_ambiguities' => ['registry_identity', 'cattle_identification', 'age_and_ownership_proof', 'record_and_certificate_fields', 'municipality_reference', 'original_document_handling', 'transfer_chain', 'numbering_authority', 'corrections_and_duplicates', 'retention_and_access', 'legacy_registry_migration']],
+            ),
+            $this->provision(
+                code: 'MRC-3F-05-APPLICABILITY',
+                section: 'Section 3F.05',
+                title: 'Large-cattle registration external-law applicability',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance assigns other large-cattle registration matters to the Revised Administrative Code and other applicable laws, ordinances, rules, and regulations.',
+                notes: 'The exact code provisions, current legal force, amendments, precedence, incorporated requirements, institutional authority, and enforcement require legal validation.',
+                metadata: ['chapter' => 3, 'article' => 'F', 'known_ambiguities' => ['revised_administrative_code_provisions', 'external_law_currency', 'amendments_and_precedence', 'incorporated_requirements', 'institutional_authority', 'enforcement']],
+            ),
+            $this->provision(
                 code: 'MRC-2E-01-BUSINESS-TAX-SCOPE',
                 section: 'Section 2E.01',
                 title: 'Payment scope for multiple establishments and businesses',
@@ -1731,6 +1776,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
         $this->seedSpecialCockfightingArticleCClauses();
         $this->seedAstrayAnimalArticleDClauses();
         $this->seedCircusParadeArticleEClauses();
+        $this->seedLargeCattleArticleFClauses();
 
         $this->persistPolicyBoundaryClauses('MRC-2F-01-PIL', [
             $this->pilThresholdClause(1, 'SARI-SARI', '1', 'Sari-Sari Stores', '61,600.00', 6_160_000),
@@ -2115,6 +2161,53 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             $this->policyBoundaryClause(2, 'MRC-3E-04-WRITTEN-APPLICATION-CONTENTS', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'A written application in a prescribed form shall indicate the name, address of the applicant, the description of the activity, the place or places where the same will be conducted and such other pertinent information as may be required.', 'Candidate application evidence: prescribed written form containing applicant name and address, activity description, activity places, and other required pertinent information.', 'The prescribed form, applicant identity, address standard, route and place detail, additional-information authority, filing channel, signature, attachments, retention, and sufficiency require accepted procedure.', ['candidate_fields' => ['applicant_name', 'applicant_address', 'activity_description', 'activity_places', 'other_pertinent_information']]),
             $this->policyBoundaryClause(3, 'MRC-3E-04-PNP-ORDER-RULES', RevenueCodeProvisionClauseType::AuthorityBoundary, 'The Station Commander of the Philippine National Police shall promulgate the necessary rules and regulations to maintain an orderly and peaceful conduct of the activities mentioned in this Article.', 'Candidate authority: the Philippine National Police Station Commander establishes rules for orderly and peaceful conduct of Article E activities.', 'Current office title and jurisdiction, delegation, rule identity and publication, consistency with other law, permit conditions, coordination, enforcement, and audit evidence require legal and operational validation.', ['candidate_authority' => 'Station Commander of the Philippine National Police', 'candidate_purpose' => 'orderly_and_peaceful_conduct']),
             $this->policyBoundaryClause(4, 'MRC-3E-04-PNP-LAWFUL-BOUNDARY', RevenueCodeProvisionClauseType::OperatingRestriction, 'He shall also define the boundary within which such activities may be lawfully conducted.', 'Candidate operating boundary: the PNP Station Commander defines where the covered activities may lawfully occur.', 'The pronoun refers to the preceding Station Commander, but current authority, route and geographic representation, issuance and publication, conflict with Mayor permit places, changes, enforcement, and evidence require accepted procedure.', ['candidate_authority' => 'Station Commander of the Philippine National Police', 'candidate_boundary_type' => 'lawful_activity_area', 'source_actor_pronoun' => 'He']),
+        ]);
+    }
+
+    private function seedLargeCattleArticleFClauses(): void
+    {
+        $this->persistPolicyBoundaryClauses('MRC-3F-01-DEFINITION', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-3F-01-TWO-YEAR-LARGE-CATTLE',
+                type: RevenueCodeProvisionClauseType::Definition,
+                sourceText: 'For purposes of this Article, “large cattle” includes a two-year old horse, mule ass, carabao, cow or other domesticated member of the bovine family.',
+                candidateInterpretation: 'Candidate Article F meaning: large cattle includes the listed domesticated animals once they reach two years of age.',
+                executionBlocker: 'The “mule ass” punctuation is defective; species treatment, the two-year qualifier, age evidence, Article F-only scope, and the difference from Article D’s unqualified definition require accepted legal interpretation.',
+                metadata: ['candidate_minimum_age_years' => 2, 'candidate_animals' => ['horse', 'mule', 'ass', 'carabao', 'cow', 'other domesticated bovine family member'], 'scope_contrast_clause' => 'MRC-3D-01-LARGE-CATTLE', 'known_source_wording' => 'mule ass'],
+            ),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3F-02-FEES', [
+            $this->policyBoundaryClause(1, 'MRC-3F-02-CERTIFICATE-OWNERSHIP-FEE', RevenueCodeProvisionClauseType::PermitRequirement, 'For certificate of Ownership - Service Fee 100.00.', 'Candidate source fee: PHP 100.00 for a certificate of ownership.', 'Certificate eligibility and meaning, cattle and owner identity, initial versus replacement issuance, ownership evidence, numbering, payer, collection, receipt, and operational amount acceptance require municipal policy.', ['candidate_service' => 'certificate_of_ownership'], 10_000),
+            $this->policyBoundaryClause(2, 'MRC-3F-02-CERTIFICATE-TRANSFER-FEE', RevenueCodeProvisionClauseType::PermitRequirement, 'For certificate of transfer - Service Fee 100.00.', 'Candidate source fee: PHP 100.00 for a certificate of transfer.', 'Transfer eligibility and meaning, cattle identity, ownership chain, original documents, numbering, payer, collection, receipt, same-day limitation, and operational amount acceptance require municipal policy.', ['candidate_service' => 'certificate_of_transfer'], 10_000),
+            $this->policyBoundaryClause(3, 'MRC-3F-02-PRIVATE-BRAND-REGISTRATION-FEE', RevenueCodeProvisionClauseType::PermitRequirement, 'For registration of Private Brand - Service Fee 200.00.', 'Candidate source fee: PHP 200.00 for registration of a private brand.', 'Brand owner and mark identity, uniqueness, territorial scope, approval and conflict checks, cattle linkage, validity, renewal, numbering, collection, receipt, and operational amount acceptance require municipal policy.', ['candidate_service' => 'private_brand_registration'], 20_000),
+            $this->policyBoundaryClause(4, 'MRC-3F-02-TRANSFER-FEE-ONCE-PER-DAY', RevenueCodeProvisionClauseType::PaymentTiming, 'The transfer fee shall be collected only once if a large cattle is transferred more than once in a day.', 'Candidate frequency: collect the transfer fee only once for the same animal when it is transferred multiple times on one day.', 'Animal identity, calendar day and timezone, transfer chain, payer, first-versus-later transaction, reversals, corrections, cross-municipality transfers, and certificate issuance for each transfer require accepted policy.', ['candidate_frequency' => 'once_per_animal_per_day', 'candidate_trigger' => 'multiple_transfers_same_day']),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3F-03-PAYMENT', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-3F-03-PAY-UPON-REGISTRATION-TRANSFER',
+                type: RevenueCodeProvisionClauseType::PaymentTiming,
+                sourceText: 'The registration fee shall be paid to the Municipal Treasurer upon registration or transfer of ownership of the large cattle.',
+                candidateInterpretation: 'Candidate timing: pay the applicable charge to the Municipal Treasurer when registering cattle or transferring its ownership.',
+                executionBlocker: 'Section 3F.02 labels three service fees while this sentence says registration fee; charge mapping, payer, event sequence, receipt, certificate release, failed registration, and refund treatment require accepted procedure.',
+                metadata: ['candidate_collector' => 'Municipal Treasurer', 'candidate_timing' => 'upon_registration_or_transfer', 'known_terminology_conflict' => ['registration_fee', 'service_fee']],
+            ),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3F-04-REGISTRY', [
+            $this->policyBoundaryClause(1, 'MRC-3F-04-REGISTER-AT-TWO-YEARS', RevenueCodeProvisionClauseType::PermitRequirement, 'Large cattle shall be registered with the Municipal Treasurer upon reaching the age of two (2) years.', 'Candidate registration trigger: register large cattle with the Municipal Treasurer when it reaches two years of age.', 'Birth and age evidence, exact due date, cattle identity, owner responsibility, late registration, animals already older than two, imported animals, and enforcement require accepted procedure.', ['candidate_registration_age_years' => 2, 'candidate_registry_authority' => 'Municipal Treasurer']),
+            $this->policyBoundaryClause(2, 'MRC-3F-04-REGISTER-OWNERSHIP-SALE-TRANSFER', RevenueCodeProvisionClauseType::PermitRequirement, 'The ownership of a large cattle or its sale or transfer of ownership to another person shall be registered with the Municipal Treasurer.', 'Candidate registrable events: ownership, sale, and other transfer of ownership must be registered with the Municipal Treasurer.', 'Initial ownership, sale-versus-other-transfer classification, effective date, parties, cattle identity, title evidence, gifts, inheritance, cross-municipality events, and duplicate records require accepted procedure.', ['candidate_registry_authority' => 'Municipal Treasurer', 'candidate_events' => ['ownership', 'sale', 'other_transfer_of_ownership']]),
+            $this->policyBoundaryClause(3, 'MRC-3F-04-OWNERSHIP-REGISTRY-CERTIFICATE-DATA', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'All branded and counter-branded large cattle presented to the Municipal Treasurer shall be registered in a book showing among others, the name and residence of the owner, the consideration or purchase price of the animal in cases of sale or transfer, and the class, color, sex, brands and other identification marks of the cattle. These data shall also be stated in the certificate of ownership issued to the owner of the large cattle.', 'Candidate ownership record: registry book and ownership certificate carry the stated owner, transaction, classification, appearance, brand, and identification facts.', 'Branded/counter-branded scope, record identity, prescribed fields, owner and address standards, price evidence, classification vocabularies, mark representation, certificate format and numbering, corrections, privacy, and retention require accepted procedure.', ['candidate_registry_fields' => ['owner_name', 'owner_residence', 'consideration_or_purchase_price', 'cattle_class', 'color', 'sex', 'brands', 'other_identification_marks'], 'candidate_certificate' => 'certificate_of_ownership']),
+            $this->policyBoundaryClause(4, 'MRC-3F-04-TRANSFER-REGISTRY-DATA', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'The transfer of the large cattle, regardless of its age, shall be entered in the registry book setting forth, among others, the names and the residence of the owners and the purchaser; the consideration or purchase price of the animal for sale or transfer, class, sex, brands and other identifying marks of the animals; and a reference by number to the original certificate of ownership with the name of the municipality issued to it.', 'Candidate transfer record: every transfer regardless of cattle age records the parties, transaction value, cattle facts, marks, original ownership-certificate number, and issuing municipality.', 'The age-independent transfer rule must be reconciled with initial registration at age two; seller/owner plurality, purchaser identity, fields, price evidence, omitted color, certificate reference and municipality authority, cross-municipality verification, corrections, and chain integrity require accepted procedure.', ['candidate_applies_regardless_of_age' => true, 'candidate_registry_fields' => ['owner_names_and_residences', 'purchaser_name_and_residence', 'consideration_or_purchase_price', 'cattle_class', 'sex', 'brands', 'other_identifying_marks', 'original_certificate_number', 'issuing_municipality'], 'known_field_difference' => 'color appears in ownership record but not transfer list']),
+            $this->policyBoundaryClause(5, 'MRC-3F-04-ORIGINAL-TITLE-DOCUMENTS', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'No entries of transfer shall be made or certificate of transfer shall be issued by the Municipal Treasurer except upon the production of the original certificate of ownership and certificate of transfer and such other documents that show title of the owner.', 'Candidate transfer prerequisite: produce the original ownership certificate, transfer certificate, and other title documents before registry entry or transfer-certificate issuance.', 'Why an original transfer certificate is required before issuing a transfer certificate is unclear; document chain, original handling, prior transfers, loss or destruction, fraud checks, title sufficiency, issuing municipality verification, exceptions, and retention require accepted policy.', ['candidate_required_documents' => ['original_certificate_of_ownership', 'certificate_of_transfer', 'other_documents_showing_owner_title'], 'candidate_blocks' => ['transfer_registry_entry', 'certificate_of_transfer_issuance'], 'known_sequence_ambiguity' => 'certificate of transfer required before certificate of transfer issuance']),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3F-05-APPLICABILITY', [
+            $this->policyBoundaryClause(1, 'MRC-3F-05-REVISED-ADMINISTRATIVE-CODE', RevenueCodeProvisionClauseType::AuthorityBoundary, 'All other matters relating to the registration of large cattle shall be governed by the pertinent provisions of the Revised Administrative Code.', 'Candidate external authority: pertinent Revised Administrative Code provisions govern other large-cattle registration matters.', 'The source does not identify the code version or provisions; current legal force, amendments, superseding livestock law, incorporated procedure, institutional authority, and precedence require legal validation.', ['external_authority' => 'Revised Administrative Code']),
+            $this->policyBoundaryClause(2, 'MRC-3F-05-OTHER-AUTHORITIES', RevenueCodeProvisionClauseType::AuthorityBoundary, 'All other matters relating to the registration of large cattle shall be governed by ... other applicable laws, ordinances and rules and regulations.', 'Candidate external authority boundary: other applicable laws, ordinances, rules, and regulations govern matters not specified in Article F.', 'The authority catalog, versions, applicability, precedence, incorporated requirements, issuing institutions, and enforcement are not enumerated and require legal validation.', ['external_authority' => 'other applicable laws, ordinances, rules and regulations']),
         ]);
     }
 
