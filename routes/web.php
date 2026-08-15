@@ -22,6 +22,7 @@ use App\Http\Controllers\Staff\ReceiptController;
 use App\Http\Controllers\Staff\RevenueSourceReportController;
 use App\Http\Controllers\Staff\StoryboardController;
 use App\Http\Controllers\Staff\TopEstablishmentTaxDueReportController;
+use App\Http\Controllers\Staff\TotalCapitalGrossSummaryReportController;
 use App\Http\Controllers\Staff\UnpaidEstablishmentReportController;
 use Illuminate\Support\Facades\Route;
 
@@ -111,6 +112,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('reports.business-tax-by-major-type.index');
         Route::get('reports/business-tax-by-major-type/download', [BusinessTaxByMajorTypeReportController::class, 'download'])
             ->name('reports.business-tax-by-major-type.download');
+        Route::get('reports/total-capital-gross-summary', [TotalCapitalGrossSummaryReportController::class, 'index'])
+            ->name('reports.total-capital-gross-summary.index');
+        Route::get('reports/total-capital-gross-summary/download', [TotalCapitalGrossSummaryReportController::class, 'download'])
+            ->name('reports.total-capital-gross-summary.download');
         Route::get('reports/daily-collections', [DailyCollectionReportController::class, 'index'])
             ->name('reports.daily-collections.index');
         Route::get('reports/daily-collections/download', [DailyCollectionReportController::class, 'download'])

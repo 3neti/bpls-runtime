@@ -241,6 +241,7 @@ try {
         await inspectManualReceiptPaidEstablishmentsReport(page, baseUrl);
         await inspectManualReceiptPaymentSummaryReport(page, baseUrl);
         await inspectManualReceiptBusinessTaxByMajorTypeReport(page, baseUrl);
+        await inspectManualReceiptTotalCapitalGrossSummaryReport(page, baseUrl);
         await inspectManualReceiptPaymentSchedule(page, baseUrl);
         await inspectManualReceiptDetail(page, baseUrl);
         await inspectManualReceiptPermitReleaseBoundary(page, baseUrl);
@@ -5003,6 +5004,134 @@ async function inspectManualReceiptBusinessTaxByMajorTypeReport(
     await targetPage.setViewportSize({ width: 1440, height: 900 });
 }
 
+async function inspectManualReceiptTotalCapitalGrossSummaryReport(
+    targetPage,
+    targetBaseUrl,
+) {
+    const reportUrl = `${targetBaseUrl}${manifest.resources.total_capital_gross_summary_report_url}`;
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const row = targetPage.locator(
+        `[data-testid="capital-gross-row"][data-application-id="${manifest.resources.permit_application_id}"]`,
+    );
+    const rowVisible = await row.isVisible().catch(() => false);
+    const expectedPayment = uiMoneyFromCents(
+        manifest.resources.total_capital_gross_payment_cents,
+    );
+    const paymentText = rowVisible
+        ? await row
+              .getByTestId('capital-gross-payment')
+              .textContent()
+              .catch(() => null)
+        : null;
+    const scopeVisible = await targetPage
+        .getByText(
+            'One row per permit application with an issued, receipted collection in the selected collection-date range.',
+            { exact: true },
+        )
+        .isVisible()
+        .catch(() => false);
+    const lifetimeVisible = await targetPage
+        .getByText('remain lifetime figures', { exact: false })
+        .isVisible()
+        .catch(() => false);
+    const noRecalculationVisible = await targetPage
+        .getByText('does not recalculate assessment', { exact: false })
+        .isVisible()
+        .catch(() => false);
+    const csvExportVisible = await targetPage
+        .getByRole('link', { name: /export csv/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'total-capital-gross-summary-report-row-visible',
+            'Total capital and gross summary shows the exact application and lifetime receipted payment',
+            true,
+            rowVisible && paymentText?.trim() === expectedPayment,
+            {
+                url: reportUrl,
+                application_id: manifest.resources.permit_application_id,
+                payment_text: paymentText,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'total-capital-gross-summary-report-boundary-visible',
+            'Total capital and gross summary explains date qualification, lifetime scope, and no-recalculation boundary',
+            true,
+            scopeVisible && lifetimeVisible && noRecalculationVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'total-capital-gross-summary-report-csv-visible',
+            'Total capital and gross summary offers CSV export',
+            true,
+            csvExportVisible,
+        ),
+    );
+    reportTotalCapitalGrossSummary(
+        rowVisible ? manifest.resources.permit_application_id : null,
+        paymentText?.trim() === expectedPayment
+            ? manifest.resources.total_capital_gross_payment_cents
+            : null,
+        csvExportVisible,
+    );
+    await screenshot(
+        targetPage,
+        '02-total-capital-gross-summary-report',
+        'browser/screenshots/02-total-capital-gross-summary-report.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const mobileRow = targetPage.locator(
+        `[data-testid="capital-gross-mobile-row"][data-application-id="${manifest.resources.permit_application_id}"]`,
+    );
+    const mobileRowVisible = await mobileRow.isVisible().catch(() => false);
+    const mobilePaymentText = mobileRowVisible
+        ? await mobileRow
+              .getByTestId('capital-gross-mobile-payment')
+              .textContent()
+              .catch(() => null)
+        : null;
+    const mobileHorizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+
+    checks.push(
+        check(
+            'total-capital-gross-summary-report-mobile-visible',
+            'Mobile capital and gross summary keeps the exact application payment visible',
+            true,
+            mobileRowVisible && mobilePaymentText?.trim() === expectedPayment,
+        ),
+    );
+    checks.push(
+        check(
+            'total-capital-gross-summary-report-mobile-no-horizontal-overflow',
+            'Mobile capital and gross summary has no page-level horizontal overflow',
+            false,
+            mobileHorizontalOverflow,
+        ),
+    );
+    reportEvidence.total_capital_gross_summary.mobile_visible =
+        mobileRowVisible;
+    reportEvidence.total_capital_gross_summary.mobile_horizontal_overflow =
+        mobileHorizontalOverflow;
+    await screenshot(
+        targetPage,
+        '02-total-capital-gross-summary-report-mobile',
+        'browser/screenshots/02-total-capital-gross-summary-report-mobile.png',
+    );
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+}
+
 async function inspectManualReceiptDetail(targetPage, targetBaseUrl) {
     const receiptUrl = `${targetBaseUrl}${manifest.resources.receipt_url}`;
     await targetPage.goto(receiptUrl, { waitUntil: 'networkidle' });
@@ -6712,6 +6841,18 @@ function reportBusinessTaxByMajorType(
     reportEvidence.business_tax_by_major_type = {
         major_type: majorType,
         amount_cents: amountCents,
+        csv_export_visible: csvExportVisible,
+    };
+}
+
+function reportTotalCapitalGrossSummary(
+    applicationId,
+    paymentAmountCents,
+    csvExportVisible,
+) {
+    reportEvidence.total_capital_gross_summary = {
+        application_id: applicationId,
+        payment_amount_cents: paymentAmountCents,
         csv_export_visible: csvExportVisible,
     };
 }

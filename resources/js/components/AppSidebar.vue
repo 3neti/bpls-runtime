@@ -32,6 +32,7 @@ import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/Rece
 import { index as revenueSourceReportIndex } from '@/actions/App/Http/Controllers/Staff/RevenueSourceReportController';
 import { index as storyboardIndex } from '@/actions/App/Http/Controllers/Staff/StoryboardController';
 import { index as topEstablishmentTaxDueReportIndex } from '@/actions/App/Http/Controllers/Staff/TopEstablishmentTaxDueReportController';
+import { index as totalCapitalGrossSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/TotalCapitalGrossSummaryReportController';
 import { index as unpaidEstablishmentReportIndex } from '@/actions/App/Http/Controllers/Staff/UnpaidEstablishmentReportController';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
@@ -106,6 +107,11 @@ const staffNavItems: NavItem[] = [
         title: 'Tax by Major Type',
         href: businessTaxByMajorTypeReportIndex(),
         icon: ChartNoAxesColumnIncreasing,
+    },
+    {
+        title: 'Capital / Gross',
+        href: totalCapitalGrossSummaryReportIndex(),
+        icon: ChartColumn,
     },
     {
         title: 'Revenue Sources',

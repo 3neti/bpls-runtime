@@ -1115,6 +1115,12 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($firstManifest['resources']['business_tax_by_major_type_report_url'])->toContain('receipt_from=SCENARIO-OR-MANUAL-RECEIPT-TEST-001')
         ->and($firstManifest['resources']['business_tax_major_type'])->toBe('Retail')
         ->and($firstManifest['resources']['business_tax_major_amount_cents'])->toBe(20_000)
+        ->and($firstManifest['resources']['total_capital_gross_summary_report_url'])->toContain('date_from=')
+        ->and($firstManifest['resources']['total_capital_gross_capital_cents'])->toBe(9_000_050)
+        ->and($firstManifest['resources']['total_capital_gross_gross_cents'])->toBe(17_000_075)
+        ->and($firstManifest['resources']['total_capital_gross_payment_cents'])->toBe($receipt->amount_cents)
+        ->and($firstManifest['resources']['total_capital_gross_balance_cents'])->toBe(0)
+        ->and($firstManifest['resources']['total_capital_gross_payment_status'])->toBe('Completed')
         ->and($firstManifest['resources']['application_form_pdf_url'])->toBe('/staff/permit-applications/'.$firstManifest['resources']['permit_application_id'].'/application-form.pdf')
         ->and($firstManifest['resources']['assessment_pdf_url'])->toBe('/staff/assessments/'.$firstManifest['resources']['assessment_id'].'/pdf')
         ->and($firstManifest['resources']['assessment_total_amount_cents'])->toBe(PermitApplication::query()->findOrFail($firstManifest['resources']['permit_application_id'])->assessments()->firstOrFail()->total_amount_cents)
@@ -1681,6 +1687,13 @@ test('manual collection receipt scenario audit compares browser evidence with ca
             'business_tax_by_major_type' => [
                 'major_type' => $manifest['resources']['business_tax_major_type'],
                 'amount_cents' => $manifest['resources']['business_tax_major_amount_cents'],
+                'csv_export_visible' => true,
+                'mobile_visible' => true,
+                'mobile_horizontal_overflow' => false,
+            ],
+            'total_capital_gross_summary' => [
+                'application_id' => $manifest['resources']['permit_application_id'],
+                'payment_amount_cents' => $manifest['resources']['total_capital_gross_payment_cents'],
                 'csv_export_visible' => true,
                 'mobile_visible' => true,
                 'mobile_horizontal_overflow' => false,

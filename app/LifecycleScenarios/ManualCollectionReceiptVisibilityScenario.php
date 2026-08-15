@@ -9,6 +9,7 @@ use App\Actions\BuildDailyCollectionsReport;
 use App\Actions\BuildPaidEstablishmentsReport;
 use App\Actions\BuildPaymentSummaryReport;
 use App\Actions\BuildPermitApplicationTimeline;
+use App\Actions\BuildTotalCapitalGrossSummaryReport;
 use App\Actions\CompletePermitClearance;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreateCitizenPermitApplicationDraft;
@@ -73,6 +74,7 @@ final class ManualCollectionReceiptVisibilityScenario
         private readonly DescribeCitizenPaymentSchedule $describeCitizenPaymentSchedule,
         private readonly BuildDailyCollectionsReport $buildDailyCollectionsReport,
         private readonly BuildBusinessTaxByMajorTypeReport $buildBusinessTaxByMajorTypeReport,
+        private readonly BuildTotalCapitalGrossSummaryReport $buildTotalCapitalGrossSummaryReport,
         private readonly BuildCollectionsByRevenueSourceReport $buildCollectionsByRevenueSourceReport,
         private readonly BuildPaidEstablishmentsReport $buildPaidEstablishmentsReport,
         private readonly BuildPaymentSummaryReport $buildPaymentSummaryReport,
@@ -237,6 +239,12 @@ final class ManualCollectionReceiptVisibilityScenario
         ]);
         $businessTaxByMajorTypeRow = collect($businessTaxByMajorTypeReport['rows'])
             ->firstWhere('major_type', 'Retail');
+        $totalCapitalGrossSummaryReport = $this->buildTotalCapitalGrossSummaryReport->handle([
+            'date_from' => $collection->received_at->toDateString(),
+            'date_to' => $collection->received_at->toDateString(),
+        ]);
+        $totalCapitalGrossSummaryRow = collect($totalCapitalGrossSummaryReport['rows'])
+            ->firstWhere('application_id', $permitApplication->id);
         $paidEstablishmentsReport = $this->buildPaidEstablishmentsReport->handle([
             'year' => $permitApplication->application_year,
             'q' => $reportSearch,
@@ -269,6 +277,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('manual-receipt-issued', 'Issue manual receipt through receipt action', ['receipt_status' => ReceiptStatus::Issued->value, 'collection_status' => TreasuryCollectionStatus::Receipted->value], ['receipt_status' => $receipt->status->value, 'collection_status' => $collection->status->value, 'receipt_id' => $receipt->id]),
             $this->step('payment-summary-report-row-projected', 'Payment summary contains the exact paid schedule and receipted collection evidence', ['payment_schedule_id' => $paymentSchedule->id, 'paid_amount_cents' => $paymentSchedule->paid_amount_cents, 'receipted_amount_cents' => $receipt->amount_cents], ['payment_schedule_id' => $paymentSummaryRow['payment_schedule_id'] ?? null, 'paid_amount_cents' => $paymentSummaryRow['paid_amount_cents'] ?? null, 'receipted_amount_cents' => $paymentSummaryRow['receipted_amount_cents'] ?? null]),
             $this->step('business-tax-by-major-type-report-row-projected', 'Business tax by major type contains the exact receipted Tax allocation under the first activity classification', ['major_type' => 'Retail', 'amount_cents' => 20_000], ['major_type' => $businessTaxByMajorTypeRow['major_type'] ?? null, 'amount_cents' => $businessTaxByMajorTypeRow['amount_cents'] ?? null]),
+            $this->step('total-capital-gross-summary-report-row-projected', 'Total capital and gross summary contains declarations once and the exact lifetime receipted collection', ['application_id' => $permitApplication->id, 'capital_investment_cents' => 9_000_050, 'gross_sales_cents' => 17_000_075, 'payment_amount_cents' => $receipt->amount_cents, 'remaining_balance_cents' => 0, 'payment_status' => 'Completed'], ['application_id' => $totalCapitalGrossSummaryRow['application_id'] ?? null, 'capital_investment_cents' => $totalCapitalGrossSummaryRow['capital_investment_cents'] ?? null, 'gross_sales_cents' => $totalCapitalGrossSummaryRow['gross_sales_cents'] ?? null, 'payment_amount_cents' => $totalCapitalGrossSummaryRow['payment_amount_cents'] ?? null, 'remaining_balance_cents' => $totalCapitalGrossSummaryRow['remaining_balance_cents'] ?? null, 'payment_status' => $totalCapitalGrossSummaryRow['payment_status'] ?? null]),
             $this->step('receipt-void-blocked', 'Attempt receipt void through receipt policy boundary action', ['void_blocked' => true, 'receipt_status' => ReceiptStatus::Issued->value, 'collection_status' => TreasuryCollectionStatus::Receipted->value], ['void_blocked' => $receiptVoidBlocked, 'receipt_status' => $receipt->status->value, 'collection_status' => $collection->status->value, 'receipt_id' => $receipt->id]),
             $this->step('clearance-checklist-completed', 'Complete clearance checklist through clearance actions', ['completed_clearances' => 3, 'all_completed' => true], ['completed_clearances' => $completedClearances, 'all_completed' => $permitApplication->clearances->every(fn ($clearance): bool => $clearance->status === PermitClearanceStatus::Completed)]),
             $this->step('release-ready-for-authority-review', 'Describe release readiness without issuing permit', ['ready_for_authority_review' => true, 'can_release' => false], ['ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'], 'can_release' => $releaseReadiness['can_release']]),
@@ -394,6 +403,19 @@ final class ManualCollectionReceiptVisibilityScenario
             ], false),
             'business_tax_major_type' => 'Retail',
             'business_tax_major_amount_cents' => 20_000,
+            'total_capital_gross_summary_report_url' => route('staff.reports.total-capital-gross-summary.index', [
+                'date_from' => $collection->received_at->toDateString(),
+                'date_to' => $collection->received_at->toDateString(),
+            ], false),
+            'total_capital_gross_summary_report_download_url' => route('staff.reports.total-capital-gross-summary.download', [
+                'date_from' => $collection->received_at->toDateString(),
+                'date_to' => $collection->received_at->toDateString(),
+            ], false),
+            'total_capital_gross_capital_cents' => 9_000_050,
+            'total_capital_gross_gross_cents' => 17_000_075,
+            'total_capital_gross_payment_cents' => $receipt->amount_cents,
+            'total_capital_gross_balance_cents' => 0,
+            'total_capital_gross_payment_status' => 'Completed',
             'receipt_void_boundary_reference' => $receiptVoidBoundary['reference'],
             'application_form_pdf_url' => route('staff.permit-applications.application-form.pdf', $permitApplication, false),
             'permit_pdf_url' => route('staff.permit-applications.permit.pdf', $permitApplication, false),
@@ -502,6 +524,17 @@ final class ManualCollectionReceiptVisibilityScenario
                 'major_type' => $businessTaxByMajorTypeRow['major_type'] ?? null,
                 'amount_cents' => $businessTaxByMajorTypeRow['amount_cents'] ?? null,
             ],
+            'total_capital_gross_summary_report' => [
+                'date_from' => $totalCapitalGrossSummaryReport['filters']['date_from'],
+                'date_to' => $totalCapitalGrossSummaryReport['filters']['date_to'],
+                'row_count' => $totalCapitalGrossSummaryReport['summary']['row_count'],
+                'application_id' => $totalCapitalGrossSummaryRow['application_id'] ?? null,
+                'capital_investment_cents' => $totalCapitalGrossSummaryRow['capital_investment_cents'] ?? null,
+                'gross_sales_cents' => $totalCapitalGrossSummaryRow['gross_sales_cents'] ?? null,
+                'payment_amount_cents' => $totalCapitalGrossSummaryRow['payment_amount_cents'] ?? null,
+                'remaining_balance_cents' => $totalCapitalGrossSummaryRow['remaining_balance_cents'] ?? null,
+                'payment_status' => $totalCapitalGrossSummaryRow['payment_status'] ?? null,
+            ],
             'clearances' => $permitApplication->clearances
                 ->map(fn ($clearance): array => [
                     'id' => $clearance->id,
@@ -566,6 +599,12 @@ final class ManualCollectionReceiptVisibilityScenario
         ]);
         $businessTaxByMajorTypeRow = collect($businessTaxByMajorTypeReport['rows'])
             ->firstWhere('major_type', $manifest['resources']['business_tax_major_type']);
+        $totalCapitalGrossSummaryReport = $this->buildTotalCapitalGrossSummaryReport->handle([
+            'date_from' => $collection->received_at->toDateString(),
+            'date_to' => $collection->received_at->toDateString(),
+        ]);
+        $totalCapitalGrossSummaryRow = collect($totalCapitalGrossSummaryReport['rows'])
+            ->firstWhere('application_id', $permitApplication->id);
         $paidEstablishmentsReport = $this->buildPaidEstablishmentsReport->handle([
             'year' => $permitApplication->application_year,
             'q' => $permitApplication->application_number ?? $permitApplication->business->name,
@@ -617,6 +656,8 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('audit-browser-payment-summary-report-row', 'Browser evidence observed the same payment summary row on desktop and mobile', ['payment_schedule_id' => $paymentSchedule->id, 'paid_amount_cents' => $paymentSchedule->paid_amount_cents, 'csv_export_visible' => true, 'mobile_visible' => true, 'mobile_horizontal_overflow' => false], ['payment_schedule_id' => data_get($browserReport, 'reports.payment_summary.payment_schedule_id'), 'paid_amount_cents' => data_get($browserReport, 'reports.payment_summary.paid_amount_cents'), 'csv_export_visible' => data_get($browserReport, 'reports.payment_summary.csv_export_visible'), 'mobile_visible' => data_get($browserReport, 'reports.payment_summary.mobile_visible'), 'mobile_horizontal_overflow' => data_get($browserReport, 'reports.payment_summary.mobile_horizontal_overflow')]),
             $this->step('audit-business-tax-by-major-type-report-row', 'Business tax by major type contains only the canonical receipted Tax allocation', ['major_type' => $manifest['resources']['business_tax_major_type'], 'amount_cents' => $manifest['resources']['business_tax_major_amount_cents']], ['major_type' => $businessTaxByMajorTypeRow['major_type'] ?? null, 'amount_cents' => $businessTaxByMajorTypeRow['amount_cents'] ?? null]),
             $this->step('audit-browser-business-tax-by-major-type-report-row', 'Browser evidence observed the same major type amount on desktop and mobile', ['major_type' => $manifest['resources']['business_tax_major_type'], 'amount_cents' => $manifest['resources']['business_tax_major_amount_cents'], 'csv_export_visible' => true, 'mobile_visible' => true, 'mobile_horizontal_overflow' => false], ['major_type' => data_get($browserReport, 'reports.business_tax_by_major_type.major_type'), 'amount_cents' => data_get($browserReport, 'reports.business_tax_by_major_type.amount_cents'), 'csv_export_visible' => data_get($browserReport, 'reports.business_tax_by_major_type.csv_export_visible'), 'mobile_visible' => data_get($browserReport, 'reports.business_tax_by_major_type.mobile_visible'), 'mobile_horizontal_overflow' => data_get($browserReport, 'reports.business_tax_by_major_type.mobile_horizontal_overflow')]),
+            $this->step('audit-total-capital-gross-summary-report-row', 'Total capital and gross summary agrees with canonical declaration and collection records', ['application_id' => $permitApplication->id, 'capital_investment_cents' => $manifest['resources']['total_capital_gross_capital_cents'], 'gross_sales_cents' => $manifest['resources']['total_capital_gross_gross_cents'], 'payment_amount_cents' => $manifest['resources']['total_capital_gross_payment_cents'], 'remaining_balance_cents' => $manifest['resources']['total_capital_gross_balance_cents'], 'payment_status' => $manifest['resources']['total_capital_gross_payment_status']], ['application_id' => $totalCapitalGrossSummaryRow['application_id'] ?? null, 'capital_investment_cents' => $totalCapitalGrossSummaryRow['capital_investment_cents'] ?? null, 'gross_sales_cents' => $totalCapitalGrossSummaryRow['gross_sales_cents'] ?? null, 'payment_amount_cents' => $totalCapitalGrossSummaryRow['payment_amount_cents'] ?? null, 'remaining_balance_cents' => $totalCapitalGrossSummaryRow['remaining_balance_cents'] ?? null, 'payment_status' => $totalCapitalGrossSummaryRow['payment_status'] ?? null]),
+            $this->step('audit-browser-total-capital-gross-summary-report-row', 'Browser evidence observed the same application and lifetime payment on desktop and mobile', ['application_id' => $permitApplication->id, 'payment_amount_cents' => $manifest['resources']['total_capital_gross_payment_cents'], 'csv_export_visible' => true, 'mobile_visible' => true, 'mobile_horizontal_overflow' => false], ['application_id' => data_get($browserReport, 'reports.total_capital_gross_summary.application_id'), 'payment_amount_cents' => data_get($browserReport, 'reports.total_capital_gross_summary.payment_amount_cents'), 'csv_export_visible' => data_get($browserReport, 'reports.total_capital_gross_summary.csv_export_visible'), 'mobile_visible' => data_get($browserReport, 'reports.total_capital_gross_summary.mobile_visible'), 'mobile_horizontal_overflow' => data_get($browserReport, 'reports.total_capital_gross_summary.mobile_horizontal_overflow')]),
             $this->step('audit-receipt-void-boundary', 'Receipt void boundary remains blocked without financial mutation', ['reference' => $receiptVoidBoundary['reference'], 'status' => 'blocked', 'can_void' => false, 'receipt_status' => ReceiptStatus::Issued->value, 'collection_status' => TreasuryCollectionStatus::Receipted->value], ['reference' => $manifest['resources']['receipt_void_boundary_reference'] ?? null, 'status' => $receiptVoidBoundary['status'], 'can_void' => $receiptVoidBoundary['can_void'], 'receipt_status' => $receipt->status->value, 'collection_status' => $collection->status->value]),
             $this->step('audit-browser-receipt-void-boundary', 'Browser evidence observed the same receipt void boundary', ['reference' => $receiptVoidBoundary['reference'], 'status' => 'blocked', 'can_void' => false], ['reference' => data_get($browserReport, 'receipt_void_boundary.reference'), 'status' => data_get($browserReport, 'receipt_void_boundary.status'), 'can_void' => data_get($browserReport, 'receipt_void_boundary.can_void')]),
             $this->step('audit-clearances-completed', 'Clearance checklist evidence is complete', ['completed_clearances' => 3, 'all_completed' => true], ['completed_clearances' => $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count(), 'all_completed' => $permitApplication->clearances->isNotEmpty() && $permitApplication->clearances->every(fn ($clearance): bool => $clearance->status === PermitClearanceStatus::Completed)]),
@@ -731,6 +772,17 @@ final class ManualCollectionReceiptVisibilityScenario
                     'total_amount_cents' => $businessTaxByMajorTypeReport['summary']['total_amount_cents'],
                     'major_type' => $businessTaxByMajorTypeRow['major_type'] ?? null,
                     'amount_cents' => $businessTaxByMajorTypeRow['amount_cents'] ?? null,
+                ],
+                'total_capital_gross_summary_report' => [
+                    'date_from' => $totalCapitalGrossSummaryReport['filters']['date_from'],
+                    'date_to' => $totalCapitalGrossSummaryReport['filters']['date_to'],
+                    'row_count' => $totalCapitalGrossSummaryReport['summary']['row_count'],
+                    'application_id' => $totalCapitalGrossSummaryRow['application_id'] ?? null,
+                    'capital_investment_cents' => $totalCapitalGrossSummaryRow['capital_investment_cents'] ?? null,
+                    'gross_sales_cents' => $totalCapitalGrossSummaryRow['gross_sales_cents'] ?? null,
+                    'payment_amount_cents' => $totalCapitalGrossSummaryRow['payment_amount_cents'] ?? null,
+                    'remaining_balance_cents' => $totalCapitalGrossSummaryRow['remaining_balance_cents'] ?? null,
+                    'payment_status' => $totalCapitalGrossSummaryRow['payment_status'] ?? null,
                 ],
                 'permit_application_status' => $permitApplication->status->value,
                 'clearances' => $permitApplication->clearances
