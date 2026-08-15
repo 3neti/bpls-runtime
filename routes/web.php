@@ -7,6 +7,7 @@ use App\Http\Controllers\PublicPermitVerificationController;
 use App\Http\Controllers\PublicPermitVerificationPageController;
 use App\Http\Controllers\Staff\AssessmentPaymentScheduleController;
 use App\Http\Controllers\Staff\AssessmentSummaryReportController;
+use App\Http\Controllers\Staff\CollectiblesReportController;
 use App\Http\Controllers\Staff\CollectionReceiptController;
 use App\Http\Controllers\Staff\DailyCollectionReportController;
 use App\Http\Controllers\Staff\FeeRuleController;
@@ -101,6 +102,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('reports.payment-summary.index');
         Route::get('reports/payment-summary/download', [PaymentSummaryReportController::class, 'download'])
             ->name('reports.payment-summary.download');
+        Route::get('reports/collectibles', [CollectiblesReportController::class, 'index'])
+            ->name('reports.collectibles.index');
+        Route::get('reports/collectibles/download', [CollectiblesReportController::class, 'download'])
+            ->name('reports.collectibles.download');
         Route::get('reports/daily-collections', [DailyCollectionReportController::class, 'index'])
             ->name('reports.daily-collections.index');
         Route::get('reports/daily-collections/download', [DailyCollectionReportController::class, 'download'])

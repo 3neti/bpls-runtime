@@ -35,6 +35,7 @@ use Illuminate\Support\Carbon;
  * @property array<string, mixed>|null $metadata
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read BusinessOwner $owner
  */
 #[Fillable(['business_owner_id', 'name', 'trade_name', 'registration_number', 'address', 'barangay', 'ownership_type', 'organization_name', 'occupancy', 'building_name', 'property_index_number', 'business_area_square_meters', 'male_employee_count', 'female_employee_count', 'contact_number', 'email', 'established_on', 'started_on', 'registered_on', 'legacy_source_id', 'metadata'])]
 class Business extends Model
@@ -42,11 +43,13 @@ class Business extends Model
     /** @use HasFactory<BusinessFactory> */
     use HasFactory;
 
+    /** @return BelongsTo<BusinessOwner, $this> */
     public function owner(): BelongsTo
     {
         return $this->belongsTo(BusinessOwner::class, 'business_owner_id');
     }
 
+    /** @return HasMany<PermitApplication, $this> */
     public function permitApplications(): HasMany
     {
         return $this->hasMany(PermitApplication::class);

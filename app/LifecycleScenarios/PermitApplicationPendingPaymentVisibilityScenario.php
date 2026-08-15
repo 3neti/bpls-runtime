@@ -3,6 +3,7 @@
 namespace App\LifecycleScenarios;
 
 use App\Actions\BuildAssessmentSummaryReport;
+use App\Actions\BuildBreakdownOfCollectiblesReport;
 use App\Actions\BuildTopEstablishmentsTaxDueReport;
 use App\Actions\BuildUnpaidEstablishmentsReport;
 use App\Actions\CreateAssessmentForPermitApplication;
@@ -34,6 +35,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         private readonly CreateAssessmentForPermitApplication $createAssessment,
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
         private readonly BuildAssessmentSummaryReport $buildAssessmentSummaryReport,
+        private readonly BuildBreakdownOfCollectiblesReport $buildBreakdownOfCollectiblesReport,
         private readonly BuildUnpaidEstablishmentsReport $buildUnpaidEstablishmentsReport,
         private readonly BuildTopEstablishmentsTaxDueReport $buildTopEstablishmentsTaxDueReport,
         private readonly DescribePaymentPolicyBoundary $describePaymentPolicyBoundary,
@@ -94,6 +96,12 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         ]);
         $assessmentSummaryRow = collect($assessmentSummaryReport['rows'])
             ->firstWhere('assessment_id', $assessment->id);
+        $collectiblesReport = $this->buildBreakdownOfCollectiblesReport->handle([
+            'year' => $permitApplication->application_year,
+            'q' => $permitApplication->application_number,
+        ]);
+        $collectiblesRow = collect($collectiblesReport['rows'])
+            ->firstWhere('application_id', $permitApplication->id);
         $unpaidEstablishmentsReport = $this->buildUnpaidEstablishmentsReport->handle([
             'year' => $permitApplication->application_year,
             'q' => $permitApplication->application_number,
@@ -123,6 +131,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             $this->step('payment-schedule-prepared', 'Prepare payment schedule through payment schedule action', ['schedule_status' => PaymentScheduleStatus::Pending->value, 'application_status' => PermitApplicationStatus::PendingPayment->value], ['schedule_status' => $paymentSchedule->status->value, 'application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id]),
             $this->step('payment-policy-boundary-recorded', 'Expose unresolved installment, due-date, surcharge, interest, PIL, and deficiency-tax policy without calculating them', ['payment_policy_status' => 'policy_boundary'], ['payment_policy_status' => $paymentPolicyBoundary['status'], 'blocked_calculation_count' => count($paymentPolicyBoundary['blocked_calculations'])]),
             $this->step('assessment-summary-report-row-projected', 'Assessment summary contains the current immutable assessment snapshot', ['assessment_id' => $assessment->id, 'total_amount_cents' => $assessment->total_amount_cents], ['assessment_id' => $assessmentSummaryRow['assessment_id'] ?? null, 'total_amount_cents' => $assessmentSummaryRow['total_amount_cents'] ?? null]),
+            $this->step('collectibles-report-row-projected', 'Breakdown of collectibles contains the exact pending schedule without inventing a due date', ['application_id' => $permitApplication->id, 'total_amount_cents' => $paymentSchedule->total_amount_cents, 'unscheduled_amount_cents' => $paymentSchedule->total_amount_cents], ['application_id' => $collectiblesRow['application_id'] ?? null, 'total_amount_cents' => $collectiblesRow['total_amount_cents'] ?? null, 'unscheduled_amount_cents' => $collectiblesRow['unscheduled_amount_cents'] ?? null]),
             $this->step('unpaid-establishments-report-row-projected', 'Unpaid establishments report contains the pending permit schedule', ['application_number' => $permitApplication->application_number, 'business_name' => $permitApplication->business->name], ['application_number' => $unpaidEstablishmentRow['application_number'] ?? null, 'business_name' => $unpaidEstablishmentRow['business_name'] ?? null]),
             $this->step('top-tax-due-report-row-projected', 'Top tax due report contains the pending permit assessment tax lines', ['application_number' => $permitApplication->application_number, 'tax_due_cents' => $topTaxDueCents], ['application_number' => $topTaxDueRow['application_number'] ?? null, 'tax_due_cents' => $topTaxDueRow['tax_due_cents'] ?? null]),
         ];
@@ -174,6 +183,17 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                 'q' => $permitApplication->application_number,
             ], false),
             'assessment_summary_business_name' => $permitApplication->business->name,
+            'collectibles_report_url' => route('staff.reports.collectibles.index', [
+                'year' => $permitApplication->application_year,
+                'q' => $permitApplication->application_number,
+            ], false),
+            'collectibles_report_download_url' => route('staff.reports.collectibles.download', [
+                'year' => $permitApplication->application_year,
+                'q' => $permitApplication->application_number,
+            ], false),
+            'collectibles_business_name' => $permitApplication->business->name,
+            'collectibles_total_amount_cents' => $paymentSchedule->total_amount_cents,
+            'collectibles_unscheduled_amount_cents' => $paymentSchedule->total_amount_cents,
             'list_url' => route('staff.permit-applications.index', absolute: false),
             'detail_url' => route('staff.permit-applications.show', $permitApplication, false),
             'payment_schedule_url' => route('staff.payment-schedules.show', $paymentSchedule, false),
@@ -237,6 +257,14 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             'payment_schedule_id' => $paymentSchedule->id,
             'payment_schedule_status' => $paymentSchedule->status->value,
             'payment_policy_boundary' => $paymentPolicyBoundary,
+            'collectibles_report' => [
+                'year' => $collectiblesReport['filters']['year'],
+                'row_count' => $collectiblesReport['summary']['row_count'],
+                'total_amount_cents' => $collectiblesReport['summary']['total_amount_cents'],
+                'unscheduled_amount_cents' => $collectiblesReport['summary']['unscheduled_amount_cents'],
+                'application_id' => $collectiblesRow['application_id'] ?? null,
+                'business_name' => $collectiblesRow['business_name'] ?? null,
+            ],
             'unpaid_establishments_report' => [
                 'year' => $unpaidEstablishmentsReport['filters']['year'],
                 'row_count' => $unpaidEstablishmentsReport['summary']['row_count'],
@@ -294,6 +322,12 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         ]);
         $assessmentSummaryRow = collect($assessmentSummaryReport['rows'])
             ->firstWhere('assessment_id', $assessment->id);
+        $collectiblesReport = $this->buildBreakdownOfCollectiblesReport->handle([
+            'year' => $permitApplication->application_year,
+            'q' => $permitApplication->application_number,
+        ]);
+        $collectiblesRow = collect($collectiblesReport['rows'])
+            ->firstWhere('application_id', $permitApplication->id);
         $unpaidEstablishmentsReport = $this->buildUnpaidEstablishmentsReport->handle([
             'year' => $permitApplication->application_year,
             'q' => $permitApplication->application_number,
@@ -329,6 +363,8 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             $this->step('audit-browser-payment-policy-boundary', 'Browser evidence shows the payment policy boundary', ['payment_policy_status' => 'policy_boundary', 'installment_visible' => true, 'due_date_visible' => true, 'surcharge_visible' => true, 'pil_visible' => true], ['payment_policy_status' => data_get($browserReport, 'payment_policy_boundary.status'), 'installment_visible' => data_get($browserReport, 'payment_policy_boundary.installment_visible'), 'due_date_visible' => data_get($browserReport, 'payment_policy_boundary.due_date_visible'), 'surcharge_visible' => data_get($browserReport, 'payment_policy_boundary.surcharge_visible'), 'pil_visible' => data_get($browserReport, 'payment_policy_boundary.pil_visible')]),
             $this->step('audit-assessment-summary-report-row', 'Assessment summary contains the canonical current assessment snapshot', ['assessment_id' => $assessment->id, 'total_amount_cents' => $assessment->total_amount_cents], ['assessment_id' => $assessmentSummaryRow['assessment_id'] ?? null, 'total_amount_cents' => $assessmentSummaryRow['total_amount_cents'] ?? null]),
             $this->step('audit-browser-assessment-summary-report-row', 'Browser evidence observed the same assessment summary row', ['assessment_id' => $assessment->id, 'total_amount_cents' => $assessment->total_amount_cents, 'csv_export_visible' => true], ['assessment_id' => data_get($browserReport, 'reports.assessment_summary.assessment_id'), 'total_amount_cents' => data_get($browserReport, 'reports.assessment_summary.total_amount_cents'), 'csv_export_visible' => data_get($browserReport, 'reports.assessment_summary.csv_export_visible')]),
+            $this->step('audit-collectibles-report-row', 'Breakdown of collectibles contains the canonical outstanding schedule as unscheduled', ['application_id' => $permitApplication->id, 'total_amount_cents' => $paymentSchedule->total_amount_cents, 'unscheduled_amount_cents' => $paymentSchedule->total_amount_cents], ['application_id' => $collectiblesRow['application_id'] ?? null, 'total_amount_cents' => $collectiblesRow['total_amount_cents'] ?? null, 'unscheduled_amount_cents' => $collectiblesRow['unscheduled_amount_cents'] ?? null]),
+            $this->step('audit-browser-collectibles-report-row', 'Browser evidence observed the same collectible row on desktop and mobile', ['application_id' => $permitApplication->id, 'total_amount_cents' => $paymentSchedule->total_amount_cents, 'unscheduled_amount_cents' => $paymentSchedule->total_amount_cents, 'csv_export_visible' => true, 'mobile_visible' => true, 'mobile_horizontal_overflow' => false], ['application_id' => data_get($browserReport, 'reports.collectibles.application_id'), 'total_amount_cents' => data_get($browserReport, 'reports.collectibles.total_amount_cents'), 'unscheduled_amount_cents' => data_get($browserReport, 'reports.collectibles.unscheduled_amount_cents'), 'csv_export_visible' => data_get($browserReport, 'reports.collectibles.csv_export_visible'), 'mobile_visible' => data_get($browserReport, 'reports.collectibles.mobile_visible'), 'mobile_horizontal_overflow' => data_get($browserReport, 'reports.collectibles.mobile_horizontal_overflow')]),
             $this->step('audit-unpaid-establishments-report-row', 'Unpaid establishments report contains the scenario pending permit schedule', ['application_number' => $permitApplication->application_number, 'business_name' => $permitApplication->business->name], ['application_number' => $unpaidEstablishmentRow['application_number'] ?? null, 'business_name' => $unpaidEstablishmentRow['business_name'] ?? null]),
             $this->step('audit-browser-unpaid-establishments-report-row', 'Browser evidence observed the unpaid establishments report row', ['application_number' => $permitApplication->application_number, 'csv_export_visible' => true], ['application_number' => data_get($browserReport, 'reports.unpaid_establishments.application_number'), 'csv_export_visible' => data_get($browserReport, 'reports.unpaid_establishments.csv_export_visible')]),
             $this->step('audit-top-tax-due-report-row', 'Top tax due report contains the scenario pending permit assessment tax lines', ['application_number' => $permitApplication->application_number, 'tax_due_cents' => $manifest['resources']['top_tax_due_cents']], ['application_number' => $topTaxDueRow['application_number'] ?? null, 'tax_due_cents' => $topTaxDueRow['tax_due_cents'] ?? null]),
@@ -383,6 +419,14 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                 'payment_schedule_id' => $paymentSchedule->id,
                 'payment_schedule_status' => $paymentSchedule->status->value,
                 'payment_policy_boundary' => $paymentPolicyBoundary,
+                'collectibles_report' => [
+                    'year' => $collectiblesReport['filters']['year'],
+                    'row_count' => $collectiblesReport['summary']['row_count'],
+                    'total_amount_cents' => $collectiblesReport['summary']['total_amount_cents'],
+                    'unscheduled_amount_cents' => $collectiblesReport['summary']['unscheduled_amount_cents'],
+                    'application_id' => $collectiblesRow['application_id'] ?? null,
+                    'business_name' => $collectiblesRow['business_name'] ?? null,
+                ],
                 'assessment_summary_report' => [
                     'year' => $assessmentSummaryReport['filters']['year'],
                     'row_count' => $assessmentSummaryReport['summary']['row_count'],

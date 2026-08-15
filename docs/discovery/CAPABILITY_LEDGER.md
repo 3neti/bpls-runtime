@@ -102,7 +102,7 @@ Evidence sources:
 | CAP-086 | Abstract by billing group | Reporting/Treasury | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc route `/abstract/[billingGroupId]`. |
 | CAP-087 | Paid establishment masterlist | Reporting | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc app. |
 | CAP-088 | Unpaid establishment masterlist | Reporting | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc app. |
-| CAP-089 | Breakdown of collectibles | Reporting/Treasury | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc app. |
+| CAP-089 | Breakdown of collectibles | Reporting/Treasury | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | Legacy omits outstanding schedules without due dates; Laravel exposes them as Unscheduled pending accepted installment and due-date policy. | High | Ad hoc app; Laravel report and CSV preserve quarterly due-date buckets without inventing missing schedule dates. |
 | CAP-090 | Business tax by major type | Reporting | REQUIRED | REQUIRED | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc app. |
 | CAP-091 | Top establishments by tax due | Reporting | REQUIRED | UNKNOWN | IMPLEMENTED | IMPLEMENTED | IMPLEMENTED | None known | High | Ad hoc app. |
 | CAP-092 | Total capital/gross summary | Reporting | REQUIRED | REQUIRED | IMPLEMENTED | NOT OBSERVED | IMPLEMENTED | Live sample did not list it in first 25 lines but source route exists. | High | Ad hoc route exists. |

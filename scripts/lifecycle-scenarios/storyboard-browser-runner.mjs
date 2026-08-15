@@ -221,6 +221,7 @@ try {
         await inspectPendingPaymentAssessmentDetail(page, baseUrl);
         await inspectPendingPaymentScheduleDetail(page, baseUrl);
         await inspectPendingPaymentAssessmentSummaryReport(page, baseUrl);
+        await inspectPendingPaymentCollectiblesReport(page, baseUrl);
         await inspectPendingPaymentUnpaidEstablishmentsReport(page, baseUrl);
         await inspectPendingPaymentTopTaxDueReport(page, baseUrl);
         await inspectPendingPaymentPermitApplicationMobile(page, baseUrl);
@@ -3739,6 +3740,159 @@ async function inspectPendingPaymentUnpaidEstablishmentsReport(
     );
 }
 
+async function inspectPendingPaymentCollectiblesReport(
+    targetPage,
+    targetBaseUrl,
+) {
+    const reportUrl = `${targetBaseUrl}${manifest.resources.collectibles_report_url}`;
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const row = targetPage.locator(
+        `[data-testid="collectibles-row"][data-application-id="${manifest.resources.record_id}"]`,
+    );
+    const rowVisible = await row.isVisible().catch(() => false);
+    const expectedTotal = uiMoneyFromCents(
+        manifest.resources.collectibles_total_amount_cents,
+    );
+    const expectedUnscheduled = uiMoneyFromCents(
+        manifest.resources.collectibles_unscheduled_amount_cents,
+    );
+    const totalText = rowVisible
+        ? await row
+              .getByTestId('collectibles-row-total')
+              .textContent()
+              .catch(() => null)
+        : null;
+    const unscheduledText = rowVisible
+        ? await row
+              .getByTestId('collectibles-unscheduled')
+              .textContent()
+              .catch(() => null)
+        : null;
+    const scopeVisible = await targetPage
+        .getByText(
+            'Outstanding balances from pending and partially paid permit payment schedules for the selected year, grouped by permit application.',
+            { exact: true },
+        )
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const policyVisible = await targetPage
+        .getByText('does not invent installments', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const legacyDiscrepancyVisible = await targetPage
+        .getByText('legacy query omitted schedules', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const csvExportVisible = await targetPage
+        .getByRole('link', { name: /export csv/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'collectibles-report-row-visible',
+            'Breakdown of collectibles shows the exact pending permit application and canonical outstanding amount',
+            true,
+            rowVisible &&
+                totalText?.trim() === expectedTotal &&
+                unscheduledText?.trim() === expectedUnscheduled,
+            {
+                url: reportUrl,
+                application_id: manifest.resources.record_id,
+                total_text: totalText,
+                unscheduled_text: unscheduledText,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'collectibles-report-policy-boundary-visible',
+            'Breakdown of collectibles exposes unscheduled balances and financial policy limits',
+            true,
+            scopeVisible && policyVisible && legacyDiscrepancyVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'collectibles-report-csv-visible',
+            'Breakdown of collectibles offers CSV export',
+            true,
+            csvExportVisible,
+        ),
+    );
+    reportCollectibles(
+        rowVisible ? manifest.resources.record_id : null,
+        totalText?.trim() === expectedTotal
+            ? manifest.resources.collectibles_total_amount_cents
+            : null,
+        unscheduledText?.trim() === expectedUnscheduled
+            ? manifest.resources.collectibles_unscheduled_amount_cents
+            : null,
+        csvExportVisible,
+    );
+    await screenshot(
+        targetPage,
+        '05-collectibles-report',
+        'browser/screenshots/05-collectibles-report.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const mobileRow = targetPage.locator(
+        `[data-testid="collectibles-mobile-row"][data-application-id="${manifest.resources.record_id}"]`,
+    );
+    const mobileRowVisible = await mobileRow.isVisible().catch(() => false);
+    const mobileTotalText = mobileRowVisible
+        ? await mobileRow
+              .getByTestId('collectibles-mobile-total')
+              .textContent()
+              .catch(() => null)
+        : null;
+    const mobileUnscheduledText = mobileRowVisible
+        ? await mobileRow
+              .getByTestId('collectibles-mobile-unscheduled')
+              .textContent()
+              .catch(() => null)
+        : null;
+    const mobileHorizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+
+    checks.push(
+        check(
+            'collectibles-report-mobile-visible',
+            'Mobile breakdown of collectibles keeps exact unscheduled balance and total visible',
+            true,
+            mobileRowVisible &&
+                mobileTotalText?.trim() === expectedTotal &&
+                mobileUnscheduledText?.trim() === expectedUnscheduled,
+        ),
+    );
+    checks.push(
+        check(
+            'collectibles-report-mobile-no-horizontal-overflow',
+            'Mobile breakdown of collectibles has no page-level horizontal overflow',
+            false,
+            mobileHorizontalOverflow,
+        ),
+    );
+    reportEvidence.collectibles.mobile_visible = mobileRowVisible;
+    reportEvidence.collectibles.mobile_horizontal_overflow =
+        mobileHorizontalOverflow;
+    await screenshot(
+        targetPage,
+        '05-collectibles-report-mobile',
+        'browser/screenshots/05-collectibles-report-mobile.png',
+    );
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+}
+
 async function inspectPendingPaymentAssessmentSummaryReport(
     targetPage,
     targetBaseUrl,
@@ -6429,6 +6583,20 @@ function reportUnpaidEstablishments(
         application_number: applicationNumber,
         business_name: businessName,
         application_visible: applicationVisible,
+        csv_export_visible: csvExportVisible,
+    };
+}
+
+function reportCollectibles(
+    applicationId,
+    totalAmountCents,
+    unscheduledAmountCents,
+    csvExportVisible,
+) {
+    reportEvidence.collectibles = {
+        application_id: applicationId,
+        total_amount_cents: totalAmountCents,
+        unscheduled_amount_cents: unscheduledAmountCents,
         csv_export_visible: csvExportVisible,
     };
 }

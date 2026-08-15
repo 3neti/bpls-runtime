@@ -62,7 +62,7 @@ function paymentPolicyBoundaryBrowserReport(): array
 }
 
 /** @param array<string, mixed> $manifest */
-function assessmentSummaryBrowserReport(array $manifest): array
+function pendingPaymentReportsBrowserReport(array $manifest): array
 {
     return [
         'assessment_summary' => [
@@ -72,6 +72,14 @@ function assessmentSummaryBrowserReport(array $manifest): array
             'total_amount_cents' => $manifest['resources']['assessment_total_amount_cents'],
             'application_visible' => true,
             'csv_export_visible' => true,
+        ],
+        'collectibles' => [
+            'application_id' => $manifest['resources']['record_id'],
+            'total_amount_cents' => $manifest['resources']['collectibles_total_amount_cents'],
+            'unscheduled_amount_cents' => $manifest['resources']['collectibles_unscheduled_amount_cents'],
+            'csv_export_visible' => true,
+            'mobile_visible' => true,
+            'mobile_horizontal_overflow' => false,
         ],
     ];
 }
@@ -1828,6 +1836,10 @@ test('permit application pending payment scenario executes assessment and paymen
         ->and($firstManifest['resources']['business_tax_amount_cents'])->toBe(20_000)
         ->and($firstManifest['resources']['assessment_summary_report_url'])->toContain('q=APP-SCENARIO-PERMIT-PENDING-PAYMENT-TEST-001')
         ->and($firstManifest['resources']['assessment_summary_business_name'])->toBe('Scenario Payment Business permit-pending-payment-test-001')
+        ->and($firstManifest['resources']['collectibles_report_url'])->toContain('q=APP-SCENARIO-PERMIT-PENDING-PAYMENT-TEST-001')
+        ->and($firstManifest['resources']['collectibles_business_name'])->toBe('Scenario Payment Business permit-pending-payment-test-001')
+        ->and($firstManifest['resources']['collectibles_total_amount_cents'])->toBe(30_000)
+        ->and($firstManifest['resources']['collectibles_unscheduled_amount_cents'])->toBe(30_000)
         ->and($firstManifest['resources']['unpaid_establishments_report_url'])->toContain('q=APP-SCENARIO-PERMIT-PENDING-PAYMENT-TEST-001')
         ->and($firstManifest['resources']['unpaid_establishment_business_name'])->toBe('Scenario Payment Business permit-pending-payment-test-001')
         ->and($firstManifest['resources']['top_tax_due_report_url'])->toContain('q=APP-SCENARIO-PERMIT-PENDING-PAYMENT-TEST-001')
@@ -2026,7 +2038,7 @@ test('permit application pending payment scenario audit compares browser evidenc
             ],
         ],
         'reports' => [
-            ...assessmentSummaryBrowserReport($manifest),
+            ...pendingPaymentReportsBrowserReport($manifest),
             'unpaid_establishments' => [
                 'application_number' => $manifest['resources']['application_number'],
                 'business_name' => $manifest['resources']['unpaid_establishment_business_name'],
@@ -2100,7 +2112,7 @@ test('renewal permit lifecycle foundation audit compares browser policy evidence
             ],
         ],
         'reports' => [
-            ...assessmentSummaryBrowserReport($manifest),
+            ...pendingPaymentReportsBrowserReport($manifest),
             'unpaid_establishments' => [
                 'application_number' => $manifest['resources']['application_number'],
                 'business_name' => $manifest['resources']['unpaid_establishment_business_name'],
@@ -2174,7 +2186,7 @@ test('amendment permit lifecycle foundation audit compares browser policy eviden
             ],
         ],
         'reports' => [
-            ...assessmentSummaryBrowserReport($manifest),
+            ...pendingPaymentReportsBrowserReport($manifest),
             'unpaid_establishments' => [
                 'application_number' => $manifest['resources']['application_number'],
                 'business_name' => $manifest['resources']['unpaid_establishment_business_name'],
@@ -2250,7 +2262,7 @@ test('transfer permit lifecycle foundation audit compares browser policy evidenc
             ],
         ],
         'reports' => [
-            ...assessmentSummaryBrowserReport($manifest),
+            ...pendingPaymentReportsBrowserReport($manifest),
             'unpaid_establishments' => [
                 'application_number' => $manifest['resources']['application_number'],
                 'business_name' => $manifest['resources']['unpaid_establishment_business_name'],
@@ -2326,7 +2338,7 @@ test('retirement permit lifecycle foundation audit compares browser policy evide
             ],
         ],
         'reports' => [
-            ...assessmentSummaryBrowserReport($manifest),
+            ...pendingPaymentReportsBrowserReport($manifest),
             'unpaid_establishments' => [
                 'application_number' => $manifest['resources']['application_number'],
                 'business_name' => $manifest['resources']['unpaid_establishment_business_name'],
