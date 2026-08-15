@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Staff;
 
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
+use App\Enums\FeeRuleExecutionStatus;
 use App\Enums\FeeRuleScope;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Models\FeeRule;
+use App\Models\FeeRuleRange;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -29,7 +31,7 @@ class FeeRuleController extends Controller
         ]);
 
         $feeRules = FeeRule::query()
-            ->with('lineOfBusiness')
+            ->with(['lineOfBusiness', 'currentReconciliation'])
             ->withCount('ranges')
             ->when($filters['q'] ?? null, function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
@@ -69,9 +71,10 @@ class FeeRuleController extends Controller
                 'active_rules' => FeeRule::query()->where('is_active', true)->count(),
                 'mrc_rules' => FeeRule::query()->where('legacy_source_id', 'like', 'LEGAL-MRC-001%')->count(),
                 'blocked_policy_count' => FeeRule::query()
-                    ->whereNotNull('metadata')
-                    ->get()
-                    ->filter(fn (FeeRule $feeRule): bool => filled($feeRule->metadata['policy_boundaries'] ?? []))
+                    ->whereHas('currentReconciliation', fn ($query) => $query->where('execution_status', FeeRuleExecutionStatus::Blocked))
+                    ->count(),
+                'executable_rule_count' => FeeRule::query()
+                    ->whereHas('currentReconciliation', fn ($query) => $query->where('execution_status', FeeRuleExecutionStatus::Executable))
                     ->count(),
             ],
             'categories' => $this->options(FeeRuleCategory::cases()),
@@ -86,13 +89,14 @@ class FeeRuleController extends Controller
 
         $feeRule->load([
             'lineOfBusiness',
+            'currentReconciliation',
             'ranges' => fn ($query) => $query->orderBy('min_basis_cents'),
         ]);
 
         return Inertia::render('fee-rules/Show', [
             'feeRule' => [
                 ...$this->feeRulePayload($feeRule),
-                'ranges' => $feeRule->ranges->map(fn ($range): array => [
+                'ranges' => $feeRule->ranges->map(fn (FeeRuleRange $range): array => [
                     'id' => $range->id,
                     'min_basis_cents' => $range->min_basis_cents,
                     'max_basis_cents' => $range->max_basis_cents,
@@ -100,7 +104,7 @@ class FeeRuleController extends Controller
                     'rate_basis_points' => $range->rate_basis_points,
                 ])->values()->all(),
             ],
-            'scopeNote' => 'This detail page is read-only evidence. It exposes the persisted catalog rule, legal provenance, applicability, and unresolved policy boundaries without editing rates or inventing assessment behavior.',
+            'scopeNote' => 'This detail page is read-only evidence. A recorded ordinance extract is executable only when its current reconciliation explicitly authorizes deterministic execution.',
         ]);
     }
 
@@ -119,7 +123,7 @@ class FeeRuleController extends Controller
             'basis' => $feeRule->basis,
             'amount_cents' => $feeRule->amount_cents,
             'rate_basis_points' => $feeRule->rate_basis_points,
-            'effective_from' => $feeRule->effective_from?->toDateString(),
+            'effective_from' => $feeRule->effective_from->toDateString(),
             'effective_until' => $feeRule->effective_until?->toDateString(),
             'is_active' => $feeRule->is_active,
             'legal_basis' => $feeRule->legal_basis,
@@ -134,6 +138,22 @@ class FeeRuleController extends Controller
             'application_types' => $feeRule->metadata['application_types'] ?? null,
             'policy_boundaries' => $feeRule->metadata['policy_boundaries'] ?? [],
             'policy_note' => $feeRule->metadata['policy_note'] ?? null,
+            'reconciliation_required' => ($feeRule->metadata['reconciliation_required'] ?? false) === true,
+            'current_reconciliation' => $feeRule->currentReconciliation ? [
+                'id' => $feeRule->currentReconciliation->id,
+                'version' => $feeRule->currentReconciliation->version,
+                'legal_authority' => $feeRule->currentReconciliation->legal_authority,
+                'evidence_reference' => $feeRule->currentReconciliation->evidence_reference,
+                'original_text' => $feeRule->currentReconciliation->original_text,
+                'normalized_interpretation' => $feeRule->currentReconciliation->normalized_interpretation,
+                'decision_authority' => $feeRule->currentReconciliation->decision_authority,
+                'decision_reference' => $feeRule->currentReconciliation->decision_reference,
+                'effective_from' => $feeRule->currentReconciliation->effective_from->toDateString(),
+                'effective_until' => $feeRule->currentReconciliation->effective_until?->toDateString(),
+                'execution_status' => $feeRule->currentReconciliation->execution_status->value,
+                'execution_reason' => $feeRule->currentReconciliation->execution_reason,
+                'decided_at' => $feeRule->currentReconciliation->decided_at?->toIso8601String(),
+            ] : null,
         ];
     }
 

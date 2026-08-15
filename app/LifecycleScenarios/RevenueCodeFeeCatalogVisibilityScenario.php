@@ -207,7 +207,7 @@ final class RevenueCodeFeeCatalogVisibilityScenario
                 [
                     'title' => 'Staff opens a fee-rule detail',
                     'description' => 'The detail page shows the selected business tax rule, applicability, legal source, and persisted range brackets.',
-                    'dialogue' => 'Assessment can use confirmed persisted ranges while unresolved formula and policy questions remain explicit.',
+                    'dialogue' => 'The disputed brackets remain visible evidence but cannot execute until the Municipality accepts a reconciliation.',
                     'duration_seconds' => 5,
                 ],
             ],

@@ -21,6 +21,7 @@ use App\LifecycleScenarios\LifecycleScenarioRegistry;
 use App\LifecycleScenarios\ManualCollectionReceiptVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationCancelledVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationPendingPaymentVisibilityScenario;
+use App\LifecycleScenarios\RevenueCodeExecutabilitySafetyScenario;
 use App\LifecycleScenarios\RevenueCodeFeeCatalogVisibilityScenario;
 use App\LifecycleScenarios\ScenarioActorResolver;
 use App\LifecycleScenarios\ScenarioArtifactStore;
@@ -308,6 +309,20 @@ test('scenario registry discovers the revenue code fee catalog visibility scenar
         ->and($scenario->expectations['fee_rule_code'])->toBe('MRC-2A-02-B-RETAIL-BUSINESS-TAX')
         ->and($scenario->expectations['range_count'])->toBe(23)
         ->and($scenario->expectations['policy_boundary'])->toBe('new_business_initial_local_business_tax_exemption')
+        ->and($scenario->safety['external_integrations'])->toBeFalse();
+});
+
+test('scenario registry discovers the revenue code executability safety scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('revenue_code_executability_safety');
+
+    expect($scenario)
+        ->key->toBe('revenue_code_executability_safety')
+        ->label->toBe('Revenue Code executability and reconciliation safety')
+        ->risk->toBe('local transactional')
+        ->and($scenario->expectations['exact_fee_rule_code'])->toBe('MRC-3A-04-BUSINESS-INSPECTION')
+        ->and($scenario->expectations['exact_amount_cents'])->toBe(35_000)
+        ->and($scenario->expectations['blocked_fee_rule_code'])->toBe('MRC-3A-02-NEW-MAYORS-PERMIT-MICRO')
+        ->and($scenario->expectations['blocked_assessment_count'])->toBe(0)
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
@@ -1243,6 +1258,44 @@ test('revenue code fee catalog visibility scenario prepares deterministic catalo
         ->and($artifactStore->exists('storyboard/storyboard.html'))->toBeTrue();
 });
 
+test('revenue code executability safety scenario prepares exact execution and blocked precondition idempotently', function () {
+    Storage::fake('local');
+
+    $user = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('revenue_code_executability_safety');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'revenue-execution-test-001');
+    $runner = app(RevenueCodeExecutabilitySafetyScenario::class);
+
+    $firstManifest = $runner->prepare($scenario, 'revenue-execution-test-001', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+    $secondManifest = $runner->prepare($scenario, 'revenue-execution-test-001', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+
+    $assessment = Assessment::query()->with('lines')->findOrFail($firstManifest['resources']['exact_assessment_id']);
+    $blockedApplication = PermitApplication::query()->findOrFail($firstManifest['resources']['blocked_application_id']);
+    $storyboard = $artifactStore->readJson('storyboard/storyboard.json');
+
+    expect($firstManifest['scenario']['key'])->toBe('revenue_code_executability_safety')
+        ->and($firstManifest['resources']['exact_assessment_id'])->toBe($secondManifest['resources']['exact_assessment_id'])
+        ->and($firstManifest['resources']['blocked_application_id'])->toBe($secondManifest['resources']['blocked_application_id'])
+        ->and($firstManifest['resources']['exact_application_id'])->not->toBe($firstManifest['resources']['blocked_application_id'])
+        ->and($firstManifest['resources']['exact_application_number'])->not->toBe($firstManifest['resources']['blocked_application_number'])
+        ->and($assessment->total_amount_cents)->toBe(35_000)
+        ->and($assessment->lines)->toHaveCount(1)
+        ->and($assessment->lines->sole()->code)->toBe('MRC-3A-04-BUSINESS-INSPECTION')
+        ->and($assessment->lines->sole()->rule_snapshot['reconciliation']['execution_status'])->toBe('executable')
+        ->and($blockedApplication->assessments()->count())->toBe(0)
+        ->and($firstManifest['resources']['blocked_reconciliation_status'])->toBe('blocked')
+        ->and($storyboard['title'])->toBe('Revenue Code executability and reconciliation safety')
+        ->and($artifactStore->exists('terminal/prepare.json'))->toBeTrue()
+        ->and($artifactStore->exists('terminal/execution.json'))->toBeTrue()
+        ->and($artifactStore->exists('storyboard/storyboard.html'))->toBeTrue();
+});
+
 test('assessment policy boundary visibility scenario prepares formula boundary precondition idempotently', function () {
     Storage::fake('local');
 
@@ -1294,6 +1347,27 @@ test('command prepares the revenue code fee catalog visibility scenario', functi
     expect($manifest['scenario']['key'])->toBe('revenue_code_fee_catalog_visibility')
         ->and($manifest['result']['terminal'])->toBe('passed')
         ->and($manifest['resources']['public_reference'])->toBe('MRC-2A-02-B-RETAIL-BUSINESS-TAX')
+        ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
+});
+
+test('command prepares the revenue code executability safety scenario', function () {
+    Storage::fake('local');
+
+    configuredScenarioUser('test@example.com');
+
+    $this->artisan('lifecycle:scenario', [
+        'scenario' => 'revenue_code_executability_safety',
+        '--run-id' => 'revenue-execution-command-test-001',
+        '--phase' => 'prepare',
+    ])->assertSuccessful();
+
+    $artifactStore = new ScenarioArtifactStore('revenue_code_executability_safety', 'revenue-execution-command-test-001');
+    $manifest = $artifactStore->readJson('manifest.json');
+
+    expect($manifest['scenario']['key'])->toBe('revenue_code_executability_safety')
+        ->and($manifest['result']['terminal'])->toBe('passed')
+        ->and($manifest['resources']['exact_assessment_total_amount_cents'])->toBe(35_000)
+        ->and($manifest['resources']['blocked_reconciliation_status'])->toBe('blocked')
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
 });
 
@@ -2250,6 +2324,54 @@ test('revenue code fee catalog visibility audit compares browser evidence with c
         ->browser->toBe('passed')
         ->audit->toBe('passed')
         ->passed->toBeTrue()
+        ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
+});
+
+test('revenue code executability safety audit compares browser evidence with exact and refused canonical state', function () {
+    Storage::fake('local');
+
+    $user = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('revenue_code_executability_safety');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'revenue-execution-test-002');
+    $runner = app(RevenueCodeExecutabilitySafetyScenario::class);
+
+    $manifest = $runner->prepare($scenario, 'revenue-execution-test-002', [
+        'operator' => $user,
+        'recipient' => $user,
+    ], $artifactStore);
+
+    $this
+        ->actingAs($user)
+        ->from(route('staff.permit-applications.assessments.index'))
+        ->post(route('staff.permit-applications.assessments.store', $manifest['resources']['blocked_application_id']))
+        ->assertRedirectBackWithErrors(['assessment_policy']);
+
+    $artifactStore->putJson('browser/report.json', [
+        'result' => ['passed' => true],
+        'revenue_code_execution' => [
+            'exact_visible' => true,
+            'blocked_visible' => true,
+            'refusal_visible' => true,
+            'not_assessed_visible' => true,
+        ],
+        'checks' => [],
+        'artifacts' => [
+            'screenshots' => [
+                '01-exact-assessment' => 'browser/screenshots/01-exact-assessment.png',
+                '04-blocked-assessment-refusal' => 'browser/screenshots/04-blocked-assessment-refusal.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($manifest, $artifactStore);
+
+    expect($audited['result'])
+        ->terminal->toBe('passed')
+        ->browser->toBe('passed')
+        ->audit->toBe('passed')
+        ->passed->toBeTrue()
+        ->and(Assessment::query()->where('permit_application_id', $manifest['resources']['blocked_application_id'])->count())->toBe(0)
         ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });

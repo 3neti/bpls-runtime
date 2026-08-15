@@ -48,6 +48,11 @@ type FeeRule = {
     application_types: string[] | null;
     policy_boundaries: string[];
     policy_note: string | null;
+    reconciliation_required: boolean;
+    current_reconciliation: {
+        execution_status: string;
+        execution_reason: string;
+    } | null;
 };
 
 const props = defineProps<{
@@ -70,6 +75,7 @@ const props = defineProps<{
         active_rules: number;
         mrc_rules: number;
         blocked_policy_count: number;
+        executable_rule_count: number;
     };
     categories: Option[];
     scopes: Option[];
@@ -100,10 +106,14 @@ function query(): Record<string, string | undefined> {
 }
 
 function applyFilters(): void {
-    router.get(index.url({ query: query() }), {}, {
-        preserveState: true,
-        replace: true,
-    });
+    router.get(
+        index.url({ query: query() }),
+        {},
+        {
+            preserveState: true,
+            replace: true,
+        },
+    );
 }
 
 function clearFilters(): void {
@@ -112,10 +122,14 @@ function clearFilters(): void {
     scope.value = '';
     calculationType.value = '';
     status.value = 'active';
-    router.get(index.url({ query: query() }), {}, {
-        preserveState: true,
-        replace: true,
-    });
+    router.get(
+        index.url({ query: query() }),
+        {},
+        {
+            preserveState: true,
+            replace: true,
+        },
+    );
 }
 
 function money(amountCents: number): string {
@@ -286,7 +300,7 @@ function decodePaginationLabel(value: string): string {
             </form>
 
             <section
-                class="grid gap-3 md:grid-cols-4"
+                class="grid gap-3 md:grid-cols-3 xl:grid-cols-5"
                 aria-label="Fee catalog summary"
             >
                 <div
@@ -323,10 +337,20 @@ function decodePaginationLabel(value: string): string {
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
                     <div class="text-xs text-muted-foreground uppercase">
-                        Policy Boundaries
+                        Blocked Rules
                     </div>
                     <div class="mt-2 text-2xl font-semibold">
                         {{ summary.blocked_policy_count }}
+                    </div>
+                </div>
+                <div
+                    class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+                >
+                    <div class="text-xs text-muted-foreground uppercase">
+                        Executable Rules
+                    </div>
+                    <div class="mt-2 text-2xl font-semibold">
+                        {{ summary.executable_rule_count }}
                     </div>
                 </div>
             </section>
@@ -393,11 +417,11 @@ function decodePaginationLabel(value: string): string {
                                 class="border-b last:border-0"
                             >
                                 <td class="px-3 py-3 align-top">
-                                    <div class="break-words font-medium">
+                                    <div class="font-medium break-words">
                                         {{ rule.code }}
                                     </div>
                                     <div
-                                        class="mt-1 break-words text-xs text-muted-foreground"
+                                        class="mt-1 text-xs break-words text-muted-foreground"
                                     >
                                         {{ rule.name }}
                                     </div>
@@ -420,6 +444,23 @@ function decodePaginationLabel(value: string): string {
                                             variant="outline"
                                         >
                                             {{ label(rule.catalog_status) }}
+                                        </Badge>
+                                        <Badge
+                                            v-if="rule.current_reconciliation"
+                                            :variant="
+                                                rule.current_reconciliation
+                                                    .execution_status ===
+                                                'executable'
+                                                    ? 'default'
+                                                    : 'destructive'
+                                            "
+                                        >
+                                            {{
+                                                label(
+                                                    rule.current_reconciliation
+                                                        .execution_status,
+                                                )
+                                            }}
                                         </Badge>
                                     </div>
                                 </td>
@@ -457,7 +498,9 @@ function decodePaginationLabel(value: string): string {
                                     </div>
                                 </td>
                                 <td class="px-3 py-3 align-top">
-                                    <div>{{ label(rule.calculation_type) }}</div>
+                                    <div>
+                                        {{ label(rule.calculation_type) }}
+                                    </div>
                                     <div
                                         class="mt-1 text-xs text-muted-foreground"
                                     >
@@ -478,7 +521,7 @@ function decodePaginationLabel(value: string): string {
                                     </div>
                                 </td>
                                 <td
-                                    class="px-3 py-3 text-right font-medium align-top"
+                                    class="px-3 py-3 text-right align-top font-medium"
                                 >
                                     {{ money(rule.amount_cents) }}
                                 </td>
@@ -488,7 +531,7 @@ function decodePaginationLabel(value: string): string {
                                     </div>
                                     <div
                                         v-if="rule.legacy_source_id"
-                                        class="mt-1 break-words text-xs text-muted-foreground"
+                                        class="mt-1 text-xs break-words text-muted-foreground"
                                     >
                                         {{ rule.legacy_source_id }}
                                     </div>
@@ -512,7 +555,11 @@ function decodePaginationLabel(value: string): string {
                                     </div>
                                 </td>
                                 <td class="px-3 py-3 text-right align-top">
-                                    <Button as-child size="sm" variant="outline">
+                                    <Button
+                                        as-child
+                                        size="sm"
+                                        variant="outline"
+                                    >
                                         <Link
                                             :href="show(rule.id)"
                                             :aria-label="`View ${rule.code}`"
@@ -543,11 +590,7 @@ function decodePaginationLabel(value: string): string {
                         :variant="link.active ? 'default' : 'outline'"
                         :disabled="!link.url"
                     >
-                        <Link
-                            v-if="link.url"
-                            :href="link.url"
-                            preserve-state
-                        >
+                        <Link v-if="link.url" :href="link.url" preserve-state>
                             {{ decodePaginationLabel(link.label) }}
                         </Link>
                         <span v-else>

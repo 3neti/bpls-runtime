@@ -606,8 +606,44 @@ final class LifecycleScenarioRegistry
                 expectations: [
                     'fee_rule_code' => 'MRC-2A-02-B-RETAIL-BUSINESS-TAX',
                     'range_count' => 23,
-                    'catalog_status' => 'partial_executable_extract',
+                    'catalog_status' => 'recorded_non_executable',
                     'policy_boundary' => 'new_business_initial_local_business_tax_exemption',
+                    'external_calls' => 0,
+                    'irreversible_actions' => false,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
+            'revenue_code_executability_safety' => new LifecycleScenarioDefinition(
+                key: 'revenue_code_executability_safety',
+                label: 'Revenue Code executability and reconciliation safety',
+                mode: 'revenue_code_executability_safety',
+                risk: 'local transactional',
+                actors: [
+                    'operator' => 'primary_operator',
+                    'recipient' => 'sample_recipient',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'exact_fee_rule_code' => 'MRC-3A-04-BUSINESS-INSPECTION',
+                    'exact_amount_cents' => 35_000,
+                    'exact_execution_status' => 'executable',
+                    'blocked_fee_rule_code' => 'MRC-3A-02-NEW-MAYORS-PERMIT-MICRO',
+                    'blocked_execution_status' => 'blocked',
+                    'blocked_assessment_count' => 0,
                     'external_calls' => 0,
                     'irreversible_actions' => false,
                 ],

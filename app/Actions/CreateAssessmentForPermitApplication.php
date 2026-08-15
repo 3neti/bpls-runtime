@@ -82,7 +82,7 @@ class CreateAssessmentForPermitApplication
             ->values();
 
         return FeeRule::query()
-            ->with('ranges')
+            ->with(['ranges', 'currentReconciliation'])
             ->where('is_active', true)
             ->whereDate('effective_from', '<=', $asOfDate)
             ->where(function ($query) use ($asOfDate): void {

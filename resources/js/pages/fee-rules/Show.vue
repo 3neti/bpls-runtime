@@ -18,6 +18,22 @@ type FeeRuleRange = {
     rate_basis_points: number | null;
 };
 
+type FeeRuleReconciliation = {
+    id: number;
+    version: number;
+    legal_authority: string;
+    evidence_reference: string;
+    original_text: string;
+    normalized_interpretation: string | null;
+    decision_authority: string | null;
+    decision_reference: string | null;
+    effective_from: string;
+    effective_until: string | null;
+    execution_status: string;
+    execution_reason: string;
+    decided_at: string | null;
+};
+
 type FeeRule = {
     id: number;
     code: string;
@@ -43,6 +59,8 @@ type FeeRule = {
     application_types: string[] | null;
     policy_boundaries: string[];
     policy_note: string | null;
+    reconciliation_required: boolean;
+    current_reconciliation: FeeRuleReconciliation | null;
     ranges: FeeRuleRange[];
 };
 
@@ -99,7 +117,7 @@ function basisRange(range: FeeRuleRange): string {
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
                         <h1
-                            class="break-words text-xl font-semibold text-foreground"
+                            class="text-xl font-semibold break-words text-foreground"
                         >
                             {{ feeRule.code }}
                         </h1>
@@ -111,9 +129,26 @@ function basisRange(range: FeeRuleRange): string {
                         <Badge v-if="feeRule.catalog_status" variant="outline">
                             {{ label(feeRule.catalog_status) }}
                         </Badge>
+                        <Badge
+                            v-if="feeRule.current_reconciliation"
+                            :variant="
+                                feeRule.current_reconciliation
+                                    .execution_status === 'executable'
+                                    ? 'default'
+                                    : 'destructive'
+                            "
+                            data-testid="fee-rule-execution-status"
+                        >
+                            {{
+                                label(
+                                    feeRule.current_reconciliation
+                                        .execution_status,
+                                )
+                            }}
+                        </Badge>
                     </div>
                     <p
-                        class="mt-1 max-w-4xl break-words text-sm text-muted-foreground"
+                        class="mt-1 max-w-4xl text-sm break-words text-muted-foreground"
                     >
                         {{ feeRule.name }}
                     </p>
@@ -133,6 +168,161 @@ function basisRange(range: FeeRuleRange): string {
                 <p class="font-medium">Read-only policy boundary</p>
                 <p class="mt-1">
                     {{ scopeNote }}
+                </p>
+            </section>
+
+            <section
+                v-if="feeRule.reconciliation_required"
+                class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+                data-testid="financial-reconciliation"
+            >
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-sm font-semibold text-foreground">
+                            Financial Reconciliation
+                        </h2>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                            Legal evidence and the accepted operational decision
+                            are preserved separately from the executable rule.
+                        </p>
+                    </div>
+                    <Badge
+                        v-if="feeRule.current_reconciliation"
+                        :variant="
+                            feeRule.current_reconciliation.execution_status ===
+                            'executable'
+                                ? 'default'
+                                : 'destructive'
+                        "
+                    >
+                        {{
+                            label(
+                                feeRule.current_reconciliation.execution_status,
+                            )
+                        }}
+                    </Badge>
+                </div>
+
+                <div
+                    v-if="feeRule.current_reconciliation"
+                    class="mt-4 grid gap-4 lg:grid-cols-2"
+                >
+                    <div class="grid gap-4">
+                        <div>
+                            <h3
+                                class="text-xs font-medium text-muted-foreground uppercase"
+                            >
+                                Original Ordinance Text
+                            </h3>
+                            <p class="mt-1 text-sm break-words">
+                                {{
+                                    feeRule.current_reconciliation.original_text
+                                }}
+                            </p>
+                        </div>
+                        <div>
+                            <h3
+                                class="text-xs font-medium text-muted-foreground uppercase"
+                            >
+                                Normalized Interpretation
+                            </h3>
+                            <p class="mt-1 text-sm break-words">
+                                {{
+                                    feeRule.current_reconciliation
+                                        .normalized_interpretation ??
+                                    'No interpretation recorded'
+                                }}
+                            </p>
+                        </div>
+                        <div>
+                            <h3
+                                class="text-xs font-medium text-muted-foreground uppercase"
+                            >
+                                Execution Reason
+                            </h3>
+                            <p
+                                class="mt-1 text-sm break-words"
+                                data-testid="fee-rule-execution-reason"
+                            >
+                                {{
+                                    feeRule.current_reconciliation
+                                        .execution_reason
+                                }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <dl class="grid gap-4 text-sm">
+                        <div>
+                            <dt class="text-xs text-muted-foreground uppercase">
+                                Legal Authority
+                            </dt>
+                            <dd class="mt-1 break-words">
+                                {{
+                                    feeRule.current_reconciliation
+                                        .legal_authority
+                                }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground uppercase">
+                                Evidence Reference
+                            </dt>
+                            <dd class="mt-1 break-words">
+                                {{
+                                    feeRule.current_reconciliation
+                                        .evidence_reference
+                                }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground uppercase">
+                                Decision Authority
+                            </dt>
+                            <dd class="mt-1 break-words">
+                                {{
+                                    feeRule.current_reconciliation
+                                        .decision_authority ?? '-'
+                                }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground uppercase">
+                                Decision Reference
+                            </dt>
+                            <dd class="mt-1 break-words">
+                                {{
+                                    feeRule.current_reconciliation
+                                        .decision_reference ?? '-'
+                                }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground uppercase">
+                                Effective Period
+                            </dt>
+                            <dd class="mt-1">
+                                {{
+                                    feeRule.current_reconciliation
+                                        .effective_from
+                                }}
+                                to
+                                {{
+                                    feeRule.current_reconciliation
+                                        .effective_until ?? 'No end date'
+                                }}
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <p
+                    v-else
+                    class="mt-4 text-sm font-medium text-destructive"
+                    data-testid="fee-rule-reconciliation-missing"
+                >
+                    Execution is unavailable because no financial reconciliation
+                    is recorded.
                 </p>
             </section>
 
@@ -264,7 +454,9 @@ function basisRange(range: FeeRuleRange): string {
             </section>
 
             <section
-                v-if="feeRule.policy_note || feeRule.policy_boundaries.length > 0"
+                v-if="
+                    feeRule.policy_note || feeRule.policy_boundaries.length > 0
+                "
                 class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
             >
                 <h2 class="text-sm font-semibold text-foreground">

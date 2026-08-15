@@ -39,6 +39,7 @@ const supportedScenarios = [
     'permit_application_pending_payment_visibility',
     'renewal_permit_lifecycle_foundation',
     'revenue_code_fee_catalog_visibility',
+    'revenue_code_executability_safety',
     'retirement_permit_lifecycle_foundation',
     'transfer_permit_lifecycle_foundation',
 ];
@@ -91,6 +92,7 @@ const amendmentPolicyEvidence = {};
 const transferPolicyEvidence = {};
 const retirementPolicyEvidence = {};
 const feeCatalogEvidence = {};
+const revenueCodeExecutionEvidence = {};
 const citizenDraftEvidence = {};
 const citizenRegistryEvidence = {};
 const citizenProcessingEvidence = {};
@@ -161,9 +163,7 @@ try {
         await inspectCitizenPermitDraft(page, baseUrl);
     }
 
-    if (
-        manifest.scenario.key === 'citizen_existing_business_registry_safety'
-    ) {
+    if (manifest.scenario.key === 'citizen_existing_business_registry_safety') {
         await inspectCitizenExistingBusinessRegistrySafety(page, baseUrl);
         await page.setViewportSize({ width: 1440, height: 900 });
         await editCitizenPermitDraft(page, baseUrl);
@@ -197,6 +197,10 @@ try {
         await inspectRevenueCodeFeeCatalogList(page, baseUrl);
         await inspectRevenueCodeFeeCatalogDetail(page, baseUrl);
         await inspectRevenueCodeFeeCatalogMobile(page, baseUrl);
+    }
+
+    if (manifest.scenario.key === 'revenue_code_executability_safety') {
+        await inspectRevenueCodeExecutabilitySafety(page, baseUrl);
     }
 
     if (manifest.scenario.key === 'assessment_policy_boundary_visibility') {
@@ -287,6 +291,7 @@ const report = {
     transfer_policy: transferPolicyEvidence,
     retirement_policy: retirementPolicyEvidence,
     fee_catalog: feeCatalogEvidence,
+    revenue_code_execution: revenueCodeExecutionEvidence,
     citizen_draft: citizenDraftEvidence,
     citizen_registry: citizenRegistryEvidence,
     citizen_processing: citizenProcessingEvidence,
@@ -1061,12 +1066,14 @@ async function inspectCitizenExistingBusinessRegistrySafety(
         'citizen-registry-business-select',
     );
     await businessSelect.waitFor();
-    const options = await businessSelect.locator('option').evaluateAll((items) =>
-        items.map((item) => ({
-            value: item.value,
-            label: item.textContent?.trim() ?? '',
-        })),
-    );
+    const options = await businessSelect
+        .locator('option')
+        .evaluateAll((items) =>
+            items.map((item) => ({
+                value: item.value,
+                label: item.textContent?.trim() ?? '',
+            })),
+        );
     const ownedOptionVisible = options.some(
         (option) =>
             option.value === String(registry.business_id) &&
@@ -2514,6 +2521,233 @@ async function inspectRevenueCodeFeeCatalogList(targetPage, targetBaseUrl) {
         '01-fee-catalog-list',
         'browser/screenshots/01-fee-catalog-list.png',
     );
+}
+
+async function inspectRevenueCodeExecutabilitySafety(
+    targetPage,
+    targetBaseUrl,
+) {
+    const exactAssessmentUrl = `${targetBaseUrl}${manifest.resources.exact_assessment_url}`;
+    await targetPage.goto(exactAssessmentUrl, { waitUntil: 'networkidle' });
+    const exactApplicationVisible = await targetPage
+        .getByText(manifest.resources.exact_application_number, {
+            exact: true,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const exactAssessmentLine = targetPage.locator(
+        `[data-testid="assessment-line"][data-line-code="${manifest.resources.exact_fee_rule_code}"]`,
+    );
+    const exactRuleVisible = await exactAssessmentLine
+        .isVisible()
+        .catch(() => false);
+    const exactAmountVisible = await exactAssessmentLine
+        .getByText(
+            uiMoneyFromCents(
+                manifest.resources.exact_assessment_total_amount_cents,
+            ),
+            { exact: true },
+        )
+        .first()
+        .isVisible()
+        .catch(() => false);
+    checks.push(
+        check(
+            'revenue-code-exact-assessment-visible',
+            'Assessment detail shows the exact reconciled inspection fee',
+            true,
+            exactApplicationVisible && exactRuleVisible && exactAmountVisible,
+            {
+                assessment_id: manifest.resources.exact_assessment_id,
+                url: exactAssessmentUrl,
+            },
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '01-exact-assessment',
+        'browser/screenshots/01-exact-assessment.png',
+    );
+
+    const exactFeeRuleUrl = `${targetBaseUrl}${manifest.resources.exact_fee_rule_url}`;
+    await targetPage.goto(exactFeeRuleUrl, { waitUntil: 'networkidle' });
+    const exactStatus = await targetPage
+        .getByTestId('fee-rule-execution-status')
+        .innerText()
+        .then(normalizedText)
+        .catch(() => '');
+    const exactAuthorityVisible = await targetPage
+        .getByText('Municipality of Ipil Sangguniang Bayan', { exact: true })
+        .isVisible()
+        .catch(() => false);
+    const exactInterpretationVisible = await targetPage
+        .getByText(
+            'Charge one annual PHP 350.00 business inspection fee per permit application.',
+            { exact: true },
+        )
+        .isVisible()
+        .catch(() => false);
+    const exactVisible =
+        exactStatus === 'executable' &&
+        exactAuthorityVisible &&
+        exactInterpretationVisible;
+    checks.push(
+        check(
+            'revenue-code-exact-reconciliation-visible',
+            'Fee catalog shows the accepted authority chain for the executable rule',
+            true,
+            exactVisible,
+            {
+                fee_rule_id: manifest.resources.exact_fee_rule_id,
+                reconciliation_id: manifest.resources.exact_reconciliation_id,
+                execution_status: exactStatus,
+            },
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '02-exact-reconciliation',
+        'browser/screenshots/02-exact-reconciliation.png',
+    );
+
+    const blockedFeeRuleUrl = `${targetBaseUrl}${manifest.resources.blocked_fee_rule_url}`;
+    await targetPage.goto(blockedFeeRuleUrl, { waitUntil: 'networkidle' });
+    const blockedStatus = await targetPage
+        .getByTestId('fee-rule-execution-status')
+        .innerText()
+        .then(normalizedText)
+        .catch(() => '');
+    const blockedReasonVisible = await targetPage
+        .getByText('Municipal enterprise-scale eligibility is unresolved', {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const blockedOriginalTextVisible = await targetPage
+        .getByText('For new business, Micro-Industry', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const blockedVisible =
+        blockedStatus === 'blocked' &&
+        blockedReasonVisible &&
+        blockedOriginalTextVisible;
+    checks.push(
+        check(
+            'revenue-code-blocked-reconciliation-visible',
+            'Fee catalog shows the unresolved rule as recorded and non-executable',
+            true,
+            blockedVisible,
+            {
+                fee_rule_id: manifest.resources.blocked_fee_rule_id,
+                reconciliation_id: manifest.resources.blocked_reconciliation_id,
+                execution_status: blockedStatus,
+            },
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '03-blocked-reconciliation',
+        'browser/screenshots/03-blocked-reconciliation.png',
+    );
+
+    const assessmentIndexUrl = `${targetBaseUrl}${manifest.resources.assessment_index_url}`;
+    await targetPage.goto(assessmentIndexUrl, { waitUntil: 'networkidle' });
+    const applicationRow = targetPage
+        .locator('tr')
+        .filter({ hasText: manifest.resources.blocked_application_number })
+        .first();
+    await applicationRow.getByRole('button', { name: /assess/i }).click();
+    await targetPage.waitForLoadState('networkidle');
+    await targetPage
+        .waitForFunction(
+            (expectedMessage) =>
+                document.body.innerText.includes(expectedMessage),
+            manifest.resources.expected_refusal_message,
+            { timeout: 10000 },
+        )
+        .catch(() => {});
+    const refusalVisible = await targetPage
+        .getByText(manifest.resources.expected_refusal_message, {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const updatedApplicationRow = targetPage
+        .locator('tr')
+        .filter({ hasText: manifest.resources.blocked_application_number })
+        .first();
+    const notAssessedVisible = await updatedApplicationRow
+        .getByText('Not assessed', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    checks.push(
+        check(
+            'revenue-code-blocked-assessment-refused',
+            'Browser assessment attempt shows the reconciliation refusal and creates no visible assessment',
+            true,
+            refusalVisible && notAssessedVisible,
+            {
+                permit_application_id:
+                    manifest.resources.blocked_application_id,
+            },
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '04-blocked-assessment-refusal',
+        'browser/screenshots/04-blocked-assessment-refusal.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(blockedFeeRuleUrl, { waitUntil: 'networkidle' });
+    const mobileStatusVisible = await targetPage
+        .getByTestId('fee-rule-execution-status')
+        .isVisible()
+        .catch(() => false);
+    const horizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+    checks.push(
+        check(
+            'revenue-code-reconciliation-mobile-visible',
+            'Mobile detail keeps reconciliation status visible',
+            true,
+            mobileStatusVisible,
+        ),
+        check(
+            'revenue-code-reconciliation-mobile-no-horizontal-overflow',
+            'Mobile detail has no horizontal overflow',
+            false,
+            horizontalOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '05-blocked-reconciliation-mobile',
+        'browser/screenshots/05-blocked-reconciliation-mobile.png',
+    );
+
+    Object.assign(revenueCodeExecutionEvidence, {
+        exact_assessment_id: manifest.resources.exact_assessment_id,
+        exact_fee_rule_id: manifest.resources.exact_fee_rule_id,
+        exact_reconciliation_id: manifest.resources.exact_reconciliation_id,
+        exact_visible: exactVisible,
+        blocked_application_id: manifest.resources.blocked_application_id,
+        blocked_fee_rule_id: manifest.resources.blocked_fee_rule_id,
+        blocked_reconciliation_id: manifest.resources.blocked_reconciliation_id,
+        blocked_visible: blockedVisible,
+        refusal_visible: refusalVisible,
+        not_assessed_visible: notAssessedVisible,
+        mobile_status_visible: mobileStatusVisible,
+        horizontal_overflow: horizontalOverflow,
+    });
 }
 
 async function inspectAssessmentPolicyBoundary(targetPage, targetBaseUrl) {
@@ -5887,6 +6121,12 @@ function redact(value) {
     return String(value)
         .replace(password ?? '', '[redacted]')
         .replace(email ?? '', '[redacted-email]')
-        .replace(operatorPassword ?? '__operator-password-not-set__', '[redacted]')
-        .replace(operatorEmail ?? '__operator-email-not-set__', '[redacted-email]');
+        .replace(
+            operatorPassword ?? '__operator-password-not-set__',
+            '[redacted]',
+        )
+        .replace(
+            operatorEmail ?? '__operator-email-not-set__',
+            '[redacted-email]',
+        );
 }

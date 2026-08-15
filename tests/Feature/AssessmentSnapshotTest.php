@@ -4,12 +4,14 @@ use App\Actions\CreateAssessmentForPermitApplication;
 use App\Enums\AssessmentStatus;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
+use App\Enums\FeeRuleExecutionStatus;
 use App\Enums\FeeRuleScope;
 use App\Enums\PermitApplicationStatus;
 use App\Exceptions\UnsupportedAssessmentPolicy;
 use App\Models\Assessment;
 use App\Models\FeeRule;
 use App\Models\FeeRuleRange;
+use App\Models\FeeRuleReconciliation;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
@@ -204,3 +206,89 @@ it('does not invent rate rounding behavior before policy is confirmed', function
 
     app(CreateAssessmentForPermitApplication::class)->handle($application);
 })->throws(UnsupportedAssessmentPolicy::class);
+
+it('requires a reconciliation record when a fee rule opts into financial reconciliation', function () {
+    $application = PermitApplication::factory()->create([
+        'application_year' => 2026,
+    ]);
+
+    FeeRule::factory()->create([
+        'code' => 'UNRECONCILED-FEE',
+        'scope' => FeeRuleScope::Application,
+        'calculation_type' => FeeRuleCalculationType::Fixed,
+        'amount_cents' => 35_000,
+        'effective_from' => '2026-01-01',
+        'metadata' => ['reconciliation_required' => true],
+    ]);
+
+    expect(fn () => app(CreateAssessmentForPermitApplication::class)->handle($application))
+        ->toThrow(UnsupportedAssessmentPolicy::class, 'no financial reconciliation is recorded');
+
+    expect($application->assessments()->count())->toBe(0);
+});
+
+it('refuses a blocked reconciliation without superseding the existing assessment', function () {
+    $application = PermitApplication::factory()->create([
+        'application_year' => 2026,
+    ]);
+
+    $feeRule = FeeRule::factory()->create([
+        'code' => 'RECONCILED-FEE',
+        'scope' => FeeRuleScope::Application,
+        'calculation_type' => FeeRuleCalculationType::Fixed,
+        'amount_cents' => 35_000,
+        'effective_from' => '2026-01-01',
+    ]);
+
+    $existingAssessment = app(CreateAssessmentForPermitApplication::class)->handle($application);
+
+    $feeRule->update(['metadata' => ['reconciliation_required' => true]]);
+    FeeRuleReconciliation::factory()->for($feeRule)->create([
+        'execution_status' => FeeRuleExecutionStatus::Blocked,
+        'execution_reason' => 'Municipal interpretation remains unresolved.',
+    ]);
+
+    expect(fn () => app(CreateAssessmentForPermitApplication::class)->handle($application->refresh()))
+        ->toThrow(UnsupportedAssessmentPolicy::class, 'Municipal interpretation remains unresolved');
+
+    expect($existingAssessment->refresh()->superseded_at)->toBeNull();
+    expect($application->assessments()->count())->toBe(1);
+});
+
+it('snapshots the accepted reconciliation that authorized financial execution', function () {
+    $application = PermitApplication::factory()->create([
+        'application_year' => 2026,
+    ]);
+
+    $feeRule = FeeRule::factory()->create([
+        'code' => 'EXACT-INSPECTION-FEE',
+        'scope' => FeeRuleScope::Application,
+        'calculation_type' => FeeRuleCalculationType::Fixed,
+        'amount_cents' => 35_000,
+        'effective_from' => '2026-01-01',
+        'metadata' => ['reconciliation_required' => true],
+    ]);
+    $reconciliation = FeeRuleReconciliation::factory()->for($feeRule)->create([
+        'legal_authority' => 'Ordinance No. 08-656-2023',
+        'evidence_reference' => 'LEGAL-MRC-001:SECTION-3A.04',
+        'normalized_interpretation' => 'One annual PHP 350 inspection fee per application.',
+        'decision_authority' => 'Municipality of Ipil',
+        'decision_reference' => 'Section 3A.04',
+        'execution_status' => FeeRuleExecutionStatus::Executable,
+        'execution_reason' => 'Exact and deterministic.',
+    ]);
+
+    $assessment = app(CreateAssessmentForPermitApplication::class)->handle($application);
+    $snapshot = $assessment->lines->sole()->rule_snapshot['reconciliation'];
+
+    expect($snapshot)
+        ->toMatchArray([
+            'fee_rule_reconciliation_id' => $reconciliation->id,
+            'legal_authority' => 'Ordinance No. 08-656-2023',
+            'evidence_reference' => 'LEGAL-MRC-001:SECTION-3A.04',
+            'normalized_interpretation' => 'One annual PHP 350 inspection fee per application.',
+            'decision_authority' => 'Municipality of Ipil',
+            'decision_reference' => 'Section 3A.04',
+            'execution_status' => 'executable',
+        ]);
+});

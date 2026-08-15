@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowLeft, CreditCard, FileText, ReceiptText } from '@lucide/vue';
-import { Badge } from '@/components/ui/badge';
-import { Button, buttonVariants } from '@/components/ui/button';
-import AppLayout from '@/layouts/AppLayout.vue';
-import {
-    index as assessmentIndex,
-    pdf as assessmentPdf,
-} from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import {
     show as paymentScheduleShow,
     store as paymentScheduleStore,
 } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
+import {
+    index as assessmentIndex,
+    pdf as assessmentPdf,
+} from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
+import { Badge } from '@/components/ui/badge';
+import { Button, buttonVariants } from '@/components/ui/button';
+import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
 type AssessmentLine = {
@@ -124,7 +124,10 @@ function money(amountCents: number): string {
                             variant="outline"
                             size="sm"
                         >
-                            <a :href="assessmentPdf.url(assessment.id)" target="_blank">
+                            <a
+                                :href="assessmentPdf.url(assessment.id)"
+                                target="_blank"
+                            >
                                 <FileText />
                                 PDF
                             </a>
@@ -220,7 +223,7 @@ function money(amountCents: number): string {
                 class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
             >
                 <div class="overflow-x-auto">
-                    <table class="w-full min-w-[920px] text-sm">
+                    <table class="w-full min-w-[820px] text-sm">
                         <thead
                             class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
                         >
@@ -242,6 +245,8 @@ function money(amountCents: number): string {
                                 v-for="line in assessment.lines"
                                 :key="line.id"
                                 class="border-b last:border-b-0"
+                                data-testid="assessment-line"
+                                :data-line-code="line.code"
                             >
                                 <td
                                     class="px-4 py-3 align-top font-mono text-xs"
@@ -290,7 +295,9 @@ function money(amountCents: number): string {
                 <h2 class="mb-2 text-sm font-semibold text-foreground">
                     Assessment document gaps
                 </h2>
-                <ul class="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                <ul
+                    class="list-disc space-y-1 pl-5 text-sm text-muted-foreground"
+                >
                     <li v-for="gap in assessmentDocumentGaps" :key="gap">
                         {{ gap }}
                     </li>

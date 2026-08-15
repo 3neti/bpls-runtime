@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * @property int $id
@@ -24,6 +25,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $legacy_source_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read Collection<int, AssessmentLine> $lines
  */
 #[Fillable(['permit_application_id', 'assessed_by_id', 'sequence', 'status', 'assessed_at', 'superseded_at', 'total_amount_cents', 'source_snapshot', 'legacy_source_id'])]
 class Assessment extends Model
@@ -36,21 +38,25 @@ class Assessment extends Model
         'total_amount_cents' => 0,
     ];
 
+    /** @return BelongsTo<PermitApplication, $this> */
     public function permitApplication(): BelongsTo
     {
         return $this->belongsTo(PermitApplication::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function assessedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assessed_by_id');
     }
 
+    /** @return HasMany<AssessmentLine, $this> */
     public function lines(): HasMany
     {
         return $this->hasMany(AssessmentLine::class);
     }
 
+    /** @return HasMany<PaymentSchedule, $this> */
     public function paymentSchedules(): HasMany
     {
         return $this->hasMany(PaymentSchedule::class);

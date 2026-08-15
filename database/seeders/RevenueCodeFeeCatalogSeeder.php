@@ -4,9 +4,11 @@ namespace Database\Seeders;
 
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
+use App\Enums\FeeRuleExecutionStatus;
 use App\Enums\FeeRuleScope;
 use App\Models\FeeRule;
 use App\Models\FeeRuleRange;
+use App\Models\FeeRuleReconciliation;
 use App\Models\LineOfBusiness;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -36,7 +38,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             ],
         );
 
-        $this->fixedRule(
+        $newBusinessPermitFee = $this->fixedRule(
             code: 'MRC-3A-02-NEW-MAYORS-PERMIT-MICRO',
             name: "Mayor's Permit Fee - New Business Micro-Industry",
             amountCents: 20_000,
@@ -47,11 +49,19 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 'application_type' => 'new',
                 'application_types' => ['new'],
                 'enterprise_scale' => 'micro_industry',
-                'catalog_status' => 'executable_foundation',
+                'catalog_status' => 'recorded_non_executable',
+                'reconciliation_required' => true,
             ],
         );
+        $this->reconcile(
+            feeRule: $newBusinessPermitFee,
+            originalText: 'Section 3A.02(b): For new business, Micro-Industry - P 200.00.',
+            normalizedInterpretation: 'Charge PHP 200.00 to every new permit application.',
+            executionStatus: FeeRuleExecutionStatus::Blocked,
+            executionReason: 'Municipal enterprise-scale eligibility is unresolved; the micro-industry amount cannot be applied to every new business.',
+        );
 
-        $this->fixedRule(
+        $inspectionFee = $this->fixedRule(
             code: 'MRC-3A-04-BUSINESS-INSPECTION',
             name: 'Business Inspection Fee',
             amountCents: 35_000,
@@ -59,11 +69,21 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             metadata: [
                 'source_id' => 'LEGAL-MRC-001',
                 'source_section' => 'Section 3A.04',
-                'catalog_status' => 'executable_foundation',
+                'catalog_status' => 'executable_reconciled',
+                'reconciliation_required' => true,
             ],
         );
+        $this->reconcile(
+            feeRule: $inspectionFee,
+            originalText: 'Section 3A.04: Any business operation in the municipality should be charged an inspection fee of P350.00, uniform to all business establishments and payable per annum.',
+            normalizedInterpretation: 'Charge one annual PHP 350.00 business inspection fee per permit application.',
+            executionStatus: FeeRuleExecutionStatus::Executable,
+            executionReason: 'The ordinance states an exact, uniform annual amount with deterministic application scope.',
+            decisionAuthority: 'Municipality of Ipil Sangguniang Bayan',
+            decisionReference: 'Ordinance No. 08-656-2023 Section 3A.04',
+        );
 
-        $this->fixedRule(
+        $registrationPlateFee = $this->fixedRule(
             code: 'MRC-3A-05-BUSINESS-REGISTRATION-PLATE',
             name: 'Business Permit Registration Plate',
             amountCents: 30_000,
@@ -72,9 +92,17 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 'source_id' => 'LEGAL-MRC-001',
                 'source_section' => 'Section 3A.05',
                 'application_types' => ['new'],
-                'catalog_status' => 'executable_foundation',
+                'catalog_status' => 'recorded_non_executable',
+                'reconciliation_required' => true,
                 'policy_note' => 'Ordinance states not to exceed PHP 300.00; production configuration must confirm the exact charged amount.',
             ],
+        );
+        $this->reconcile(
+            feeRule: $registrationPlateFee,
+            originalText: 'Section 3A.05: Applicants shall pay an amount not to exceed Three Hundred Pesos (P300.00) for the Business Permit Registration Plate and handling.',
+            normalizedInterpretation: 'Charge the statutory ceiling of PHP 300.00 as the exact registration-plate amount.',
+            executionStatus: FeeRuleExecutionStatus::Blocked,
+            executionReason: 'The ordinance provides a ceiling, not the Municipality-confirmed exact operational charge.',
         );
 
         $retailTax = FeeRule::query()->updateOrCreate(
@@ -97,8 +125,9 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                     'source_id' => 'LEGAL-MRC-001',
                     'source_section' => 'Section 2A.02(b)',
                     'application_types' => ['renewal'],
-                    'catalog_status' => 'partial_executable_extract',
-                    'extraction_scope' => 'Fixed-amount brackets only; percentage/rate continuation above PHP 2,000,000 remains blocked by rounding and policy confirmation.',
+                    'catalog_status' => 'recorded_non_executable',
+                    'reconciliation_required' => true,
+                    'extraction_scope' => 'The fixed-amount schedule remains recorded but non-executable pending municipal resolution of malformed and overlapping ordinance rows.',
                     'policy_boundaries' => [
                         'new_business_initial_local_business_tax_exemption',
                         'renewal_prior_year_gross_receipts_basis',
@@ -149,6 +178,14 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 ],
             );
         });
+
+        $this->reconcile(
+            feeRule: $retailTax,
+            originalText: 'Section 2A.02(b) includes "6,000.00 or more but less than 7,500.00", followed by "7,000.00 or more but less than 8,000.00", and malformed values including "150,0000.00" and "5000,000.00".',
+            normalizedInterpretation: 'The current catalog transcription starts the second disputed interval at PHP 7,500.00 and interprets the malformed values as PHP 150,000.00 and PHP 500,000.00.',
+            executionStatus: FeeRuleExecutionStatus::Blocked,
+            executionReason: 'The wholesale/dealer schedule contains overlapping and malformed brackets that require an accepted municipal reconciliation.',
+        );
     }
 
     /**
@@ -173,6 +210,36 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 'is_active' => true,
                 'legacy_source_id' => $metadata['source_id'].':'.$metadata['source_section'],
                 'metadata' => $metadata,
+            ],
+        );
+    }
+
+    private function reconcile(
+        FeeRule $feeRule,
+        string $originalText,
+        ?string $normalizedInterpretation,
+        FeeRuleExecutionStatus $executionStatus,
+        string $executionReason,
+        string $decisionAuthority = 'Municipality of Ipil - decision pending',
+        string $decisionReference = 'Engineering Program Review #005 Board Decision (software execution refusal)',
+    ): FeeRuleReconciliation {
+        return FeeRuleReconciliation::query()->updateOrCreate(
+            [
+                'fee_rule_id' => $feeRule->id,
+                'version' => 1,
+            ],
+            [
+                'legal_authority' => 'Municipality of Ipil Ordinance No. 08-656-2023',
+                'evidence_reference' => $feeRule->legacy_source_id ?? 'LEGAL-MRC-001',
+                'original_text' => $originalText,
+                'normalized_interpretation' => $normalizedInterpretation,
+                'decision_authority' => $decisionAuthority,
+                'decision_reference' => $decisionReference,
+                'effective_from' => '2023-01-01',
+                'effective_until' => null,
+                'execution_status' => $executionStatus,
+                'execution_reason' => $executionReason,
+                'decided_at' => '2026-08-15 00:00:00',
             ],
         );
     }

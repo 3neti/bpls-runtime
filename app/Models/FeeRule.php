@@ -11,7 +11,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * @property int $id
@@ -32,6 +34,10 @@ use Illuminate\Support\Carbon;
  * @property array<string, mixed>|null $metadata
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read LineOfBusiness|null $lineOfBusiness
+ * @property-read Collection<int, FeeRuleRange> $ranges
+ * @property-read Collection<int, FeeRuleReconciliation> $reconciliations
+ * @property-read FeeRuleReconciliation|null $currentReconciliation
  */
 #[Fillable(['line_of_business_id', 'code', 'name', 'category', 'scope', 'calculation_type', 'basis', 'amount_cents', 'rate_basis_points', 'effective_from', 'effective_until', 'legal_basis', 'is_active', 'legacy_source_id', 'metadata'])]
 class FeeRule extends Model
@@ -45,14 +51,28 @@ class FeeRule extends Model
         'is_active' => true,
     ];
 
+    /** @return BelongsTo<LineOfBusiness, $this> */
     public function lineOfBusiness(): BelongsTo
     {
         return $this->belongsTo(LineOfBusiness::class);
     }
 
+    /** @return HasMany<FeeRuleRange, $this> */
     public function ranges(): HasMany
     {
         return $this->hasMany(FeeRuleRange::class);
+    }
+
+    /** @return HasMany<FeeRuleReconciliation, $this> */
+    public function reconciliations(): HasMany
+    {
+        return $this->hasMany(FeeRuleReconciliation::class);
+    }
+
+    /** @return HasOne<FeeRuleReconciliation, $this> */
+    public function currentReconciliation(): HasOne
+    {
+        return $this->hasOne(FeeRuleReconciliation::class)->ofMany('version', 'max');
     }
 
     /**
