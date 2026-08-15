@@ -58,7 +58,7 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
     expect(FeeRuleRange::query()->whereBelongsTo($retailTax)->count())->toBe(23);
     expect(FeeRuleReconciliation::query()->count())->toBe(4);
 
-    expect(RevenueCodeProvision::query()->count())->toBe(77)
+    expect(RevenueCodeProvision::query()->count())->toBe(81)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2A.02%')->count())->toBe(8)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2B.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2C.%')->count())->toBe(2)
@@ -73,8 +73,9 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3H.%')->count())->toBe(10)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3I.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3J.%')->count())->toBe(2)
+        ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3K.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->whereNotNull('fee_rule_id')->count())->toBe(4)
-        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(76);
+        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(80);
 
     $wholesaleProvision = RevenueCodeProvision::query()
         ->with('feeRule.currentReconciliation')
@@ -138,11 +139,23 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->metadata->known_ambiguities->toContain('extension_duration_and_amount')
         ->metadata->known_ambiguities->toContain('legacy_implementation_not_found');
 
+    $equipmentFeesProvision = RevenueCodeProvision::query()
+        ->where('code', 'MRC-3K-01-ANNUAL-EQUIPMENT-FEES')
+        ->sole();
+
+    expect($equipmentFeesProvision)
+        ->reconciliation_status->toBe(RevenueCodeProvisionStatus::ReconciliationRequired)
+        ->fee_rule_id->toBeNull()
+        ->metadata->schedule_clause_count->toBe(23)
+        ->metadata->known_ambiguities->toContain('nonresident_or_rental_eligibility_logic')
+        ->metadata->known_ambiguities->toContain('unpriced_other_equipment_parent')
+        ->metadata->known_ambiguities->toContain('legacy_implementation_not_found');
+
     expect(RevenueCodeProvisionRow::query()->count())->toBe(82);
-    expect(RevenueCodeProvisionClause::query()->count())->toBe(399)
+    expect(RevenueCodeProvisionClause::query()->count())->toBe(425)
         ->and(RevenueCodeProvisionClause::query()
             ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
-            ->count())->toBe(399);
+            ->count())->toBe(425);
 
     $dependentRate = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2A-02-C-DEPENDENT-HALF-RATE')
@@ -840,6 +853,46 @@ it('preserves filming and video coverage fees as non executable ordinance eviden
         ->and($advancePayment->metadata['candidate_payee'])->toBe('Municipal Treasurer')
         ->and($advancePayment->metadata['source_lead_days'])->toBe(7)
         ->and($advancePayment->metadata['known_timing_attachment_ambiguity'])->toBeTrue();
+});
+
+it('preserves agricultural machinery and heavy equipment rules as non executable ordinance evidence', function () {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+
+    $scope = RevenueCodeProvisionClause::query()->where('code', 'MRC-3K-01-NONRESIDENT-OR-RENTED-EQUIPMENT-SCOPE')->sole();
+    $handtractor = RevenueCodeProvisionClause::query()->where('code', 'MRC-3K-01-HANDTRACTORS')->sole();
+    $bulldozer = RevenueCodeProvisionClause::query()->where('code', 'MRC-3K-01-BULLDOZERS')->sole();
+    $manualThresher = RevenueCodeProvisionClause::query()->where('code', 'MRC-3K-01-MANUAL-TRESHERS')->sole();
+    $otherEquipment = RevenueCodeProvisionClause::query()->where('code', 'MRC-3K-01-OTHER-UNENUMERATED-NO-AMOUNT')->sole();
+    $riceFarmTractor = RevenueCodeProvisionClause::query()->where('code', 'MRC-3K-01-FOUR-WHEEL-DRIVE-RICE-FARM-TRACTOR')->sole();
+    $combineHarvester = RevenueCodeProvisionClause::query()->where('code', 'MRC-3K-01-COMBINE-RICE-HARVESTER')->sole();
+    $payment = RevenueCodeProvisionClause::query()->where('code', 'MRC-3K-02-PAY-BEFORE-RENTAL-UPON-APPLICATION')->sole();
+    $registry = RevenueCodeProvisionClause::query()->where('code', 'MRC-3K-03-TREASURER-EQUIPMENT-REGISTRY')->sole();
+    $penalty = RevenueCodeProvisionClause::query()->where('code', 'MRC-3K-04-JUDICIAL-FINE-IMPRISONMENT')->sole();
+
+    expect($scope)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::Eligibility)
+        ->metadata->source_boolean_operator->toBe('or')
+        ->metadata->known_grammar_ambiguity->toBeTrue()
+        ->metadata->candidate_values_are_non_executable->toBeTrue()
+        ->and($handtractor->amount_cents)->toBe(25_000)
+        ->and($handtractor->metadata['candidate_unit'])->toBe('equipment_item_per_annum')
+        ->and($bulldozer->amount_cents)->toBe(150_000)
+        ->and($manualThresher->amount_cents)->toBe(15_000)
+        ->and($manualThresher->metadata['known_source_spelling'])->toBe('Treshers')
+        ->and($otherEquipment->amount_cents)->toBeNull()
+        ->and($otherEquipment->metadata['known_missing_parent_amount'])->toBeTrue()
+        ->and($riceFarmTractor->amount_cents)->toBe(50_000)
+        ->and($combineHarvester->amount_cents)->toBe(50_000)
+        ->and($payment->clause_type)->toBe(RevenueCodeProvisionClauseType::PaymentTiming)
+        ->and($payment->metadata['known_trigger_attachment_ambiguity'])->toBeTrue()
+        ->and($registry->clause_type)->toBe(RevenueCodeProvisionClauseType::DocumentaryRequirement)
+        ->and($registry->metadata['candidate_registry_fields'])->toBe(['equipment_make', 'equipment_brand', 'owner_name', 'owner_address'])
+        ->and($registry->metadata['known_missing_identity_fields'])->toContain('serial_number')
+        ->and($penalty->clause_type)->toBe(RevenueCodeProvisionClauseType::Penalty)
+        ->and($penalty->metadata['candidate_minimum_fine_cents'])->toBe(50_000)
+        ->and($penalty->metadata['candidate_maximum_fine_cents'])->toBe(100_000)
+        ->and($penalty->metadata['source_imprisonment_minimum_months'])->toBe(1)
+        ->and($penalty->metadata['source_imprisonment_maximum_months'])->toBe(6);
 });
 
 it('preserves dispensing pump requirements fees and sanctions as non executable ordinance evidence', function () {

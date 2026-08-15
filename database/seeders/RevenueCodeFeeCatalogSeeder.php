@@ -885,6 +885,42 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 metadata: ['chapter' => 3, 'article' => 'J', 'known_ambiguities' => ['filming_permit_and_mayors_permit_relationship', 'application_and_payment_sequence', 'calendar_or_business_days', 'commencement_timestamp', 'late_application', 'changed_schedule', 'extension_relationship', 'treasurer_delegation', 'receipt_evidence', 'cancellation_and_refund', 'enforcement']],
             ),
             $this->provision(
+                code: 'MRC-3K-01-ANNUAL-EQUIPMENT-FEES',
+                section: 'Section 3K.01',
+                title: 'Agricultural machinery and heavy-equipment annual permit fees',
+                type: RevenueCodeProvisionType::FixedFee,
+                excerpt: 'The ordinance prints annual permit fees for agricultural machinery and heavy equipment associated with non-resident operators or equipment rented within Ipil.',
+                notes: 'The “non-resident operators ... or equipment renting out” grammar leaves the eligibility logic unclear. Operator, owner, lessor, lessee and equipment identity; residence; rental and municipal-use evidence; annual term; equipment classification; the unpriced other-equipment parent; fleet and duplicate-unit treatment; permit identity; exemptions; payer; collector; and accepted operational amounts require reconciliation. No operational implementation was found in the studied legacy archive.',
+                metadata: ['chapter' => 3, 'article' => 'K', 'schedule_clause_count' => 23, 'known_ambiguities' => ['nonresident_or_rental_eligibility_logic', 'operator_owner_lessor_lessee_identity', 'residence_evidence', 'rental_and_municipal_use_evidence', 'annual_term_and_proration', 'equipment_classification', 'singular_plural_source_labels', 'unpriced_other_equipment_parent', 'fleet_and_duplicate_unit_treatment', 'permit_identity', 'exemptions', 'payer_and_collector', 'operational_amount_acceptance', 'legacy_implementation_not_found']],
+            ),
+            $this->provision(
+                code: 'MRC-3K-02-PAYMENT-TIMING',
+                section: 'Section 3K.02',
+                title: 'Equipment permit payment before rental',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance makes the fee payable before rental of the equipment upon application for a Mayor’s permit.',
+                notes: 'Whether payment is triggered by rental, permit application, or both; owner, operator, lessor, lessee and payer identity; rental date; annual permit validity; late or ongoing rentals; equipment substitution; Mayor’s-permit identity; collector; receipt; cancellation; refund; and enforcement require accepted municipal procedure.',
+                metadata: ['chapter' => 3, 'article' => 'K', 'known_ambiguities' => ['rental_or_application_trigger', 'actor_and_payer_identity', 'rental_commencement', 'annual_permit_validity', 'late_or_ongoing_rental', 'equipment_substitution', 'mayors_permit_identity', 'collector_and_receipt', 'cancellation_and_refund', 'enforcement']],
+            ),
+            $this->provision(
+                code: 'MRC-3K-03-EQUIPMENT-REGISTRY',
+                section: 'Section 3K.03',
+                title: 'Treasurer agricultural machinery and heavy-equipment registry',
+                type: RevenueCodeProvisionType::EvidenceRequirement,
+                excerpt: 'The ordinance requires the Municipal Treasurer to keep a registry of all heavy equipment and agricultural machinery with equipment make and brand plus owner name and address.',
+                notes: 'Registry scope uses “all” although the fee scope refers to non-resident operators or rented equipment. Equipment and owner identity, serial and plate identifiers absent from the printed fields, operator and rental linkage, required fields, registration trigger, permit relationship, numbering, corrections, transfers, retirement, retention, privacy, access, and legacy migration require accepted procedure.',
+                metadata: ['chapter' => 3, 'article' => 'K', 'known_ambiguities' => ['all_equipment_versus_fee_scope', 'equipment_and_owner_identity', 'missing_serial_plate_identifiers', 'operator_and_rental_linkage', 'registration_trigger', 'permit_relationship', 'numbering', 'corrections_and_transfers', 'retirement_and_disposition', 'retention_privacy_access', 'legacy_registry_migration']],
+            ),
+            $this->provision(
+                code: 'MRC-3K-04-PENALTY',
+                section: 'Section 3K.04',
+                title: 'Agricultural machinery and heavy-equipment judicial penalty',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance prints a PHP 500 to PHP 1,000 fine, one to six months imprisonment, or both, for any Article K violation at the court’s discretion.',
+                notes: 'Violation elements, responsible actor, equipment and permit identity, enforcement and referral, conviction, offense counting, fine and imprisonment authority, municipal penalty ceilings, court discretion, notice, hearing, appeal, and current legal validity require counsel and municipal acceptance. No penalty is executable.',
+                metadata: ['chapter' => 3, 'article' => 'K', 'known_ambiguities' => ['violation_elements', 'responsible_actor', 'equipment_and_permit_identity', 'enforcement_and_referral', 'conviction_boundary', 'offense_counting', 'fine_and_imprisonment_authority', 'municipal_penalty_ceiling', 'court_discretion', 'notice_hearing_appeal', 'current_legal_validity']],
+            ),
+            $this->provision(
                 code: 'MRC-2E-01-BUSINESS-TAX-SCOPE',
                 section: 'Section 2E.01',
                 title: 'Payment scope for multiple establishments and businesses',
@@ -1952,6 +1988,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
         $this->seedWeightsMeasuresArticleHClauses();
         $this->seedDispensingPumpsArticleIClauses();
         $this->seedFilmingArticleJClauses();
+        $this->seedEquipmentArticleKClauses();
 
         $this->persistPolicyBoundaryClauses('MRC-2F-01-PIL', [
             $this->pilThresholdClause(1, 'SARI-SARI', '1', 'Sari-Sari Stores', '61,600.00', 6_160_000),
@@ -2550,6 +2587,69 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
         $this->persistPolicyBoundaryClauses('MRC-3J-02-PAYMENT-TIMING', [
             $this->policyBoundaryClause(1, 'MRC-3J-02-TREASURER-SEVEN-DAYS-BEFORE', RevenueCodeProvisionClauseType::PaymentTiming, 'The fee imposed herein shall be paid to the Municipal Treasurer upon application for the Mayor’s Permit seven (7) days before location-filming is commenced.', 'Candidate payment boundary: pay the Municipal Treasurer when applying for the stated permit at least seven days before location-filming starts.', 'Whether the seven days govern application, payment, or both; calendar-versus-business-day counting; commencement timestamp and timezone; Mayor’s Permit versus filming-permit identity; Treasurer delegation; rescheduling; late applications; payment channel; receipt; rejection; cancellation; refund; and enforcement require accepted municipal procedure.', ['candidate_payee' => 'Municipal Treasurer', 'source_permit_term' => 'Mayor’s Permit', 'source_lead_days' => 7, 'candidate_event' => 'location_filming_commencement', 'known_timing_attachment_ambiguity' => true]),
         ]);
+    }
+
+    private function seedEquipmentArticleKClauses(): void
+    {
+        $this->persistPolicyBoundaryClauses('MRC-3K-01-ANNUAL-EQUIPMENT-FEES', [
+            $this->policyBoundaryClause(1, 'MRC-3K-01-NONRESIDENT-OR-RENTED-EQUIPMENT-SCOPE', RevenueCodeProvisionClauseType::Eligibility, 'There shall be collected an annual permit fee at the following rates for every agricultural machinery or heavy equipment from non-resident operators of said machinery, or equipment renting out said machinery/equipment in this municipality.', 'Candidate fee scope: annual equipment permit charges apply under the source’s non-resident-operator or municipal-rental conditions.', 'The sentence does not clearly identify the second actor or whether “or” creates two independent eligibility branches. Operator, owner, lessor, lessee, payer, residence, equipment, rental transaction and municipal-use identity; annual term; permit scope; exemptions; and evidence require accepted policy.', ['source_actor_condition' => 'non-resident operators', 'source_alternative_condition' => 'equipment renting out said machinery/equipment in this municipality', 'source_boolean_operator' => 'or', 'known_grammar_ambiguity' => true, 'candidate_frequency' => 'annual']),
+            $this->equipmentPermitFeeClause(2, 'HANDTRACTORS', 'Handtractors - 250.00 per annum.', 'handtractors', 25_000),
+            $this->equipmentPermitFeeClause(3, 'LIGHT-TRACTOR', 'Light Tractor - 300.00 per annum.', 'light_tractor', 30_000),
+            $this->equipmentPermitFeeClause(4, 'HEAVY-TRACTOR', 'Heavy Tractor - 350.00 per annum.', 'heavy_tractor', 35_000),
+            $this->equipmentPermitFeeClause(5, 'BULLDOZERS', 'Bulldozers - 1,500.00 per annum.', 'bulldozers', 150_000),
+            $this->equipmentPermitFeeClause(6, 'FORKLIFT', 'Forklift - 350.00 per annum.', 'forklift', 35_000),
+            $this->equipmentPermitFeeClause(7, 'HEAVY-GRADER', 'Heavy Grader - 600.00 per annum.', 'heavy_grader', 60_000),
+            $this->equipmentPermitFeeClause(8, 'LIGHT-GRADER', 'Light Grader - 600.00 per annum.', 'light_grader', 60_000),
+            $this->equipmentPermitFeeClause(9, 'MECHANIZED-TRESHERS', 'Mechanized Treshers - 350.00 per annum.', 'mechanized_treshers', 35_000, ['known_source_spelling' => 'Treshers']),
+            $this->equipmentPermitFeeClause(10, 'MANUAL-TRESHERS', 'Manual Treshers - 150.00 per annum.', 'manual_treshers', 15_000, ['known_source_spelling' => 'Treshers']),
+            $this->equipmentPermitFeeClause(11, 'CARGO-TRUCK', 'Cargo Truck - 350.00 per annum.', 'cargo_truck', 35_000),
+            $this->equipmentPermitFeeClause(12, 'DUMP-TRUCK', 'Dump Truck - 350.00 per annum.', 'dump_truck', 35_000),
+            $this->equipmentPermitFeeClause(13, 'ROAD-ROLLERS', 'Road Rollers - 350.00 per annum.', 'road_rollers', 35_000),
+            $this->equipmentPermitFeeClause(14, 'PAYLOADER', 'Payloader - 350.00 per annum.', 'payloader', 35_000),
+            $this->equipmentPermitFeeClause(15, 'PRIMEMOVERS-FLATBEDS', 'Primemovers/Flatbeds - 350.00 per annum.', 'primemovers_or_flatbeds', 35_000),
+            $this->equipmentPermitFeeClause(16, 'BACKHOE', 'Backhoe - 600.00 per annum.', 'backhoe', 60_000),
+            $this->equipmentPermitFeeClause(17, 'ROCKCRUSHER', 'Rockcrusher - 600.00 per annum.', 'rockcrusher', 60_000),
+            $this->equipmentPermitFeeClause(18, 'BATCHING-PLANT', 'Batching Plant - 500.00 per annum.', 'batching_plant', 50_000),
+            $this->equipmentPermitFeeClause(19, 'TRANSIT-MIXER-TRUCK', 'Transit/Mixer Truck - 600.00 per annum.', 'transit_or_mixer_truck', 60_000),
+            $this->equipmentPermitFeeClause(20, 'CRANE', 'Crane - 350.00 per annum.', 'crane', 35_000),
+            $this->policyBoundaryClause(21, 'MRC-3K-01-OTHER-UNENUMERATED-NO-AMOUNT', RevenueCodeProvisionClauseType::Eligibility, 'Other agricultural machinery or heavy equipment not enumerated above.', 'Candidate catch-all category: other unenumerated agricultural machinery or heavy equipment is contemplated by the schedule.', 'No amount is aligned with the parent catch-all. Whether it is merely a heading for t.1 and t.2 or covers all other equipment, classification authority, comparable-rate treatment, prohibition on collection without an amount, additions, and operational handling require municipal and legal reconciliation.', ['candidate_equipment_class' => 'other_unenumerated_agricultural_machinery_or_heavy_equipment', 'source_amount_cents' => null, 'known_missing_parent_amount' => true]),
+            $this->equipmentPermitFeeClause(22, 'FOUR-WHEEL-DRIVE-RICE-FARM-TRACTOR', 'Four-wheel Drive Rice farm Tractor - 500.00 per annum.', 'four_wheel_drive_rice_farm_tractor', 50_000, ['source_item' => 't.1']),
+            $this->equipmentPermitFeeClause(23, 'COMBINE-RICE-HARVESTER', 'Combine Rice harvester - 500.00 per annum.', 'combine_rice_harvester', 50_000, ['source_item' => 't.2']),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3K-02-PAYMENT-TIMING', [
+            $this->policyBoundaryClause(1, 'MRC-3K-02-PAY-BEFORE-RENTAL-UPON-APPLICATION', RevenueCodeProvisionClauseType::PaymentTiming, 'The fee imposed herein shall be payable prior to the rental of the equipment upon application for a Mayors permit.', 'Candidate payment boundary: pay the equipment permit fee when applying for the stated permit and before the equipment rental.', 'Whether rental or application is the operative trigger, rental commencement and contract evidence, permit applicant and payer, owner/operator/lessor/lessee responsibility, annual validity, late or ongoing rentals, equipment changes, source “Mayors permit” identity, collector, receipt, rejection, cancellation, refund, and enforcement require accepted procedure.', ['candidate_payment_timing' => ['upon_permit_application', 'before_equipment_rental'], 'source_permit_term' => 'Mayors permit', 'known_trigger_attachment_ambiguity' => true]),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3K-03-EQUIPMENT-REGISTRY', [
+            $this->policyBoundaryClause(1, 'MRC-3K-03-TREASURER-EQUIPMENT-REGISTRY', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'The Municipal Treasurer shall keep a registry of all heavy equipment and agricultural machinery, which shall include the make and brand of the heavy equipment and agricultural machinery and name and address of the owner.', 'Candidate registry obligation: the Municipal Treasurer records all covered equipment with make, brand, owner name, and owner address.', '“All” may exceed Section 3K.01 fee eligibility. Treasurer delegation, equipment and owner identity, serial/VIN/engine/plate identifiers omitted from the source, operator and rental relationships, required make/brand vocabularies, registration trigger, permit linkage, numbering, duplicate detection, corrections, ownership transfer, retirement, retention, privacy, access, and migration require accepted procedure.', ['candidate_registry_authority' => 'Municipal Treasurer', 'source_registry_scope' => 'all_heavy_equipment_and_agricultural_machinery', 'candidate_registry_fields' => ['equipment_make', 'equipment_brand', 'owner_name', 'owner_address'], 'known_missing_identity_fields' => ['serial_number', 'vehicle_identification_number', 'engine_number', 'plate_number']]),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3K-04-PENALTY', [
+            $this->policyBoundaryClause(1, 'MRC-3K-04-JUDICIAL-FINE-IMPRISONMENT', RevenueCodeProvisionClauseType::Penalty, 'Any violation of the provisions of this article shall be punished by a fine of not less than Five Hundred Pesos (500.00) but not exceeding One Thousand Peso (1,000.00) or imprisonment of not less than one (1) month but not exceeding six months, or both, at the discretion of the court.', 'Candidate judicial penalty band: an Article K violation carries a PHP 500.00 to PHP 1,000.00 fine, one to six months imprisonment, or both at court discretion.', 'Violation and responsible-actor mapping, equipment and permit identity, investigation, notice, hearing, referral, conviction, offense counting, municipal penalty ceiling, fine and imprisonment authority, court discretion, appeal, and current legal validity require counsel and municipal acceptance.', ['candidate_minimum_fine_cents' => 50_000, 'candidate_maximum_fine_cents' => 100_000, 'source_imprisonment_minimum_months' => 1, 'source_imprisonment_maximum_months' => 6, 'candidate_authority' => 'court']),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function equipmentPermitFeeClause(int $sequence, string $codeSuffix, string $sourceText, string $equipmentClass, int $amountCents, array $metadata = []): array
+    {
+        return $this->policyBoundaryClause(
+            sequence: $sequence,
+            code: 'MRC-3K-01-'.$codeSuffix,
+            type: RevenueCodeProvisionClauseType::RateBand,
+            sourceText: $sourceText,
+            candidateInterpretation: 'Candidate source amount: PHP '.number_format($amountCents / 100, 2, '.', ',').' annually for each equipment item in the stated class.',
+            executionBlocker: 'Equipment classification and identity, operator/owner/lessor/lessee eligibility, residence and rental evidence, annual term and proration, unit count, permit identity, payer, collector, exemptions, replacement, cancellation, refund, and accepted operational amount require municipal reconciliation.',
+            metadata: [
+                'candidate_equipment_class' => $equipmentClass,
+                'candidate_unit' => 'equipment_item_per_annum',
+                ...$metadata,
+            ],
+            amountCents: $amountCents,
+        );
     }
 
     /**
