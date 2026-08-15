@@ -6,6 +6,7 @@ use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleExecutionStatus;
 use App\Enums\FeeRuleScope;
+use App\Enums\RevenueCodeProvisionClauseType;
 use App\Enums\RevenueCodeProvisionRowStatus;
 use App\Enums\RevenueCodeProvisionStatus;
 use App\Enums\RevenueCodeProvisionType;
@@ -14,6 +15,7 @@ use App\Models\FeeRuleRange;
 use App\Models\FeeRuleReconciliation;
 use App\Models\LineOfBusiness;
 use App\Models\RevenueCodeProvision;
+use App\Models\RevenueCodeProvisionClause;
 use App\Models\RevenueCodeProvisionRow;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -199,6 +201,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             retailTax: $retailTax,
         );
         $this->seedTaxScheduleRows();
+        $this->seedPolicyBoundaryClauses();
     }
 
     /**
@@ -411,6 +414,190 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
         $this->seedWholesaleScheduleRows();
         $this->seedContractorScheduleRows();
         $this->seedEnumeratedServiceScheduleRows();
+    }
+
+    private function seedPolicyBoundaryClauses(): void
+    {
+        $this->persistPolicyBoundaryClauses('MRC-2A-02-C-EXPORTERS-ESSENTIALS', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-2A-02-C-DEPENDENT-HALF-RATE',
+                type: RevenueCodeProvisionClauseType::DependentRate,
+                sourceText: 'On Exporters, and on manufacturers, millers, producers, wholesalers, distributors, dealers or retailers of essential commodities enumerated hereunder at a rate not exceeding one-half (1/2) of the rates prescribed under subsections (a), (b), and (d) of this article.',
+                candidateInterpretation: 'Candidate relationship: an eligible activity is bounded by one-half of the applicable accepted rate under Section 2A.02(a), (b), or (d).',
+                executionBlocker: 'The source rates are not fully reconciled and the ordinance supplies a ceiling, not an accepted operational rate.',
+                metadata: ['dependent_sections' => ['2A.02(a)', '2A.02(b)', '2A.02(d)'], 'rate_multiplier' => '0.5'],
+                isCeiling: true,
+            ),
+            $this->policyBoundaryClause(
+                sequence: 2,
+                code: 'MRC-2A-02-C-ESSENTIAL-COMMODITIES',
+                type: RevenueCodeProvisionClauseType::Eligibility,
+                sourceText: '(1.) Rice and Corn; (2.) Wheat or cassava flour, meat dairy products, locally manufactured, processed or preserved food, sugar, salt and agricultural marine, and fresh water products, whether in their original state or not; (3.) Cooking oil and cooking gas; (4.) Laundry soap, detergents, and medicine; (5.) Agricultural implements, equipment and post-harvest facilities, fertilizers, pesticides, insecticides, herbicides and other farm inputs; (6.) Poultry feeds and other animal feeds; (7.) School Supplies and; (8.) Cement.',
+                candidateInterpretation: 'Candidate eligibility catalog: eight source categories are preserved for municipal classification and product mapping.',
+                executionBlocker: 'No accepted municipal commodity catalog or classification procedure currently maps a declared line of business to these legal categories.',
+                metadata: ['category_count' => 8, 'categories' => ['rice_and_corn', 'flour_meat_dairy_food_sugar_salt_agricultural_and_aquatic_products', 'cooking_oil_and_gas', 'soap_detergents_and_medicine', 'agricultural_inputs_and_equipment', 'animal_feeds', 'school_supplies', 'cement']],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 3,
+                code: 'MRC-2A-02-C-EXPORT-SALES-EXCLUSION',
+                type: RevenueCodeProvisionClauseType::TaxBase,
+                sourceText: 'For purposes of this provision, the term exporters shall refer to those who are principally engaged in the business of exporting goods and merchandise, as well as manufacturers and producers whose goods or products are both sold domestically and abroad. The amount of export sales shall be excluded from the total sales and shall be subject to the rates not exceeding one half (1/2) of the rates prescribed under paragraph (a), (b), and (d) of this article.',
+                candidateInterpretation: 'Candidate tax-base split: export sales are separately identified from domestic sales before applying an accepted exporter rate.',
+                executionBlocker: 'Exporter eligibility, the source wording around excluded sales, evidence requirements, and the accepted rate remain unresolved.',
+                metadata: ['requires_separate_export_sales' => true, 'requires_separate_domestic_sales' => true],
+            ),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-2A-02-D-RETAILERS', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-2A-02-D-FIRST-RETAIL-BAND',
+                type: RevenueCodeProvisionClauseType::RateBand,
+                sourceText: 'Gross Sales/Receipts for the Preceding year: 400,000 or less. Rate of Tax per annum: 2.52%.',
+                candidateInterpretation: 'Candidate first band: 252 basis points applies to preceding-year retail gross sales or receipts not exceeding PHP 400,000.00.',
+                executionBlocker: 'The applicable population, rounding, and accepted operational configuration have not been reconciled.',
+                metadata: ['basis_below_or_equal_cents' => 40_000_000],
+                rateBasisPoints: '252.0000',
+            ),
+            $this->policyBoundaryClause(
+                sequence: 2,
+                code: 'MRC-2A-02-D-EXCESS-RETAIL-BAND',
+                type: RevenueCodeProvisionClauseType::RateBand,
+                sourceText: 'Gross Sales/Receipts for the Preceding year: More than 400,000.00. Rate of Tax per annum: 1.26%. The rate of two and fifty two percent (2.52%) per annum shall be imposed on sales not exceeding Four Hundred Thousand Pesos (P400,000.00) while the rate of one and twenty six percent (1.26 %) per annum shall be imposed on sales in excess of the first Four Hundred Thousand Pesos (P400,000.00).',
+                candidateInterpretation: 'Candidate compound treatment: 252 basis points applies to the first PHP 400,000.00 and 126 basis points applies only to the excess.',
+                executionBlocker: 'Compound-band application and monetary rounding require accepted municipal policy and production configuration.',
+                metadata: ['threshold_cents' => 40_000_000, 'first_band_rate_basis_points' => '252.0000'],
+                rateBasisPoints: '126.0000',
+            ),
+            $this->policyBoundaryClause(
+                sequence: 3,
+                code: 'MRC-2A-02-D-BARANGAY-AUTHORITY',
+                type: RevenueCodeProvisionClauseType::AuthorityBoundary,
+                sourceText: 'However, Barangays shall have the exclusive power to levy taxes on stores whose gross sales or receipts of the preceding calendar year does not exceed Thirty Thousand Pesos (P30,000.00) subject to existing laws and regulations.',
+                candidateInterpretation: 'Candidate taxing-authority boundary: qualifying fixed retailers at or below PHP 30,000.00 fall under barangay taxing authority.',
+                executionBlocker: 'Municipal intake needs an accepted rule for identifying the correct barangay authority and excluding or routing the municipal tax.',
+                metadata: ['gross_sales_ceiling_cents' => 3_000_000, 'authority' => 'barangay'],
+            ),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-2A-02-F-FINANCIAL-INSTITUTIONS', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-2A-02-F-GROSS-RECEIPTS-RATE',
+                type: RevenueCodeProvisionClauseType::RateBand,
+                sourceText: 'On banks and other financial institutions, at the rate of fifty-seven and twenty-three percent of one percent (57.23% of 1%) of the gross receipts of the preceding calendar year derived from the enumerated sources.',
+                candidateInterpretation: 'Candidate rate: 57.23 percent of one percent is represented as 57.23 basis points against accepted taxable gross receipts.',
+                executionBlocker: 'The taxable-receipt classifications, operational rate authority, source evidence, and rounding remain unreconciled.',
+                metadata: ['source_expression' => '57.23% of 1%'],
+                rateBasisPoints: '57.2300',
+            ),
+            $this->policyBoundaryClause(
+                sequence: 2,
+                code: 'MRC-2A-02-F-TAXABLE-RECEIPTS',
+                type: RevenueCodeProvisionClauseType::TaxableReceiptCatalog,
+                sourceText: 'Banks and Banking Institutions whether these transactions are recorded in the regional and principal office: (1) Interest from loans and discounts; (2) Interest earned and actually collected on interbank loans; (3) Rental of property; (4) Income earned and actually collected from acquired assets; (5) Income from sales or exchange of assets and property; (6) Cash dividends earned and received on equity investments; (7) Bank Commissions from lending activities; (8) Income component of rentals from financial leasing; (9) Interest Income from unpaid amount due from delinquent cardholders and “Financial Charges”; (10) Merchant’s Discount; (11) Income from Automated Teller Machine (ATM); (12) General consultancy services; (13) All other similar activities consisting essentially of the sales of services for a fee. Other Financial Institutions whether these transactions are recorded in the regional and principal office: (1) Gross receipts derived from interest, commissions and discounts from lending activities; (2) Income from financial leasing, dividends and rentals on property; (3) Profit from exchange or sale of property, insurance premium.',
+                candidateInterpretation: 'Candidate receipt catalog: source categories are preserved separately for banks and other financial institutions before any ledger or account mapping.',
+                executionBlocker: 'No accepted operational mapping currently determines which production receipt accounts enter or leave the taxable base.',
+                metadata: ['bank_receipt_categories' => ['loan_interest_and_discounts', 'interbank_loans', 'property_and_equipment_rentals', 'acquired_assets', 'asset_sales_or_exchanges', 'cash_dividends', 'bank_commissions', 'financial_leasing', 'credit_card_charges', 'merchant_discount', 'atm_income', 'consultancy', 'similar_fee_based_services'], 'other_financial_institution_categories' => ['lending_interest_commissions_and_discounts', 'financial_leasing_dividends_and_rentals', 'property_exchange_or_sale_and_insurance_premiums']],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 3,
+                code: 'MRC-2A-02-F-JOINT-STATEMENT',
+                type: RevenueCodeProvisionClauseType::DocumentaryRequirement,
+                sourceText: 'At the time of the annual payment of the tax due, the Head Office or branch of a bank shall submit to the Municipal Treasurer a notarized Joint Statement of Annual Income (Schedule of Annual Income) for the preceding calendar year which shall be signed by a designated Officer of the Head Office and by the Branch Manager.',
+                candidateInterpretation: 'Candidate documentary requirement: annual financial-institution tax evidence includes a notarized joint annual-income statement with two authorized signatories.',
+                executionBlocker: 'Document format, signer authority, review responsibility, and documentary-sufficiency policy are not yet accepted.',
+                metadata: ['notarization_required' => true, 'required_signatory_roles' => ['designated_head_office_officer', 'branch_manager']],
+            ),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-2A-02-H-PEDDLERS', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-2A-02-H-ANNUAL-CEILING',
+                type: RevenueCodeProvisionClauseType::AmountCeiling,
+                sourceText: 'On Peddlers engaged in the sale of any merchandise or article of commerce, at the rate not exceeding P62.75 per peddler annually.',
+                candidateInterpretation: 'Candidate maximum annual amount: PHP 62.75.',
+                executionBlocker: 'The ordinance supplies a ceiling rather than the Municipality-confirmed exact operational amount.',
+                metadata: ['period' => 'annual'],
+                amountCents: 6_275,
+                isCeiling: true,
+            ),
+            $this->policyBoundaryClause(
+                sequence: 2,
+                code: 'MRC-2A-02-H-DELIVERY-VEHICLE-EXEMPTION',
+                type: RevenueCodeProvisionClauseType::Exemption,
+                sourceText: 'Delivery trucks, vans or vehicles used by manufacturers, producers, wholesalers, dealers, or retailers, enumerated under Section 141 of R.A. 7160 shall be exempt from the peddler taxes herein imposed.',
+                candidateInterpretation: 'Candidate exemption: qualifying delivery vehicles used by the referenced business classes are outside the peddlers-tax population.',
+                executionBlocker: 'Vehicle use, business classification, and Section 141 eligibility require accepted evidence and municipal review rules.',
+                metadata: ['external_legal_reference' => 'Republic Act No. 7160 Section 141', 'vehicle_types' => ['delivery_truck', 'van', 'vehicle']],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 3,
+                code: 'MRC-2A-02-H-PAYMENT-TIMING',
+                type: RevenueCodeProvisionClauseType::PaymentTiming,
+                sourceText: 'The tax herein imposed shall be payable within the first twenty (20) days of January. An individual who will start to peddle merchandise or articles of commerce after January 20 shall pay the full amount of the tax before engaging in such activity.',
+                candidateInterpretation: 'Candidate timing: existing peddlers pay by January 20; a new entrant after that date pays the full annual amount before operating.',
+                executionBlocker: 'The exact amount, start-date evidence, collection workflow, and treatment of late or renewed activity remain unreconciled.',
+                metadata: ['annual_due_month' => 1, 'annual_due_day' => 20, 'new_entrant_proration' => false],
+            ),
+        ]);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $clauses
+     */
+    private function persistPolicyBoundaryClauses(string $provisionCode, array $clauses): void
+    {
+        $provision = RevenueCodeProvision::query()->where('code', $provisionCode)->sole();
+
+        $provision->clauses()->whereNotIn('sequence', array_column($clauses, 'sequence'))->delete();
+
+        foreach ($clauses as $clause) {
+            RevenueCodeProvisionClause::query()->updateOrCreate(
+                [
+                    'revenue_code_provision_id' => $provision->id,
+                    'sequence' => $clause['sequence'],
+                ],
+                $clause,
+            );
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function policyBoundaryClause(
+        int $sequence,
+        string $code,
+        RevenueCodeProvisionClauseType $type,
+        string $sourceText,
+        string $candidateInterpretation,
+        string $executionBlocker,
+        array $metadata,
+        ?int $amountCents = null,
+        ?string $rateBasisPoints = null,
+        bool $isCeiling = false,
+    ): array {
+        return [
+            'sequence' => $sequence,
+            'code' => $code,
+            'clause_type' => $type,
+            'source_text' => $sourceText,
+            'candidate_interpretation' => $candidateInterpretation,
+            'amount_cents' => $amountCents,
+            'rate_basis_points' => $rateBasisPoints,
+            'is_ceiling' => $isCeiling,
+            'reconciliation_status' => RevenueCodeProvisionStatus::ReconciliationRequired,
+            'execution_blocker' => $executionBlocker,
+            'metadata' => [
+                ...$metadata,
+                'source_id' => 'LEGAL-MRC-001',
+                'candidate_values_are_non_executable' => true,
+            ],
+        ];
     }
 
     private function seedManufacturerScheduleRows(): void

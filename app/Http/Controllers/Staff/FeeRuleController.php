@@ -13,6 +13,7 @@ use App\Http\Controllers\Controller;
 use App\Models\FeeRule;
 use App\Models\FeeRuleRange;
 use App\Models\RevenueCodeProvision;
+use App\Models\RevenueCodeProvisionClause;
 use App\Models\RevenueCodeProvisionRow;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -98,6 +99,7 @@ class FeeRuleController extends Controller
                 ->values()
                 ->all(),
             'revenueCodeScheduleMatrices' => $this->scheduleMatricesPayload(),
+            'revenueCodePolicyBoundaries' => $this->policyBoundaryPayload(),
             'summary' => [
                 'total_rules' => FeeRule::query()->count(),
                 'active_rules' => FeeRule::query()->where('is_active', true)->count(),
@@ -113,6 +115,10 @@ class FeeRuleController extends Controller
                     ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
                     ->count(),
                 'provisions_linked_to_rules' => RevenueCodeProvision::query()->whereNotNull('fee_rule_id')->count(),
+                'policy_boundary_clauses' => RevenueCodeProvisionClause::query()->count(),
+                'policy_boundary_clauses_requiring_reconciliation' => RevenueCodeProvisionClause::query()
+                    ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
+                    ->count(),
             ],
             'categories' => $this->options(FeeRuleCategory::cases()),
             'scopes' => $this->options(FeeRuleScope::cases()),
@@ -247,6 +253,40 @@ class FeeRuleController extends Controller
                 ],
             )->values()->all(),
         ];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function policyBoundaryPayload(): array
+    {
+        return RevenueCodeProvision::query()
+            ->with('clauses')
+            ->whereHas('clauses')
+            ->orderBy('section_reference')
+            ->get()
+            ->map(fn (RevenueCodeProvision $provision): array => [
+                'provision' => [
+                    'code' => $provision->code,
+                    'section_reference' => $provision->section_reference,
+                    'title' => $provision->title,
+                    'reconciliation_status' => $provision->reconciliation_status->value,
+                ],
+                'clauses' => $provision->clauses->map(fn (RevenueCodeProvisionClause $clause): array => [
+                    'id' => $clause->id,
+                    'sequence' => $clause->sequence,
+                    'code' => $clause->code,
+                    'clause_type' => $clause->clause_type->value,
+                    'source_text' => $clause->source_text,
+                    'candidate_interpretation' => $clause->candidate_interpretation,
+                    'amount_cents' => $clause->amount_cents,
+                    'rate_basis_points' => $clause->rate_basis_points,
+                    'is_ceiling' => $clause->is_ceiling,
+                    'reconciliation_status' => $clause->reconciliation_status->value,
+                    'execution_blocker' => $clause->execution_blocker,
+                    'candidate_values_are_non_executable' => ($clause->metadata['candidate_values_are_non_executable'] ?? false) === true,
+                ])->values()->all(),
+            ])
+            ->values()
+            ->all();
     }
 
     /**

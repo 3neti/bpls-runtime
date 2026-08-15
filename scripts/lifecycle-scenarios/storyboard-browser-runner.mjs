@@ -2529,6 +2529,13 @@ async function inspectRevenueCodeFeeCatalogList(targetPage, targetBaseUrl) {
         .isVisible()
         .catch(() => false);
     const verifiedScheduleCodes = [];
+    const policyBoundaryRegister = targetPage.getByTestId(
+        'revenue-code-policy-boundary-register',
+    );
+    const policyBoundaryRegisterVisible = await policyBoundaryRegister
+        .isVisible()
+        .catch(() => false);
+    const verifiedPolicyBoundaryClauseCodes = [];
 
     for (const finding of manifest.resources.schedule_findings ?? []) {
         const scheduleButton = scheduleMatrix.locator(
@@ -2575,6 +2582,32 @@ async function inspectRevenueCodeFeeCatalogList(targetPage, targetBaseUrl) {
             scheduleExecutionRefusedVisible
         ) {
             verifiedScheduleCodes.push(finding.provision_code);
+        }
+    }
+
+    for (const clauseCode of manifest.resources.policy_boundary_clause_codes ??
+        []) {
+        const clauseRow = policyBoundaryRegister.locator(
+            `[data-policy-clause-code="${clauseCode}"]`,
+        );
+        const clauseVisible = await clauseRow.isVisible().catch(() => false);
+        const refusalVisible = await clauseRow
+            .getByText('Candidate values are non-executable.', { exact: true })
+            .isVisible()
+            .catch(() => false);
+
+        checks.push(
+            check(
+                `fee-catalog-policy-boundary-${clauseCode}-visible`,
+                `Fee catalog shows source evidence and execution refusal for ${clauseCode}`,
+                true,
+                clauseVisible && refusalVisible,
+                { clause_code: clauseCode },
+            ),
+        );
+
+        if (clauseVisible && refusalVisible) {
+            verifiedPolicyBoundaryClauseCodes.push(clauseCode);
         }
     }
 
@@ -2634,6 +2667,14 @@ async function inspectRevenueCodeFeeCatalogList(targetPage, targetBaseUrl) {
     feeCatalogEvidence.all_schedules_execution_refused =
         verifiedScheduleCodes.length ===
         (manifest.resources.schedule_findings ?? []).length;
+    feeCatalogEvidence.policy_boundary_register_visible =
+        policyBoundaryRegisterVisible;
+    feeCatalogEvidence.policy_boundary_clause_codes =
+        verifiedPolicyBoundaryClauseCodes;
+    feeCatalogEvidence.all_policy_boundary_clauses_execution_refused =
+        policyBoundaryRegisterVisible &&
+        verifiedPolicyBoundaryClauseCodes.length ===
+            (manifest.resources.policy_boundary_clause_codes ?? []).length;
     checks.push(
         check(
             'fee-catalog-list-policy-boundary-visible',
@@ -3128,6 +3169,10 @@ async function inspectRevenueCodeFeeCatalogMobile(targetPage, targetBaseUrl) {
         .getByTestId('revenue-code-schedule-matrix')
         .isVisible()
         .catch(() => false);
+    const policyBoundaryRegisterVisible = await targetPage
+        .getByTestId('revenue-code-policy-boundary-register')
+        .isVisible()
+        .catch(() => false);
     const listHorizontalOverflow = await targetPage.evaluate(
         () =>
             document.documentElement.scrollWidth >
@@ -3146,6 +3191,12 @@ async function inspectRevenueCodeFeeCatalogMobile(targetPage, targetBaseUrl) {
             'Mobile catalog keeps the row-level reconciliation matrix visible',
             true,
             scheduleMatrixVisible,
+        ),
+        check(
+            'fee-catalog-mobile-policy-boundary-register-visible',
+            'Mobile catalog keeps non-schedule policy boundaries visible',
+            true,
+            policyBoundaryRegisterVisible,
         ),
         check(
             'fee-catalog-mobile-list-no-horizontal-overflow',

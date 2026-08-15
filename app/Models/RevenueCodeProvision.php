@@ -28,6 +28,7 @@ use Illuminate\Support\Collection;
  * @property array<string, mixed>|null $metadata
  * @property-read FeeRule|null $feeRule
  * @property-read Collection<int, RevenueCodeProvisionRow> $rows
+ * @property-read Collection<int, RevenueCodeProvisionClause> $clauses
  */
 #[Fillable(['fee_rule_id', 'code', 'source_id', 'section_reference', 'title', 'provision_type', 'evidence_summary', 'reconciliation_status', 'reconciliation_notes', 'effective_from', 'metadata'])]
 class RevenueCodeProvision extends Model
@@ -45,6 +46,12 @@ class RevenueCodeProvision extends Model
     public function rows(): HasMany
     {
         return $this->hasMany(RevenueCodeProvisionRow::class)->orderBy('sequence');
+    }
+
+    /** @return HasMany<RevenueCodeProvisionClause, $this> */
+    public function clauses(): HasMany
+    {
+        return $this->hasMany(RevenueCodeProvisionClause::class)->orderBy('sequence');
     }
 
     /** @return array<string, string> */

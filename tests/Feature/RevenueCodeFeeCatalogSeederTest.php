@@ -6,6 +6,7 @@ use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleExecutionStatus;
 use App\Enums\FeeRuleScope;
 use App\Enums\PermitApplicationType;
+use App\Enums\RevenueCodeProvisionClauseType;
 use App\Enums\RevenueCodeProvisionStatus;
 use App\Exceptions\UnsupportedAssessmentPolicy;
 use App\Models\FeeRule;
@@ -15,6 +16,7 @@ use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
 use App\Models\RevenueCodeProvision;
+use App\Models\RevenueCodeProvisionClause;
 use App\Models\RevenueCodeProvisionRow;
 use Database\Seeders\RevenueCodeFeeCatalogSeeder;
 
@@ -83,6 +85,39 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->feeRule->currentReconciliation->execution_status->toBe(FeeRuleExecutionStatus::Executable);
 
     expect(RevenueCodeProvisionRow::query()->count())->toBe(82);
+    expect(RevenueCodeProvisionClause::query()->count())->toBe(12)
+        ->and(RevenueCodeProvisionClause::query()
+            ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
+            ->count())->toBe(12);
+
+    $dependentRate = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2A-02-C-DEPENDENT-HALF-RATE')
+        ->sole();
+    $retailExcessRate = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2A-02-D-EXCESS-RETAIL-BAND')
+        ->sole();
+    $financialReceipts = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2A-02-F-TAXABLE-RECEIPTS')
+        ->sole();
+    $peddlerCeiling = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2A-02-H-ANNUAL-CEILING')
+        ->sole();
+
+    expect($dependentRate)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::DependentRate)
+        ->is_ceiling->toBeTrue()
+        ->metadata->dependent_sections->toBe(['2A.02(a)', '2A.02(b)', '2A.02(d)'])
+        ->metadata->candidate_values_are_non_executable->toBeTrue()
+        ->and($retailExcessRate)
+        ->rate_basis_points->toBe('126.0000')
+        ->candidate_interpretation->toContain('first PHP 400,000.00')
+        ->and($financialReceipts)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::TaxableReceiptCatalog)
+        ->metadata->bank_receipt_categories->toHaveCount(13)
+        ->and($peddlerCeiling)
+        ->amount_cents->toBe(6_275)
+        ->is_ceiling->toBeTrue()
+        ->execution_blocker->toContain('ceiling');
 
     $overlappingRow = RevenueCodeProvisionRow::query()
         ->where('code', 'MRC-2A-02-B-ROW-08')

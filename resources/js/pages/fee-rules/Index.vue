@@ -116,6 +116,29 @@ type RevenueCodeScheduleMatrix = {
     rows: RevenueCodeScheduleRow[];
 };
 
+type RevenueCodePolicyBoundary = {
+    provision: {
+        code: string;
+        section_reference: string;
+        title: string;
+        reconciliation_status: string;
+    };
+    clauses: {
+        id: number;
+        sequence: number;
+        code: string;
+        clause_type: string;
+        source_text: string;
+        candidate_interpretation: string;
+        amount_cents: number | null;
+        rate_basis_points: string | null;
+        is_ceiling: boolean;
+        reconciliation_status: string;
+        execution_blocker: string;
+        candidate_values_are_non_executable: boolean;
+    }[];
+};
+
 const props = defineProps<{
     filters: {
         q: string;
@@ -133,6 +156,7 @@ const props = defineProps<{
     };
     revenueCodeProvisions: RevenueCodeProvision[];
     revenueCodeScheduleMatrices: RevenueCodeScheduleMatrix[];
+    revenueCodePolicyBoundaries: RevenueCodePolicyBoundary[];
     summary: {
         total_rules: number;
         active_rules: number;
@@ -142,6 +166,8 @@ const props = defineProps<{
         provisions_recorded: number;
         provisions_requiring_reconciliation: number;
         provisions_linked_to_rules: number;
+        policy_boundary_clauses: number;
+        policy_boundary_clauses_requiring_reconciliation: number;
     };
     categories: Option[];
     scopes: Option[];
@@ -241,6 +267,20 @@ function candidateValue(row: RevenueCodeScheduleRow): string {
     }
 
     return '-';
+}
+
+function clauseCandidateValue(
+    clause: RevenueCodePolicyBoundary['clauses'][number],
+): string | null {
+    if (clause.amount_cents !== null) {
+        return `${money(clause.amount_cents)}${clause.is_ceiling ? ' ceiling' : ''}`;
+    }
+
+    if (clause.rate_basis_points !== null) {
+        return `${clause.rate_basis_points} basis points${clause.is_ceiling ? ' ceiling' : ''}`;
+    }
+
+    return null;
 }
 
 function label(value: string | null): string {
@@ -623,6 +663,161 @@ function decodePaginationLabel(value: string): string {
                             </tr>
                         </tbody>
                     </table>
+                </div>
+            </section>
+
+            <section
+                class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
+                aria-labelledby="revenue-code-policy-boundaries-heading"
+                data-testid="revenue-code-policy-boundary-register"
+            >
+                <div
+                    class="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3"
+                >
+                    <div>
+                        <h2
+                            id="revenue-code-policy-boundaries-heading"
+                            class="font-semibold"
+                        >
+                            Non-schedule policy boundaries
+                        </h2>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                            Exact clauses and candidate facts are preserved for
+                            municipal reconciliation. They cannot execute an
+                            assessment.
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap gap-2 text-xs">
+                        <Badge variant="outline">
+                            {{ summary.policy_boundary_clauses }} clauses
+                        </Badge>
+                        <Badge variant="destructive">
+                            {{
+                                summary.policy_boundary_clauses_requiring_reconciliation
+                            }}
+                            non-executable
+                        </Badge>
+                    </div>
+                </div>
+
+                <div class="divide-y">
+                    <div
+                        v-for="boundary in revenueCodePolicyBoundaries"
+                        :key="boundary.provision.code"
+                        class="px-4 py-4"
+                        :data-policy-provision-code="boundary.provision.code"
+                    >
+                        <div
+                            class="mb-3 flex flex-wrap items-center justify-between gap-2"
+                        >
+                            <div>
+                                <h3 class="text-sm font-semibold">
+                                    {{ boundary.provision.section_reference }}
+                                    · {{ boundary.provision.title }}
+                                </h3>
+                                <p class="mt-1 text-xs text-muted-foreground">
+                                    {{ boundary.provision.code }}
+                                </p>
+                            </div>
+                            <Badge variant="destructive">
+                                {{
+                                    label(
+                                        boundary.provision
+                                            .reconciliation_status,
+                                    )
+                                }}
+                            </Badge>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table
+                                class="w-full min-w-[980px] table-fixed text-sm"
+                            >
+                                <thead
+                                    class="border-y bg-muted/30 text-left text-xs text-muted-foreground uppercase"
+                                >
+                                    <tr>
+                                        <th
+                                            class="w-[16%] px-3 py-2 font-medium"
+                                        >
+                                            Boundary
+                                        </th>
+                                        <th
+                                            class="w-[29%] px-3 py-2 font-medium"
+                                        >
+                                            Ordinance evidence
+                                        </th>
+                                        <th
+                                            class="w-[27%] px-3 py-2 font-medium"
+                                        >
+                                            Candidate fact
+                                        </th>
+                                        <th
+                                            class="w-[28%] px-3 py-2 font-medium"
+                                        >
+                                            Execution refusal
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr
+                                        v-for="clause in boundary.clauses"
+                                        :key="clause.id"
+                                        class="border-b last:border-0"
+                                        :data-policy-clause-code="clause.code"
+                                    >
+                                        <td class="px-3 py-3 align-top">
+                                            <Badge variant="outline">
+                                                {{ label(clause.clause_type) }}
+                                            </Badge>
+                                            <div
+                                                class="mt-2 text-xs break-words text-muted-foreground"
+                                            >
+                                                {{ clause.code }}
+                                            </div>
+                                        </td>
+                                        <td
+                                            class="px-3 py-3 align-top text-xs leading-relaxed"
+                                        >
+                                            {{ clause.source_text }}
+                                        </td>
+                                        <td class="px-3 py-3 align-top">
+                                            <Badge
+                                                v-if="
+                                                    clauseCandidateValue(clause)
+                                                "
+                                                class="mb-2"
+                                                variant="outline"
+                                            >
+                                                {{
+                                                    clauseCandidateValue(clause)
+                                                }}
+                                            </Badge>
+                                            <p class="text-xs leading-relaxed">
+                                                {{
+                                                    clause.candidate_interpretation
+                                                }}
+                                            </p>
+                                            <p
+                                                v-if="
+                                                    clause.candidate_values_are_non_executable
+                                                "
+                                                class="mt-2 text-xs font-medium text-destructive"
+                                            >
+                                                Candidate values are
+                                                non-executable.
+                                            </p>
+                                        </td>
+                                        <td
+                                            class="px-3 py-3 align-top text-xs leading-relaxed text-muted-foreground"
+                                        >
+                                            {{ clause.execution_blocker }}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </section>
 
