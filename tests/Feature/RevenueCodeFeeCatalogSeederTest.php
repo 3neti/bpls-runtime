@@ -58,7 +58,7 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
     expect(FeeRuleRange::query()->whereBelongsTo($retailTax)->count())->toBe(23);
     expect(FeeRuleReconciliation::query()->count())->toBe(4);
 
-    expect(RevenueCodeProvision::query()->count())->toBe(71)
+    expect(RevenueCodeProvision::query()->count())->toBe(75)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2A.02%')->count())->toBe(8)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2B.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2C.%')->count())->toBe(2)
@@ -71,8 +71,9 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3F.%')->count())->toBe(5)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3G.%')->count())->toBe(3)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3H.%')->count())->toBe(10)
+        ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3I.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->whereNotNull('fee_rule_id')->count())->toBe(4)
-        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(70);
+        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(74);
 
     $wholesaleProvision = RevenueCodeProvision::query()
         ->with('feeRule.currentReconciliation')
@@ -115,11 +116,21 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->metadata->schedule_clause_count->toBe(17)
         ->metadata->known_ambiguities->toContain('gasoline_pump_article_i_overlap');
 
+    $dispensingPumpFeesProvision = RevenueCodeProvision::query()
+        ->where('code', 'MRC-3I-04-FEES')
+        ->sole();
+
+    expect($dispensingPumpFeesProvision)
+        ->reconciliation_status->toBe(RevenueCodeProvisionStatus::ReconciliationRequired)
+        ->fee_rule_id->toBeNull()
+        ->metadata->schedule_clause_count->toBe(3)
+        ->metadata->known_ambiguities->toContain('calibration_amount_missing');
+
     expect(RevenueCodeProvisionRow::query()->count())->toBe(82);
-    expect(RevenueCodeProvisionClause::query()->count())->toBe(373)
+    expect(RevenueCodeProvisionClause::query()->count())->toBe(392)
         ->and(RevenueCodeProvisionClause::query()
             ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
-            ->count())->toBe(373);
+            ->count())->toBe(392);
 
     $dependentRate = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2A-02-C-DEPENDENT-HALF-RATE')
@@ -786,6 +797,44 @@ it('refuses unresolved new-business eligibility instead of assessing every new b
         ->toThrow(UnsupportedAssessmentPolicy::class, 'Municipal enterprise-scale eligibility is unresolved');
 
     expect($application->assessments()->count())->toBe(0);
+});
+
+it('preserves dispensing pump requirements fees and sanctions as non executable ordinance evidence', function () {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+
+    $twiceYearlyCalibration = RevenueCodeProvisionClause::query()->where('code', 'MRC-3I-01-CALIBRATE-TWICE-YEARLY')->sole();
+    $sectionFourResponsibility = RevenueCodeProvisionClause::query()->where('code', 'MRC-3I-01-INDEPENDENT-BRAND-SECTION-4-RESPONSIBILITY')->sole();
+    $printedTolerance = RevenueCodeProvisionClause::query()->where('code', 'MRC-3I-02-FIFTY-MILLIMETERS-PER-TEN-LITERS')->sole();
+    $flowRateProtocol = RevenueCodeProvisionClause::query()->where('code', 'MRC-3I-02-THREE-FLOW-RATE-AVERAGE')->sole();
+    $actualUsePresumption = RevenueCodeProvisionClause::query()->where('code', 'MRC-3I-02-ACTUAL-USE-PRESUMPTION')->sole();
+    $brokenSealPresumption = RevenueCodeProvisionClause::query()->where('code', 'MRC-3I-02-BROKEN-NO-SEAL-PRIMA-FACIE')->sole();
+    $repeatOffense = RevenueCodeProvisionClause::query()->where('code', 'MRC-3I-03-SECOND-SUCCEEDING-FINE-REVOCATION-CLOSURE')->sole();
+    $feeScope = RevenueCodeProvisionClause::query()->where('code', 'MRC-3I-04-REGISTRATION-SEALING-CALIBRATION-SCOPE')->sole();
+    $registration = RevenueCodeProvisionClause::query()->where('code', 'MRC-3I-04-REGISTRATION-PER-NOZZLE')->sole();
+    $sealing = RevenueCodeProvisionClause::query()->where('code', 'MRC-3I-04-SEALING-TAGGING-PER-NOZZLE')->sole();
+
+    expect($twiceYearlyCalibration)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::CalibrationRequirement)
+        ->metadata->source_frequency_per_year->toBe(2)
+        ->metadata->candidate_values_are_non_executable->toBeTrue()
+        ->and($sectionFourResponsibility->metadata['source_cross_reference'])->toBe('Section 4')
+        ->and($sectionFourResponsibility->metadata['candidate_cross_reference'])->toBeNull()
+        ->and($printedTolerance->metadata['source_tolerance_value'])->toBe(50)
+        ->and($printedTolerance->metadata['source_tolerance_unit'])->toBe('millimeters')
+        ->and($printedTolerance->metadata['source_reference_quantity_liters'])->toBe(10)
+        ->and($printedTolerance->metadata['known_dimensional_conflict'])->toBeTrue()
+        ->and($flowRateProtocol->metadata['source_flow_rates'])->toBe(['low', 'medium', 'fast'])
+        ->and($actualUsePresumption->clause_type)->toBe(RevenueCodeProvisionClauseType::EvidentiaryPresumption)
+        ->and($actualUsePresumption->metadata['known_boolean_ambiguity'])->toBeTrue()
+        ->and($brokenSealPresumption->clause_type)->toBe(RevenueCodeProvisionClauseType::EvidentiaryPresumption)
+        ->and($brokenSealPresumption->metadata['candidate_evidence_standard'])->toBe('prima_facie')
+        ->and($repeatOffense->metadata['candidate_fine_cents'])->toBe(500_000)
+        ->and($repeatOffense->metadata['candidate_additional_sanctions'])->toBe(['permit_revocation', 'permanent_business_closure'])
+        ->and($feeScope->metadata['source_services_without_amounts'])->toBe(['calibration'])
+        ->and($registration->amount_cents)->toBe(7_500)
+        ->and($registration->metadata['candidate_unit'])->toBe('nozzle')
+        ->and($sealing->amount_cents)->toBe(12_500)
+        ->and($sealing->metadata['candidate_unit'])->toBe('nozzle');
 });
 
 it('refuses the disputed wholesale schedule instead of executing normalized brackets', function () {

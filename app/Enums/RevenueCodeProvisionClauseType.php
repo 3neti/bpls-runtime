@@ -52,4 +52,5 @@ enum RevenueCodeProvisionClauseType: string
     case InspectionRequirement = 'inspection_requirement';
     case ProhibitedPractice = 'prohibited_practice';
     case CompromisePenalty = 'compromise_penalty';
+    case EvidentiaryPresumption = 'evidentiary_presumption';
 }
