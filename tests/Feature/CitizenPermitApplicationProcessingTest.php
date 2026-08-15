@@ -2,6 +2,7 @@
 
 use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Actions\DescribePaymentPolicyBoundary;
+use App\Actions\DescribePermitVerificationBoundary;
 use App\Enums\AssessmentStatus;
 use App\Enums\PaymentScheduleStatus;
 use App\Enums\PermitApplicationStatus;
@@ -109,6 +110,7 @@ test('citizen financial state remains hidden without the explicit permission', f
             ->where('permitApplication.processing.has_entered_municipal_processing', true)
             ->where('permitApplication.processing.assessment', null)
             ->where('permitApplication.processing.payment_schedule', null)
+            ->where('permitApplication.permit_artifact', null)
             ->has('permitApplication.timeline', 1)
             ->where('permitApplication.timeline.0.key', "application-recorded:{$application->id}")
             ->where('permitApplication.can_view_financials', false)
@@ -204,6 +206,8 @@ test('citizens can view collection receipt clearance and authority review eviden
         ]);
     }
 
+    $verification = app(DescribePermitVerificationBoundary::class)->handle($application);
+
     $this->actingAs($citizen)
         ->get(route('citizen.permit-applications.show', $application))
         ->assertOk()
@@ -221,6 +225,16 @@ test('citizens can view collection receipt clearance and authority review eviden
             ->where('permitApplication.processing.authority_review.ready_for_authority_review', true)
             ->where('permitApplication.processing.authority_review.can_release', false)
             ->where('permitApplication.processing.authority_review.status', 'ready_for_authority_review')
+            ->where('permitApplication.permit_artifact.label', "Mayor's Permit Artifact")
+            ->where('permitApplication.permit_artifact.status', 'generated_artifact_available')
+            ->where('permitApplication.permit_artifact.ready_for_authority_review', true)
+            ->where('permitApplication.permit_artifact.can_issue', false)
+            ->where('permitApplication.permit_artifact.can_release', false)
+            ->where('permitApplication.permit_artifact.can_make_legally_effective', false)
+            ->where('permitApplication.permit_artifact.verification_reference', $verification['reference'])
+            ->where('permitApplication.permit_artifact.verification_status', 'artifact_only')
+            ->where('permitApplication.permit_artifact.verification_view_url', $verification['view_url'])
+            ->missing('permitApplication.permit_artifact.permit_pdf_url')
         );
 });
 

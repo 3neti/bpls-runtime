@@ -6,6 +6,7 @@ use App\Actions\BuildPermitApplicationTimeline;
 use App\Actions\CreatePermitApplication;
 use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Actions\DescribePaymentPolicyBoundary;
+use App\Actions\DescribePermitArtifact;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\UpdateCitizenPermitApplicationDraft;
 use App\Enums\PermitApplicationStatus;
@@ -30,6 +31,7 @@ class PermitApplicationController extends Controller
         private readonly BuildPermitApplicationTimeline $buildPermitApplicationTimeline,
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly DescribePaymentPolicyBoundary $describePaymentPolicyBoundary,
+        private readonly DescribePermitArtifact $describePermitArtifact,
         private readonly DescribePermitReleaseReadiness $describePermitReleaseReadiness,
     ) {}
 
@@ -143,6 +145,9 @@ class PermitApplicationController extends Controller
             && $releaseReadiness['payment_schedule_id'] === $latestPaymentSchedule?->id
                 ? $releaseReadiness
                 : null;
+        $permitArtifact = ($authorityReview['ready_for_authority_review'] ?? false)
+            ? $this->describePermitArtifact->handle($application)
+            : null;
 
         return Inertia::render('citizen/permit-applications/Show', [
             'permitApplication' => [
@@ -262,6 +267,21 @@ class PermitApplicationController extends Controller
                         'statement' => $authorityReview['authority_boundary']['artifact_statement'],
                         'reason' => $authorityReview['reason'],
                     ],
+                ],
+                'permit_artifact' => $permitArtifact === null ? null : [
+                    'label' => $permitArtifact['label'],
+                    'status' => $permitArtifact['status'],
+                    'available' => $permitArtifact['available'],
+                    'ready_for_authority_review' => $permitArtifact['ready_for_authority_review'],
+                    'can_issue' => $permitArtifact['can_issue'],
+                    'can_release' => $permitArtifact['can_release'],
+                    'can_make_legally_effective' => $permitArtifact['can_make_legally_effective'],
+                    'verification_reference' => $permitArtifact['verification_reference'],
+                    'verification_status' => $permitArtifact['verification_status'],
+                    'verification_view_url' => $permitArtifact['verification_view_url'],
+                    'artifact_statement' => $permitArtifact['artifact_statement'],
+                    'policy_note' => $permitArtifact['policy_note'],
+                    'blocked_by' => $permitArtifact['blocked_by'],
                 ],
                 'timeline' => $this->citizenTimeline($application, $canViewDocuments, $canViewFinancials),
                 'can_edit' => $request->user()->can(UserPermission::EditOwnPermitApplications->value)

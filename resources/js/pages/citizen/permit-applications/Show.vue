@@ -3,8 +3,10 @@ import { Head, Link, setLayoutProps, useForm } from '@inertiajs/vue3';
 import {
     ArrowLeft,
     Banknote,
+    BadgeCheck,
     ClipboardCheck,
     Download,
+    ExternalLink,
     FilePenLine,
     FilePlus2,
     History,
@@ -159,6 +161,21 @@ type PermitApplication = {
             reason: string;
         } | null;
     };
+    permit_artifact: {
+        label: string;
+        status: string;
+        available: boolean;
+        ready_for_authority_review: boolean;
+        can_issue: boolean;
+        can_release: boolean;
+        can_make_legally_effective: boolean;
+        verification_reference: string;
+        verification_status: string;
+        verification_view_url: string;
+        artifact_statement: string;
+        policy_note: string;
+        blocked_by: string[];
+    } | null;
     timeline: {
         key: string;
         category: string;
@@ -703,6 +720,132 @@ function documentBoundaryError(): string | undefined {
                     <p class="mt-2 text-xs">
                         {{ permitApplication.processing.authority_review.reason }}
                     </p>
+                </div>
+
+                <div
+                    v-if="permitApplication.permit_artifact"
+                    data-testid="citizen-permit-artifact"
+                    :data-artifact-status="permitApplication.permit_artifact.status"
+                    :data-verification-reference="
+                        permitApplication.permit_artifact.verification_reference
+                    "
+                    :data-verification-status="
+                        permitApplication.permit_artifact.verification_status
+                    "
+                    :data-can-issue="permitApplication.permit_artifact.can_issue"
+                    :data-can-release="permitApplication.permit_artifact.can_release"
+                    :data-can-make-legally-effective="
+                        permitApplication.permit_artifact
+                            .can_make_legally_effective
+                    "
+                    class="grid gap-4 border-t border-border pt-4"
+                >
+                    <div
+                        class="flex flex-wrap items-start justify-between gap-3"
+                    >
+                        <div class="flex items-start gap-2">
+                            <BadgeCheck
+                                class="mt-0.5 size-4 text-muted-foreground"
+                            />
+                            <div>
+                                <h3 class="text-sm font-semibold text-foreground">
+                                    Permit artifact identity
+                                </h3>
+                                <p class="text-xs text-muted-foreground">
+                                    {{ permitApplication.permit_artifact.label }}
+                                </p>
+                            </div>
+                        </div>
+                        <Button as-child variant="outline" size="sm">
+                            <a
+                                data-testid="citizen-permit-artifact-verification-link"
+                                :href="
+                                    permitApplication.permit_artifact
+                                        .verification_view_url
+                                "
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <ExternalLink />
+                                Verify artifact
+                            </a>
+                        </Button>
+                    </div>
+
+                    <dl class="grid gap-3 text-sm sm:grid-cols-3">
+                        <div>
+                            <dt class="text-xs text-muted-foreground">Status</dt>
+                            <dd class="font-medium capitalize">
+                                {{
+                                    permitApplication.permit_artifact.status.replaceAll(
+                                        '_',
+                                        ' ',
+                                    )
+                                }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground">
+                                Verification
+                            </dt>
+                            <dd class="font-medium capitalize">
+                                {{
+                                    permitApplication.permit_artifact.verification_status.replaceAll(
+                                        '_',
+                                        ' ',
+                                    )
+                                }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground">
+                                Legal effect
+                            </dt>
+                            <dd class="font-medium">
+                                {{
+                                    permitApplication.permit_artifact
+                                        .can_make_legally_effective
+                                        ? 'Legally effective'
+                                        : 'Not legally effective'
+                                }}
+                            </dd>
+                        </div>
+                        <div class="sm:col-span-3">
+                            <dt class="text-xs text-muted-foreground">
+                                Verification reference
+                            </dt>
+                            <dd class="font-mono text-xs break-all">
+                                {{
+                                    permitApplication.permit_artifact
+                                        .verification_reference
+                                }}
+                            </dd>
+                        </div>
+                    </dl>
+
+                    <div
+                        class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+                    >
+                        <p>{{ permitApplication.permit_artifact.policy_note }}</p>
+                        <p class="mt-2 text-xs">
+                            {{
+                                permitApplication.permit_artifact
+                                    .artifact_statement
+                            }}
+                        </p>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        <Badge
+                            v-for="blocker in permitApplication.permit_artifact
+                                .blocked_by"
+                            :key="blocker"
+                            variant="outline"
+                            class="capitalize"
+                        >
+                            {{ blocker.replaceAll('_', ' ') }}
+                        </Badge>
+                    </div>
                 </div>
             </section>
 

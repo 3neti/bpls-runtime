@@ -106,6 +106,8 @@ test('scenario registry discovers the citizen permit authority review visibility
         ->and($scenario->expectations['receipt_status'])->toBe('issued')
         ->and($scenario->expectations['ready_for_authority_review'])->toBeTrue()
         ->and($scenario->expectations['can_release'])->toBeFalse()
+        ->and($scenario->expectations['permit_artifact_status'])->toBe('generated_artifact_available')
+        ->and($scenario->expectations['public_verification_status'])->toBe('artifact_only')
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
@@ -758,8 +760,17 @@ test('citizen permit authority review scenario composes domain actions idempoten
             'ready_for_authority_review' => true,
             'can_release' => false,
             'authority_review_status' => 'ready_for_authority_review',
+            'permit_artifact_status' => $firstManifest['resources']['permit_artifact_status'],
+            'permit_verification_reference' => $firstManifest['resources']['permit_verification_reference'],
+            'permit_verification_status' => $firstManifest['resources']['permit_verification_status'],
+            'permit_verification_view_url' => $firstManifest['resources']['permit_verification_view_url'],
+            'can_issue' => false,
+            'can_make_legally_effective' => false,
             'timeline_event_count' => $firstManifest['resources']['citizen_timeline_event_count'],
             'timeline_event_keys' => $firstManifest['resources']['citizen_timeline_event_keys'],
+            'public_page_visible' => true,
+            'public_page_can_verify_release' => false,
+            'public_page_released' => false,
         ],
         'checks' => [],
         'artifacts' => [
@@ -782,15 +793,25 @@ test('citizen permit authority review scenario composes domain actions idempoten
         ->and($firstManifest['resources']['clearances_completed'])->toBe(3)
         ->and($firstManifest['resources']['ready_for_authority_review'])->toBeTrue()
         ->and($firstManifest['resources']['can_release'])->toBeFalse()
+        ->and($firstManifest['resources']['permit_artifact_status'])->toBe('generated_artifact_available')
+        ->and($firstManifest['resources']['permit_verification_reference'])->toStartWith('PVA-'.$firstManifest['resources']['record_id'].'-')
+        ->and($firstManifest['resources']['permit_verification_status'])->toBe('artifact_only')
+        ->and($firstManifest['resources']['permit_verification_view_url'])->toEndWith('/view')
+        ->and($firstManifest['resources'])->not->toHaveKey('permit_pdf_url')
+        ->and($firstManifest['resources']['can_issue'])->toBeFalse()
+        ->and($firstManifest['resources']['can_make_legally_effective'])->toBeFalse()
         ->and($firstManifest['resources']['citizen_timeline_event_count'])->toBe(10)
         ->and($firstManifest['resources']['citizen_timeline_event_keys'])->toBe($expectedTimelineKeys)
         ->and(PermitApplication::query()->count())->toBe(1)
         ->and(TreasuryCollection::query()->count())->toBe(1)
         ->and(Receipt::query()->count())->toBe(1)
+        ->and(collect($audit['checks'])->where('passed', false)->values()->all())->toBe([])
         ->and($audited['result']['audit'])->toBe('passed')
         ->and($audited['result']['passed'])->toBeTrue()
         ->and($audit['canonical']['ready_for_authority_review'])->toBeTrue()
         ->and($audit['canonical']['can_release'])->toBeFalse()
+        ->and($audit['canonical']['permit_verification_reference'])->toBe($firstManifest['resources']['permit_verification_reference'])
+        ->and(collect($audit['checks'])->firstWhere('key', 'audit-browser-artifact-identity')['passed'])->toBeTrue()
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
 
@@ -1103,6 +1124,8 @@ test('command prepares the citizen permit authority review visibility scenario',
         ->and($manifest['resources']['receipt_status'])->toBe(ReceiptStatus::Issued->value)
         ->and($manifest['resources']['ready_for_authority_review'])->toBeTrue()
         ->and($manifest['resources']['can_release'])->toBeFalse()
+        ->and($manifest['resources']['permit_artifact_status'])->toBe('generated_artifact_available')
+        ->and($manifest['resources']['permit_verification_status'])->toBe('artifact_only')
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
 });
 

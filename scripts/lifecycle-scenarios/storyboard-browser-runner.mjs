@@ -535,11 +535,17 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
     const authority = targetPage.getByTestId(
         'citizen-authority-review-boundary',
     );
+    const artifact = targetPage.getByTestId('citizen-permit-artifact');
+    const verificationLink = targetPage.getByTestId(
+        'citizen-permit-artifact-verification-link',
+    );
     const timeline = targetPage.getByTestId('citizen-application-timeline');
     await collection.waitFor();
     await receipt.waitFor();
     await clearances.waitFor();
     await authority.waitFor();
+    await artifact.waitFor();
+    await verificationLink.waitFor();
     await timeline.waitFor();
 
     const timelineEventKeys = await timeline
@@ -585,6 +591,25 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
         authority_review_status: await authority.getAttribute(
             'data-authority-review-status',
         ),
+        permit_artifact_status: await artifact.getAttribute(
+            'data-artifact-status',
+        ),
+        permit_verification_reference: await artifact.getAttribute(
+            'data-verification-reference',
+        ),
+        permit_verification_status: await artifact.getAttribute(
+            'data-verification-status',
+        ),
+        permit_verification_view_url: new URL(
+            await verificationLink.getAttribute('href'),
+            targetBaseUrl,
+        ).pathname,
+        can_issue:
+            (await artifact.getAttribute('data-can-issue')) === 'true',
+        can_make_legally_effective:
+            (await artifact.getAttribute(
+                'data-can-make-legally-effective',
+            )) === 'true',
         timeline_event_count: timelineEventKeys.length,
         timeline_event_keys: timelineEventKeys,
     };
@@ -601,6 +626,16 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
             manifest.resources.ready_for_authority_review,
         can_release: manifest.resources.can_release,
         authority_review_status: manifest.resources.authority_review_status,
+        permit_artifact_status: manifest.resources.permit_artifact_status,
+        permit_verification_reference:
+            manifest.resources.permit_verification_reference,
+        permit_verification_status:
+            manifest.resources.permit_verification_status,
+        permit_verification_view_url:
+            manifest.resources.permit_verification_view_url,
+        can_issue: manifest.resources.can_issue,
+        can_make_legally_effective:
+            manifest.resources.can_make_legally_effective,
         timeline_event_count:
             manifest.resources.citizen_timeline_event_count,
         timeline_event_keys: manifest.resources.citizen_timeline_event_keys,
@@ -668,6 +703,9 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
     const mobileAuthorityVisible = await targetPage
         .getByTestId('citizen-authority-review-boundary')
         .isVisible();
+    const mobileArtifactVisible = await targetPage
+        .getByTestId('citizen-permit-artifact')
+        .isVisible();
     const horizontalOverflow = await targetPage.evaluate(
         () =>
             document.documentElement.scrollWidth >
@@ -699,6 +737,12 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
             mobileAuthorityVisible,
         ),
         check(
+            'citizen-authority-review-mobile-artifact-visible',
+            'Mobile detail keeps the artifact-only identity visible',
+            true,
+            mobileArtifactVisible,
+        ),
+        check(
             'citizen-authority-review-mobile-no-horizontal-overflow',
             'Mobile authority-review view has no page-level horizontal overflow',
             false,
@@ -709,6 +753,101 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
         targetPage,
         '05-citizen-authority-review-mobile',
         'browser/screenshots/05-citizen-authority-review-mobile.png',
+    );
+
+    const publicVerificationUrl = `${targetBaseUrl}${manifest.resources.permit_verification_view_url}`;
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+    await targetPage.goto(publicVerificationUrl, { waitUntil: 'networkidle' });
+    const publicReferenceVisible = await targetPage
+        .getByText(manifest.resources.permit_verification_reference, {
+            exact: true,
+        })
+        .isVisible();
+    const publicArtifactOnlyVisible = await targetPage
+        .getByText('Artifact only', { exact: true })
+        .isVisible();
+    const publicApplicationVisible = await targetPage
+        .getByText(manifest.resources.application_number, { exact: true })
+        .isVisible();
+    const publicCanVerifyRelease =
+        (await targetPage
+            .getByText('Can verify release', { exact: true })
+            .locator('..')
+            .getByText('Yes', { exact: true })
+            .count()) > 0;
+    const publicReleased =
+        (await targetPage
+            .getByText('Released', { exact: true })
+            .locator('..')
+            .getByText('Yes', { exact: true })
+            .count()) > 0;
+
+    Object.assign(citizenAuthorityReviewEvidence, {
+        public_page_visible:
+            publicReferenceVisible &&
+            publicArtifactOnlyVisible &&
+            publicApplicationVisible,
+        public_page_can_verify_release: publicCanVerifyRelease,
+        public_page_released: publicReleased,
+    });
+    checks.push(
+        check(
+            'citizen-artifact-public-page-exact-record-visible',
+            'Public verification page shows the exact artifact reference and application',
+            true,
+            publicReferenceVisible &&
+                publicArtifactOnlyVisible &&
+                publicApplicationVisible,
+        ),
+        check(
+            'citizen-artifact-public-page-release-unverified',
+            'Public verification page does not verify permit release',
+            false,
+            publicCanVerifyRelease,
+        ),
+        check(
+            'citizen-artifact-public-page-not-released',
+            'Public verification page does not report the permit released',
+            false,
+            publicReleased,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '06-citizen-public-artifact-verification',
+        'browser/screenshots/06-citizen-public-artifact-verification.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(publicVerificationUrl, { waitUntil: 'networkidle' });
+    const mobilePublicReferenceVisible = await targetPage
+        .getByText(manifest.resources.permit_verification_reference, {
+            exact: true,
+        })
+        .isVisible();
+    const mobilePublicOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+    checks.push(
+        check(
+            'citizen-artifact-public-page-mobile-reference-visible',
+            'Mobile public verification keeps the exact reference visible',
+            true,
+            mobilePublicReferenceVisible,
+        ),
+        check(
+            'citizen-artifact-public-page-mobile-no-horizontal-overflow',
+            'Mobile public verification has no page-level horizontal overflow',
+            false,
+            mobilePublicOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '07-citizen-public-artifact-verification-mobile',
+        'browser/screenshots/07-citizen-public-artifact-verification-mobile.png',
     );
 }
 

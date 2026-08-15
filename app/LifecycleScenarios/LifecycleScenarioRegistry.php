@@ -35,6 +35,8 @@ final class LifecycleScenarioRegistry
                     'clearances_completed' => true,
                     'ready_for_authority_review' => true,
                     'can_release' => false,
+                    'permit_artifact_status' => 'generated_artifact_available',
+                    'public_verification_status' => 'artifact_only',
                     'online_payment_status' => 'blocked',
                     'browser_is_read_only' => true,
                     'external_calls' => 0,

@@ -670,6 +670,8 @@ test('release readiness evidence can be ready for authority review without permi
         ->and($artifact['can_make_legally_effective'])->toBeFalse()
         ->and($artifact['authority_boundary_status'])->toBe('ready_for_authority_review')
         ->and($artifact['permit_pdf_url'])->toBe(route('staff.permit-applications.permit.pdf', $application, false))
+        ->and($artifact['verification_url'])->toContain('/permits/verify/'.$application->id.'/')
+        ->and($artifact['verification_view_url'])->toEndWith('/view')
         ->and($artifact['policy_note'])->toContain('do not issue, release, or make a permit legally effective');
 
     $this->actingAs($user)

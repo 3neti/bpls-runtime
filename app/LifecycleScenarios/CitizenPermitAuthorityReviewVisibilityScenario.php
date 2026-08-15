@@ -9,6 +9,7 @@ use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\CreatePermitApplication;
 use App\Actions\DescribeOnlinePaymentBoundary;
+use App\Actions\DescribePermitArtifact;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\IssueManualCollectionReceipt;
 use App\Actions\RecordPaymentScheduleCollection;
@@ -43,6 +44,7 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
         private readonly IssueManualCollectionReceipt $issueReceipt,
         private readonly CompletePermitClearance $completeClearance,
         private readonly AttemptPermitApplicationRelease $attemptRelease,
+        private readonly DescribePermitArtifact $describePermitArtifact,
         private readonly DescribePermitReleaseReadiness $describeReleaseReadiness,
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly BuildPermitApplicationTimeline $buildPermitApplicationTimeline,
@@ -131,6 +133,7 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
         $collection->refresh();
         $receipt->refresh();
         $releaseReadiness = $this->describeReleaseReadiness->handle($permitApplication);
+        $permitArtifact = $this->describePermitArtifact->handle($permitApplication);
         $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
         $timeline = $this->buildPermitApplicationTimeline->handle($permitApplication);
         $timelineKeys = collect($timeline)->pluck('key')->all();
@@ -189,6 +192,19 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
                 'ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'],
                 'can_release' => $releaseReadiness['can_release'],
             ]),
+            $this->step('citizen-artifact-identity-projected', 'Describe the generated artifact identity and public verification boundary without exposing the staff PDF', [
+                'artifact_status' => 'generated_artifact_available',
+                'verification_status' => 'artifact_only',
+                'can_issue' => false,
+                'can_release' => false,
+                'can_make_legally_effective' => false,
+            ], [
+                'artifact_status' => $permitArtifact['status'],
+                'verification_status' => $permitArtifact['verification_status'],
+                'can_issue' => $permitArtifact['can_issue'],
+                'can_release' => $permitArtifact['can_release'],
+                'can_make_legally_effective' => $permitArtifact['can_make_legally_effective'],
+            ], 'applicant'),
             $this->step('permit-release-refused', 'Attempt release through the authoritative policy boundary', [
                 'release_blocked' => true,
                 'application_status' => PermitApplicationStatus::PendingPayment->value,
@@ -239,6 +255,13 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
             'ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'],
             'can_release' => $releaseReadiness['can_release'],
             'authority_review_status' => $releaseReadiness['authority_boundary']['status'],
+            'permit_artifact_status' => $permitArtifact['status'],
+            'permit_artifact_available' => $permitArtifact['available'],
+            'permit_verification_reference' => $permitArtifact['verification_reference'],
+            'permit_verification_status' => $permitArtifact['verification_status'],
+            'permit_verification_view_url' => parse_url($permitArtifact['verification_view_url'], PHP_URL_PATH),
+            'can_issue' => $permitArtifact['can_issue'],
+            'can_make_legally_effective' => $permitArtifact['can_make_legally_effective'],
             'online_payment_status' => $onlinePaymentBoundary['status'],
             'can_pay_online' => $onlinePaymentBoundary['can_pay_online'],
             'citizen_timeline_event_count' => count($timelineKeys),
@@ -265,6 +288,7 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
                 'status' => $clearance->status->value,
             ])->values()->all(),
             'release_readiness' => $releaseReadiness,
+            'permit_artifact' => collect($permitArtifact)->except('permit_pdf_url')->all(),
             'online_payment_boundary' => $onlinePaymentBoundary,
             'timeline' => $timeline,
             'run_id' => $runId,
@@ -296,6 +320,7 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
         $collection = TreasuryCollection::query()->findOrFail($manifest['resources']['collection_id']);
         $receipt = Receipt::query()->findOrFail($manifest['resources']['receipt_id']);
         $releaseReadiness = $this->describeReleaseReadiness->handle($permitApplication);
+        $permitArtifact = $this->describePermitArtifact->handle($permitApplication);
         $timelineKeys = collect($this->buildPermitApplicationTimeline->handle($permitApplication))->pluck('key')->all();
         $browserReport = $artifactStore->readJson('browser/report.json') ?? ['result' => ['passed' => false]];
         $canonical = [
@@ -321,6 +346,13 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
             'ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'],
             'can_release' => $releaseReadiness['can_release'],
             'authority_review_status' => $releaseReadiness['authority_boundary']['status'],
+            'permit_artifact_status' => $permitArtifact['status'],
+            'permit_artifact_available' => $permitArtifact['available'],
+            'permit_verification_reference' => $permitArtifact['verification_reference'],
+            'permit_verification_status' => $permitArtifact['verification_status'],
+            'permit_verification_view_url' => parse_url($permitArtifact['verification_view_url'], PHP_URL_PATH),
+            'can_issue' => $permitArtifact['can_issue'],
+            'can_make_legally_effective' => $permitArtifact['can_make_legally_effective'],
             'timeline_event_count' => count($timelineKeys),
             'timeline_event_keys' => $timelineKeys,
         ];
@@ -342,6 +374,16 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
                 'can_release' => false,
                 'authority_review_status' => 'ready_for_authority_review',
             ], $canonical),
+            $this->step('audit-artifact-identity', 'Canonical artifact identity remains generated and artifact-only without issuance or legal effect', [
+                'can_release' => false,
+                'permit_artifact_status' => 'generated_artifact_available',
+                'permit_artifact_available' => true,
+                'permit_verification_reference' => $manifest['resources']['permit_verification_reference'],
+                'permit_verification_status' => 'artifact_only',
+                'permit_verification_view_url' => $manifest['resources']['permit_verification_view_url'],
+                'can_issue' => false,
+                'can_make_legally_effective' => false,
+            ], $canonical),
             $this->step('audit-timeline', 'Canonical timeline retains every prepared event in order', [
                 'timeline_event_count' => $manifest['resources']['citizen_timeline_event_count'],
                 'timeline_event_keys' => $manifest['resources']['citizen_timeline_event_keys'],
@@ -362,6 +404,18 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
             $this->step('audit-browser-timeline', 'Citizen browser shows every canonical event in order', [
                 'timeline_event_count' => count($timelineKeys),
                 'timeline_event_keys' => $timelineKeys,
+            ], data_get($browserReport, 'citizen_authority_review', [])),
+            $this->step('audit-browser-artifact-identity', 'Citizen browser and public page agree with the canonical artifact-only identity', [
+                'can_release' => false,
+                'permit_artifact_status' => $canonical['permit_artifact_status'],
+                'permit_verification_reference' => $canonical['permit_verification_reference'],
+                'permit_verification_status' => $canonical['permit_verification_status'],
+                'permit_verification_view_url' => $canonical['permit_verification_view_url'],
+                'can_issue' => false,
+                'can_make_legally_effective' => false,
+                'public_page_visible' => true,
+                'public_page_can_verify_release' => false,
+                'public_page_released' => false,
             ], data_get($browserReport, 'citizen_authority_review', [])),
             $this->step('audit-browser-result', 'Browser evidence runner passed', [
                 'browser' => true,
@@ -453,8 +507,8 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
     private function storyboard(string $runId, PermitApplication $permitApplication, Receipt $receipt): array
     {
         return [
-            'title' => 'Citizen follows a paid permit application to authority review',
-            'summary' => 'A citizen sees collection, receipt, clearance, and authority-review evidence for an owned application while permit issuance and release remain explicitly unavailable.',
+            'title' => 'Citizen follows a paid permit application to artifact-only verification',
+            'summary' => 'A citizen sees collection, receipt, clearance, authority-review, and generated artifact identity evidence for an owned application while permit issuance, download, release, and legal effect remain explicitly unavailable.',
             'run_id' => $runId,
             'record' => [
                 'type' => 'permit_application',
@@ -484,6 +538,12 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
                     'title' => 'Citizen sees the authority boundary',
                     'description' => 'The application is ready for human authority review while issuance, release, and legal effect remain unresolved.',
                     'dialogue' => 'The software reports readiness and refuses release.',
+                    'duration_seconds' => 5,
+                ],
+                [
+                    'title' => 'Citizen verifies the artifact identity',
+                    'description' => 'The citizen follows the exact public verification reference to an artifact-only page without receiving the staff permit PDF.',
+                    'dialogue' => 'The reference identifies generated evidence; it does not verify issuance, release, or legal effect.',
                     'duration_seconds' => 5,
                 ],
             ],
