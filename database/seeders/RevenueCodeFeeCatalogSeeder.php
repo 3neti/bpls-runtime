@@ -19,6 +19,7 @@ use App\Models\RevenueCodeProvisionClause;
 use App\Models\RevenueCodeProvisionRow;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class RevenueCodeFeeCatalogSeeder extends Seeder
 {
@@ -921,6 +922,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 metadata: ['chapter' => 3, 'article' => 'K', 'known_ambiguities' => ['violation_elements', 'responsible_actor', 'equipment_and_permit_identity', 'enforcement_and_referral', 'conviction_boundary', 'offense_counting', 'fine_and_imprisonment_authority', 'municipal_penalty_ceiling', 'court_discretion', 'notice_hearing_appeal', 'current_legal_validity']],
             ),
             ...$this->articleLProvisions(),
+            ...$this->articleMProvisions(),
             $this->provision(
                 code: 'MRC-2E-01-BUSINESS-TAX-SCOPE',
                 section: 'Section 2E.01',
@@ -1044,6 +1046,29 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             excerpt: $definition[4],
             notes: 'Operational execution is blocked pending accepted municipal procedure for: '.implode(', ', $definition[5]).'. No Article L implementation was found in the studied legacy archive.',
             metadata: ['chapter' => 3, 'article' => 'L', 'known_ambiguities' => $definition[5], 'legacy_implementation_not_found' => true],
+        ), $definitions);
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function articleMProvisions(): array
+    {
+        $definitions = [
+            ['01-OCCUPATIONAL-FEES', 'Section 3M.01', 'Individual occupational calling permit fees', RevenueCodeProvisionType::FixedFee, 'The ordinance prints a uniform PHP 100.00 annual Mayor’s Permit fee for 69 named or catch-all occupations and callings not requiring government examination.', ['person_and_occupation_identity', 'government_examination_boundary', 'occupation_classification', 'multiple_occupation_treatment', 'current_operational_amount']],
+            ['02-EXEMPTIONS', 'Section 3M.02', 'Occupational calling fee exemptions', RevenueCodeProvisionType::AdministrativeRule, 'Professionals subject to provincial professional tax and government employees are exempted from the Article M fee.', ['professional_tax_liability_evidence', 'government_employee_scope', 'permit_versus_fee_exemption', 'mixed_occupation']],
+            ['03-PERSONS-GOVERNED', 'Section 3M.03', 'Workers requiring individual Mayor’s Permit and Calling ID', RevenueCodeProvisionType::AdministrativeRule, 'Temporary and permanent workers in stated dangerous, public-facing, food, night, and other occupations must secure an individual Mayor’s Permit and LGU-Ipil Calling ID.', ['worker_and_employer_identity', 'establishment_classification', 'temporary_worker_scope', 'public_health_and_safety_basis', 'age_and_documentary_requirements']],
+            ['04-PAYMENT-TIMING', 'Section 3M.04', 'Occupational permit payment, employer advance, and Calling ID', RevenueCodeProvisionType::AdministrativeRule, 'Article M fees are payable upon first application and annually by January 20; each distinct occupation is separately payable, employers advance employee fees, and a one-year Calling ID has a printed PHP 25.00 amount.', ['application_and_approval_sequence', 'annual_period', 'distinct_occupation_identity', 'employer_advance_and_recovery', 'calling_id_issuance_and_validity', 'payer_collector_receipt']],
+            ['05-LATE-CHANGES-RENEWAL', 'Section 3M.05', 'Late charges, ownership or location change, new hires, and renewal', RevenueCodeProvisionType::AdministrativeRule, 'The ordinance prints a 25-percent surcharge and two-percent monthly penalty capped at 36 months, requires new permits after ownership or inter-municipal location changes, and addresses new hires and birth-month renewal.', ['surcharge_and_interest_arithmetic', 'monthly_accrual_and_cap', 'ownership_and_location_change_scope', 'new_hire_start_boundary', 'birth_month_renewal_conflict']],
+            ['06-ADMINISTRATION', 'Section 3M.06', 'BPLO occupational registry and permit cancellation', RevenueCodeProvisionType::EvidenceRequirement, 'BPLO must keep occupational permit and payment records; retirement or cessation requires surrender of permit and receipt for cancellation by stated authorities.', ['registry_fields_and_privacy', 'payment_and_receipt_linkage', 'retirement_or_cessation_evidence', 'surrender_and_cancellation_authority', 'retention_and_migration']],
+        ];
+
+        return array_map(fn (array $definition): array => $this->provision(
+            code: 'MRC-3M-'.$definition[0],
+            section: $definition[1],
+            title: $definition[2],
+            type: $definition[3],
+            excerpt: $definition[4],
+            notes: 'Operational execution is blocked pending accepted municipal procedure for: '.implode(', ', $definition[5]).'. The studied legacy archive contains only a static “OCCUPATIONAL CALLING” assessment label, not an Article M workflow or rule implementation.',
+            metadata: ['chapter' => 3, 'article' => 'M', 'known_ambiguities' => $definition[5], 'legacy_evidence' => 'static_business_permit_form_assessment_label_only'],
         ), $definitions);
     }
 
@@ -2669,6 +2694,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
         ]);
 
         $this->seedArticleLPolicyBoundaryClauses();
+        $this->seedArticleMPolicyBoundaryClauses();
     }
 
     private function seedArticleLPolicyBoundaryClauses(): void
@@ -2803,6 +2829,169 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
         $this->persistArticleLClauses('MRC-3L-21-SEPARABILITY', [
             ['UNAFFECTED-PROVISIONS', RevenueCodeProvisionClauseType::AuthorityBoundary, 'If any Article L part or provision is held unconstitutional or invalid, unaffected parts continue in full force and effect.', 'Candidate legal boundary: an authoritative invalidity decision does not automatically disable unaffected provisions.', 'Decision authority, finality, affected-clause mapping, dependency analysis, effective date, notice, and operational suspension require legal procedure.', ['candidate_legal_effect' => 'separability']],
         ]);
+    }
+
+    private function seedArticleMPolicyBoundaryClauses(): void
+    {
+        $occupations = [
+            'Actuary',
+            'All Vendors',
+            'Animal Trainer',
+            'Bandsaw/Chainsaw Operator',
+            'Bar Tender',
+            'Bar/Club/Disco/Voke/ Manager/Supervisor',
+            'Barber/Hairstylist/Beautician',
+            'Basketball/Volleyball/Boxing/and Other Sports Referee/Official',
+            'Bingo Caller',
+            'Butcher',
+            'Call Center Agent',
+            'Carpenter/Mason/Painter',
+            'Chiropodist',
+            'Cinema Projector Operator',
+            'Commercial Steward/Stewardess',
+            'Construction Foreman/Supervisor',
+            'Cook/Baker',
+            'Couturier',
+            'Dance/Gym/Sports Instructor',
+            'Disc Jockey',
+            'Dispatcher/Porter',
+            'Dressmaker/Tailor',
+            'Driver/Inspector/Conductor of Passenger and Cargo Vehicles',
+            'Driving/Diving/Swimming Instructor',
+            'Electrician (Non PRC)',
+            'Electronic Technician',
+            'Embalmer',
+            'GRO/Hospitality Girl/Hostess/Club Dancer',
+            'Handyman',
+            'Hollow Block Maker',
+            'Host/Hostess',
+            'Insurance Agents and Sub Agent',
+            'Janitor/Janitress',
+            'Jewelry Appraiser',
+            'Laborer',
+            'Lathe Machine Operator',
+            'Marine Surveyor',
+            'Massage Attendant/Masseur',
+            'Mechanic',
+            'Medical/Dental Aid/Attendant',
+            'Medical/Dental Sales Representative',
+            'Merchandiser/Promo girl',
+            'Non-PRC Passer Teacher/Instructor',
+            'Packer',
+            'Photographer',
+            'Pilot',
+            'Plumber',
+            'Professional Artist',
+            'Professional Boxer/Ring Announcer',
+            'Radio/Telecom Operator',
+            'Real Estate Broker',
+            'Receptionist',
+            'Reflexologist',
+            'Salesgirl/salesboy',
+            'Security Guard/Watchman',
+            'Shoe Shine Boy',
+            'Shoe/Bag Repairman',
+            'Singer/Band Member',
+            'Sports Promoter',
+            'Statistician',
+            'Stevedoring Worker',
+            'Stock Broker',
+            'Sugar Technologist',
+            'Tattooer',
+            'Waiter/Waitress',
+            'Watch/Jewelry Repairman',
+            'Welder/Body Builder',
+            'Personnel Under Recruitment Agencies',
+            'Others not specified above',
+        ];
+
+        $this->persistPolicyBoundaryClauses('MRC-3M-01-OCCUPATIONAL-FEES', [
+            $this->policyBoundaryClause(1, 'MRC-3M-01-ANNUAL-PERSON-OCCUPATION-SCOPE', RevenueCodeProvisionClauseType::PermitRequirement, 'There shall be collected as annual fee at the rate prescribed for issuance of Mayor’s Permit to every person engaged in an occupation or calling not requiring government examination within the municipality.', 'Candidate scope: each person practicing a covered non-examined occupation in Ipil obtains an annual individual Mayor’s Permit.', 'Person, occupation, practice, territorial nexus, government-examination boundary, permit identity, annual period, multiple occupations, exemptions, payer, collector, and current authority require reconciliation.', ['candidate_frequency' => 'annual', 'candidate_permit' => 'individual_mayors_permit']),
+            ...array_map(fn (string $occupation, int $index): array => $this->occupationalCallingFeeClause($index + 2, $occupation), $occupations, array_keys($occupations)),
+        ]);
+
+        $this->persistArticleMClauses('MRC-3M-02-EXEMPTIONS', [
+            ['PROVINCIAL-PROFESSIONAL-TAX', RevenueCodeProvisionClauseType::Exemption, 'All professionals who are subject to the Provincial Tax imposition pursuant to Section 139 of the Local Government Code are exempted from payment of this fee.', 'Candidate exemption: a professional subject to the referenced provincial tax does not pay the Article M fee.', 'Profession, PRC or examination status, actual tax liability versus payment, province, period, proof, mixed occupations, permit-versus-fee effect, and current national law require legal reconciliation.', ['external_legal_reference' => 'Local Government Code Section 139']],
+            ['GOVERNMENT-EMPLOYEES', RevenueCodeProvisionClauseType::Exemption, 'Government employees are exempted from payment of this fee.', 'Candidate exemption: government employees do not pay the Article M fee.', 'National or local employer scope, permanent or temporary status, job-order and contractor treatment, outside occupations, proof, period, and permit-versus-fee effect require acceptance.', ['candidate_exempt_group' => 'government_employees']],
+        ]);
+
+        $this->persistArticleMClauses('MRC-3M-03-PERSONS-GOVERNED', [
+            ['TEMPORARY-PERMANENT-PERMIT-ID', RevenueCodeProvisionClauseType::PermitRequirement, 'The following workers or employees whether working on temporary or permanent basis shall secure the individual Mayor’s Permit and LGU-Ipil Calling ID.', 'Candidate requirement applies to both temporary and permanent workers in the listed groups.', 'Worker, employer, engagement, start and end dates, temporary status, permit and ID identity, duplication, and enforcement require acceptance.', ['candidate_employment_statuses' => ['temporary', 'permanent']]],
+            ['INDUSTRIAL-MANUFACTURING', RevenueCodeProvisionClauseType::Eligibility, 'Employees or workers in industrial or manufacturing establishments including the source-enumerated factories, plants, construction jobs, shops, laboratories, mills, and repair establishments.', 'Candidate covered group preserves the ordinance’s industrial and manufacturing establishment catalog.', 'Establishment and activity classification, exposure, construction period, mixed use, worker role, inspection, and source catalog maintenance require municipal mapping.', ['candidate_group' => 'industrial_and_manufacturing_workers']],
+            ['COMMERCIAL-DANGEROUS', RevenueCodeProvisionClauseType::Eligibility, 'Employees and workers in commercial establishments including film storage, cold storage, delivery services, funeral parlors, janitorial services, junk shops, hardware, pest control, printing, service stations, slaughterhouses, textile stores, warehouses, and parking lots.', 'Candidate covered group preserves the stated commercial establishment catalog.', 'Business classification, worker exposure, establishment status, mixed activity, role, and current public-health or safety basis require acceptance.', ['candidate_group' => 'commercial_offensive_or_dangerous_workers']],
+            ['ENVIRONMENTAL-EXPOSURE', RevenueCodeProvisionClauseType::Eligibility, 'Employees and workers in other industrial, manufacturing, or commercial establishments normally exposed to excessive heat, light, noise, cold, and other environmental factors endangering physical and health well-being.', 'Candidate catch-all uses occupational environmental exposure as eligibility.', 'Exposure thresholds, measurement, normality, duration, hazard determination, inspector authority, evidence, protective controls, and appeal require accepted technical policy.', ['candidate_hazards' => ['excessive_heat', 'excessive_light', 'excessive_noise', 'excessive_cold', 'other_environmental_factors']]],
+            ['PUBLIC-DAILY-NEEDS', RevenueCodeProvisionClauseType::Eligibility, 'Employees and workers in establishments attending to the daily needs of the public, including drugstores, department stores, groceries, supermarkets, beauty salons, tailor and dress shops, bank tellers, receptionists, and receiving clerks in utility payment outlets except transportation companies.', 'Candidate covered group uses direct daily public-service contact and the printed examples.', 'The source numbering splits this sentence between items 4 and 5. Public-contact threshold, listed classes, transportation exclusion, role identity, and mixed duties require reconciliation.', ['candidate_group' => 'daily_public_needs_workers', 'known_source_numbering_split' => true]],
+            ['FOOD-ESTABLISHMENTS', RevenueCodeProvisionClauseType::Eligibility, 'Employees and workers in canteens, carinderias, catering services, bakeries, ice cream or ice milk factories, refreshment parlors, restaurants, sari-sari stores, and soda fountains.', 'Candidate covered group preserves food and eatery establishment workers.', 'Food establishment and worker identity, handling versus non-handling roles, temporary work, health-certificate relationship, and current policy require acceptance.', ['candidate_group' => 'food_and_eatery_workers']],
+            ['MARKET-STALLHOLDERS-WORKERS', RevenueCodeProvisionClauseType::Eligibility, 'Stallholders, employees and workers in public markets.', 'Candidate covered group includes public-market stallholders and workers.', 'Public-market identity, stallholder versus worker, helper and substitute roles, operating days, and relationship to vendor permits require acceptance.', ['candidate_group' => 'public_market_stallholders_and_workers']],
+            ['FOOD-PEDDLERS', RevenueCodeProvisionClauseType::Eligibility, 'Peddlers of cooked or uncooked foods and all other food peddlers, including peddlers of seasonal merchandise.', 'Candidate covered group preserves cooked, uncooked, other food, and seasonal-merchandise peddlers.', 'Peddler identity, food-versus-seasonal merchandise grammar, location, mobility, activity period, overlap with vendor permits, and evidence require reconciliation.', ['candidate_group' => 'food_and_seasonal_merchandise_peddlers']],
+            ['NIGHT-ESTABLISHMENTS', RevenueCodeProvisionClauseType::Eligibility, 'Workers or employees in the source-enumerated night or night-and-day establishments, including bars, entertainment venues, clubs, massage clinics, hotels, motels, and security agencies.', 'Candidate covered group uses employment in businesses whose activities occur or are consumed at night.', 'Nighttime boundary, establishment classification, worker role, mixed schedules, temporary events, security personnel, and current policy require acceptance.', ['candidate_group' => 'night_and_night_day_establishment_workers']],
+            ['MINIMUM-AGE', RevenueCodeProvisionClauseType::OperatingRestriction, 'Night and day clubs, night clubs, day clubs, cocktail lounges, bars, cabarets, sauna bath houses and similar places shall under no circumstances allow hostesses, waitresses, waiters, entertainers or hospitality girls below 18 years of age to work as such.', 'Candidate restriction: the stated establishments and roles have a minimum working age of 18.', 'Role and establishment mapping, age timing, employment relationship, labor-law authority, inspection, evidence, employer liability, due process, and current legal validity require reconciliation.', ['candidate_minimum_age' => 18]],
+            ['EIGHTEENTH-YEAR-CERTIFICATE', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'A person securing the individual Mayor’s Permit during the 18th birth year shall present a baptismal or birth certificate issued by the local civil registrar concerned.', 'Candidate age evidence: a permittee in the 18th birth year provides one of the stated certificates.', 'Why only the 18th birth year is covered, baptismal certificate authority, civil-registry issuance wording, authenticity, alternatives, retention, privacy, and sufficiency require acceptance.', ['candidate_documents' => ['baptismal_certificate', 'birth_certificate']]],
+            ['OTHER-OCCUPATIONS', RevenueCodeProvisionClauseType::Eligibility, 'All other employees and persons who exercise their profession, occupation or calling within the Municipality aside from those specifically mentioned in Section 108.', 'Candidate catch-all covers other workers and practitioners within Ipil.', 'The source cross-reference to Section 108 is unresolved. Profession versus occupation, examination and exemption boundaries, territorial nexus, overlap, and authority require legal reconciliation.', ['source_cross_reference' => 'Section 108', 'known_cross_reference_question' => true]],
+        ]);
+
+        $this->persistArticleMClauses('MRC-3M-04-PAYMENT-TIMING', [
+            ['FIRST-APPLICATION-ANNUAL-JANUARY-20', RevenueCodeProvisionClauseType::PaymentTiming, 'Fees shall be paid to the Municipal Treasurer upon filing the first application and annually thereafter within the first twenty days of January.', 'Candidate timing: first application payment occurs on filing; subsequent annual payment is due by January 20.', 'Application filing timestamp, first-versus-renewal identity, calendar, late filing, operating-year coverage, collector delegation, receipt, and conflict with birth-month renewal require reconciliation.', ['candidate_annual_due_month' => 1, 'candidate_annual_due_day' => 20]],
+            ['EACH-DISTINCT-OCCUPATION', RevenueCodeProvisionClauseType::SeparateEstablishment, 'The permit fee is payable for every separate or distinct occupation or calling engaged in.', 'Candidate unit: one fee for each distinct occupation or calling practiced by a person.', 'Occupation equivalence, combined labels, concurrent or sequential work, employer count, period, additions, removals, and duplicate charging require classification policy.', ['candidate_charge_unit' => 'person_distinct_occupation']],
+            ['EMPLOYER-ADVANCE', RevenueCodeProvisionClauseType::PaymentTiming, 'Employer shall advance the fees to the Municipality for its employees.', 'Candidate payer boundary: the employer advances employee Article M fees to the Municipality.', 'Legal liability, payroll recovery, consent, multiple employers, direct employee payment, new hires, refunds, termination, receipt ownership, and accounting require accepted labor and Treasury procedure.', ['candidate_advancing_party' => 'employer']],
+            ['CALLING-ID', RevenueCodeProvisionClauseType::RateBand, 'LGU Calling ID shall be secured from the Licensing Office after approval of the Mayor’s Permit for Twenty-Five Pesos (25.00), valid for one year, paid at the Municipal Treasurer.', 'Candidate Calling ID: after permit approval, collect PHP 25.00 through Treasury for a one-year licensing-office ID.', 'Permit approval and ID issuance sequence, person and occupation identity, one ID per permit or person, validity start, replacement, lamination overlap, payer, receipt, renewal, and accepted amount require reconciliation.', ['candidate_issuing_office' => 'Licensing Office', 'candidate_collector' => 'Municipal Treasurer', 'candidate_validity_years' => 1], 2_500],
+        ]);
+
+        $this->persistArticleMClauses('MRC-3M-05-LATE-CHANGES-RENEWAL', [
+            ['LATE-SURCHARGE', RevenueCodeProvisionClauseType::SurchargeInterest, 'Failure to pay within the prescribed time shall subject a taxpayer to a surcharge of Twenty-five percent (25%) of the original amount of late payment.', 'Candidate late surcharge: 25 percent of the original late amount.', 'Taxpayer versus permittee or employer liability, original amount, trigger date, partial payment, rounding, waiver, correction, and authority require financial reconciliation.', ['candidate_surcharge_percent' => '25.00']],
+            ['MONTHLY-PENALTY', RevenueCodeProvisionClauseType::SurchargeInterest, 'Failure to pay within the prescribed time shall subject a taxpayer to a penalty of 2% monthly but not exceed 36 months.', 'Candidate monthly addition: two percent per month capped at 36 months.', 'The source calls this a penalty, not interest. Accrual start, full or partial month, compounding, base amount, cap application, surcharge interaction, payment allocation, rounding, waiver, and current authority require reconciliation.', ['candidate_monthly_percent' => '2.00', 'candidate_maximum_months' => 36, 'source_term' => 'penalty']],
+            ['OWNERSHIP-LOCATION-NEW-PERMIT', RevenueCodeProvisionClauseType::LocationTransfer, 'On change of business ownership or location from one municipality to another, the new owner, agent or manager shall secure a new permit and pay as though it were new business.', 'Candidate boundary: stated ownership or inter-municipal location change requires a new Article M permit and fee.', 'Article M person permit versus business ownership grammar, intramunicipal change, employee continuity, new owner or agent liability, effective date, cancellation, and duplicate payment require reconciliation.', ['candidate_triggers' => ['business_ownership_change', 'inter_municipal_location_change']]],
+            ['NEW-HIRE-IMMEDIATE-PERMIT', RevenueCodeProvisionClauseType::PermitRequirement, 'Newly hired workers and employees shall secure their individual Mayor’s Permit from the moment they are actually accepted by management to start working.', 'Candidate timing: a newly accepted worker must obtain the permit at the employment-start boundary.', 'Offer acceptance versus first work, probation, pre-employment, temporary and agency staff, employer responsibility, grace period, evidence, and enforcement require policy.', ['candidate_trigger' => 'accepted_by_management_to_start_work']],
+            ['BIRTH-MONTH-RENEWAL', RevenueCodeProvisionClauseType::PaymentTiming, 'The individual Mayor’s Permit shall be renewed during the permittee’s birth month next following calendar.', 'Candidate renewal timing: renewal occurs in the permittee’s next birth month.', 'This conflicts with the January 20 annual deadline. Initial permit date, calendar-year meaning, birth month, leap dates, validity, proration, late charge, and transition require authoritative reconciliation.', ['candidate_renewal_basis' => 'birth_month', 'known_timing_conflict' => 'section_3m_04_january_20']],
+        ]);
+
+        $this->persistArticleMClauses('MRC-3M-06-ADMINISTRATION', [
+            ['BPLO-REGISTER', RevenueCodeProvisionClauseType::RecordRetention, 'The Business Permit and Licensing Office shall keep a record of persons engaged in occupations or callings not requiring government examination and corresponding payment of fees under personal data for reference.', 'Candidate registry: BPLO links person, occupation or calling, permit, and fee-payment evidence.', 'Required personal fields, lawful purpose, occupation history, employer, permit and receipt identity, corrections, duplicate detection, access, privacy, retention, reporting, and migration require accepted procedure.', ['candidate_registry_authority' => 'BPLO', 'candidate_registry_subject' => 'occupational_calling_permittees']],
+            ['RETIREMENT-SURRENDER-CANCEL', RevenueCodeProvisionClauseType::PermitCancellation, 'On retirement or cessation, a person with a valid Mayor’s Permit shall surrender the permit and corresponding Official Receipt to the Municipal Treasurer and Municipal Mayor respectively for cancellation.', 'Candidate closure boundary: retirement or cessation requires surrender of the permit and receipt to the stated authorities for cancellation.', 'The “respectively” mapping is unclear. Retirement and cessation evidence, effective date, surrender when lost, Treasurer-versus-Mayor custody, cancellation authority, fee and refund effect, record retention, and re-entry require reconciliation.', ['candidate_trigger' => ['retirement', 'cessation'], 'known_respectively_mapping_ambiguity' => true]],
+        ]);
+    }
+
+    /**
+     * @param  array<int, array{0: string, 1: RevenueCodeProvisionClauseType, 2: string, 3: string, 4: string, 5: array<string, mixed>, 6?: int}>  $clauses
+     */
+    private function persistArticleMClauses(string $provisionCode, array $clauses): void
+    {
+        $this->persistPolicyBoundaryClauses($provisionCode, array_map(
+            fn (array $clause, int $index): array => $this->policyBoundaryClause(
+                sequence: $index + 1,
+                code: $provisionCode.'-'.$clause[0],
+                type: $clause[1],
+                sourceText: $clause[2],
+                candidateInterpretation: $clause[3],
+                executionBlocker: $clause[4],
+                metadata: $clause[5],
+                amountCents: $clause[6] ?? null,
+            ),
+            $clauses,
+            array_keys($clauses),
+        ));
+    }
+
+    /** @return array<string, mixed> */
+    private function occupationalCallingFeeClause(int $sequence, string $occupation): array
+    {
+        $code = Str::of($occupation)
+            ->ascii()
+            ->upper()
+            ->replaceMatches('/[^A-Z0-9]+/', '-')
+            ->trim('-')
+            ->toString();
+
+        return $this->policyBoundaryClause(
+            sequence: $sequence,
+            code: 'MRC-3M-01-'.$code,
+            type: RevenueCodeProvisionClauseType::RateBand,
+            sourceText: $occupation.' - 100.00.',
+            candidateInterpretation: 'Candidate source amount: PHP 100.00 annually for a person classified under “'.$occupation.'”.',
+            executionBlocker: 'Person, occupation, government-examination boundary, territorial practice, employment and employer identity, annual period, multiple occupations, exemptions, permit and ID relationship, payer, collector, receipt, and accepted operational amount require reconciliation.',
+            metadata: ['candidate_occupation' => $occupation, 'candidate_frequency' => 'annual', 'candidate_charge_unit' => 'person_occupation'],
+            amountCents: 10_000,
+        );
     }
 
     /**

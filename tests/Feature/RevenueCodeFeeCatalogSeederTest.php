@@ -58,7 +58,7 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
     expect(FeeRuleRange::query()->whereBelongsTo($retailTax)->count())->toBe(23);
     expect(FeeRuleReconciliation::query()->count())->toBe(4);
 
-    expect(RevenueCodeProvision::query()->count())->toBe(102)
+    expect(RevenueCodeProvision::query()->count())->toBe(108)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2A.02%')->count())->toBe(8)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2B.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2C.%')->count())->toBe(2)
@@ -75,8 +75,9 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3J.%')->count())->toBe(2)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3K.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3L.%')->count())->toBe(21)
+        ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3M.%')->count())->toBe(6)
         ->and(RevenueCodeProvision::query()->whereNotNull('fee_rule_id')->count())->toBe(4)
-        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(101);
+        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(107);
 
     $wholesaleProvision = RevenueCodeProvision::query()
         ->with('feeRule.currentReconciliation')
@@ -153,10 +154,10 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->metadata->known_ambiguities->toContain('legacy_implementation_not_found');
 
     expect(RevenueCodeProvisionRow::query()->count())->toBe(82);
-    expect(RevenueCodeProvisionClause::query()->count())->toBe(498)
+    expect(RevenueCodeProvisionClause::query()->count())->toBe(593)
         ->and(RevenueCodeProvisionClause::query()
             ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
-            ->count())->toBe(498);
+            ->count())->toBe(593);
 
     $dependentRate = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2A-02-C-DEPENDENT-HALF-RATE')
@@ -936,6 +937,51 @@ it('preserves MTOP foundation operating policy and enforcement as non executable
             ->whereHas('provision', fn ($query) => $query->where('section_reference', 'like', 'Section 3L.%'))
             ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
             ->count())->toBe(73);
+});
+
+it('preserves occupational calling permits fees and administration as non executable ordinance evidence', function () {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+
+    $scope = RevenueCodeProvisionClause::query()->where('code', 'MRC-3M-01-ANNUAL-PERSON-OCCUPATION-SCOPE')->sole();
+    $actuary = RevenueCodeProvisionClause::query()->where('code', 'MRC-3M-01-ACTUARY')->sole();
+    $nonPrcTeacher = RevenueCodeProvisionClause::query()->where('code', 'MRC-3M-01-NON-PRC-PASSER-TEACHER-INSTRUCTOR')->sole();
+    $catchAll = RevenueCodeProvisionClause::query()->where('code', 'MRC-3M-01-OTHERS-NOT-SPECIFIED-ABOVE')->sole();
+    $professionalExemption = RevenueCodeProvisionClause::query()->where('code', 'MRC-3M-02-EXEMPTIONS-PROVINCIAL-PROFESSIONAL-TAX')->sole();
+    $minimumAge = RevenueCodeProvisionClause::query()->where('code', 'MRC-3M-03-PERSONS-GOVERNED-MINIMUM-AGE')->sole();
+    $callingId = RevenueCodeProvisionClause::query()->where('code', 'MRC-3M-04-PAYMENT-TIMING-CALLING-ID')->sole();
+    $monthlyPenalty = RevenueCodeProvisionClause::query()->where('code', 'MRC-3M-05-LATE-CHANGES-RENEWAL-MONTHLY-PENALTY')->sole();
+    $birthMonthRenewal = RevenueCodeProvisionClause::query()->where('code', 'MRC-3M-05-LATE-CHANGES-RENEWAL-BIRTH-MONTH-RENEWAL')->sole();
+    $registry = RevenueCodeProvisionClause::query()->where('code', 'MRC-3M-06-ADMINISTRATION-BPLO-REGISTER')->sole();
+    $cancellation = RevenueCodeProvisionClause::query()->where('code', 'MRC-3M-06-ADMINISTRATION-RETIREMENT-SURRENDER-CANCEL')->sole();
+
+    expect($scope)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::PermitRequirement)
+        ->metadata->candidate_frequency->toBe('annual')
+        ->metadata->candidate_values_are_non_executable->toBeTrue()
+        ->and($actuary->amount_cents)->toBe(10_000)
+        ->and($actuary->metadata['candidate_charge_unit'])->toBe('person_occupation')
+        ->and($nonPrcTeacher->amount_cents)->toBe(10_000)
+        ->and($catchAll->metadata['candidate_occupation'])->toBe('Others not specified above')
+        ->and($professionalExemption->clause_type)->toBe(RevenueCodeProvisionClauseType::Exemption)
+        ->and($professionalExemption->metadata['external_legal_reference'])->toBe('Local Government Code Section 139')
+        ->and($minimumAge->metadata['candidate_minimum_age'])->toBe(18)
+        ->and($callingId->amount_cents)->toBe(2_500)
+        ->and($callingId->metadata['candidate_validity_years'])->toBe(1)
+        ->and($monthlyPenalty->metadata['candidate_monthly_percent'])->toBe('2.00')
+        ->and($monthlyPenalty->metadata['candidate_maximum_months'])->toBe(36)
+        ->and($birthMonthRenewal->metadata['known_timing_conflict'])->toBe('section_3m_04_january_20')
+        ->and($registry->clause_type)->toBe(RevenueCodeProvisionClauseType::RecordRetention)
+        ->and($registry->metadata['candidate_registry_authority'])->toBe('BPLO')
+        ->and($cancellation->clause_type)->toBe(RevenueCodeProvisionClauseType::PermitCancellation)
+        ->and($cancellation->metadata['known_respectively_mapping_ambiguity'])->toBeTrue();
+
+    expect(RevenueCodeProvisionClause::query()
+        ->whereHas('provision', fn ($query) => $query->where('section_reference', 'like', 'Section 3M.%'))
+        ->count())->toBe(95)
+        ->and(RevenueCodeProvisionClause::query()
+            ->whereHas('provision', fn ($query) => $query->where('section_reference', 'like', 'Section 3M.%'))
+            ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
+            ->count())->toBe(95);
 });
 
 it('preserves dispensing pump requirements fees and sanctions as non executable ordinance evidence', function () {
