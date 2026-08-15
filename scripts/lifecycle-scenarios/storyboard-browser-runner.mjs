@@ -536,6 +536,9 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
         'citizen-authority-review-boundary',
     );
     const artifact = targetPage.getByTestId('citizen-permit-artifact');
+    const paymentDetailLink = targetPage.getByTestId(
+        'citizen-payment-detail-link',
+    );
     const verificationLink = targetPage.getByTestId(
         'citizen-permit-artifact-verification-link',
     );
@@ -545,6 +548,7 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
     await clearances.waitFor();
     await authority.waitFor();
     await artifact.waitFor();
+    await paymentDetailLink.waitFor();
     await verificationLink.waitFor();
     await timeline.waitFor();
 
@@ -610,6 +614,10 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
             (await artifact.getAttribute(
                 'data-can-make-legally-effective',
             )) === 'true',
+        payment_detail_url: new URL(
+            await paymentDetailLink.getAttribute('href'),
+            targetBaseUrl,
+        ).pathname,
         timeline_event_count: timelineEventKeys.length,
         timeline_event_keys: timelineEventKeys,
     };
@@ -636,6 +644,7 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
         can_issue: manifest.resources.can_issue,
         can_make_legally_effective:
             manifest.resources.can_make_legally_effective,
+        payment_detail_url: manifest.resources.payment_detail_url,
         timeline_event_count:
             manifest.resources.citizen_timeline_event_count,
         timeline_event_keys: manifest.resources.citizen_timeline_event_keys,
@@ -755,6 +764,154 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
         'browser/screenshots/05-citizen-authority-review-mobile.png',
     );
 
+    const paymentDetailUrl = `${targetBaseUrl}${manifest.resources.payment_detail_url}`;
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+    await targetPage.goto(paymentDetailUrl, { waitUntil: 'networkidle' });
+    const paymentDetail = targetPage.getByTestId('citizen-payment-detail');
+    const paymentPolicy = targetPage.getByTestId(
+        'citizen-payment-policy-boundary',
+    );
+    const onlinePaymentPolicy = targetPage.getByTestId(
+        'citizen-online-payment-detail-boundary',
+    );
+    const paymentReceipt = targetPage.getByTestId('citizen-payment-receipt');
+    await paymentDetail.waitFor();
+    await paymentPolicy.waitFor();
+    await onlinePaymentPolicy.waitFor();
+    await paymentReceipt.waitFor();
+
+    const paymentLineCodes = await targetPage
+        .getByTestId('citizen-payment-line')
+        .evaluateAll((elements) =>
+            elements.map((element) => element.getAttribute('data-line-code')),
+        );
+    const paymentCollectionCount = await targetPage
+        .getByTestId('citizen-payment-collection')
+        .count();
+    const paymentAllocationCount = await targetPage
+        .getByTestId('citizen-payment-allocation')
+        .count();
+    const paymentEvidence = {
+        payment_schedule_id: Number(
+            await paymentDetail.getAttribute('data-payment-schedule-id'),
+        ),
+        payment_schedule_status: await paymentDetail.getAttribute(
+            'data-payment-status',
+        ),
+        payment_total_amount_cents: Number(
+            await paymentDetail.getAttribute('data-payment-total-cents'),
+        ),
+        payment_paid_amount_cents: Number(
+            await paymentDetail.getAttribute('data-payment-paid-cents'),
+        ),
+        payment_balance_amount_cents: Number(
+            await paymentDetail.getAttribute('data-payment-balance-cents'),
+        ),
+        payment_line_count: paymentLineCodes.length,
+        payment_line_codes: paymentLineCodes,
+        payment_collection_count: paymentCollectionCount,
+        payment_allocation_count: paymentAllocationCount,
+        receipt_number: await paymentReceipt.getAttribute(
+            'data-receipt-number',
+        ),
+        payment_policy_status:
+            await paymentPolicy.getAttribute('data-policy-status'),
+        can_split_installments:
+            (await paymentPolicy.getAttribute(
+                'data-can-split-installments',
+            )) === 'true',
+        online_payment_status: await onlinePaymentPolicy.getAttribute(
+            'data-online-payment-status',
+        ),
+        can_pay_online:
+            (await onlinePaymentPolicy.getAttribute(
+                'data-can-pay-online',
+            )) === 'true',
+        can_reconcile_online:
+            (await onlinePaymentPolicy.getAttribute(
+                'data-can-reconcile-online',
+            )) === 'true',
+        payment_detail_action_visible: await targetPage
+            .getByRole('button', {
+                name: /pay online|make payment|record payment/i,
+            })
+            .isVisible()
+            .catch(() => false),
+        receipt_download_visible: await targetPage
+            .getByRole('link', { name: /download receipt|receipt pdf/i })
+            .isVisible()
+            .catch(() => false),
+    };
+    const expectedPaymentEvidence = {
+        payment_schedule_id: manifest.resources.payment_schedule_id,
+        payment_schedule_status: manifest.resources.payment_schedule_status,
+        payment_total_amount_cents:
+            manifest.resources.payment_total_amount_cents,
+        payment_paid_amount_cents:
+            manifest.resources.payment_paid_amount_cents,
+        payment_balance_amount_cents:
+            manifest.resources.payment_balance_amount_cents,
+        payment_line_count: manifest.resources.payment_line_count,
+        payment_line_codes: manifest.resources.payment_line_codes,
+        payment_collection_count: manifest.resources.payment_collection_count,
+        payment_allocation_count: manifest.resources.payment_allocation_count,
+        receipt_number: manifest.resources.receipt_number,
+        payment_policy_status: manifest.resources.payment_policy_status,
+        can_split_installments: manifest.resources.can_split_installments,
+        online_payment_status: manifest.resources.online_payment_status,
+        can_pay_online: manifest.resources.can_pay_online,
+        can_reconcile_online: manifest.resources.can_reconcile_online,
+        payment_detail_action_visible: false,
+        receipt_download_visible: false,
+    };
+    Object.assign(citizenAuthorityReviewEvidence, paymentEvidence);
+    checks.push(
+        check(
+            'citizen-payment-detail-matches-canonical',
+            'Citizen payment detail matches the exact canonical schedule, allocation, receipt, and policy evidence',
+            expectedPaymentEvidence,
+            paymentEvidence,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '06-citizen-payment-detail',
+        'browser/screenshots/06-citizen-payment-detail.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(paymentDetailUrl, { waitUntil: 'networkidle' });
+    const mobilePaymentDetailVisible = await targetPage
+        .getByTestId('citizen-payment-detail')
+        .isVisible();
+    const mobilePaymentReceiptVisible = await targetPage
+        .getByTestId('citizen-payment-receipt')
+        .isVisible();
+    const mobilePaymentOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+    checks.push(
+        check(
+            'citizen-payment-detail-mobile-visible',
+            'Mobile payment detail keeps authoritative schedule evidence visible',
+            true,
+            mobilePaymentDetailVisible && mobilePaymentReceiptVisible,
+        ),
+        check(
+            'citizen-payment-detail-mobile-no-horizontal-overflow',
+            'Mobile payment detail has no page-level horizontal overflow',
+            false,
+            mobilePaymentOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '07-citizen-payment-detail-mobile',
+        'browser/screenshots/07-citizen-payment-detail-mobile.png',
+    );
+
     const publicVerificationUrl = `${targetBaseUrl}${manifest.resources.permit_verification_view_url}`;
     await targetPage.setViewportSize({ width: 1440, height: 900 });
     await targetPage.goto(publicVerificationUrl, { waitUntil: 'networkidle' });
@@ -814,8 +971,8 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
     );
     await screenshot(
         targetPage,
-        '06-citizen-public-artifact-verification',
-        'browser/screenshots/06-citizen-public-artifact-verification.png',
+        '08-citizen-public-artifact-verification',
+        'browser/screenshots/08-citizen-public-artifact-verification.png',
     );
 
     await targetPage.setViewportSize({ width: 390, height: 844 });
@@ -846,8 +1003,8 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
     );
     await screenshot(
         targetPage,
-        '07-citizen-public-artifact-verification-mobile',
-        'browser/screenshots/07-citizen-public-artifact-verification-mobile.png',
+        '09-citizen-public-artifact-verification-mobile',
+        'browser/screenshots/09-citizen-public-artifact-verification-mobile.png',
     );
 }
 

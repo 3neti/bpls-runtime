@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Citizen\PaymentScheduleController as CitizenPaymentScheduleController;
 use App\Http\Controllers\Citizen\PermitApplicationController as CitizenPermitApplicationController;
 use App\Http\Controllers\Citizen\PermitApplicationDocumentController as CitizenPermitApplicationDocumentController;
 use App\Http\Controllers\PublicPermitVerificationController;
@@ -37,6 +38,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.documents.store');
         Route::get('permit-applications/{permitApplication}/documents/{document}/download', [CitizenPermitApplicationDocumentController::class, 'download'])
             ->name('permit-applications.documents.download');
+        Route::get('payment-schedules/{paymentSchedule}', [CitizenPaymentScheduleController::class, 'show'])
+            ->name('payment-schedules.show');
     });
 
     Route::prefix('staff')->name('staff.')->middleware('can:staff.access')->group(function () {

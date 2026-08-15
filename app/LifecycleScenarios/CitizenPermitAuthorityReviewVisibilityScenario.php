@@ -8,6 +8,7 @@ use App\Actions\CompletePermitClearance;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\CreatePermitApplication;
+use App\Actions\DescribeCitizenPaymentSchedule;
 use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Actions\DescribePermitArtifact;
 use App\Actions\DescribePermitReleaseReadiness;
@@ -44,6 +45,7 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
         private readonly IssueManualCollectionReceipt $issueReceipt,
         private readonly CompletePermitClearance $completeClearance,
         private readonly AttemptPermitApplicationRelease $attemptRelease,
+        private readonly DescribeCitizenPaymentSchedule $describeCitizenPaymentSchedule,
         private readonly DescribePermitArtifact $describePermitArtifact,
         private readonly DescribePermitReleaseReadiness $describeReleaseReadiness,
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
@@ -133,6 +135,7 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
         $collection->refresh();
         $receipt->refresh();
         $releaseReadiness = $this->describeReleaseReadiness->handle($permitApplication);
+        $citizenPaymentSchedule = $this->describeCitizenPaymentSchedule->handle($paymentSchedule);
         $permitArtifact = $this->describePermitArtifact->handle($permitApplication);
         $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
         $timeline = $this->buildPermitApplicationTimeline->handle($permitApplication);
@@ -219,6 +222,25 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
                 'status' => $onlinePaymentBoundary['status'],
                 'can_pay_online' => $onlinePaymentBoundary['can_pay_online'],
             ]),
+            $this->step('citizen-payment-evidence-projected', 'Project exact persisted schedule, allocation, and receipt evidence without payment mutations', [
+                'payment_schedule_id' => $paymentSchedule->id,
+                'lines_present' => true,
+                'collection_count' => 1,
+                'allocations_cover_all_lines' => true,
+                'receipt_number' => $receipt->receipt_number,
+                'can_pay_online' => false,
+                'can_reconcile_online' => false,
+            ], [
+                'payment_schedule_id' => $citizenPaymentSchedule['id'],
+                'lines_present' => $citizenPaymentSchedule['lines']->isNotEmpty(),
+                'line_count' => $citizenPaymentSchedule['lines']->count(),
+                'collection_count' => $citizenPaymentSchedule['collections']->count(),
+                'allocations_cover_all_lines' => $citizenPaymentSchedule['collections']->sum(fn (array $item): int => $item['allocations']->count()) === $citizenPaymentSchedule['lines']->count(),
+                'allocation_count' => $citizenPaymentSchedule['collections']->sum(fn (array $item): int => $item['allocations']->count()),
+                'receipt_number' => data_get($citizenPaymentSchedule, 'collections.0.receipt.receipt_number'),
+                'can_pay_online' => $citizenPaymentSchedule['online_payment_boundary']['can_pay_online'],
+                'can_reconcile_online' => $citizenPaymentSchedule['online_payment_boundary']['can_reconcile_online'],
+            ], 'applicant'),
             $this->step('citizen-authority-timeline-projected', 'Project the complete authoritative journey for citizen review', [
                 'event_keys' => $timelineKeys,
             ], [
@@ -264,10 +286,18 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
             'can_make_legally_effective' => $permitArtifact['can_make_legally_effective'],
             'online_payment_status' => $onlinePaymentBoundary['status'],
             'can_pay_online' => $onlinePaymentBoundary['can_pay_online'],
+            'can_reconcile_online' => $onlinePaymentBoundary['can_reconcile_online'],
+            'payment_line_count' => $citizenPaymentSchedule['lines']->count(),
+            'payment_line_codes' => $citizenPaymentSchedule['lines']->pluck('code')->all(),
+            'payment_collection_count' => $citizenPaymentSchedule['collections']->count(),
+            'payment_allocation_count' => $citizenPaymentSchedule['collections']->sum(fn (array $item): int => $item['allocations']->count()),
+            'payment_policy_status' => $citizenPaymentSchedule['payment_policy_boundary']['status'],
+            'can_split_installments' => $citizenPaymentSchedule['payment_policy_boundary']['can_split_installments'],
             'citizen_timeline_event_count' => count($timelineKeys),
             'citizen_timeline_event_keys' => $timelineKeys,
             'list_url' => route('citizen.permit-applications.index', absolute: false),
             'detail_url' => route('citizen.permit-applications.show', $permitApplication, false),
+            'payment_detail_url' => route('citizen.payment-schedules.show', $paymentSchedule, false),
         ];
         $manifest['steps'] = $steps;
         $manifest['result']['terminal'] = collect($steps)->every(fn (array $step): bool => $step['passed']) ? 'passed' : 'failed';
@@ -289,6 +319,7 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
             ])->values()->all(),
             'release_readiness' => $releaseReadiness,
             'permit_artifact' => collect($permitArtifact)->except('permit_pdf_url')->all(),
+            'citizen_payment_schedule' => $citizenPaymentSchedule,
             'online_payment_boundary' => $onlinePaymentBoundary,
             'timeline' => $timeline,
             'run_id' => $runId,
@@ -320,6 +351,7 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
         $collection = TreasuryCollection::query()->findOrFail($manifest['resources']['collection_id']);
         $receipt = Receipt::query()->findOrFail($manifest['resources']['receipt_id']);
         $releaseReadiness = $this->describeReleaseReadiness->handle($permitApplication);
+        $citizenPaymentSchedule = $this->describeCitizenPaymentSchedule->handle($paymentSchedule);
         $permitArtifact = $this->describePermitArtifact->handle($permitApplication);
         $timelineKeys = collect($this->buildPermitApplicationTimeline->handle($permitApplication))->pluck('key')->all();
         $browserReport = $artifactStore->readJson('browser/report.json') ?? ['result' => ['passed' => false]];
@@ -353,6 +385,15 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
             'permit_verification_view_url' => parse_url($permitArtifact['verification_view_url'], PHP_URL_PATH),
             'can_issue' => $permitArtifact['can_issue'],
             'can_make_legally_effective' => $permitArtifact['can_make_legally_effective'],
+            'payment_line_count' => $citizenPaymentSchedule['lines']->count(),
+            'payment_line_codes' => $citizenPaymentSchedule['lines']->pluck('code')->all(),
+            'payment_collection_count' => $citizenPaymentSchedule['collections']->count(),
+            'payment_allocation_count' => $citizenPaymentSchedule['collections']->sum(fn (array $item): int => $item['allocations']->count()),
+            'payment_policy_status' => $citizenPaymentSchedule['payment_policy_boundary']['status'],
+            'can_split_installments' => $citizenPaymentSchedule['payment_policy_boundary']['can_split_installments'],
+            'online_payment_status' => $citizenPaymentSchedule['online_payment_boundary']['status'],
+            'can_pay_online' => $citizenPaymentSchedule['online_payment_boundary']['can_pay_online'],
+            'can_reconcile_online' => $citizenPaymentSchedule['online_payment_boundary']['can_reconcile_online'],
             'timeline_event_count' => count($timelineKeys),
             'timeline_event_keys' => $timelineKeys,
         ];
@@ -404,6 +445,25 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
             $this->step('audit-browser-timeline', 'Citizen browser shows every canonical event in order', [
                 'timeline_event_count' => count($timelineKeys),
                 'timeline_event_keys' => $timelineKeys,
+            ], data_get($browserReport, 'citizen_authority_review', [])),
+            $this->step('audit-browser-payment-evidence', 'Citizen payment detail agrees with persisted schedule, allocation, receipt, and policy evidence', [
+                'receipt_number' => $canonical['receipt_number'],
+                'payment_schedule_id' => $canonical['payment_schedule_id'],
+                'payment_schedule_status' => $canonical['payment_schedule_status'],
+                'payment_total_amount_cents' => $canonical['payment_total_amount_cents'],
+                'payment_paid_amount_cents' => $canonical['payment_paid_amount_cents'],
+                'payment_balance_amount_cents' => $canonical['payment_balance_amount_cents'],
+                'payment_line_count' => $canonical['payment_line_count'],
+                'payment_line_codes' => $canonical['payment_line_codes'],
+                'payment_collection_count' => $canonical['payment_collection_count'],
+                'payment_allocation_count' => $canonical['payment_allocation_count'],
+                'payment_policy_status' => 'policy_boundary',
+                'can_split_installments' => false,
+                'online_payment_status' => 'blocked',
+                'can_pay_online' => false,
+                'can_reconcile_online' => false,
+                'payment_detail_action_visible' => false,
+                'receipt_download_visible' => false,
             ], data_get($browserReport, 'citizen_authority_review', [])),
             $this->step('audit-browser-artifact-identity', 'Citizen browser and public page agree with the canonical artifact-only identity', [
                 'can_release' => false,
@@ -538,6 +598,12 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
                     'title' => 'Citizen sees the authority boundary',
                     'description' => 'The application is ready for human authority review while issuance, release, and legal effect remain unresolved.',
                     'dialogue' => 'The software reports readiness and refuses release.',
+                    'duration_seconds' => 5,
+                ],
+                [
+                    'title' => 'Citizen reviews exact payment evidence',
+                    'description' => 'The citizen opens the exact owned payment schedule and reviews persisted assessed lines, collection allocation, and receipt identity.',
+                    'dialogue' => 'The page reports what Treasury recorded without executing payment or reconciliation.',
                     'duration_seconds' => 5,
                 ],
                 [

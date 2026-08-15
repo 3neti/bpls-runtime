@@ -37,6 +37,8 @@ final class LifecycleScenarioRegistry
                     'can_release' => false,
                     'permit_artifact_status' => 'generated_artifact_available',
                     'public_verification_status' => 'artifact_only',
+                    'citizen_payment_detail' => 'read_only',
+                    'can_reconcile_online' => false,
                     'online_payment_status' => 'blocked',
                     'browser_is_read_only' => true,
                     'external_calls' => 0,

@@ -15,6 +15,7 @@ import {
     ShieldCheck,
     Upload,
 } from '@lucide/vue';
+import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Citizen/PaymentScheduleController';
 import {
     create,
     edit,
@@ -419,24 +420,40 @@ function documentBoundaryError(): string | undefined {
                     "
                     class="grid gap-4"
                 >
-                    <div class="flex items-start gap-2">
-                        <Banknote class="mt-0.5 size-4 text-muted-foreground" />
-                        <div>
-                            <h3 class="text-sm font-semibold text-foreground">
-                                Payment status
-                            </h3>
-                            <p class="text-xs text-muted-foreground">
-                                Schedule #{{
-                                    permitApplication.processing
-                                        .payment_schedule.sequence
-                                }}
-                                ·
-                                {{
-                                    permitApplication.processing
-                                        .payment_schedule.payment_mode
-                                }}
-                            </p>
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div class="flex items-start gap-2">
+                            <Banknote class="mt-0.5 size-4 text-muted-foreground" />
+                            <div>
+                                <h3 class="text-sm font-semibold text-foreground">
+                                    Payment status
+                                </h3>
+                                <p class="text-xs text-muted-foreground">
+                                    Schedule #{{
+                                        permitApplication.processing
+                                            .payment_schedule.sequence
+                                    }}
+                                    ·
+                                    {{
+                                        permitApplication.processing
+                                            .payment_schedule.payment_mode
+                                    }}
+                                </p>
+                            </div>
                         </div>
+                        <Button as-child variant="outline" size="sm">
+                            <Link
+                                data-testid="citizen-payment-detail-link"
+                                :href="
+                                    paymentScheduleShow(
+                                        permitApplication.processing
+                                            .payment_schedule.id,
+                                    )
+                                "
+                            >
+                                <Banknote />
+                                Payment details
+                            </Link>
+                        </Button>
                     </div>
                     <dl class="grid gap-3 text-sm sm:grid-cols-4">
                         <div>

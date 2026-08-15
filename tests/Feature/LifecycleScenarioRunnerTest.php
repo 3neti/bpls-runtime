@@ -108,6 +108,8 @@ test('scenario registry discovers the citizen permit authority review visibility
         ->and($scenario->expectations['can_release'])->toBeFalse()
         ->and($scenario->expectations['permit_artifact_status'])->toBe('generated_artifact_available')
         ->and($scenario->expectations['public_verification_status'])->toBe('artifact_only')
+        ->and($scenario->expectations['citizen_payment_detail'])->toBe('read_only')
+        ->and($scenario->expectations['can_reconcile_online'])->toBeFalse()
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
@@ -771,6 +773,22 @@ test('citizen permit authority review scenario composes domain actions idempoten
             'public_page_visible' => true,
             'public_page_can_verify_release' => false,
             'public_page_released' => false,
+            'payment_schedule_id' => $firstManifest['resources']['payment_schedule_id'],
+            'payment_schedule_status' => $firstManifest['resources']['payment_schedule_status'],
+            'payment_total_amount_cents' => $firstManifest['resources']['payment_total_amount_cents'],
+            'payment_paid_amount_cents' => $firstManifest['resources']['payment_paid_amount_cents'],
+            'payment_balance_amount_cents' => $firstManifest['resources']['payment_balance_amount_cents'],
+            'payment_line_count' => $firstManifest['resources']['payment_line_count'],
+            'payment_line_codes' => $firstManifest['resources']['payment_line_codes'],
+            'payment_collection_count' => $firstManifest['resources']['payment_collection_count'],
+            'payment_allocation_count' => $firstManifest['resources']['payment_allocation_count'],
+            'payment_policy_status' => $firstManifest['resources']['payment_policy_status'],
+            'can_split_installments' => false,
+            'online_payment_status' => 'blocked',
+            'can_pay_online' => false,
+            'can_reconcile_online' => false,
+            'payment_detail_action_visible' => false,
+            'receipt_download_visible' => false,
         ],
         'checks' => [],
         'artifacts' => [
@@ -800,6 +818,14 @@ test('citizen permit authority review scenario composes domain actions idempoten
         ->and($firstManifest['resources'])->not->toHaveKey('permit_pdf_url')
         ->and($firstManifest['resources']['can_issue'])->toBeFalse()
         ->and($firstManifest['resources']['can_make_legally_effective'])->toBeFalse()
+        ->and($firstManifest['resources']['payment_detail_url'])->toBe('/citizen/payment-schedules/'.$firstManifest['resources']['payment_schedule_id'])
+        ->and($firstManifest['resources']['payment_line_count'])->toBe(1)
+        ->and($firstManifest['resources']['payment_line_codes'])->toBe(['SCENARIO-CITIZEN-AUTHORITY-FEE'])
+        ->and($firstManifest['resources']['payment_collection_count'])->toBe(1)
+        ->and($firstManifest['resources']['payment_allocation_count'])->toBe(1)
+        ->and($firstManifest['resources']['payment_policy_status'])->toBe('policy_boundary')
+        ->and($firstManifest['resources']['can_split_installments'])->toBeFalse()
+        ->and($firstManifest['resources']['can_reconcile_online'])->toBeFalse()
         ->and($firstManifest['resources']['citizen_timeline_event_count'])->toBe(10)
         ->and($firstManifest['resources']['citizen_timeline_event_keys'])->toBe($expectedTimelineKeys)
         ->and(PermitApplication::query()->count())->toBe(1)
@@ -812,6 +838,7 @@ test('citizen permit authority review scenario composes domain actions idempoten
         ->and($audit['canonical']['can_release'])->toBeFalse()
         ->and($audit['canonical']['permit_verification_reference'])->toBe($firstManifest['resources']['permit_verification_reference'])
         ->and(collect($audit['checks'])->firstWhere('key', 'audit-browser-artifact-identity')['passed'])->toBeTrue()
+        ->and(collect($audit['checks'])->firstWhere('key', 'audit-browser-payment-evidence')['passed'])->toBeTrue()
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
 
@@ -1126,6 +1153,10 @@ test('command prepares the citizen permit authority review visibility scenario',
         ->and($manifest['resources']['can_release'])->toBeFalse()
         ->and($manifest['resources']['permit_artifact_status'])->toBe('generated_artifact_available')
         ->and($manifest['resources']['permit_verification_status'])->toBe('artifact_only')
+        ->and($manifest['resources']['payment_detail_url'])->toBe('/citizen/payment-schedules/'.$manifest['resources']['payment_schedule_id'])
+        ->and($manifest['resources']['payment_line_count'])->toBe(1)
+        ->and($manifest['resources']['payment_collection_count'])->toBe(1)
+        ->and($manifest['resources']['can_reconcile_online'])->toBeFalse()
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
 });
 
