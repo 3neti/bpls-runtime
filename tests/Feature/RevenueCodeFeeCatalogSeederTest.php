@@ -6,6 +6,7 @@ use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleExecutionStatus;
 use App\Enums\FeeRuleScope;
 use App\Enums\PermitApplicationType;
+use App\Enums\RevenueCodeProvisionStatus;
 use App\Exceptions\UnsupportedAssessmentPolicy;
 use App\Models\FeeRule;
 use App\Models\FeeRuleRange;
@@ -13,6 +14,7 @@ use App\Models\FeeRuleReconciliation;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
+use App\Models\RevenueCodeProvision;
 use Database\Seeders\RevenueCodeFeeCatalogSeeder;
 
 it('seeds a deterministic revenue code fee catalog foundation with legal provenance', function () {
@@ -52,6 +54,32 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
 
     expect(FeeRuleRange::query()->whereBelongsTo($retailTax)->count())->toBe(23);
     expect(FeeRuleReconciliation::query()->count())->toBe(4);
+
+    expect(RevenueCodeProvision::query()->count())->toBe(11)
+        ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2A.02%')->count())->toBe(8)
+        ->and(RevenueCodeProvision::query()->whereNotNull('fee_rule_id')->count())->toBe(4)
+        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(10);
+
+    $wholesaleProvision = RevenueCodeProvision::query()
+        ->with('feeRule.currentReconciliation')
+        ->where('code', 'MRC-2A-02-B-WHOLESALERS')
+        ->sole();
+
+    expect($wholesaleProvision)
+        ->section_reference->toBe('Section 2A.02(b)')
+        ->reconciliation_status->toBe(RevenueCodeProvisionStatus::ReconciliationRequired)
+        ->reconciliation_notes->toContain('overlapping')
+        ->feeRule->code->toBe('MRC-2A-02-B-RETAIL-BUSINESS-TAX')
+        ->feeRule->currentReconciliation->execution_status->toBe(FeeRuleExecutionStatus::Blocked);
+
+    $inspectionProvision = RevenueCodeProvision::query()
+        ->with('feeRule.currentReconciliation')
+        ->where('code', 'MRC-3A-04-INSPECTION')
+        ->sole();
+
+    expect($inspectionProvision)
+        ->reconciliation_status->toBe(RevenueCodeProvisionStatus::Reconciled)
+        ->feeRule->currentReconciliation->execution_status->toBe(FeeRuleExecutionStatus::Executable);
 });
 
 it('executes the exact annual business inspection fee with reconciliation provenance', function () {

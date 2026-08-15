@@ -6,10 +6,13 @@ use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleExecutionStatus;
 use App\Enums\FeeRuleScope;
+use App\Enums\RevenueCodeProvisionStatus;
+use App\Enums\RevenueCodeProvisionType;
 use App\Models\FeeRule;
 use App\Models\FeeRuleRange;
 use App\Models\FeeRuleReconciliation;
 use App\Models\LineOfBusiness;
+use App\Models\RevenueCodeProvision;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -186,6 +189,13 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             executionStatus: FeeRuleExecutionStatus::Blocked,
             executionReason: 'The wholesale/dealer schedule contains overlapping and malformed brackets that require an accepted municipal reconciliation.',
         );
+
+        $this->seedProvisionRegister(
+            newBusinessPermitFee: $newBusinessPermitFee,
+            inspectionFee: $inspectionFee,
+            registrationPlateFee: $registrationPlateFee,
+            retailTax: $retailTax,
+        );
     }
 
     /**
@@ -242,5 +252,153 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 'decided_at' => '2026-08-15 00:00:00',
             ],
         );
+    }
+
+    private function seedProvisionRegister(
+        FeeRule $newBusinessPermitFee,
+        FeeRule $inspectionFee,
+        FeeRule $registrationPlateFee,
+        FeeRule $retailTax,
+    ): void {
+        $provisions = [
+            $this->provision(
+                code: 'MRC-2A-02-A-MANUFACTURERS',
+                section: 'Section 2A.02(a)',
+                title: 'Manufacturers, producers, assemblers, and processors',
+                type: RevenueCodeProvisionType::TaxSchedule,
+                excerpt: 'Graduated annual business-tax schedule for manufacturers and related producers, ending with a percentage rate for gross sales of PHP 6,500,000.00 or more.',
+                notes: 'The schedule contains the malformed value "4,000,0000.00" and an upper percentage expressed as "not exceeding"; municipal reconciliation and production configuration are required.',
+                metadata: ['chapter' => 2, 'article' => 'A', 'schedule_row_count' => 20, 'known_ambiguities' => ['malformed_numeric_value', 'statutory_ceiling']],
+            ),
+            $this->provision(
+                code: 'MRC-2A-02-B-WHOLESALERS',
+                section: 'Section 2A.02(b)',
+                title: 'Wholesalers, distributors, and dealers',
+                type: RevenueCodeProvisionType::TaxSchedule,
+                excerpt: 'Graduated annual business-tax schedule for wholesalers, distributors, or dealers, ending with a percentage rate for gross sales of PHP 2,000,000.00 or more.',
+                notes: 'The source has overlapping PHP 6,000.00-7,500.00 and PHP 7,000.00-8,000.00 rows plus malformed values including "150,0000.00" and "5000,000.00".',
+                metadata: ['chapter' => 2, 'article' => 'A', 'schedule_row_count' => 24, 'known_ambiguities' => ['overlapping_ranges', 'malformed_numeric_values', 'statutory_ceiling']],
+                feeRule: $retailTax,
+            ),
+            $this->provision(
+                code: 'MRC-2A-02-C-EXPORTERS-ESSENTIALS',
+                section: 'Section 2A.02(c)',
+                title: 'Exporters and essential commodities',
+                type: RevenueCodeProvisionType::PercentageRate,
+                excerpt: 'Exporters and listed essential commodities are subject to a rate not exceeding one-half of the rates prescribed under subsections (a), (b), and (d), with export sales excluded from total sales.',
+                notes: 'Execution depends on accepted classification of exporters and essential commodities and on reconciled base schedules under subsections (a), (b), and (d).',
+                metadata: ['chapter' => 2, 'article' => 'A', 'dependent_sections' => ['2A.02(a)', '2A.02(b)', '2A.02(d)'], 'known_ambiguities' => ['eligibility_classification', 'dependent_unreconciled_schedules']],
+            ),
+            $this->provision(
+                code: 'MRC-2A-02-D-RETAILERS',
+                section: 'Section 2A.02(d)',
+                title: 'Retailers',
+                type: RevenueCodeProvisionType::PercentageRate,
+                excerpt: 'Retail gross sales up to PHP 400,000.00 are stated at 2.52 percent, with 1.26 percent on sales in excess of the first PHP 400,000.00 and a barangay threshold stated separately.',
+                notes: 'The operational treatment of the two rates, barangay taxing threshold, eligibility, and rounding requires municipal confirmation.',
+                metadata: ['chapter' => 2, 'article' => 'A', 'known_ambiguities' => ['compound_rate_application', 'barangay_tax_boundary', 'rounding_policy']],
+            ),
+            $this->provision(
+                code: 'MRC-2A-02-E-CONTRACTORS',
+                section: 'Section 2A.02(e)',
+                title: 'Contractors and independent contractors',
+                type: RevenueCodeProvisionType::TaxSchedule,
+                excerpt: 'Graduated annual business-tax schedule for contractors and independent contractors, including project-term installments and completion recomputation.',
+                notes: 'The schedule contains overlapping PHP 300,000.00-500,000.00 and PHP 400,000.00-500,000.00 rows; installment, recomputation, deficiency, and refund behavior also require accepted policy.',
+                metadata: ['chapter' => 2, 'article' => 'A', 'schedule_row_count' => 19, 'known_ambiguities' => ['overlapping_ranges', 'project_term_installments', 'deficiency_or_refund']],
+            ),
+            $this->provision(
+                code: 'MRC-2A-02-F-FINANCIAL-INSTITUTIONS',
+                section: 'Section 2A.02(f)',
+                title: 'Banks and other financial institutions',
+                type: RevenueCodeProvisionType::PercentageRate,
+                excerpt: 'Banks and other financial institutions are stated at 57.23 percent of one percent of enumerated gross receipts from the preceding calendar year.',
+                notes: 'Taxable receipt classification, evidence requirements, production configuration, and rounding require municipal reconciliation before execution.',
+                metadata: ['chapter' => 2, 'article' => 'A', 'known_ambiguities' => ['taxable_receipt_classification', 'documentary_basis', 'rounding_policy']],
+            ),
+            $this->provision(
+                code: 'MRC-2A-02-G-ENUMERATED-SERVICES',
+                section: 'Section 2A.02(g)',
+                title: 'Enumerated service and amusement businesses',
+                type: RevenueCodeProvisionType::TaxSchedule,
+                excerpt: 'Enumerated service, amusement, real-estate, lodging, medical, cable, and computer establishments are assigned a graduated annual business-tax schedule.',
+                notes: 'The extracted table is visually interleaved and repeats overlapping PHP 300,000.00-500,000.00 and PHP 400,000.00-500,000.00 rows; source layout and rates require municipal reconciliation.',
+                metadata: ['chapter' => 2, 'article' => 'A', 'schedule_row_count' => 19, 'known_ambiguities' => ['source_layout_corruption', 'overlapping_ranges', 'statutory_ceiling']],
+            ),
+            $this->provision(
+                code: 'MRC-2A-02-H-PEDDLERS',
+                section: 'Section 2A.02(h)',
+                title: 'Peddlers',
+                type: RevenueCodeProvisionType::FixedFee,
+                excerpt: 'Peddlers are subject to an annual tax at a rate not exceeding PHP 62.75, with specified delivery vehicles exempted.',
+                notes: 'The ordinance states a ceiling rather than an exact operational amount and includes eligibility and vehicle exemptions that require accepted configuration.',
+                metadata: ['chapter' => 2, 'article' => 'A', 'known_ambiguities' => ['statutory_ceiling', 'eligibility_and_exemptions']],
+            ),
+            $this->provision(
+                code: 'MRC-3A-02-B-NEW-MICRO-PERMIT',
+                section: 'Section 3A.02(b)',
+                title: "New-business micro-industry Mayor's Permit fee",
+                type: RevenueCodeProvisionType::FixedFee,
+                excerpt: 'For new business, Micro-Industry - P 200.00.',
+                notes: 'Municipal enterprise-scale eligibility remains unresolved.',
+                metadata: ['chapter' => 3, 'article' => 'A', 'known_ambiguities' => ['enterprise_scale_eligibility']],
+                feeRule: $newBusinessPermitFee,
+            ),
+            $this->provision(
+                code: 'MRC-3A-04-INSPECTION',
+                section: 'Section 3A.04',
+                title: 'Business inspection fee',
+                type: RevenueCodeProvisionType::FixedFee,
+                excerpt: 'Any business operation in the municipality should be charged an inspection fee of P350.00, uniform to all business establishments and payable per annum.',
+                notes: 'Exact uniform annual amount is linked to the accepted executable reconciliation.',
+                metadata: ['chapter' => 3, 'article' => 'A', 'known_ambiguities' => []],
+                feeRule: $inspectionFee,
+                status: RevenueCodeProvisionStatus::Reconciled,
+            ),
+            $this->provision(
+                code: 'MRC-3A-05-REGISTRATION-PLATE',
+                section: 'Section 3A.05',
+                title: 'Business permit registration plate',
+                type: RevenueCodeProvisionType::FixedFee,
+                excerpt: 'Applicants shall pay an amount not to exceed Three Hundred Pesos (P300.00) for the Business Permit Registration Plate and handling.',
+                notes: 'The ordinance supplies a ceiling, not the Municipality-confirmed exact operational amount.',
+                metadata: ['chapter' => 3, 'article' => 'A', 'known_ambiguities' => ['statutory_ceiling']],
+                feeRule: $registrationPlateFee,
+            ),
+        ];
+
+        foreach ($provisions as $provision) {
+            RevenueCodeProvision::query()->updateOrCreate(['code' => $provision['code']], $provision);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function provision(
+        string $code,
+        string $section,
+        string $title,
+        RevenueCodeProvisionType $type,
+        string $excerpt,
+        string $notes,
+        array $metadata,
+        ?FeeRule $feeRule = null,
+        RevenueCodeProvisionStatus $status = RevenueCodeProvisionStatus::ReconciliationRequired,
+    ): array {
+        return [
+            'code' => $code,
+            'fee_rule_id' => $feeRule?->id,
+            'source_id' => 'LEGAL-MRC-001',
+            'section_reference' => $section,
+            'title' => $title,
+            'provision_type' => $type,
+            'evidence_summary' => $excerpt,
+            'reconciliation_status' => $status,
+            'reconciliation_notes' => $notes,
+            'effective_from' => '2023-01-01',
+            'metadata' => $metadata,
+        ];
     }
 }

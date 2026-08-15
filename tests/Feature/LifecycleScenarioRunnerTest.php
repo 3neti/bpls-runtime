@@ -1249,6 +1249,10 @@ test('revenue code fee catalog visibility scenario prepares deterministic catalo
         ->and($firstManifest['resources']['detail_url'])->toBe('/staff/fee-rules/'.$firstManifest['resources']['record_id'])
         ->and($firstManifest['resources']['range_count'])->toBe(23)
         ->and($firstManifest['resources']['first_range_amount_cents'])->toBe(2266)
+        ->and($firstManifest['resources']['provision_code'])->toBe('MRC-2A-02-B-WHOLESALERS')
+        ->and($firstManifest['resources']['provision_status'])->toBe('reconciliation_required')
+        ->and($firstManifest['resources']['provision_count'])->toBe(11)
+        ->and($firstManifest['resources']['reconciliation_required_count'])->toBe(10)
         ->and($firstManifest['resources']['policy_boundaries'])->toContain('new_business_initial_local_business_tax_exemption')
         ->and($feeRule->ranges)->toHaveCount(23)
         ->and($storyboard['title'])->toBe('Revenue Code fee catalog visibility')
@@ -2308,6 +2312,9 @@ test('revenue code fee catalog visibility audit compares browser evidence with c
             'application_types_visible' => $manifest['resources']['application_types'],
             'range_amount_visible' => true,
             'legal_basis_visible' => true,
+            'provision_visible' => true,
+            'reconciliation_required_visible' => true,
+            'linked_rule_visible' => true,
         ],
         'checks' => [],
         'artifacts' => [

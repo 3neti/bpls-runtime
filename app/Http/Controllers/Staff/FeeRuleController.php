@@ -6,10 +6,12 @@ use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleExecutionStatus;
 use App\Enums\FeeRuleScope;
+use App\Enums\RevenueCodeProvisionStatus;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Models\FeeRule;
 use App\Models\FeeRuleRange;
+use App\Models\RevenueCodeProvision;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -66,6 +68,29 @@ class FeeRuleController extends Controller
                 'status' => $filters['status'] ?? 'active',
             ],
             'feeRules' => $feeRules,
+            'revenueCodeProvisions' => RevenueCodeProvision::query()
+                ->with(['feeRule.currentReconciliation'])
+                ->orderBy('section_reference')
+                ->get()
+                ->map(fn (RevenueCodeProvision $provision): array => [
+                    'id' => $provision->id,
+                    'code' => $provision->code,
+                    'section_reference' => $provision->section_reference,
+                    'title' => $provision->title,
+                    'provision_type' => $provision->provision_type->value,
+                    'evidence_summary' => $provision->evidence_summary,
+                    'reconciliation_status' => $provision->reconciliation_status->value,
+                    'reconciliation_notes' => $provision->reconciliation_notes,
+                    'known_ambiguities' => $provision->metadata['known_ambiguities'] ?? [],
+                    'fee_rule' => $provision->feeRule ? [
+                        'id' => $provision->feeRule->id,
+                        'code' => $provision->feeRule->code,
+                        'name' => $provision->feeRule->name,
+                        'execution_status' => $provision->feeRule->currentReconciliation?->execution_status->value,
+                    ] : null,
+                ])
+                ->values()
+                ->all(),
             'summary' => [
                 'total_rules' => FeeRule::query()->count(),
                 'active_rules' => FeeRule::query()->where('is_active', true)->count(),
@@ -76,6 +101,11 @@ class FeeRuleController extends Controller
                 'executable_rule_count' => FeeRule::query()
                     ->whereHas('currentReconciliation', fn ($query) => $query->where('execution_status', FeeRuleExecutionStatus::Executable))
                     ->count(),
+                'provisions_recorded' => RevenueCodeProvision::query()->count(),
+                'provisions_requiring_reconciliation' => RevenueCodeProvision::query()
+                    ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
+                    ->count(),
+                'provisions_linked_to_rules' => RevenueCodeProvision::query()->whereNotNull('fee_rule_id')->count(),
             ],
             'categories' => $this->options(FeeRuleCategory::cases()),
             'scopes' => $this->options(FeeRuleScope::cases()),

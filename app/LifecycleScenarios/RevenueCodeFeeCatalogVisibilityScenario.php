@@ -3,6 +3,7 @@
 namespace App\LifecycleScenarios;
 
 use App\Models\FeeRule;
+use App\Models\RevenueCodeProvision;
 use App\Models\User;
 use Database\Seeders\RevenueCodeFeeCatalogSeeder;
 use RuntimeException;
@@ -32,6 +33,7 @@ final class RevenueCodeFeeCatalogVisibilityScenario
 
         $feeRule = $this->feeRule();
         $feeRule->load(['lineOfBusiness', 'ranges' => fn ($query) => $query->orderBy('min_basis_cents')]);
+        $provision = $this->provision();
         $manifest = $this->scenarioManifest->initial($scenario, $runId, $actors);
 
         $steps = [
@@ -39,6 +41,8 @@ final class RevenueCodeFeeCatalogVisibilityScenario
             $this->step('fee-catalog-seeded', 'Prepare deterministic Revenue Code fee catalog evidence', ['rule_code' => 'MRC-2A-02-B-RETAIL-BUSINESS-TAX'], ['rule_code' => $feeRule->code, 'fee_rule_id' => $feeRule->id]),
             $this->step('fee-rule-ranges-present', 'Verify persisted range brackets for the selected business tax rule', ['range_count' => 23, 'first_range_amount_cents' => 2266], ['range_count' => $feeRule->ranges->count(), 'first_range_amount_cents' => $feeRule->ranges->first()?->amount_cents]),
             $this->step('policy-boundary-present', 'Verify unresolved Revenue Code policy boundary remains explicit', ['policy_boundary' => 'new_business_initial_local_business_tax_exemption'], ['policy_boundary' => $feeRule->metadata['policy_boundaries'][0] ?? null]),
+            $this->step('provision-coverage-recorded', 'Verify provision coverage is distinct from executable policy', ['provision_count' => 11, 'reconciliation_required_count' => 10], ['provision_count' => RevenueCodeProvision::query()->count(), 'reconciliation_required_count' => RevenueCodeProvision::query()->where('reconciliation_status', 'reconciliation_required')->count()]),
+            $this->step('ambiguous-provision-linked', 'Link the disputed legal provision to its blocked fee rule without authorizing execution', ['provision_code' => 'MRC-2A-02-B-WHOLESALERS', 'reconciliation_status' => 'reconciliation_required', 'fee_rule_code' => $feeRule->code], ['provision_code' => $provision->code, 'reconciliation_status' => $provision->reconciliation_status->value, 'fee_rule_code' => $provision->feeRule?->code]),
         ];
 
         foreach ($steps as $step) {
@@ -59,6 +63,11 @@ final class RevenueCodeFeeCatalogVisibilityScenario
             'policy_boundaries' => $feeRule->metadata['policy_boundaries'] ?? [],
             'range_count' => $feeRule->ranges->count(),
             'first_range_amount_cents' => $feeRule->ranges->first()?->amount_cents,
+            'provision_id' => $provision->id,
+            'provision_code' => $provision->code,
+            'provision_status' => $provision->reconciliation_status->value,
+            'provision_count' => RevenueCodeProvision::query()->count(),
+            'reconciliation_required_count' => RevenueCodeProvision::query()->where('reconciliation_status', 'reconciliation_required')->count(),
             'list_url' => route('staff.fee-rules.index', absolute: false),
             'detail_url' => route('staff.fee-rules.show', $feeRule, false),
         ];
@@ -90,6 +99,14 @@ final class RevenueCodeFeeCatalogVisibilityScenario
                 'max_basis_cents' => $feeRule->ranges->first()?->max_basis_cents,
                 'amount_cents' => $feeRule->ranges->first()?->amount_cents,
             ],
+            'provision' => [
+                'id' => $provision->id,
+                'code' => $provision->code,
+                'section_reference' => $provision->section_reference,
+                'reconciliation_status' => $provision->reconciliation_status->value,
+                'reconciliation_notes' => $provision->reconciliation_notes,
+                'fee_rule_code' => $provision->feeRule?->code,
+            ],
             'run_id' => $runId,
         ]);
         $artifactStore->putJson('terminal/execution.json', [
@@ -112,10 +129,9 @@ final class RevenueCodeFeeCatalogVisibilityScenario
      */
     public function audit(array $manifest, ScenarioArtifactStore $artifactStore): array
     {
-        $feeRule = FeeRule::query()
-            ->with(['lineOfBusiness', 'ranges' => fn ($query) => $query->orderBy('min_basis_cents')])
-            ->findOrFail($manifest['resources']['record_id']);
+        $feeRule = $this->feeRuleById((int) $manifest['resources']['record_id']);
         $browserReport = $artifactStore->readJson('browser/report.json') ?? [];
+        $provision = $this->provisionById((int) $manifest['resources']['provision_id']);
         $applicationTypes = array_values($feeRule->metadata['application_types'] ?? []);
         $policyBoundaries = array_values($feeRule->metadata['policy_boundaries'] ?? []);
 
@@ -125,6 +141,8 @@ final class RevenueCodeFeeCatalogVisibilityScenario
             $this->step('audit-browser-fee-catalog', 'Browser evidence shows catalog and exact fee-rule detail', ['fee_rule_code' => $feeRule->code, 'detail_visible' => true, 'range_amount_visible' => true, 'legal_basis_visible' => true], ['fee_rule_code' => data_get($browserReport, 'fee_catalog.fee_rule_code'), 'detail_visible' => data_get($browserReport, 'fee_catalog.detail_visible'), 'range_amount_visible' => data_get($browserReport, 'fee_catalog.range_amount_visible'), 'legal_basis_visible' => data_get($browserReport, 'fee_catalog.legal_basis_visible')]),
             $this->step('audit-browser-fee-catalog-applicability', 'Browser evidence shows the persisted fee-rule applicability', ['application_types' => $applicationTypes], ['application_types' => data_get($browserReport, 'fee_catalog.application_types_visible', [])]),
             $this->step('audit-browser-fee-catalog-policy-boundaries', 'Browser evidence shows every persisted unresolved policy boundary', ['policy_boundaries' => $policyBoundaries], ['policy_boundaries' => data_get($browserReport, 'fee_catalog.policy_boundaries_visible', [])]),
+            $this->step('audit-provision-coverage', 'Canonical provision register retains the prepared coverage and policy boundary', ['provision_code' => $manifest['resources']['provision_code'], 'reconciliation_status' => 'reconciliation_required', 'fee_rule_code' => $feeRule->code], ['provision_code' => $provision->code, 'reconciliation_status' => $provision->reconciliation_status->value, 'fee_rule_code' => $provision->feeRule?->code]),
+            $this->step('audit-browser-provision-coverage', 'Browser evidence shows the legal provision separately from executable policy', ['provision_visible' => true, 'reconciliation_required_visible' => true, 'linked_rule_visible' => true], ['provision_visible' => data_get($browserReport, 'fee_catalog.provision_visible'), 'reconciliation_required_visible' => data_get($browserReport, 'fee_catalog.reconciliation_required_visible'), 'linked_rule_visible' => data_get($browserReport, 'fee_catalog.linked_rule_visible')]),
         ];
         $passed = collect($checks)->every(fn (array $check): bool => $check['passed']);
 
@@ -148,6 +166,10 @@ final class RevenueCodeFeeCatalogVisibilityScenario
                 'range_count' => $feeRule->ranges->count(),
                 'application_types' => $applicationTypes,
                 'policy_boundaries' => $policyBoundaries,
+                'provision_id' => $provision->id,
+                'provision_code' => $provision->code,
+                'provision_status' => $provision->reconciliation_status->value,
+                'provision_fee_rule_id' => $provision->fee_rule_id,
             ],
             'browser' => $browserReport,
         ]);
@@ -161,6 +183,30 @@ final class RevenueCodeFeeCatalogVisibilityScenario
     {
         return FeeRule::query()
             ->where('code', 'MRC-2A-02-B-RETAIL-BUSINESS-TAX')
+            ->sole();
+    }
+
+    private function provision(): RevenueCodeProvision
+    {
+        return RevenueCodeProvision::query()
+            ->with('feeRule')
+            ->where('code', 'MRC-2A-02-B-WHOLESALERS')
+            ->sole();
+    }
+
+    private function feeRuleById(int $id): FeeRule
+    {
+        return FeeRule::query()
+            ->with(['lineOfBusiness', 'ranges' => fn ($query) => $query->orderBy('min_basis_cents')])
+            ->whereKey($id)
+            ->sole();
+    }
+
+    private function provisionById(int $id): RevenueCodeProvision
+    {
+        return RevenueCodeProvision::query()
+            ->with('feeRule')
+            ->whereKey($id)
             ->sole();
     }
 
@@ -190,7 +236,7 @@ final class RevenueCodeFeeCatalogVisibilityScenario
     {
         return [
             'title' => 'Revenue Code fee catalog visibility',
-            'summary' => 'BPLO staff verifies that the persisted Revenue Code fee catalog exposes the exact business tax rule, range brackets, legal provenance, and unresolved policy boundaries without editing or executing new financial policy.',
+            'summary' => 'BPLO staff verifies that legal-provision coverage remains distinct from executable fee policy while the catalog exposes range evidence and unresolved policy boundaries.',
             'run_id' => $runId,
             'record' => [
                 'type' => 'fee_rule',
@@ -203,6 +249,12 @@ final class RevenueCodeFeeCatalogVisibilityScenario
                     'description' => 'The catalog lists persisted Revenue Code rules with legal provenance and policy-boundary labels.',
                     'dialogue' => 'The fee catalog is visible evidence, not editable policy.',
                     'duration_seconds' => 4,
+                ],
+                [
+                    'title' => 'Staff reviews ordinance coverage',
+                    'description' => 'The provision register records all eight Section 2A.02 business-tax families and the characterized Chapter III permit provisions without making unresolved provisions executable.',
+                    'dialogue' => 'Recorded legal coverage is not calculation authority.',
+                    'duration_seconds' => 5,
                 ],
                 [
                     'title' => 'Staff opens a fee-rule detail',

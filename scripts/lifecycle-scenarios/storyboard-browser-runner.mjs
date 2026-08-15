@@ -2487,6 +2487,18 @@ async function inspectRevenueCodeFeeCatalogList(targetPage, targetBaseUrl) {
         .first()
         .isVisible()
         .catch(() => false);
+    const provisionRow = targetPage.locator(
+        `[data-provision-code="${manifest.resources.provision_code}"]`,
+    );
+    const provisionVisible = await provisionRow.isVisible().catch(() => false);
+    const reconciliationRequiredVisible = await provisionRow
+        .getByText('reconciliation required', { exact: true })
+        .isVisible()
+        .catch(() => false);
+    const linkedRuleVisible = await provisionRow
+        .getByText(manifest.resources.fee_rule_code, { exact: true })
+        .isVisible()
+        .catch(() => false);
 
     checks.push(
         check(
@@ -2500,6 +2512,24 @@ async function inspectRevenueCodeFeeCatalogList(targetPage, targetBaseUrl) {
             },
         ),
     );
+    checks.push(
+        check(
+            'fee-catalog-provision-coverage-visible',
+            'Fee catalog shows the exact legal provision separately from policy execution',
+            true,
+            provisionVisible &&
+                reconciliationRequiredVisible &&
+                linkedRuleVisible,
+            {
+                provision_id: manifest.resources.provision_id,
+                provision_code: manifest.resources.provision_code,
+            },
+        ),
+    );
+    feeCatalogEvidence.provision_visible = provisionVisible;
+    feeCatalogEvidence.reconciliation_required_visible =
+        reconciliationRequiredVisible;
+    feeCatalogEvidence.linked_rule_visible = linkedRuleVisible;
     checks.push(
         check(
             'fee-catalog-list-policy-boundary-visible',
@@ -2983,8 +3013,40 @@ async function inspectRevenueCodeFeeCatalogDetail(targetPage, targetBaseUrl) {
 }
 
 async function inspectRevenueCodeFeeCatalogMobile(targetPage, targetBaseUrl) {
-    const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
+    const listUrl = `${targetBaseUrl}${manifest.resources.list_url}`;
     await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(listUrl, { waitUntil: 'networkidle' });
+    const provisionRegisterVisible = await targetPage
+        .getByTestId('revenue-code-provision-register')
+        .isVisible()
+        .catch(() => false);
+    const listHorizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+
+    checks.push(
+        check(
+            'fee-catalog-mobile-provision-register-visible',
+            'Mobile catalog keeps Revenue Code provision coverage visible',
+            true,
+            provisionRegisterVisible,
+        ),
+        check(
+            'fee-catalog-mobile-list-no-horizontal-overflow',
+            'Mobile catalog contains wide tables without page-level horizontal overflow',
+            false,
+            listHorizontalOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '03-fee-catalog-mobile',
+        'browser/screenshots/03-fee-catalog-mobile.png',
+    );
+
+    const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
     await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
     const headingVisible = await targetPage
         .getByRole('heading', { name: manifest.resources.fee_rule_code })
@@ -3028,8 +3090,8 @@ async function inspectRevenueCodeFeeCatalogMobile(targetPage, targetBaseUrl) {
     );
     await screenshot(
         targetPage,
-        '03-fee-rule-mobile',
-        'browser/screenshots/03-fee-rule-mobile.png',
+        '04-fee-rule-mobile',
+        'browser/screenshots/04-fee-rule-mobile.png',
     );
 }
 

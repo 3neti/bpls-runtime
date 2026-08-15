@@ -55,6 +55,24 @@ type FeeRule = {
     } | null;
 };
 
+type RevenueCodeProvision = {
+    id: number;
+    code: string;
+    section_reference: string;
+    title: string;
+    provision_type: string;
+    evidence_summary: string;
+    reconciliation_status: string;
+    reconciliation_notes: string | null;
+    known_ambiguities: string[];
+    fee_rule: {
+        id: number;
+        code: string;
+        name: string;
+        execution_status: string | null;
+    } | null;
+};
+
 const props = defineProps<{
     filters: {
         q: string;
@@ -70,12 +88,16 @@ const props = defineProps<{
         to: number | null;
         total: number;
     };
+    revenueCodeProvisions: RevenueCodeProvision[];
     summary: {
         total_rules: number;
         active_rules: number;
         mrc_rules: number;
         blocked_policy_count: number;
         executable_rule_count: number;
+        provisions_recorded: number;
+        provisions_requiring_reconciliation: number;
+        provisions_linked_to_rules: number;
     };
     categories: Option[];
     scopes: Option[];
@@ -352,6 +374,173 @@ function decodePaginationLabel(value: string): string {
                     <div class="mt-2 text-2xl font-semibold">
                         {{ summary.executable_rule_count }}
                     </div>
+                </div>
+            </section>
+
+            <section
+                class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
+                aria-labelledby="revenue-code-coverage-heading"
+                data-testid="revenue-code-provision-register"
+            >
+                <div
+                    class="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3"
+                >
+                    <div>
+                        <h2
+                            id="revenue-code-coverage-heading"
+                            class="font-semibold"
+                        >
+                            Revenue Code provision coverage
+                        </h2>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                            Legal provisions are recorded independently from
+                            executable fee rules. Coverage does not authorize a
+                            calculation.
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap gap-2 text-xs">
+                        <Badge variant="outline">
+                            {{ summary.provisions_recorded }} recorded
+                        </Badge>
+                        <Badge variant="destructive">
+                            {{ summary.provisions_requiring_reconciliation }}
+                            require reconciliation
+                        </Badge>
+                        <Badge variant="outline">
+                            {{ summary.provisions_linked_to_rules }} linked to
+                            rules
+                        </Badge>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full min-w-[960px] table-fixed text-sm">
+                        <thead
+                            class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
+                        >
+                            <tr>
+                                <th class="w-[16%] px-3 py-3 font-medium">
+                                    Provision
+                                </th>
+                                <th class="w-[20%] px-3 py-3 font-medium">
+                                    Subject
+                                </th>
+                                <th class="w-[29%] px-3 py-3 font-medium">
+                                    Evidence coverage
+                                </th>
+                                <th class="w-[22%] px-3 py-3 font-medium">
+                                    Reconciliation
+                                </th>
+                                <th class="w-[13%] px-3 py-3 font-medium">
+                                    Executable rule
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr
+                                v-for="provision in revenueCodeProvisions"
+                                :key="provision.id"
+                                class="border-b last:border-0"
+                                :data-provision-code="provision.code"
+                            >
+                                <td class="px-3 py-3 align-top">
+                                    <div class="font-medium">
+                                        {{ provision.section_reference }}
+                                    </div>
+                                    <div
+                                        class="mt-1 text-xs break-words text-muted-foreground"
+                                    >
+                                        {{ provision.code }}
+                                    </div>
+                                    <Badge class="mt-2" variant="outline">
+                                        {{ label(provision.provision_type) }}
+                                    </Badge>
+                                </td>
+                                <td class="px-3 py-3 align-top">
+                                    {{ provision.title }}
+                                    <div
+                                        v-if="
+                                            provision.known_ambiguities.length >
+                                            0
+                                        "
+                                        class="mt-2 flex flex-wrap gap-1"
+                                    >
+                                        <span
+                                            v-for="ambiguity in provision.known_ambiguities"
+                                            :key="ambiguity"
+                                            class="rounded-md border border-sidebar-border/70 px-2 py-0.5 text-xs leading-snug break-words text-muted-foreground dark:border-sidebar-border"
+                                        >
+                                            {{ label(ambiguity) }}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="px-3 py-3 align-top text-xs">
+                                    {{ provision.evidence_summary }}
+                                </td>
+                                <td class="px-3 py-3 align-top">
+                                    <Badge
+                                        :variant="
+                                            provision.reconciliation_status ===
+                                            'reconciled'
+                                                ? 'default'
+                                                : 'destructive'
+                                        "
+                                    >
+                                        {{
+                                            label(
+                                                provision.reconciliation_status,
+                                            )
+                                        }}
+                                    </Badge>
+                                    <p
+                                        v-if="provision.reconciliation_notes"
+                                        class="mt-2 text-xs text-muted-foreground"
+                                    >
+                                        {{ provision.reconciliation_notes }}
+                                    </p>
+                                </td>
+                                <td class="px-3 py-3 align-top">
+                                    <template v-if="provision.fee_rule">
+                                        <Link
+                                            :href="
+                                                show(provision.fee_rule.id).url
+                                            "
+                                            class="font-medium text-primary underline-offset-4 hover:underline"
+                                        >
+                                            {{ provision.fee_rule.code }}
+                                        </Link>
+                                        <Badge
+                                            v-if="
+                                                provision.fee_rule
+                                                    .execution_status
+                                            "
+                                            class="mt-2"
+                                            :variant="
+                                                provision.fee_rule
+                                                    .execution_status ===
+                                                'executable'
+                                                    ? 'default'
+                                                    : 'destructive'
+                                            "
+                                        >
+                                            {{
+                                                label(
+                                                    provision.fee_rule
+                                                        .execution_status,
+                                                )
+                                            }}
+                                        </Badge>
+                                    </template>
+                                    <span
+                                        v-else
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        No executable rule
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </section>
 
