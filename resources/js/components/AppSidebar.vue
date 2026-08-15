@@ -19,6 +19,7 @@ import {
 import { computed } from 'vue';
 import { index as citizenPermitApplicationIndex } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
 import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
+import { index as assessmentSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentSummaryReportController';
 import { index as dailyCollectionReportIndex } from '@/actions/App/Http/Controllers/Staff/DailyCollectionReportController';
 import { index as feeRuleIndex } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
 import { index as paidEstablishmentReportIndex } from '@/actions/App/Http/Controllers/Staff/PaidEstablishmentReportController';
@@ -82,6 +83,11 @@ const staffNavItems: NavItem[] = [
         title: 'Daily Collections',
         href: dailyCollectionReportIndex(),
         icon: ChartColumn,
+    },
+    {
+        title: 'Assessment Summary',
+        href: assessmentSummaryReportIndex(),
+        icon: ChartNoAxesColumnIncreasing,
     },
     {
         title: 'Revenue Sources',

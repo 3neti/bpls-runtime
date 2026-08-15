@@ -220,6 +220,7 @@ try {
         await inspectPendingPaymentPermitApplicationDetail(page, baseUrl);
         await inspectPendingPaymentAssessmentDetail(page, baseUrl);
         await inspectPendingPaymentScheduleDetail(page, baseUrl);
+        await inspectPendingPaymentAssessmentSummaryReport(page, baseUrl);
         await inspectPendingPaymentUnpaidEstablishmentsReport(page, baseUrl);
         await inspectPendingPaymentTopTaxDueReport(page, baseUrl);
         await inspectPendingPaymentPermitApplicationMobile(page, baseUrl);
@@ -3737,6 +3738,125 @@ async function inspectPendingPaymentUnpaidEstablishmentsReport(
     );
 }
 
+async function inspectPendingPaymentAssessmentSummaryReport(
+    targetPage,
+    targetBaseUrl,
+) {
+    const reportUrl = `${targetBaseUrl}${manifest.resources.assessment_summary_report_url}`;
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const assessmentVisible = await targetPage
+        .getByText(`Assessment ${manifest.resources.assessment_id}`, {
+            exact: true,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const applicationVisible = await targetPage
+        .getByText(manifest.resources.application_number, { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const businessVisible = await targetPage
+        .getByText(manifest.resources.assessment_summary_business_name, {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const amountVisible = await targetPage
+        .getByText(
+            uiMoneyFromCents(manifest.resources.assessment_total_amount_cents),
+            { exact: false },
+        )
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const scopeVisible = await targetPage
+        .getByText(
+            'Current computed, non-superseded assessment snapshots for the selected application year.',
+            { exact: true },
+        )
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const policyVisible = await targetPage
+        .getByText('does not recalculate legal liability', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const csvExportVisible = await targetPage
+        .getByRole('link', { name: /export csv/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'assessment-summary-report-assessment-visible',
+            'Assessment summary shows the exact canonical assessment',
+            true,
+            assessmentVisible,
+            {
+                url: reportUrl,
+                assessment_id: manifest.resources.assessment_id,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'assessment-summary-report-application-visible',
+            'Assessment summary shows the exact permit application',
+            true,
+            applicationVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'assessment-summary-report-business-visible',
+            'Assessment summary shows the exact business',
+            true,
+            businessVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'assessment-summary-report-total-visible',
+            'Assessment summary shows the persisted snapshot total',
+            true,
+            amountVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'assessment-summary-report-boundary-visible',
+            'Assessment summary keeps snapshot and financial-policy boundaries visible',
+            true,
+            scopeVisible && policyVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'assessment-summary-report-csv-visible',
+            'Assessment summary offers CSV export',
+            true,
+            csvExportVisible,
+        ),
+    );
+    reportAssessmentSummary(
+        manifest.resources.assessment_id,
+        manifest.resources.application_number,
+        manifest.resources.assessment_summary_business_name,
+        manifest.resources.assessment_total_amount_cents,
+        applicationVisible,
+        csvExportVisible,
+    );
+    await screenshot(
+        targetPage,
+        '05-assessment-summary-report',
+        'browser/screenshots/05-assessment-summary-report.png',
+    );
+}
+
 async function inspectPendingPaymentTopTaxDueReport(targetPage, targetBaseUrl) {
     const reportUrl = `${targetBaseUrl}${manifest.resources.top_tax_due_report_url}`;
     await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
@@ -3950,6 +4070,58 @@ async function inspectPendingPaymentPermitApplicationMobile(
         targetPage,
         '07-mobile-detail',
         'browser/screenshots/07-mobile-detail.png',
+    );
+
+    await targetPage.goto(
+        `${targetBaseUrl}${manifest.resources.assessment_summary_report_url}`,
+        { waitUntil: 'networkidle' },
+    );
+    const mobileAssessmentVisible = await targetPage
+        .getByText(`Assessment ${manifest.resources.assessment_id}`, {
+            exact: true,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const mobileTotalVisible = await targetPage
+        .getByText(
+            uiMoneyFromCents(manifest.resources.assessment_total_amount_cents),
+            { exact: false },
+        )
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const reportHorizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+
+    checks.push(
+        check(
+            'assessment-summary-mobile-visible',
+            'Mobile assessment summary keeps exact snapshot identity and total visible',
+            true,
+            mobileAssessmentVisible && mobileTotalVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'assessment-summary-mobile-no-horizontal-overflow',
+            'Mobile assessment summary contains wide data without page overflow',
+            false,
+            reportHorizontalOverflow,
+        ),
+    );
+    reportEvidence.assessment_summary.mobile_assessment_visible =
+        mobileAssessmentVisible;
+    reportEvidence.assessment_summary.mobile_total_visible = mobileTotalVisible;
+    reportEvidence.assessment_summary.mobile_horizontal_overflow =
+        reportHorizontalOverflow;
+    await screenshot(
+        targetPage,
+        '08-assessment-summary-mobile',
+        'browser/screenshots/08-assessment-summary-mobile.png',
     );
 }
 
@@ -6049,6 +6221,24 @@ function reportDailyCollection(
         receipt_number: receiptNumber,
         amount_cents: amountCents,
         scope_visible: scopeVisible,
+        csv_export_visible: csvExportVisible,
+    };
+}
+
+function reportAssessmentSummary(
+    assessmentId,
+    applicationNumber,
+    businessName,
+    totalAmountCents,
+    applicationVisible,
+    csvExportVisible,
+) {
+    reportEvidence.assessment_summary = {
+        assessment_id: assessmentId,
+        application_number: applicationNumber,
+        business_name: businessName,
+        total_amount_cents: totalAmountCents,
+        application_visible: applicationVisible,
         csv_export_visible: csvExportVisible,
     };
 }

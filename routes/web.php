@@ -6,6 +6,7 @@ use App\Http\Controllers\Citizen\PermitApplicationDocumentController as CitizenP
 use App\Http\Controllers\PublicPermitVerificationController;
 use App\Http\Controllers\PublicPermitVerificationPageController;
 use App\Http\Controllers\Staff\AssessmentPaymentScheduleController;
+use App\Http\Controllers\Staff\AssessmentSummaryReportController;
 use App\Http\Controllers\Staff\CollectionReceiptController;
 use App\Http\Controllers\Staff\DailyCollectionReportController;
 use App\Http\Controllers\Staff\FeeRuleController;
@@ -91,6 +92,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('receipts.pdf');
         Route::post('receipts/{receipt}/void', [ReceiptController::class, 'voidReceipt'])
             ->name('receipts.void');
+        Route::get('reports/assessment-summary', [AssessmentSummaryReportController::class, 'index'])
+            ->name('reports.assessment-summary.index');
+        Route::get('reports/assessment-summary/download', [AssessmentSummaryReportController::class, 'download'])
+            ->name('reports.assessment-summary.download');
         Route::get('reports/daily-collections', [DailyCollectionReportController::class, 'index'])
             ->name('reports.daily-collections.index');
         Route::get('reports/daily-collections/download', [DailyCollectionReportController::class, 'download'])

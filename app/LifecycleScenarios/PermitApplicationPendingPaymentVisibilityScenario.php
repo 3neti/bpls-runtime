@@ -2,6 +2,7 @@
 
 namespace App\LifecycleScenarios;
 
+use App\Actions\BuildAssessmentSummaryReport;
 use App\Actions\BuildTopEstablishmentsTaxDueReport;
 use App\Actions\BuildUnpaidEstablishmentsReport;
 use App\Actions\CreateAssessmentForPermitApplication;
@@ -26,10 +27,13 @@ use RuntimeException;
 
 final class PermitApplicationPendingPaymentVisibilityScenario
 {
+    private const int ScenarioApplicationYear = 2000;
+
     public function __construct(
         private readonly CreatePermitApplication $createPermitApplication,
         private readonly CreateAssessmentForPermitApplication $createAssessment,
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
+        private readonly BuildAssessmentSummaryReport $buildAssessmentSummaryReport,
         private readonly BuildUnpaidEstablishmentsReport $buildUnpaidEstablishmentsReport,
         private readonly BuildTopEstablishmentsTaxDueReport $buildTopEstablishmentsTaxDueReport,
         private readonly DescribePaymentPolicyBoundary $describePaymentPolicyBoundary,
@@ -67,7 +71,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             'barangay' => 'Poblacion',
             'application_number' => $applicationNumber,
             'type' => $applicationType->value,
-            'application_year' => now()->year,
+            'application_year' => self::ScenarioApplicationYear,
             'lines' => [[
                 'line_of_business_id' => $lineOfBusiness->id,
                 'declared_gross_sales_cents' => 125_000_00,
@@ -84,6 +88,12 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             ->with(['assessments', 'paymentSchedules'])
             ->whereKey($paymentSchedule->permit_application_id)
             ->sole();
+        $assessmentSummaryReport = $this->buildAssessmentSummaryReport->handle([
+            'year' => $permitApplication->application_year,
+            'q' => $permitApplication->application_number,
+        ]);
+        $assessmentSummaryRow = collect($assessmentSummaryReport['rows'])
+            ->firstWhere('assessment_id', $assessment->id);
         $unpaidEstablishmentsReport = $this->buildUnpaidEstablishmentsReport->handle([
             'year' => $permitApplication->application_year,
             'q' => $permitApplication->application_number,
@@ -112,6 +122,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             $this->step('business-tax-assessment-line-computed', 'Assessment action persisted gross-sales business tax meaning', ['category' => FeeRuleCategory::Tax->value, 'basis' => 'declared_gross_sales', 'line_of_business' => $lineOfBusiness->name], ['category' => $rangeAssessmentLine->category->value, 'basis' => $rangeAssessmentLine->basis, 'line_of_business' => $rangeAssessmentLine->lineOfBusiness?->name, 'assessment_line_id' => $rangeAssessmentLine->id]),
             $this->step('payment-schedule-prepared', 'Prepare payment schedule through payment schedule action', ['schedule_status' => PaymentScheduleStatus::Pending->value, 'application_status' => PermitApplicationStatus::PendingPayment->value], ['schedule_status' => $paymentSchedule->status->value, 'application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id]),
             $this->step('payment-policy-boundary-recorded', 'Expose unresolved installment, due-date, surcharge, interest, PIL, and deficiency-tax policy without calculating them', ['payment_policy_status' => 'policy_boundary'], ['payment_policy_status' => $paymentPolicyBoundary['status'], 'blocked_calculation_count' => count($paymentPolicyBoundary['blocked_calculations'])]),
+            $this->step('assessment-summary-report-row-projected', 'Assessment summary contains the current immutable assessment snapshot', ['assessment_id' => $assessment->id, 'total_amount_cents' => $assessment->total_amount_cents], ['assessment_id' => $assessmentSummaryRow['assessment_id'] ?? null, 'total_amount_cents' => $assessmentSummaryRow['total_amount_cents'] ?? null]),
             $this->step('unpaid-establishments-report-row-projected', 'Unpaid establishments report contains the pending permit schedule', ['application_number' => $permitApplication->application_number, 'business_name' => $permitApplication->business->name], ['application_number' => $unpaidEstablishmentRow['application_number'] ?? null, 'business_name' => $unpaidEstablishmentRow['business_name'] ?? null]),
             $this->step('top-tax-due-report-row-projected', 'Top tax due report contains the pending permit assessment tax lines', ['application_number' => $permitApplication->application_number, 'tax_due_cents' => $topTaxDueCents], ['application_number' => $topTaxDueRow['application_number'] ?? null, 'tax_due_cents' => $topTaxDueRow['tax_due_cents'] ?? null]),
         ];
@@ -126,6 +137,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             'public_reference' => $permitApplication->application_number,
             'application_number' => $permitApplication->application_number,
             'application_type' => $permitApplication->type->value,
+            'scenario_policy_date' => self::ScenarioApplicationYear.'-01-01',
             'renewal_policy_status' => data_get($permitApplication->metadata, 'renewal_policy_boundary.status'),
             'amendment_policy_status' => data_get($permitApplication->metadata, 'amendment_policy_boundary.status'),
             'transfer_policy_status' => data_get($permitApplication->metadata, 'transfer_policy_boundary.status'),
@@ -153,6 +165,15 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             'business_tax_amount_cents' => $rangeAssessmentLine->amount_cents,
             'payment_schedule_id' => $paymentSchedule->id,
             'payment_policy_status' => $paymentPolicyBoundary['status'],
+            'assessment_summary_report_url' => route('staff.reports.assessment-summary.index', [
+                'year' => $permitApplication->application_year,
+                'q' => $permitApplication->application_number,
+            ], false),
+            'assessment_summary_report_download_url' => route('staff.reports.assessment-summary.download', [
+                'year' => $permitApplication->application_year,
+                'q' => $permitApplication->application_number,
+            ], false),
+            'assessment_summary_business_name' => $permitApplication->business->name,
             'list_url' => route('staff.permit-applications.index', absolute: false),
             'detail_url' => route('staff.permit-applications.show', $permitApplication, false),
             'payment_schedule_url' => route('staff.payment-schedules.show', $paymentSchedule, false),
@@ -267,6 +288,12 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             ->whereKey((int) $manifest['resources']['payment_schedule_id'])
             ->sole();
         $paymentPolicyBoundary = $this->describePaymentPolicyBoundary->handle($paymentSchedule);
+        $assessmentSummaryReport = $this->buildAssessmentSummaryReport->handle([
+            'year' => $permitApplication->application_year,
+            'q' => $permitApplication->application_number,
+        ]);
+        $assessmentSummaryRow = collect($assessmentSummaryReport['rows'])
+            ->firstWhere('assessment_id', $assessment->id);
         $unpaidEstablishmentsReport = $this->buildUnpaidEstablishmentsReport->handle([
             'year' => $permitApplication->application_year,
             'q' => $permitApplication->application_number,
@@ -300,6 +327,8 @@ final class PermitApplicationPendingPaymentVisibilityScenario
             $this->step('audit-payment-schedule-status', 'Payment schedule remains pending for collection', ['status' => PaymentScheduleStatus::Pending->value], ['status' => $paymentSchedule->status->value]),
             $this->step('audit-payment-policy-boundary', 'Canonical payment policy boundary remains explicit', ['payment_policy_status' => 'policy_boundary'], ['payment_policy_status' => $paymentPolicyBoundary['status'], 'blocked_calculation_count' => count($paymentPolicyBoundary['blocked_calculations'])]),
             $this->step('audit-browser-payment-policy-boundary', 'Browser evidence shows the payment policy boundary', ['payment_policy_status' => 'policy_boundary', 'installment_visible' => true, 'due_date_visible' => true, 'surcharge_visible' => true, 'pil_visible' => true], ['payment_policy_status' => data_get($browserReport, 'payment_policy_boundary.status'), 'installment_visible' => data_get($browserReport, 'payment_policy_boundary.installment_visible'), 'due_date_visible' => data_get($browserReport, 'payment_policy_boundary.due_date_visible'), 'surcharge_visible' => data_get($browserReport, 'payment_policy_boundary.surcharge_visible'), 'pil_visible' => data_get($browserReport, 'payment_policy_boundary.pil_visible')]),
+            $this->step('audit-assessment-summary-report-row', 'Assessment summary contains the canonical current assessment snapshot', ['assessment_id' => $assessment->id, 'total_amount_cents' => $assessment->total_amount_cents], ['assessment_id' => $assessmentSummaryRow['assessment_id'] ?? null, 'total_amount_cents' => $assessmentSummaryRow['total_amount_cents'] ?? null]),
+            $this->step('audit-browser-assessment-summary-report-row', 'Browser evidence observed the same assessment summary row', ['assessment_id' => $assessment->id, 'total_amount_cents' => $assessment->total_amount_cents, 'csv_export_visible' => true], ['assessment_id' => data_get($browserReport, 'reports.assessment_summary.assessment_id'), 'total_amount_cents' => data_get($browserReport, 'reports.assessment_summary.total_amount_cents'), 'csv_export_visible' => data_get($browserReport, 'reports.assessment_summary.csv_export_visible')]),
             $this->step('audit-unpaid-establishments-report-row', 'Unpaid establishments report contains the scenario pending permit schedule', ['application_number' => $permitApplication->application_number, 'business_name' => $permitApplication->business->name], ['application_number' => $unpaidEstablishmentRow['application_number'] ?? null, 'business_name' => $unpaidEstablishmentRow['business_name'] ?? null]),
             $this->step('audit-browser-unpaid-establishments-report-row', 'Browser evidence observed the unpaid establishments report row', ['application_number' => $permitApplication->application_number, 'csv_export_visible' => true], ['application_number' => data_get($browserReport, 'reports.unpaid_establishments.application_number'), 'csv_export_visible' => data_get($browserReport, 'reports.unpaid_establishments.csv_export_visible')]),
             $this->step('audit-top-tax-due-report-row', 'Top tax due report contains the scenario pending permit assessment tax lines', ['application_number' => $permitApplication->application_number, 'tax_due_cents' => $manifest['resources']['top_tax_due_cents']], ['application_number' => $topTaxDueRow['application_number'] ?? null, 'tax_due_cents' => $topTaxDueRow['tax_due_cents'] ?? null]),
@@ -354,6 +383,14 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                 'payment_schedule_id' => $paymentSchedule->id,
                 'payment_schedule_status' => $paymentSchedule->status->value,
                 'payment_policy_boundary' => $paymentPolicyBoundary,
+                'assessment_summary_report' => [
+                    'year' => $assessmentSummaryReport['filters']['year'],
+                    'row_count' => $assessmentSummaryReport['summary']['row_count'],
+                    'total_amount_cents' => $assessmentSummaryReport['summary']['total_amount_cents'],
+                    'assessment_id' => $assessmentSummaryRow['assessment_id'] ?? null,
+                    'application_number' => $assessmentSummaryRow['application_number'] ?? null,
+                    'business_name' => $assessmentSummaryRow['business_name'] ?? null,
+                ],
                 'unpaid_establishments_report' => [
                     'year' => $unpaidEstablishmentsReport['filters']['year'],
                     'row_count' => $unpaidEstablishmentsReport['summary']['row_count'],
@@ -403,7 +440,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                 'calculation_type' => FeeRuleCalculationType::Fixed,
                 'basis' => 'none',
                 'amount_cents' => 10_000,
-                'effective_from' => now()->startOfYear(),
+                'effective_from' => self::ScenarioApplicationYear.'-01-01',
                 'is_active' => true,
             ],
         );
@@ -419,7 +456,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                 'basis' => 'declared_gross_sales',
                 'amount_cents' => 0,
                 'rate_basis_points' => null,
-                'effective_from' => now()->startOfYear(),
+                'effective_from' => self::ScenarioApplicationYear.'-01-01',
                 'is_active' => true,
             ],
         );
