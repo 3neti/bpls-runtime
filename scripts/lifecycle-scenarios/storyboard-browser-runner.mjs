@@ -242,6 +242,7 @@ try {
         await inspectManualReceiptPaymentSummaryReport(page, baseUrl);
         await inspectManualReceiptBusinessTaxByMajorTypeReport(page, baseUrl);
         await inspectManualReceiptTotalCapitalGrossSummaryReport(page, baseUrl);
+        await inspectManualReceiptCmciLdcsBoundary(page, baseUrl);
         await inspectManualReceiptPaymentSchedule(page, baseUrl);
         await inspectManualReceiptDetail(page, baseUrl);
         await inspectManualReceiptPermitReleaseBoundary(page, baseUrl);
@@ -5128,6 +5129,130 @@ async function inspectManualReceiptTotalCapitalGrossSummaryReport(
         targetPage,
         '02-total-capital-gross-summary-report-mobile',
         'browser/screenshots/02-total-capital-gross-summary-report-mobile.png',
+    );
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+}
+
+async function inspectManualReceiptCmciLdcsBoundary(targetPage, targetBaseUrl) {
+    const reportUrl = `${targetBaseUrl}${manifest.resources.cmci_ldcs_report_url}`;
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+
+    const boundaryVisible = await targetPage
+        .getByTestId('cmci-boundary-status')
+        .isVisible()
+        .catch(() => false);
+    const authorityExplanationVisible = await targetPage
+        .getByTestId('cmci-authority-boundary')
+        .getByText('do not prove legal issuance', { exact: false })
+        .isVisible()
+        .catch(() => false);
+    const officialRowCount = Number(
+        (
+            await targetPage
+                .getByTestId('cmci-official-row-count')
+                .textContent()
+                .catch(() => null)
+        )?.trim(),
+    );
+    const contractColumnCount = Number(
+        (
+            await targetPage
+                .getByTestId('cmci-column-count')
+                .textContent()
+                .catch(() => null)
+        )?.trim(),
+    );
+    const exportVisible = await targetPage
+        .getByRole('link', { name: /export/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const artifactVisible = await targetPage
+        .getByText(manifest.resources.paid_establishment_business_name, {
+            exact: false,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'cmci-ldcs-authority-boundary-visible',
+            'CMCI LDCS shows its blocked authority state and exact 18-field contract',
+            true,
+            boundaryVisible &&
+                authorityExplanationVisible &&
+                officialRowCount === 0 &&
+                contractColumnCount === 18,
+            {
+                url: reportUrl,
+                official_row_count: officialRowCount,
+                contract_column_count: contractColumnCount,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'cmci-ldcs-artifact-excluded',
+            'CMCI LDCS does not expose the artifact-ready application as an official released permit',
+            true,
+            !artifactVisible && !exportVisible,
+        ),
+    );
+
+    reportEvidence.cmci_ldcs = {
+        status: boundaryVisible ? 'blocked' : null,
+        can_generate: false,
+        can_export: exportVisible,
+        official_row_count: officialRowCount,
+        contract_column_count: contractColumnCount,
+        artifact_excluded: !artifactVisible,
+    };
+    await screenshot(
+        targetPage,
+        '02-cmci-ldcs-boundary',
+        'browser/screenshots/02-cmci-ldcs-boundary.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const mobileBoundaryVisible = await targetPage
+        .getByTestId('cmci-boundary-status')
+        .isVisible()
+        .catch(() => false);
+    const mobileColumnCount = await targetPage
+        .getByTestId('cmci-mobile-column')
+        .count();
+    const mobileHorizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+
+    checks.push(
+        check(
+            'cmci-ldcs-mobile-visible',
+            'Mobile CMCI LDCS keeps the authority state and all contract fields visible',
+            true,
+            mobileBoundaryVisible && mobileColumnCount === 18,
+        ),
+    );
+    checks.push(
+        check(
+            'cmci-ldcs-mobile-no-horizontal-overflow',
+            'Mobile CMCI LDCS has no page-level horizontal overflow',
+            false,
+            mobileHorizontalOverflow,
+        ),
+    );
+    reportEvidence.cmci_ldcs.mobile_visible =
+        mobileBoundaryVisible && mobileColumnCount === 18;
+    reportEvidence.cmci_ldcs.mobile_horizontal_overflow =
+        mobileHorizontalOverflow;
+    await screenshot(
+        targetPage,
+        '02-cmci-ldcs-boundary-mobile',
+        'browser/screenshots/02-cmci-ldcs-boundary-mobile.png',
     );
     await targetPage.setViewportSize({ width: 1440, height: 900 });
 }

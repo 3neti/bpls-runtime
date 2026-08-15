@@ -8,6 +8,7 @@ use App\Http\Controllers\PublicPermitVerificationPageController;
 use App\Http\Controllers\Staff\AssessmentPaymentScheduleController;
 use App\Http\Controllers\Staff\AssessmentSummaryReportController;
 use App\Http\Controllers\Staff\BusinessTaxByMajorTypeReportController;
+use App\Http\Controllers\Staff\CmciLdcsReportController;
 use App\Http\Controllers\Staff\CollectiblesReportController;
 use App\Http\Controllers\Staff\CollectionReceiptController;
 use App\Http\Controllers\Staff\DailyCollectionReportController;
@@ -116,6 +117,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('reports.total-capital-gross-summary.index');
         Route::get('reports/total-capital-gross-summary/download', [TotalCapitalGrossSummaryReportController::class, 'download'])
             ->name('reports.total-capital-gross-summary.download');
+        Route::get('reports/cmci-ldcs', [CmciLdcsReportController::class, 'index'])
+            ->name('reports.cmci-ldcs.index');
         Route::get('reports/daily-collections', [DailyCollectionReportController::class, 'index'])
             ->name('reports.daily-collections.index');
         Route::get('reports/daily-collections/download', [DailyCollectionReportController::class, 'download'])

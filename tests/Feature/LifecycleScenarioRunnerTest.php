@@ -1121,6 +1121,13 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($firstManifest['resources']['total_capital_gross_payment_cents'])->toBe($receipt->amount_cents)
         ->and($firstManifest['resources']['total_capital_gross_balance_cents'])->toBe(0)
         ->and($firstManifest['resources']['total_capital_gross_payment_status'])->toBe('Completed')
+        ->and($firstManifest['resources']['cmci_ldcs_report_url'])->toBe('/staff/reports/cmci-ldcs')
+        ->and($firstManifest['resources']['cmci_ldcs_status'])->toBe('blocked')
+        ->and($firstManifest['resources']['cmci_ldcs_can_generate'])->toBeFalse()
+        ->and($firstManifest['resources']['cmci_ldcs_can_export'])->toBeFalse()
+        ->and($firstManifest['resources']['cmci_ldcs_official_row_count'])->toBe(0)
+        ->and($firstManifest['resources']['cmci_ldcs_contract_column_count'])->toBe(18)
+        ->and($firstManifest['resources']['cmci_ldcs_artifact_excluded'])->toBeTrue()
         ->and($firstManifest['resources']['application_form_pdf_url'])->toBe('/staff/permit-applications/'.$firstManifest['resources']['permit_application_id'].'/application-form.pdf')
         ->and($firstManifest['resources']['assessment_pdf_url'])->toBe('/staff/assessments/'.$firstManifest['resources']['assessment_id'].'/pdf')
         ->and($firstManifest['resources']['assessment_total_amount_cents'])->toBe(PermitApplication::query()->findOrFail($firstManifest['resources']['permit_application_id'])->assessments()->firstOrFail()->total_amount_cents)
@@ -1698,6 +1705,16 @@ test('manual collection receipt scenario audit compares browser evidence with ca
                 'mobile_visible' => true,
                 'mobile_horizontal_overflow' => false,
             ],
+            'cmci_ldcs' => [
+                'status' => 'blocked',
+                'can_generate' => false,
+                'can_export' => false,
+                'official_row_count' => 0,
+                'contract_column_count' => 18,
+                'artifact_excluded' => true,
+                'mobile_visible' => true,
+                'mobile_horizontal_overflow' => false,
+            ],
         ],
         'verification' => [
             'reference' => $verification['reference'],
@@ -1781,6 +1798,8 @@ test('manual collection receipt scenario audit compares browser evidence with ca
         ->and($audited['resources']['permit_verification_reference'])->toBe($verification['reference'])
         ->and($audited['resources']['permit_artifact_status'])->toBe('generated_artifact_available')
         ->and($audited['resources']['receipt_void_boundary_reference'])->toBe($voidBoundary['reference'])
+        ->and(collect($artifactStore->readJson('terminal/audit.json')['checks'])->firstWhere('key', 'audit-cmci-ldcs-authority-boundary')['passed'])->toBeTrue()
+        ->and(collect($artifactStore->readJson('terminal/audit.json')['checks'])->firstWhere('key', 'audit-browser-cmci-ldcs-authority-boundary')['passed'])->toBeTrue()
         ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });

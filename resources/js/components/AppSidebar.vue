@@ -14,6 +14,7 @@ import {
     LayoutGrid,
     ReceiptText,
     Trophy,
+    TableProperties,
     WalletCards,
 } from '@lucide/vue';
 import { computed } from 'vue';
@@ -21,6 +22,7 @@ import { index as citizenPermitApplicationIndex } from '@/actions/App/Http/Contr
 import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { index as assessmentSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentSummaryReportController';
 import { index as businessTaxByMajorTypeReportIndex } from '@/actions/App/Http/Controllers/Staff/BusinessTaxByMajorTypeReportController';
+import { index as cmciLdcsReportIndex } from '@/actions/App/Http/Controllers/Staff/CmciLdcsReportController';
 import { index as collectiblesReportIndex } from '@/actions/App/Http/Controllers/Staff/CollectiblesReportController';
 import { index as dailyCollectionReportIndex } from '@/actions/App/Http/Controllers/Staff/DailyCollectionReportController';
 import { index as feeRuleIndex } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
@@ -112,6 +114,11 @@ const staffNavItems: NavItem[] = [
         title: 'Capital / Gross',
         href: totalCapitalGrossSummaryReportIndex(),
         icon: ChartColumn,
+    },
+    {
+        title: 'CMCI LDCS',
+        href: cmciLdcsReportIndex(),
+        icon: TableProperties,
     },
     {
         title: 'Revenue Sources',
