@@ -85,10 +85,10 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->feeRule->currentReconciliation->execution_status->toBe(FeeRuleExecutionStatus::Executable);
 
     expect(RevenueCodeProvisionRow::query()->count())->toBe(82);
-    expect(RevenueCodeProvisionClause::query()->count())->toBe(12)
+    expect(RevenueCodeProvisionClause::query()->count())->toBe(19)
         ->and(RevenueCodeProvisionClause::query()
             ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
-            ->count())->toBe(12);
+            ->count())->toBe(19);
 
     $dependentRate = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2A-02-C-DEPENDENT-HALF-RATE')
@@ -101,6 +101,24 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->sole();
     $peddlerCeiling = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2A-02-H-ANNUAL-CEILING')
+        ->sole();
+    $manufacturerTaxScope = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2A-02-B-MANUFACTURER-TAX-SCOPE')
+        ->sole();
+    $contractorMinimum = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2A-02-E-MINIMUM-TAX')
+        ->sole();
+    $contractorInstallments = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2A-02-E-PROJECT-INSTALLMENTS')
+        ->sole();
+    $contractorRecomputation = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2A-02-E-COMPLETION-RECOMPUTATION')
+        ->sole();
+    $serviceEligibility = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2A-02-G-ENUMERATED-BUSINESSES')
+        ->sole();
+    $serviceMinimum = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-2A-02-G-MINIMUM-TAX')
         ->sole();
 
     expect($dependentRate)
@@ -117,7 +135,25 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->and($peddlerCeiling)
         ->amount_cents->toBe(6_275)
         ->is_ceiling->toBeTrue()
-        ->execution_blocker->toContain('ceiling');
+        ->execution_blocker->toContain('ceiling')
+        ->and($manufacturerTaxScope)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::TaxScopeBoundary)
+        ->metadata->excluded_when_subject_to_section->toBe('2A.02(a)')
+        ->and($contractorMinimum)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::MinimumTax)
+        ->amount_cents->toBe(1_447_793)
+        ->and($contractorInstallments)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::InstallmentSchedule)
+        ->metadata->allocation->toBe('equal')
+        ->and($contractorRecomputation)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::CompletionRecomputation)
+        ->metadata->candidate_outcomes->toBe(['deficiency_collection', 'excess_refund'])
+        ->and($serviceEligibility)
+        ->metadata->source_item_numbers->toBe([14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24])
+        ->metadata->known_ambiguity->toBe('enumeration_starts_at_14')
+        ->and($serviceMinimum)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::MinimumTax)
+        ->amount_cents->toBe(1_447_793);
 
     $overlappingRow = RevenueCodeProvisionRow::query()
         ->where('code', 'MRC-2A-02-B-ROW-08')

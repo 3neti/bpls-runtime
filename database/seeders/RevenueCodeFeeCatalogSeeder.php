@@ -418,6 +418,18 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
 
     private function seedPolicyBoundaryClauses(): void
     {
+        $this->persistPolicyBoundaryClauses('MRC-2A-02-B-WHOLESALERS', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-2A-02-B-MANUFACTURER-TAX-SCOPE',
+                type: RevenueCodeProvisionClauseType::TaxScopeBoundary,
+                sourceText: 'The Businesses enumerated in paragraph (a) above shall no longer be subject to the tax on wholesalers, distributors, or dealers herein provided for.',
+                candidateInterpretation: 'Candidate tax-scope boundary: a business taxed under Section 2A.02(a) is excluded from a second wholesale, distributor, or dealer tax under Section 2A.02(b).',
+                executionBlocker: 'The application needs an accepted activity-classification and multi-line allocation policy before this exclusion can be applied deterministically.',
+                metadata: ['excluded_when_subject_to_section' => '2A.02(a)', 'excluded_tax_section' => '2A.02(b)'],
+            ),
+        ]);
+
         $this->persistPolicyBoundaryClauses('MRC-2A-02-C-EXPORTERS-ESSENTIALS', [
             $this->policyBoundaryClause(
                 sequence: 1,
@@ -481,6 +493,46 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             ),
         ]);
 
+        $this->persistPolicyBoundaryClauses('MRC-2A-02-E-CONTRACTORS', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-2A-02-E-MINIMUM-TAX',
+                type: RevenueCodeProvisionClauseType::MinimumTax,
+                sourceText: 'Provided, that in no case shall the tax on gross sales of P2,000,000.00 or more be less than P14,477.93.',
+                candidateInterpretation: 'Candidate minimum: contractor tax for gross sales of PHP 2,000,000.00 or more has a PHP 14,477.93 floor.',
+                executionBlocker: 'The source schedule has an overlapping bracket and a ceiling-only percentage; the floor cannot execute until the underlying schedule and rounding are reconciled.',
+                metadata: ['gross_sales_from_cents' => 200_000_000],
+                amountCents: 1_447_793,
+            ),
+            $this->policyBoundaryClause(
+                sequence: 2,
+                code: 'MRC-2A-02-E-INITIAL-CONTRACT-BASIS',
+                type: RevenueCodeProvisionClauseType::InitialTaxBasis,
+                sourceText: 'For the purposes of this section, the tax of general engineering, general building and specialty contractors shall initially be based on the total contract price.',
+                candidateInterpretation: 'Candidate initial basis: qualifying contractor tax starts from total contract price rather than preceding-year gross receipts.',
+                executionBlocker: 'Contract type eligibility, contract amendments, project scope, and the accepted conversion from contract price to annual liability remain unresolved.',
+                metadata: ['candidate_basis' => 'total_contract_price', 'contractor_classes' => ['general_engineering', 'general_building', 'specialty']],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 3,
+                code: 'MRC-2A-02-E-PROJECT-INSTALLMENTS',
+                type: RevenueCodeProvisionClauseType::InstallmentSchedule,
+                sourceText: 'For the purposes of this section, the tax of general engineering, general building and specialty contractors shall initially be based on the total contract price, payable in equal annual installments within the project term.',
+                candidateInterpretation: 'Candidate schedule: the initial contractor tax is divided into equal annual installments across the project term.',
+                executionBlocker: 'Installment count, partial years, due dates, project extensions, cancellations, and remainder allocation require accepted municipal policy.',
+                metadata: ['frequency' => 'annual', 'allocation' => 'equal', 'term_basis' => 'project_term'],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 4,
+                code: 'MRC-2A-02-E-COMPLETION-RECOMPUTATION',
+                type: RevenueCodeProvisionClauseType::CompletionRecomputation,
+                sourceText: 'Upon completion of the project, the taxes shall be recomputed on the basis of the gross receipts for the proceeding calendar years and the deficiency tax, if there be any, shall be collected provided in this code or the excess tax payment shall be refunded.',
+                candidateInterpretation: 'Candidate completion treatment: recompute from project-period gross receipts, collect a deficiency, or refund an excess payment.',
+                executionBlocker: 'Completion authority, gross-receipts period, deficiency procedures, refund authority, audit evidence, and the source wording “proceeding calendar years” require municipal reconciliation.',
+                metadata: ['candidate_completion_basis' => 'project_period_gross_receipts', 'candidate_outcomes' => ['deficiency_collection', 'excess_refund'], 'source_wording_question' => 'proceeding_calendar_years'],
+            ),
+        ]);
+
         $this->persistPolicyBoundaryClauses('MRC-2A-02-F-FINANCIAL-INSTITUTIONS', [
             $this->policyBoundaryClause(
                 sequence: 1,
@@ -509,6 +561,28 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 candidateInterpretation: 'Candidate documentary requirement: annual financial-institution tax evidence includes a notarized joint annual-income statement with two authorized signatories.',
                 executionBlocker: 'Document format, signer authority, review responsibility, and documentary-sufficiency policy are not yet accepted.',
                 metadata: ['notarization_required' => true, 'required_signatory_roles' => ['designated_head_office_officer', 'branch_manager']],
+            ),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-2A-02-G-ENUMERATED-SERVICES', [
+            $this->policyBoundaryClause(
+                sequence: 1,
+                code: 'MRC-2A-02-G-ENUMERATED-BUSINESSES',
+                type: RevenueCodeProvisionClauseType::Eligibility,
+                sourceText: 'On the businesses hereunder enumerated: (14) Cafes, cafeterias, ice cream and other refreshment parlors, restaurants, soda fountain bars, carinderias or food caterers; (15) Amusement places, including places wherein customers thereof actively participate without making bets or wagers, including but not limited to night clubs, or day clubs, cocktail lounges, cabarets or dance halls, karaoke bars, skating rinks, bath houses, swimming pools, exclusive clubs such as country and sports clubs, resorts and other similar places, billiard and pool tables, bowling alleys, circuses, carnivals, merry go-rounds, roller coasters, ferries wheels, swings, shooting galleries, and other similar contrivances, theaters and cinema houses, boxing stadia, race tracks, cockpits and other similar establishments; (16) Commission agents; (17) Lessors, dealers, brokers of real estate; (18) On travel agencies and travel agents; (19) On boarding houses, pension houses, motels, apartments, apartelles, and condominiums; (20) Subdivision owners/ Private cemeteries and Memorial Parks; (21) Privately-owned markets; (22) Hospitals, medical clinics, dental clinics, therapeutic clinics, medical laboratories, dental, laboratories; (23) Operators of Cable Network System; (24) Operators of computer services establishment.',
+                candidateInterpretation: 'Candidate eligibility catalog: the source enumerates eleven service-business groups numbered 14 through 24.',
+                executionBlocker: 'Operational business classifications and the unexplained source numbering that begins at 14 require accepted municipal mapping before schedule execution.',
+                metadata: ['category_count' => 11, 'source_item_numbers' => [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24], 'known_ambiguity' => 'enumeration_starts_at_14', 'categories' => ['food_and_refreshment_establishments', 'amusement_places', 'commission_agents', 'real_estate_lessors_dealers_and_brokers', 'travel_agencies_and_agents', 'lodging_and_residential_lessors', 'subdivision_cemetery_and_memorial_park_owners', 'private_markets', 'medical_and_dental_establishments', 'cable_network_operators', 'computer_service_establishments']],
+            ),
+            $this->policyBoundaryClause(
+                sequence: 2,
+                code: 'MRC-2A-02-G-MINIMUM-TAX',
+                type: RevenueCodeProvisionClauseType::MinimumTax,
+                sourceText: 'Provided that in no case shall the tax on gross sales of P2,000,000.00 or more be less than P14,477.93.',
+                candidateInterpretation: 'Candidate minimum: enumerated-service tax for gross sales of PHP 2,000,000.00 or more has a PHP 14,477.93 floor.',
+                executionBlocker: 'The source schedule has an overlapping bracket and a ceiling-only percentage; the floor cannot execute until the schedule, eligibility, and rounding are reconciled.',
+                metadata: ['gross_sales_from_cents' => 200_000_000],
+                amountCents: 1_447_793,
             ),
         ]);
 

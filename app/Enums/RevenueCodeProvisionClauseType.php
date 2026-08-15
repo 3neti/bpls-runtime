@@ -14,4 +14,9 @@ enum RevenueCodeProvisionClauseType: string
     case AmountCeiling = 'amount_ceiling';
     case Exemption = 'exemption';
     case PaymentTiming = 'payment_timing';
+    case TaxScopeBoundary = 'tax_scope_boundary';
+    case MinimumTax = 'minimum_tax';
+    case InitialTaxBasis = 'initial_tax_basis';
+    case InstallmentSchedule = 'installment_schedule';
+    case CompletionRecomputation = 'completion_recomputation';
 }

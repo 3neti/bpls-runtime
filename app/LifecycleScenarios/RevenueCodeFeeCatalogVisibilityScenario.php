@@ -30,15 +30,22 @@ final class RevenueCodeFeeCatalogVisibilityScenario
 
     /** @var array<int, string> */
     private const POLICY_BOUNDARY_CLAUSE_CODES = [
+        'MRC-2A-02-B-MANUFACTURER-TAX-SCOPE',
         'MRC-2A-02-C-DEPENDENT-HALF-RATE',
         'MRC-2A-02-C-ESSENTIAL-COMMODITIES',
         'MRC-2A-02-C-EXPORT-SALES-EXCLUSION',
         'MRC-2A-02-D-FIRST-RETAIL-BAND',
         'MRC-2A-02-D-EXCESS-RETAIL-BAND',
         'MRC-2A-02-D-BARANGAY-AUTHORITY',
+        'MRC-2A-02-E-MINIMUM-TAX',
+        'MRC-2A-02-E-INITIAL-CONTRACT-BASIS',
+        'MRC-2A-02-E-PROJECT-INSTALLMENTS',
+        'MRC-2A-02-E-COMPLETION-RECOMPUTATION',
         'MRC-2A-02-F-GROSS-RECEIPTS-RATE',
         'MRC-2A-02-F-TAXABLE-RECEIPTS',
         'MRC-2A-02-F-JOINT-STATEMENT',
+        'MRC-2A-02-G-ENUMERATED-BUSINESSES',
+        'MRC-2A-02-G-MINIMUM-TAX',
         'MRC-2A-02-H-ANNUAL-CEILING',
         'MRC-2A-02-H-DELIVERY-VEHICLE-EXEMPTION',
         'MRC-2A-02-H-PAYMENT-TIMING',
@@ -84,7 +91,7 @@ final class RevenueCodeFeeCatalogVisibilityScenario
             $this->step('ambiguous-provision-linked', 'Link the disputed legal provision to its blocked fee rule without authorizing execution', ['provision_code' => 'MRC-2A-02-B-WHOLESALERS', 'reconciliation_status' => 'reconciliation_required', 'fee_rule_code' => $feeRule->code], ['provision_code' => $provision->code, 'reconciliation_status' => $provision->reconciliation_status->value, 'fee_rule_code' => $provision->feeRule?->code]),
             $this->step('schedule-matrix-analyzed', 'Analyze exact source rows for mechanical reconciliation findings', ['row_count' => 24, 'overlap_count' => 1, 'gap_count' => 0, 'reconciliation_required_count' => 3, 'ceiling_count' => 1, 'execution_ready' => false], $scheduleAnalysis['summary']),
             $this->step('schedule-matrices-analyzed', 'Analyze every extracted Section 2A.02 schedule without authorizing execution', ['schedule_count' => 4, 'row_count' => 82, 'overlap_count' => 3, 'gap_count' => 0, 'reconciliation_required_count' => 7, 'ceiling_count' => 4, 'execution_ready_count' => 0], $scheduleSummary),
-            $this->step('policy-boundary-clauses-recorded', 'Record non-schedule legal clauses without authorizing financial execution', ['provision_count' => 4, 'clause_count' => 12, 'reconciliation_required_count' => 12, 'ceiling_count' => 2, 'execution_ready_count' => 0], $policyBoundarySummary),
+            $this->step('policy-boundary-clauses-recorded', 'Record non-schedule legal clauses without authorizing financial execution', ['provision_count' => 7, 'clause_count' => 19, 'reconciliation_required_count' => 19, 'ceiling_count' => 2, 'execution_ready_count' => 0], $policyBoundarySummary),
         ];
 
         foreach ($steps as $step) {
@@ -410,7 +417,7 @@ final class RevenueCodeFeeCatalogVisibilityScenario
                 ],
                 [
                     'title' => 'Staff reviews non-schedule policy boundaries',
-                    'description' => 'Dependent rates, retail bands, taxable financial receipts, documentary requirements, peddler ceilings, exemptions, and timing remain traceable clauses with explicit execution blockers.',
+                    'description' => 'Tax-scope exclusions, dependent rates, retail bands, contractor installments and recomputation, minimum floors, service eligibility, taxable financial receipts, documentary requirements, peddler ceilings, exemptions, and timing remain traceable clauses with explicit execution blockers.',
                     'dialogue' => 'Candidate facts support reconciliation; they are not executable policy.',
                     'duration_seconds' => 5,
                 ],

@@ -1273,13 +1273,13 @@ test('revenue code fee catalog visibility scenario prepares deterministic catalo
         ->and($firstManifest['resources']['schedule_matrices']['MRC-2A-02-G-ENUMERATED-SERVICES']['ceiling_count'])->toBe(1)
         ->and($firstManifest['resources']['schedule_findings'])->toHaveCount(4)
         ->and($firstManifest['resources']['policy_boundary_summary'])->toBe([
-            'provision_count' => 4,
-            'clause_count' => 12,
-            'reconciliation_required_count' => 12,
+            'provision_count' => 7,
+            'clause_count' => 19,
+            'reconciliation_required_count' => 19,
             'ceiling_count' => 2,
             'execution_ready_count' => 0,
         ])
-        ->and($firstManifest['resources']['policy_boundary_clause_codes'])->toHaveCount(12)
+        ->and($firstManifest['resources']['policy_boundary_clause_codes'])->toHaveCount(19)
         ->and($firstManifest['resources']['overlap_row_code'])->toBe('MRC-2A-02-B-ROW-08')
         ->and($firstManifest['resources']['policy_boundaries'])->toContain('new_business_initial_local_business_tax_exemption')
         ->and($feeRule->ranges)->toHaveCount(23)
