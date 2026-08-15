@@ -6,6 +6,7 @@ use App\Actions\AttemptPermitApplicationRelease;
 use App\Actions\BuildCollectionsByRevenueSourceReport;
 use App\Actions\BuildDailyCollectionsReport;
 use App\Actions\BuildPaidEstablishmentsReport;
+use App\Actions\BuildPaymentSummaryReport;
 use App\Actions\BuildPermitApplicationTimeline;
 use App\Actions\CompletePermitClearance;
 use App\Actions\CreateAssessmentForPermitApplication;
@@ -53,6 +54,8 @@ use RuntimeException;
 
 final class ManualCollectionReceiptVisibilityScenario
 {
+    private const int ScenarioApplicationYear = 2001;
+
     public function __construct(
         private readonly CreatePermitApplication $createPermitApplication,
         private readonly CreateCitizenPermitApplicationDraft $createCitizenPermitApplicationDraft,
@@ -70,6 +73,7 @@ final class ManualCollectionReceiptVisibilityScenario
         private readonly BuildDailyCollectionsReport $buildDailyCollectionsReport,
         private readonly BuildCollectionsByRevenueSourceReport $buildCollectionsByRevenueSourceReport,
         private readonly BuildPaidEstablishmentsReport $buildPaidEstablishmentsReport,
+        private readonly BuildPaymentSummaryReport $buildPaymentSummaryReport,
         private readonly BuildPermitApplicationTimeline $buildPermitApplicationTimeline,
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly DescribePermitArtifact $describePermitArtifact,
@@ -124,7 +128,7 @@ final class ManualCollectionReceiptVisibilityScenario
             'established_on' => '2018-01-15',
             'started_on' => '2018-02-01',
             'registered_on' => '2018-01-10',
-            'application_year' => now()->year,
+            'application_year' => self::ScenarioApplicationYear,
             'lines' => [
                 [
                     'line_of_business_id' => $lineOfBusiness->id,
@@ -229,6 +233,12 @@ final class ManualCollectionReceiptVisibilityScenario
         ]);
         $paidEstablishmentRow = collect($paidEstablishmentsReport['rows'])
             ->firstWhere('application_id', $permitApplication->id);
+        $paymentSummaryReport = $this->buildPaymentSummaryReport->handle([
+            'year' => $permitApplication->application_year,
+            'q' => $reportSearch,
+        ]);
+        $paymentSummaryRow = collect($paymentSummaryReport['rows'])
+            ->firstWhere('payment_schedule_id', $paymentSchedule->id);
         $verificationBoundary = $this->describeVerificationBoundary->handle($permitApplication);
         $receiptVoidBoundary = $this->describeReceiptVoidBoundary->handle($receipt);
         $timeline = $this->buildPermitApplicationTimeline->handle($permitApplication);
@@ -247,6 +257,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('collection-recorded', 'Record full over-the-counter collection through Treasury action', ['payment_schedule_status' => PaymentScheduleStatus::Paid->value, 'collection_status' => TreasuryCollectionStatus::PendingReceipt->value], ['payment_schedule_status' => $paymentSchedule->status->value, 'collection_status' => $collectionStatusBeforeReceipt->value, 'collection_id' => $collection->id]),
             $this->step('online-payment-boundary-recorded', 'Describe online payment and reconciliation boundary without calling a gateway', ['online_payment_status' => 'blocked', 'can_pay_online' => false, 'can_reconcile_online' => false], ['online_payment_status' => $onlinePaymentBoundary['status'], 'can_pay_online' => $onlinePaymentBoundary['can_pay_online'], 'can_reconcile_online' => $onlinePaymentBoundary['can_reconcile_online']]),
             $this->step('manual-receipt-issued', 'Issue manual receipt through receipt action', ['receipt_status' => ReceiptStatus::Issued->value, 'collection_status' => TreasuryCollectionStatus::Receipted->value], ['receipt_status' => $receipt->status->value, 'collection_status' => $collection->status->value, 'receipt_id' => $receipt->id]),
+            $this->step('payment-summary-report-row-projected', 'Payment summary contains the exact paid schedule and receipted collection evidence', ['payment_schedule_id' => $paymentSchedule->id, 'paid_amount_cents' => $paymentSchedule->paid_amount_cents, 'receipted_amount_cents' => $receipt->amount_cents], ['payment_schedule_id' => $paymentSummaryRow['payment_schedule_id'] ?? null, 'paid_amount_cents' => $paymentSummaryRow['paid_amount_cents'] ?? null, 'receipted_amount_cents' => $paymentSummaryRow['receipted_amount_cents'] ?? null]),
             $this->step('receipt-void-blocked', 'Attempt receipt void through receipt policy boundary action', ['void_blocked' => true, 'receipt_status' => ReceiptStatus::Issued->value, 'collection_status' => TreasuryCollectionStatus::Receipted->value], ['void_blocked' => $receiptVoidBlocked, 'receipt_status' => $receipt->status->value, 'collection_status' => $collection->status->value, 'receipt_id' => $receipt->id]),
             $this->step('clearance-checklist-completed', 'Complete clearance checklist through clearance actions', ['completed_clearances' => 3, 'all_completed' => true], ['completed_clearances' => $completedClearances, 'all_completed' => $permitApplication->clearances->every(fn ($clearance): bool => $clearance->status === PermitClearanceStatus::Completed)]),
             $this->step('release-ready-for-authority-review', 'Describe release readiness without issuing permit', ['ready_for_authority_review' => true, 'can_release' => false], ['ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'], 'can_release' => $releaseReadiness['can_release']]),
@@ -349,6 +360,15 @@ final class ManualCollectionReceiptVisibilityScenario
                 'q' => $reportSearch,
             ], false),
             'paid_establishment_business_name' => $permitApplication->business->name,
+            'payment_summary_report_url' => route('staff.reports.payment-summary.index', [
+                'year' => $permitApplication->application_year,
+                'q' => $reportSearch,
+            ], false),
+            'payment_summary_report_download_url' => route('staff.reports.payment-summary.download', [
+                'year' => $permitApplication->application_year,
+                'q' => $reportSearch,
+            ], false),
+            'payment_summary_business_name' => $permitApplication->business->name,
             'receipt_void_boundary_reference' => $receiptVoidBoundary['reference'],
             'application_form_pdf_url' => route('staff.permit-applications.application-form.pdf', $permitApplication, false),
             'permit_pdf_url' => route('staff.permit-applications.permit.pdf', $permitApplication, false),
@@ -440,6 +460,14 @@ final class ManualCollectionReceiptVisibilityScenario
                 'application_number' => $paidEstablishmentRow['application_number'] ?? null,
                 'business_name' => $paidEstablishmentRow['business_name'] ?? null,
             ],
+            'payment_summary_report' => [
+                'year' => $paymentSummaryReport['filters']['year'],
+                'row_count' => $paymentSummaryReport['summary']['row_count'],
+                'paid_amount_cents' => $paymentSummaryReport['summary']['paid_amount_cents'],
+                'receipted_amount_cents' => $paymentSummaryReport['summary']['receipted_amount_cents'],
+                'payment_schedule_id' => $paymentSummaryRow['payment_schedule_id'] ?? null,
+                'application_number' => $paymentSummaryRow['application_number'] ?? null,
+            ],
             'clearances' => $permitApplication->clearances
                 ->map(fn ($clearance): array => [
                     'id' => $clearance->id,
@@ -502,6 +530,12 @@ final class ManualCollectionReceiptVisibilityScenario
         ]);
         $paidEstablishmentRow = collect($paidEstablishmentsReport['rows'])
             ->firstWhere('application_id', $permitApplication->id);
+        $paymentSummaryReport = $this->buildPaymentSummaryReport->handle([
+            'year' => $permitApplication->application_year,
+            'q' => $permitApplication->application_number ?? $permitApplication->business->name,
+        ]);
+        $paymentSummaryRow = collect($paymentSummaryReport['rows'])
+            ->firstWhere('payment_schedule_id', $paymentSchedule->id);
         $releaseReadiness = $this->describeReleaseReadiness->handle($permitApplication);
         $permitArtifact = $this->describePermitArtifact->handle($permitApplication);
         $verificationBoundary = $this->describeVerificationBoundary->handle($permitApplication);
@@ -537,6 +571,8 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('audit-browser-revenue-source-report-row', 'Browser evidence observed the revenue source report row', ['source_code' => $manifest['resources']['revenue_source_code'], 'csv_export_visible' => true], ['source_code' => data_get($browserReport, 'reports.revenue_source.source_code'), 'csv_export_visible' => data_get($browserReport, 'reports.revenue_source.csv_export_visible')]),
             $this->step('audit-paid-establishments-report-row', 'Paid establishments report contains the scenario paid permit schedule', ['application_number' => $permitApplication->application_number, 'business_name' => $permitApplication->business->name], ['application_number' => $paidEstablishmentRow['application_number'] ?? null, 'business_name' => $paidEstablishmentRow['business_name'] ?? null]),
             $this->step('audit-browser-paid-establishments-report-row', 'Browser evidence observed the paid establishments report row', ['application_number' => $permitApplication->application_number, 'csv_export_visible' => true], ['application_number' => data_get($browserReport, 'reports.paid_establishments.application_number'), 'csv_export_visible' => data_get($browserReport, 'reports.paid_establishments.csv_export_visible')]),
+            $this->step('audit-payment-summary-report-row', 'Payment summary contains the exact paid schedule and receipt evidence', ['payment_schedule_id' => $paymentSchedule->id, 'paid_amount_cents' => $paymentSchedule->paid_amount_cents, 'receipted_amount_cents' => $receipt->amount_cents], ['payment_schedule_id' => $paymentSummaryRow['payment_schedule_id'] ?? null, 'paid_amount_cents' => $paymentSummaryRow['paid_amount_cents'] ?? null, 'receipted_amount_cents' => $paymentSummaryRow['receipted_amount_cents'] ?? null]),
+            $this->step('audit-browser-payment-summary-report-row', 'Browser evidence observed the same payment summary row on desktop and mobile', ['payment_schedule_id' => $paymentSchedule->id, 'paid_amount_cents' => $paymentSchedule->paid_amount_cents, 'csv_export_visible' => true, 'mobile_visible' => true, 'mobile_horizontal_overflow' => false], ['payment_schedule_id' => data_get($browserReport, 'reports.payment_summary.payment_schedule_id'), 'paid_amount_cents' => data_get($browserReport, 'reports.payment_summary.paid_amount_cents'), 'csv_export_visible' => data_get($browserReport, 'reports.payment_summary.csv_export_visible'), 'mobile_visible' => data_get($browserReport, 'reports.payment_summary.mobile_visible'), 'mobile_horizontal_overflow' => data_get($browserReport, 'reports.payment_summary.mobile_horizontal_overflow')]),
             $this->step('audit-receipt-void-boundary', 'Receipt void boundary remains blocked without financial mutation', ['reference' => $receiptVoidBoundary['reference'], 'status' => 'blocked', 'can_void' => false, 'receipt_status' => ReceiptStatus::Issued->value, 'collection_status' => TreasuryCollectionStatus::Receipted->value], ['reference' => $manifest['resources']['receipt_void_boundary_reference'] ?? null, 'status' => $receiptVoidBoundary['status'], 'can_void' => $receiptVoidBoundary['can_void'], 'receipt_status' => $receipt->status->value, 'collection_status' => $collection->status->value]),
             $this->step('audit-browser-receipt-void-boundary', 'Browser evidence observed the same receipt void boundary', ['reference' => $receiptVoidBoundary['reference'], 'status' => 'blocked', 'can_void' => false], ['reference' => data_get($browserReport, 'receipt_void_boundary.reference'), 'status' => data_get($browserReport, 'receipt_void_boundary.status'), 'can_void' => data_get($browserReport, 'receipt_void_boundary.can_void')]),
             $this->step('audit-clearances-completed', 'Clearance checklist evidence is complete', ['completed_clearances' => 3, 'all_completed' => true], ['completed_clearances' => $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count(), 'all_completed' => $permitApplication->clearances->isNotEmpty() && $permitApplication->clearances->every(fn ($clearance): bool => $clearance->status === PermitClearanceStatus::Completed)]),
@@ -635,6 +671,14 @@ final class ManualCollectionReceiptVisibilityScenario
                     'application_number' => $paidEstablishmentRow['application_number'] ?? null,
                     'business_name' => $paidEstablishmentRow['business_name'] ?? null,
                 ],
+                'payment_summary_report' => [
+                    'year' => $paymentSummaryReport['filters']['year'],
+                    'row_count' => $paymentSummaryReport['summary']['row_count'],
+                    'paid_amount_cents' => $paymentSummaryReport['summary']['paid_amount_cents'],
+                    'receipted_amount_cents' => $paymentSummaryReport['summary']['receipted_amount_cents'],
+                    'payment_schedule_id' => $paymentSummaryRow['payment_schedule_id'] ?? null,
+                    'application_number' => $paymentSummaryRow['application_number'] ?? null,
+                ],
                 'permit_application_status' => $permitApplication->status->value,
                 'clearances' => $permitApplication->clearances
                     ->map(fn ($clearance): array => [
@@ -727,7 +771,7 @@ final class ManualCollectionReceiptVisibilityScenario
 
     private function feeRules(LineOfBusiness $lineOfBusiness): void
     {
-        FeeRule::query()->firstOrCreate(
+        FeeRule::query()->updateOrCreate(
             ['code' => 'SCENARIO-RECEIPT-APPLICATION-FEE'],
             [
                 'name' => 'Scenario Receipt Application Fee',
@@ -736,12 +780,13 @@ final class ManualCollectionReceiptVisibilityScenario
                 'calculation_type' => FeeRuleCalculationType::Fixed,
                 'basis' => 'none',
                 'amount_cents' => 10_000,
-                'effective_from' => now()->startOfYear(),
+                'effective_from' => self::ScenarioApplicationYear.'-01-01',
+                'effective_until' => self::ScenarioApplicationYear.'-12-31',
                 'is_active' => true,
             ],
         );
 
-        FeeRule::query()->firstOrCreate(
+        FeeRule::query()->updateOrCreate(
             ['code' => 'SCENARIO-RECEIPT-BUSINESS-TAX'],
             [
                 'line_of_business_id' => $lineOfBusiness->id,
@@ -751,7 +796,8 @@ final class ManualCollectionReceiptVisibilityScenario
                 'calculation_type' => FeeRuleCalculationType::Fixed,
                 'basis' => 'declared_gross_sales',
                 'amount_cents' => 20_000,
-                'effective_from' => now()->startOfYear(),
+                'effective_from' => self::ScenarioApplicationYear.'-01-01',
+                'effective_until' => self::ScenarioApplicationYear.'-12-31',
                 'is_active' => true,
             ],
         );

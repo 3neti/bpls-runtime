@@ -441,6 +441,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                 'basis' => 'none',
                 'amount_cents' => 10_000,
                 'effective_from' => self::ScenarioApplicationYear.'-01-01',
+                'effective_until' => self::ScenarioApplicationYear.'-12-31',
                 'is_active' => true,
             ],
         );
@@ -457,6 +458,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
                 'amount_cents' => 0,
                 'rate_basis_points' => null,
                 'effective_from' => self::ScenarioApplicationYear.'-01-01',
+                'effective_until' => self::ScenarioApplicationYear.'-12-31',
                 'is_active' => true,
             ],
         );

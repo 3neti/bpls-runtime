@@ -238,6 +238,7 @@ try {
         await inspectManualReceiptDailyCollectionReport(page, baseUrl);
         await inspectManualReceiptRevenueSourceReport(page, baseUrl);
         await inspectManualReceiptPaidEstablishmentsReport(page, baseUrl);
+        await inspectManualReceiptPaymentSummaryReport(page, baseUrl);
         await inspectManualReceiptPaymentSchedule(page, baseUrl);
         await inspectManualReceiptDetail(page, baseUrl);
         await inspectManualReceiptPermitReleaseBoundary(page, baseUrl);
@@ -4576,6 +4577,147 @@ async function inspectManualReceiptPaidEstablishmentsReport(
     );
 }
 
+async function inspectManualReceiptPaymentSummaryReport(
+    targetPage,
+    targetBaseUrl,
+) {
+    const reportUrl = `${targetBaseUrl}${manifest.resources.payment_summary_report_url}`;
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const row = targetPage.locator(
+        `[data-testid="payment-summary-row"][data-payment-schedule-id="${manifest.resources.payment_schedule_id}"]`,
+    );
+    const rowVisible = await row.isVisible().catch(() => false);
+    const paidText = rowVisible
+        ? await row
+              .getByTestId('payment-summary-paid')
+              .textContent()
+              .catch(() => null)
+        : null;
+    const statusText = rowVisible
+        ? await row
+              .getByTestId('payment-summary-status')
+              .textContent()
+              .catch(() => null)
+        : null;
+    const expectedPaidText = new Intl.NumberFormat('en-PH', {
+        style: 'currency',
+        currency: 'PHP',
+    }).format(manifest.resources.payment_paid_amount_cents / 100);
+    const paidAmountVisible = paidText?.trim() === expectedPaidText;
+    const paidStatusVisible = statusText?.trim().toLowerCase() === 'paid';
+    const scopeVisible = await targetPage
+        .getByText(
+            'Permit payment schedules and their persisted collection and receipt evidence for the selected application year.',
+            { exact: true },
+        )
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const policyVisible = await targetPage
+        .getByText('without recalculating liability', { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const csvExportVisible = await targetPage
+        .getByRole('link', { name: /export csv/i })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    checks.push(
+        check(
+            'payment-summary-report-row-visible',
+            'Payment summary shows the exact paid schedule from the manifest',
+            true,
+            rowVisible && paidAmountVisible && paidStatusVisible,
+            {
+                url: reportUrl,
+                payment_schedule_id: manifest.resources.payment_schedule_id,
+                paid_text: paidText,
+                status_text: statusText,
+            },
+        ),
+    );
+    checks.push(
+        check(
+            'payment-summary-report-scope-visible',
+            'Payment summary keeps financial policy limits visible',
+            true,
+            scopeVisible && policyVisible,
+        ),
+    );
+    checks.push(
+        check(
+            'payment-summary-report-csv-visible',
+            'Payment summary offers CSV export',
+            true,
+            csvExportVisible,
+        ),
+    );
+    reportPaymentSummary(
+        rowVisible ? manifest.resources.payment_schedule_id : null,
+        paidAmountVisible ? manifest.resources.payment_paid_amount_cents : null,
+        csvExportVisible,
+    );
+    await screenshot(
+        targetPage,
+        '02-payment-summary-report',
+        'browser/screenshots/02-payment-summary-report.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
+    const mobileRow = targetPage.locator(
+        `[data-testid="payment-summary-mobile-row"][data-payment-schedule-id="${manifest.resources.payment_schedule_id}"]`,
+    );
+    const mobileRowVisible = await mobileRow.isVisible().catch(() => false);
+    const mobilePaidText = mobileRowVisible
+        ? await mobileRow
+              .getByTestId('payment-summary-mobile-paid')
+              .textContent()
+              .catch(() => null)
+        : null;
+    const mobileStatusText = mobileRowVisible
+        ? await mobileRow
+              .getByTestId('payment-summary-mobile-status')
+              .textContent()
+              .catch(() => null)
+        : null;
+    const mobileHorizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+
+    checks.push(
+        check(
+            'payment-summary-report-mobile-visible',
+            'Mobile payment summary keeps exact paid schedule and status visible',
+            true,
+            mobileRowVisible &&
+                mobilePaidText?.trim() === expectedPaidText &&
+                mobileStatusText?.trim().toLowerCase() === 'paid',
+        ),
+    );
+    checks.push(
+        check(
+            'payment-summary-report-mobile-no-horizontal-overflow',
+            'Mobile payment summary has no page-level horizontal overflow',
+            false,
+            mobileHorizontalOverflow,
+        ),
+    );
+    reportEvidence.payment_summary.mobile_visible = mobileRowVisible;
+    reportEvidence.payment_summary.mobile_horizontal_overflow =
+        mobileHorizontalOverflow;
+    await screenshot(
+        targetPage,
+        '02-payment-summary-report-mobile',
+        'browser/screenshots/02-payment-summary-report-mobile.png',
+    );
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+}
+
 async function inspectManualReceiptDetail(targetPage, targetBaseUrl) {
     const receiptUrl = `${targetBaseUrl}${manifest.resources.receipt_url}`;
     await targetPage.goto(receiptUrl, { waitUntil: 'networkidle' });
@@ -6261,6 +6403,18 @@ function reportPaidEstablishments(
         application_number: applicationNumber,
         business_name: businessName,
         application_visible: applicationVisible,
+        csv_export_visible: csvExportVisible,
+    };
+}
+
+function reportPaymentSummary(
+    paymentScheduleId,
+    paidAmountCents,
+    csvExportVisible,
+) {
+    reportEvidence.payment_summary = {
+        payment_schedule_id: paymentScheduleId,
+        paid_amount_cents: paidAmountCents,
         csv_export_visible: csvExportVisible,
     };
 }

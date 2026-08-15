@@ -23,6 +23,7 @@ import { index as assessmentSummaryReportIndex } from '@/actions/App/Http/Contro
 import { index as dailyCollectionReportIndex } from '@/actions/App/Http/Controllers/Staff/DailyCollectionReportController';
 import { index as feeRuleIndex } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
 import { index as paidEstablishmentReportIndex } from '@/actions/App/Http/Controllers/Staff/PaidEstablishmentReportController';
+import { index as paymentSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/PaymentSummaryReportController';
 import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import { index as permitApplicationIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
@@ -88,6 +89,11 @@ const staffNavItems: NavItem[] = [
         title: 'Assessment Summary',
         href: assessmentSummaryReportIndex(),
         icon: ChartNoAxesColumnIncreasing,
+    },
+    {
+        title: 'Payment Summary',
+        href: paymentSummaryReportIndex(),
+        icon: WalletCards,
     },
     {
         title: 'Revenue Sources',

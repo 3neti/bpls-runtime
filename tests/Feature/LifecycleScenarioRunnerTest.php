@@ -1660,6 +1660,13 @@ test('manual collection receipt scenario audit compares browser evidence with ca
                 'application_visible' => true,
                 'csv_export_visible' => true,
             ],
+            'payment_summary' => [
+                'payment_schedule_id' => $manifest['resources']['payment_schedule_id'],
+                'paid_amount_cents' => $manifest['resources']['payment_paid_amount_cents'],
+                'csv_export_visible' => true,
+                'mobile_visible' => true,
+                'mobile_horizontal_overflow' => false,
+            ],
         ],
         'verification' => [
             'reference' => $verification['reference'],
