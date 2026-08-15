@@ -58,14 +58,15 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
     expect(FeeRuleRange::query()->whereBelongsTo($retailTax)->count())->toBe(23);
     expect(FeeRuleReconciliation::query()->count())->toBe(4);
 
-    expect(RevenueCodeProvision::query()->count())->toBe(33)
+    expect(RevenueCodeProvision::query()->count())->toBe(39)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2A.02%')->count())->toBe(8)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2B.%')->count())->toBe(4)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2C.%')->count())->toBe(2)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 2D.%')->count())->toBe(3)
         ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3A.%')->count())->toBe(7)
+        ->and(RevenueCodeProvision::query()->where('section_reference', 'like', 'Section 3B.%')->count())->toBe(6)
         ->and(RevenueCodeProvision::query()->whereNotNull('fee_rule_id')->count())->toBe(4)
-        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(32);
+        ->and(RevenueCodeProvision::query()->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)->count())->toBe(38);
 
     $wholesaleProvision = RevenueCodeProvision::query()
         ->with('feeRule.currentReconciliation')
@@ -89,10 +90,10 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->feeRule->currentReconciliation->execution_status->toBe(FeeRuleExecutionStatus::Executable);
 
     expect(RevenueCodeProvisionRow::query()->count())->toBe(82);
-    expect(RevenueCodeProvisionClause::query()->count())->toBe(196)
+    expect(RevenueCodeProvisionClause::query()->count())->toBe(254)
         ->and(RevenueCodeProvisionClause::query()
             ->where('reconciliation_status', RevenueCodeProvisionStatus::ReconciliationRequired)
-            ->count())->toBe(196);
+            ->count())->toBe(254);
 
     $dependentRate = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-2A-02-C-DEPENDENT-HALF-RATE')
@@ -210,6 +211,27 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->sole();
     $doeCompliance = RevenueCodeProvisionClause::query()
         ->where('code', 'MRC-3A-02-A-10-DOE-COMPLIANCE')
+        ->sole();
+    $localDerbyDefinition = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3B-01-LOCAL-DERBY')
+        ->sole();
+    $missingDerbyAmount = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3B-02-DERBY-MISSING-AMOUNT')
+        ->sole();
+    $hackfightAmount = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3B-02-HACKFIGHT-PER-FIGHT')
+        ->sole();
+    $cockpitFranchise = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3B-03-TEN-YEAR-FRANCHISE')
+        ->sole();
+    $cockpitRegistrationFee = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3B-05-REGISTRATION-FEE-PAYMENT')
+        ->sole();
+    $prohibitedCockfightDates = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3B-07-PROHIBITED-DATES')
+        ->sole();
+    $otherCockpitOffenderPenalty = RevenueCodeProvisionClause::query()
+        ->where('code', 'MRC-3B-08-OTHER-OFFENDER-PENALTY')
         ->sole();
 
     expect($dependentRate)
@@ -340,7 +362,28 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->clause_type->toBe(RevenueCodeProvisionClauseType::DocumentaryRequirement)
         ->source_text->toContain('No Retail Outlet shall operate until a Certificate of Compliance')
         ->candidate_interpretation->toContain('evidence requirement')
-        ->metadata->source_amount_is_missing->toBeFalse();
+        ->metadata->source_amount_is_missing->toBeFalse()
+        ->and($localDerbyDefinition)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::Definition)
+        ->source_text->toContain('Local Derby')
+        ->and($missingDerbyAmount)
+        ->amount_cents->toBeNull()
+        ->metadata->source_amount_is_missing->toBeTrue()
+        ->and($hackfightAmount)
+        ->amount_cents->toBe(10_000)
+        ->metadata->source_value_text->toBe('100.00/fight')
+        ->and($cockpitFranchise)
+        ->metadata->source_term_years->toBe(10)
+        ->and($cockpitRegistrationFee)
+        ->metadata->known_terminology_conflict->toBe(['annual_cockpit_permit_fee', 'cockpit_registration_fee'])
+        ->and($prohibitedCockfightDates)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::OperatingRestriction)
+        ->metadata->known_source_defect->toBe('November 30 labeled National Heroes Day')
+        ->and($otherCockpitOffenderPenalty)
+        ->clause_type->toBe(RevenueCodeProvisionClauseType::Penalty)
+        ->is_ceiling->toBeTrue()
+        ->metadata->candidate_minimum_fine_cents->toBe(60_000)
+        ->metadata->candidate_maximum_fine_cents->toBe(200_000);
 
     $overlappingRow = RevenueCodeProvisionRow::query()
         ->where('code', 'MRC-2A-02-B-ROW-08')

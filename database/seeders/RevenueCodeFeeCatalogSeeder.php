@@ -489,6 +489,60 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 feeRule: $registrationPlateFee,
             ),
             $this->provision(
+                code: 'MRC-3B-01-DEFINITIONS',
+                section: 'Section 3B.01',
+                title: 'Cockpit, cockfighting, derby, personnel, and participant definitions',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance defines cockpit, cockfighting, local and international derby, bet taker or promoter, gaffer, referee, bettor, matchmaker, cashier, and medical aid.',
+                notes: 'Several definitions contain source wording defects, role overlap, and terminology that require legal and operational reconciliation before classification or authorization behavior is implemented.',
+                metadata: ['chapter' => 3, 'article' => 'B', 'known_ambiguities' => ['role_overlap', 'local_and_international_derby_eligibility', 'source_wording_defects', 'personnel_identity_and_credentials']],
+            ),
+            $this->provision(
+                code: 'MRC-3B-02-PERMIT-FEES',
+                section: 'Section 3B.02',
+                title: 'Cockpit owner, operator, licensee, personnel, hackfight, and derby fees',
+                type: RevenueCodeProvisionType::FixedFee,
+                excerpt: 'The ordinance states owner/operator/licensee fees, nine cockpit-personnel permit amounts, a PHP 100.00 per-fight hackfight amount, and a Derby row with no printed amount.',
+                notes: 'Fee scope, annual-versus-event treatment, role mapping, duplicate roles, hackfight event counting, and the blank Derby amount require municipal reconciliation. No listed amount is executable.',
+                metadata: ['chapter' => 3, 'article' => 'B', 'schedule_clause_count' => 13, 'known_ambiguities' => ['annual_fee_scope', 'role_mapping', 'hackfight_counting', 'blank_derby_amount', 'personnel_permit_identity']],
+            ),
+            $this->provision(
+                code: 'MRC-3B-03-04-FRANCHISE-LICENSING-REGISTRATION',
+                section: 'Section 3B.03-3B.04',
+                title: 'Cockpit franchise, licensing, documentary requirements, and registration',
+                type: RevenueCodeProvisionType::EvidenceRequirement,
+                excerpt: 'The ordinance requires a ten-year Sangguniang Bayan franchise, an authorizing ordinance, stated new-license and renewal evidence, municipal authority to operate, and registration with the Municipal Mayor.',
+                notes: 'Franchise grant, license issuance, documentary sufficiency, responsible-office authority, renewal sequence, registration identity, and national-law references require accepted procedure and current legal validation.',
+                metadata: ['chapter' => 3, 'article' => 'B', 'known_ambiguities' => ['franchise_and_license_authority', 'ten_year_term_effect', 'documentary_sufficiency', 'city_or_municipal_wording', 'registration_certificate_identity', 'national_law_currency']],
+            ),
+            $this->provision(
+                code: 'MRC-3B-05-06-PAYMENT-APPLICABILITY',
+                section: 'Section 3B.05-3B.06',
+                title: 'Cockpit fee payment timing and national-law applicability',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance states payment points for filing, cockpit registration, and personnel permits and applies Presidential Decrees 449 and 1802 plus other pertinent laws.',
+                notes: 'The source fee table names an annual cockpit permit fee while the payment section names a cockpit registration fee. Amount identity, January and birth-month renewal procedure, participation control, and current external-law applicability require reconciliation.',
+                metadata: ['chapter' => 3, 'article' => 'B', 'known_ambiguities' => ['permit_versus_registration_fee_terminology', 'january_renewal_procedure', 'birth_month_renewal_procedure', 'participation_control', 'external_law_currency_and_priority']],
+            ),
+            $this->provision(
+                code: 'MRC-3B-07-OPERATIONS',
+                section: 'Section 3B.07',
+                title: 'Cockpit ownership, siting, scheduling, special-purpose fights, and prohibited games',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance restricts ownership and operation, assigns cockpit-number and siting authority, limits ordinary and special-purpose cockfighting dates, and prohibits other gambling on the premises.',
+                notes: 'Citizenship eligibility, zoning and proximity standards, obsolete transition timing, allowed dates, fair and fiesta limits, malformed special-purpose wording, resolution/Mayor authority, and enforcement require current legal and municipal policy.',
+                metadata: ['chapter' => 3, 'article' => 'B', 'known_ambiguities' => ['citizenship_eligibility', 'cockpit_number_authority', 'zoning_and_proximity_standard', 'obsolete_transition_period', 'allowed_and_prohibited_dates', 'fair_and_fiesta_frequency', 'special_purpose_authority', 'malformed_source_wording', 'other_gambling_enforcement']],
+            ),
+            $this->provision(
+                code: 'MRC-3B-08-PENALTIES',
+                section: 'Section 3B.08',
+                title: 'Cockpit violation penalties',
+                type: RevenueCodeProvisionType::AdministrativeRule,
+                excerpt: 'The ordinance states imprisonment and fine consequences for enumerated cockpit actors and a separate PHP 600.00 to PHP 2,000.00 range for other offenders.',
+                notes: 'The source contains grammatical defects and references court discretion, subsidiary imprisonment, Chief of Police regulations, and Section 49. Penal enforcement is not application-calculation behavior and requires current legal authority.',
+                metadata: ['chapter' => 3, 'article' => 'B', 'known_ambiguities' => ['penal_authority_and_currency', 'offender_classification', 'court_discretion', 'subsidiary_imprisonment', 'section_49_reference', 'source_wording_defects']],
+            ),
+            $this->provision(
                 code: 'MRC-2E-01-BUSINESS-TAX-SCOPE',
                 section: 'Section 2E.01',
                 title: 'Payment scope for multiple establishments and businesses',
@@ -1547,6 +1601,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
         ]);
 
         $this->seedMayorsPermitArticleAClauses();
+        $this->seedCockpitArticleBClauses();
 
         $this->persistPolicyBoundaryClauses('MRC-2F-01-PIL', [
             $this->pilThresholdClause(1, 'SARI-SARI', '1', 'Sari-Sari Stores', '61,600.00', 6_160_000),
@@ -1617,7 +1672,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             $this->enterpriseScaleClause(7, 'LARGE', 'Large-scale Industries', 'Above P 60M', '200 more', 6_000_000_000, null),
         ]);
 
-        $this->persistPermitFeeScheduleClauses('MRC-3A-02-A-01-06-GENERAL-PERMIT-FEES', [
+        $this->persistFixedFeeScheduleClauses('MRC-3A-02-A-01-06-GENERAL-PERMIT-FEES', [
             ['MRC-3A-02-A-01-MANUFACTURER-MICRO', 'Manufacturers/Importers/Producers', 'Micro-Industry', '300.00', 30_000],
             ['MRC-3A-02-A-01-MANUFACTURER-COTTAGE', 'Manufacturers/Importers/Producers', 'Cottage Industries', '500.00', 50_000],
             ['MRC-3A-02-A-01-MANUFACTURER-SMALL', 'Manufacturers/Importers/Producers', 'Small-scale Industries', '1,000.00', 100_000],
@@ -1647,7 +1702,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             ['MRC-3A-02-A-06-WHOLESALE-LARGE', 'Wholesalers/Retailers/Dealers or Distributors', 'Large-Scale Industries', '2,000.00', 200_000],
         ]);
 
-        $this->persistPermitFeeScheduleClauses('MRC-3A-02-A-07-13-SPECIAL-PERMIT-FEES', [
+        $this->persistFixedFeeScheduleClauses('MRC-3A-02-A-07-13-SPECIAL-PERMIT-FEES', [
             ['MRC-3A-02-A-07-LIQUOR-MICRO', 'Liquors, Distilled Spirits and Manufactured Tobacco', 'Micro-Industry', '1,000.00', 100_000],
             ['MRC-3A-02-A-07-LIQUOR-COTTAGE', 'Liquors, Distilled Spirits and Manufactured Tobacco', 'Cottage Industries', '2,000.00', 200_000],
             ['MRC-3A-02-A-07-LIQUOR-SMALL', 'Liquors, Distilled Spirits and Manufactured Tobacco', 'Small-scale Industries', '3,000.00', 300_000],
@@ -1679,7 +1734,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             ['MRC-3A-02-A-13-EDUCATION-LARGE', 'Educational Institutions and any other business not mention in the chapter', 'Large', '20,000.00', 2_000_000],
         ]);
 
-        $this->persistPermitFeeScheduleClauses('MRC-3A-02-B-NEW-MICRO-PERMIT', [
+        $this->persistFixedFeeScheduleClauses('MRC-3A-02-B-NEW-MICRO-PERMIT', [
             ['MRC-3A-02-B-NEW-MICRO', 'New Business', 'Micro-Industry', '200.00', 20_000],
             ['MRC-3A-02-B-NEW-COTTAGE', 'New Business', 'Cottage Industries', '500.00', 50_000],
             ['MRC-3A-02-B-NEW-SMALL', 'New Business', 'Small-scale Industries', '1,000.00', 100_000],
@@ -1697,6 +1752,85 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
         $this->persistPolicyBoundaryClauses('MRC-3A-05-REGISTRATION-PLATE', [
             $this->policyBoundaryClause(1, 'MRC-3A-05-REGISTRATION-PLATE-CEILING', RevenueCodeProvisionClauseType::AmountCeiling, 'Applicants shall pay an amount not to exceed Three Hundred Pesos (P300.00) for the Business Permit Registration Plate and handling.', 'Candidate ceiling: the registration plate and handling charge may not exceed PHP 300.00.', 'The ordinance states a ceiling rather than the Municipality-confirmed exact operational amount.', ['candidate_charge' => 'registration_plate_and_handling'], 30_000, isCeiling: true),
             $this->policyBoundaryClause(2, 'MRC-3A-05-PLATE-STICKER-COVERAGE', RevenueCodeProvisionClauseType::PermitRequirement, 'The payment shall include the new plate and the corresponding annual or quarterly renewal sticker.', 'Candidate coverage: the charge includes a new plate and the corresponding annual or quarterly renewal sticker.', 'Plate eligibility, annual-versus-quarterly sticker issue, replacement, validity, custody, and audit procedure require accepted policy.', ['candidate_inclusions' => ['new_plate', 'annual_or_quarterly_renewal_sticker']]),
+        ]);
+    }
+
+    private function seedCockpitArticleBClauses(): void
+    {
+        $this->persistPolicyBoundaryClauses('MRC-3B-01-DEFINITIONS', [
+            $this->definitionClause(1, 'COCKPIT', 'Cockpit includes any place, compound, building or portion thereof, where cockfights are held, whether or not money bets are made on the results of such cockfights.', 'Candidate meaning: a cockpit is a place or part of a place where cockfights are held, regardless of whether money bets are made.'),
+            $this->definitionClause(2, 'COCKFIGHTING', 'Cockfighting shall embrace and mean the commonly known game or term “cockfighting derby, pintakasi or tubada” or each equivalent term in different Philippine localities.', 'Candidate meaning: cockfighting includes derby, pintakasi, tubada, and equivalent local terms.'),
+            $this->definitionClause(3, 'LOCAL-DERBY', 'Local Derby is an invitational cockfight participated in by gamecockers or cockfighting “afficionados” of the Philippines with “pot money” awarded to the proclaimed winning entry.', 'Candidate meaning: a local derby is an invitational event for Philippine participants with pot money awarded to the winning entry.'),
+            $this->definitionClause(4, 'INTERNATIONAL-DERBY', 'International Derby refers to an invitational cockfight participated in by local and foreign gamecockers or cockfighting “aficionados” with “pot money” awarded to the proclaimed winning entry.', 'Candidate meaning: an international derby is an invitational event involving local and foreign participants with pot money awarded to the winning entry.'),
+            $this->definitionClause(5, 'BET-TAKER-PROMOTER', 'Bet taker or promoter refers to a person who alone or with another initiates a cockfight and/or calls and take care of bets from the owners of both gamecocks and those of other bettors before he orders commencement of the cockfight thereafter distributes won bets to the winners after deducting a certain commission, or both.', 'Candidate meaning: a bet taker or promoter initiates a fight and/or handles, distributes, and deducts commission from bets.'),
+            $this->definitionClause(6, 'GAFFER', 'Gaffer (taga-tari) refers to a person knowledgeable in the art of arming fighting cocks with gaffs on one or both legs.', 'Candidate meaning: a gaffer arms fighting cocks with gaffs.'),
+            $this->definitionClause(7, 'REFEREE', 'Referee (Sentenciador) refers who a person who watches and oversees the proper gaffing of fighting cocks; determine the physical condition of gamecocks while cockfighting is in progress, the injuries sustained by the cocks and their capability to continue fighting, and decides and makes known his decision either by word or gesture the result of the cockfighting by announcing the winner or deciding a tie in a contest game.', 'Candidate meaning: a referee oversees gaffing, evaluates fighting condition, and declares a winner or tie.'),
+            $this->definitionClause(8, 'BETTOR', 'Bettor a person who participates in cockfights and with the use of money or other things of value, bets with other bettors or through the bet taker or promoter and win or lose his bet depending upon the result of the cockfight as announced by the referee or sentenciador. He may be the owner of fighting cock.', 'Candidate meaning: a bettor wagers money or value directly or through a bet taker and may own a fighting cock.'),
+            $this->definitionClause(9, 'MATCHMAKER', 'Matchmaker one who arranges cockfights.', 'Candidate meaning: a matchmaker arranges cockfights.'),
+            $this->definitionClause(10, 'CASHIER', 'Cashier a person in charge of the cash transactions of a cockpit.', 'Candidate meaning: a cashier handles cockpit cash transactions.'),
+            $this->definitionClause(11, 'MEDICAL-AID', 'Medical Aid a person in charge in treating wounded cockpit', 'Candidate meaning: medical aid is a person responsible for treatment described by the source, whose object is grammatically incomplete.'),
+        ]);
+
+        $this->persistFixedFeeScheduleClauses('MRC-3B-02-PERMIT-FEES', [
+            ['MRC-3B-02-OWNER-APPLICATION-FILING', 'Owner/Operator/Licensee of the Cockpit', 'Application Filling Fee', '20,000.00', 2_000_000],
+            ['MRC-3B-02-OWNER-ANNUAL-PERMIT', 'Owner/Operator/Licensee of the Cockpit', 'Annual Cockpit Permit Fee', '10,000.00', 1_000_000],
+            ['MRC-3B-02-PERSONNEL-PROMOTER-HOST', 'Cockpit Personnel', 'Promoter/Host', '2,000.00', 200_000],
+            ['MRC-3B-02-PERSONNEL-MANAGER', 'Cockpit Personnel', 'Cockpit Manager', '1,000.00', 100_000],
+            ['MRC-3B-02-PERSONNEL-REFEREE', 'Cockpit Personnel', 'Referee', '200.00', 20_000],
+            ['MRC-3B-02-PERSONNEL-BET-TAKER', 'Cockpit Personnel', 'Bet Taker “Kristo” (Inside/Outside of the Rueda”', '300.00', 30_000],
+            ['MRC-3B-02-PERSONNEL-BET-MANAGER', 'Cockpit Personnel', 'Bet Manager “Maciador/ Kasador”', '500.00', 50_000],
+            ['MRC-3B-02-PERSONNEL-GAFFER', 'Cockpit Personnel', 'Gaffer “ Mananari”', '200.00', 20_000],
+            ['MRC-3B-02-PERSONNEL-CASHIER', 'Cockpit Personnel', 'Cashier', '200.00', 20_000],
+            ['MRC-3B-02-PERSONNEL-DERBY-MATCHMAKER', 'Cockpit Personnel', 'Derby (Matchmaker)', '1,000.00', 100_000],
+            ['MRC-3B-02-PERSONNEL-MEDICAL-AID', 'Cockpit Personnel', 'Medical Aid', '200.00', 20_000],
+            ['MRC-3B-02-HACKFIGHT-PER-FIGHT', 'Cockfight Event', 'Hackfight', '100.00/fight', 10_000],
+            ['MRC-3B-02-DERBY-MISSING-AMOUNT', 'Cockfight Event', 'Derby', null, null, 'The source table prints a Derby row with no amount; no value is inferred from Article C or neighboring rows.'],
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3B-03-04-FRANCHISE-LICENSING-REGISTRATION', [
+            $this->policyBoundaryClause(1, 'MRC-3B-03-TEN-YEAR-FRANCHISE', RevenueCodeProvisionClauseType::PermitRequirement, 'No cockpit shall be established, operated and maintained without first securing a franchise from the Sangguniang Bayan and which shall be for a period of ten (10) years.', 'Candidate authority boundary: secure a ten-year Sangguniang Bayan franchise before establishing, operating, or maintaining a cockpit.', 'Franchise application, grant, effective date, renewal, revocation, evidence, and current legal authority require accepted procedure.', ['candidate_authority' => 'Sangguniang Bayan', 'source_term_years' => 10]),
+            $this->policyBoundaryClause(2, 'MRC-3B-03-LICENSE-ORDINANCE-AUTHORITY', RevenueCodeProvisionClauseType::AuthorityBoundary, 'Subject to the provisions of Book II of Republic Act 7160, the Sangguniang Bayan shall enact an Ordinance authorizing the issuance of license to operate a cockpit in the Municipality of Ipil pursuant to the provisions of Article 99 Section (a) Subsection (3) Paragraph (v) of the rules and Regulations Implementing the Local Government Code of 1991.', 'Candidate authority chain: a Sangguniang Bayan ordinance authorizes cockpit license issuance subject to the cited national law and implementing rules.', 'The authorizing ordinance, current national-law reference, issuing office, effective version, and relationship to the franchise require legal and municipal confirmation.', ['candidate_authority' => 'Sangguniang Bayan', 'external_authority' => 'Republic Act 7160 and implementing rules']),
+            $this->policyBoundaryClause(3, 'MRC-3B-03-NEW-ZONING-CLEARANCE', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'New License: Zoning/Locational Clearance issued by the Zoning Administrator.', 'Candidate new-license evidence: zoning or locational clearance issued by the Zoning Administrator.', 'Applicability, document identity, validity, verification, and sufficiency require accepted licensing procedure.', ['application_type' => 'new', 'candidate_issuer' => 'Zoning Administrator']),
+            $this->policyBoundaryClause(4, 'MRC-3B-03-NEW-BUILDING-PLAN', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'New License: Building Plan and Design duly approved by the Municipal Engineer.', 'Candidate new-license evidence: building plan and design approved by the Municipal Engineer.', 'Approval identity, version, site linkage, verification, and sufficiency require accepted licensing procedure.', ['application_type' => 'new', 'candidate_issuer' => 'Municipal Engineer']),
+            $this->policyBoundaryClause(5, 'MRC-3B-03-NEW-SANITARY-CLEARANCE', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'New License: Sanitary Permit/Clearance issued by the Municipal Health Office.', 'Candidate new-license evidence: sanitary permit or clearance issued by the Municipal Health Office.', 'Document identity, validity, verification, and sufficiency require accepted licensing procedure.', ['application_type' => 'new', 'candidate_issuer' => 'Municipal Health Office']),
+            $this->policyBoundaryClause(6, 'MRC-3B-03-NEW-TAX-FEE-PAYMENT', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'New License: Payments of the required city/municipal taxes and fees.', 'Candidate new-license evidence: payment of required city or municipal taxes and fees.', 'The source says city/municipal; jurisdiction, charge catalog, payment sufficiency, receipt evidence, and sequence require reconciliation.', ['application_type' => 'new', 'known_source_wording' => 'city/municipal']),
+            $this->policyBoundaryClause(7, 'MRC-3B-03-RENEWAL-ENGINEER-CERTIFICATION', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'Annual Renewal: Certification from the Municipal Engineer to the effect that such cockpit is free from material, structural or other physical hazards.', 'Candidate annual-renewal evidence: Municipal Engineer certification that the cockpit is free from material, structural, or other physical hazards.', 'Inspection method, certification identity, validity, verification, and sufficiency require accepted renewal procedure.', ['application_type' => 'renewal', 'candidate_issuer' => 'Municipal Engineer']),
+            $this->policyBoundaryClause(8, 'MRC-3B-03-RENEWAL-SANITARY-CLEARANCE', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'Annual Renewal: Sanitary Permit/Clearance issued by the Municipal Health Office.', 'Candidate annual-renewal evidence: sanitary permit or clearance issued by the Municipal Health Office.', 'Document identity, validity, verification, and sufficiency require accepted renewal procedure.', ['application_type' => 'renewal', 'candidate_issuer' => 'Municipal Health Office']),
+            $this->policyBoundaryClause(9, 'MRC-3B-03-RENEWAL-TAX-FEE-PAYMENT', RevenueCodeProvisionClauseType::DocumentaryRequirement, 'Annual Renewal: Payments of the required city/municipal taxes and fees.', 'Candidate annual-renewal evidence: payment of required city or municipal taxes and fees.', 'The source says city/municipal; jurisdiction, charge catalog, payment sufficiency, receipt evidence, and sequence require reconciliation.', ['application_type' => 'renewal', 'known_source_wording' => 'city/municipal']),
+            $this->policyBoundaryClause(10, 'MRC-3B-04-MAYOR-REGISTRATION', RevenueCodeProvisionClauseType::AuthorityBoundary, 'Cockpit in the Municipality of Ipil after Having been granted authority to operate by the Sangguniang Bayan shall register at the Office of the Municipal Mayor.', 'Candidate sequence: after Sangguniang Bayan operating authority, register the cockpit with the Office of the Municipal Mayor.', 'Authority evidence, registration workflow, responsible actor, record identity, and relationship to franchise and license require accepted procedure.', ['candidate_prerequisite_authority' => 'Sangguniang Bayan', 'candidate_registration_office' => 'Office of the Municipal Mayor']),
+            $this->policyBoundaryClause(11, 'MRC-3B-04-REGISTRATION-CERTIFICATE', RevenueCodeProvisionClauseType::PermitRequirement, 'No cockpits shall be allowed to operate without the proper registration certificate.', 'Candidate operating prerequisite: a proper cockpit registration certificate.', 'Certificate identity, issuer, validity, public meaning, replacement, suspension, and enforcement require accepted policy.', ['candidate_timing' => 'before_operation']),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3B-05-06-PAYMENT-APPLICABILITY', [
+            $this->policyBoundaryClause(1, 'MRC-3B-05-FILING-FEE-UPON-APPLICATION', RevenueCodeProvisionClauseType::PaymentTiming, 'The application filling fee shall be payable to the Municipal Treasurer upon application for a permit or license to operate and maintain cockpits.', 'Candidate payment timing: pay the application filing fee to the Municipal Treasurer upon permit or license application.', 'Filing-versus-filling terminology, payment initiation, non-refundable treatment, receipt evidence, and franchise/license sequence require accepted policy.', ['candidate_collector' => 'Municipal Treasurer', 'candidate_timing' => 'upon_application']),
+            $this->policyBoundaryClause(2, 'MRC-3B-05-REGISTRATION-FEE-PAYMENT', RevenueCodeProvisionClauseType::PaymentTiming, 'The cockpit registration fee shall be also payable upon application for a permit before a cockpit can operate and shall be secured within the first twenty days of January of each year in case of renewal;', 'Candidate payment timing: pay the named cockpit registration fee upon application before operation and within the first 20 days of January for renewal.', 'Section 3B.02 names an annual cockpit permit fee rather than a registration fee; amount identity, first-year application, renewal calendar, extensions, late consequences, and receipt evidence require reconciliation.', ['candidate_timing' => ['upon_application_before_operation', 'renewal_first_20_days_of_january'], 'known_terminology_conflict' => ['annual_cockpit_permit_fee', 'cockpit_registration_fee']]),
+            $this->policyBoundaryClause(3, 'MRC-3B-05-PERSONNEL-FEE-PAYMENT', RevenueCodeProvisionClauseType::PaymentTiming, 'The permit fees on cockpit personnel shall be paid before they participate in a cockfight and shall be paid annually upon renewal of the permit on the birth month of permittee.', 'Candidate personnel timing: pay before participation and renew annually during the permittee birth month.', 'Personnel identity, permit scope, participation control, birth-month due date, grace periods, late consequences, and receipt evidence require accepted policy.', ['candidate_timing' => ['before_participation', 'annual_birth_month_renewal']]),
+            $this->policyBoundaryClause(4, 'MRC-3B-06-PD-449-APPLICABILITY', RevenueCodeProvisionClauseType::AuthorityBoundary, 'The provision of PD 449, otherwise known as the Cockfighting Law of 1974 ... shall apply to all matters regarding the operation of cockpits and the holding of cockfights in this Municipality.', 'Candidate external authority: Presidential Decree 449 applies to cockpit operation and cockfight holding.', 'Current legal force, amendments, precedence, incorporated requirements, and enforcement authority require legal validation.', ['external_authority' => 'Presidential Decree 449']),
+            $this->policyBoundaryClause(5, 'MRC-3B-06-PD-1802-APPLICABILITY', RevenueCodeProvisionClauseType::AuthorityBoundary, 'PD 1802 (Creating the Philippine Game Fowl Commission) ... shall apply to all matters regarding the operation of cockpits and the holding of cockfights in this Municipality.', 'Candidate external authority: Presidential Decree 1802 applies to cockpit operation and cockfight holding.', 'Current legal force, institutional succession, amendments, incorporated requirements, and enforcement authority require legal validation.', ['external_authority' => 'Presidential Decree 1802']),
+            $this->policyBoundaryClause(6, 'MRC-3B-06-OTHER-LAWS-APPLICABILITY', RevenueCodeProvisionClauseType::AuthorityBoundary, 'Such other pertinent laws shall apply to all matters regarding the operation of cockpits and the holding of cockfights in this Municipality.', 'Candidate external authority boundary: other pertinent laws may govern cockpit operation and cockfight holding.', 'The applicable-law catalog, precedence, effective versions, and operational consequences are not enumerated and require legal validation.', ['external_authority' => 'other pertinent laws']),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3B-07-OPERATIONS', [
+            $this->policyBoundaryClause(1, 'MRC-3B-07-FILIPINO-OWNERSHIP', RevenueCodeProvisionClauseType::Eligibility, 'Only Filipino citizens not otherwise inhibited by existing laws shall be allowed to own, manage and operate cockpits.', 'Candidate eligibility: only Filipino citizens not otherwise prohibited by law may own, manage, or operate cockpits.', 'Natural-person versus entity ownership, citizenship evidence, prohibited-person rules, beneficial ownership, role scope, and current law require validation.', ['candidate_roles' => ['owner', 'manager', 'operator']]),
+            $this->policyBoundaryClause(2, 'MRC-3B-07-COOPERATIVE-CAPITALIZATION', RevenueCodeProvisionClauseType::Eligibility, 'Cooperative capitalization is encouraged.', 'Candidate policy observation: cooperative capitalization is encouraged but not stated as a mandatory eligibility condition.', 'Legal effect, cooperative identity, capitalization evidence, incentives, and whether the sentence is merely aspirational require municipal confirmation.', ['candidate_requirement_level' => 'encouraged']),
+            $this->policyBoundaryClause(3, 'MRC-3B-07-COCKPIT-NUMBER-AUTHORITY', RevenueCodeProvisionClauseType::AuthorityBoundary, 'The Sangguniang Bayan shall determine the number of cockpits to be allowed on this municipality.', 'Candidate authority: the Sangguniang Bayan determines the number of allowed cockpits.', 'Current authorized count, resolution or ordinance evidence, allocation procedure, vacancies, transfers, and enforcement require municipal policy.', ['candidate_authority' => 'Sangguniang Bayan']),
+            $this->policyBoundaryClause(4, 'MRC-3B-07-ZONING-SITE', RevenueCodeProvisionClauseType::OperatingRestriction, 'Cockpits shall be constructed and operated within the appropriate areas as prescribed in the Zoning Ordinance of the municipality of Ipil.', 'Candidate siting restriction: construction and operation only in areas allowed by the Ipil Zoning Ordinance.', 'Current zoning version, parcel mapping, locational evidence, nonconforming use, variance, and enforcement require accepted procedure.', ['external_authority' => 'Municipality of Ipil Zoning Ordinance']),
+            $this->policyBoundaryClause(5, 'MRC-3B-07-PROXIMITY-RESTRICTION', RevenueCodeProvisionClauseType::OperatingRestriction, 'The Municipal Mayor shall see to it that no cockpits are constructed within or near existing residential or commercial areas, hospitals, school, churches or other public building.', 'Candidate siting restriction: exclude locations within or near the listed sensitive places under Municipal Mayor oversight.', 'The source includes commercial areas and does not define within or near; distance, measurement, land-use evidence, exceptions, and enforcement require policy.', ['candidate_authority' => 'Municipal Mayor', 'source_sensitive_places' => ['residential areas', 'commercial areas', 'hospitals', 'school', 'churches', 'other public building']]),
+            $this->policyBoundaryClause(6, 'MRC-3B-07-PD449-TRANSITION', RevenueCodeProvisionClauseType::OperatingRestriction, 'Owners, lessees, or operators of cockpits which are now in existence and do not conform to this requirements are given three (3) years from date of effectivity of Presidential Degree No. 449 to comply herewith.', 'Candidate historical transition: nonconforming existing cockpits received three years from the effectivity of Presidential Decree 449 to comply.', 'The transition is historical and likely elapsed; current legal effect, grandfathered records, compliance evidence, and source Degree/Decree wording require legal validation.', ['source_term_years' => 3, 'external_authority' => 'Presidential Decree 449', 'candidate_historical_rule' => true]),
+            $this->policyBoundaryClause(7, 'MRC-3B-07-BUILDING-PERMIT-AUTHORITY', RevenueCodeProvisionClauseType::AuthorityBoundary, 'Approval or issuance of building permits for the construction of cockpits shall be made by the Municipal Engineer in accordance with the Building Ordinance of municipality of Ipil, or engineering laws and practices.', 'Candidate authority: the Municipal Engineer approves or issues cockpit building permits under local building and engineering authorities.', 'Current issuing authority, code version, plan-review procedure, evidence, inspections, and relationship to national building law require validation.', ['candidate_authority' => 'Municipal Engineer']),
+            $this->policyBoundaryClause(8, 'MRC-3B-07-LICENSED-COCKPIT-ONLY', RevenueCodeProvisionClauseType::OperatingRestriction, 'Except as provided in this Ordinance, cock fighting shall be allowed only in licensed cockpits.', 'Candidate restriction: cockfighting occurs only in licensed cockpits except for stated ordinance exceptions.', 'License validity, exception catalog, event-location evidence, enforcement, and relationship to registration and franchise require accepted policy.', ['candidate_location_requirement' => 'licensed_cockpit']),
+            $this->policyBoundaryClause(9, 'MRC-3B-07-SUNDAY-HOLIDAY-SCHEDULE', RevenueCodeProvisionClauseType::OperatingRestriction, 'Cock fighting shall be allowed only in licensed cockpits during Sundays and legal holidays.', 'Candidate ordinary schedule: Sundays and legal holidays in licensed cockpits, subject to other prohibitions.', 'Holiday authority, conflicts with prohibited dates, hours, event identity, and permit requirements require accepted scheduling policy.', ['candidate_days' => ['sundays', 'legal_holidays']]),
+            $this->policyBoundaryClause(10, 'MRC-3B-07-LOCAL-FIESTA-THREE-DAYS', RevenueCodeProvisionClauseType::OperatingRestriction, 'Cock fighting shall be allowed ... during local fiestas for not more than three (3) days.', 'Candidate fiesta schedule: no more than three days during a local fiesta.', 'Fiesta designation, start/end dates, consecutive-day treatment, event identity, hours, and authorization evidence require accepted policy.', ['candidate_maximum_days' => 3]),
+            $this->policyBoundaryClause(11, 'MRC-3B-07-FAIR-CARNIVAL-EXPOSITION', RevenueCodeProvisionClauseType::OperatingRestriction, 'It may be held during municipal, agricultural, commercial or industrial fair, carnival or exposition for similar period of three (3) days upon resolution of the municipality where such fair, carnival or exposition shall be allowed within the month of a local fiesta or more than two more occasions a year in the same city.', 'Candidate special schedule: up to three days for listed events upon municipal resolution, subject to a malformed source condition concerning the local-fiesta month and two additional occasions.', 'The final condition is grammatically defective and says city; event eligibility, resolution authority, three-day period, fiesta-month relationship, annual frequency, and jurisdiction require reconciliation.', ['candidate_events' => ['municipal fair', 'agricultural fair', 'commercial fair', 'industrial fair', 'carnival', 'exposition'], 'candidate_maximum_days' => 3, 'known_source_wording' => ['more than two more occasions', 'same city']]),
+            $this->policyBoundaryClause(12, 'MRC-3B-07-PROHIBITED-DATES', RevenueCodeProvisionClauseType::OperatingRestriction, 'No cock fighting shall be held on December (30) Rizal Day), December 25 (Christmas Day), November 30 (National Heroes Day),June 12 (Philippine Independence Day), Holy Thursday, Good Friday, Election or Referendum Day and during Registration Day for such Election or Referendum Day.', 'Candidate prohibited schedule: no cockfighting on the listed fixed and movable dates or election-related days.', 'The source mislabels November 30, contains punctuation defects, and may conflict with legal holidays; authoritative calendars, election notices, date precedence, and current law require validation.', ['source_dates' => ['December 30', 'December 25', 'November 30', 'June 12', 'Holy Thursday', 'Good Friday', 'Election or Referendum Day', 'Registration Day for Election or Referendum'], 'known_source_defect' => 'November 30 labeled National Heroes Day']),
+            $this->policyBoundaryClause(13, 'MRC-3B-07-SPECIAL-PURPOSE-AUTHORITY', RevenueCodeProvisionClauseType::AuthorityBoundary, 'Subject to the preceding subsection hereof, the Municipal Mayor or his authorized representative may also allow the holding of cock fighting for the entertainment of foreign dignitaries or for tourist, or for returning Filipinos, commonly known as “Balikbayan”, or for the support of national fund raising campaign for charitable purposes as may be authorized by the Office of the Municipal Mayor upon resolution of the Sangguniang Bayan, in licensed cockpits or in playgrounds or parks.', 'Candidate special-purpose authority: Mayor or authorized representative approval plus a Sangguniang Bayan resolution for listed tourism, returning-Filipino, or national charitable purposes at stated venues.', 'Actor authority, resolution prerequisite, eligible purpose/person, venue, event permit, evidence, national campaign authorization, and relationship to the preceding restriction require accepted policy.', ['candidate_authorities' => ['Municipal Mayor or authorized representative', 'Sangguniang Bayan'], 'candidate_venues' => ['licensed cockpits', 'playgrounds', 'parks']]),
+            $this->policyBoundaryClause(14, 'MRC-3B-07-SPECIAL-PURPOSE-FREQUENCY', RevenueCodeProvisionClauseType::OperatingRestriction, 'Provided that this privilege shall be extended for only on time, for a period not exceeding three, within a year.', 'Candidate boundary: the source appears to limit the privilege to one time and a period not exceeding three within a year, but omits the unit and contains a wording defect.', '“Only on time” and “not exceeding three” are incomplete; occurrence count, day unit, rolling/calendar year, event scope, and renewal require authoritative interpretation.', ['known_source_wording' => ['only on time', 'period not exceeding three'], 'missing_unit' => true]),
+            $this->policyBoundaryClause(15, 'MRC-3B-07-OTHER-GAMES-PROHIBITED', RevenueCodeProvisionClauseType::OperatingRestriction, 'No gambling of any kind shall be permitted on the premises of the cockpit or place of cock fighting during cockpits. The owner, manager or lessee of such cockpit and the violators of this injunction shall be criminally liable under the provisions of Section 49 hereof.', 'Candidate restriction: prohibit other gambling on cockpit or cockfight premises during the stated event, with liability assigned to listed actors and violators.', '“During cockpits” is defective wording; prohibited activity classification, premises/time scope, actor responsibility, Section 49 reference, reporting, and enforcement require legal validation.', ['source_cross_reference' => 'Section 49', 'candidate_responsible_roles' => ['owner', 'manager', 'lessee', 'violator']]),
+        ]);
+
+        $this->persistPolicyBoundaryClauses('MRC-3B-08-PENALTIES', [
+            $this->policyBoundaryClause(1, 'MRC-3B-08-ENUMERATED-ACTOR-PENALTY', RevenueCodeProvisionClauseType::Penalty, 'By prison correctional in its maximum period and a fine of TWO THOUSAND PESOS (Php2,000.00), with subsidiary imprisonment in case of insolvency, when the offender if the financier, owner, manager or operator of a cockpit, or the gaffer, referee or bet taker in cockfights, or the offender is guilty of allowing, promoting or participating in any other kind of gambling in the premises of cockpits during cockfights.', 'Candidate source penalty: PHP 2,000.00 plus stated imprisonment consequences for enumerated actors or other-gambling conduct.', 'Penal execution belongs to lawful investigation and court authority, not assessment calculation; current legal force, offense elements, actor classification, procedure, and sentencing require legal validation.', ['source_offender_roles' => ['financier', 'owner', 'manager', 'operator', 'gaffer', 'referee', 'bet taker'], 'candidate_imprisonment' => 'prison correctional maximum period with subsidiary imprisonment in case of insolvency'], 200_000),
+            $this->policyBoundaryClause(2, 'MRC-3B-08-OTHER-OFFENDER-PENALTY', RevenueCodeProvisionClauseType::Penalty, 'By prison correctional or fine or not less than SIX HUNDRED PESOS (Php600.00) or more than TWO THOUSAND PESOS (Php2,000.00) or both, such imprisonment and fine at the discretion of the court, with subsidiary imprisonment in case of insolvency, in case of any other offender.', 'Candidate source range: PHP 600.00 minimum and PHP 2,000.00 maximum, with stated imprisonment or both at court discretion for other offenders.', 'Penal execution belongs to court authority, not assessment calculation; the source grammar, current legal force, offense elements, procedure, and sentencing require legal validation.', ['candidate_minimum_fine_cents' => 60_000, 'candidate_maximum_fine_cents' => 200_000, 'candidate_authority' => 'court discretion', 'candidate_imprisonment' => 'prison correctional with subsidiary imprisonment in case of insolvency'], 200_000, isCeiling: true),
         ]);
     }
 
@@ -1785,7 +1919,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
     /**
      * @param  list<array{0: string, 1: string, 2: ?string, 3: ?string, 4: ?int, 5?: string, 6?: RevenueCodeProvisionClauseType, 7?: string}>  $rows
      */
-    private function persistPermitFeeScheduleClauses(string $provisionCode, array $rows): void
+    private function persistFixedFeeScheduleClauses(string $provisionCode, array $rows): void
     {
         $clauses = [];
 
@@ -1826,6 +1960,20 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
         }
 
         $this->persistPolicyBoundaryClauses($provisionCode, $clauses);
+    }
+
+    /** @return array<string, mixed> */
+    private function definitionClause(int $sequence, string $codeSuffix, string $sourceText, string $candidateInterpretation): array
+    {
+        return $this->policyBoundaryClause(
+            sequence: $sequence,
+            code: 'MRC-3B-01-'.$codeSuffix,
+            type: RevenueCodeProvisionClauseType::Definition,
+            sourceText: $sourceText,
+            candidateInterpretation: $candidateInterpretation,
+            executionBlocker: 'The definition remains non-executable until terminology, role identity, evidence, and current governing-law alignment are accepted.',
+            metadata: ['definition_code' => strtolower(str_replace('-', '_', $codeSuffix))],
+        );
     }
 
     /** @return array<string, mixed> */

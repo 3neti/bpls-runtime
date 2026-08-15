@@ -1254,8 +1254,8 @@ test('revenue code fee catalog visibility scenario prepares deterministic catalo
         ->and($firstManifest['resources']['first_range_amount_cents'])->toBe(2266)
         ->and($firstManifest['resources']['provision_code'])->toBe('MRC-2A-02-B-WHOLESALERS')
         ->and($firstManifest['resources']['provision_status'])->toBe('reconciliation_required')
-        ->and($firstManifest['resources']['provision_count'])->toBe(33)
-        ->and($firstManifest['resources']['reconciliation_required_count'])->toBe(32)
+        ->and($firstManifest['resources']['provision_count'])->toBe(39)
+        ->and($firstManifest['resources']['reconciliation_required_count'])->toBe(38)
         ->and($firstManifest['resources']['schedule_matrix']['row_count'])->toBe(24)
         ->and($firstManifest['resources']['schedule_matrix']['overlap_count'])->toBe(1)
         ->and($firstManifest['resources']['schedule_matrix']['gap_count'])->toBe(0)
@@ -1273,13 +1273,13 @@ test('revenue code fee catalog visibility scenario prepares deterministic catalo
         ->and($firstManifest['resources']['schedule_matrices']['MRC-2A-02-G-ENUMERATED-SERVICES']['ceiling_count'])->toBe(1)
         ->and($firstManifest['resources']['schedule_findings'])->toHaveCount(4)
         ->and($firstManifest['resources']['policy_boundary_summary'])->toBe([
-            'provision_count' => 31,
-            'clause_count' => 196,
-            'reconciliation_required_count' => 196,
-            'ceiling_count' => 4,
+            'provision_count' => 37,
+            'clause_count' => 254,
+            'reconciliation_required_count' => 254,
+            'ceiling_count' => 5,
             'execution_ready_count' => 0,
         ])
-        ->and($firstManifest['resources']['policy_boundary_clause_codes'])->toHaveCount(196)
+        ->and($firstManifest['resources']['policy_boundary_clause_codes'])->toHaveCount(254)
         ->and($firstManifest['resources']['overlap_row_code'])->toBe('MRC-2A-02-B-ROW-08')
         ->and($firstManifest['resources']['policy_boundaries'])->toContain('new_business_initial_local_business_tax_exemption')
         ->and($feeRule->ranges)->toHaveCount(23)

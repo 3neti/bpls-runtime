@@ -38,4 +38,7 @@ enum RevenueCodeProvisionClauseType: string
     case TaxMapping = 'tax_mapping';
     case SitusDefinition = 'situs_definition';
     case SalesAllocation = 'sales_allocation';
+    case Definition = 'definition';
+    case OperatingRestriction = 'operating_restriction';
+    case Penalty = 'penalty';
 }
