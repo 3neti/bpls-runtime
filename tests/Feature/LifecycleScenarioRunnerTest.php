@@ -6,6 +6,7 @@ use App\Actions\StoreCitizenPermitApplicationDocument;
 use App\Actions\SubmitCitizenPermitApplication;
 use App\Actions\UpdateCitizenPermitApplicationDraft;
 use App\Enums\PermitApplicationStatus;
+use App\Enums\PermitClearanceStatus;
 use App\Enums\ReceiptStatus;
 use App\Enums\StoryboardExportFormat;
 use App\Enums\StoryboardExportStatus;
@@ -92,6 +93,24 @@ test('scenario registry discovers the citizen formal submission visibility scena
         ->and($scenario->expectations['browser_performs_submission'])->toBeTrue()
         ->and($scenario->expectations['canonical_state'])->toBe('assessment')
         ->and($scenario->expectations['official_application_number'])->toBeNull()
+        ->and($scenario->safety['external_integrations'])->toBeFalse();
+});
+
+test('scenario registry discovers the citizen-originated permit milestone', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_new_permit_lifecycle_authority_boundary');
+
+    expect($scenario)
+        ->key->toBe('citizen_new_permit_lifecycle_authority_boundary')
+        ->label->toBe('Citizen-originated new permit lifecycle to authority boundary')
+        ->risk->toBe('local transactional')
+        ->and($scenario->actors)->toBe([
+            'applicant' => 'citizen_applicant',
+            'operator' => 'primary_operator',
+            'recipient' => 'sample_recipient',
+        ])
+        ->and($scenario->expectations['official_application_number'])->toBeNull()
+        ->and($scenario->expectations['ready_for_authority_review'])->toBeTrue()
+        ->and($scenario->expectations['can_release'])->toBeFalse()
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
@@ -1009,6 +1028,53 @@ test('new permit lifecycle scenario executes real domain actions to authority bo
         ->and($artifactStore->exists('storyboard/storyboard.html'))->toBeTrue();
 });
 
+test('citizen-originated permit milestone composes the exact submitted record to authority review idempotently', function () {
+    Storage::fake('local');
+
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    $operator = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('citizen_new_permit_lifecycle_authority_boundary');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'citizen-new-permit-milestone-test-001');
+    $runner = app(ManualCollectionReceiptVisibilityScenario::class);
+
+    $firstManifest = $runner->prepare($scenario, 'citizen-new-permit-milestone-test-001', [
+        'applicant' => $citizen,
+        'operator' => $operator,
+        'recipient' => $operator,
+    ], $artifactStore);
+    $secondManifest = $runner->prepare($scenario, 'citizen-new-permit-milestone-test-001', [
+        'applicant' => $citizen,
+        'operator' => $operator,
+        'recipient' => $operator,
+    ], $artifactStore);
+
+    $permitApplication = PermitApplication::query()
+        ->with(['assessments', 'paymentSchedules', 'treasuryCollections.receipt', 'clearances'])
+        ->findOrFail($firstManifest['resources']['permit_application_id']);
+    $storyboard = $artifactStore->readJson('storyboard/storyboard.json');
+
+    expect($firstManifest['resources']['permit_application_id'])->toBe($secondManifest['resources']['permit_application_id'])
+        ->and($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
+        ->and($permitApplication->submitted_by_id)->toBe($citizen->id)
+        ->and($permitApplication->business->business_owner_id)->toBe($citizen->refresh()->business_owner_id)
+        ->and($permitApplication->application_number)->toBeNull()
+        ->and(data_get($permitApplication->metadata, 'citizen_submission.actor_id'))->toBe($citizen->id)
+        ->and(data_get($permitApplication->metadata, 'municipal_receipt.processing_status'))->toBe(PermitApplicationStatus::Assessment->value)
+        ->and($permitApplication->status)->toBe(PermitApplicationStatus::PendingPayment)
+        ->and($permitApplication->assessments)->toHaveCount(1)
+        ->and($permitApplication->paymentSchedules)->toHaveCount(1)
+        ->and($permitApplication->treasuryCollections)->toHaveCount(1)
+        ->and($permitApplication->treasuryCollections->first()->receipt)->not->toBeNull()
+        ->and($permitApplication->clearances)->toHaveCount(3)
+        ->and($permitApplication->clearances->where('status', PermitClearanceStatus::Completed))->toHaveCount(3)
+        ->and($firstManifest['resources']['application_display_reference'])->toBe('Application #'.$permitApplication->id)
+        ->and($firstManifest['resources']['permit_timeline_event_count'])->toBe(14)
+        ->and($firstManifest['resources']['citizen_timeline_event_keys'])->toBe($firstManifest['resources']['permit_timeline_event_keys'])
+        ->and($storyboard['title'])->toBe('Citizen-originated new permit lifecycle to authority boundary')
+        ->and($artifactStore->exists('terminal/prepare.json'))->toBeTrue()
+        ->and($artifactStore->exists('storyboard/storyboard.html'))->toBeTrue();
+});
+
 test('new permit lifecycle scenario preserves uniqueness for long run references with a shared prefix', function () {
     Storage::fake('local');
 
@@ -1260,6 +1326,33 @@ test('command prepares the new permit lifecycle authority boundary scenario', fu
     expect($manifest['scenario']['key'])->toBe('new_permit_lifecycle_authority_boundary')
         ->and($manifest['result']['terminal'])->toBe('passed')
         ->and($manifest['resources']['application_number'])->toBe('APP-SCENARIO-NEW-PERMIT-COMMAND-TEST-001')
+        ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
+});
+
+test('command prepares the citizen-originated permit milestone', function () {
+    Storage::fake('local');
+
+    $citizen = configuredCitizenScenarioUser('citizen@example.test');
+    $operator = configuredScenarioUser('operator@example.test');
+    config()->set('lifecycle_scenarios.actors.citizen_applicant.email', $citizen->email);
+    config()->set('lifecycle_scenarios.actors.primary_operator.email', $operator->email);
+    config()->set('lifecycle_scenarios.actors.sample_recipient.email', $operator->email);
+
+    $this->artisan('lifecycle:scenario', [
+        'scenario' => 'citizen_new_permit_lifecycle_authority_boundary',
+        '--run-id' => 'citizen-new-permit-command-test-001',
+        '--phase' => 'prepare',
+    ])->assertSuccessful();
+
+    $artifactStore = new ScenarioArtifactStore('citizen_new_permit_lifecycle_authority_boundary', 'citizen-new-permit-command-test-001');
+    $manifest = $artifactStore->readJson('manifest.json');
+
+    expect($manifest['scenario']['key'])->toBe('citizen_new_permit_lifecycle_authority_boundary')
+        ->and($manifest['result']['terminal'])->toBe('passed')
+        ->and($manifest['resources']['application_number'])->toBeNull()
+        ->and($manifest['resources']['submitted_by_id'])->toBe($citizen->id)
+        ->and($manifest['resources']['ready_for_authority_review'])->toBeTrue()
+        ->and($manifest['resources']['can_release'])->toBeFalse()
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue();
 });
 
@@ -2129,6 +2222,7 @@ function configuredCitizenScenarioUser(string $email): User
         UserPermission::AccessCitizen,
         UserPermission::CreateOwnPermitApplications,
         UserPermission::EditOwnPermitApplications,
+        UserPermission::SubmitOwnPermitApplications,
         UserPermission::UploadOwnPermitApplicationDocuments,
         UserPermission::ViewOwnPermitApplications,
         UserPermission::ViewOwnPermitApplicationDocuments,

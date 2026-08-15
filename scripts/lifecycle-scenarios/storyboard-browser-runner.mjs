@@ -22,6 +22,7 @@ if (manifest.schema_version !== 'application.lifecycle-evidence.v1') {
 
 const supportedScenarios = [
     'assessment_policy_boundary_visibility',
+    'citizen_new_permit_lifecycle_authority_boundary',
     'citizen_permit_authority_review_visibility',
     'citizen_permit_processing_visibility',
     'citizen_permit_submission_visibility',
@@ -46,10 +47,22 @@ if (!supportedScenarios.includes(manifest.scenario?.key)) {
 
 const email = process.env.LIFECYCLE_BROWSER_EMAIL;
 const password = process.env.LIFECYCLE_BROWSER_PASSWORD;
+const operatorEmail = process.env.LIFECYCLE_BROWSER_OPERATOR_EMAIL;
+const operatorPassword = process.env.LIFECYCLE_BROWSER_OPERATOR_PASSWORD;
 
 if (!email || !password) {
     fail(
         'LIFECYCLE_BROWSER_EMAIL and LIFECYCLE_BROWSER_PASSWORD are required for browser evidence.',
+    );
+}
+
+if (
+    manifest.scenario.key ===
+        'citizen_new_permit_lifecycle_authority_boundary' &&
+    (!operatorEmail || !operatorPassword)
+) {
+    fail(
+        'LIFECYCLE_BROWSER_OPERATOR_EMAIL and LIFECYCLE_BROWSER_OPERATOR_PASSWORD are required for citizen milestone staff evidence.',
     );
 }
 
@@ -115,6 +128,7 @@ try {
 
     if (
         [
+            'citizen_new_permit_lifecycle_authority_boundary',
             'citizen_permit_authority_review_visibility',
             'citizen_permit_processing_visibility',
         ].includes(manifest.scenario.key)
@@ -123,9 +137,21 @@ try {
     }
 
     if (
-        manifest.scenario.key === 'citizen_permit_authority_review_visibility'
+        [
+            'citizen_new_permit_lifecycle_authority_boundary',
+            'citizen_permit_authority_review_visibility',
+        ].includes(manifest.scenario.key)
     ) {
         await inspectCitizenPermitAuthorityReview(page, baseUrl);
+    }
+
+    if (
+        manifest.scenario.key ===
+        'citizen_new_permit_lifecycle_authority_boundary'
+    ) {
+        await context.clearCookies();
+        await authenticate(page, baseUrl, operatorEmail, operatorPassword);
+        await page.setViewportSize({ width: 1440, height: 900 });
     }
 
     if (manifest.scenario.key === 'citizen_permit_draft_visibility') {
@@ -186,6 +212,7 @@ try {
 
     if (
         [
+            'citizen_new_permit_lifecycle_authority_boundary',
             'new_permit_lifecycle_authority_boundary',
             'manual_collection_receipt_visibility',
         ].includes(manifest.scenario.key)
@@ -307,12 +334,12 @@ async function inspectCitizenPermitProcessing(targetPage, targetBaseUrl) {
     const listUrl = `${targetBaseUrl}${manifest.resources.list_url}`;
     await targetPage.goto(listUrl, { waitUntil: 'networkidle' });
     const listRow = targetPage.locator(
-        `[data-testid="citizen-permit-application-row"][data-application-id="${manifest.resources.record_id}"]`,
+        `[data-testid="citizen-permit-application-row"][data-application-id="${permitApplicationId()}"]`,
     );
     await listRow.waitFor();
     const listStatus = await listRow.getAttribute('data-application-status');
     const listReferenceVisible = await listRow
-        .getByText(manifest.resources.application_number, { exact: false })
+        .getByText(citizenApplicationDisplayReference(), { exact: false })
         .isVisible();
     checks.push(
         check(
@@ -320,7 +347,7 @@ async function inspectCitizenPermitProcessing(targetPage, targetBaseUrl) {
             'Citizen list shows the exact manifest application',
             true,
             true,
-            { permit_application_id: manifest.resources.record_id },
+            { permit_application_id: permitApplicationId() },
         ),
         check(
             'citizen-processing-list-status-matches',
@@ -418,7 +445,7 @@ async function inspectCitizenPermitProcessing(targetPage, targetBaseUrl) {
     const expectedState = {
         application_status: manifest.resources.application_status,
         assessment_id: manifest.resources.assessment_id,
-        assessment_status: manifest.resources.assessment_status,
+        assessment_status: manifest.resources.assessment_status ?? 'computed',
         assessment_total_amount_cents:
             manifest.resources.assessment_total_amount_cents,
         payment_schedule_id: manifest.resources.payment_schedule_id,
@@ -926,7 +953,7 @@ async function inspectCitizenPermitAuthorityReview(targetPage, targetBaseUrl) {
         .getByText('Artifact only', { exact: true })
         .isVisible();
     const publicApplicationVisible = await targetPage
-        .getByText(manifest.resources.application_number, { exact: true })
+        .getByText(publicApplicationDisplayReference(), { exact: true })
         .isVisible();
     const publicCanVerifyRelease =
         (await targetPage
@@ -3318,7 +3345,7 @@ async function inspectManualReceiptPaymentSchedule(targetPage, targetBaseUrl) {
     const scheduleUrl = `${targetBaseUrl}${manifest.resources.payment_schedule_url}`;
     await targetPage.goto(scheduleUrl, { waitUntil: 'networkidle' });
     const applicationVisible = await targetPage
-        .getByText(manifest.resources.application_number, { exact: false })
+        .getByText(applicationDisplayReference(), { exact: false })
         .first()
         .isVisible()
         .catch(() => false);
@@ -3396,7 +3423,7 @@ async function inspectManualReceiptPaymentScheduleQueue(
     const queueUrl = `${targetBaseUrl}${manifest.resources.payment_schedule_queue_url}`;
     await targetPage.goto(queueUrl, { waitUntil: 'networkidle' });
     const applicationVisible = await targetPage
-        .getByText(manifest.resources.application_number, { exact: false })
+        .getByText(applicationDisplayReference(), { exact: false })
         .first()
         .isVisible()
         .catch(() => false);
@@ -3446,12 +3473,12 @@ async function inspectManualReceiptQueue(targetPage, targetBaseUrl) {
     const queueUrl = `${targetBaseUrl}${manifest.resources.receipt_queue_url}`;
     await targetPage.goto(queueUrl, { waitUntil: 'networkidle' });
     const receiptVisible = await targetPage
-        .getByText(manifest.resources.public_reference, { exact: false })
+        .getByText(manifest.resources.receipt_number, { exact: false })
         .first()
         .isVisible()
         .catch(() => false);
     const applicationVisible = await targetPage
-        .getByText(manifest.resources.application_number, { exact: false })
+        .getByText(applicationDisplayReference(), { exact: false })
         .first()
         .isVisible()
         .catch(() => false);
@@ -3521,7 +3548,7 @@ async function inspectManualReceiptDailyCollectionReport(
         .isVisible()
         .catch(() => false);
     const applicationVisible = await targetPage
-        .getByText(manifest.resources.application_number, { exact: false })
+        .getByText(applicationDisplayReference(), { exact: false })
         .first()
         .isVisible()
         .catch(() => false);
@@ -3593,7 +3620,7 @@ async function inspectManualReceiptDailyCollectionReport(
         ),
     );
     reportDailyCollection(
-        manifest.resources.public_reference,
+        manifest.resources.receipt_number,
         manifest.resources.assessment_total_amount_cents,
         scopeVisible,
         csvExportVisible,
@@ -3684,7 +3711,7 @@ async function inspectManualReceiptPaidEstablishmentsReport(
     const reportUrl = `${targetBaseUrl}${manifest.resources.paid_establishments_report_url}`;
     await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
     const applicationVisible = await targetPage
-        .getByText(manifest.resources.application_number, { exact: false })
+        .getByText(applicationDisplayReference(), { exact: false })
         .first()
         .isVisible()
         .catch(() => false);
@@ -3774,7 +3801,7 @@ async function inspectManualReceiptDetail(targetPage, targetBaseUrl) {
         .isVisible()
         .catch(() => false);
     const applicationVisible = await targetPage
-        .getByText(manifest.resources.application_number, { exact: false })
+        .getByText(applicationDisplayReference(), { exact: false })
         .first()
         .isVisible()
         .catch(() => false);
@@ -4121,7 +4148,7 @@ async function inspectManualReceiptPermitReleaseBoundary(
     }
 
     const applicationVisible = await targetPage
-        .getByText(manifest.resources.application_number, { exact: false })
+        .getByText(applicationDisplayReference(), { exact: false })
         .first()
         .isVisible()
         .catch(() => false);
@@ -4862,9 +4889,7 @@ async function inspectManualReceiptPermitVerificationBoundary(
         applicationFormPdfContentType.includes('application/pdf') &&
         applicationFormPdfBody.startsWith('%PDF-1.4') &&
         applicationFormPdfBody.includes('Business Application Form Artifact') &&
-        applicationFormPdfBody.includes(
-            manifest.resources.application_number,
-        ) &&
+        applicationFormPdfBody.includes(applicationDisplayReference()) &&
         applicationFormPdfBody.includes(
             'Application form artifact renders currently captured intake facts',
         ) &&
@@ -4924,7 +4949,7 @@ async function inspectManualReceiptPermitVerificationBoundary(
         assessmentPdfContentType.includes('application/pdf') &&
         assessmentPdfBody.startsWith('%PDF-1.4') &&
         assessmentPdfBody.includes('Assessment Sheet Artifact') &&
-        assessmentPdfBody.includes(manifest.resources.application_number) &&
+        assessmentPdfBody.includes(applicationDisplayReference()) &&
         assessmentPdfBody.includes(
             moneyFromCents(manifest.resources.assessment_total_amount_cents),
         ) &&
@@ -5506,6 +5531,35 @@ function uiLabel(value) {
     return String(value).replaceAll('_', ' ');
 }
 
+function applicationDisplayReference() {
+    return (
+        manifest.resources.application_display_reference ??
+        manifest.resources.application_number
+    );
+}
+
+function citizenApplicationDisplayReference() {
+    return (
+        manifest.resources.citizen_application_display_reference ??
+        applicationDisplayReference()
+    );
+}
+
+function publicApplicationDisplayReference() {
+    return (
+        manifest.resources.public_application_display_reference ??
+        (manifest.resources.application_number === null
+            ? 'Unnumbered application'
+            : applicationDisplayReference())
+    );
+}
+
+function permitApplicationId() {
+    return (
+        manifest.resources.permit_application_id ?? manifest.resources.record_id
+    );
+}
+
 function normalizedText(value) {
     return String(value ?? '')
         .replaceAll(/\s+/g, ' ')
@@ -5693,5 +5747,7 @@ function fail(message) {
 function redact(value) {
     return String(value)
         .replace(password ?? '', '[redacted]')
-        .replace(email ?? '', '[redacted-email]');
+        .replace(email ?? '', '[redacted-email]')
+        .replace(operatorPassword ?? '__operator-password-not-set__', '[redacted]')
+        .replace(operatorEmail ?? '__operator-email-not-set__', '[redacted-email]');
 }

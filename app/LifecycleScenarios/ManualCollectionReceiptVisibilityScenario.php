@@ -9,8 +9,10 @@ use App\Actions\BuildPaidEstablishmentsReport;
 use App\Actions\BuildPermitApplicationTimeline;
 use App\Actions\CompletePermitClearance;
 use App\Actions\CreateAssessmentForPermitApplication;
+use App\Actions\CreateCitizenPermitApplicationDraft;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\CreatePermitApplication;
+use App\Actions\DescribeCitizenPaymentSchedule;
 use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Actions\DescribePermitArtifact;
 use App\Actions\DescribePermitReleaseReadiness;
@@ -20,7 +22,9 @@ use App\Actions\EnsurePermitApplicationClearances;
 use App\Actions\IssueManualCollectionReceipt;
 use App\Actions\RecordPaymentScheduleCollection;
 use App\Actions\SimplePdfDocument;
+use App\Actions\StoreCitizenPermitApplicationDocument;
 use App\Actions\StorePermitApplicationDocument;
+use App\Actions\SubmitCitizenPermitApplication;
 use App\Actions\VoidReceipt;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
@@ -51,7 +55,10 @@ final class ManualCollectionReceiptVisibilityScenario
 {
     public function __construct(
         private readonly CreatePermitApplication $createPermitApplication,
+        private readonly CreateCitizenPermitApplicationDraft $createCitizenPermitApplicationDraft,
+        private readonly SubmitCitizenPermitApplication $submitCitizenPermitApplication,
         private readonly StorePermitApplicationDocument $storePermitApplicationDocument,
+        private readonly StoreCitizenPermitApplicationDocument $storeCitizenPermitApplicationDocument,
         private readonly CreateAssessmentForPermitApplication $createAssessment,
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
         private readonly RecordPaymentScheduleCollection $recordCollection,
@@ -59,6 +66,7 @@ final class ManualCollectionReceiptVisibilityScenario
         private readonly EnsurePermitApplicationClearances $ensureClearances,
         private readonly CompletePermitClearance $completeClearance,
         private readonly AttemptPermitApplicationRelease $attemptRelease,
+        private readonly DescribeCitizenPaymentSchedule $describeCitizenPaymentSchedule,
         private readonly BuildDailyCollectionsReport $buildDailyCollectionsReport,
         private readonly BuildCollectionsByRevenueSourceReport $buildCollectionsByRevenueSourceReport,
         private readonly BuildPaidEstablishmentsReport $buildPaidEstablishmentsReport,
@@ -85,13 +93,16 @@ final class ManualCollectionReceiptVisibilityScenario
         }
 
         $operator = $actors['operator'] ?? throw new RuntimeException('Scenario operator actor was not resolved.');
+        $isCitizenOriginated = $scenario->key === 'citizen_new_permit_lifecycle_authority_boundary';
+        $applicant = $isCitizenOriginated
+            ? ($actors['applicant'] ?? throw new RuntimeException('Scenario applicant actor was not resolved.'))
+            : null;
         $manifest = $this->scenarioManifest->initial($scenario, $runId, $actors);
         $lineOfBusiness = $this->lineOfBusiness();
         $secondaryLineOfBusiness = $this->secondaryLineOfBusiness();
         $this->feeRules($lineOfBusiness);
 
-        $applicationNumber = 'APP-SCENARIO-'.$this->boundedRunReference($runId, 40);
-        $permitApplication = $this->createPermitApplication->handle([
+        $applicationData = [
             'owner_name' => 'Scenario Owner '.$runId,
             'owner_email' => null,
             'owner_phone' => null,
@@ -113,8 +124,6 @@ final class ManualCollectionReceiptVisibilityScenario
             'established_on' => '2018-01-15',
             'started_on' => '2018-02-01',
             'registered_on' => '2018-01-10',
-            'application_number' => $applicationNumber,
-            'type' => PermitApplicationType::New->value,
             'application_year' => now()->year,
             'lines' => [
                 [
@@ -132,9 +141,20 @@ final class ManualCollectionReceiptVisibilityScenario
                     'started_on' => '2021-06-01',
                 ],
             ],
-        ], $operator);
+        ];
 
-        $supportingDocument = $this->storeScenarioDocument($permitApplication, $operator, $runId);
+        if ($isCitizenOriginated) {
+            $permitApplication = $this->createCitizenPermitApplicationDraft->handle($applicationData, $applicant);
+            $supportingDocument = $this->storeScenarioDocument($permitApplication, $applicant, $runId, citizen: true);
+            $permitApplication = $this->submitCitizenPermitApplication->handle($permitApplication, $applicant);
+        } else {
+            $permitApplication = $this->createPermitApplication->handle([
+                ...$applicationData,
+                'application_number' => 'APP-SCENARIO-'.$this->boundedRunReference($runId, 40),
+                'type' => PermitApplicationType::New->value,
+            ], $operator);
+            $supportingDocument = $this->storeScenarioDocument($permitApplication, $operator, $runId);
+        }
 
         $assessment = $this->createAssessment->handle($permitApplication, $operator);
         $paymentSchedule = $this->createPaymentSchedule->handle($assessment, $operator);
@@ -187,7 +207,12 @@ final class ManualCollectionReceiptVisibilityScenario
         $receipt->refresh();
         $permitApplication = $paymentSchedule->permitApplication()->firstOrFail();
         $permitApplication->load('business');
+        $applicationDisplayReference = $permitApplication->application_number ?? 'Application #'.$permitApplication->id;
+        $reportSearch = $permitApplication->application_number ?? $permitApplication->business->name;
         $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
+        $citizenPaymentSchedule = $isCitizenOriginated
+            ? $this->describeCitizenPaymentSchedule->handle($paymentSchedule)
+            : null;
         $dailyCollectionsReport = $this->buildDailyCollectionsReport->handle([
             'date_from' => $collection->received_at->toDateString(),
             'date_to' => $collection->received_at->toDateString(),
@@ -200,20 +225,23 @@ final class ManualCollectionReceiptVisibilityScenario
             ->firstWhere('code', 'SCENARIO-RECEIPT-APPLICATION-FEE');
         $paidEstablishmentsReport = $this->buildPaidEstablishmentsReport->handle([
             'year' => $permitApplication->application_year,
-            'q' => $permitApplication->application_number,
+            'q' => $reportSearch,
         ]);
         $paidEstablishmentRow = collect($paidEstablishmentsReport['rows'])
-            ->firstWhere('application_number', $permitApplication->application_number);
+            ->firstWhere('application_id', $permitApplication->id);
         $verificationBoundary = $this->describeVerificationBoundary->handle($permitApplication);
         $receiptVoidBoundary = $this->describeReceiptVoidBoundary->handle($receipt);
         $timeline = $this->buildPermitApplicationTimeline->handle($permitApplication);
         $timelineKeys = collect($timeline)->pluck('key')->all();
 
         $steps = [
-            $this->step('actors-resolved', 'Resolve actual application users', ['operator_id' => $operator->id], ['operator_id' => $operator->id]),
-            $this->step('permit-application-created', 'Create permit application through staff intake action', ['status' => PermitApplicationStatus::Draft->value], ['status' => PermitApplicationStatus::Draft->value, 'permit_application_id' => $permitApplication->id]),
-            $this->step('business-activities-recorded', 'Record multiple business activities through the staff intake action', ['activity_count' => 2], ['activity_count' => $permitApplication->lines->count(), 'activity_line_ids' => $permitApplication->lines->pluck('id')->all()]),
-            $this->step('supporting-document-recorded', 'Record supporting evidence through permit document action', ['document_id' => $supportingDocument->id, 'storage_private' => true], ['document_id' => $supportingDocument->id, 'storage_private' => $supportingDocument->storage_disk === 'local' && Storage::disk('local')->exists($supportingDocument->path)]),
+            $this->step('actors-resolved', $isCitizenOriginated ? 'Resolve actual citizen and municipal operator' : 'Resolve actual application users', $isCitizenOriginated ? ['applicant_id' => $applicant?->id, 'operator_id' => $operator->id] : ['operator_id' => $operator->id], $isCitizenOriginated ? ['applicant_id' => $applicant?->id, 'operator_id' => $operator->id] : ['operator_id' => $operator->id]),
+            $this->step('permit-application-created', $isCitizenOriginated ? 'Create permit application through citizen draft action' : 'Create permit application through staff intake action', ['created_as' => PermitApplicationStatus::Draft->value, 'submitted_by_id' => $isCitizenOriginated ? $applicant?->id : $operator->id], ['created_as' => PermitApplicationStatus::Draft->value, 'submitted_by_id' => $permitApplication->submitted_by_id, 'permit_application_id' => $permitApplication->id], $isCitizenOriginated ? 'applicant' : 'operator'),
+            $this->step('business-activities-recorded', $isCitizenOriginated ? 'Record declared business activities through the citizen draft action' : 'Record multiple business activities through the staff intake action', ['activity_count' => 2], ['activity_count' => $permitApplication->lines->count(), 'activity_line_ids' => $permitApplication->lines->pluck('id')->all()], $isCitizenOriginated ? 'applicant' : 'operator'),
+            $this->step('supporting-document-recorded', 'Record supporting evidence through permit document action', ['document_id' => $supportingDocument->id, 'storage_private' => true], ['document_id' => $supportingDocument->id, 'storage_private' => $supportingDocument->storage_disk === 'local' && Storage::disk('local')->exists($supportingDocument->path)], $isCitizenOriginated ? 'applicant' : 'operator'),
+            ...($isCitizenOriginated ? [
+                $this->step('citizen-application-submitted', 'Submit citizen draft through the formal submission action', ['status' => PermitApplicationStatus::Assessment->value, 'citizen_submitted' => true, 'municipality_received' => true, 'official_application_number' => null], ['status' => PermitApplicationStatus::Assessment->value, 'citizen_submitted' => data_get($permitApplication->metadata, 'citizen_submission.submitted_at') !== null, 'municipality_received' => data_get($permitApplication->metadata, 'municipal_receipt.received_at') !== null, 'official_application_number' => $permitApplication->application_number], 'applicant'),
+            ] : []),
             $this->step('assessment-computed', 'Compute assessment through assessment action', ['assessment_status' => 'computed'], ['assessment_status' => $assessment->status->value, 'assessment_id' => $assessment->id]),
             $this->step('payment-schedule-prepared', 'Prepare payment schedule through payment schedule action', ['application_status' => PermitApplicationStatus::PendingPayment->value], ['application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id]),
             $this->step('collection-recorded', 'Record full over-the-counter collection through Treasury action', ['payment_schedule_status' => PaymentScheduleStatus::Paid->value, 'collection_status' => TreasuryCollectionStatus::PendingReceipt->value], ['payment_schedule_status' => $paymentSchedule->status->value, 'collection_status' => $collectionStatusBeforeReceipt->value, 'collection_id' => $collection->id]),
@@ -224,7 +252,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('release-ready-for-authority-review', 'Describe release readiness without issuing permit', ['ready_for_authority_review' => true, 'can_release' => false], ['ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'], 'can_release' => $releaseReadiness['can_release']]),
             $this->step('permit-artifact-available-for-authority-review', 'Describe generated permit artifact without issuing permit', ['status' => 'generated_artifact_available', 'ready_for_authority_review' => true, 'can_issue' => false, 'can_release' => false], ['status' => $permitArtifact['status'], 'ready_for_authority_review' => $permitArtifact['ready_for_authority_review'], 'can_issue' => $permitArtifact['can_issue'], 'can_release' => $permitArtifact['can_release']]),
             $this->step('permit-release-blocked', 'Attempt permit release through release boundary action', ['release_blocked' => true, 'application_status' => PermitApplicationStatus::PendingPayment->value], ['release_blocked' => $releaseBlocked, 'application_status' => $permitApplication->status->value]),
-            $this->step('application-timeline-projected', 'Project authoritative lifecycle records into chronological review evidence', ['event_count' => 11, 'release_boundary_visible' => true], ['event_count' => count($timelineKeys), 'release_boundary_visible' => in_array("release-blocked:{$permitApplication->id}", $timelineKeys, true)]),
+            $this->step('application-timeline-projected', 'Project authoritative lifecycle records into chronological review evidence', ['event_count' => $isCitizenOriginated ? 14 : 11, 'release_boundary_visible' => true], ['event_count' => count($timelineKeys), 'release_boundary_visible' => in_array("release-blocked:{$permitApplication->id}", $timelineKeys, true)]),
         ];
 
         foreach ($steps as $step) {
@@ -237,6 +265,11 @@ final class ManualCollectionReceiptVisibilityScenario
             'public_reference' => $receipt->receipt_number,
             'permit_application_id' => $permitApplication->id,
             'application_number' => $permitApplication->application_number,
+            'application_display_reference' => $applicationDisplayReference,
+            'citizen_application_display_reference' => $permitApplication->application_number ?? 'Application record #'.$permitApplication->id,
+            'public_application_display_reference' => $permitApplication->application_number ?? 'Unnumbered application',
+            'application_status' => $permitApplication->status->value,
+            'submitted_by_id' => $permitApplication->submitted_by_id,
             'business_activities' => $permitApplication->lines
                 ->map(fn ($line): array => [
                     'id' => $line->id,
@@ -262,15 +295,25 @@ final class ManualCollectionReceiptVisibilityScenario
             'supporting_document_name' => $supportingDocument->original_name,
             'supporting_document_download_url' => route('staff.permit-applications.documents.download', [$permitApplication, $supportingDocument], false),
             'assessment_id' => $assessment->id,
+            'assessment_status' => $assessment->status->value,
             'assessment_total_amount_cents' => $assessment->total_amount_cents,
             'assessment_pdf_url' => route('staff.permit-applications.assessments.pdf', $assessment, false),
             'payment_schedule_id' => $paymentSchedule->id,
+            'payment_schedule_status' => $paymentSchedule->status->value,
+            'payment_total_amount_cents' => $paymentSchedule->total_amount_cents,
+            'payment_paid_amount_cents' => $paymentSchedule->paid_amount_cents,
+            'payment_balance_amount_cents' => $paymentSchedule->total_amount_cents - $paymentSchedule->paid_amount_cents,
             'online_payment_boundary_status' => $onlinePaymentBoundary['status'],
             'collection_id' => $collection->id,
+            'collection_status' => $collection->status->value,
+            'collection_amount_cents' => $collection->amount_cents,
+            'receipt_id' => $receipt->id,
+            'receipt_number' => $receipt->receipt_number,
+            'receipt_status' => $receipt->status->value,
             'permit_application_create_url' => route('staff.permit-applications.create', absolute: false),
             'permit_application_url' => route('staff.permit-applications.show', $permitApplication, false),
             'payment_schedule_queue_url' => route('staff.payment-schedules.index', [
-                'q' => $permitApplication->application_number,
+                'q' => $reportSearch,
                 'status' => PaymentScheduleStatus::Paid->value,
             ], false),
             'payment_schedule_url' => route('staff.payment-schedules.show', $paymentSchedule, false),
@@ -299,11 +342,11 @@ final class ManualCollectionReceiptVisibilityScenario
             'revenue_source_code' => 'SCENARIO-RECEIPT-APPLICATION-FEE',
             'paid_establishments_report_url' => route('staff.reports.paid-establishments.index', [
                 'year' => $permitApplication->application_year,
-                'q' => $permitApplication->application_number,
+                'q' => $reportSearch,
             ], false),
             'paid_establishments_report_download_url' => route('staff.reports.paid-establishments.download', [
                 'year' => $permitApplication->application_year,
-                'q' => $permitApplication->application_number,
+                'q' => $reportSearch,
             ], false),
             'paid_establishment_business_name' => $permitApplication->business->name,
             'receipt_void_boundary_reference' => $receiptVoidBoundary['reference'],
@@ -321,6 +364,32 @@ final class ManualCollectionReceiptVisibilityScenario
             ], false),
             'permit_timeline_event_count' => count($timelineKeys),
             'permit_timeline_event_keys' => $timelineKeys,
+            ...($isCitizenOriginated ? [
+                'public_reference' => $applicationDisplayReference,
+                'clearances_completed' => $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count(),
+                'clearances_total' => $permitApplication->clearances->count(),
+                'ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'],
+                'can_release' => $releaseReadiness['can_release'],
+                'authority_review_status' => $releaseReadiness['authority_boundary']['status'],
+                'permit_artifact_available' => $permitArtifact['available'],
+                'permit_verification_status' => $permitArtifact['verification_status'],
+                'can_issue' => $permitArtifact['can_issue'],
+                'can_make_legally_effective' => $permitArtifact['can_make_legally_effective'],
+                'online_payment_status' => $onlinePaymentBoundary['status'],
+                'can_pay_online' => $onlinePaymentBoundary['can_pay_online'],
+                'can_reconcile_online' => $onlinePaymentBoundary['can_reconcile_online'],
+                'payment_line_count' => $citizenPaymentSchedule['lines']->count(),
+                'payment_line_codes' => $citizenPaymentSchedule['lines']->pluck('code')->all(),
+                'payment_collection_count' => $citizenPaymentSchedule['collections']->count(),
+                'payment_allocation_count' => $citizenPaymentSchedule['collections']->sum(fn (array $item): int => $item['allocations']->count()),
+                'payment_policy_status' => $citizenPaymentSchedule['payment_policy_boundary']['status'],
+                'can_split_installments' => $citizenPaymentSchedule['payment_policy_boundary']['can_split_installments'],
+                'citizen_timeline_event_count' => count($timelineKeys),
+                'citizen_timeline_event_keys' => $timelineKeys,
+                'list_url' => route('citizen.permit-applications.index', absolute: false),
+                'detail_url' => route('citizen.permit-applications.show', $permitApplication, false),
+                'payment_detail_url' => route('citizen.payment-schedules.show', $paymentSchedule, false),
+            ] : []),
         ];
         $manifest['steps'] = $steps;
         $manifest['result']['terminal'] = collect($steps)->every(fn (array $step): bool => $step['passed']) ? 'passed' : 'failed';
@@ -429,10 +498,10 @@ final class ManualCollectionReceiptVisibilityScenario
             ->firstWhere('code', $manifest['resources']['revenue_source_code']);
         $paidEstablishmentsReport = $this->buildPaidEstablishmentsReport->handle([
             'year' => $permitApplication->application_year,
-            'q' => $permitApplication->application_number,
+            'q' => $permitApplication->application_number ?? $permitApplication->business->name,
         ]);
         $paidEstablishmentRow = collect($paidEstablishmentsReport['rows'])
-            ->firstWhere('application_number', $permitApplication->application_number);
+            ->firstWhere('application_id', $permitApplication->id);
         $releaseReadiness = $this->describeReleaseReadiness->handle($permitApplication);
         $permitArtifact = $this->describePermitArtifact->handle($permitApplication);
         $verificationBoundary = $this->describeVerificationBoundary->handle($permitApplication);
@@ -447,6 +516,10 @@ final class ManualCollectionReceiptVisibilityScenario
         ];
 
         $checks = [
+            ...(($manifest['scenario']['key'] ?? null) === 'citizen_new_permit_lifecycle_authority_boundary' ? [
+                $this->step('audit-citizen-origin', 'Application retains the citizen registry and submission origin throughout municipal processing', ['submitted_by_id' => data_get($manifest, 'actors.applicant.id'), 'application_number' => null, 'citizen_submitted' => true, 'municipality_received' => true], ['submitted_by_id' => $permitApplication->submitted_by_id, 'application_number' => $permitApplication->application_number, 'citizen_submitted' => data_get($permitApplication->metadata, 'citizen_submission.submitted_at') !== null, 'municipality_received' => data_get($permitApplication->metadata, 'municipal_receipt.received_at') !== null]),
+                $this->step('audit-browser-citizen-milestone', 'Citizen browser evidence agrees with the exact final canonical record', ['application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id, 'receipt_id' => $receipt->id, 'ready_for_authority_review' => true, 'can_release' => false], ['application_status' => data_get($browserReport, 'citizen_processing.application_status'), 'payment_schedule_id' => data_get($browserReport, 'citizen_processing.payment_schedule_id'), 'receipt_id' => data_get($browserReport, 'citizen_authority_review.receipt_id'), 'ready_for_authority_review' => data_get($browserReport, 'citizen_authority_review.ready_for_authority_review'), 'can_release' => data_get($browserReport, 'citizen_authority_review.can_release')]),
+            ] : []),
             $this->step('audit-payment-schedule-paid', 'Payment schedule is paid', ['status' => PaymentScheduleStatus::Paid->value], ['status' => $paymentSchedule->status->value]),
             $this->step('audit-business-activities', 'Canonical permit application retains every prepared business activity', ['activities' => $manifest['resources']['business_activities']], ['activities' => $permitApplication->lines->map(fn ($line): array => ['id' => $line->id, 'code' => $line->lineOfBusiness?->code, 'name' => $line->lineOfBusiness?->name, 'declared_gross_sales_cents' => $line->declared_gross_sales_cents, 'capital_investment_cents' => $line->capital_investment_cents, 'quantity' => $line->quantity, 'started_on' => $line->started_on?->toDateString()])->values()->all()]),
             $this->step('audit-browser-business-activities', 'Browser intake controls and detail rows agree with canonical business activities', ['intake_add_remove_verified' => true, 'intake_mobile_visible' => true, 'activities' => $manifest['resources']['business_activities']], ['intake_add_remove_verified' => data_get($browserReport, 'business_activities.intake_add_remove_verified'), 'intake_mobile_visible' => data_get($browserReport, 'business_activities.intake_mobile_visible'), 'activities' => data_get($browserReport, 'business_activities.activities')]),
@@ -585,7 +658,7 @@ final class ManualCollectionReceiptVisibilityScenario
         return $manifest;
     }
 
-    private function storeScenarioDocument(PermitApplication $permitApplication, User $operator, string $runId): PermitApplicationDocument
+    private function storeScenarioDocument(PermitApplication $permitApplication, User $actor, string $runId, bool $citizen = false): PermitApplicationDocument
     {
         $document = new SimplePdfDocument(
             title: 'Scenario Supporting Evidence',
@@ -604,7 +677,7 @@ final class ManualCollectionReceiptVisibilityScenario
         }
 
         try {
-            return $this->storePermitApplicationDocument->handle($permitApplication, [
+            $data = [
                 'label' => 'Business registration evidence',
                 'file' => new UploadedFile(
                     $temporaryPath,
@@ -614,7 +687,13 @@ final class ManualCollectionReceiptVisibilityScenario
                     true,
                 ),
                 'remarks' => 'Lifecycle scenario intake evidence.',
-            ], $operator);
+            ];
+
+            if ($citizen) {
+                return $this->storeCitizenPermitApplicationDocument->handle($permitApplication, $data, $actor);
+            }
+
+            return $this->storePermitApplicationDocument->handle($permitApplication, $data, $actor);
         } finally {
             if (is_file($temporaryPath)) {
                 unlink($temporaryPath);
@@ -683,11 +762,11 @@ final class ManualCollectionReceiptVisibilityScenario
      * @param  array<string, mixed>  $actual
      * @return array<string, mixed>
      */
-    private function step(string $key, string $action, array $expected, array $actual): array
+    private function step(string $key, string $action, array $expected, array $actual, string $actor = 'operator'): array
     {
         return [
             'key' => $key,
-            'actor' => 'operator',
+            'actor' => $actor,
             'action' => $action,
             'expected' => $expected,
             'actual' => $actual,
@@ -702,12 +781,17 @@ final class ManualCollectionReceiptVisibilityScenario
      */
     private function storyboard(LifecycleScenarioDefinition $scenario, string $runId, PermitApplication $permitApplication, PaymentSchedule $paymentSchedule, TreasuryCollection $collection, Receipt $receipt): array
     {
-        $isUnifiedPermitLifecycle = $scenario->key === 'new_permit_lifecycle_authority_boundary';
+        $isCitizenOriginated = $scenario->key === 'citizen_new_permit_lifecycle_authority_boundary';
+        $isUnifiedPermitLifecycle = $isCitizenOriginated || $scenario->key === 'new_permit_lifecycle_authority_boundary';
 
         return [
-            'title' => $isUnifiedPermitLifecycle ? 'New permit lifecycle to authority boundary' : 'Manual collection receipt visibility',
+            'title' => $isCitizenOriginated
+                ? 'Citizen-originated new permit lifecycle to authority boundary'
+                : ($isUnifiedPermitLifecycle ? 'New permit lifecycle to authority boundary' : 'Manual collection receipt visibility'),
             'summary' => $isUnifiedPermitLifecycle
-                ? 'BPLO/Treasury staff execute a new permit lifecycle through intake, assessment, payment schedule, collection, receipt, clearances, permit artifact generation, public verification, and the explicit authority boundary without legally issuing or releasing the permit.'
+                ? ($isCitizenOriginated
+                    ? 'A citizen creates and formally submits an unnumbered new permit application; BPLO and Treasury continue the exact record through assessment, collection, receipt, clearances, artifact verification, and the authority boundary without legally issuing or releasing the permit.'
+                    : 'BPLO/Treasury staff execute a new permit lifecycle through intake, assessment, payment schedule, collection, receipt, clearances, permit artifact generation, public verification, and the explicit authority boundary without legally issuing or releasing the permit.')
                 : 'BPLO/Treasury staff prepare a collectible assessment, record full over-the-counter payment, issue a manual receipt, and verify the receipt is visible from Treasury surfaces.',
             'run_id' => $runId,
             'record' => [
@@ -722,9 +806,13 @@ final class ManualCollectionReceiptVisibilityScenario
             ],
             'frames' => [
                 [
-                    'title' => 'Staff records new permit application',
-                    'description' => 'Staff records a new business permit application, computes assessment, and prepares a payment schedule.',
-                    'dialogue' => 'The application is pending payment and ready for Treasury collection.',
+                    'title' => $isCitizenOriginated ? 'Citizen submits new permit application' : 'Staff records new permit application',
+                    'description' => $isCitizenOriginated
+                        ? 'The citizen saves a draft, attaches supporting evidence, and formally submits the exact unnumbered record into the municipal assessment queue.'
+                        : 'Staff records a new business permit application, computes assessment, and prepares a payment schedule.',
+                    'dialogue' => $isCitizenOriginated
+                        ? 'Submission and municipal receipt are recorded without inventing an official application number.'
+                        : 'The application is pending payment and ready for Treasury collection.',
                     'duration_seconds' => 5,
                 ],
                 [
@@ -786,7 +874,9 @@ final class ManualCollectionReceiptVisibilityScenario
             ->map(fn (array $frame): string => '<li><strong>'.e($frame['title']).'</strong><br>'.e($frame['description']).'<br><em>'.e($frame['dialogue']).'</em></li>')
             ->implode('');
 
-        return '<!doctype html><html><head><meta charset="utf-8"><title>'.e($storyboard['title']).'</title></head><body><h1>'.e($storyboard['title']).'</h1><p>'.e($storyboard['summary']).'</p><p>Run ID: '.e($runId).'</p><p>Application: '.e((string) $permitApplication->application_number).'</p><p>Payment schedule: '.e((string) $paymentSchedule->id).'</p><p>Collection: '.e((string) $collection->id).'</p><p>Receipt: '.e($receipt->receipt_number).'</p><ol>'.$frames.'</ol></body></html>';
+        $applicationReference = $permitApplication->application_number ?? 'Application #'.$permitApplication->id;
+
+        return '<!doctype html><html><head><meta charset="utf-8"><title>'.e($storyboard['title']).'</title></head><body><h1>'.e($storyboard['title']).'</h1><p>'.e($storyboard['summary']).'</p><p>Run ID: '.e($runId).'</p><p>Application: '.e($applicationReference).'</p><p>Payment schedule: '.e((string) $paymentSchedule->id).'</p><p>Collection: '.e((string) $collection->id).'</p><p>Receipt: '.e($receipt->receipt_number).'</p><ol>'.$frames.'</ol></body></html>';
     }
 
     private function safeRunReference(string $runId): string

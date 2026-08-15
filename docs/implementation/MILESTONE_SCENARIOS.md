@@ -12,6 +12,86 @@ Milestone scenarios are composed from completed vertical slices. They are not a 
 - `MILESTONE EVIDENCE PACKAGE`: terminal, browser, audit, storyboard, generated document, screenshot, and parity evidence are available for review.
 - `BLOCKED`: implementation must stop at an explicit unresolved policy boundary.
 
+## MS-002: Citizen-Originated New Permit Lifecycle To Authority Boundary
+
+Status: MILESTONE EVIDENCE PACKAGE
+
+Scenario key: `citizen_new_permit_lifecycle_authority_boundary`
+
+Run ID: `citizen-new-permit-20260815-001`
+
+Artifact root: `storage/app/private/lifecycle-scenarios/citizen_new_permit_lifecycle_authority_boundary/citizen-new-permit-20260815-001`
+
+Purpose: prove that one application created and formally submitted by an established citizen can be received and processed through the real municipal domain actions, inspected by both citizen and staff in the browser, and carried through assessment, Treasury collection, clearances, and artifact verification without crossing the unresolved authority boundary.
+
+The scenario composes the citizen and municipal processing lifecycles around one exact database record. It does not implement a second workflow path: every transition is executed by the same application actions and policies used by the production UI.
+
+## MS-002 Lifecycle Map
+
+| Step | Business meaning | Executed by | Evidence | Status |
+| --- | --- | --- | --- | --- |
+| 1 | Citizen creates an unnumbered draft under the durable legal owner identity | Citizen draft action | `manifest.json`, `terminal/prepare.json`, intake screenshots | BROWSER VERIFIED |
+| 2 | Citizen attaches supporting evidence while the application remains a draft | Citizen document action | prepare evidence, supporting-document screenshots | BROWSER VERIFIED |
+| 3 | Citizen formally submits and the municipality receives the application into processing | Citizen submission action | submission and receipt timeline events, citizen list/detail screenshots | BROWSER VERIFIED |
+| 4 | Municipality computes assessment from persisted fee rules | Assessment action | assessment #54, terminal and browser evidence | BROWSER VERIFIED |
+| 5 | Municipality establishes the payment schedule | Payment schedule action | payment schedule #51, queue/detail screenshots | BROWSER VERIFIED |
+| 6 | Treasury records the full over-the-counter collection | Treasury collection action | collection #33, report and payment screenshots | BROWSER VERIFIED |
+| 7 | Treasury issues the manually authorized receipt | Receipt action | receipt #33, receipt/report screenshots | BROWSER VERIFIED |
+| 8 | Authorized staff complete the three clearance records | Clearance actions | audit evidence, staff and citizen detail screenshots | BROWSER VERIFIED |
+| 9 | The generated permit artifact and public artifact identity become inspectable | Existing document and verification boundaries | `PVA-68-8d01ccfe76f898ed`, desktop/mobile public screenshots | ARTIFACT VERIFIED |
+| 10 | Citizen and staff see readiness for authority review while issuance and release remain unavailable | Existing authority-boundary policy and projections | audit checks, citizen/staff authority screenshots | BLOCKED BY POLICY |
+
+## MS-002 Authoritative Resource Identifiers
+
+- Permit application: #68
+- Official application number: none
+- Assessment: #54
+- Payment schedule: #51
+- Collection: #33
+- Receipt: #33
+- Permit verification reference: `PVA-68-8d01ccfe76f898ed`
+
+These are local evidence identifiers. `Application #68` and `Application record #68` are display fallbacks for the internal record identity; neither is represented as an official municipal application number.
+
+## MS-002 Evidence Package
+
+- Manifest: `manifest.json`
+- Human summary: `summary.html`
+- Reviewer note: `review.md`
+- Terminal evidence: `terminal/prepare.json`, `terminal/execution.json`, `terminal/audit.json`
+- Browser evidence: `browser/report.json`, browser action log, console-error and failed-request reports
+- Storyboard: `storyboard/storyboard.json`, `storyboard/storyboard.html`
+- Representative screenshots:
+  - `browser/screenshots/01-citizen-processing-list.png`
+  - `browser/screenshots/02-citizen-processing-detail.png`
+  - `browser/screenshots/01-payment-schedule-queue.png`
+  - `browser/screenshots/02-paid-establishments-report.png`
+  - `browser/screenshots/03-permit-release-boundary.png`
+  - `browser/screenshots/04-citizen-authority-review.png`
+  - `browser/screenshots/06-citizen-payment-detail.png`
+  - `browser/screenshots/08-citizen-public-artifact-verification.png`
+  - mobile counterparts for the citizen processing, authority-review, payment, and public-verification surfaces
+
+Generated evidence remains under `storage/app/private/**` and outside version control.
+
+## MS-002 Verification Matrix
+
+| Verification layer | Result | Evidence |
+| --- | --- | --- |
+| Terminal scenario prepare | PASS | exact citizen, owner, business, application, and downstream records in `manifest.json` |
+| Domain transition audit | PASS | `terminal/audit.json`; fourteen expected timeline events and no duplicate operations |
+| Citizen browser verification | PASS | exact manifest record on desktop and mobile |
+| Staff browser verification | PASS | exact manifest record across assessment, Treasury, reports, documents, and authority boundary |
+| Canonical/UI agreement | PASS | 124 browser checks and terminal audit checks |
+| Browser JavaScript errors | ZERO | `browser/console-errors.json` |
+| Failed application requests | ZERO | `browser/failed-requests.json` |
+| External integrations | NONE | scenario safety manifest |
+| Irreversible actions | NONE | scenario safety manifest |
+
+## MS-002 Explicit Non-Claims
+
+This milestone does not claim documentary sufficiency, an official application-number format, complete ordinance fee parity, automatic official receipt numbering, online payment or reconciliation, legal permit issuance, legal release, legal effect, production migration parity, or live-production UI parity.
+
 ## MS-001: Unified New Permit Lifecycle To Authority Boundary
 
 Status: MILESTONE EVIDENCE PACKAGE

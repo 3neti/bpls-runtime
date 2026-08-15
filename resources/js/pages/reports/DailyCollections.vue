@@ -319,7 +319,10 @@ function label(value: string | null): string {
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 align-top">
-                                    {{ row.application_number }}
+                                    {{
+                                        row.application_number ??
+                                        `Application #${row.application_id}`
+                                    }}
                                 </td>
                                 <td class="px-4 py-3 align-top">
                                     <div class="flex flex-wrap gap-2">

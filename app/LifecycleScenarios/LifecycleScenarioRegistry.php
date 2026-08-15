@@ -12,6 +12,49 @@ final class LifecycleScenarioRegistry
     public function all(): array
     {
         return [
+            'citizen_new_permit_lifecycle_authority_boundary' => new LifecycleScenarioDefinition(
+                key: 'citizen_new_permit_lifecycle_authority_boundary',
+                label: 'Citizen-originated new permit lifecycle to authority boundary',
+                mode: 'citizen_new_permit_lifecycle_authority_boundary',
+                risk: 'local transactional',
+                actors: [
+                    'applicant' => 'citizen_applicant',
+                    'operator' => 'primary_operator',
+                    'recipient' => 'sample_recipient',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'application_type' => 'new',
+                    'citizen_submitted' => true,
+                    'municipality_received' => true,
+                    'official_application_number' => null,
+                    'payment_schedule_status' => 'paid',
+                    'collection_status' => 'receipted',
+                    'receipt_status' => 'issued',
+                    'clearances_completed' => true,
+                    'ready_for_authority_review' => true,
+                    'can_release' => false,
+                    'permit_release_status' => 'blocked',
+                    'public_verification_status' => 'artifact_only',
+                    'external_calls' => 0,
+                    'irreversible_actions' => false,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
             'citizen_permit_submission_visibility' => new LifecycleScenarioDefinition(
                 key: 'citizen_permit_submission_visibility',
                 label: 'Citizen permit formal submission visibility',

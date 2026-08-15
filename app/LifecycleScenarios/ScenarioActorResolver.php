@@ -54,6 +54,7 @@ final class ScenarioActorResolver
                 UserPermission::AccessCitizen,
                 UserPermission::CreateOwnPermitApplications,
                 UserPermission::EditOwnPermitApplications,
+                UserPermission::SubmitOwnPermitApplications,
                 UserPermission::UploadOwnPermitApplicationDocuments,
                 UserPermission::ViewOwnPermitApplications,
                 UserPermission::ViewOwnPermitApplicationDocuments,
