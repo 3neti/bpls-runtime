@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
 import { Search, X } from '@lucide/vue';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import {
     index,
     show,
@@ -94,6 +94,28 @@ type RevenueCodeScheduleRow = {
     issues: RevenueCodeScheduleIssue[];
 };
 
+type RevenueCodeScheduleMatrix = {
+    provision: {
+        id: number;
+        code: string;
+        section_reference: string;
+        title: string;
+        reconciliation_status: string;
+        linked_fee_rule_code: string | null;
+        linked_fee_rule_execution_status: string | null;
+    };
+    summary: {
+        row_count: number;
+        exact_row_count: number;
+        reconciliation_required_count: number;
+        overlap_count: number;
+        gap_count: number;
+        ceiling_count: number;
+        execution_ready: boolean;
+    };
+    rows: RevenueCodeScheduleRow[];
+};
+
 const props = defineProps<{
     filters: {
         q: string;
@@ -110,27 +132,7 @@ const props = defineProps<{
         total: number;
     };
     revenueCodeProvisions: RevenueCodeProvision[];
-    revenueCodeScheduleMatrix: {
-        provision: {
-            id: number;
-            code: string;
-            section_reference: string;
-            title: string;
-            reconciliation_status: string;
-            linked_fee_rule_code: string | null;
-            linked_fee_rule_execution_status: string | null;
-        };
-        summary: {
-            row_count: number;
-            exact_row_count: number;
-            reconciliation_required_count: number;
-            overlap_count: number;
-            gap_count: number;
-            ceiling_count: number;
-            execution_ready: boolean;
-        };
-        rows: RevenueCodeScheduleRow[];
-    };
+    revenueCodeScheduleMatrices: RevenueCodeScheduleMatrix[];
     summary: {
         total_rules: number;
         active_rules: number;
@@ -151,6 +153,13 @@ const category = ref(props.filters.category);
 const scope = ref(props.filters.scope);
 const calculationType = ref(props.filters.calculation_type);
 const status = ref(props.filters.status);
+const activeScheduleCode = ref('MRC-2A-02-B-WHOLESALERS');
+const activeScheduleMatrix = computed(
+    () =>
+        props.revenueCodeScheduleMatrices.find(
+            (matrix) => matrix.provision.code === activeScheduleCode.value,
+        ) ?? props.revenueCodeScheduleMatrices[0],
+);
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -618,10 +627,36 @@ function decodePaginationLabel(value: string): string {
             </section>
 
             <section
+                v-if="activeScheduleMatrix"
                 class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
                 aria-labelledby="revenue-code-matrix-heading"
                 data-testid="revenue-code-schedule-matrix"
             >
+                <div
+                    class="flex gap-1 overflow-x-auto border-b bg-muted/20 p-2"
+                    aria-label="Revenue Code schedule"
+                >
+                    <Button
+                        v-for="matrix in revenueCodeScheduleMatrices"
+                        :key="matrix.provision.code"
+                        type="button"
+                        size="sm"
+                        :variant="
+                            matrix.provision.code === activeScheduleCode
+                                ? 'default'
+                                : 'ghost'
+                        "
+                        class="shrink-0"
+                        :aria-pressed="
+                            matrix.provision.code === activeScheduleCode
+                        "
+                        :data-schedule-provision-code="matrix.provision.code"
+                        @click="activeScheduleCode = matrix.provision.code"
+                    >
+                        {{ matrix.provision.section_reference }}
+                    </Button>
+                </div>
+
                 <div
                     class="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3"
                 >
@@ -630,33 +665,34 @@ function decodePaginationLabel(value: string): string {
                             id="revenue-code-matrix-heading"
                             class="font-semibold"
                         >
-                            Section 2A.02(b) reconciliation matrix
+                            {{
+                                activeScheduleMatrix.provision.section_reference
+                            }}
+                            reconciliation matrix
                         </h2>
                         <p class="mt-1 text-sm text-muted-foreground">
                             Source rows and non-executable candidate values for
-                            wholesalers, distributors, and dealers.
+                            {{ activeScheduleMatrix.provision.title }}.
                         </p>
                     </div>
                     <div class="flex flex-wrap gap-2 text-xs">
                         <Badge variant="outline">
-                            {{ revenueCodeScheduleMatrix.summary.row_count }}
+                            {{ activeScheduleMatrix.summary.row_count }}
                             source rows
                         </Badge>
                         <Badge variant="destructive">
-                            {{
-                                revenueCodeScheduleMatrix.summary.overlap_count
-                            }}
+                            {{ activeScheduleMatrix.summary.overlap_count }}
                             overlap
                         </Badge>
                         <Badge variant="destructive">
                             {{
-                                revenueCodeScheduleMatrix.summary
+                                activeScheduleMatrix.summary
                                     .reconciliation_required_count
                             }}
                             require normalization
                         </Badge>
                         <Badge variant="outline">
-                            {{ revenueCodeScheduleMatrix.summary.gap_count }}
+                            {{ activeScheduleMatrix.summary.gap_count }}
                             gaps
                         </Badge>
                     </div>
@@ -699,7 +735,7 @@ function decodePaginationLabel(value: string): string {
                         </thead>
                         <tbody>
                             <tr
-                                v-for="row in revenueCodeScheduleMatrix.rows"
+                                v-for="row in activeScheduleMatrix.rows"
                                 :key="row.id"
                                 class="border-b last:border-0"
                                 :class="

@@ -309,6 +309,9 @@ test('scenario registry discovers the revenue code fee catalog visibility scenar
         ->and($scenario->expectations['fee_rule_code'])->toBe('MRC-2A-02-B-RETAIL-BUSINESS-TAX')
         ->and($scenario->expectations['range_count'])->toBe(23)
         ->and($scenario->expectations['policy_boundary'])->toBe('new_business_initial_local_business_tax_exemption')
+        ->and($scenario->expectations['schedule_count'])->toBe(4)
+        ->and($scenario->expectations['schedule_total_row_count'])->toBe(82)
+        ->and($scenario->expectations['schedule_total_overlap_count'])->toBe(3)
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
@@ -1257,6 +1260,18 @@ test('revenue code fee catalog visibility scenario prepares deterministic catalo
         ->and($firstManifest['resources']['schedule_matrix']['overlap_count'])->toBe(1)
         ->and($firstManifest['resources']['schedule_matrix']['gap_count'])->toBe(0)
         ->and($firstManifest['resources']['schedule_matrix']['execution_ready'])->toBeFalse()
+        ->and($firstManifest['resources']['schedule_summary']['schedule_count'])->toBe(4)
+        ->and($firstManifest['resources']['schedule_summary']['row_count'])->toBe(82)
+        ->and($firstManifest['resources']['schedule_summary']['overlap_count'])->toBe(3)
+        ->and($firstManifest['resources']['schedule_summary']['gap_count'])->toBe(0)
+        ->and($firstManifest['resources']['schedule_summary']['reconciliation_required_count'])->toBe(7)
+        ->and($firstManifest['resources']['schedule_summary']['ceiling_count'])->toBe(4)
+        ->and($firstManifest['resources']['schedule_summary']['execution_ready_count'])->toBe(0)
+        ->and($firstManifest['resources']['schedule_matrices'])->toHaveCount(4)
+        ->and($firstManifest['resources']['schedule_matrices']['MRC-2A-02-A-MANUFACTURERS']['row_count'])->toBe(20)
+        ->and($firstManifest['resources']['schedule_matrices']['MRC-2A-02-E-CONTRACTORS']['overlap_count'])->toBe(1)
+        ->and($firstManifest['resources']['schedule_matrices']['MRC-2A-02-G-ENUMERATED-SERVICES']['ceiling_count'])->toBe(1)
+        ->and($firstManifest['resources']['schedule_findings'])->toHaveCount(4)
         ->and($firstManifest['resources']['overlap_row_code'])->toBe('MRC-2A-02-B-ROW-08')
         ->and($firstManifest['resources']['policy_boundaries'])->toContain('new_business_initial_local_business_tax_exemption')
         ->and($feeRule->ranges)->toHaveCount(23)
@@ -2325,6 +2340,8 @@ test('revenue code fee catalog visibility audit compares browser evidence with c
             'malformed_visible' => true,
             'ceiling_visible' => true,
             'execution_refused_visible' => true,
+            'schedule_provision_codes' => $manifest['resources']['schedule_provision_codes'],
+            'all_schedules_execution_refused' => true,
         ],
         'checks' => [],
         'artifacts' => [

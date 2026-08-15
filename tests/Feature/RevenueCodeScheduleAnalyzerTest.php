@@ -38,6 +38,37 @@ it('detects the disputed wholesale schedule without authorizing execution', func
         ->toContain(['type' => 'ceiling_not_exact']);
 });
 
+it('analyzes each extracted schedule without authorizing execution', function (string $provisionCode, array $expectedSummary, string $findingRowCode, string $findingType) {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+
+    $provision = RevenueCodeProvision::query()->where('code', $provisionCode)->sole();
+    $analysis = app(AnalyzeRevenueCodeSchedule::class)->handle($provision);
+    $findingRow = collect($analysis['rows'])->firstWhere('code', $findingRowCode);
+
+    expect($analysis['summary'])->toMatchArray($expectedSummary)
+        ->and($analysis['summary']['execution_ready'])->toBeFalse()
+        ->and(collect($findingRow['issues'])->pluck('type')->all())->toContain($findingType);
+})->with([
+    'manufacturers' => [
+        'MRC-2A-02-A-MANUFACTURERS',
+        ['row_count' => 20, 'exact_row_count' => 18, 'reconciliation_required_count' => 2, 'overlap_count' => 0, 'gap_count' => 0, 'ceiling_count' => 1],
+        'MRC-2A-02-A-ROW-18',
+        'normalization_required',
+    ],
+    'contractors' => [
+        'MRC-2A-02-E-CONTRACTORS',
+        ['row_count' => 19, 'exact_row_count' => 18, 'reconciliation_required_count' => 1, 'overlap_count' => 1, 'gap_count' => 0, 'ceiling_count' => 1],
+        'MRC-2A-02-E-ROW-15',
+        'overlap',
+    ],
+    'enumerated services' => [
+        'MRC-2A-02-G-ENUMERATED-SERVICES',
+        ['row_count' => 19, 'exact_row_count' => 18, 'reconciliation_required_count' => 1, 'overlap_count' => 1, 'gap_count' => 0, 'ceiling_count' => 1],
+        'MRC-2A-02-G-ROW-15',
+        'overlap',
+    ],
+]);
+
 it('detects a gap from candidate bounds without changing row evidence', function () {
     $provision = RevenueCodeProvision::factory()->create([
         'reconciliation_status' => RevenueCodeProvisionStatus::Reconciled,

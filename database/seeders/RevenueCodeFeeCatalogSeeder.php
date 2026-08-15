@@ -198,7 +198,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             registrationPlateFee: $registrationPlateFee,
             retailTax: $retailTax,
         );
-        $this->seedWholesaleScheduleRows();
+        $this->seedTaxScheduleRows();
     }
 
     /**
@@ -308,7 +308,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 type: RevenueCodeProvisionType::TaxSchedule,
                 excerpt: 'Graduated annual business-tax schedule for contractors and independent contractors, including project-term installments and completion recomputation.',
                 notes: 'The schedule contains overlapping PHP 300,000.00-500,000.00 and PHP 400,000.00-500,000.00 rows; installment, recomputation, deficiency, and refund behavior also require accepted policy.',
-                metadata: ['chapter' => 2, 'article' => 'A', 'schedule_row_count' => 19, 'known_ambiguities' => ['overlapping_ranges', 'project_term_installments', 'deficiency_or_refund']],
+                metadata: ['chapter' => 2, 'article' => 'A', 'schedule_row_count' => 19, 'known_ambiguities' => ['overlapping_ranges', 'statutory_ceiling', 'minimum_tax_floor', 'project_term_installments', 'deficiency_or_refund']],
             ),
             $this->provision(
                 code: 'MRC-2A-02-F-FINANCIAL-INSTITUTIONS',
@@ -325,8 +325,8 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 title: 'Enumerated service and amusement businesses',
                 type: RevenueCodeProvisionType::TaxSchedule,
                 excerpt: 'Enumerated service, amusement, real-estate, lodging, medical, cable, and computer establishments are assigned a graduated annual business-tax schedule.',
-                notes: 'The extracted table is visually interleaved and repeats overlapping PHP 300,000.00-500,000.00 and PHP 400,000.00-500,000.00 rows; source layout and rates require municipal reconciliation.',
-                metadata: ['chapter' => 2, 'article' => 'A', 'schedule_row_count' => 19, 'known_ambiguities' => ['source_layout_corruption', 'overlapping_ranges', 'statutory_ceiling']],
+                notes: 'The schedule repeats overlapping PHP 300,000.00-500,000.00 and PHP 400,000.00-500,000.00 rows, states a maximum percentage for the final row, and specifies a minimum tax that requires accepted operational treatment.',
+                metadata: ['chapter' => 2, 'article' => 'A', 'schedule_row_count' => 19, 'known_ambiguities' => ['overlapping_ranges', 'statutory_ceiling', 'minimum_tax_floor']],
             ),
             $this->provision(
                 code: 'MRC-2A-02-H-PEDDLERS',
@@ -405,12 +405,44 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
         ];
     }
 
+    private function seedTaxScheduleRows(): void
+    {
+        $this->seedManufacturerScheduleRows();
+        $this->seedWholesaleScheduleRows();
+        $this->seedContractorScheduleRows();
+        $this->seedEnumeratedServiceScheduleRows();
+    }
+
+    private function seedManufacturerScheduleRows(): void
+    {
+        $rows = [
+            $this->scheduleRow(1, 'Less than Php10,000.00', '207.73', 0, 1_000_000, 20_773, sectionCode: 'A'),
+            $this->scheduleRow(2, '10,000.00 or more but less than 15,000.00', '276.96', 1_000_000, 1_500_000, 27_696, sectionCode: 'A'),
+            $this->scheduleRow(3, '15,000.00 or more but less than 20,000.00', '380.20', 1_500_000, 2_000_000, 38_020, sectionCode: 'A'),
+            $this->scheduleRow(4, '20,000.00 or more but less than 30,000.00', '553.94', 2_000_000, 3_000_000, 55_394, sectionCode: 'A'),
+            $this->scheduleRow(5, '30,000.00 or more but less than 40,000.00', '830.91', 3_000_000, 4_000_000, 83_091, sectionCode: 'A'),
+            $this->scheduleRow(6, '40,000.00 or more but less than 50,000.00', '1,038.64', 4_000_000, 5_000_000, 103_864, sectionCode: 'A'),
+            $this->scheduleRow(7, '50,000.00 or more but less than 75,000.00', '1,661.81', 5_000_000, 7_500_000, 166_181, sectionCode: 'A'),
+            $this->scheduleRow(8, '75,000.00 or more but less than 100,000.00', '2,077.27', 7_500_000, 10_000_000, 207_727, sectionCode: 'A'),
+            $this->scheduleRow(9, '100,000.00 or more but less than 150,000.00', '2,769.69', 10_000_000, 15_000_000, 276_969, sectionCode: 'A'),
+            $this->scheduleRow(10, '150,000.00 or more but less than 200,000.00', '3,462.11', 15_000_000, 20_000_000, 346_211, sectionCode: 'A'),
+            $this->scheduleRow(11, '200,000.00 or more but less than 300,000.00', '4,846.96', 20_000_000, 30_000_000, 484_696, sectionCode: 'A'),
+            $this->scheduleRow(12, '300,000.00 or more but less than 500,000.00', '6,924.23', 30_000_000, 50_000_000, 692_423, sectionCode: 'A'),
+            $this->scheduleRow(13, '500,000.00 or more but less than 750,000.00', '10,071.60', 50_000_000, 75_000_000, 1_007_160, sectionCode: 'A'),
+            $this->scheduleRow(14, '750,000.00 or more but less than 1,000,000.00', '12,589.50', 75_000_000, 100_000_000, 1_258_950, sectionCode: 'A'),
+            $this->scheduleRow(15, '1,000,000.00 or more but less than 2,000,000.00', '17,310.56', 100_000_000, 200_000_000, 1_731_056, sectionCode: 'A'),
+            $this->scheduleRow(16, '2,000,000.00 or more but less than 3,000,000.00', '20,772.68', 200_000_000, 300_000_000, 2_077_268, sectionCode: 'A'),
+            $this->scheduleRow(17, '3,000,000.00 or more but less than 4,000,000.00', '24,927.21', 300_000_000, 400_000_000, 2_492_721, sectionCode: 'A'),
+            $this->scheduleRow(18, '4,000,0000.00 or more but less than 5,000,000.00', '29,081.74', 400_000_000, 500_000_000, 2_908_174, RevenueCodeProvisionRowStatus::ReconciliationRequired, 'Candidate lower bound assumes the malformed source value "4,000,0000.00" means PHP 4,000,000.00.', sectionCode: 'A'),
+            $this->scheduleRow(19, '5,000,000.00 or more but less than 6,500,000.00', '30,686.91', 500_000_000, 650_000_000, 3_068_691, sectionCode: 'A'),
+            $this->scheduleRow(20, '6,500,000.00 or more', 'at rate not exceeding forty-seven and twenty-one percent (47.21%) of one percent (1%)', 650_000_000, null, null, RevenueCodeProvisionRowStatus::ReconciliationRequired, 'The ordinance provides a maximum percentage, not an exact accepted operational rate.', '47.2100', true, 'A'),
+        ];
+
+        $this->persistScheduleRows('MRC-2A-02-A-MANUFACTURERS', $rows);
+    }
+
     private function seedWholesaleScheduleRows(): void
     {
-        $provision = RevenueCodeProvision::query()
-            ->where('code', 'MRC-2A-02-B-WHOLESALERS')
-            ->sole();
-
         $rows = [
             $this->scheduleRow(1, 'Less than Php1,000.00', '22.66', 0, 100_000, 2_266),
             $this->scheduleRow(2, '1,000.00 or more but less than 2,000.00', '41.55', 100_000, 200_000, 4_155),
@@ -438,6 +470,64 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
             $this->scheduleRow(24, '2,000,000.00 or more', 'at rate not exceeding sixty-two and ninety-five percent (62.95%) of one percent (1%)', 200_000_000, null, null, RevenueCodeProvisionRowStatus::ReconciliationRequired, 'The ordinance provides a maximum percentage, not an exact accepted operational rate.', '62.9500', true),
         ];
 
+        $this->persistScheduleRows('MRC-2A-02-B-WHOLESALERS', $rows);
+    }
+
+    private function seedContractorScheduleRows(): void
+    {
+        $this->persistScheduleRows(
+            'MRC-2A-02-E-CONTRACTORS',
+            $this->contractorStyleScheduleRows('E', 34_621, '62.9500'),
+        );
+    }
+
+    private function seedEnumeratedServiceScheduleRows(): void
+    {
+        $this->persistScheduleRows(
+            'MRC-2A-02-G-ENUMERATED-SERVICES',
+            $this->contractorStyleScheduleRows('G', 34_622, '57.2300'),
+        );
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function contractorStyleScheduleRows(string $sectionCode, int $twentyThousandAmountCents, string $ceilingRateBasisPoints): array
+    {
+        $ceilingText = $sectionCode === 'E'
+            ? 'at rate not exceeding sixty-two and ninety-five percent (62.95%) of one percent (1%)'
+            : 'at rate not exceeding fifty-seven and twenty-three percent (57.23%) of one percent (1%)';
+
+        return [
+            $this->scheduleRow(1, 'Less than Php5,000.00', '34.34', 0, 500_000, 3_434, sectionCode: $sectionCode),
+            $this->scheduleRow(2, '5,000.00 or more but less than 10,000.00', '77.26', 500_000, 1_000_000, 7_726, sectionCode: $sectionCode),
+            $this->scheduleRow(3, '10,000.00 or more but less than 15,000.00', '131.62', 1_000_000, 1_500_000, 13_162, sectionCode: $sectionCode),
+            $this->scheduleRow(4, '15,000.00 or more but less than 20,000.00', '207.73', 1_500_000, 2_000_000, 20_773, sectionCode: $sectionCode),
+            $this->scheduleRow(5, '20,000.00 or more but less than 30,000.00', $sectionCode === 'E' ? '346.21' : '346.22', 2_000_000, 3_000_000, $twentyThousandAmountCents, sectionCode: $sectionCode),
+            $this->scheduleRow(6, '30,000.00 or more but less than 40,000.00', '484.70', 3_000_000, 4_000_000, 48_470, sectionCode: $sectionCode),
+            $this->scheduleRow(7, '40,000.00 or more but less than 50,000.00', '692.42', 4_000_000, 5_000_000, 69_242, sectionCode: $sectionCode),
+            $this->scheduleRow(8, '50,000.00 or more but less than 75,000.00', '1,107.88', 5_000_000, 7_500_000, 110_788, sectionCode: $sectionCode),
+            $this->scheduleRow(9, '75,000.00 or more but less than 100,000.00', '1,661.81', 7_500_000, 10_000_000, 166_181, sectionCode: $sectionCode),
+            $this->scheduleRow(10, '100,000.00 or more but less than 150,000.00', '2,492.72', 10_000_000, 15_000_000, 249_272, sectionCode: $sectionCode),
+            $this->scheduleRow(11, '150,000.00 or more but less than 200,000.00', '3,323.63', 15_000_000, 20_000_000, 332_363, sectionCode: $sectionCode),
+            $this->scheduleRow(12, '200,000.00 or more but less than 250,000.00', '4,569.99', 20_000_000, 25_000_000, 456_999, sectionCode: $sectionCode),
+            $this->scheduleRow(13, '250,000.00 or more but less than 300,000.00', '5,816.35', 25_000_000, 30_000_000, 581_635, sectionCode: $sectionCode),
+            $this->scheduleRow(14, '300,000.00 or more but less than 500,000.00', '7,755.13', 30_000_000, 50_000_000, 775_513, sectionCode: $sectionCode),
+            $this->scheduleRow(15, '400,000.00 or more but less than 500,000.00', '10,386.34', 40_000_000, 50_000_000, 1_038_634, sectionCode: $sectionCode),
+            $this->scheduleRow(16, '500,000.00 or more but less than 750,000.00', '11,645.29', 50_000_000, 75_000_000, 1_164_529, sectionCode: $sectionCode),
+            $this->scheduleRow(17, '750,000.00 or more but less than 1,000,000.00', '12,904.24', 75_000_000, 100_000_000, 1_290_424, sectionCode: $sectionCode),
+            $this->scheduleRow(18, '1,000,000.00 or more but less than 2,000,000.00', '14,477.93', 100_000_000, 200_000_000, 1_447_793, sectionCode: $sectionCode),
+            $this->scheduleRow(19, '2,000,000.00 or more', $ceilingText, 200_000_000, null, null, RevenueCodeProvisionRowStatus::ReconciliationRequired, 'The ordinance provides a maximum percentage, not an exact accepted operational rate; the stated PHP 14,477.93 minimum also requires accepted operational treatment.', $ceilingRateBasisPoints, true, $sectionCode),
+        ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     */
+    private function persistScheduleRows(string $provisionCode, array $rows): void
+    {
+        $provision = RevenueCodeProvision::query()->where('code', $provisionCode)->sole();
+
+        $provision->rows()->whereNotIn('sequence', array_column($rows, 'sequence'))->delete();
+
         foreach ($rows as $row) {
             RevenueCodeProvisionRow::query()->updateOrCreate(
                 [
@@ -461,10 +551,11 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
         ?string $normalizationNotes = null,
         ?string $rateBasisPoints = null,
         bool $isCeiling = false,
+        string $sectionCode = 'B',
     ): array {
         return [
             'sequence' => $sequence,
-            'code' => 'MRC-2A-02-B-ROW-'.str_pad((string) $sequence, 2, '0', STR_PAD_LEFT),
+            'code' => 'MRC-2A-02-'.$sectionCode.'-ROW-'.str_pad((string) $sequence, 2, '0', STR_PAD_LEFT),
             'source_basis_text' => $sourceBasisText,
             'source_value_text' => $sourceValueText,
             'basis_from_cents' => $basisFromCents,

@@ -82,7 +82,7 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->reconciliation_status->toBe(RevenueCodeProvisionStatus::Reconciled)
         ->feeRule->currentReconciliation->execution_status->toBe(FeeRuleExecutionStatus::Executable);
 
-    expect(RevenueCodeProvisionRow::query()->count())->toBe(24);
+    expect(RevenueCodeProvisionRow::query()->count())->toBe(82);
 
     $overlappingRow = RevenueCodeProvisionRow::query()
         ->where('code', 'MRC-2A-02-B-ROW-08')
@@ -105,6 +105,42 @@ it('seeds a deterministic revenue code fee catalog foundation with legal provena
         ->source_value_text->toContain('not exceeding')
         ->rate_basis_points->toBe('62.9500')
         ->is_ceiling->toBeTrue();
+
+    $manufacturerMalformedRow = RevenueCodeProvisionRow::query()
+        ->where('code', 'MRC-2A-02-A-ROW-18')
+        ->sole();
+    $manufacturerCeilingRow = RevenueCodeProvisionRow::query()
+        ->where('code', 'MRC-2A-02-A-ROW-20')
+        ->sole();
+    $contractorOverlapRow = RevenueCodeProvisionRow::query()
+        ->where('code', 'MRC-2A-02-E-ROW-15')
+        ->sole();
+    $serviceCeilingRow = RevenueCodeProvisionRow::query()
+        ->where('code', 'MRC-2A-02-G-ROW-19')
+        ->sole();
+
+    expect($manufacturerMalformedRow)
+        ->source_basis_text->toStartWith('4,000,0000.00')
+        ->normalization_notes->toContain('malformed source value')
+        ->and($manufacturerCeilingRow)
+        ->rate_basis_points->toBe('47.2100')
+        ->is_ceiling->toBeTrue()
+        ->and($contractorOverlapRow)
+        ->source_basis_text->toStartWith('400,000.00')
+        ->basis_from_cents->toBe(40_000_000)
+        ->and($serviceCeilingRow)
+        ->rate_basis_points->toBe('57.2300')
+        ->is_ceiling->toBeTrue();
+
+    $enumeratedServiceProvision = RevenueCodeProvision::query()
+        ->where('code', 'MRC-2A-02-G-ENUMERATED-SERVICES')
+        ->sole();
+
+    expect($enumeratedServiceProvision->metadata['known_ambiguities'])
+        ->toContain('overlapping_ranges')
+        ->toContain('statutory_ceiling')
+        ->toContain('minimum_tax_floor')
+        ->not->toContain('source_layout_corruption');
 });
 
 it('executes the exact annual business inspection fee with reconciliation provenance', function () {

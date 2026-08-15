@@ -97,7 +97,7 @@ class FeeRuleController extends Controller
                 ])
                 ->values()
                 ->all(),
-            'revenueCodeScheduleMatrix' => $this->scheduleMatrixPayload(),
+            'revenueCodeScheduleMatrices' => $this->scheduleMatricesPayload(),
             'summary' => [
                 'total_rules' => FeeRule::query()->count(),
                 'active_rules' => FeeRule::query()->where('is_active', true)->count(),
@@ -194,13 +194,27 @@ class FeeRuleController extends Controller
         ];
     }
 
-    /** @return array<string, mixed> */
-    private function scheduleMatrixPayload(): array
+    /** @return array<int, array<string, mixed>> */
+    private function scheduleMatricesPayload(): array
     {
-        $provision = RevenueCodeProvision::query()
+        return RevenueCodeProvision::query()
             ->with('feeRule.currentReconciliation')
-            ->where('code', 'MRC-2A-02-B-WHOLESALERS')
-            ->sole();
+            ->whereIn('code', [
+                'MRC-2A-02-A-MANUFACTURERS',
+                'MRC-2A-02-B-WHOLESALERS',
+                'MRC-2A-02-E-CONTRACTORS',
+                'MRC-2A-02-G-ENUMERATED-SERVICES',
+            ])
+            ->orderBy('section_reference')
+            ->get()
+            ->map(fn (RevenueCodeProvision $provision): array => $this->scheduleMatrixPayload($provision))
+            ->values()
+            ->all();
+    }
+
+    /** @return array<string, mixed> */
+    private function scheduleMatrixPayload(RevenueCodeProvision $provision): array
+    {
         $analysis = $this->analyzeRevenueCodeSchedule->handle($provision);
         $analysisRows = collect($analysis['rows'])->keyBy('code');
 

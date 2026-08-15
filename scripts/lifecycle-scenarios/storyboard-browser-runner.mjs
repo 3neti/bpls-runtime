@@ -2528,6 +2528,55 @@ async function inspectRevenueCodeFeeCatalogList(targetPage, targetBaseUrl) {
         .getByText('Execution refused.', { exact: true })
         .isVisible()
         .catch(() => false);
+    const verifiedScheduleCodes = [];
+
+    for (const finding of manifest.resources.schedule_findings ?? []) {
+        const scheduleButton = scheduleMatrix.locator(
+            `[data-schedule-provision-code="${finding.provision_code}"]`,
+        );
+        await scheduleButton.click();
+
+        const findingRow = scheduleMatrix.locator(
+            `[data-schedule-row-code="${finding.finding_row_code}"]`,
+        );
+        const findingVisible = await findingRow
+            .getByText(finding.finding_text, { exact: false })
+            .isVisible()
+            .catch(() => false);
+        const scheduleCeilingVisible = await scheduleMatrix
+            .locator(`[data-schedule-row-code="${finding.ceiling_row_code}"]`)
+            .getByText('ceiling not exact', { exact: true })
+            .isVisible()
+            .catch(() => false);
+        const scheduleExecutionRefusedVisible = await scheduleMatrix
+            .getByText('Execution refused.', { exact: true })
+            .isVisible()
+            .catch(() => false);
+
+        checks.push(
+            check(
+                `fee-catalog-schedule-${finding.provision_code}-visible`,
+                `Fee catalog shows reconciliation evidence for ${finding.provision_code}`,
+                true,
+                findingVisible &&
+                    scheduleCeilingVisible &&
+                    scheduleExecutionRefusedVisible,
+                {
+                    provision_code: finding.provision_code,
+                    finding_row_code: finding.finding_row_code,
+                    ceiling_row_code: finding.ceiling_row_code,
+                },
+            ),
+        );
+
+        if (
+            findingVisible &&
+            scheduleCeilingVisible &&
+            scheduleExecutionRefusedVisible
+        ) {
+            verifiedScheduleCodes.push(finding.provision_code);
+        }
+    }
 
     checks.push(
         check(
@@ -2581,6 +2630,10 @@ async function inspectRevenueCodeFeeCatalogList(targetPage, targetBaseUrl) {
     feeCatalogEvidence.malformed_visible = malformedVisible;
     feeCatalogEvidence.ceiling_visible = ceilingVisible;
     feeCatalogEvidence.execution_refused_visible = executionRefusedVisible;
+    feeCatalogEvidence.schedule_provision_codes = verifiedScheduleCodes;
+    feeCatalogEvidence.all_schedules_execution_refused =
+        verifiedScheduleCodes.length ===
+        (manifest.resources.schedule_findings ?? []).length;
     checks.push(
         check(
             'fee-catalog-list-policy-boundary-visible',
