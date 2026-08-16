@@ -14,6 +14,18 @@ Source ID: `LIVE-APP-001`
 - observed title: `BPLS Portal`
 - observed console errors during check: 0
 
+Read-only aggregate scale observation on 2026-08-16:
+
+- business owners: 3,163 total owners
+- businesses: 3,188 total businesses
+- permit applications: 3,065 total applications
+- permits: 2,709 total permits
+- Payments & Billing: 29,113 unified transactions, of which 28,643 were displayed as completed payments
+- clearance configuration: 5 clearance types
+- method: authenticated navigation to existing list surfaces and reading their visible pagination/summary totals; no search, mutation, export, or record download was performed
+- limitation: the unified transaction total is not asserted to equal the Convex `payments` table count; payment-schedule, clearance-assignment, nested line-of-business, document-object, deleted-record, and historical-version counts were not exposed by these surfaces and remain unknown
+- privacy: no row-level production values, credentials, cookies, or session artifacts were persisted
+
 Observed high-level surfaces:
 
 - Dashboard
