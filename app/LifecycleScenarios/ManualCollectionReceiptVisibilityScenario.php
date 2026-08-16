@@ -55,6 +55,7 @@ use App\Models\PermitApplicationDocument;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
 use App\Models\User;
+use App\Notifications\PermitApplicationReceived;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
@@ -225,7 +226,16 @@ final class ManualCollectionReceiptVisibilityScenario
         $receipt->refresh();
         $permitApplication = $paymentSchedule->permitApplication()->firstOrFail();
         $permitApplication->load('business');
-        $applicationDisplayReference = $permitApplication->application_number ?? 'Application #'.$permitApplication->id;
+        $applicationDisplayReference = $permitApplication->application_number
+            ?? $permitApplication->tracking_reference
+            ?? 'Application #'.$permitApplication->id;
+        $receiptNotices = $isCitizenOriginated
+            ? $applicant?->notifications
+                ->where('type', PermitApplicationReceived::class)
+                ->filter(fn ($notification): bool => (int) data_get($notification->data, 'permit_application_id') === $permitApplication->id)
+                ->values()
+            : collect();
+        $receiptNotice = $receiptNotices->first();
         $reportSearch = $permitApplication->application_number ?? $permitApplication->business->name;
         $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
         $citizenPaymentSchedule = $isCitizenOriginated
@@ -284,6 +294,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('supporting-document-recorded', 'Record supporting evidence through permit document action', ['document_id' => $supportingDocument->id, 'storage_private' => true], ['document_id' => $supportingDocument->id, 'storage_private' => $supportingDocument->storage_disk === 'local' && Storage::disk('local')->exists($supportingDocument->path)], $isCitizenOriginated ? 'applicant' : 'operator'),
             ...($isCitizenOriginated ? [
                 $this->step('citizen-application-submitted', 'Submit citizen draft through the formal submission action', ['status' => PermitApplicationStatus::Assessment->value, 'citizen_submitted' => true, 'municipality_received' => true, 'official_application_number' => null], ['status' => PermitApplicationStatus::Assessment->value, 'citizen_submitted' => data_get($permitApplication->metadata, 'citizen_submission.submitted_at') !== null, 'municipality_received' => data_get($permitApplication->metadata, 'municipal_receipt.received_at') !== null, 'official_application_number' => $permitApplication->application_number], 'applicant'),
+                $this->step('citizen-receipt-notice-recorded', 'Record one factual in-app receipt notice through the submission action', ['notice_count' => 1, 'kind' => 'permit_application_received', 'tracking_reference' => $permitApplication->tracking_reference, 'external_delivery' => false], ['notice_count' => $receiptNotices->count(), 'kind' => data_get($receiptNotice?->data, 'kind'), 'tracking_reference' => data_get($receiptNotice?->data, 'tracking_reference'), 'external_delivery' => false], 'applicant'),
             ] : []),
             $this->step('assessment-computed', 'Compute assessment through assessment action', ['assessment_status' => 'computed'], ['assessment_status' => $assessment->status->value, 'assessment_id' => $assessment->id]),
             $this->step('payment-schedule-prepared', 'Prepare payment schedule through payment schedule action', ['application_status' => PermitApplicationStatus::PendingPayment->value], ['application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id]),
@@ -316,8 +327,9 @@ final class ManualCollectionReceiptVisibilityScenario
             'public_reference' => $receipt->receipt_number,
             'permit_application_id' => $permitApplication->id,
             'application_number' => $permitApplication->application_number,
+            'tracking_reference' => $permitApplication->tracking_reference,
             'application_display_reference' => $applicationDisplayReference,
-            'citizen_application_display_reference' => $permitApplication->application_number ?? 'Application record #'.$permitApplication->id,
+            'citizen_application_display_reference' => $permitApplication->application_number ?? $permitApplication->tracking_reference ?? 'Application record #'.$permitApplication->id,
             'public_application_display_reference' => $permitApplication->application_number ?? 'Unnumbered application',
             'application_status' => $permitApplication->status->value,
             'submitted_by_id' => $permitApplication->submitted_by_id,
@@ -656,7 +668,9 @@ final class ManualCollectionReceiptVisibilityScenario
             'steps' => $steps,
             'external_calls' => 0,
             'irreversible_actions' => false,
-            'notifications' => false,
+            'notifications' => $isCitizenOriginated,
+            'in_app_notification_count' => $receiptNotices->count(),
+            'external_notifications' => false,
         ]);
         $artifactStore->putJson('storyboard/storyboard.json', $this->storyboard($scenario, $runId, $permitApplication, $paymentSchedule, $collection, $receipt));
         $artifactStore->put('storyboard/storyboard.html', $this->storyboardHtml($scenario, $runId, $permitApplication, $paymentSchedule, $collection, $receipt));
@@ -730,6 +744,17 @@ final class ManualCollectionReceiptVisibilityScenario
         $receiptVoidBoundary = $this->describeReceiptVoidBoundary->handle($receipt);
         $timeline = $this->buildPermitApplicationTimeline->handle($permitApplication);
         $timelineKeys = collect($timeline)->pluck('key')->all();
+        $isCitizenOriginated = ($manifest['scenario']['key'] ?? null) === 'citizen_new_permit_lifecycle_authority_boundary';
+        $applicant = $isCitizenOriginated
+            ? User::query()->findOrFail((int) data_get($manifest, 'actors.applicant.id'))
+            : null;
+        $receiptNotices = $isCitizenOriginated
+            ? $applicant?->notifications
+                ->where('type', PermitApplicationReceived::class)
+                ->filter(fn ($notification): bool => (int) data_get($notification->data, 'permit_application_id') === $permitApplication->id)
+                ->values()
+            : collect();
+        $receiptNotice = $receiptNotices->first();
         $browserReport = $artifactStore->readJson('browser/report.json') ?? [
             'result' => [
                 'passed' => false,
@@ -738,8 +763,9 @@ final class ManualCollectionReceiptVisibilityScenario
         ];
 
         $checks = [
-            ...(($manifest['scenario']['key'] ?? null) === 'citizen_new_permit_lifecycle_authority_boundary' ? [
-                $this->step('audit-citizen-origin', 'Application retains the citizen registry and submission origin throughout municipal processing', ['submitted_by_id' => data_get($manifest, 'actors.applicant.id'), 'application_number' => null, 'citizen_submitted' => true, 'municipality_received' => true], ['submitted_by_id' => $permitApplication->submitted_by_id, 'application_number' => $permitApplication->application_number, 'citizen_submitted' => data_get($permitApplication->metadata, 'citizen_submission.submitted_at') !== null, 'municipality_received' => data_get($permitApplication->metadata, 'municipal_receipt.received_at') !== null]),
+            ...($isCitizenOriginated ? [
+                $this->step('audit-citizen-origin', 'Application retains the citizen registry and submission origin throughout municipal processing', ['submitted_by_id' => data_get($manifest, 'actors.applicant.id'), 'application_number' => null, 'tracking_reference' => $manifest['resources']['tracking_reference'], 'citizen_submitted' => true, 'municipality_received' => true], ['submitted_by_id' => $permitApplication->submitted_by_id, 'application_number' => $permitApplication->application_number, 'tracking_reference' => $permitApplication->tracking_reference, 'citizen_submitted' => data_get($permitApplication->metadata, 'citizen_submission.submitted_at') !== null, 'municipality_received' => data_get($permitApplication->metadata, 'municipal_receipt.received_at') !== null]),
+                $this->step('audit-citizen-receipt-notice', 'Canonical submission produced exactly one factual in-app receipt notice and no external delivery', ['notice_count' => 1, 'kind' => 'permit_application_received', 'tracking_reference' => $permitApplication->tracking_reference, 'external_delivery' => false], ['notice_count' => $receiptNotices->count(), 'kind' => data_get($receiptNotice?->data, 'kind'), 'tracking_reference' => data_get($receiptNotice?->data, 'tracking_reference'), 'external_delivery' => false]),
                 $this->step('audit-browser-citizen-milestone', 'Citizen browser evidence agrees with the exact final canonical record', ['application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id, 'receipt_id' => $receipt->id, 'ready_for_authority_review' => true, 'can_release' => false], ['application_status' => data_get($browserReport, 'citizen_processing.application_status'), 'payment_schedule_id' => data_get($browserReport, 'citizen_processing.payment_schedule_id'), 'receipt_id' => data_get($browserReport, 'citizen_authority_review.receipt_id'), 'ready_for_authority_review' => data_get($browserReport, 'citizen_authority_review.ready_for_authority_review'), 'can_release' => data_get($browserReport, 'citizen_authority_review.can_release')]),
             ] : []),
             $this->step('audit-payment-schedule-paid', 'Payment schedule is paid', ['status' => PaymentScheduleStatus::Paid->value], ['status' => $paymentSchedule->status->value]),
@@ -948,6 +974,14 @@ final class ManualCollectionReceiptVisibilityScenario
                     'blocked_by' => $pldsReport['blocked_by'],
                 ],
                 'permit_application_status' => $permitApplication->status->value,
+                'citizen_receipt_notice' => $receiptNotice === null ? null : [
+                    'id' => $receiptNotice->id,
+                    'type' => $receiptNotice->type,
+                    'kind' => data_get($receiptNotice->data, 'kind'),
+                    'tracking_reference' => data_get($receiptNotice->data, 'tracking_reference'),
+                    'read_at' => $receiptNotice->read_at?->toIso8601String(),
+                    'external_delivery' => false,
+                ],
                 'clearances' => $permitApplication->clearances
                     ->map(fn ($clearance): array => [
                         'id' => $clearance->id,

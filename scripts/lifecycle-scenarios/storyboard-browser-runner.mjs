@@ -1390,6 +1390,7 @@ async function inspectCitizenPermitDraft(targetPage, targetBaseUrl) {
 async function submitCitizenPermitApplication(targetPage, targetBaseUrl) {
     const detailUrl = `${targetBaseUrl}${manifest.resources.detail_url}`;
     const listUrl = `${targetBaseUrl}${manifest.resources.list_url}`;
+    const notificationsUrl = `${targetBaseUrl}${manifest.resources.notifications_url}`;
 
     await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
     const currentStatus = await targetPage
@@ -1472,15 +1473,15 @@ async function submitCitizenPermitApplication(targetPage, targetBaseUrl) {
         .getByRole('link', { name: 'Edit Draft', exact: true })
         .isVisible()
         .catch(() => false);
-    const postSubmissionReferenceVisible = await targetPage
-        .getByRole('heading', {
-            name: manifest.resources.post_submission_reference,
-            exact: true,
-        })
-        .isVisible();
+    const trackingReference = (
+        await targetPage.locator('h1').first().innerText()
+    ).trim();
+    const postSubmissionReferenceVisible = /^SUB-[0-9A-HJKMNP-TV-Z]{26}$/.test(
+        trackingReference,
+    );
     const breadcrumbReferenceVisible = await targetPage
         .getByRole('navigation', { name: 'breadcrumb' })
-        .getByText(manifest.resources.post_submission_reference, {
+        .getByText(trackingReference, {
             exact: true,
         })
         .isVisible()
@@ -1493,7 +1494,7 @@ async function submitCitizenPermitApplication(targetPage, targetBaseUrl) {
         municipality_received: municipalityReceived,
         submit_action_available: submitActionAvailable,
         edit_action_available: editActionAvailable,
-        post_submission_reference: manifest.resources.post_submission_reference,
+        tracking_reference: trackingReference,
     });
     checks.push(
         check(
@@ -1509,8 +1510,8 @@ async function submitCitizenPermitApplication(targetPage, targetBaseUrl) {
             !submitActionAvailable && !editActionAvailable,
         ),
         check(
-            'citizen-submission-internal-reference-visible',
-            'Unnumbered submitted record uses an internal application reference',
+            'citizen-submission-tracking-reference-visible',
+            'Unnumbered submitted record uses a non-official tracking reference',
             true,
             postSubmissionReferenceVisible,
         ),
@@ -1567,6 +1568,85 @@ async function submitCitizenPermitApplication(targetPage, targetBaseUrl) {
         targetPage,
         '04-citizen-submission-mobile',
         'browser/screenshots/04-citizen-submission-mobile.png',
+    );
+
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+    await targetPage.goto(notificationsUrl, { waitUntil: 'networkidle' });
+    const receiptNotice = targetPage.locator(
+        `[data-testid="citizen-notification"][data-notification-kind="permit_application_received"][data-tracking-reference="${trackingReference}"]`,
+    );
+    await receiptNotice.waitFor();
+    const receiptNoticeVisible = await receiptNotice.isVisible();
+    const receiptNoticeText = await receiptNotice.innerText();
+    const receiptNoticeApplicationUrl = await receiptNotice
+        .getByRole('link', { name: 'View application', exact: true })
+        .getAttribute('href');
+    const noticeAvoidsAuthorityClaim =
+        receiptNoticeText.includes('does not mean') &&
+        receiptNoticeText.includes('complete, assessed, or approved');
+
+    Object.assign(citizenSubmissionEvidence, {
+        receipt_notice_visible: receiptNoticeVisible,
+        receipt_notice_tracking_reference: trackingReference,
+        receipt_notice_application_url: receiptNoticeApplicationUrl,
+        receipt_notice_avoids_authority_claim: noticeAvoidsAuthorityClaim,
+    });
+    checks.push(
+        check(
+            'citizen-submission-receipt-notice-visible',
+            'Citizen notices show the exact submission reference',
+            true,
+            receiptNoticeVisible,
+        ),
+        check(
+            'citizen-submission-receipt-notice-targets-exact-record',
+            'Receipt notice opens the exact manifest-bound application',
+            manifest.resources.detail_url,
+            receiptNoticeApplicationUrl,
+        ),
+        check(
+            'citizen-submission-receipt-notice-preserves-authority-boundary',
+            'Receipt notice does not imply completeness, assessment, or approval',
+            true,
+            noticeAvoidsAuthorityClaim,
+        ),
+    );
+    actionLog.push(
+        stepLog(
+            'citizen-receipt-notice-inspected',
+            'Inspect the in-app receipt notice produced by the canonical submission action',
+            {
+                permit_application_id: manifest.resources.record_id,
+                tracking_reference: trackingReference,
+            },
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '05-citizen-receipt-notice',
+        'browser/screenshots/05-citizen-receipt-notice.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(notificationsUrl, { waitUntil: 'networkidle' });
+    await receiptNotice.waitFor();
+    const noticeHorizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+    checks.push(
+        check(
+            'citizen-submission-receipt-notice-mobile-no-horizontal-overflow',
+            'Receipt notice remains usable without mobile overflow',
+            false,
+            noticeHorizontalOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '06-citizen-receipt-notice-mobile',
+        'browser/screenshots/06-citizen-receipt-notice-mobile.png',
     );
 }
 

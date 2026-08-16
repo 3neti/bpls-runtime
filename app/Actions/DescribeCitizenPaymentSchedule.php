@@ -43,7 +43,9 @@ final class DescribeCitizenPaymentSchedule
             ],
             'permit_application' => [
                 'id' => $paymentSchedule->permitApplication->id,
-                'display_reference' => $paymentSchedule->permitApplication->application_number ?? 'Draft #'.$paymentSchedule->permitApplication->id,
+                'display_reference' => $paymentSchedule->permitApplication->application_number
+                    ?? $paymentSchedule->permitApplication->tracking_reference
+                    ?? 'Application record #'.$paymentSchedule->permitApplication->id,
                 'application_number' => $paymentSchedule->permitApplication->application_number,
                 'type' => $paymentSchedule->permitApplication->type->value,
                 'status' => $paymentSchedule->permitApplication->status->value,

@@ -13,6 +13,8 @@ use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
 use App\Models\Role;
 use App\Models\User;
+use App\Notifications\PermitApplicationReceived;
+use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('formal citizen submission records separate submitted and received facts without inventing downstream behavior', function () {
@@ -27,10 +29,12 @@ test('formal citizen submission records separate submitted and received facts wi
     expect($application->status)->toBe(PermitApplicationStatus::Assessment)
         ->and($application->submitted_at)->not->toBeNull()
         ->and($application->application_number)->toBeNull()
+        ->and($application->tracking_reference)->toMatch('/^SUB-[0-9A-HJKMNP-TV-Z]{26}$/')
         ->and(data_get($application->metadata, 'citizen_submission.actor_id'))->toBe($citizen->id)
         ->and(data_get($application->metadata, 'citizen_submission.submitted_at'))->toBe($application->submitted_at->toIso8601String())
         ->and(data_get($application->metadata, 'municipal_receipt.received_at'))->toBe($application->submitted_at->toIso8601String())
         ->and(data_get($application->metadata, 'submission_policy_boundary.official_application_number_assigned'))->toBeFalse()
+        ->and(data_get($application->metadata, 'submission_policy_boundary.tracking_reference_is_official_number'))->toBeFalse()
         ->and(data_get($application->metadata, 'submission_policy_boundary.documentary_sufficiency_determined'))->toBeFalse()
         ->and(data_get($application->metadata, 'submission_policy_boundary.payment_mode_committed'))->toBeFalse()
         ->and($application->metadata['status_history'])->toHaveCount(1)
@@ -50,15 +54,19 @@ test('formal citizen submission is idempotent for the same application', functio
 
     $first = $submit->handle($application, $citizen);
     $firstSubmittedAt = $first->submitted_at?->toIso8601String();
+    $firstTrackingReference = $first->tracking_reference;
     $second = $submit->handle($application, $citizen);
 
     expect($second->submitted_at?->toIso8601String())->toBe($firstSubmittedAt)
+        ->and($second->tracking_reference)->toBe($firstTrackingReference)
         ->and($second->metadata['status_history'])->toHaveCount(1)
+        ->and($citizen->notifications()->where('type', PermitApplicationReceived::class)->count())->toBe(1)
         ->and($second->assessments()->count())->toBe(0)
         ->and(PermitApplication::query()->count())->toBe(1);
 });
 
 test('citizen submission requires explicit permission and an owned registry-linked draft', function () {
+    Notification::fake();
     [$citizen, $application] = citizenSubmissionDraft();
     $citizen->role->permissions()
         ->where('code', UserPermission::SubmitOwnPermitApplications->value)
@@ -83,6 +91,8 @@ test('citizen submission requires explicit permission and an owned registry-link
 
     expect($application->refresh()->status)->toBe(PermitApplicationStatus::Draft)
         ->and($application->submitted_at)->toBeNull();
+
+    Notification::assertNothingSent();
 });
 
 test('citizen submission rejects a draft whose business is not linked to the citizen legal identity', function () {
@@ -122,6 +132,7 @@ test('citizen detail exposes the formal submission boundary before and after rec
             ->where('permitApplication.submission_boundary.municipality_received_at', $application->submitted_at?->toIso8601String())
             ->where('permitApplication.processing.has_entered_municipal_processing', true)
             ->where('permitApplication.application_number', null)
+            ->where('permitApplication.display_reference', $application->tracking_reference)
         );
 });
 

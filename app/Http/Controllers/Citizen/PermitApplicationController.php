@@ -489,6 +489,7 @@ class PermitApplicationController extends Controller
         return [
             'id' => $permitApplication->id,
             'display_reference' => $permitApplication->application_number
+                ?? $permitApplication->tracking_reference
                 ?? ($permitApplication->status === PermitApplicationStatus::Draft
                     ? 'Draft #'.$permitApplication->id
                     : 'Application record #'.$permitApplication->id),

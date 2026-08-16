@@ -42,6 +42,7 @@ use App\Models\Role;
 use App\Models\Storyboard;
 use App\Models\TreasuryCollection;
 use App\Models\User;
+use App\Notifications\PermitApplicationReceived;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -703,6 +704,7 @@ test('citizen formal submission scenario audits the browser transition against c
         ->and($citizen->business_owner_id)->toBe($application->business->business_owner_id);
 
     app(SubmitCitizenPermitApplication::class)->handle($application, $citizen);
+    $application->refresh();
     $artifactStore->putJson('browser/report.json', [
         'result' => ['passed' => true],
         'citizen_submission' => [
@@ -711,16 +713,23 @@ test('citizen formal submission scenario audits the browser transition against c
             'municipality_received' => true,
             'submit_action_available' => false,
             'edit_action_available' => false,
+            'tracking_reference' => $application->tracking_reference,
+            'receipt_notice_visible' => true,
+            'receipt_notice_tracking_reference' => $application->tracking_reference,
+            'receipt_notice_application_url' => route('citizen.permit-applications.show', $application, false),
+            'receipt_notice_avoids_authority_claim' => true,
         ],
         'checks' => [],
         'artifacts' => [
             'screenshots' => [
                 '02-citizen-after-submission' => 'browser/screenshots/02-citizen-after-submission.png',
+                '05-citizen-receipt-notice' => 'browser/screenshots/05-citizen-receipt-notice.png',
             ],
         ],
     ]);
 
     $audited = $runner->audit($manifest, $artifactStore);
+    $execution = $artifactStore->readJson('terminal/execution.json');
 
     expect($audited['result'])
         ->terminal->toBe('passed')
@@ -728,6 +737,9 @@ test('citizen formal submission scenario audits the browser transition against c
         ->audit->toBe('passed')
         ->passed->toBeTrue()
         ->and($application->refresh()->metadata['status_history'])->toHaveCount(1)
+        ->and($execution['notifications'])->toBeTrue()
+        ->and($execution['in_app_notification_count'])->toBe(1)
+        ->and($execution['external_notifications'])->toBeFalse()
         ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
@@ -1264,12 +1276,19 @@ test('citizen-originated permit milestone composes the exact submitted record to
         ->with(['assessments', 'paymentSchedules', 'treasuryCollections.receipt', 'clearances'])
         ->findOrFail($firstManifest['resources']['permit_application_id']);
     $storyboard = $artifactStore->readJson('storyboard/storyboard.json');
+    $execution = $artifactStore->readJson('terminal/execution.json');
+    $receiptNotices = $citizen->notifications
+        ->where('type', PermitApplicationReceived::class)
+        ->filter(fn ($notification): bool => (int) data_get($notification->data, 'permit_application_id') === $permitApplication->id)
+        ->values();
 
     expect($firstManifest['resources']['permit_application_id'])->toBe($secondManifest['resources']['permit_application_id'])
         ->and($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
         ->and($permitApplication->submitted_by_id)->toBe($citizen->id)
         ->and($permitApplication->business->business_owner_id)->toBe($citizen->refresh()->business_owner_id)
         ->and($permitApplication->application_number)->toBeNull()
+        ->and($permitApplication->tracking_reference)->not->toBeNull()
+        ->and($firstManifest['resources']['tracking_reference'])->toBe($permitApplication->tracking_reference)
         ->and(data_get($permitApplication->metadata, 'citizen_submission.actor_id'))->toBe($citizen->id)
         ->and(data_get($permitApplication->metadata, 'municipal_receipt.processing_status'))->toBe(PermitApplicationStatus::Assessment->value)
         ->and($permitApplication->status)->toBe(PermitApplicationStatus::PendingPayment)
@@ -1279,7 +1298,12 @@ test('citizen-originated permit milestone composes the exact submitted record to
         ->and($permitApplication->treasuryCollections->first()->receipt)->not->toBeNull()
         ->and($permitApplication->clearances)->toHaveCount(3)
         ->and($permitApplication->clearances->where('status', PermitClearanceStatus::Completed))->toHaveCount(3)
-        ->and($firstManifest['resources']['application_display_reference'])->toBe('Application #'.$permitApplication->id)
+        ->and($firstManifest['resources']['application_display_reference'])->toBe($permitApplication->tracking_reference)
+        ->and($receiptNotices)->toHaveCount(1)
+        ->and(data_get($receiptNotices->sole()->data, 'tracking_reference'))->toBe($permitApplication->tracking_reference)
+        ->and($execution['notifications'])->toBeTrue()
+        ->and($execution['in_app_notification_count'])->toBe(1)
+        ->and($execution['external_notifications'])->toBeFalse()
         ->and($firstManifest['resources']['permit_timeline_event_count'])->toBe(14)
         ->and($firstManifest['resources']['citizen_timeline_event_keys'])->toBe($firstManifest['resources']['permit_timeline_event_keys'])
         ->and($storyboard['title'])->toBe('Citizen-originated new permit lifecycle to authority boundary')

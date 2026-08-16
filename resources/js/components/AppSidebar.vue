@@ -2,6 +2,7 @@
 import { Link, usePage } from '@inertiajs/vue3';
 import {
     BookOpen,
+    Bell,
     Calculator,
     ChartColumn,
     ChartNoAxesColumnIncreasing,
@@ -18,6 +19,7 @@ import {
     WalletCards,
 } from '@lucide/vue';
 import { computed } from 'vue';
+import { index as citizenNotificationIndex } from '@/actions/App/Http/Controllers/Citizen/NotificationController';
 import { index as citizenPermitApplicationIndex } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
 import { index as allAbstractReportIndex } from '@/actions/App/Http/Controllers/Staff/AllAbstractReportController';
 import { index as annexCDnfbpReportIndex } from '@/actions/App/Http/Controllers/Staff/AnnexCDnfbpReportController';
@@ -187,6 +189,11 @@ const citizenNavItems: NavItem[] = [
         title: 'My Permit Applications',
         href: citizenPermitApplicationIndex(),
         icon: FileText,
+    },
+    {
+        title: 'Notices',
+        href: citizenNotificationIndex(),
+        icon: Bell,
     },
 ];
 

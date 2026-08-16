@@ -10,6 +10,7 @@ use App\Models\BusinessOwner;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\User;
+use App\Notifications\PermitApplicationReceived;
 use DomainException;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
@@ -194,9 +195,10 @@ final class CitizenPermitDraftVisibilityScenario
             'record_type' => 'permit_application',
             'record_id' => $permitApplication->id,
             'public_reference' => 'Draft #'.$permitApplication->id,
-            'post_submission_reference' => 'Application record #'.$permitApplication->id,
+            'post_submission_reference_kind' => 'tracking_reference',
             'business_name' => $businessName,
             'list_url' => route('citizen.permit-applications.index', absolute: false),
+            'notifications_url' => route('citizen.notifications.index', absolute: false),
             'create_url' => route('citizen.permit-applications.create', absolute: false),
             'edit_url' => route('citizen.permit-applications.edit', $permitApplication, false),
             'detail_url' => route('citizen.permit-applications.show', $permitApplication, false),
@@ -238,6 +240,8 @@ final class CitizenPermitDraftVisibilityScenario
             $manifest['resources']['expected_submission'] = [
                 'status' => PermitApplicationStatus::Assessment->value,
                 'application_number' => null,
+                'tracking_reference_assigned' => true,
+                'in_app_receipt_notice_count' => 1,
                 'assessment_count' => 0,
                 'payment_schedule_count' => 0,
                 'browser_performs_submission' => true,
@@ -504,6 +508,13 @@ final class CitizenPermitDraftVisibilityScenario
      */
     private function auditSubmission(array $manifest, PermitApplication $permitApplication, array $browserReport, ScenarioArtifactStore $artifactStore): array
     {
+        $applicant = User::query()->findOrFail((int) data_get($manifest, 'actors.applicant.id'));
+        $receiptNotices = $applicant->notifications
+            ->where('type', PermitApplicationReceived::class)
+            ->filter(fn ($notification): bool => (int) data_get($notification->data, 'permit_application_id') === $permitApplication->id)
+            ->values();
+        $receiptNotice = $receiptNotices->first();
+
         $checks = [
             $this->step('audit-citizen-submitted', 'Canonical application records the citizen submission fact', [
                 'status' => PermitApplicationStatus::Assessment->value,
@@ -523,12 +534,16 @@ final class CitizenPermitDraftVisibilityScenario
             ]),
             $this->step('audit-submission-policy-seams', 'Submission leaves unresolved policy and downstream financial behavior untouched', [
                 'application_number' => null,
+                'tracking_reference_assigned' => true,
+                'tracking_reference_is_official_number' => false,
                 'assessment_count' => 0,
                 'payment_schedule_count' => 0,
                 'documentary_sufficiency_determined' => false,
                 'payment_mode_committed' => false,
             ], [
                 'application_number' => $permitApplication->application_number,
+                'tracking_reference_assigned' => $permitApplication->tracking_reference !== null,
+                'tracking_reference_is_official_number' => (bool) data_get($permitApplication->metadata, 'submission_policy_boundary.tracking_reference_is_official_number'),
                 'assessment_count' => $permitApplication->assessments()->count(),
                 'payment_schedule_count' => $permitApplication->paymentSchedules()->count(),
                 'documentary_sufficiency_determined' => (bool) data_get($permitApplication->metadata, 'submission_policy_boundary.documentary_sufficiency_determined'),
@@ -540,12 +555,34 @@ final class CitizenPermitDraftVisibilityScenario
                 'municipality_received' => true,
                 'submit_action_available' => false,
                 'edit_action_available' => false,
+                'tracking_reference' => $permitApplication->tracking_reference,
             ], [
                 'status' => data_get($browserReport, 'citizen_submission.status'),
                 'citizen_submitted' => data_get($browserReport, 'citizen_submission.citizen_submitted'),
                 'municipality_received' => data_get($browserReport, 'citizen_submission.municipality_received'),
                 'submit_action_available' => data_get($browserReport, 'citizen_submission.submit_action_available'),
                 'edit_action_available' => data_get($browserReport, 'citizen_submission.edit_action_available'),
+                'tracking_reference' => data_get($browserReport, 'citizen_submission.tracking_reference'),
+            ]),
+            $this->step('audit-in-app-receipt-notice', 'Submission creates one factual citizen notice through the canonical action', [
+                'notice_count' => 1,
+                'kind' => 'permit_application_received',
+                'tracking_reference' => $permitApplication->tracking_reference,
+                'external_delivery' => false,
+            ], [
+                'notice_count' => $receiptNotices->count(),
+                'kind' => data_get($receiptNotice?->data, 'kind'),
+                'tracking_reference' => data_get($receiptNotice?->data, 'tracking_reference'),
+                'external_delivery' => false,
+            ]),
+            $this->step('audit-browser-receipt-notice', 'Browser notice agrees with canonical application and notification evidence', [
+                'visible' => true,
+                'tracking_reference' => $permitApplication->tracking_reference,
+                'application_url' => route('citizen.permit-applications.show', $permitApplication, false),
+            ], [
+                'visible' => (bool) data_get($browserReport, 'citizen_submission.receipt_notice_visible'),
+                'tracking_reference' => data_get($browserReport, 'citizen_submission.receipt_notice_tracking_reference'),
+                'application_url' => data_get($browserReport, 'citizen_submission.receipt_notice_application_url'),
             ]),
             $this->step('audit-browser-result', 'Browser evidence runner passed', ['browser' => true], ['browser' => (bool) data_get($browserReport, 'result.passed')]),
         ];
@@ -566,13 +603,27 @@ final class CitizenPermitDraftVisibilityScenario
                 'permit_application_id' => $permitApplication->id,
                 'status' => $permitApplication->status->value,
                 'application_number' => $permitApplication->application_number,
+                'tracking_reference' => $permitApplication->tracking_reference,
                 'submitted_at' => $permitApplication->submitted_at?->toIso8601String(),
                 'citizen_submission' => data_get($permitApplication->metadata, 'citizen_submission'),
                 'municipal_receipt' => data_get($permitApplication->metadata, 'municipal_receipt'),
                 'assessment_count' => $permitApplication->assessments()->count(),
                 'payment_schedule_count' => $permitApplication->paymentSchedules()->count(),
+                'receipt_notice' => $receiptNotice === null ? null : [
+                    'id' => $receiptNotice->id,
+                    'type' => $receiptNotice->type,
+                    'data' => $receiptNotice->data,
+                    'read_at' => $receiptNotice->read_at?->toIso8601String(),
+                ],
             ],
             'browser' => $browserReport,
+        ]);
+        $execution = $artifactStore->readJson('terminal/execution.json') ?? [];
+        $artifactStore->putJson('terminal/execution.json', [
+            ...$execution,
+            'notifications' => true,
+            'in_app_notification_count' => $receiptNotices->count(),
+            'external_notifications' => false,
         ]);
         $artifactStore->putJson('manifest.json', $manifest);
         $artifactStore->put('summary.html', $this->summaryRenderer->html($manifest));
@@ -640,7 +691,7 @@ final class CitizenPermitDraftVisibilityScenario
         if ($scenarioKey === 'citizen_permit_submission_visibility') {
             return [
                 'title' => 'Citizen formally submits a new permit application',
-                'summary' => 'A citizen submits the exact saved draft through the real portal; the municipality receives it into the processing queue without assigning an official number or triggering financial behavior.',
+                'summary' => 'A citizen submits the exact saved draft through the real portal; the municipality receives it into the processing queue, assigns a non-official tracking reference, and records an in-app receipt notice without triggering financial behavior.',
                 'run_id' => $runId,
                 'record' => [
                     'type' => 'permit_application',
@@ -662,8 +713,8 @@ final class CitizenPermitDraftVisibilityScenario
                     ],
                     [
                         'title' => 'Submission and receipt are verified',
-                        'description' => 'UI and canonical audit evidence agree while numbering, documentary sufficiency, assessment computation, and payment remain subsequent decisions.',
-                        'dialogue' => 'Submitted and received do not mean approved or issued.',
+                        'description' => 'UI, notice, and canonical audit evidence agree while official numbering, documentary sufficiency, assessment computation, and payment remain subsequent decisions.',
+                        'dialogue' => 'The tracking reference confirms receipt; it is not an official application number or approval.',
                         'duration_seconds' => 5,
                     ],
                 ],

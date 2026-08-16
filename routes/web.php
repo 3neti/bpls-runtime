@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Citizen\NotificationController as CitizenNotificationController;
 use App\Http\Controllers\Citizen\PaymentScheduleController as CitizenPaymentScheduleController;
 use App\Http\Controllers\Citizen\PermitApplicationController as CitizenPermitApplicationController;
 use App\Http\Controllers\Citizen\PermitApplicationDocumentController as CitizenPermitApplicationDocumentController;
@@ -46,6 +47,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
 
     Route::prefix('citizen')->name('citizen.')->middleware('can:citizen.access')->group(function () {
+        Route::get('notifications', [CitizenNotificationController::class, 'index'])
+            ->name('notifications.index');
+        Route::patch('notifications/{notification}', [CitizenNotificationController::class, 'update'])
+            ->name('notifications.update');
         Route::resource('permit-applications', CitizenPermitApplicationController::class)
             ->only(['index', 'create', 'store', 'show', 'edit', 'update']);
         Route::post('permit-applications/{permitApplication}/submit', [CitizenPermitApplicationController::class, 'submit'])

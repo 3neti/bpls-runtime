@@ -6,8 +6,10 @@ use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
 use App\Models\PermitApplication;
 use App\Models\User;
+use App\Notifications\PermitApplicationReceived;
 use DomainException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class SubmitCitizenPermitApplication
 {
@@ -47,6 +49,7 @@ class SubmitCitizenPermitApplication
             }
 
             $occurredAt = now();
+            $trackingReference = 'SUB-'.Str::upper((string) Str::ulid());
             $metadata = $application->metadata ?? [];
             $metadata['citizen_submission'] = [
                 'actor_id' => $submittedBy->id,
@@ -60,6 +63,7 @@ class SubmitCitizenPermitApplication
             ];
             $metadata['submission_policy_boundary'] = [
                 'official_application_number_assigned' => false,
+                'tracking_reference_is_official_number' => false,
                 'documentary_sufficiency_determined' => false,
                 'payment_mode_committed' => false,
             ];
@@ -78,8 +82,16 @@ class SubmitCitizenPermitApplication
                 'status' => PermitApplicationStatus::Assessment,
                 'submitted_at' => $occurredAt,
                 'application_number' => null,
+                'tracking_reference' => $trackingReference,
                 'metadata' => $metadata,
             ])->save();
+
+            $submittedBy->notify(new PermitApplicationReceived(
+                permitApplicationId: $application->id,
+                trackingReference: $trackingReference,
+                businessName: $application->business->name,
+                receivedAt: $occurredAt,
+            ));
 
             return $application->refresh()->load(['business.owner', 'lines.lineOfBusiness']);
         });

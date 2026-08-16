@@ -18,6 +18,7 @@ use Illuminate\Support\Collection;
  * @property int $business_id
  * @property int|null $submitted_by_id
  * @property string|null $application_number
+ * @property string|null $tracking_reference
  * @property PermitApplicationType $type
  * @property PermitApplicationStatus $status
  * @property int $application_year
@@ -32,7 +33,7 @@ use Illuminate\Support\Collection;
  * @property-read Collection<int, PaymentSchedule> $paymentSchedules
  * @property-read Collection<int, TreasuryCollection> $treasuryCollections
  */
-#[Fillable(['business_id', 'submitted_by_id', 'application_number', 'type', 'status', 'application_year', 'submitted_at', 'assessed_at', 'legacy_source_id', 'metadata'])]
+#[Fillable(['business_id', 'submitted_by_id', 'application_number', 'tracking_reference', 'type', 'status', 'application_year', 'submitted_at', 'assessed_at', 'legacy_source_id', 'metadata'])]
 class PermitApplication extends Model
 {
     /** @use HasFactory<PermitApplicationFactory> */
