@@ -57,6 +57,12 @@ class LegacyMappingPlan extends Model
         return $this->hasMany(LegacyMappingProposal::class);
     }
 
+    /** @return HasMany<LegacyMappingExecution, $this> */
+    public function executions(): HasMany
+    {
+        return $this->hasMany(LegacyMappingExecution::class);
+    }
+
     /** @return array<string, string> */
     protected function casts(): array
     {

@@ -20,11 +20,13 @@ class PlanLegacyRegistryMigration
 {
     public const PlannerVersion = 'bpls.registry-mapping-plan.v1';
 
+    public function __construct(private LegacyRegistryMappingProjector $projector) {}
+
     public function handle(LegacyImportBatch $batch, string $runReference): LegacyMappingPlan
     {
         $this->assertRunReference($runReference);
         $this->assertBatchCanBePlanned($batch);
-        $registrySnapshotHash = $this->registrySnapshotHash();
+        $registrySnapshotHash = $this->projector->registrySnapshotHash();
         $plan = $this->resolvePlan($batch, $runReference, $registrySnapshotHash);
 
         if (in_array($plan->status, [LegacyMappingPlanStatus::Planned, LegacyMappingPlanStatus::PlannedWithExceptions], true)) {
@@ -179,7 +181,7 @@ class PlanLegacyRegistryMigration
         $proposalsByLegacyId = [];
 
         foreach ($this->records($batch, 'business_owners') as $record) {
-            $projection = $this->ownerProjection($record);
+            $projection = $this->projector->owner($record);
             $signals = $this->ownerSignals($record->payload);
             $reasons = $projection['reasons'];
             $collisionFingerprints = [];
@@ -217,8 +219,8 @@ class PlanLegacyRegistryMigration
                 'target_id' => $targetId,
                 'proposed_action' => $action,
                 'status' => $status,
-                'identity_fingerprint' => $this->hashCanonical($projection['identity']),
-                'projection_hash' => $this->hashCanonical($projection['attributes']),
+                'identity_fingerprint' => $this->projector->hashCanonical($projection['identity']),
+                'projection_hash' => $this->projector->hashCanonical($projection['attributes']),
                 'collision_fingerprints' => $collisionFingerprints,
                 'reasons' => array_values(array_unique($reasons)),
                 'metadata' => [
@@ -298,7 +300,7 @@ class PlanLegacyRegistryMigration
     private function planBusinesses(LegacyMappingPlan $plan, LegacyImportBatch $batch, array $ownerProposals, array $analysis): void
     {
         foreach ($this->records($batch, 'businesses') as $record) {
-            $projection = $this->businessProjection($record);
+            $projection = $this->projector->business($record);
             $ownerLegacyId = $projection['owner_legacy_id'];
             $ownerProposal = $ownerLegacyId === null ? null : ($ownerProposals[$ownerLegacyId] ?? null);
             $reasons = $projection['reasons'];
@@ -364,8 +366,8 @@ class PlanLegacyRegistryMigration
                 'target_id' => $targetId,
                 'proposed_action' => $action,
                 'status' => $status,
-                'identity_fingerprint' => $this->hashCanonical($projection['identity']),
-                'projection_hash' => $this->hashCanonical($projection['attributes']),
+                'identity_fingerprint' => $this->projector->hashCanonical($projection['identity']),
+                'projection_hash' => $this->projector->hashCanonical($projection['attributes']),
                 'collision_fingerprints' => $collisionFingerprints,
                 'reasons' => array_values(array_unique($reasons)),
                 'metadata' => [
@@ -407,159 +409,6 @@ class PlanLegacyRegistryMigration
                 'payloads_in_report' => false,
             ],
         ]);
-    }
-
-    /**
-     * @return array{attributes: array<string, mixed>, identity: array<string, mixed>, reasons: list<string>, blocked: bool}
-     */
-    private function ownerProjection(LegacyRecord $record): array
-    {
-        $payload = $record->payload;
-        $firstName = $this->string($payload, 'firstName');
-        $middleName = $this->string($payload, 'middleName');
-        $lastName = $this->string($payload, 'lastName');
-        $ownerType = $this->string($payload, 'ownerType');
-        $groupName = $this->string($payload, 'groupName');
-        $individualName = Str::of(implode(' ', array_filter([$firstName, $middleName, $lastName])))->squish()->toString();
-        $name = $ownerType === 'Group' && $groupName !== '' ? $groupName : $individualName;
-        $reasons = [];
-        $blocked = false;
-
-        if ($name === '') {
-            $reasons[] = 'required_owner_name_missing';
-            $blocked = true;
-        }
-
-        if ($ownerType === 'Group') {
-            $reasons[] = 'group_owner_semantics_require_reconciliation';
-        }
-
-        if (($payload['isDeleted'] ?? false) === true) {
-            $reasons[] = 'soft_deleted_record_policy_unresolved';
-        }
-
-        if (($payload['isBlacklisted'] ?? false) === true || $this->string($payload, 'blacklistReason') !== '') {
-            $reasons[] = 'blacklist_state_requires_registry_policy';
-        }
-
-        $attributes = [
-            'name' => $name,
-            'email' => $this->stringOrNull($payload, 'email'),
-            'phone' => $this->stringOrNull($payload, 'mobile'),
-            'address' => $this->stringOrNull($payload, 'address'),
-            'legacy_source_id' => $record->legacy_id,
-            'metadata' => [
-                'legacy_owner_type' => $ownerType !== '' ? $ownerType : null,
-                'legacy_group_name' => $groupName !== '' ? $groupName : null,
-                'legacy_birth_date' => $this->stringOrNull($payload, 'birthDate'),
-                'legacy_civil_status' => $this->stringOrNull($payload, 'civilStatus'),
-                'legacy_gender' => $this->stringOrNull($payload, 'gender'),
-                'legacy_citizenship' => $this->stringOrNull($payload, 'citizenship'),
-                'legacy_tin' => $this->stringOrNull($payload, 'tin'),
-                'legacy_location_ids_preserved' => array_filter([
-                    'provinceId' => $this->stringOrNull($payload, 'provinceId'),
-                    'cityId' => $this->stringOrNull($payload, 'cityId'),
-                    'barangayId' => $this->stringOrNull($payload, 'barangayId'),
-                ]),
-            ],
-        ];
-
-        return [
-            'attributes' => $attributes,
-            'identity' => [
-                'name' => $this->normalize($name),
-                'birth_date' => $this->normalize($this->string($payload, 'birthDate')),
-                'tin' => $this->normalize($this->string($payload, 'tin')),
-                'email' => $this->normalize($this->string($payload, 'email')),
-                'phone' => $this->normalizePhone($this->string($payload, 'mobile')),
-            ],
-            'reasons' => $reasons,
-            'blocked' => $blocked,
-        ];
-    }
-
-    /**
-     * @return array{attributes: array<string, mixed>, identity: array<string, mixed>, reasons: list<string>, blocked: bool, owner_legacy_id: string|null}
-     */
-    private function businessProjection(LegacyRecord $record): array
-    {
-        $payload = $record->payload;
-        $name = $this->string($payload, 'name');
-        $ownerLegacyId = $this->stringOrNull($payload, 'ownerId');
-        $reasons = [];
-        $blocked = false;
-
-        if ($name === '') {
-            $reasons[] = 'required_business_name_missing';
-            $blocked = true;
-        }
-
-        if ($ownerLegacyId === null) {
-            $reasons[] = 'required_business_owner_reference_missing';
-            $blocked = true;
-        }
-
-        foreach (['provinceId', 'cityId', 'barangayId', 'categoryId', 'subCategoryId'] as $referenceField) {
-            if ($this->string($payload, $referenceField) !== '') {
-                $reasons[] = 'reference_data_mapping_required';
-                break;
-            }
-        }
-
-        if (($payload['isDeleted'] ?? false) === true) {
-            $reasons[] = 'soft_deleted_record_policy_unresolved';
-        }
-
-        if (($payload['isBlacklisted'] ?? false) === true || $this->string($payload, 'blacklistReason') !== '') {
-            $reasons[] = 'blacklist_state_requires_registry_policy';
-        }
-
-        $attributes = [
-            'name' => $name,
-            'registration_number' => $this->stringOrNull($payload, 'registrationNumber'),
-            'address' => $this->stringOrNull($payload, 'address'),
-            'barangay' => $this->stringOrNull($payload, 'barangay'),
-            'ownership_type' => $this->stringOrNull($payload, 'ownershipType'),
-            'organization_name' => $this->stringOrNull($payload, 'groupName'),
-            'occupancy' => $this->stringOrNull($payload, 'occupancy'),
-            'building_name' => $this->stringOrNull($payload, 'buildingName'),
-            'property_index_number' => $this->stringOrNull($payload, 'propertyIndexNumber'),
-            'business_area_square_meters' => $payload['businessArea'] ?? null,
-            'male_employee_count' => $payload['maleEmployeeCount'] ?? null,
-            'female_employee_count' => $payload['femaleEmployeeCount'] ?? null,
-            'contact_number' => $this->stringOrNull($payload, 'contactNumber'),
-            'email' => $this->stringOrNull($payload, 'email'),
-            'established_on' => $this->stringOrNull($payload, 'establishedDate'),
-            'started_on' => $this->stringOrNull($payload, 'dateStarted'),
-            'registered_on' => $this->stringOrNull($payload, 'registrationDate'),
-            'legacy_source_id' => $record->legacy_id,
-            'metadata' => [
-                'legacy_business_scale' => $this->stringOrNull($payload, 'businessScale'),
-                'legacy_annual_revenue' => $this->stringOrNull($payload, 'annualRevenue'),
-                'legacy_permit_payment_cadence' => $this->stringOrNull($payload, 'permitPaymentCadence'),
-                'legacy_location_ids_preserved' => array_filter([
-                    'provinceId' => $this->stringOrNull($payload, 'provinceId'),
-                    'cityId' => $this->stringOrNull($payload, 'cityId'),
-                    'barangayId' => $this->stringOrNull($payload, 'barangayId'),
-                ]),
-                'legacy_classification_ids_preserved' => array_filter([
-                    'categoryId' => $this->stringOrNull($payload, 'categoryId'),
-                    'subCategoryId' => $this->stringOrNull($payload, 'subCategoryId'),
-                ]),
-            ],
-        ];
-
-        return [
-            'attributes' => $attributes,
-            'identity' => [
-                'owner_legacy_id' => $ownerLegacyId,
-                'name' => $this->normalize($name),
-                'registration_number' => $this->normalize($this->string($payload, 'registrationNumber')),
-            ],
-            'reasons' => $reasons,
-            'blocked' => $blocked,
-            'owner_legacy_id' => $ownerLegacyId,
-        ];
     }
 
     /**
@@ -657,21 +506,6 @@ class PlanLegacyRegistryMigration
         return [LegacyMappingProposalStatus::Ready, LegacyMappingProposalAction::Create];
     }
 
-    private function registrySnapshotHash(): string
-    {
-        $context = hash_init('sha256');
-
-        foreach (BusinessOwner::query()->select(['id', 'name', 'email', 'phone', 'address', 'legacy_source_id', 'updated_at'])->orderBy('id')->cursor() as $owner) {
-            hash_update($context, $this->canonicalJson(['owner', ...$owner->getAttributes()]));
-        }
-
-        foreach (Business::query()->select(['id', 'business_owner_id', 'name', 'registration_number', 'legacy_source_id', 'updated_at'])->orderBy('id')->cursor() as $business) {
-            hash_update($context, $this->canonicalJson(['business', ...$business->getAttributes()]));
-        }
-
-        return hash_final($context);
-    }
-
     private function signal(string $type, string $value): string
     {
         return hash('sha256', $type.'|'.$this->normalize($value));
@@ -693,47 +527,6 @@ class PlanLegacyRegistryMigration
         $value = $payload[$key] ?? null;
 
         return is_string($value) || is_int($value) ? Str::of((string) $value)->trim()->toString() : '';
-    }
-
-    /** @param array<string, mixed> $payload */
-    private function stringOrNull(array $payload, string $key): ?string
-    {
-        $value = $this->string($payload, $key);
-
-        return $value === '' ? null : $value;
-    }
-
-    /** @param array<string, mixed> $value */
-    private function hashCanonical(array $value): string
-    {
-        return hash('sha256', $this->canonicalJson($value));
-    }
-
-    /** @param array<array-key, mixed> $value */
-    private function canonicalJson(array $value): string
-    {
-        $normalized = $this->sortRecursively($value);
-
-        return json_encode($normalized, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-    }
-
-    /**
-     * @param  array<array-key, mixed>  $value
-     * @return array<array-key, mixed>
-     */
-    private function sortRecursively(array $value): array
-    {
-        if (! array_is_list($value)) {
-            ksort($value);
-        }
-
-        foreach ($value as $key => $item) {
-            if (is_array($item)) {
-                $value[$key] = $this->sortRecursively($item);
-            }
-        }
-
-        return $value;
     }
 
     private function withEvidence(LegacyMappingPlan $plan): LegacyMappingPlan

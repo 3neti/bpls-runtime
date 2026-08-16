@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $id
+ * @property int|null $legacy_mapping_execution_id
  * @property int $legacy_source_id
  * @property int $legacy_import_batch_id
  * @property string $dataset_key
@@ -21,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $mapping_basis
  * @property array<string, mixed>|null $metadata
  */
-#[Fillable(['legacy_source_id', 'legacy_import_batch_id', 'dataset_key', 'entity_type', 'legacy_id', 'target_type', 'target_id', 'status', 'mapping_basis', 'metadata'])]
+#[Fillable(['legacy_mapping_execution_id', 'legacy_source_id', 'legacy_import_batch_id', 'dataset_key', 'entity_type', 'legacy_id', 'target_type', 'target_id', 'status', 'mapping_basis', 'metadata'])]
 class LegacyIdMapping extends Model
 {
     /** @use HasFactory<LegacyIdMappingFactory> */
@@ -39,6 +40,12 @@ class LegacyIdMapping extends Model
     public function importBatch(): BelongsTo
     {
         return $this->belongsTo(LegacyImportBatch::class, 'legacy_import_batch_id');
+    }
+
+    /** @return BelongsTo<LegacyMappingExecution, $this> */
+    public function execution(): BelongsTo
+    {
+        return $this->belongsTo(LegacyMappingExecution::class, 'legacy_mapping_execution_id');
     }
 
     /** @return array<string, string> */
