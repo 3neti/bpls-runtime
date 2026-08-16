@@ -71,6 +71,12 @@ class LegacyImportBatch extends Model
         return $this->hasMany(LegacyMigrationException::class);
     }
 
+    /** @return HasMany<LegacyMappingPlan, $this> */
+    public function mappingPlans(): HasMany
+    {
+        return $this->hasMany(LegacyMappingPlan::class, 'legacy_import_batch_id');
+    }
+
     /** @return array<string, string> */
     protected function casts(): array
     {
