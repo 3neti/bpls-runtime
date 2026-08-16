@@ -4,6 +4,7 @@ paths:
   - 'app/{Actions,Console/Commands,Models}/**/*Legacy*Declaration*.php'
   - 'app/{Actions,Console/Commands,Models}/**/*Legacy*Financial*.php'
   - 'app/{Actions,Console/Commands,Models}/**/*Legacy*Permit*Evidence*.php'
+  - 'app/{Actions,Console/Commands,Models}/**/*Legacy*Migration*Rehearsal*.php'
 ---
 
 # Actions Console Commands Models
@@ -19,3 +20,9 @@ Financial migration execution is local/testing-only and accepts complete exact r
 
 ## Execute only reconciled pending legacy clearances
 Legacy permit-evidence execution is local/testing-only and accepts exact Ready `clearance` proposals only when `isCompleted=false`, one accepted application mapping exists, and the clearance reconciliation records decision authority and evidence. Never execute supporting documents without checksum-verified object transfer/application scope, or permit/released/completed-clearance claims without separately accepted authority. Rollback deletes only unchanged execution-created pending clearances.
+
+## Migration rehearsals compose existing executors
+A migration rehearsal binds exact completed latest-plan executions from one staged batch, verifies complete Ready-proposal coverage and readiness evidence, and never maps or calculates data itself. Rollback must invoke existing domain rollback actions in dependency-reverse order and retain resumable phase evidence.
+
+## Permit evidence execution includes reconciled documents
+Permit-evidence execution may handle Ready pending clearances and Ready supporting documents only after checksum, MIME, size, and exact application-scope reconciliation. Document transfer never migrates legacy approval as sufficiency or asserts permit issuance, release, or legal effect.

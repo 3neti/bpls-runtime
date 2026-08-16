@@ -125,6 +125,12 @@ class LegacyImportBatch extends Model
         return $this->hasMany(LegacyPermitDocumentMapping::class, 'legacy_import_batch_id');
     }
 
+    /** @return HasMany<LegacyMigrationRehearsal, $this> */
+    public function migrationRehearsals(): HasMany
+    {
+        return $this->hasMany(LegacyMigrationRehearsal::class, 'legacy_import_batch_id');
+    }
+
     /** @return HasMany<LegacyMigrationReadinessAssessment, $this> */
     public function readinessAssessments(): HasMany
     {
