@@ -3,6 +3,7 @@ import { Link, usePage } from '@inertiajs/vue3';
 import {
     BookOpen,
     Bell,
+    Building2,
     Calculator,
     ChartColumn,
     ChartNoAxesColumnIncreasing,
@@ -34,6 +35,7 @@ import { index as cmciLdcsReportIndex } from '@/actions/App/Http/Controllers/Sta
 import { index as collectiblesReportIndex } from '@/actions/App/Http/Controllers/Staff/CollectiblesReportController';
 import { index as dailyCollectionReportIndex } from '@/actions/App/Http/Controllers/Staff/DailyCollectionReportController';
 import { index as feeRuleIndex } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
+import { index as municipalityConfigurationIndex } from '@/actions/App/Http/Controllers/Staff/MunicipalityConfigurationController';
 import { index as paidEstablishmentReportIndex } from '@/actions/App/Http/Controllers/Staff/PaidEstablishmentReportController';
 import { index as paymentSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/PaymentSummaryReportController';
 import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
@@ -196,6 +198,15 @@ const staffNavItems: NavItem[] = [
                   title: 'Roles & Permissions',
                   href: rolePermissionIndex(),
                   icon: ShieldCheck,
+              },
+          ]
+        : []),
+    ...(page.props.auth.can_view_municipality_configuration
+        ? [
+              {
+                  title: 'Municipality',
+                  href: municipalityConfigurationIndex(),
+                  icon: Building2,
               },
           ]
         : []),

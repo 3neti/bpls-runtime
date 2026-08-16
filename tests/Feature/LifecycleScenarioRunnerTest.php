@@ -20,6 +20,7 @@ use App\LifecycleScenarios\CitizenPermitDraftVisibilityScenario;
 use App\LifecycleScenarios\CitizenPermitProcessingVisibilityScenario;
 use App\LifecycleScenarios\LifecycleScenarioRegistry;
 use App\LifecycleScenarios\ManualCollectionReceiptVisibilityScenario;
+use App\LifecycleScenarios\MunicipalityConfigurationVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationCancelledVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationPendingPaymentVisibilityScenario;
 use App\LifecycleScenarios\RevenueCodeExecutabilitySafetyScenario;
@@ -268,6 +269,18 @@ test('scenario registry discovers the user directory visibility scenario', funct
         ->risk->toBe('presentation-only')
         ->and($scenario->actors)->toBe(['operator' => 'primary_operator'])
         ->and($scenario->expectations['read_only'])->toBeTrue();
+});
+
+test('scenario registry discovers the municipality configuration visibility scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('municipality_configuration_visibility');
+
+    expect($scenario)
+        ->key->toBe('municipality_configuration_visibility')
+        ->mode->toBe('municipality_configuration_visibility')
+        ->risk->toBe('presentation-only')
+        ->and($scenario->actors)->toBe(['operator' => 'primary_operator'])
+        ->and($scenario->expectations['read_only'])->toBeTrue()
+        ->and($scenario->expectations['permit_issuance_authorized'])->toBeFalse();
 });
 
 test('scenario registry discovers the new permit lifecycle authority boundary scenario', function () {
@@ -1451,6 +1464,90 @@ test('user directory scenario preserves aggregate-only canonical and browser evi
         ->audit->toBe('passed')
         ->passed->toBeTrue()
         ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
+});
+
+test('municipality configuration scenario preserves authority-safe canonical and browser evidence idempotently', function () {
+    Storage::fake('local');
+
+    config()->set('municipality.name', 'Municipality of Ipil');
+    config()->set('municipality.province', 'Zamboanga Sibugay');
+    config()->set('municipality.system_name', 'Business Permit and Licensing System');
+    config()->set('municipality.signatories.permit', [
+        [
+            'role' => 'Municipal Mayor',
+            'name' => 'Configured Mayor',
+            'title' => 'Municipal Mayor',
+            'authority_status' => 'unverified',
+        ],
+    ]);
+    $operator = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('municipality_configuration_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'municipality-configuration-test-001');
+    $runner = app(MunicipalityConfigurationVisibilityScenario::class);
+
+    $firstManifest = $runner->prepare($scenario, 'municipality-configuration-test-001', [
+        'operator' => $operator,
+    ], $artifactStore);
+    $secondManifest = $runner->prepare($scenario, 'municipality-configuration-test-001', [
+        'operator' => $operator,
+    ], $artifactStore);
+    $prepare = $artifactStore->readJson('terminal/prepare.json');
+    $execution = $artifactStore->readJson('terminal/execution.json');
+
+    expect($firstManifest['resources'])->toBe($secondManifest['resources'])
+        ->and($firstManifest['resources']['municipality_name'])->toBe('Municipality of Ipil')
+        ->and($firstManifest['resources']['signatory_count'])->toBe(1)
+        ->and($firstManifest['resources']['verified_signatory_count'])->toBe(0)
+        ->and($firstManifest['resources']['permit_issuance_authorized'])->toBeFalse()
+        ->and($firstManifest['resources']['signatory_authority_statuses'])->toBe([
+            ['role' => 'Municipal Mayor', 'authority_status' => 'unverified'],
+        ])
+        ->and($prepare)->not->toHaveKey('permit_signatories')
+        ->and(json_encode($prepare))->not->toContain('Configured Mayor')
+        ->and($execution['read_only'])->toBeTrue()
+        ->and($execution['external_calls'])->toBe(0);
+
+    $browserSummary = [
+        'municipality_name' => $firstManifest['resources']['municipality_name'],
+        'province' => $firstManifest['resources']['province'],
+        'system_name' => $firstManifest['resources']['system_name'],
+        'signatory_count' => $firstManifest['resources']['signatory_count'],
+        'verified_signatory_count' => $firstManifest['resources']['verified_signatory_count'],
+        'unverified_signatory_count' => $firstManifest['resources']['unverified_signatory_count'],
+        'all_signatories_verified' => $firstManifest['resources']['all_signatories_verified'],
+        'permit_issuance_authorized' => false,
+        'read_only' => true,
+        'source_type' => $firstManifest['resources']['source_type'],
+        'signatory_authority_statuses' => $firstManifest['resources']['signatory_authority_statuses'],
+    ];
+    $artifactStore->putJson('browser/report.json', [
+        'result' => ['passed' => true],
+        'municipality_configuration' => [
+            'summary' => $browserSummary,
+            'mutation_actions_visible' => false,
+            'authority_boundary_visible' => true,
+            'mobile_visible' => true,
+            'page_horizontal_overflow' => false,
+        ],
+        'checks' => [],
+        'artifacts' => [
+            'screenshots' => [
+                '01-municipality-configuration' => 'browser/screenshots/01-municipality-configuration.png',
+                '02-municipality-configuration-mobile' => 'browser/screenshots/02-municipality-configuration-mobile.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($firstManifest, $artifactStore);
+
+    expect($audited['result'])
+        ->terminal->toBe('passed')
+        ->browser->toBe('passed')
+        ->audit->toBe('passed')
+        ->passed->toBeTrue()
+        ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
+        ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue()
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
 
@@ -2926,6 +3023,7 @@ function configuredScenarioUser(string $email): User
         UserPermission::CreateBillingGroupRecords,
         UserPermission::ViewUsers,
         UserPermission::ViewRoles,
+        UserPermission::ViewMunicipalityConfiguration,
         UserPermission::ManageStoryboards,
     ])->map(fn (UserPermission $permission): int => Permission::factory()->create([
         'code' => $permission->value,

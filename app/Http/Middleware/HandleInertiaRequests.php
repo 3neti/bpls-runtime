@@ -49,6 +49,7 @@ class HandleInertiaRequests extends Middleware
                 'can_access_citizen' => $user?->can('citizen.access') ?? false,
                 'can_view_users' => $user?->can('users.view') ?? false,
                 'can_view_roles' => $user?->can('roles.view') ?? false,
+                'can_view_municipality_configuration' => $user?->can('municipality_configuration.view') ?? false,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];

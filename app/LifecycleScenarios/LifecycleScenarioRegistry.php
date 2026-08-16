@@ -846,6 +846,39 @@ final class LifecycleScenarioRegistry
                     ],
                 ],
             ),
+            'municipality_configuration_visibility' => new LifecycleScenarioDefinition(
+                key: 'municipality_configuration_visibility',
+                label: 'Municipality configuration and authority visibility',
+                mode: 'municipality_configuration_visibility',
+                risk: 'presentation-only',
+                actors: [
+                    'operator' => 'primary_operator',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'municipality_identity_visible' => true,
+                    'signatory_authority_visible' => true,
+                    'permit_issuance_authorized' => false,
+                    'read_only' => true,
+                    'external_calls' => 0,
+                    'irreversible_actions' => false,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
         ];
     }
 

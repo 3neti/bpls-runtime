@@ -34,6 +34,7 @@ const supportedScenarios = [
     'citizen_permit_draft_visibility',
     'new_permit_lifecycle_authority_boundary',
     'manual_collection_receipt_visibility',
+    'municipality_configuration_visibility',
     'storyboard_terminal_state_visibility',
     'permit_application_cancelled_visibility',
     'amendment_permit_lifecycle_foundation',
@@ -104,6 +105,7 @@ const citizenSubmissionEvidence = {};
 const billingGroupEvidence = {};
 const rolePermissionEvidence = {};
 const userDirectoryEvidence = {};
+const municipalityConfigurationEvidence = {};
 
 let browser;
 
@@ -225,6 +227,10 @@ try {
         await inspectUserDirectory(page, baseUrl);
     }
 
+    if (manifest.scenario.key === 'municipality_configuration_visibility') {
+        await inspectMunicipalityConfiguration(page, baseUrl);
+    }
+
     if (
         [
             'amendment_permit_lifecycle_foundation',
@@ -328,6 +334,7 @@ const report = {
     billing_group: billingGroupEvidence,
     role_permissions: rolePermissionEvidence,
     user_directory: userDirectoryEvidence,
+    municipality_configuration: municipalityConfigurationEvidence,
     artifacts: {
         screenshots,
     },
@@ -641,6 +648,149 @@ async function inspectUserDirectory(targetPage, targetBaseUrl) {
         targetPage,
         '02-user-directory-mobile',
         'browser/screenshots/02-user-directory-mobile.png',
+    );
+}
+
+async function inspectMunicipalityConfiguration(targetPage, targetBaseUrl) {
+    const configurationUrl = `${targetBaseUrl}${manifest.resources.configuration_url}`;
+    await targetPage.goto(configurationUrl, { waitUntil: 'networkidle' });
+    const summary = targetPage.getByTestId(
+        'municipality-configuration-summary',
+    );
+    const signatories = targetPage.getByTestId('municipality-signatories');
+    await summary.waitFor();
+    await signatories.waitFor();
+
+    const signatoryAuthorityStatuses = await targetPage
+        .getByTestId('municipality-signatory')
+        .evaluateAll((elements) =>
+            elements.map((element) => ({
+                role: element.getAttribute('data-role'),
+                authority_status: element.getAttribute('data-authority-status'),
+            })),
+        );
+    const visibleSummary = {
+        municipality_name: (
+            await targetPage.getByTestId('municipality-name').innerText()
+        ).trim(),
+        province: await summary.getAttribute('data-province'),
+        system_name: await summary.getAttribute('data-system-name'),
+        signatory_count: Number(
+            await summary.getAttribute('data-signatory-count'),
+        ),
+        verified_signatory_count: Number(
+            await summary.getAttribute('data-verified-signatory-count'),
+        ),
+        unverified_signatory_count: Number(
+            await summary.getAttribute('data-unverified-signatory-count'),
+        ),
+        all_signatories_verified:
+            (await summary.getAttribute('data-all-signatories-verified')) ===
+            'true',
+        permit_issuance_authorized:
+            (await summary.getAttribute('data-permit-issuance-authorized')) ===
+            'true',
+        read_only: (await summary.getAttribute('data-read-only')) === 'true',
+        source_type: await summary.getAttribute('data-source-type'),
+        signatory_authority_statuses: signatoryAuthorityStatuses,
+    };
+    const authorityBoundaryVisible = await targetPage
+        .getByTestId('municipality-authority-boundary')
+        .isVisible();
+    const mutationActionsVisible = await targetPage
+        .getByRole('button', {
+            name: /edit|save|update|verify|approve|issue|release/i,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    Object.assign(municipalityConfigurationEvidence, {
+        summary: visibleSummary,
+        authority_boundary_visible: authorityBoundaryVisible,
+        mutation_actions_visible: mutationActionsVisible,
+    });
+    checks.push(
+        check(
+            'municipality-configuration-summary',
+            'Visible municipality identity and signatory evidence match the prepared canonical projection',
+            {
+                municipality_name: manifest.resources.municipality_name,
+                province: manifest.resources.province,
+                system_name: manifest.resources.system_name,
+                signatory_count: manifest.resources.signatory_count,
+                verified_signatory_count:
+                    manifest.resources.verified_signatory_count,
+                unverified_signatory_count:
+                    manifest.resources.unverified_signatory_count,
+                all_signatories_verified:
+                    manifest.resources.all_signatories_verified,
+                permit_issuance_authorized: false,
+                read_only: true,
+                source_type: manifest.resources.source_type,
+                signatory_authority_statuses:
+                    manifest.resources.signatory_authority_statuses,
+            },
+            visibleSummary,
+        ),
+        check(
+            'municipality-authority-boundary-visible',
+            'The page states that configuration does not authorize permit issuance',
+            true,
+            authorityBoundaryVisible,
+        ),
+        check(
+            'municipality-configuration-read-only',
+            'No configuration or permit-authority mutation is available',
+            false,
+            mutationActionsVisible,
+        ),
+    );
+    actionLog.push(
+        stepLog(
+            'municipality-configuration-inspected',
+            'Inspect municipality identity and signatory authority status without changing runtime configuration',
+            { signatory_count: visibleSummary.signatory_count },
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '01-municipality-configuration',
+        'browser/screenshots/01-municipality-configuration.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(configurationUrl, { waitUntil: 'networkidle' });
+    const mobileVisible = await targetPage
+        .getByTestId('municipality-signatories')
+        .isVisible();
+    const pageHorizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+    Object.assign(municipalityConfigurationEvidence, {
+        mobile_visible: mobileVisible,
+        page_horizontal_overflow: pageHorizontalOverflow,
+    });
+    checks.push(
+        check(
+            'municipality-configuration-mobile-visible',
+            'Municipality identity and signatory evidence remain visible on mobile',
+            true,
+            mobileVisible,
+        ),
+        check(
+            'municipality-configuration-mobile-no-page-overflow',
+            'Municipality configuration has no page-level horizontal overflow',
+            false,
+            pageHorizontalOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '02-municipality-configuration-mobile',
+        'browser/screenshots/02-municipality-configuration-mobile.png',
     );
 }
 

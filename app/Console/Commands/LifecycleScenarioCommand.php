@@ -9,6 +9,7 @@ use App\LifecycleScenarios\CitizenPermitDraftVisibilityScenario;
 use App\LifecycleScenarios\CitizenPermitProcessingVisibilityScenario;
 use App\LifecycleScenarios\LifecycleScenarioRegistry;
 use App\LifecycleScenarios\ManualCollectionReceiptVisibilityScenario;
+use App\LifecycleScenarios\MunicipalityConfigurationVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationCancelledVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationPendingPaymentVisibilityScenario;
 use App\LifecycleScenarios\RevenueCodeExecutabilitySafetyScenario;
@@ -44,6 +45,7 @@ class LifecycleScenarioCommand extends Command
         AssessmentPolicyBoundaryVisibilityScenario $assessmentPolicyBoundaryVisibilityScenario,
         BillingGroupDraftVisibilityScenario $billingGroupDraftVisibilityScenario,
         ManualCollectionReceiptVisibilityScenario $manualCollectionReceiptScenario,
+        MunicipalityConfigurationVisibilityScenario $municipalityConfigurationVisibilityScenario,
         PermitApplicationCancelledVisibilityScenario $permitApplicationCancelledScenario,
         PermitApplicationPendingPaymentVisibilityScenario $permitApplicationPendingPaymentScenario,
         RevenueCodeFeeCatalogVisibilityScenario $revenueCodeFeeCatalogVisibilityScenario,
@@ -72,6 +74,7 @@ class LifecycleScenarioCommand extends Command
                     'citizen_new_permit_lifecycle_authority_boundary', 'new_permit_lifecycle_authority_boundary' => $manualCollectionReceiptScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'assessment_policy_boundary_visibility' => $assessmentPolicyBoundaryVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'manual_collection_receipt_visibility' => $manualCollectionReceiptScenario->prepare($scenario, $runId, $actors, $artifactStore),
+                    'municipality_configuration_visibility' => $municipalityConfigurationVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'permit_application_cancelled_visibility' => $permitApplicationCancelledScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'revenue_code_fee_catalog_visibility' => $revenueCodeFeeCatalogVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'revenue_code_executability_safety' => $revenueCodeExecutabilitySafetyScenario->prepare($scenario, $runId, $actors, $artifactStore),
@@ -102,6 +105,7 @@ class LifecycleScenarioCommand extends Command
                     'citizen_new_permit_lifecycle_authority_boundary', 'new_permit_lifecycle_authority_boundary' => $manualCollectionReceiptScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'assessment_policy_boundary_visibility' => $assessmentPolicyBoundaryVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'manual_collection_receipt_visibility' => $manualCollectionReceiptScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
+                    'municipality_configuration_visibility' => $municipalityConfigurationVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'permit_application_cancelled_visibility' => $permitApplicationCancelledScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'revenue_code_fee_catalog_visibility' => $revenueCodeFeeCatalogVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'revenue_code_executability_safety' => $revenueCodeExecutabilitySafetyScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),

@@ -17,6 +17,7 @@ export type Auth = {
     can_access_citizen: boolean;
     can_view_users: boolean;
     can_view_roles: boolean;
+    can_view_municipality_configuration: boolean;
 };
 
 export type Passkey = {

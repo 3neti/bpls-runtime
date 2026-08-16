@@ -34,5 +34,6 @@ enum UserPermission: string
     case ViewReports = 'reports.view';
     case ViewUsers = 'users.view';
     case ViewRoles = 'roles.view';
+    case ViewMunicipalityConfiguration = 'municipality_configuration.view';
     case ManageStoryboards = 'storyboards.manage';
 }

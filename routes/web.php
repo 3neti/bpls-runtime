@@ -21,6 +21,7 @@ use App\Http\Controllers\Staff\CollectiblesReportController;
 use App\Http\Controllers\Staff\CollectionReceiptController;
 use App\Http\Controllers\Staff\DailyCollectionReportController;
 use App\Http\Controllers\Staff\FeeRuleController;
+use App\Http\Controllers\Staff\MunicipalityConfigurationController;
 use App\Http\Controllers\Staff\PaidEstablishmentReportController;
 use App\Http\Controllers\Staff\PaymentScheduleCollectionController;
 use App\Http\Controllers\Staff\PaymentSummaryReportController;
@@ -94,6 +95,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('users.index');
         Route::get('roles', [RolePermissionController::class, 'index'])
             ->name('roles.index');
+        Route::get('municipality-configuration', [MunicipalityConfigurationController::class, 'index'])
+            ->name('municipality-configuration.index');
         Route::resource('billing-groups', BillingGroupController::class)
             ->only(['index', 'store', 'show']);
         Route::post('billing-groups/{billingGroup}/records', [BillingGroupRecordController::class, 'store'])
