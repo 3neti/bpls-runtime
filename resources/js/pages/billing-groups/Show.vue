@@ -32,6 +32,21 @@ type BillingGroupRecord = {
     record_date: string | null;
     payor_name: string | null;
     field_values: Record<string, string>;
+    financial_readiness: {
+        status: string;
+        can_create_liability: boolean;
+        can_collect: boolean;
+        can_issue_receipt: boolean;
+        blocked_by: string[];
+        missing_required_fields: string[];
+        requirements: Array<{
+            key: string;
+            label: string;
+            status: string;
+            reason: string;
+        }>;
+        reason: string;
+    };
     created_by: string;
     created_at: string | null;
 };
@@ -194,6 +209,56 @@ function fieldLabel(value: string): string {
                             <p class="text-xs text-muted-foreground">
                                 Prepared by {{ record.created_by }}
                             </p>
+                            <section
+                                class="grid gap-3 border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+                                data-testid="billing-group-financial-readiness"
+                                :data-readiness-status="
+                                    record.financial_readiness.status
+                                "
+                            >
+                                <div
+                                    class="flex flex-wrap items-center justify-between gap-2"
+                                >
+                                    <strong>Financial readiness</strong>
+                                    <span
+                                        class="border border-amber-500/50 px-2 py-0.5 text-xs uppercase"
+                                    >
+                                        {{ record.financial_readiness.status }}
+                                    </span>
+                                </div>
+                                <p>{{ record.financial_readiness.reason }}</p>
+                                <div class="grid gap-2 sm:grid-cols-2">
+                                    <div
+                                        v-for="requirement in record
+                                            .financial_readiness.requirements"
+                                        :key="requirement.key"
+                                        class="border border-amber-500/30 bg-background/60 p-2"
+                                        :data-requirement="requirement.key"
+                                        :data-status="requirement.status"
+                                    >
+                                        <div
+                                            class="flex items-start justify-between gap-2"
+                                        >
+                                            <span class="font-medium">{{
+                                                requirement.label
+                                            }}</span>
+                                            <span
+                                                class="text-xs text-muted-foreground uppercase"
+                                                >{{ requirement.status }}</span
+                                            >
+                                        </div>
+                                        <p
+                                            class="mt-1 text-xs text-muted-foreground"
+                                        >
+                                            {{ requirement.reason }}
+                                        </p>
+                                    </div>
+                                </div>
+                                <p class="text-xs font-medium">
+                                    Liability, collection, and receipt actions
+                                    are unavailable.
+                                </p>
+                            </section>
                         </article>
                     </div>
                 </section>

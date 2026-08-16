@@ -703,7 +703,7 @@ final class LifecycleScenarioRegistry
             ),
             'billing_group_draft_visibility' => new LifecycleScenarioDefinition(
                 key: 'billing_group_draft_visibility',
-                label: 'Provisional billing group draft visibility',
+                label: 'Provisional billing group readiness and financial refusal',
                 mode: 'billing_group_draft_visibility',
                 risk: 'local transactional',
                 actors: [
@@ -720,6 +720,10 @@ final class LifecycleScenarioRegistry
                     'acceptance_status' => 'provisional',
                     'record_status' => 'draft',
                     'financial_effect' => 'none',
+                    'financial_readiness_status' => 'blocked',
+                    'can_create_liability' => false,
+                    'can_collect' => false,
+                    'can_issue_receipt' => false,
                     'external_calls' => 0,
                     'irreversible_actions' => false,
                 ],

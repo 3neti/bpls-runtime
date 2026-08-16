@@ -103,10 +103,12 @@ test('scenario registry discovers the provisional billing group draft scenario',
 
     expect($scenario)
         ->key->toBe('billing_group_draft_visibility')
-        ->label->toBe('Provisional billing group draft visibility')
+        ->label->toBe('Provisional billing group readiness and financial refusal')
         ->risk->toBe('local transactional')
         ->and($scenario->expectations['acceptance_status'])->toBe('provisional')
         ->and($scenario->expectations['financial_effect'])->toBe('none')
+        ->and($scenario->expectations['financial_readiness_status'])->toBe('blocked')
+        ->and($scenario->expectations['can_collect'])->toBeFalse()
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
@@ -2691,6 +2693,9 @@ test('billing group draft scenario is idempotent and audits exact browser eviden
             'definition_visible' => true,
             'draft_visible' => true,
             'policy_boundary_visible' => true,
+            'financial_refusal_visible' => true,
+            'financial_readiness_status' => 'blocked',
+            'collection_action_count' => 0,
         ],
         'artifacts' => [
             'screenshots' => [

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Staff;
 
 use App\Actions\CreateBillingGroup;
+use App\Actions\DescribeBillingGroupFinancialReadiness;
 use App\Enums\BillingGroupFieldType;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
@@ -56,12 +57,15 @@ class BillingGroupController extends Controller
         return to_route('staff.billing-groups.show', $billingGroup);
     }
 
-    public function show(BillingGroup $billingGroup): Response
+    public function show(BillingGroup $billingGroup, DescribeBillingGroupFinancialReadiness $describeFinancialReadiness): Response
     {
         Gate::authorize(UserPermission::ViewBillingGroups->value);
         Gate::authorize(UserPermission::ViewBillingGroupRecords->value);
 
         $billingGroup->load(['fields', 'records' => fn ($query) => $query->with('createdBy')->latest()]);
+        $billingGroup->records->each(
+            fn (BillingGroupRecord $record): BillingGroupRecord => $record->setRelation('billingGroup', $billingGroup),
+        );
 
         return Inertia::render('billing-groups/Show', [
             'billingGroup' => [
@@ -89,6 +93,7 @@ class BillingGroupController extends Controller
                     'record_date' => $record->record_date?->toDateString(),
                     'payor_name' => $record->payor_name,
                     'field_values' => $record->field_values ?? [],
+                    'financial_readiness' => $describeFinancialReadiness->handle($record),
                     'created_by' => $record->createdBy->name,
                     'created_at' => $record->created_at?->toIso8601String(),
                 ]),

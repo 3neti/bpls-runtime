@@ -2139,6 +2139,20 @@ async function inspectBillingGroupDraft(targetPage, targetBaseUrl) {
         .getByRole('button', { name: 'Prepare draft' })
         .isVisible()
         .catch(() => false);
+    const financialReadiness = targetPage
+        .getByTestId('billing-group-financial-readiness')
+        .first();
+    const financialRefusalVisible = await financialReadiness
+        .isVisible()
+        .catch(() => false);
+    const financialReadinessStatus = await financialReadiness
+        .getAttribute('data-readiness-status')
+        .catch(() => null);
+    const collectionActionCount = await targetPage
+        .getByRole('button', {
+            name: /collect|issue receipt|create liability/i,
+        })
+        .count();
     checks.push(
         check(
             'billing-group-draft-visible',
@@ -2157,7 +2171,13 @@ async function inspectBillingGroupDraft(targetPage, targetBaseUrl) {
             'billing-group-only-draft-action-visible',
             'Billing-group detail offers draft preparation without a collection action',
             true,
-            draftActionVisible,
+            draftActionVisible && collectionActionCount === 0,
+        ),
+        check(
+            'billing-group-financial-refusal-visible',
+            'Billing-group detail shows blocked financial readiness for the exact draft',
+            'blocked',
+            financialReadinessStatus,
         ),
     );
     await screenshot(
@@ -2170,6 +2190,11 @@ async function inspectBillingGroupDraft(targetPage, targetBaseUrl) {
     await targetPage.goto(detailUrl, { waitUntil: 'networkidle' });
     const mobileDraftVisible = await targetPage
         .getByText(manifest.resources.public_reference, { exact: true })
+        .isVisible()
+        .catch(() => false);
+    const mobileFinancialRefusalVisible = await targetPage
+        .getByTestId('billing-group-financial-readiness')
+        .first()
         .isVisible()
         .catch(() => false);
     const horizontalOverflow = await targetPage.evaluate(
@@ -2190,6 +2215,12 @@ async function inspectBillingGroupDraft(targetPage, targetBaseUrl) {
             false,
             horizontalOverflow,
         ),
+        check(
+            'billing-group-mobile-financial-refusal-visible',
+            'Mobile detail keeps the financial refusal visible',
+            true,
+            mobileFinancialRefusalVisible,
+        ),
     );
     await screenshot(
         targetPage,
@@ -2201,6 +2232,10 @@ async function inspectBillingGroupDraft(targetPage, targetBaseUrl) {
     billingGroupEvidence.draft_visible = draftVisible;
     billingGroupEvidence.policy_boundary_visible =
         listBoundaryVisible && detailBoundaryVisible;
+    billingGroupEvidence.financial_refusal_visible =
+        financialRefusalVisible && mobileFinancialRefusalVisible;
+    billingGroupEvidence.financial_readiness_status = financialReadinessStatus;
+    billingGroupEvidence.collection_action_count = collectionActionCount;
     billingGroupEvidence.draft_reference = manifest.resources.public_reference;
 }
 

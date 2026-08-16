@@ -4,9 +4,12 @@ namespace App\LifecycleScenarios;
 
 use App\Actions\CreateBillingGroup;
 use App\Actions\CreateBillingGroupDraftRecord;
+use App\Actions\DescribeBillingGroupFinancialReadiness;
+use App\Actions\RequireBillingGroupFinancialReadiness;
 use App\Enums\BillingGroupAcceptanceStatus;
 use App\Enums\BillingGroupFieldType;
 use App\Enums\BillingGroupRecordStatus;
+use App\Exceptions\UnsupportedBillingGroupFinancialPolicy;
 use App\Models\BillingGroup;
 use App\Models\BillingGroupRecord;
 use App\Models\Receipt;
@@ -19,6 +22,8 @@ final class BillingGroupDraftVisibilityScenario
     public function __construct(
         private readonly CreateBillingGroup $createBillingGroup,
         private readonly CreateBillingGroupDraftRecord $createDraftRecord,
+        private readonly DescribeBillingGroupFinancialReadiness $describeFinancialReadiness,
+        private readonly RequireBillingGroupFinancialReadiness $requireFinancialReadiness,
         private readonly ScenarioManifest $scenarioManifest,
         private readonly ScenarioSummaryRenderer $summaryRenderer,
     ) {}
@@ -85,11 +90,30 @@ final class BillingGroupDraftVisibilityScenario
             ]);
         }
 
+        $readiness = $this->describeFinancialReadiness->handle($record);
+        $refusal = null;
+
+        try {
+            $this->requireFinancialReadiness->handle($record);
+        } catch (UnsupportedBillingGroupFinancialPolicy $exception) {
+            $refusal = [
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+                'blocked_by' => $exception->readiness['blocked_by'],
+            ];
+        }
+
         $after = $this->financialCounts();
         $steps = [
             $this->step('billing-group-created', 'Create provisional billing-group definition through the application action', ['acceptance_status' => 'provisional', 'field_count' => 2], ['acceptance_status' => $billingGroup->acceptance_status->value, 'field_count' => $billingGroup->fields()->count()]),
             $this->step('draft-record-created', 'Prepare an incomplete draft through the application action', ['status' => 'draft', 'required_value_present' => false], ['status' => $record->status->value, 'required_value_present' => array_key_exists('subject_name', $record->field_values ?? [])]),
             $this->step('financial-state-unchanged', 'Verify preparation creates no collection or receipt', $before, $after),
+            $this->step(
+                'financial-execution-refused',
+                'Invoke the domain financial-readiness guard and preserve its refusal evidence',
+                ['status' => 'blocked', 'refused' => true, 'can_collect' => false, 'can_issue_receipt' => false],
+                ['status' => $readiness['status'], 'refused' => $refusal !== null, 'can_collect' => $readiness['can_collect'], 'can_issue_receipt' => $readiness['can_issue_receipt']],
+            ),
         ];
 
         foreach ($steps as $step) {
@@ -105,6 +129,7 @@ final class BillingGroupDraftVisibilityScenario
             'billing_group_name' => $billingGroup->name,
             'list_url' => route('staff.billing-groups.index', absolute: false),
             'detail_url' => route('staff.billing-groups.show', $billingGroup, false),
+            'financial_readiness_status' => $readiness['status'],
         ];
         $manifest['steps'] = $steps;
         $manifest['result']['terminal'] = collect($steps)->every(fn (array $step): bool => $step['passed']) ? 'passed' : 'failed';
@@ -122,6 +147,8 @@ final class BillingGroupDraftVisibilityScenario
             'external_calls' => 0,
             'irreversible_actions' => false,
             'notifications' => false,
+            'financial_readiness' => $readiness,
+            'financial_refusal' => $refusal,
         ]);
         $artifactStore->putJson('manifest.json', $manifest);
         $artifactStore->putJson('storyboard/storyboard.json', $this->storyboard($runId, $billingGroup, $record));
@@ -138,12 +165,14 @@ final class BillingGroupDraftVisibilityScenario
     {
         $billingGroup = $this->billingGroup((int) $manifest['resources']['billing_group_id']);
         $record = $this->billingGroupRecord((int) $manifest['resources']['record_id']);
+        $readiness = $this->describeFinancialReadiness->handle($record);
         $browserReport = $artifactStore->readJson('browser/report.json') ?? [];
         $checks = [
             $this->step('audit-provisional-definition', 'Canonical definition remains provisional', ['acceptance_status' => BillingGroupAcceptanceStatus::Provisional->value], ['acceptance_status' => $billingGroup->acceptance_status->value]),
             $this->step('audit-draft-state', 'Canonical record remains a non-financial draft', ['status' => BillingGroupRecordStatus::Draft->value, 'financial_effect' => 'none'], ['status' => $record->status->value, 'financial_effect' => $record->source_snapshot['financial_effect'] ?? null]),
             $this->step('audit-schema-snapshot', 'Draft preserves the exact field schema used at preparation', ['field_count' => $billingGroup->fields->count()], ['field_count' => count($record->schema_snapshot)]),
-            $this->step('audit-browser-visibility', 'Browser shows the exact definition, draft, and policy boundary', ['definition_visible' => true, 'draft_visible' => true, 'policy_boundary_visible' => true], ['definition_visible' => data_get($browserReport, 'billing_group.definition_visible'), 'draft_visible' => data_get($browserReport, 'billing_group.draft_visible'), 'policy_boundary_visible' => data_get($browserReport, 'billing_group.policy_boundary_visible')]),
+            $this->step('audit-financial-refusal', 'Canonical readiness still refuses liability, collection, and receipt', ['status' => 'blocked', 'can_create_liability' => false, 'can_collect' => false, 'can_issue_receipt' => false], ['status' => $readiness['status'], 'can_create_liability' => $readiness['can_create_liability'], 'can_collect' => $readiness['can_collect'], 'can_issue_receipt' => $readiness['can_issue_receipt']]),
+            $this->step('audit-browser-visibility', 'Browser shows the exact definition, draft, policy boundary, and financial refusal', ['definition_visible' => true, 'draft_visible' => true, 'policy_boundary_visible' => true, 'financial_refusal_visible' => true], ['definition_visible' => data_get($browserReport, 'billing_group.definition_visible'), 'draft_visible' => data_get($browserReport, 'billing_group.draft_visible'), 'policy_boundary_visible' => data_get($browserReport, 'billing_group.policy_boundary_visible'), 'financial_refusal_visible' => data_get($browserReport, 'billing_group.financial_refusal_visible')]),
         ];
         $passed = collect($checks)->every(fn (array $check): bool => $check['passed']);
 
@@ -166,6 +195,7 @@ final class BillingGroupDraftVisibilityScenario
                 'status' => $record->status->value,
                 'financial_effect' => $record->source_snapshot['financial_effect'] ?? null,
                 'schema_snapshot' => $record->schema_snapshot,
+                'financial_readiness' => $readiness,
             ],
             'browser' => $browserReport,
         ]);
@@ -216,20 +246,21 @@ final class BillingGroupDraftVisibilityScenario
     private function storyboard(string $runId, BillingGroup $billingGroup, BillingGroupRecord $record): array
     {
         return [
-            'title' => 'Provisional billing group draft visibility',
-            'summary' => 'Treasury staff records a configurable definition and prepares a draft declaration without creating financial or municipal authority.',
+            'title' => 'Provisional billing group readiness and financial refusal',
+            'summary' => 'Treasury staff records a configurable definition, prepares a draft declaration, and verifies that the domain refuses unsupported financial execution.',
             'run_id' => $runId,
             'records' => ['billing_group_id' => $billingGroup->id, 'billing_group_record_id' => $record->id],
             'frames' => [
                 ['title' => 'Definition recorded', 'description' => 'Staff records a provisional definition and ordered field schema.', 'dialogue' => 'Configuration does not establish policy acceptance.', 'duration_seconds' => 5],
                 ['title' => 'Draft prepared', 'description' => 'Staff prepares an incomplete declaration against the exact schema.', 'dialogue' => 'A draft is not a bill, collection, or receipt.', 'duration_seconds' => 5],
-                ['title' => 'Boundary verified', 'description' => 'Browser and audit evidence agree that no financial side effect occurred.', 'dialogue' => 'Financial execution remains unavailable.', 'duration_seconds' => 5],
+                ['title' => 'Readiness evaluated', 'description' => 'The domain identifies incomplete record facts separately from unresolved municipal policy.', 'dialogue' => 'Readiness is explicit and reviewable.', 'duration_seconds' => 5],
+                ['title' => 'Execution refused', 'description' => 'Browser and audit evidence agree that liability, collection, and receipt remain unavailable.', 'dialogue' => 'Unknown policy does not become money.', 'duration_seconds' => 5],
             ],
         ];
     }
 
     private function storyboardHtml(string $runId, BillingGroup $billingGroup, BillingGroupRecord $record): string
     {
-        return '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Provisional billing group draft visibility</title></head><body><h1>Provisional billing group draft visibility</h1><p>Run ID: '.e($runId).'</p><p>Definition: '.e($billingGroup->name).'</p><p>Draft reference: '.e($record->draft_reference).'</p><p>This journey records configurable structure and an incomplete declaration only. It creates no liability, collection, receipt, or official transaction number.</p></body></html>';
+        return '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Provisional billing group financial refusal</title></head><body><h1>Provisional billing group financial refusal</h1><p>Run ID: '.e($runId).'</p><p>Definition: '.e($billingGroup->name).'</p><p>Draft reference: '.e($record->draft_reference).'</p><p>This journey records configurable structure, evaluates readiness, and proves the domain refuses unsupported financial execution. It creates no liability, collection, receipt, or official transaction number.</p></body></html>';
     }
 }
