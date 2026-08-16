@@ -1,0 +1,194 @@
+<?php
+
+use App\Actions\PrepareLegacyConvexSnapshot;
+use App\Actions\StageLegacyExport;
+use App\Enums\LegacyImportBatchStatus;
+use App\Models\Business;
+use App\Models\BusinessOwner;
+use App\Models\LegacyRecord;
+use App\Models\PermitApplication;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+
+/** @var list<string> $legacyConvexSnapshotFixtures */
+$legacyConvexSnapshotFixtures = [];
+
+/**
+ * @param  array<string, string>  $entries
+ */
+function createConvexSnapshotArchive(array $entries): string
+{
+    global $legacyConvexSnapshotFixtures;
+
+    $path = storage_path('framework/testing/convex-snapshot-'.Str::uuid().'.zip');
+    File::ensureDirectoryExists(dirname($path));
+    $zip = new ZipArchive;
+    expect($zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE))->toBeTrue();
+    foreach ($entries as $entry => $contents) {
+        expect($zip->addFromString($entry, $contents))->toBeTrue();
+    }
+    expect($zip->close())->toBeTrue();
+    $legacyConvexSnapshotFixtures[] = $path;
+
+    return $path;
+}
+
+/** @param list<array<string, mixed>> $rows */
+function convexJsonLines(array $rows): string
+{
+    return collect($rows)
+        ->map(fn (array $row): string => json_encode($row, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR))
+        ->implode("\n")."\n";
+}
+
+afterEach(function (): void {
+    global $legacyConvexSnapshotFixtures;
+
+    foreach ($legacyConvexSnapshotFixtures as $path) {
+        File::delete($path);
+    }
+    $legacyConvexSnapshotFixtures = [];
+});
+
+test('an authorized snapshot becomes immutable payload-free intake evidence and a valid staging manifest', function () {
+    Storage::fake('local');
+    $archive = createConvexSnapshotArchive([
+        'business_owners/documents.jsonl' => convexJsonLines([
+            ['_id' => 'owner-001', 'firstName' => 'Sensitive', 'lastName' => 'Owner'],
+        ]),
+        'businesses/documents.jsonl' => convexJsonLines([
+            ['_id' => 'business-001', 'ownerId' => 'owner-001', 'name' => 'Sensitive Business'],
+        ]),
+        'business_permit_applications/documents.jsonl' => convexJsonLines([
+            ['_id' => 'application-001', 'businessOwnerId' => 'owner-001', 'businessId' => 'business-001', 'status' => 'Draft', 'applicationNumber' => 'BPA-SECRET'],
+        ]),
+        '_storage/documents.jsonl' => convexJsonLines([['_id' => 'storage-secret']]),
+        'businesses/generated_schema.jsonl' => "{}\n",
+    ]);
+
+    $result = app(PrepareLegacyConvexSnapshot::class)->handle(
+        $archive,
+        'convex-intake-001',
+        'adjoining-porcupine-740',
+        '2026-08-16T16:00:00+08:00',
+    );
+    $report = File::get($result['report_path']);
+    $manifest = json_decode(File::get($result['manifest_path']), true, flags: JSON_THROW_ON_ERROR);
+    $batch = app(StageLegacyExport::class)->handle($result['manifest_path'], 'convex-stage-001');
+
+    expect($result['table_count'])->toBe(3)
+        ->and($result['record_count'])->toBe(3)
+        ->and(hash_file('sha256', $result['archive_path']))->toBe(hash_file('sha256', $archive))
+        ->and(collect($result['datasets'])->pluck('key')->all())->toBe([
+            'business_owners',
+            'business_permit_applications',
+            'businesses',
+        ])
+        ->and($manifest['source']['source_type'])->toBe('convex_snapshot_export')
+        ->and($manifest['source']['provenance']['production_data'])->toBeTrue()
+        ->and($manifest['source']['provenance']['deployment_sha256'])->toBe(hash('sha256', 'adjoining-porcupine-740'))
+        ->and($report)->not->toContain('Sensitive', 'BPA-SECRET', 'owner-001', 'business-001', 'storage-secret')
+        ->and($batch->status)->toBe(LegacyImportBatchStatus::Staged)
+        ->and($batch->staged_record_count)->toBe(3)
+        ->and(LegacyRecord::query()->count())->toBe(3)
+        ->and(BusinessOwner::query()->count())->toBe(0)
+        ->and(Business::query()->count())->toBe(0)
+        ->and(PermitApplication::query()->count())->toBe(0);
+});
+
+test('snapshot intake is idempotent and a stable run refuses changed source evidence', function () {
+    Storage::fake('local');
+    $firstArchive = createConvexSnapshotArchive([
+        'business_owners/documents.jsonl' => convexJsonLines([['_id' => 'owner-001']]),
+    ]);
+    $secondArchive = createConvexSnapshotArchive([
+        'business_owners/documents.jsonl' => convexJsonLines([['_id' => 'owner-002']]),
+    ]);
+    $action = app(PrepareLegacyConvexSnapshot::class);
+    $first = $action->handle($firstArchive, 'convex-intake-stable', 'adjoining-porcupine-740', '2026-08-16T16:00:00+08:00');
+    $second = $action->handle($firstArchive, 'convex-intake-stable', 'adjoining-porcupine-740', '2026-08-16T16:00:00+08:00');
+
+    expect($second['archive_checksum'])->toBe($first['archive_checksum'])
+        ->and($second['manifest_path'])->toBe($first['manifest_path'])
+        ->and(fn () => $action->handle($secondArchive, 'convex-intake-stable', 'adjoining-porcupine-740', '2026-08-16T16:00:00+08:00'))
+        ->toThrow(RuntimeException::class, 'different source evidence');
+});
+
+test('snapshot intake refuses unsafe paths and archives without table documents', function (array $entries, string $message) {
+    Storage::fake('local');
+    $archive = createConvexSnapshotArchive($entries);
+
+    expect(fn () => app(PrepareLegacyConvexSnapshot::class)->handle(
+        $archive,
+        'convex-intake-refusal',
+        'adjoining-porcupine-740',
+        '2026-08-16T16:00:00+08:00',
+    ))->toThrow(RuntimeException::class, $message);
+})->with([
+    'path traversal' => [
+        ['../business_owners/documents.jsonl' => convexJsonLines([['_id' => 'owner-001']])],
+        'unsafe ZIP entry path',
+    ],
+    'no tables' => [
+        ['business_owners.jsonl' => convexJsonLines([['_id' => 'owner-001']])],
+        'no table documents.jsonl entries',
+    ],
+]);
+
+test('the command requires dual production-data confirmation and writes structured evidence', function () {
+    Storage::fake('local');
+    $archive = createConvexSnapshotArchive([
+        'business_owners/documents.jsonl' => convexJsonLines([['_id' => 'owner-001']]),
+    ]);
+    $arguments = [
+        'archive' => $archive,
+        '--run-id' => 'convex-command-001',
+        '--deployment' => 'adjoining-porcupine-740',
+        '--captured-at' => '2026-08-16T16:00:00+08:00',
+        '--json' => true,
+    ];
+
+    $this->artisan('legacy:prepare-convex-snapshot', $arguments)->assertFailed();
+    $this->artisan('legacy:prepare-convex-snapshot', [
+        ...$arguments,
+        '--accept-production-data' => true,
+        '--confirm-production-data' => true,
+    ])->assertSuccessful();
+
+    $root = 'legacy-migrations/convex-snapshots/convex-command-001';
+    Storage::disk('local')->assertExists($root.'/snapshot.zip');
+    Storage::disk('local')->assertExists($root.'/manifest.json');
+    Storage::disk('local')->assertExists($root.'/intake.json');
+    Storage::disk('local')->assertExists($root.'/review.md');
+    $report = Storage::disk('local')->get($root.'/intake.json');
+
+    expect($report)->not->toContain('owner-001', '@', 'password', 'token', 'cookie')
+        ->and(json_decode($report, true, flags: JSON_THROW_ON_ERROR)['safety'])->toMatchArray([
+            'production_data_present' => true,
+            'payloads_in_report' => false,
+            'domain_writes' => false,
+            'migration_executed' => false,
+            'cutover_authorized' => false,
+        ]);
+});
+
+test('snapshot intake refuses production execution even with confirmations', function () {
+    Storage::fake('local');
+    $archive = createConvexSnapshotArchive([
+        'business_owners/documents.jsonl' => convexJsonLines([['_id' => 'owner-001']]),
+    ]);
+    app()->detectEnvironment(fn (): string => 'production');
+
+    $this->artisan('legacy:prepare-convex-snapshot', [
+        'archive' => $archive,
+        '--run-id' => 'convex-production-refusal',
+        '--deployment' => 'adjoining-porcupine-740',
+        '--captured-at' => '2026-08-16T16:00:00+08:00',
+        '--accept-production-data' => true,
+        '--confirm-production-data' => true,
+        '--json' => true,
+    ])->assertFailed();
+
+    Storage::disk('local')->assertMissing('legacy-migrations/convex-snapshots/convex-production-refusal');
+});

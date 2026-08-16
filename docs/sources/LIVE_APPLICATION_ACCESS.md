@@ -26,6 +26,14 @@ Read-only aggregate scale observation on 2026-08-16:
 - limitation: the unified transaction total is not asserted to equal the Convex `payments` table count; payment-schedule, clearance-assignment, nested line-of-business, document-object, deleted-record, and historical-version counts were not exposed by these surfaces and remain unknown
 - privacy: no row-level production values, credentials, cookies, or session artifacts were persisted
 
+Read-only deployment/database boundary observation on 2026-08-16:
+
+- the public live login response references Convex deployment `adjoining-porcupine-740`, matching the production endpoint committed in the exact legacy source baseline
+- the legacy source contains a dedicated query `dataExport:getPermitReportCount`; one bounded unauthenticated read-only invocation against that deployment returned 3,065 non-deleted applications, matching the authenticated UI total
+- no report rows, personal data, financial values, stored objects, authentication material, or full database snapshot were requested or persisted
+- the workstation has no Convex CLI account/deploy-key configuration, so an authoritative full snapshot cannot be acquired from this checkout alone
+- the public query proves bounded database visibility, not administrative database ownership, complete export access, migration parity, or cutover authority
+
 Observed high-level surfaces:
 
 - Dashboard
