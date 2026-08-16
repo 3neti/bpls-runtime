@@ -222,7 +222,7 @@ test('stable readiness runs are idempotent and reject changed evidence', functio
         ->toThrow(RuntimeException::class, 'different evidence');
 });
 
-test('readiness reports completed application mapping coverage without claiming other domain executors exist', function () {
+test('readiness reports completed application mapping coverage and non-applicable financial execution', function () {
     $fixture = readinessBatch('application-execution');
     $plan = $fixture['batch']->applicationMappingPlans()->sole();
     $execution = LegacyApplicationMappingExecution::factory()->for($plan, 'mappingPlan')->create([
@@ -256,7 +256,9 @@ test('readiness reports completed application mapping coverage without claiming 
             'declaration_execution' => true,
             'declaration_mapped_records' => 0,
             'declaration_required_records' => 0,
-            'financial_execution' => false,
+            'financial_execution' => true,
+            'financial_mapped_snapshots' => 0,
+            'financial_required_snapshots' => 0,
             'permit_evidence_execution' => false,
         ]);
 });
@@ -343,7 +345,9 @@ test('readiness reports complete declaration execution only when every source li
             'declaration_execution' => true,
             'declaration_mapped_records' => 1,
             'declaration_required_records' => 1,
-            'financial_execution' => false,
+            'financial_execution' => true,
+            'financial_mapped_snapshots' => 0,
+            'financial_required_snapshots' => 0,
             'permit_evidence_execution' => false,
         ]);
 });

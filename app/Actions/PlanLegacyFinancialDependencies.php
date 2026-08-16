@@ -606,7 +606,7 @@ class PlanLegacyFinancialDependencies
         return $keys->first();
     }
 
-    private function snapshotHash(LegacyImportBatch $batch): string
+    public function snapshotHash(LegacyImportBatch $batch): string
     {
         $parts = [];
         foreach ($batch->records()->select(['id', 'dataset_key', 'payload_hash'])->orderBy('id')->cursor() as $record) {

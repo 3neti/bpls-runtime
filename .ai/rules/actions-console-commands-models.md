@@ -2,6 +2,7 @@
 paths:
   - 'app/{Actions,Console/Commands,Models}/**/*Legacy*Application*.php'
   - 'app/{Actions,Console/Commands,Models}/**/*Legacy*Declaration*.php'
+  - 'app/{Actions,Console/Commands,Models}/**/*Legacy*Financial*.php'
 ---
 
 # Actions Console Commands Models
@@ -11,3 +12,6 @@ Permit-application migration execution is local/testing-only, requires exact rea
 
 ## Execute declarations as complete reversible application sets
 Declaration migration execution is local/testing-only and requires every proposal for each selected legacy application to be selected and ready. Revalidate the staged projection, accepted application mapping, accepted line-of-business reconciliation, and dependency snapshot; refuse unmanaged existing lines. Persist declared facts only and never calculate assessments. Rollback may delete only unchanged execution-created lines without assessment dependencies.
+
+## Execute only annual unpaid legacy snapshots
+Financial migration execution is local/testing-only and accepts complete exact ready sets for one annual, single-section, unpaid schedule with application-scoped reconciled fees. It converts persisted amounts to immutable assessment/schedule snapshots without calculating liability, inferring payment state, creating collections/receipts, or changing application lifecycle. Installments, payment evidence, edited fees, overrides, and unmanaged targets remain non-executable; rollback requires an unchanged target graph with no collections.

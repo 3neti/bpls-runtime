@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Enums\LegacyImportBatchStatus;
 use App\Enums\LegacyMappingExecutionStatus;
 use App\Enums\LegacyMappingPlanStatus;
+use App\Enums\LegacyMappingProposalStatus;
 use App\Enums\LegacyMigrationReadinessStatus;
 use App\Enums\MigrationExceptionSeverity;
 use App\Enums\MigrationExceptionStatus;
@@ -13,6 +14,8 @@ use App\Models\LegacyApplicationIdMapping;
 use App\Models\LegacyApplicationMappingExecution;
 use App\Models\LegacyDeclarationLineMapping;
 use App\Models\LegacyDeclarationMappingExecution;
+use App\Models\LegacyFinancialMappingExecution;
+use App\Models\LegacyFinancialSnapshotMapping;
 use App\Models\LegacyImportBatch;
 use App\Models\LegacyMappingExecution;
 use App\Models\LegacyMappingPlan;
@@ -23,7 +26,7 @@ use RuntimeException;
 
 final class AssessLegacyMigrationReadiness
 {
-    public const AssessorVersion = 'bpls.legacy-migration-readiness.v2';
+    public const AssessorVersion = 'bpls.legacy-migration-readiness.v3';
 
     public function handle(LegacyImportBatch $batch, string $runReference): LegacyMigrationReadinessAssessment
     {
@@ -126,6 +129,20 @@ final class AssessLegacyMigrationReadiness
             ->whereHas('executions', fn ($query) => $query->where('status', LegacyMappingExecutionStatus::Completed))
             ->exists();
         $declarationExecutionComplete = $lineCount === 0 || ($completedDeclarationExecution && $declarationMappings >= $lineCount);
+        $financialPlan = $batch->financialMappingPlans()->latest('id')->first();
+        $financialSnapshots = $financialPlan?->proposals()
+            ->where('kind', 'payment_schedule')
+            ->where('status', LegacyMappingProposalStatus::Ready)
+            ->count() ?? 0;
+        $financialMappings = LegacyFinancialSnapshotMapping::query()
+            ->whereBelongsTo($batch, 'importBatch')
+            ->where('status', 'mapped')
+            ->count();
+        $completedFinancialExecution = $batch->financialMappingPlans()
+            ->whereHas('executions', fn ($query) => $query->where('status', LegacyMappingExecutionStatus::Completed))
+            ->exists();
+        $financialExecutionComplete = $financialSnapshots === 0
+            || ($completedFinancialExecution && $financialMappings >= $financialSnapshots);
 
         array_push(
             $checks,
@@ -147,9 +164,11 @@ final class AssessLegacyMigrationReadiness
                 'declaration_execution' => $declarationExecutionComplete,
                 'declaration_mapped_records' => $declarationMappings,
                 'declaration_required_records' => $lineCount,
-                'financial_execution' => false,
+                'financial_execution' => $financialExecutionComplete,
+                'financial_mapped_snapshots' => $financialMappings,
+                'financial_required_snapshots' => $financialSnapshots,
                 'permit_evidence_execution' => false,
-            ], 'Application and declaration execution are bounded and reversible; financial and permit-evidence migration paths remain required.'),
+            ], 'Application, declaration, and bounded annual financial snapshot execution are reversible; permit-evidence execution and unresolved financial proposals remain required.'),
             $this->check('document_object_transfer_verified', 'cutover', $documentCount === 0, [
                 'staged_document_metadata_records' => $documentCount,
                 'object_transfer_verified' => false,
@@ -282,6 +301,12 @@ final class AssessLegacyMigrationReadiness
         }
         foreach (LegacyDeclarationLineMapping::query()->whereBelongsTo($batch, 'importBatch')->select(['id', 'status', 'updated_at'])->orderBy('id')->cursor() as $mapping) {
             $parts[] = ['declaration_mapping', $mapping->id, $mapping->status, $mapping->updated_at?->toIso8601String()];
+        }
+        foreach (LegacyFinancialMappingExecution::query()->whereHas('mappingPlan', fn ($query) => $query->whereBelongsTo($batch, 'importBatch'))->orderBy('id')->get() as $execution) {
+            $parts[] = ['financial_execution', $execution->id, $execution->status->value, $execution->selection_hash, $execution->updated_at?->toIso8601String()];
+        }
+        foreach (LegacyFinancialSnapshotMapping::query()->whereBelongsTo($batch, 'importBatch')->select(['id', 'status', 'updated_at'])->orderBy('id')->cursor() as $mapping) {
+            $parts[] = ['financial_mapping', $mapping->id, $mapping->status, $mapping->updated_at?->toIso8601String()];
         }
 
         return hash('sha256', json_encode($parts, JSON_THROW_ON_ERROR));

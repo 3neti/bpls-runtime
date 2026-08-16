@@ -46,6 +46,12 @@ class LegacyFinancialMappingPlan extends Model
         return $this->hasMany(LegacyFinancialMappingProposal::class);
     }
 
+    /** @return HasMany<LegacyFinancialMappingExecution, $this> */
+    public function executions(): HasMany
+    {
+        return $this->hasMany(LegacyFinancialMappingExecution::class);
+    }
+
     /** @return array<string, string> */
     protected function casts(): array
     {

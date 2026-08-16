@@ -95,6 +95,12 @@ class LegacyImportBatch extends Model
         return $this->hasMany(LegacyFinancialMappingPlan::class, 'legacy_import_batch_id');
     }
 
+    /** @return HasMany<LegacyFinancialSnapshotMapping, $this> */
+    public function financialSnapshotMappings(): HasMany
+    {
+        return $this->hasMany(LegacyFinancialSnapshotMapping::class, 'legacy_import_batch_id');
+    }
+
     /** @return HasMany<LegacyPermitEvidencePlan, $this> */
     public function permitEvidencePlans(): HasMany
     {
