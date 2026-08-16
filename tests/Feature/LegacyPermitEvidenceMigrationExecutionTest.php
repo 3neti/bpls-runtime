@@ -212,7 +212,7 @@ test('execution fails closed for authority claims completed clearances and depen
         $authorityFixture['plan'],
         [$authorityFixture['proposal']->id],
         'permit-evidence-execution-authority',
-    ))->toThrow(RuntimeException::class, 'is not a pending clearance assignment');
+    ))->toThrow(RuntimeException::class, 'is authority-bearing or unsupported');
 
     $completedFixture = executablePermitEvidencePlan('completed');
     $completedFixture['proposal']->update(['metadata' => [...$completedFixture['proposal']->metadata, 'completed' => true]]);
@@ -277,9 +277,9 @@ test('commands require dual confirmation and write redacted execution and rollba
     expect($report)
         ->not->toContain($fixture['clearance_record']->legacy_id, $fixture['application_record']->legacy_id)
         ->and($decoded['safety'])->toMatchArray([
-            'pending_clearances_only' => true,
+            'supported_kinds' => ['clearance', 'business_supporting_document'],
             'completed_clearances_created' => false,
-            'document_objects_copied' => false,
+            'document_objects_copied' => 0,
             'permit_artifacts_created' => false,
             'issuance_authorized' => false,
             'release_authorized' => false,

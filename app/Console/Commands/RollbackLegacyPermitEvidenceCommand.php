@@ -13,10 +13,10 @@ use Throwable;
 
 #[Signature('legacy:rollback-permit-evidence
     {execution : Exact permit-evidence execution ID}
-    {--rollback : Confirm accepted mappings and unchanged created pending clearances may be removed}
+    {--rollback : Confirm accepted mappings, unchanged created records, and migrated document objects may be removed}
     {--confirm-rollback : Second explicit rollback confirmation}
     {--json : Write only structured output}')]
-#[Description('Rollback one completed pending-clearance migration execution without deleting pre-existing or changed clearances.')]
+#[Description('Rollback one completed permit-evidence migration without deleting pre-existing or changed records.')]
 class RollbackLegacyPermitEvidenceCommand extends Command
 {
     public function handle(RollbackLegacyPermitEvidence $action): int
@@ -42,6 +42,7 @@ class RollbackLegacyPermitEvidenceCommand extends Command
             'execution_id' => $execution->id,
             'status' => $execution->status->value,
             'remaining_execution_mappings' => $execution->mappings->count(),
+            'remaining_document_mappings' => $execution->documentMappings->count(),
             'pre_existing_targets_deleted' => false,
             'artifacts' => Storage::disk('local')->path($artifactPath),
         ];
@@ -59,7 +60,7 @@ class RollbackLegacyPermitEvidenceCommand extends Command
 
     private function writeEvidence(LegacyPermitEvidenceExecution $execution): string
     {
-        $execution->loadMissing(['mappingPlan.importBatch.source', 'mappings']);
+        $execution->loadMissing(['mappingPlan.importBatch.source', 'mappings', 'documentMappings']);
         $plan = $execution->mappingPlan;
         $root = "legacy-migrations/{$plan->importBatch->source->key}/{$plan->importBatch->run_reference}/permit-evidence-plans/{$plan->run_reference}/executions/{$execution->run_reference}";
         $report = [
@@ -68,8 +69,11 @@ class RollbackLegacyPermitEvidenceCommand extends Command
             'run_id' => $execution->run_reference,
             'status' => $execution->status->value,
             'removed_mapping_count' => $execution->metadata['rollback_mapping_count'] ?? 0,
-            'deleted_created_clearance_count' => $execution->metadata['rollback_deleted_created_targets'] ?? 0,
+            'deleted_created_clearance_count' => $execution->metadata['rollback_deleted_created_clearances'] ?? 0,
+            'deleted_created_document_count' => $execution->metadata['rollback_deleted_created_documents'] ?? 0,
             'remaining_execution_mappings' => $execution->mappings->count(),
+            'remaining_document_mappings' => $execution->documentMappings->count(),
+            'document_object_cleanup_complete' => $execution->metadata['rollback_document_object_cleanup_complete'] ?? false,
             'pre_existing_targets_deleted' => false,
             'personal_data_in_report' => false,
             'rolled_back_at' => $execution->rolled_back_at?->toIso8601String(),

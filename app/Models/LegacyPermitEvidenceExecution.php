@@ -54,6 +54,12 @@ class LegacyPermitEvidenceExecution extends Model
         return $this->hasMany(LegacyPermitClearanceMapping::class);
     }
 
+    /** @return HasMany<LegacyPermitDocumentMapping, $this> */
+    public function documentMappings(): HasMany
+    {
+        return $this->hasMany(LegacyPermitDocumentMapping::class);
+    }
+
     /** @return array<string, string> */
     protected function casts(): array
     {

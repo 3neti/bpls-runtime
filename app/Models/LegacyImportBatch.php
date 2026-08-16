@@ -113,6 +113,18 @@ class LegacyImportBatch extends Model
         return $this->hasMany(LegacyPermitClearanceMapping::class, 'legacy_import_batch_id');
     }
 
+    /** @return HasMany<LegacyDocumentObjectStagingRun, $this> */
+    public function documentObjectStagingRuns(): HasMany
+    {
+        return $this->hasMany(LegacyDocumentObjectStagingRun::class, 'legacy_import_batch_id');
+    }
+
+    /** @return HasMany<LegacyPermitDocumentMapping, $this> */
+    public function permitDocumentMappings(): HasMany
+    {
+        return $this->hasMany(LegacyPermitDocumentMapping::class, 'legacy_import_batch_id');
+    }
+
     /** @return HasMany<LegacyMigrationReadinessAssessment, $this> */
     public function readinessAssessments(): HasMany
     {

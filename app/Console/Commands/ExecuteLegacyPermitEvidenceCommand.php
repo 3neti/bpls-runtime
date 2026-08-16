@@ -14,19 +14,19 @@ use Throwable;
 
 #[Signature('legacy:execute-permit-evidence
     {plan : Exact permit-evidence plan ID}
-    {--proposal=* : Exact ready pending-clearance proposal ID; repeat for each approved proposal}
+    {--proposal=* : Exact ready clearance or supporting-document proposal ID; repeat for each approved proposal}
     {--run-id= : Stable operator-provided execution reference}
-    {--execute : Confirm that pending clearance records and mappings may be written}
+    {--execute : Confirm that supported domain records, private objects, and mappings may be written}
     {--confirm-execute : Second explicit confirmation of the selected writes}
     {--json : Write only structured output}')]
-#[Description('Execute explicitly selected ready pending-clearance proposals in local or testing environments without asserting completion or permit authority.')]
+#[Description('Execute selected reconciled pending-clearance and supporting-document proposals without asserting completion, sufficiency, or permit authority.')]
 class ExecuteLegacyPermitEvidenceCommand extends Command
 {
     public function handle(ExecuteLegacyPermitEvidence $action): int
     {
         try {
             if (! $this->option('execute') || ! $this->option('confirm-execute')) {
-                throw new RuntimeException('Both --execute and --confirm-execute are required for pending clearance writes.');
+                throw new RuntimeException('Both --execute and --confirm-execute are required for permit-evidence writes.');
             }
 
             $runReference = $this->option('run-id');
@@ -54,7 +54,7 @@ class ExecuteLegacyPermitEvidenceCommand extends Command
             $this->line('Status: '.$execution->status->value);
             $this->line("Selected: {$execution->selected_count}; created: {$execution->created_count}; exact links: {$execution->linked_count}; reused: {$execution->reused_count}");
             $this->line('Completed clearances created: none');
-            $this->line('Document objects copied: none');
+            $this->line('Document objects copied: '.($execution->documentMappings->count()));
             $this->line('Permit authority asserted: none');
             $this->line('Artifacts: '.Storage::disk('local')->path($artifactPath));
         }
@@ -64,7 +64,7 @@ class ExecuteLegacyPermitEvidenceCommand extends Command
 
     private function writeEvidence(LegacyPermitEvidenceExecution $execution): string
     {
-        $execution->loadMissing(['mappingPlan.importBatch.source', 'mappings']);
+        $execution->loadMissing(['mappingPlan.importBatch.source', 'mappings', 'documentMappings']);
         $plan = $execution->mappingPlan;
         $root = "legacy-migrations/{$plan->importBatch->source->key}/{$plan->importBatch->run_reference}/permit-evidence-plans/{$plan->run_reference}/executions/{$execution->run_reference}";
         $report = [
@@ -81,7 +81,7 @@ class ExecuteLegacyPermitEvidenceCommand extends Command
                 'reused' => $execution->reused_count,
                 'accepted_mappings' => $execution->mapping_count,
             ],
-            'mappings' => $execution->mappings->map(fn ($mapping): array => [
+            'clearance_mappings' => $execution->mappings->map(fn ($mapping): array => [
                 'mapping_id' => $mapping->id,
                 'proposal_id' => $mapping->metadata['proposal_id'] ?? null,
                 'permit_clearance_id' => $mapping->permit_clearance_id,
@@ -91,13 +91,26 @@ class ExecuteLegacyPermitEvidenceCommand extends Command
                 'target_snapshot_hash' => $mapping->metadata['target_snapshot_hash'] ?? null,
                 'completion_authority_asserted' => false,
             ])->all(),
+            'document_mappings' => $execution->documentMappings->map(fn ($mapping): array => [
+                'mapping_id' => $mapping->id,
+                'proposal_id' => $mapping->metadata['proposal_id'] ?? null,
+                'permit_application_document_id' => $mapping->permit_application_document_id,
+                'reconciliation_id' => $mapping->legacy_document_object_reconciliation_id,
+                'mapping_basis' => $mapping->mapping_basis,
+                'projection_hash' => $mapping->metadata['projection_hash'] ?? null,
+                'target_snapshot_hash' => $mapping->metadata['target_snapshot_hash'] ?? null,
+                'object_checksum' => $mapping->metadata['object_checksum'] ?? null,
+                'documentary_sufficiency_asserted' => false,
+            ])->all(),
             'safety' => [
                 'environment' => app()->environment(),
                 'explicit_proposal_selection' => true,
                 'double_confirmation' => true,
-                'pending_clearances_only' => true,
+                'supported_kinds' => ['clearance', 'business_supporting_document'],
                 'completed_clearances_created' => false,
-                'document_objects_copied' => false,
+                'document_objects_copied' => $execution->documentMappings->count(),
+                'legacy_document_status_authority_migrated' => false,
+                'documentary_sufficiency_asserted' => false,
                 'permit_artifacts_created' => false,
                 'issuance_authorized' => false,
                 'release_authorized' => false,
@@ -134,7 +147,7 @@ class ExecuteLegacyPermitEvidenceCommand extends Command
             'reused' => $execution->reused_count,
             'accepted_mappings' => $execution->mapping_count,
             'completed_clearances_created' => 0,
-            'document_objects_copied' => 0,
+            'document_objects_copied' => $execution->documentMappings->count(),
             'permit_authority_claims_executed' => 0,
             'external_calls' => 0,
             'artifacts' => Storage::disk('local')->path($artifactPath),

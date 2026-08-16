@@ -3,11 +3,13 @@
 namespace App\Actions;
 
 use App\Enums\LegacyClearanceTypeReconciliationStatus;
+use App\Enums\LegacyDocumentObjectReconciliationStatus;
 use App\Enums\LegacyImportBatchStatus;
 use App\Enums\LegacyMappingPlanStatus;
 use App\Enums\LegacyMappingProposalStatus;
 use App\Models\LegacyApplicationMappingPlan;
 use App\Models\LegacyClearanceTypeReconciliation;
+use App\Models\LegacyDocumentObjectReconciliation;
 use App\Models\LegacyImportBatch;
 use App\Models\LegacyPermitEvidencePlan;
 use App\Models\LegacyRecord;
@@ -17,7 +19,9 @@ use RuntimeException;
 
 final class PlanLegacyPermitEvidence
 {
-    public const PlannerVersion = 'bpls.permit-evidence-plan.v2';
+    public const PlannerVersion = 'bpls.permit-evidence-plan.v3';
+
+    public function __construct(private LegacyDocumentObjectIntegrity $documentIntegrity) {}
 
     public function handle(LegacyImportBatch $batch, string $runReference): LegacyPermitEvidencePlan
     {
@@ -178,39 +182,82 @@ final class PlanLegacyPermitEvidence
             $documentType = $this->string($document['documentType'] ?? null);
             $fileName = $this->string($document['fileName'] ?? null);
             $uploadedAt = $this->date($document['uploadedAt'] ?? null);
-            $reasons = [
-                'legacy_business_document_application_scope_unresolved',
-                'document_object_checksum_and_content_inventory_required',
-            ];
-            $blocked = true;
+            $itemKey = "document:{$index}";
+            $reconciliation = LegacyDocumentObjectReconciliation::query()
+                ->with('applicationMapping')
+                ->where('legacy_record_id', $record->id)
+                ->where('item_key', $itemKey)
+                ->first();
+            $reasons = [];
+            $blocked = false;
 
             if ($storageId === '') {
+                $blocked = true;
                 $reasons[] = 'document_storage_reference_missing';
             }
             if ($documentType === '') {
+                $blocked = true;
                 $reasons[] = 'document_type_missing';
             }
             if ($fileName === '') {
+                $blocked = true;
                 $reasons[] = 'document_filename_missing';
             }
             if ($uploadedAt === null) {
+                $blocked = true;
                 $reasons[] = 'document_upload_timestamp_invalid';
             }
 
+            if (! $reconciliation instanceof LegacyDocumentObjectReconciliation) {
+                $blocked = true;
+                $reasons[] = 'legacy_business_document_application_scope_unresolved';
+                $reasons[] = 'document_object_checksum_and_content_inventory_required';
+            } elseif ($reconciliation->status !== LegacyDocumentObjectReconciliationStatus::Accepted
+                || ! hash_equals($reconciliation->storage_reference_hash, hash('sha256', $storageId))
+                || ! hash_equals($reconciliation->document_type_hash, hash('sha256', $documentType))
+                || ! hash_equals($reconciliation->original_name_hash, hash('sha256', $fileName))) {
+                $blocked = true;
+                $reasons[] = 'document_object_reconciliation_mismatch';
+            } elseif ($reconciliation->applicationMapping->legacy_source_id !== $record->legacy_source_id
+                || $reconciliation->applicationMapping->legacy_import_batch_id !== $record->legacy_import_batch_id
+                || ! $reconciliation->applicationMapping->permitApplication()->exists()) {
+                $blocked = true;
+                $reasons[] = 'document_application_mapping_not_ready';
+            } else {
+                try {
+                    $this->documentIntegrity->assertReconciledObject($reconciliation);
+                } catch (RuntimeException) {
+                    $blocked = true;
+                    $reasons[] = 'staged_document_object_integrity_failed';
+                }
+            }
+
             $projection = [
-                'storage_reference' => $storageId,
+                'application_legacy_id' => $reconciliation?->applicationMapping?->legacy_id,
+                'storage_reference_sha256' => $storageId === '' ? null : hash('sha256', $storageId),
                 'document_type' => $documentType,
                 'file_name' => $fileName,
                 'uploaded_at' => $uploadedAt,
+                'object_checksum' => $reconciliation?->object_checksum,
+                'size_bytes' => $reconciliation?->size_bytes,
+                'mime_type' => $reconciliation?->mime_type,
             ];
-            $this->proposal($plan, $record, 'business_supporting_document', "document:{$index}", null, $blocked, $reasons, $projection, [
+            $this->proposal($plan, $record, 'business_supporting_document', $itemKey, null, $blocked, $reasons, $projection, [
                 'storage_reference_sha256' => $storageId === '' ? null : hash('sha256', $storageId),
                 'document_type_sha256' => $documentType === '' ? null : hash('sha256', $documentType),
                 'file_name_sha256' => $fileName === '' ? null : hash('sha256', $fileName),
+                'application_legacy_id_sha256' => $reconciliation === null ? null : hash('sha256', $reconciliation->applicationMapping->legacy_id),
                 'uploaded_at' => $uploadedAt,
+                'object_checksum' => $reconciliation?->object_checksum,
+                'size_bytes' => $reconciliation?->size_bytes,
+                'mime_type' => $reconciliation?->mime_type,
+                'object_staged' => $reconciliation !== null && ! $blocked,
                 'object_copied' => false,
+                'legacy_document_status_observed' => $this->string($document['status'] ?? null) ?: null,
+                'legacy_document_status_authority_migrated' => false,
+                'documentary_sufficiency_asserted' => false,
                 'domain_writes' => false,
-            ]);
+            ], $reconciliation);
         }
     }
 
@@ -284,7 +331,7 @@ final class PlanLegacyPermitEvidence
      * @param  array<string, mixed>  $projection
      * @param  array<string, mixed>  $metadata
      */
-    private function proposal(LegacyPermitEvidencePlan $plan, LegacyRecord $record, string $kind, string $itemKey, ?LegacyClearanceTypeReconciliation $reconciliation, bool $blocked, array $reasons, array $projection, array $metadata): void
+    private function proposal(LegacyPermitEvidencePlan $plan, LegacyRecord $record, string $kind, string $itemKey, ?LegacyClearanceTypeReconciliation $reconciliation, bool $blocked, array $reasons, array $projection, array $metadata, ?LegacyDocumentObjectReconciliation $documentReconciliation = null): void
     {
         $status = $blocked
             ? LegacyMappingProposalStatus::Blocked
@@ -294,6 +341,7 @@ final class PlanLegacyPermitEvidence
             ['legacy_record_id' => $record->id, 'kind' => $kind, 'item_key' => $itemKey],
             [
                 'legacy_clearance_type_reconciliation_id' => $reconciliation?->id,
+                'legacy_document_object_reconciliation_id' => $documentReconciliation?->id,
                 'source_dataset' => $record->dataset_key,
                 'status' => $status,
                 'projection_hash' => $this->hash($projection),
@@ -432,6 +480,27 @@ final class PlanLegacyPermitEvidence
                 $reconciliation->evidence_reference,
                 $reconciliation->decided_at?->toIso8601String(),
                 $this->hash($reconciliation->metadata),
+            ];
+        }
+        foreach (LegacyDocumentObjectReconciliation::query()
+            ->whereHas('stagingRun', fn ($query) => $query->whereBelongsTo($batch, 'importBatch'))
+            ->orderBy('id')
+            ->get() as $reconciliation) {
+            $parts[] = [
+                'document_object',
+                $reconciliation->id,
+                $reconciliation->legacy_record_id,
+                $reconciliation->legacy_application_id_mapping_id,
+                $reconciliation->item_key,
+                $reconciliation->status->value,
+                $reconciliation->storage_reference_hash,
+                $reconciliation->document_type_hash,
+                $reconciliation->original_name_hash,
+                $reconciliation->object_checksum,
+                $reconciliation->size_bytes,
+                $reconciliation->mime_type,
+                $reconciliation->decision_authority,
+                $reconciliation->evidence_reference,
             ];
         }
         foreach ($batch->applicationMappingPlans()->with('proposals:id,legacy_application_mapping_plan_id,legacy_record_id,status,projection_hash')->orderBy('id')->get() as $plan) {

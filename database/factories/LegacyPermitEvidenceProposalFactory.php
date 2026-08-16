@@ -24,6 +24,7 @@ class LegacyPermitEvidenceProposalFactory extends Factory
             'legacy_permit_evidence_plan_id' => LegacyPermitEvidencePlan::factory(),
             'legacy_record_id' => LegacyRecord::factory(),
             'legacy_clearance_type_reconciliation_id' => null,
+            'legacy_document_object_reconciliation_id' => null,
             'source_dataset' => 'permit_clearances',
             'kind' => 'clearance',
             'item_key' => 'record',

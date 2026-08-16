@@ -14,6 +14,8 @@ use App\Models\LegacyApplicationIdMapping;
 use App\Models\LegacyApplicationMappingExecution;
 use App\Models\LegacyDeclarationLineMapping;
 use App\Models\LegacyDeclarationMappingExecution;
+use App\Models\LegacyDocumentObjectReconciliation;
+use App\Models\LegacyDocumentObjectStagingRun;
 use App\Models\LegacyFinancialMappingExecution;
 use App\Models\LegacyFinancialSnapshotMapping;
 use App\Models\LegacyImportBatch;
@@ -21,14 +23,18 @@ use App\Models\LegacyMappingExecution;
 use App\Models\LegacyMappingPlan;
 use App\Models\LegacyMigrationReadinessAssessment;
 use App\Models\LegacyPermitClearanceMapping;
+use App\Models\LegacyPermitDocumentMapping;
 use App\Models\LegacyPermitEvidenceExecution;
+use App\Models\PermitApplicationDocument;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 final class AssessLegacyMigrationReadiness
 {
-    public const AssessorVersion = 'bpls.legacy-migration-readiness.v4';
+    public const AssessorVersion = 'bpls.legacy-migration-readiness.v5';
+
+    public function __construct(private LegacyDocumentObjectIntegrity $documentIntegrity) {}
 
     public function handle(LegacyImportBatch $batch, string $runReference): LegacyMigrationReadinessAssessment
     {
@@ -150,13 +156,21 @@ final class AssessLegacyMigrationReadiness
             ->where('kind', 'clearance')
             ->where('status', LegacyMappingProposalStatus::Ready)
             ->count() ?? 0;
+        $documentProposals = $permitEvidencePlan?->proposals()
+            ->where('kind', 'business_supporting_document')
+            ->where('status', LegacyMappingProposalStatus::Ready)
+            ->count() ?? 0;
         $unresolvedPermitEvidence = $permitEvidencePlan?->proposals()
             ->where(function ($query): void {
-                $query->where('kind', '!=', 'clearance')
+                $query->whereNotIn('kind', ['clearance', 'business_supporting_document'])
                     ->orWhere('status', '!=', LegacyMappingProposalStatus::Ready);
             })
             ->count() ?? 0;
         $permitClearanceMappings = LegacyPermitClearanceMapping::query()
+            ->whereBelongsTo($batch, 'importBatch')
+            ->where('status', 'mapped')
+            ->count();
+        $permitDocumentMappings = LegacyPermitDocumentMapping::query()
             ->whereBelongsTo($batch, 'importBatch')
             ->where('status', 'mapped')
             ->count();
@@ -166,7 +180,36 @@ final class AssessLegacyMigrationReadiness
         $permitEvidenceExecutionComplete = $permitEvidencePlan !== null
             && $unresolvedPermitEvidence === 0
             && ($pendingClearanceProposals === 0
-                || ($completedPermitEvidenceExecution && $permitClearanceMappings >= $pendingClearanceProposals));
+                || ($completedPermitEvidenceExecution && $permitClearanceMappings >= $pendingClearanceProposals))
+            && ($documentProposals === 0
+                || ($completedPermitEvidenceExecution && $permitDocumentMappings >= $documentProposals));
+        $acceptedDocumentObjects = LegacyDocumentObjectReconciliation::query()
+            ->whereHas('stagingRun', fn ($query) => $query->whereBelongsTo($batch, 'importBatch'))
+            ->where('status', 'accepted')
+            ->count();
+        $verifiedDocumentObjects = 0;
+        foreach (LegacyPermitDocumentMapping::query()
+            ->with(['permitApplicationDocument', 'documentReconciliation'])
+            ->whereBelongsTo($batch, 'importBatch')
+            ->where('status', 'mapped')
+            ->lazyById() as $mapping) {
+            $document = $mapping->permitApplicationDocument;
+            $reconciliation = $mapping->documentReconciliation;
+            $checksum = $mapping->metadata['object_checksum'] ?? null;
+            if (! is_string($checksum)
+                || $document === null
+                || $reconciliation === null
+                || ! hash_equals($reconciliation->object_checksum, $checksum)) {
+                continue;
+            }
+            if ($this->documentObjectMatches($document, $checksum)) {
+                $verifiedDocumentObjects++;
+            }
+        }
+        $documentTransferVerified = $documentCount === 0
+            || ($acceptedDocumentObjects === $documentCount
+                && $permitDocumentMappings === $documentCount
+                && $verifiedDocumentObjects === $documentCount);
 
         array_push(
             $checks,
@@ -194,12 +237,17 @@ final class AssessLegacyMigrationReadiness
                 'permit_evidence_execution' => $permitEvidenceExecutionComplete,
                 'pending_clearance_proposals' => $pendingClearanceProposals,
                 'mapped_pending_clearances' => $permitClearanceMappings,
+                'document_proposals' => $documentProposals,
+                'mapped_supporting_documents' => $permitDocumentMappings,
                 'unresolved_permit_evidence_proposals' => $unresolvedPermitEvidence,
-            ], 'Application, declaration, bounded annual financial snapshots, and reconciled pending-clearance assignments have reversible execution paths; unresolved financial and authority-bearing permit evidence remain required.'),
-            $this->check('document_object_transfer_verified', 'cutover', $documentCount === 0, [
+            ], 'Application, declaration, bounded annual financial snapshots, pending-clearance assignments, and reconciled supporting documents have reversible execution paths; unresolved financial and authority-bearing permit evidence remain required.'),
+            $this->check('document_object_transfer_verified', 'cutover', $documentTransferVerified, [
                 'staged_document_metadata_records' => $documentCount,
-                'object_transfer_verified' => false,
-            ], $documentCount === 0 ? 'No staged document objects require transfer in this batch.' : 'Every referenced object requires checksum-verified transfer and scope reconciliation.'),
+                'accepted_scope_reconciliations' => $acceptedDocumentObjects,
+                'mapped_document_records' => $permitDocumentMappings,
+                'checksum_verified_document_objects' => $verifiedDocumentObjects,
+                'object_transfer_verified' => $documentTransferVerified,
+            ], $documentCount === 0 ? 'No staged document objects require transfer in this batch.' : 'Every referenced object requires checksum-verified transfer and exact application-scope reconciliation.'),
             $this->check('municipal_cutover_authorization', 'cutover', false, [
                 'authorization_recorded' => false,
             ], 'Municipal cutover authority and evidence are not yet represented or accepted.'),
@@ -259,6 +307,17 @@ final class AssessLegacyMigrationReadiness
         }
 
         return $count;
+    }
+
+    private function documentObjectMatches(PermitApplicationDocument $document, string $checksum): bool
+    {
+        try {
+            $this->documentIntegrity->assertDocumentObject($document, $checksum);
+
+            return true;
+        } catch (RuntimeException) {
+            return false;
+        }
     }
 
     private function resolveAssessment(LegacyImportBatch $batch, string $runReference, string $snapshot): LegacyMigrationReadinessAssessment
@@ -340,6 +399,15 @@ final class AssessLegacyMigrationReadiness
         }
         foreach (LegacyPermitClearanceMapping::query()->whereBelongsTo($batch, 'importBatch')->select(['id', 'status', 'updated_at'])->orderBy('id')->cursor() as $mapping) {
             $parts[] = ['permit_clearance_mapping', $mapping->id, $mapping->status, $mapping->updated_at?->toIso8601String()];
+        }
+        foreach (LegacyDocumentObjectStagingRun::query()->whereBelongsTo($batch, 'importBatch')->orderBy('id')->get() as $run) {
+            $parts[] = ['document_staging_run', $run->id, $run->status->value, $run->manifest_checksum, $run->updated_at?->toIso8601String()];
+        }
+        foreach (LegacyDocumentObjectReconciliation::query()->whereHas('stagingRun', fn ($query) => $query->whereBelongsTo($batch, 'importBatch'))->orderBy('id')->get() as $reconciliation) {
+            $parts[] = ['document_reconciliation', $reconciliation->id, $reconciliation->status->value, $reconciliation->object_checksum, $reconciliation->updated_at?->toIso8601String()];
+        }
+        foreach (LegacyPermitDocumentMapping::query()->whereBelongsTo($batch, 'importBatch')->select(['id', 'status', 'metadata', 'updated_at'])->orderBy('id')->cursor() as $mapping) {
+            $parts[] = ['permit_document_mapping', $mapping->id, $mapping->status, $mapping->metadata['object_checksum'] ?? null, $mapping->updated_at?->toIso8601String()];
         }
 
         return hash('sha256', json_encode($parts, JSON_THROW_ON_ERROR));
