@@ -29,6 +29,7 @@ use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\LifecycleScenarios\StoryboardTerminalStateVisibilityScenario;
 use App\Models\Assessment;
 use App\Models\BillingGroup;
+use App\Models\BillingGroupReconciliation;
 use App\Models\BillingGroupRecord;
 use App\Models\Business;
 use App\Models\BusinessOwner;
@@ -103,12 +104,13 @@ test('scenario registry discovers the provisional billing group draft scenario',
 
     expect($scenario)
         ->key->toBe('billing_group_draft_visibility')
-        ->label->toBe('Provisional billing group readiness and financial refusal')
+        ->label->toBe('Billing group reconciliation evidence and financial refusal')
         ->risk->toBe('local transactional')
         ->and($scenario->expectations['acceptance_status'])->toBe('provisional')
         ->and($scenario->expectations['financial_effect'])->toBe('none')
         ->and($scenario->expectations['financial_readiness_status'])->toBe('blocked')
         ->and($scenario->expectations['can_collect'])->toBeFalse()
+        ->and($scenario->expectations['reconciliation_status'])->toBe('pending_municipal_decision')
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
@@ -2683,6 +2685,8 @@ test('billing group draft scenario is idempotent and audits exact browser eviden
     expect($first['resources']['record_id'])->toBe($second['resources']['record_id'])
         ->and(BillingGroup::query()->count())->toBe(1)
         ->and(BillingGroupRecord::query()->count())->toBe(1)
+        ->and(BillingGroupReconciliation::query()->count())->toBe(1)
+        ->and($first['resources']['reconciliation_version'])->toBe(1)
         ->and($first['result']['terminal'])->toBe('passed')
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue()
         ->and($artifactStore->exists('storyboard/storyboard.html'))->toBeTrue();
@@ -2696,6 +2700,8 @@ test('billing group draft scenario is idempotent and audits exact browser eviden
             'financial_refusal_visible' => true,
             'financial_readiness_status' => 'blocked',
             'collection_action_count' => 0,
+            'reconciliation_evidence_visible' => true,
+            'reconciliation_version' => '1',
         ],
         'artifacts' => [
             'screenshots' => [

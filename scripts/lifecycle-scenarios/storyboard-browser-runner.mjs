@@ -2153,6 +2153,17 @@ async function inspectBillingGroupDraft(targetPage, targetBaseUrl) {
             name: /collect|issue receipt|create liability/i,
         })
         .count();
+    const reconciliationEvidenceVisible = await targetPage
+        .getByTestId('billing-group-reconciliation-evidence')
+        .filter({ hasText: manifest.resources.evidence_reference })
+        .first()
+        .isVisible()
+        .catch(() => false);
+    const reconciliationVersion = await targetPage
+        .getByTestId('billing-group-reconciliation-evidence')
+        .first()
+        .getAttribute('data-version')
+        .catch(() => null);
     checks.push(
         check(
             'billing-group-draft-visible',
@@ -2178,6 +2189,19 @@ async function inspectBillingGroupDraft(targetPage, targetBaseUrl) {
             'Billing-group detail shows blocked financial readiness for the exact draft',
             'blocked',
             financialReadinessStatus,
+        ),
+        check(
+            'billing-group-reconciliation-evidence-visible',
+            'Billing-group detail shows the exact pending evidence version',
+            String(manifest.resources.reconciliation_version),
+            reconciliationVersion,
+            { reconciliation_id: manifest.resources.reconciliation_id },
+        ),
+        check(
+            'billing-group-reconciliation-reference-visible',
+            'Billing-group detail shows the exact evidence reference',
+            true,
+            reconciliationEvidenceVisible,
         ),
     );
     await screenshot(
@@ -2235,6 +2259,9 @@ async function inspectBillingGroupDraft(targetPage, targetBaseUrl) {
     billingGroupEvidence.financial_refusal_visible =
         financialRefusalVisible && mobileFinancialRefusalVisible;
     billingGroupEvidence.financial_readiness_status = financialReadinessStatus;
+    billingGroupEvidence.reconciliation_evidence_visible =
+        reconciliationEvidenceVisible;
+    billingGroupEvidence.reconciliation_version = reconciliationVersion;
     billingGroupEvidence.collection_action_count = collectionActionCount;
     billingGroupEvidence.draft_reference = manifest.resources.public_reference;
 }

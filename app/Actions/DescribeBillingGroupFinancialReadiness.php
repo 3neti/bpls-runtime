@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Models\BillingGroupField;
+use App\Models\BillingGroupReconciliation;
 use App\Models\BillingGroupRecord;
 
 class DescribeBillingGroupFinancialReadiness
@@ -10,7 +11,7 @@ class DescribeBillingGroupFinancialReadiness
     /** @return array<string, mixed> */
     public function handle(BillingGroupRecord $record): array
     {
-        $record->loadMissing('billingGroup.fields');
+        $record->loadMissing(['billingGroup.fields', 'billingGroup.currentReconciliation']);
 
         $fieldValues = $record->field_values ?? [];
         $requiredFields = collect($record->schema_snapshot)
@@ -47,6 +48,7 @@ class DescribeBillingGroupFinancialReadiness
             ])
             ->values()
             ->all();
+        $currentReconciliation = $record->billingGroup->currentReconciliation;
 
         $requirements = [
             $this->requirement(
@@ -54,6 +56,14 @@ class DescribeBillingGroupFinancialReadiness
                 'Municipal acceptance',
                 false,
                 'The definition remains provisional and has not been accepted as a Treasury collection module.',
+            ),
+            $this->requirement(
+                'municipal_reconciliation_evidence',
+                'Municipal reconciliation evidence',
+                $currentReconciliation instanceof BillingGroupReconciliation,
+                $currentReconciliation instanceof BillingGroupReconciliation
+                    ? "Evidence version {$currentReconciliation->version} is recorded; an authorized municipal decision is still required."
+                    : 'No versioned municipal reconciliation evidence is recorded for this definition.',
             ),
             $this->requirement(
                 'active_definition',
@@ -110,6 +120,8 @@ class DescribeBillingGroupFinancialReadiness
             'missing_required_fields' => $missingRequiredFields,
             'unique_fields_requiring_policy' => $uniqueFields,
             'schema_matches_current_definition' => $schemaMatches,
+            'current_reconciliation_version' => $currentReconciliation?->version,
+            'reconciliation_status' => $currentReconciliation?->reconciliation_status->value,
             'requirements' => $requirements,
             'reason' => $blockedBy === []
                 ? 'The draft is ready for an accepted financial execution action.'

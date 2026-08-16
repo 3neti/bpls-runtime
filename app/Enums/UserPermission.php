@@ -23,6 +23,7 @@ enum UserPermission: string
     case ManageBillingGroups = 'billing_groups.manage';
     case ViewBillingGroupRecords = 'billing_group_records.view';
     case CreateBillingGroupRecords = 'billing_group_records.create';
+    case RecordBillingGroupReconciliationEvidence = 'billing_group_reconciliations.create';
     case ViewPaymentSchedules = 'payment_schedules.view';
     case PreparePaymentSchedules = 'payment_schedules.prepare';
     case ViewCollections = 'collections.view';

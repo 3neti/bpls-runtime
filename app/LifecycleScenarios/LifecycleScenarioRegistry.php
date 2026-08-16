@@ -703,7 +703,7 @@ final class LifecycleScenarioRegistry
             ),
             'billing_group_draft_visibility' => new LifecycleScenarioDefinition(
                 key: 'billing_group_draft_visibility',
-                label: 'Provisional billing group readiness and financial refusal',
+                label: 'Billing group reconciliation evidence and financial refusal',
                 mode: 'billing_group_draft_visibility',
                 risk: 'local transactional',
                 actors: [
@@ -724,6 +724,8 @@ final class LifecycleScenarioRegistry
                     'can_create_liability' => false,
                     'can_collect' => false,
                     'can_issue_receipt' => false,
+                    'reconciliation_version' => 1,
+                    'reconciliation_status' => 'pending_municipal_decision',
                     'external_calls' => 0,
                     'irreversible_actions' => false,
                 ],

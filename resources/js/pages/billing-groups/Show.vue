@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, FilePlus2 } from '@lucide/vue';
+import { ArrowLeft, FilePlus2, Plus, Trash2 } from '@lucide/vue';
 import {
     index,
     show,
 } from '@/actions/App/Http/Controllers/Staff/BillingGroupController';
+import { store as storeReconciliation } from '@/actions/App/Http/Controllers/Staff/BillingGroupReconciliationController';
 import { store } from '@/actions/App/Http/Controllers/Staff/BillingGroupRecordController';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,11 +60,29 @@ type BillingGroup = {
     is_active: boolean;
     fields: BillingGroupField[];
     records: BillingGroupRecord[];
+    reconciliations: Array<{
+        id: number;
+        version: number;
+        evidence_type: string;
+        evidence_reference: string;
+        source_excerpt: string | null;
+        operational_interpretation: string | null;
+        unresolved_questions: string[];
+        reconciliation_status: string;
+        execution_status: string;
+        execution_reason: string;
+        recorded_by: string;
+        created_at: string | null;
+    }>;
 };
 
 const props = defineProps<{
     billingGroup: BillingGroup;
-    can: { create_record: boolean };
+    can: {
+        create_record: boolean;
+        record_reconciliation_evidence: boolean;
+    };
+    evidenceTypes: Array<{ value: string; label: string }>;
     policyNote: string;
 }>();
 
@@ -98,6 +117,37 @@ function submit(): void {
 
 function fieldLabel(value: string): string {
     return value.replaceAll('_', ' ');
+}
+
+const reconciliationForm = useForm<{
+    evidence_type: string;
+    evidence_reference: string;
+    source_excerpt: string;
+    operational_interpretation: string;
+    unresolved_questions: string[];
+}>({
+    evidence_type: props.evidenceTypes[0]?.value ?? '',
+    evidence_reference: '',
+    source_excerpt: '',
+    operational_interpretation: '',
+    unresolved_questions: [''],
+});
+
+function addUnresolvedQuestion(): void {
+    reconciliationForm.unresolved_questions.push('');
+}
+
+function removeUnresolvedQuestion(index: number): void {
+    if (reconciliationForm.unresolved_questions.length > 1) {
+        reconciliationForm.unresolved_questions.splice(index, 1);
+    }
+}
+
+function submitReconciliationEvidence(): void {
+    reconciliationForm.post(storeReconciliation.url(props.billingGroup.id), {
+        preserveScroll: true,
+        onSuccess: () => reconciliationForm.reset(),
+    });
 }
 </script>
 
@@ -375,6 +425,251 @@ function fieldLabel(value: string): string {
                     </Button>
                 </form>
             </div>
+
+            <section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_28rem]">
+                <div
+                    class="overflow-hidden border border-sidebar-border/70 bg-background dark:border-sidebar-border"
+                >
+                    <div class="border-b border-sidebar-border/70 p-4">
+                        <h2 class="font-semibold">
+                            Reconciliation evidence history
+                        </h2>
+                        <p class="text-xs text-muted-foreground">
+                            Immutable evidence versions support a later
+                            municipal decision. They do not authorize execution.
+                        </p>
+                    </div>
+                    <div
+                        v-if="billingGroup.reconciliations.length === 0"
+                        class="p-6 text-sm text-muted-foreground"
+                        data-testid="billing-group-no-reconciliation-evidence"
+                    >
+                        No reconciliation evidence recorded.
+                    </div>
+                    <div v-else class="divide-y divide-sidebar-border/70">
+                        <article
+                            v-for="reconciliation in billingGroup.reconciliations"
+                            :key="reconciliation.id"
+                            class="grid gap-3 p-4"
+                            data-testid="billing-group-reconciliation-evidence"
+                            :data-version="reconciliation.version"
+                        >
+                            <div
+                                class="flex flex-wrap items-start justify-between gap-2"
+                            >
+                                <div>
+                                    <strong class="text-sm"
+                                        >Evidence version
+                                        {{ reconciliation.version }}</strong
+                                    >
+                                    <p class="text-xs text-muted-foreground">
+                                        {{
+                                            fieldLabel(
+                                                reconciliation.evidence_type,
+                                            )
+                                        }}
+                                    </p>
+                                </div>
+                                <div class="flex flex-wrap gap-2 text-xs">
+                                    <span class="border px-2 py-0.5">{{
+                                        fieldLabel(
+                                            reconciliation.reconciliation_status,
+                                        )
+                                    }}</span>
+                                    <span
+                                        class="border border-amber-500/50 px-2 py-0.5 text-amber-800 dark:text-amber-200"
+                                        >{{
+                                            reconciliation.execution_status
+                                        }}</span
+                                    >
+                                </div>
+                            </div>
+                            <div class="grid gap-1 text-sm">
+                                <p>
+                                    <span class="text-muted-foreground"
+                                        >Reference:</span
+                                    >
+                                    {{ reconciliation.evidence_reference }}
+                                </p>
+                                <p v-if="reconciliation.source_excerpt">
+                                    <span class="text-muted-foreground"
+                                        >Source evidence:</span
+                                    >
+                                    {{ reconciliation.source_excerpt }}
+                                </p>
+                                <p
+                                    v-if="
+                                        reconciliation.operational_interpretation
+                                    "
+                                >
+                                    <span class="text-muted-foreground"
+                                        >Candidate interpretation:</span
+                                    >
+                                    {{
+                                        reconciliation.operational_interpretation
+                                    }}
+                                </p>
+                            </div>
+                            <div>
+                                <p class="text-xs font-medium">
+                                    Unresolved questions
+                                </p>
+                                <ul
+                                    class="mt-1 list-disc space-y-1 pl-5 text-sm text-muted-foreground"
+                                >
+                                    <li
+                                        v-for="question in reconciliation.unresolved_questions"
+                                        :key="question"
+                                    >
+                                        {{ question }}
+                                    </li>
+                                </ul>
+                            </div>
+                            <p
+                                class="border-l-2 border-amber-500 pl-3 text-xs text-muted-foreground"
+                            >
+                                {{ reconciliation.execution_reason }}
+                            </p>
+                            <p class="text-xs text-muted-foreground">
+                                Recorded by {{ reconciliation.recorded_by }}
+                            </p>
+                        </article>
+                    </div>
+                </div>
+
+                <form
+                    v-if="can.record_reconciliation_evidence"
+                    class="grid content-start gap-4 border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+                    data-testid="billing-group-reconciliation-form"
+                    @submit.prevent="submitReconciliationEvidence"
+                >
+                    <div>
+                        <h2 class="font-semibold">
+                            Record reconciliation evidence
+                        </h2>
+                        <p class="text-xs text-muted-foreground">
+                            This preserves evidence only. It cannot accept the
+                            definition or enable financial execution.
+                        </p>
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="evidence_type">Evidence type</Label>
+                        <select
+                            id="evidence_type"
+                            v-model="reconciliationForm.evidence_type"
+                            class="h-9 border border-input bg-background px-3 text-sm"
+                        >
+                            <option
+                                v-for="type in evidenceTypes"
+                                :key="type.value"
+                                :value="type.value"
+                            >
+                                {{ type.label }}
+                            </option>
+                        </select>
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="evidence_reference"
+                            >Evidence reference</Label
+                        >
+                        <Input
+                            id="evidence_reference"
+                            v-model="reconciliationForm.evidence_reference"
+                            required
+                        />
+                        <p
+                            v-if="reconciliationForm.errors.evidence_reference"
+                            class="text-sm text-destructive"
+                        >
+                            {{ reconciliationForm.errors.evidence_reference }}
+                        </p>
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="source_excerpt">Source evidence</Label>
+                        <textarea
+                            id="source_excerpt"
+                            v-model="reconciliationForm.source_excerpt"
+                            rows="3"
+                            class="w-full border border-input bg-background px-3 py-2 text-sm"
+                        />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="operational_interpretation"
+                            >Candidate operational interpretation</Label
+                        >
+                        <textarea
+                            id="operational_interpretation"
+                            v-model="
+                                reconciliationForm.operational_interpretation
+                            "
+                            rows="3"
+                            class="w-full border border-input bg-background px-3 py-2 text-sm"
+                        />
+                    </div>
+                    <div class="grid gap-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <Label>Unresolved questions</Label>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                @click="addUnresolvedQuestion"
+                            >
+                                <Plus /> Add question
+                            </Button>
+                        </div>
+                        <div
+                            v-for="(
+                                _, index
+                            ) in reconciliationForm.unresolved_questions"
+                            :key="index"
+                            class="flex items-center gap-2"
+                        >
+                            <Input
+                                v-model="
+                                    reconciliationForm.unresolved_questions[
+                                        index
+                                    ]
+                                "
+                                :aria-label="`Unresolved question ${index + 1}`"
+                                required
+                            />
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                :disabled="
+                                    reconciliationForm.unresolved_questions
+                                        .length === 1
+                                "
+                                :aria-label="`Remove unresolved question ${index + 1}`"
+                                title="Remove question"
+                                @click="removeUnresolvedQuestion(index)"
+                            >
+                                <Trash2 />
+                            </Button>
+                        </div>
+                        <p
+                            v-if="
+                                reconciliationForm.errors.unresolved_questions
+                            "
+                            class="text-sm text-destructive"
+                        >
+                            {{ reconciliationForm.errors.unresolved_questions }}
+                        </p>
+                    </div>
+                    <Button
+                        type="submit"
+                        :disabled="reconciliationForm.processing"
+                    >
+                        {{
+                            reconciliationForm.processing
+                                ? 'Recording…'
+                                : 'Record evidence version'
+                        }}
+                    </Button>
+                </form>
+            </section>
         </main>
     </AppLayout>
 </template>

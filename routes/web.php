@@ -10,6 +10,7 @@ use App\Http\Controllers\Staff\AnnexCDnfbpReportController;
 use App\Http\Controllers\Staff\AssessmentPaymentScheduleController;
 use App\Http\Controllers\Staff\AssessmentSummaryReportController;
 use App\Http\Controllers\Staff\BillingGroupController;
+use App\Http\Controllers\Staff\BillingGroupReconciliationController;
 use App\Http\Controllers\Staff\BillingGroupRecordController;
 use App\Http\Controllers\Staff\BspReportController;
 use App\Http\Controllers\Staff\BusinessTaxByMajorTypeReportController;
@@ -85,6 +86,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->only(['index', 'store', 'show']);
         Route::post('billing-groups/{billingGroup}/records', [BillingGroupRecordController::class, 'store'])
             ->name('billing-groups.records.store');
+        Route::post('billing-groups/{billingGroup}/reconciliations', [BillingGroupReconciliationController::class, 'store'])
+            ->name('billing-groups.reconciliations.store');
         Route::get('assessments/{assessment}', [PermitApplicationAssessmentController::class, 'show'])
             ->name('permit-applications.assessments.show');
         Route::get('assessments/{assessment}/pdf', [PermitApplicationAssessmentController::class, 'pdf'])

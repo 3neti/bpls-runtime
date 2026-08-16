@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -23,6 +24,8 @@ use Illuminate\Support\Collection;
  * @property Carbon|null $updated_at
  * @property-read Collection<int, BillingGroupField> $fields
  * @property-read Collection<int, BillingGroupRecord> $records
+ * @property-read Collection<int, BillingGroupReconciliation> $reconciliations
+ * @property-read BillingGroupReconciliation|null $currentReconciliation
  */
 #[Fillable(['name', 'description', 'acceptance_status', 'is_active', 'legacy_source_id', 'metadata'])]
 class BillingGroup extends Model
@@ -45,6 +48,18 @@ class BillingGroup extends Model
     public function records(): HasMany
     {
         return $this->hasMany(BillingGroupRecord::class);
+    }
+
+    /** @return HasMany<BillingGroupReconciliation, $this> */
+    public function reconciliations(): HasMany
+    {
+        return $this->hasMany(BillingGroupReconciliation::class);
+    }
+
+    /** @return HasOne<BillingGroupReconciliation, $this> */
+    public function currentReconciliation(): HasOne
+    {
+        return $this->hasOne(BillingGroupReconciliation::class)->ofMany('version', 'max');
     }
 
     /** @return array<string, string> */

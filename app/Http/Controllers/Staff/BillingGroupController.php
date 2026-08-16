@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Staff;
 
 use App\Actions\CreateBillingGroup;
 use App\Actions\DescribeBillingGroupFinancialReadiness;
+use App\Enums\BillingGroupEvidenceType;
 use App\Enums\BillingGroupFieldType;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Staff\StoreBillingGroupRequest;
 use App\Models\BillingGroup;
 use App\Models\BillingGroupField;
+use App\Models\BillingGroupReconciliation;
 use App\Models\BillingGroupRecord;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
@@ -62,7 +64,12 @@ class BillingGroupController extends Controller
         Gate::authorize(UserPermission::ViewBillingGroups->value);
         Gate::authorize(UserPermission::ViewBillingGroupRecords->value);
 
-        $billingGroup->load(['fields', 'records' => fn ($query) => $query->with('createdBy')->latest()]);
+        $billingGroup->load([
+            'fields',
+            'records' => fn ($query) => $query->with('createdBy')->latest(),
+            'reconciliations' => fn ($query) => $query->with('recordedBy')->latest('version'),
+        ]);
+        $billingGroup->setRelation('currentReconciliation', $billingGroup->reconciliations->first());
         $billingGroup->records->each(
             fn (BillingGroupRecord $record): BillingGroupRecord => $record->setRelation('billingGroup', $billingGroup),
         );
@@ -97,10 +104,29 @@ class BillingGroupController extends Controller
                     'created_by' => $record->createdBy->name,
                     'created_at' => $record->created_at?->toIso8601String(),
                 ]),
+                'reconciliations' => $billingGroup->reconciliations->map(fn (BillingGroupReconciliation $reconciliation): array => [
+                    'id' => $reconciliation->id,
+                    'version' => $reconciliation->version,
+                    'evidence_type' => $reconciliation->evidence_type->value,
+                    'evidence_reference' => $reconciliation->evidence_reference,
+                    'source_excerpt' => $reconciliation->source_excerpt,
+                    'operational_interpretation' => $reconciliation->operational_interpretation,
+                    'unresolved_questions' => $reconciliation->unresolved_questions,
+                    'reconciliation_status' => $reconciliation->reconciliation_status->value,
+                    'execution_status' => $reconciliation->execution_status,
+                    'execution_reason' => $reconciliation->execution_reason,
+                    'recorded_by' => $reconciliation->recordedBy->name,
+                    'created_at' => $reconciliation->created_at?->toIso8601String(),
+                ]),
             ],
             'can' => [
                 'create_record' => Gate::allows(UserPermission::CreateBillingGroupRecords->value),
+                'record_reconciliation_evidence' => Gate::allows(UserPermission::RecordBillingGroupReconciliationEvidence->value),
             ],
+            'evidenceTypes' => collect(BillingGroupEvidenceType::cases())->map(fn (BillingGroupEvidenceType $type): array => [
+                'value' => $type->value,
+                'label' => str($type->value)->headline()->toString(),
+            ]),
             'policyNote' => 'Draft records are incomplete declarations only. Required and unique field readiness is not yet enforced, and no amount, liability, collection, receipt, or official transaction number is created.',
         ]);
     }

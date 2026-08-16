@@ -1,15 +1,19 @@
 <?php
 
 use App\Actions\CreateBillingGroupDraftRecord;
+use App\Actions\CreateBillingGroupReconciliationEvidence;
 use App\Actions\DescribeBillingGroupFinancialReadiness;
 use App\Actions\RequireBillingGroupFinancialReadiness;
 use App\Enums\BillingGroupAcceptanceStatus;
+use App\Enums\BillingGroupEvidenceType;
 use App\Enums\BillingGroupFieldType;
+use App\Enums\BillingGroupReconciliationStatus;
 use App\Enums\BillingGroupRecordStatus;
 use App\Enums\UserPermission;
 use App\Exceptions\UnsupportedBillingGroupFinancialPolicy;
 use App\Models\BillingGroup;
 use App\Models\BillingGroupField;
+use App\Models\BillingGroupReconciliation;
 use App\Models\BillingGroupRecord;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
@@ -239,6 +243,87 @@ test('financial readiness detects schema drift without mutating the draft snapsh
         ->and($record->refresh()->schema_snapshot)->toBe($originalSnapshot);
 });
 
+test('reconciliation evidence is append only versioned and cannot authorize financial execution', function () {
+    $user = userWithPermissions([UserPermission::AccessStaff]);
+    $billingGroup = BillingGroup::factory()->create(['name' => 'Evidence Boundary']);
+    $field = BillingGroupField::factory()->for($billingGroup)->create([
+        'key' => 'subject',
+        'name' => 'Original Subject',
+        'sort_order' => 1,
+    ]);
+    $action = app(CreateBillingGroupReconciliationEvidence::class);
+
+    $first = $action->handle($billingGroup, $user, [
+        'evidence_type' => BillingGroupEvidenceType::LegacyConfiguration->value,
+        'evidence_reference' => 'Legacy archive billingGroups schema',
+        'source_excerpt' => 'Legacy records became payable immediately.',
+        'operational_interpretation' => 'Treat the legacy behavior as implementation evidence only.',
+        'unresolved_questions' => ['Does the Municipality accept this as miscellaneous collection?'],
+    ]);
+    $field->update(['name' => 'Changed Subject']);
+    $second = $action->handle($billingGroup, $user, [
+        'evidence_type' => BillingGroupEvidenceType::MunicipalSubmission->value,
+        'evidence_reference' => 'Treasury reconciliation worksheet draft',
+        'unresolved_questions' => ['Who may approve the operational schedule?'],
+    ]);
+
+    expect($first)
+        ->version->toBe(1)
+        ->reconciliation_status->toBe(BillingGroupReconciliationStatus::PendingMunicipalDecision)
+        ->execution_status->toBe('blocked')
+        ->and($first->definition_snapshot['fields'][0]['name'])->toBe('Original Subject')
+        ->and($first->metadata['financial_effect'])->toBe('none')
+        ->and($first->metadata['acceptance_effect'])->toBe('none')
+        ->and($second->version)->toBe(2)
+        ->and($second->definition_snapshot['fields'][0]['name'])->toBe('Changed Subject')
+        ->and($billingGroup->refresh()->acceptance_status)->toBe(BillingGroupAcceptanceStatus::Provisional)
+        ->and(TreasuryCollection::query()->count())->toBe(0)
+        ->and(Receipt::query()->count())->toBe(0);
+});
+
+test('authorized staff can record evidence but submitted authority fields cannot enable execution', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewBillingGroups,
+        UserPermission::RecordBillingGroupReconciliationEvidence,
+    ]);
+    $billingGroup = BillingGroup::factory()->create();
+    BillingGroupField::factory()->for($billingGroup)->create(['sort_order' => 1]);
+
+    $response = $this->actingAs($user)->post(route('staff.billing-groups.reconciliations.store', $billingGroup), [
+        'evidence_type' => BillingGroupEvidenceType::ObservedTreasuryPractice->value,
+        'evidence_reference' => 'Treasury interview note 2026-08-16',
+        'source_excerpt' => 'Practice remains subject to written confirmation.',
+        'operational_interpretation' => 'Candidate handling only.',
+        'unresolved_questions' => ['What receipt series applies?'],
+        'execution_status' => 'executable',
+        'acceptance_status' => 'accepted',
+    ]);
+
+    $reconciliation = BillingGroupReconciliation::query()->sole();
+
+    $response->assertRedirect(route('staff.billing-groups.show', $billingGroup));
+    expect($reconciliation->execution_status)->toBe('blocked')
+        ->and($reconciliation->reconciliation_status)->toBe(BillingGroupReconciliationStatus::PendingMunicipalDecision)
+        ->and($billingGroup->refresh()->acceptance_status)->toBe(BillingGroupAcceptanceStatus::Provisional);
+});
+
+test('reconciliation evidence requires an evidence reference and unresolved question', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewBillingGroups,
+        UserPermission::RecordBillingGroupReconciliationEvidence,
+    ]);
+    $billingGroup = BillingGroup::factory()->create();
+
+    $this->actingAs($user)->post(route('staff.billing-groups.reconciliations.store', $billingGroup), [
+        'evidence_type' => BillingGroupEvidenceType::LegacyConfiguration->value,
+        'unresolved_questions' => [],
+    ])->assertSessionHasErrors(['evidence_reference', 'unresolved_questions']);
+
+    expect(BillingGroupReconciliation::query()->count())->toBe(0);
+});
+
 test('billing group surfaces require their explicit permissions', function () {
     $billingGroup = BillingGroup::factory()->create();
     $staff = userWithPermissions([UserPermission::AccessStaff]);
@@ -247,6 +332,7 @@ test('billing group surfaces require their explicit permissions', function () {
     $this->actingAs($staff)->get(route('staff.billing-groups.show', $billingGroup))->assertForbidden();
     $this->actingAs($staff)->post(route('staff.billing-groups.store'), [])->assertForbidden();
     $this->actingAs($staff)->post(route('staff.billing-groups.records.store', $billingGroup), [])->assertForbidden();
+    $this->actingAs($staff)->post(route('staff.billing-groups.reconciliations.store', $billingGroup), [])->assertForbidden();
 });
 
 test('billing group pages expose provisional definition and draft-only boundaries', function () {
@@ -256,6 +342,7 @@ test('billing group pages expose provisional definition and draft-only boundarie
         UserPermission::ViewBillingGroupRecords,
         UserPermission::ManageBillingGroups,
         UserPermission::CreateBillingGroupRecords,
+        UserPermission::RecordBillingGroupReconciliationEvidence,
     ]);
     $billingGroup = BillingGroup::factory()->create(['name' => 'Provisional Records']);
     BillingGroupField::factory()->for($billingGroup)->create([
@@ -266,6 +353,9 @@ test('billing group pages expose provisional definition and draft-only boundarie
     BillingGroupRecord::factory()->for($billingGroup)->for($user, 'createdBy')->create([
         'draft_reference' => 'BGRD-TEST-001',
         'field_values' => ['subject' => 'Sample'],
+    ]);
+    BillingGroupReconciliation::factory()->for($billingGroup)->for($user, 'recordedBy')->create([
+        'evidence_reference' => 'Scenario evidence reference',
     ]);
 
     $this->actingAs($user)->get(route('staff.billing-groups.index'))
@@ -286,6 +376,10 @@ test('billing group pages expose provisional definition and draft-only boundarie
             ->where('billingGroup.records.0.financial_readiness.can_collect', false)
             ->where('billingGroup.records.0.financial_readiness.can_issue_receipt', false)
             ->where('billingGroup.records.0.financial_readiness.blocked_by', fn (Collection $blockedBy): bool => $blockedBy->contains('billing_group_acceptance'))
+            ->where('billingGroup.records.0.financial_readiness.current_reconciliation_version', 1)
+            ->where('billingGroup.reconciliations.0.evidence_reference', 'Scenario evidence reference')
+            ->where('billingGroup.reconciliations.0.execution_status', 'blocked')
             ->where('can.create_record', true)
+            ->where('can.record_reconciliation_evidence', true)
             ->where('policyNote', fn (string $note): bool => str_contains($note, 'no amount, liability, collection, receipt')));
 });
