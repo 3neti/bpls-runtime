@@ -5,6 +5,7 @@ paths:
   - '{app/Actions/*LegacyRegistryMigration.php,app/Console/Commands/*LegacyRegistryMigrationCommand.php,app/Models/LegacyMapping*.php}'
   - '{app/Actions/PlanLegacyApplicationDeclarations.php,app/Console/Commands/PlanLegacyApplicationDeclarationsCommand.php,app/Models/Legacy{DeclarationMapping*,LineOfBusinessReconciliation}.php}'
   - '{app/Actions/PlanLegacyFinancialDependencies.php,app/Console/Commands/PlanLegacyFinancialDependenciesCommand.php,app/Models/Legacy{FeeRuleReconciliation,FinancialMapping*}.php}'
+  - '{app/Actions/PlanLegacyPermitEvidence.php,app/Console/Commands/PlanLegacyPermitEvidenceCommand.php,app/Models/Legacy{ClearanceTypeReconciliation,PermitEvidence*}.php}'
 ---
 
 # Commands Models
@@ -23,3 +24,6 @@ A legacy businessCategory name or matching current name never establishes LineOf
 
 ## Legacy financial plans preserve evidence without authority
 Legacy fee identity requires an accepted reconciliation with municipal decision authority; fee names never establish identity. Convert only persisted exact historical amounts to cents for consistency checks. Overrides, exclusions, edited schedule fees, payment status/processor semantics, collections, and receipt claims remain reviewable or blocked and must not calculate liability or write financial domain records.
+
+## Legacy permit evidence preserves the authority boundary
+Permit-evidence planning may inventory exact clearance identity, supporting-file metadata, legacy status, and permit claims, but must not copy objects or write current clearances, documents, permit artifacts, numbers, QR data, issuance, release, or legal effect. Clearance identity requires an accepted reconciliation with decision authority and evidence; labels never establish identity. Hash sensitive storage, filename, actor, and permit identifiers in generated evidence.
