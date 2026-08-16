@@ -17,6 +17,7 @@ use App\LifecycleScenarios\RolePermissionMatrixVisibilityScenario;
 use App\LifecycleScenarios\ScenarioActorResolver;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\LifecycleScenarios\StoryboardTerminalStateVisibilityScenario;
+use App\LifecycleScenarios\UserDirectoryVisibilityScenario;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Process;
 use RuntimeException;
@@ -49,6 +50,7 @@ class LifecycleScenarioCommand extends Command
         RevenueCodeExecutabilitySafetyScenario $revenueCodeExecutabilitySafetyScenario,
         RolePermissionMatrixVisibilityScenario $rolePermissionMatrixVisibilityScenario,
         StoryboardTerminalStateVisibilityScenario $storyboardScenario,
+        UserDirectoryVisibilityScenario $userDirectoryVisibilityScenario,
     ): int {
         $scenario = $registry->get((string) $this->argument('scenario'));
         $runId = (string) ($this->option('run-id') ?: $scenario->key.'-'.now()->format('Ymd-His'));
@@ -74,6 +76,7 @@ class LifecycleScenarioCommand extends Command
                     'revenue_code_fee_catalog_visibility' => $revenueCodeFeeCatalogVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'revenue_code_executability_safety' => $revenueCodeExecutabilitySafetyScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'role_permission_matrix_visibility' => $rolePermissionMatrixVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
+                    'user_directory_visibility' => $userDirectoryVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'amendment_permit_lifecycle_foundation' => $permitApplicationPendingPaymentScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'permit_application_pending_payment_visibility' => $permitApplicationPendingPaymentScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'renewal_permit_lifecycle_foundation' => $permitApplicationPendingPaymentScenario->prepare($scenario, $runId, $actors, $artifactStore),
@@ -103,6 +106,7 @@ class LifecycleScenarioCommand extends Command
                     'revenue_code_fee_catalog_visibility' => $revenueCodeFeeCatalogVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'revenue_code_executability_safety' => $revenueCodeExecutabilitySafetyScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'role_permission_matrix_visibility' => $rolePermissionMatrixVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
+                    'user_directory_visibility' => $userDirectoryVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'amendment_permit_lifecycle_foundation' => $permitApplicationPendingPaymentScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'permit_application_pending_payment_visibility' => $permitApplicationPendingPaymentScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'renewal_permit_lifecycle_foundation' => $permitApplicationPendingPaymentScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
@@ -127,7 +131,7 @@ class LifecycleScenarioCommand extends Command
                     'passed' => false,
                     'error' => $exception->getMessage(),
                     'artifacts' => $artifactStore->absolutePath(),
-                ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
             } else {
                 $this->error($exception->getMessage());
                 $this->line('Artifacts: '.$artifactStore->absolutePath());
@@ -215,7 +219,7 @@ class LifecycleScenarioCommand extends Command
                 'run_id' => $manifest['run_id'],
                 'resource' => $manifest['resources'] ?? [],
                 'artifacts' => $artifactStore->absolutePath(),
-            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 
             return $passed ? self::SUCCESS : self::FAILURE;
         }

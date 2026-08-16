@@ -44,6 +44,7 @@ const supportedScenarios = [
     'retirement_permit_lifecycle_foundation',
     'role_permission_matrix_visibility',
     'transfer_permit_lifecycle_foundation',
+    'user_directory_visibility',
 ];
 
 if (!supportedScenarios.includes(manifest.scenario?.key)) {
@@ -102,6 +103,7 @@ const citizenAuthorityReviewEvidence = {};
 const citizenSubmissionEvidence = {};
 const billingGroupEvidence = {};
 const rolePermissionEvidence = {};
+const userDirectoryEvidence = {};
 
 let browser;
 
@@ -219,6 +221,10 @@ try {
         await inspectRolePermissionMatrix(page, baseUrl);
     }
 
+    if (manifest.scenario.key === 'user_directory_visibility') {
+        await inspectUserDirectory(page, baseUrl);
+    }
+
     if (
         [
             'amendment_permit_lifecycle_foundation',
@@ -321,6 +327,7 @@ const report = {
     citizen_submission: citizenSubmissionEvidence,
     billing_group: billingGroupEvidence,
     role_permissions: rolePermissionEvidence,
+    user_directory: userDirectoryEvidence,
     artifacts: {
         screenshots,
     },
@@ -520,6 +527,120 @@ async function inspectRolePermissionMatrix(targetPage, targetBaseUrl) {
         targetPage,
         '02-role-permission-matrix-mobile',
         'browser/screenshots/02-role-permission-matrix-mobile.png',
+    );
+}
+
+async function inspectUserDirectory(targetPage, targetBaseUrl) {
+    const directoryUrl = `${targetBaseUrl}${manifest.resources.directory_url}`;
+    await targetPage.goto(directoryUrl, { waitUntil: 'networkidle' });
+    const summary = targetPage.locator(
+        '[data-testid="user-directory-summary"]',
+    );
+    const directory = targetPage.locator('[data-testid="user-directory"]');
+    await summary.waitFor();
+    await directory.waitFor();
+
+    const roleDistribution = Object.fromEntries(
+        await targetPage
+            .locator('[data-testid="user-role-distribution"] [data-role-code]')
+            .evaluateAll((roleElements) =>
+                roleElements.map((roleElement) => [
+                    roleElement.getAttribute('data-role-code'),
+                    Number(roleElement.getAttribute('data-user-count')),
+                ]),
+            ),
+    );
+    const visibleSummary = {
+        user_count: Number(await summary.getAttribute('data-user-count')),
+        verified_user_count: Number(
+            await summary.getAttribute('data-verified-user-count'),
+        ),
+        linked_owner_count: Number(
+            await summary.getAttribute('data-linked-owner-count'),
+        ),
+        unassigned_role_count: Number(
+            await summary.getAttribute('data-unassigned-role-count'),
+        ),
+        role_distribution: roleDistribution,
+    };
+    const mutationActionsVisible = await targetPage
+        .getByRole('button', {
+            name: /create user|edit user|delete user|reset password|assign role/i,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    Object.assign(userDirectoryEvidence, {
+        summary: visibleSummary,
+        mutation_actions_visible: mutationActionsVisible,
+    });
+    checks.push(
+        check(
+            'user-directory-summary',
+            'Visible account aggregates match the prepared canonical projection',
+            {
+                user_count: manifest.resources.user_count,
+                verified_user_count: manifest.resources.verified_user_count,
+                linked_owner_count: manifest.resources.linked_owner_count,
+                unassigned_role_count: manifest.resources.unassigned_role_count,
+                role_distribution: manifest.resources.role_distribution,
+            },
+            visibleSummary,
+        ),
+        check(
+            'user-directory-read-only',
+            'No provisioning, credential, or role mutation action is available',
+            false,
+            mutationActionsVisible,
+        ),
+    );
+    actionLog.push(
+        stepLog(
+            'user-directory-inspected',
+            'Inspect aggregate account and identity-link evidence without persisting user payloads',
+            { user_count: visibleSummary.user_count },
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '01-user-directory',
+        'browser/screenshots/01-user-directory.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(directoryUrl, { waitUntil: 'networkidle' });
+    await targetPage.locator('[data-testid="user-directory"]').waitFor();
+    const pageHorizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+    const mobileVisible = await targetPage
+        .locator('[data-testid="user-directory"]')
+        .isVisible();
+    Object.assign(userDirectoryEvidence, {
+        mobile_visible: mobileVisible,
+        page_horizontal_overflow: pageHorizontalOverflow,
+    });
+    checks.push(
+        check(
+            'user-directory-mobile-visible',
+            'User directory remains visible on mobile',
+            true,
+            mobileVisible,
+        ),
+        check(
+            'user-directory-mobile-no-page-overflow',
+            'Wide directory table remains contained without page overflow',
+            false,
+            pageHorizontalOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '02-user-directory-mobile',
+        'browser/screenshots/02-user-directory-mobile.png',
     );
 }
 

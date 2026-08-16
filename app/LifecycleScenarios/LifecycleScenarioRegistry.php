@@ -813,6 +813,39 @@ final class LifecycleScenarioRegistry
                     ],
                 ],
             ),
+            'user_directory_visibility' => new LifecycleScenarioDefinition(
+                key: 'user_directory_visibility',
+                label: 'User directory visibility',
+                mode: 'user_directory_visibility',
+                risk: 'presentation-only',
+                actors: [
+                    'operator' => 'primary_operator',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'account_identity_visible' => true,
+                    'legal_owner_link_visible' => true,
+                    'read_only' => true,
+                    'sensitive_artifact_payloads' => false,
+                    'external_calls' => 0,
+                    'irreversible_actions' => false,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
         ];
     }
 

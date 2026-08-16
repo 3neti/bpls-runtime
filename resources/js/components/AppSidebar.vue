@@ -17,6 +17,7 @@ import {
     ShieldCheck,
     Trophy,
     TableProperties,
+    Users,
     WalletCards,
 } from '@lucide/vue';
 import { computed } from 'vue';
@@ -45,6 +46,7 @@ import { index as storyboardIndex } from '@/actions/App/Http/Controllers/Staff/S
 import { index as topEstablishmentTaxDueReportIndex } from '@/actions/App/Http/Controllers/Staff/TopEstablishmentTaxDueReportController';
 import { index as totalCapitalGrossSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/TotalCapitalGrossSummaryReportController';
 import { index as unpaidEstablishmentReportIndex } from '@/actions/App/Http/Controllers/Staff/UnpaidEstablishmentReportController';
+import { index as userDirectoryIndex } from '@/actions/App/Http/Controllers/Staff/UserDirectoryController';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -179,6 +181,15 @@ const staffNavItems: NavItem[] = [
         href: storyboardIndex(),
         icon: Film,
     },
+    ...(page.props.auth.can_view_users
+        ? [
+              {
+                  title: 'Users',
+                  href: userDirectoryIndex(),
+                  icon: Users,
+              },
+          ]
+        : []),
     ...(page.props.auth.can_view_roles
         ? [
               {

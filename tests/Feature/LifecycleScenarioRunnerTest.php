@@ -28,6 +28,7 @@ use App\LifecycleScenarios\RolePermissionMatrixVisibilityScenario;
 use App\LifecycleScenarios\ScenarioActorResolver;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\LifecycleScenarios\StoryboardTerminalStateVisibilityScenario;
+use App\LifecycleScenarios\UserDirectoryVisibilityScenario;
 use App\Models\Assessment;
 use App\Models\BillingGroup;
 use App\Models\BillingGroupReconciliation;
@@ -253,6 +254,17 @@ test('scenario registry discovers the role and permission matrix visibility scen
     expect($scenario)
         ->key->toBe('role_permission_matrix_visibility')
         ->mode->toBe('role_permission_matrix_visibility')
+        ->risk->toBe('presentation-only')
+        ->and($scenario->actors)->toBe(['operator' => 'primary_operator'])
+        ->and($scenario->expectations['read_only'])->toBeTrue();
+});
+
+test('scenario registry discovers the user directory visibility scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('user_directory_visibility');
+
+    expect($scenario)
+        ->key->toBe('user_directory_visibility')
+        ->mode->toBe('user_directory_visibility')
         ->risk->toBe('presentation-only')
         ->and($scenario->actors)->toBe(['operator' => 'primary_operator'])
         ->and($scenario->expectations['read_only'])->toBeTrue();
@@ -1378,6 +1390,67 @@ test('role permission matrix scenario preserves read-only canonical and browser 
         ->passed->toBeTrue()
         ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue()
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
+});
+
+test('user directory scenario preserves aggregate-only canonical and browser evidence idempotently', function () {
+    Storage::fake('local');
+
+    $operator = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('user_directory_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'user-directory-test-001');
+    $runner = app(UserDirectoryVisibilityScenario::class);
+
+    $firstManifest = $runner->prepare($scenario, 'user-directory-test-001', [
+        'operator' => $operator,
+    ], $artifactStore);
+    $secondManifest = $runner->prepare($scenario, 'user-directory-test-001', [
+        'operator' => $operator,
+    ], $artifactStore);
+    $prepare = $artifactStore->readJson('terminal/prepare.json');
+    $execution = $artifactStore->readJson('terminal/execution.json');
+
+    expect($firstManifest['resources'])->toBe($secondManifest['resources'])
+        ->and($firstManifest['resources']['user_count'])->toBe(1)
+        ->and($firstManifest['resources']['verified_user_count'])->toBe(1)
+        ->and($firstManifest['resources']['linked_owner_count'])->toBe(0)
+        ->and($firstManifest['resources']['role_distribution'])->toBe([$operator->role->code => 1])
+        ->and($prepare)->not->toHaveKey('users')
+        ->and($execution['read_only'])->toBeTrue()
+        ->and($execution['external_calls'])->toBe(0);
+
+    $browserSummary = [
+        'user_count' => $firstManifest['resources']['user_count'],
+        'verified_user_count' => $firstManifest['resources']['verified_user_count'],
+        'linked_owner_count' => $firstManifest['resources']['linked_owner_count'],
+        'unassigned_role_count' => $firstManifest['resources']['unassigned_role_count'],
+        'role_distribution' => $firstManifest['resources']['role_distribution'],
+    ];
+    $artifactStore->putJson('browser/report.json', [
+        'result' => ['passed' => true],
+        'user_directory' => [
+            'summary' => $browserSummary,
+            'mutation_actions_visible' => false,
+            'mobile_visible' => true,
+            'page_horizontal_overflow' => false,
+        ],
+        'checks' => [],
+        'artifacts' => [
+            'screenshots' => [
+                '01-user-directory' => 'browser/screenshots/01-user-directory.png',
+                '02-user-directory-mobile' => 'browser/screenshots/02-user-directory-mobile.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($firstManifest, $artifactStore);
+
+    expect($audited['result'])
+        ->terminal->toBe('passed')
+        ->browser->toBe('passed')
+        ->audit->toBe('passed')
+        ->passed->toBeTrue()
+        ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
         ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
 
@@ -2851,6 +2924,7 @@ function configuredScenarioUser(string $email): User
         UserPermission::ManageBillingGroups,
         UserPermission::ViewBillingGroupRecords,
         UserPermission::CreateBillingGroupRecords,
+        UserPermission::ViewUsers,
         UserPermission::ViewRoles,
         UserPermission::ManageStoryboards,
     ])->map(fn (UserPermission $permission): int => Permission::factory()->create([

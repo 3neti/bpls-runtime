@@ -35,6 +35,7 @@ use App\Http\Controllers\Staff\StoryboardController;
 use App\Http\Controllers\Staff\TopEstablishmentTaxDueReportController;
 use App\Http\Controllers\Staff\TotalCapitalGrossSummaryReportController;
 use App\Http\Controllers\Staff\UnpaidEstablishmentReportController;
+use App\Http\Controllers\Staff\UserDirectoryController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
@@ -89,6 +90,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('fee-rules.index');
         Route::get('fee-rules/{feeRule}', [FeeRuleController::class, 'show'])
             ->name('fee-rules.show');
+        Route::get('users', [UserDirectoryController::class, 'index'])
+            ->name('users.index');
         Route::get('roles', [RolePermissionController::class, 'index'])
             ->name('roles.index');
         Route::resource('billing-groups', BillingGroupController::class)
