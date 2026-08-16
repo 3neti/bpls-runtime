@@ -2687,6 +2687,7 @@ test('billing group draft scenario is idempotent and audits exact browser eviden
         ->and(BillingGroupRecord::query()->count())->toBe(1)
         ->and(BillingGroupReconciliation::query()->count())->toBe(1)
         ->and($first['resources']['reconciliation_version'])->toBe(1)
+        ->and($first['resources']['abstract_report_url'])->toContain('/staff/reports/billing-groups/')
         ->and($first['result']['terminal'])->toBe('passed')
         ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue()
         ->and($artifactStore->exists('storyboard/storyboard.html'))->toBeTrue();
@@ -2702,6 +2703,8 @@ test('billing group draft scenario is idempotent and audits exact browser eviden
             'collection_action_count' => 0,
             'reconciliation_evidence_visible' => true,
             'reconciliation_version' => '1',
+            'abstract_boundary_visible' => true,
+            'abstract_mobile_visible' => true,
         ],
         'artifacts' => [
             'screenshots' => [

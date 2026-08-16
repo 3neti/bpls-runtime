@@ -122,6 +122,7 @@ class BillingGroupController extends Controller
             'can' => [
                 'create_record' => Gate::allows(UserPermission::CreateBillingGroupRecords->value),
                 'record_reconciliation_evidence' => Gate::allows(UserPermission::RecordBillingGroupReconciliationEvidence->value),
+                'view_abstract_report' => Gate::allows(UserPermission::ViewReports->value),
             ],
             'evidenceTypes' => collect(BillingGroupEvidenceType::cases())->map(fn (BillingGroupEvidenceType $type): array => [
                 'value' => $type->value,

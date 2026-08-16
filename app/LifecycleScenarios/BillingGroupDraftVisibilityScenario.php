@@ -5,6 +5,7 @@ namespace App\LifecycleScenarios;
 use App\Actions\CreateBillingGroup;
 use App\Actions\CreateBillingGroupDraftRecord;
 use App\Actions\CreateBillingGroupReconciliationEvidence;
+use App\Actions\DescribeBillingGroupAbstractReportBoundary;
 use App\Actions\DescribeBillingGroupFinancialReadiness;
 use App\Actions\RequireBillingGroupFinancialReadiness;
 use App\Enums\BillingGroupAcceptanceStatus;
@@ -26,6 +27,7 @@ final class BillingGroupDraftVisibilityScenario
         private readonly CreateBillingGroup $createBillingGroup,
         private readonly CreateBillingGroupDraftRecord $createDraftRecord,
         private readonly CreateBillingGroupReconciliationEvidence $createReconciliationEvidence,
+        private readonly DescribeBillingGroupAbstractReportBoundary $describeAbstractReportBoundary,
         private readonly DescribeBillingGroupFinancialReadiness $describeFinancialReadiness,
         private readonly RequireBillingGroupFinancialReadiness $requireFinancialReadiness,
         private readonly ScenarioManifest $scenarioManifest,
@@ -114,6 +116,7 @@ final class BillingGroupDraftVisibilityScenario
         }
 
         $readiness = $this->describeFinancialReadiness->handle($record);
+        $abstractBoundary = $this->describeAbstractReportBoundary->handle($billingGroup);
         $refusal = null;
 
         try {
@@ -143,6 +146,12 @@ final class BillingGroupDraftVisibilityScenario
                 ['status' => 'blocked', 'refused' => true, 'can_collect' => false, 'can_issue_receipt' => false],
                 ['status' => $readiness['status'], 'refused' => $refusal !== null, 'can_collect' => $readiness['can_collect'], 'can_issue_receipt' => $readiness['can_issue_receipt']],
             ),
+            $this->step(
+                'billing-group-abstract-refused',
+                'Describe the group-specific abstract contract without promoting drafts to collection rows',
+                ['status' => 'blocked', 'official_row_count' => 0, 'can_generate' => false, 'can_export' => false],
+                ['status' => $abstractBoundary['status'], 'official_row_count' => $abstractBoundary['official_row_count'], 'can_generate' => $abstractBoundary['can_generate'], 'can_export' => $abstractBoundary['can_export']],
+            ),
         ];
 
         foreach ($steps as $step) {
@@ -158,6 +167,7 @@ final class BillingGroupDraftVisibilityScenario
             'billing_group_name' => $billingGroup->name,
             'list_url' => route('staff.billing-groups.index', absolute: false),
             'detail_url' => route('staff.billing-groups.show', $billingGroup, false),
+            'abstract_report_url' => route('staff.reports.billing-groups.abstract.index', $billingGroup, false),
             'financial_readiness_status' => $readiness['status'],
             'reconciliation_id' => $reconciliation->id,
             'reconciliation_version' => $reconciliation->version,
@@ -180,6 +190,7 @@ final class BillingGroupDraftVisibilityScenario
             'irreversible_actions' => false,
             'notifications' => false,
             'financial_readiness' => $readiness,
+            'abstract_report_boundary' => $abstractBoundary,
             'financial_refusal' => $refusal,
             'reconciliation_id' => $reconciliation->id,
         ]);
@@ -200,6 +211,7 @@ final class BillingGroupDraftVisibilityScenario
         $record = $this->billingGroupRecord((int) $manifest['resources']['record_id']);
         $reconciliation = BillingGroupReconciliation::query()->whereKey((int) $manifest['resources']['reconciliation_id'])->sole();
         $readiness = $this->describeFinancialReadiness->handle($record);
+        $abstractBoundary = $this->describeAbstractReportBoundary->handle($billingGroup);
         $browserReport = $artifactStore->readJson('browser/report.json') ?? [];
         $checks = [
             $this->step('audit-provisional-definition', 'Canonical definition remains provisional', ['acceptance_status' => BillingGroupAcceptanceStatus::Provisional->value], ['acceptance_status' => $billingGroup->acceptance_status->value]),
@@ -207,7 +219,8 @@ final class BillingGroupDraftVisibilityScenario
             $this->step('audit-schema-snapshot', 'Draft preserves the exact field schema used at preparation', ['field_count' => $billingGroup->fields->count()], ['field_count' => count($record->schema_snapshot)]),
             $this->step('audit-financial-refusal', 'Canonical readiness still refuses liability, collection, and receipt', ['status' => 'blocked', 'can_create_liability' => false, 'can_collect' => false, 'can_issue_receipt' => false], ['status' => $readiness['status'], 'can_create_liability' => $readiness['can_create_liability'], 'can_collect' => $readiness['can_collect'], 'can_issue_receipt' => $readiness['can_issue_receipt']]),
             $this->step('audit-reconciliation-evidence', 'Canonical evidence remains versioned, pending, and non-executable', ['version' => 1, 'status' => 'pending_municipal_decision', 'execution_status' => 'blocked', 'financial_effect' => 'none', 'acceptance_effect' => 'none'], ['version' => $reconciliation->version, 'status' => $reconciliation->reconciliation_status->value, 'execution_status' => $reconciliation->execution_status, 'financial_effect' => $reconciliation->metadata['financial_effect'] ?? null, 'acceptance_effect' => $reconciliation->metadata['acceptance_effect'] ?? null]),
-            $this->step('audit-browser-visibility', 'Browser shows the exact definition, draft, evidence version, policy boundary, and financial refusal', ['definition_visible' => true, 'draft_visible' => true, 'reconciliation_evidence_visible' => true, 'policy_boundary_visible' => true, 'financial_refusal_visible' => true], ['definition_visible' => data_get($browserReport, 'billing_group.definition_visible'), 'draft_visible' => data_get($browserReport, 'billing_group.draft_visible'), 'reconciliation_evidence_visible' => data_get($browserReport, 'billing_group.reconciliation_evidence_visible'), 'policy_boundary_visible' => data_get($browserReport, 'billing_group.policy_boundary_visible'), 'financial_refusal_visible' => data_get($browserReport, 'billing_group.financial_refusal_visible')]),
+            $this->step('audit-abstract-boundary', 'Canonical abstract boundary excludes every provisional draft from official rows', ['status' => 'blocked', 'official_row_count' => 0, 'draft_record_count' => 1, 'can_generate' => false, 'can_export' => false], ['status' => $abstractBoundary['status'], 'official_row_count' => $abstractBoundary['official_row_count'], 'draft_record_count' => $abstractBoundary['billing_group']['draft_record_count'], 'can_generate' => $abstractBoundary['can_generate'], 'can_export' => $abstractBoundary['can_export']]),
+            $this->step('audit-browser-visibility', 'Browser shows the exact definition, draft, evidence version, financial refusal, and abstract boundary', ['definition_visible' => true, 'draft_visible' => true, 'reconciliation_evidence_visible' => true, 'policy_boundary_visible' => true, 'financial_refusal_visible' => true, 'abstract_boundary_visible' => true, 'abstract_mobile_visible' => true], ['definition_visible' => data_get($browserReport, 'billing_group.definition_visible'), 'draft_visible' => data_get($browserReport, 'billing_group.draft_visible'), 'reconciliation_evidence_visible' => data_get($browserReport, 'billing_group.reconciliation_evidence_visible'), 'policy_boundary_visible' => data_get($browserReport, 'billing_group.policy_boundary_visible'), 'financial_refusal_visible' => data_get($browserReport, 'billing_group.financial_refusal_visible'), 'abstract_boundary_visible' => data_get($browserReport, 'billing_group.abstract_boundary_visible'), 'abstract_mobile_visible' => data_get($browserReport, 'billing_group.abstract_mobile_visible')]),
         ];
         $passed = collect($checks)->every(fn (array $check): bool => $check['passed']);
 
@@ -231,6 +244,7 @@ final class BillingGroupDraftVisibilityScenario
                 'financial_effect' => $record->source_snapshot['financial_effect'] ?? null,
                 'schema_snapshot' => $record->schema_snapshot,
                 'financial_readiness' => $readiness,
+                'abstract_report_boundary' => $abstractBoundary,
                 'reconciliation' => [
                     'id' => $reconciliation->id,
                     'version' => $reconciliation->version,
@@ -298,6 +312,7 @@ final class BillingGroupDraftVisibilityScenario
                 ['title' => 'Evidence version recorded', 'description' => 'Staff preserves source evidence, a candidate interpretation, unresolved questions, and the exact definition snapshot.', 'dialogue' => 'Evidence is not acceptance.', 'duration_seconds' => 5],
                 ['title' => 'Readiness evaluated', 'description' => 'The domain identifies incomplete record facts separately from unresolved municipal policy.', 'dialogue' => 'Readiness is explicit and reviewable.', 'duration_seconds' => 5],
                 ['title' => 'Execution refused', 'description' => 'Browser and audit evidence agree that liability, collection, and receipt remain unavailable.', 'dialogue' => 'Unknown policy does not become money.', 'duration_seconds' => 5],
+                ['title' => 'Abstract refused', 'description' => 'The group-specific report preserves the legacy column contract while excluding every provisional draft from official collection rows.', 'dialogue' => 'A draft is not an official receipt.', 'duration_seconds' => 5],
             ],
         ];
     }

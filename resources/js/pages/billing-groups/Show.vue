@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ArrowLeft, FilePlus2, Plus, Trash2 } from '@lucide/vue';
+import {
+    ArrowLeft,
+    FilePlus2,
+    Plus,
+    TableProperties,
+    Trash2,
+} from '@lucide/vue';
+import { index as abstractReportIndex } from '@/actions/App/Http/Controllers/Staff/BillingGroupAbstractReportController';
 import {
     index,
     show,
@@ -81,6 +88,7 @@ const props = defineProps<{
     can: {
         create_record: boolean;
         record_reconciliation_evidence: boolean;
+        view_abstract_report: boolean;
     };
     evidenceTypes: Array<{ value: string; label: string }>;
     policyNote: string;
@@ -175,11 +183,22 @@ function submitReconciliationEvidence(): void {
                         }}
                     </p>
                 </div>
-                <Button as-child variant="outline">
-                    <Link :href="index()"
-                        ><ArrowLeft /> Back to billing groups</Link
+                <div class="flex flex-wrap gap-2">
+                    <Button
+                        v-if="can.view_abstract_report"
+                        as-child
+                        variant="outline"
                     >
-                </Button>
+                        <Link :href="abstractReportIndex(billingGroup.id)">
+                            <TableProperties /> Abstract report
+                        </Link>
+                    </Button>
+                    <Button as-child variant="outline">
+                        <Link :href="index()"
+                            ><ArrowLeft /> Back to billing groups</Link
+                        >
+                    </Button>
+                </div>
             </section>
 
             <section

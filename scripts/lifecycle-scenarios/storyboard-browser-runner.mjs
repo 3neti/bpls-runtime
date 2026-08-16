@@ -2252,6 +2252,91 @@ async function inspectBillingGroupDraft(targetPage, targetBaseUrl) {
         'browser/screenshots/03-billing-group-mobile.png',
     );
 
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+    const abstractUrl = `${targetBaseUrl}${manifest.resources.abstract_report_url}`;
+    await targetPage.goto(abstractUrl, { waitUntil: 'networkidle' });
+    const abstractBoundaryVisible = await targetPage
+        .getByTestId('billing-group-abstract-boundary')
+        .isVisible()
+        .catch(() => false);
+    const abstractStatusVisible = await targetPage
+        .getByTestId('billing-group-abstract-status')
+        .isVisible()
+        .catch(() => false);
+    const officialRowCount = await targetPage
+        .getByTestId('billing-group-abstract-official-row-count')
+        .innerText()
+        .catch(() => null);
+    const abstractDraftCount = await targetPage
+        .getByTestId('billing-group-abstract-draft-count')
+        .innerText()
+        .catch(() => null);
+    const abstractExportActionCount = await targetPage
+        .getByRole('button', { name: /export|download/i })
+        .count();
+    checks.push(
+        check(
+            'billing-group-abstract-boundary-visible',
+            'Group-specific abstract shows the financial reporting refusal',
+            true,
+            abstractBoundaryVisible && abstractStatusVisible,
+        ),
+        check(
+            'billing-group-abstract-official-rows-empty',
+            'Group-specific abstract excludes the provisional draft from official rows',
+            '0',
+            officialRowCount?.trim() ?? null,
+        ),
+        check(
+            'billing-group-abstract-draft-evidence-count',
+            'Group-specific abstract identifies the exact draft as non-financial evidence',
+            '1',
+            abstractDraftCount?.trim() ?? null,
+        ),
+        check(
+            'billing-group-abstract-export-unavailable',
+            'Group-specific abstract exposes no misleading export action',
+            0,
+            abstractExportActionCount,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '04-billing-group-abstract',
+        'browser/screenshots/04-billing-group-abstract.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(abstractUrl, { waitUntil: 'networkidle' });
+    const mobileAbstractVisible = await targetPage
+        .getByTestId('billing-group-abstract-boundary')
+        .isVisible()
+        .catch(() => false);
+    const mobileAbstractOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+    checks.push(
+        check(
+            'billing-group-abstract-mobile-visible',
+            'Mobile abstract keeps the financial reporting boundary visible',
+            true,
+            mobileAbstractVisible,
+        ),
+        check(
+            'billing-group-abstract-mobile-no-horizontal-overflow',
+            'Mobile abstract has no page-level horizontal overflow',
+            false,
+            mobileAbstractOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '05-billing-group-abstract-mobile',
+        'browser/screenshots/05-billing-group-abstract-mobile.png',
+    );
+
     billingGroupEvidence.definition_visible = definitionVisible;
     billingGroupEvidence.draft_visible = draftVisible;
     billingGroupEvidence.policy_boundary_visible =
@@ -2264,6 +2349,10 @@ async function inspectBillingGroupDraft(targetPage, targetBaseUrl) {
     billingGroupEvidence.reconciliation_version = reconciliationVersion;
     billingGroupEvidence.collection_action_count = collectionActionCount;
     billingGroupEvidence.draft_reference = manifest.resources.public_reference;
+    billingGroupEvidence.abstract_boundary_visible = abstractBoundaryVisible;
+    billingGroupEvidence.abstract_mobile_visible = mobileAbstractVisible;
+    billingGroupEvidence.abstract_official_row_count = officialRowCount?.trim();
+    billingGroupEvidence.abstract_draft_count = abstractDraftCount?.trim();
 }
 
 async function inspectStoryboardList(targetPage, targetBaseUrl) {
