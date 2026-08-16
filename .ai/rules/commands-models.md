@@ -3,6 +3,7 @@ paths:
   - '{app/Actions/StageLegacyExport.php,app/Console/Commands/StageLegacyExportCommand.php,app/Models/Legacy*.php}'
   - '{app/Actions/PlanLegacyRegistryMigration.php,app/Console/Commands/PlanLegacyRegistryMigrationCommand.php,app/Models/LegacyMapping*.php}'
   - '{app/Actions/*LegacyRegistryMigration.php,app/Console/Commands/*LegacyRegistryMigrationCommand.php,app/Models/LegacyMapping*.php}'
+  - '{app/Actions/PlanLegacyApplicationDeclarations.php,app/Console/Commands/PlanLegacyApplicationDeclarationsCommand.php,app/Models/Legacy{DeclarationMapping*,LineOfBusinessReconciliation}.php}'
 ---
 
 # Commands Models
@@ -15,3 +16,6 @@ Registry mapping plans are immutable against the staged batch and a current-regi
 
 ## Registry execution requires explicit reversible approval
 Execute only exact ready proposal IDs under a stable run reference with dual confirmation, and revalidate the shared projection hashes before writing. Similarity never authorizes identity. Rollback may delete only unchanged targets created by that execution; exact-linked pre-existing records and targets with later changes or dependencies must be preserved or refused.
+
+## Legacy declarations require reconciled identity and exact money
+A legacy businessCategory name or matching current name never establishes LineOfBusiness identity; require a versioned accepted reconciliation with decision authority and evidence. Parse only exact non-negative monetary strings into integer cents. Ranges, conflicting gross/revenue values, excluded fees, overrides, and variable mappings remain non-executable evidence and must never trigger fee calculation in migration planning.

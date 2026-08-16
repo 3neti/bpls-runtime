@@ -9,8 +9,10 @@ use App\Enums\LegacyMappingProposalStatus;
 use App\Models\Business;
 use App\Models\BusinessOwner;
 use App\Models\LegacyApplicationMappingPlan;
+use App\Models\LegacyDeclarationMappingPlan;
 use App\Models\LegacyIdMapping;
 use App\Models\LegacyImportBatch;
+use App\Models\LegacyRecord;
 use App\Models\PermitApplication;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -144,6 +146,11 @@ class PlanLegacyPermitApplications
         foreach ($batch->records()->where('dataset_key', $datasetKey)->orderBy('id')->cursor() as $record) {
             $projection = $this->projector->project($record);
             $reasons = $projection['reasons'];
+
+            if (in_array('line_of_business_mapping_required', $reasons, true) && $this->declarationsAreReady($batch, $record)) {
+                $reasons = array_values(array_diff($reasons, ['line_of_business_mapping_required']));
+            }
+
             $blocked = $projection['blocked'];
             $ownerMapping = $this->mapping($batch, 'business_owners', $projection['owner_legacy_id'], 'business_owner');
             $businessMapping = $this->mapping($batch, 'businesses', $projection['business_legacy_id'], 'business');
@@ -246,6 +253,30 @@ class PlanLegacyPermitApplications
             ->first();
     }
 
+    private function declarationsAreReady(LegacyImportBatch $batch, LegacyRecord $record): bool
+    {
+        $lines = $record->payload['linesOfBusiness'] ?? null;
+
+        if (! is_array($lines) || $lines === []) {
+            return false;
+        }
+
+        $plan = LegacyDeclarationMappingPlan::query()
+            ->whereBelongsTo($batch, 'importBatch')
+            ->whereIn('status', [LegacyMappingPlanStatus::Planned, LegacyMappingPlanStatus::PlannedWithExceptions])
+            ->latest('id')
+            ->first();
+
+        if (! $plan instanceof LegacyDeclarationMappingPlan) {
+            return false;
+        }
+
+        $proposals = $plan->proposals()->where('legacy_record_id', $record->id);
+
+        return $proposals->count() === count($lines)
+            && ! $proposals->where('status', '!=', LegacyMappingProposalStatus::Ready)->exists();
+    }
+
     /** @param list<string> $reasons
      * @return array{LegacyMappingProposalStatus, LegacyMappingProposalAction}
      */
@@ -319,6 +350,13 @@ class PlanLegacyPermitApplications
 
         foreach (PermitApplication::query()->select(['id', 'business_id', 'application_number', 'legacy_source_id', 'updated_at'])->orderBy('id')->cursor() as $application) {
             hash_update($context, json_encode(['application', ...$application->getAttributes()], JSON_THROW_ON_ERROR));
+        }
+
+        foreach (LegacyDeclarationMappingPlan::query()->whereBelongsTo($batch, 'importBatch')->with('proposals')->orderBy('id')->cursor() as $plan) {
+            hash_update($context, json_encode([
+                'declaration_plan', $plan->id, $plan->dependency_snapshot_hash, $plan->status->value,
+                $plan->proposals->map(fn ($proposal): array => [$proposal->id, $proposal->legacy_record_id, $proposal->line_index, $proposal->status->value, $proposal->projection_hash])->all(),
+            ], JSON_THROW_ON_ERROR));
         }
 
         return hash_final($context);

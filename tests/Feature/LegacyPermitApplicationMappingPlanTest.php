@@ -1,7 +1,9 @@
 <?php
 
+use App\Actions\PlanLegacyApplicationDeclarations;
 use App\Actions\PlanLegacyPermitApplications;
 use App\Enums\LegacyImportBatchStatus;
+use App\Enums\LegacyLineOfBusinessReconciliationStatus;
 use App\Enums\LegacyMappingPlanStatus;
 use App\Enums\LegacyMappingProposalAction;
 use App\Enums\LegacyMappingProposalStatus;
@@ -11,8 +13,10 @@ use App\Models\LegacyApplicationMappingPlan;
 use App\Models\LegacyApplicationMappingProposal;
 use App\Models\LegacyIdMapping;
 use App\Models\LegacyImportBatch;
+use App\Models\LegacyLineOfBusinessReconciliation;
 use App\Models\LegacyRecord;
 use App\Models\LegacySource;
+use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -111,6 +115,37 @@ test('a deterministic assessment application is ready without assigning official
         ->and($proposal->metadata['official_application_number_projected'])->toBeFalse()
         ->and(PermitApplication::query()->count())->toBe(0)
         ->and(LegacyIdMapping::query()->count())->toBe(2);
+});
+
+test('a complete ready declaration plan clears the application line mapping hold', function () {
+    $fixture = createApplicationPlanningBatch('declarations-ready');
+    $lineOfBusiness = LineOfBusiness::factory()->create();
+    LegacyLineOfBusinessReconciliation::query()->create([
+        'legacy_source_id' => $fixture['source']->id,
+        'source_dataset' => 'groups',
+        'source_value_hash' => hash('sha256', 'accepted category'),
+        'line_of_business_id' => $lineOfBusiness->id,
+        'status' => LegacyLineOfBusinessReconciliationStatus::Accepted,
+        'decision_authority' => 'Municipal test authority',
+        'evidence_reference' => 'TEST-DECLARATION-ACCEPTANCE',
+        'decided_at' => now(),
+    ]);
+    createApplicationPlanningRecord($fixture['batch'], 'application-declarations-ready', [
+        'linesOfBusiness' => [[
+            'businessCategory' => 'Accepted Category',
+            'permitApplicationType' => 'New',
+            'capitalInvestment' => '1000.00',
+        ]],
+    ]);
+
+    $declarationPlan = app(PlanLegacyApplicationDeclarations::class)
+        ->handle($fixture['batch']->fresh(), 'declaration-plan-application-ready');
+    $applicationPlan = app(PlanLegacyPermitApplications::class)
+        ->handle($fixture['batch']->fresh(), 'application-plan-declarations-ready');
+
+    expect($declarationPlan->ready_count)->toBe(1)
+        ->and($applicationPlan->proposals->sole()->status)->toBe(LegacyMappingProposalStatus::Ready)
+        ->and($applicationPlan->proposals->sole()->reasons)->toBe([]);
 });
 
 test('draft release financial and line state remain visible for review rather than becoming executable behavior', function () {
