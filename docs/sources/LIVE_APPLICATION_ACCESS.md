@@ -34,6 +34,16 @@ Read-only deployment/database boundary observation on 2026-08-16:
 - the workstation has no Convex CLI account/deploy-key configuration, so an authoritative full snapshot cannot be acquired from this checkout alone
 - the public query proves bounded database visibility, not administrative database ownership, complete export access, migration parity, or cutover authority
 
+Legacy report-query security characterization on 2026-08-16:
+
+- exact source module: `packages/backend/convex/dataExport.ts` at legacy baseline `b5a66a6a8b3828ebae9916f4bde1da729b1b9154`
+- `getPermitReportCount` and `generatePermitReport` are declared as public Convex queries with no identity, role, or permission check in either handler
+- source shows `generatePermitReport` reads nine complete operational tables per request before applying application pagination and may return owner/business names, application and receipt identifiers, classifications, fee details, amounts, payment dates, and payment status
+- `generatePermitReport` was not invoked; no sensitive report row was requested, printed, persisted, or committed
+- Board boundary: this endpoint is legacy security evidence only and must not become a migration source; further production invocation requires a specific explicit observation authorization
+- required owner action: restrict/internalize the legacy query and review exposure independently; no production remediation was attempted by this rescue
+- canonical migration path remains an authenticated administrative Convex snapshot/export with deployment identity, operator, timestamp, checksum, immutable private intake, staging, reconciliation, and rehearsal
+
 Observed high-level surfaces:
 
 - Dashboard
