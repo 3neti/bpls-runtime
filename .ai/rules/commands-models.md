@@ -6,6 +6,7 @@ paths:
   - '{app/Actions/PlanLegacyApplicationDeclarations.php,app/Console/Commands/PlanLegacyApplicationDeclarationsCommand.php,app/Models/Legacy{DeclarationMapping*,LineOfBusinessReconciliation}.php}'
   - '{app/Actions/PlanLegacyFinancialDependencies.php,app/Console/Commands/PlanLegacyFinancialDependenciesCommand.php,app/Models/Legacy{FeeRuleReconciliation,FinancialMapping*}.php}'
   - '{app/Actions/PlanLegacyPermitEvidence.php,app/Console/Commands/PlanLegacyPermitEvidenceCommand.php,app/Models/Legacy{ClearanceTypeReconciliation,PermitEvidence*}.php}'
+  - '{app/Actions/AssessLegacyMigrationReadiness.php,app/Console/Commands/AssessLegacyMigrationReadinessCommand.php,app/Models/LegacyMigrationReadinessAssessment.php}'
 ---
 
 # Commands Models
@@ -27,3 +28,6 @@ Legacy fee identity requires an accepted reconciliation with municipal decision 
 
 ## Legacy permit evidence preserves the authority boundary
 Permit-evidence planning may inventory exact clearance identity, supporting-file metadata, legacy status, and permit claims, but must not copy objects or write current clearances, documents, permit artifacts, numbers, QR data, issuance, release, or legal effect. Clearance identity requires an accepted reconciliation with decision authority and evidence; labels never establish identity. Hash sensitive storage, filename, actor, and permit identifiers in generated evidence.
+
+## Migration readiness separates rehearsal from cutover
+Readiness assessments are immutable, idempotent evidence snapshots and never execute migration or grant authority. Rehearsal requires complete staging, core datasets, resolved errors, and completed zero-exception plans. Cutover additionally requires production provenance, completed reversible executors, verified object transfer, and explicit municipal authorization; until those exist, the gate must fail while retaining redacted diagnostics.
