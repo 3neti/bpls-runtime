@@ -780,6 +780,39 @@ final class LifecycleScenarioRegistry
                     ],
                 ],
             ),
+            'role_permission_matrix_visibility' => new LifecycleScenarioDefinition(
+                key: 'role_permission_matrix_visibility',
+                label: 'Role and permission matrix visibility',
+                mode: 'role_permission_matrix_visibility',
+                risk: 'presentation-only',
+                actors: [
+                    'operator' => 'primary_operator',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => false,
+                ],
+                expectations: [
+                    'authorization_source' => 'runtime_gates_and_role_assignments',
+                    'admin_override_explicit' => true,
+                    'permission_catalog_drift_visible' => true,
+                    'read_only' => true,
+                    'external_calls' => 0,
+                    'irreversible_actions' => false,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
         ];
     }
 

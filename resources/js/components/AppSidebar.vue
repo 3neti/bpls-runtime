@@ -14,6 +14,7 @@ import {
     FolderGit2,
     LayoutGrid,
     ReceiptText,
+    ShieldCheck,
     Trophy,
     TableProperties,
     WalletCards,
@@ -39,6 +40,7 @@ import { index as permitApplicationIndex } from '@/actions/App/Http/Controllers/
 import { index as pldsReportIndex } from '@/actions/App/Http/Controllers/Staff/PldsReportController';
 import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
 import { index as revenueSourceReportIndex } from '@/actions/App/Http/Controllers/Staff/RevenueSourceReportController';
+import { index as rolePermissionIndex } from '@/actions/App/Http/Controllers/Staff/RolePermissionController';
 import { index as storyboardIndex } from '@/actions/App/Http/Controllers/Staff/StoryboardController';
 import { index as topEstablishmentTaxDueReportIndex } from '@/actions/App/Http/Controllers/Staff/TopEstablishmentTaxDueReportController';
 import { index as totalCapitalGrossSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/TotalCapitalGrossSummaryReportController';
@@ -177,6 +179,15 @@ const staffNavItems: NavItem[] = [
         href: storyboardIndex(),
         icon: Film,
     },
+    ...(page.props.auth.can_view_roles
+        ? [
+              {
+                  title: 'Roles & Permissions',
+                  href: rolePermissionIndex(),
+                  icon: ShieldCheck,
+              },
+          ]
+        : []),
 ];
 
 const citizenNavItems: NavItem[] = [

@@ -42,6 +42,7 @@ const supportedScenarios = [
     'revenue_code_fee_catalog_visibility',
     'revenue_code_executability_safety',
     'retirement_permit_lifecycle_foundation',
+    'role_permission_matrix_visibility',
     'transfer_permit_lifecycle_foundation',
 ];
 
@@ -100,6 +101,7 @@ const citizenProcessingEvidence = {};
 const citizenAuthorityReviewEvidence = {};
 const citizenSubmissionEvidence = {};
 const billingGroupEvidence = {};
+const rolePermissionEvidence = {};
 
 let browser;
 
@@ -213,6 +215,10 @@ try {
         await inspectBillingGroupDraft(page, baseUrl);
     }
 
+    if (manifest.scenario.key === 'role_permission_matrix_visibility') {
+        await inspectRolePermissionMatrix(page, baseUrl);
+    }
+
     if (
         [
             'amendment_permit_lifecycle_foundation',
@@ -314,6 +320,7 @@ const report = {
     citizen_authority_review: citizenAuthorityReviewEvidence,
     citizen_submission: citizenSubmissionEvidence,
     billing_group: billingGroupEvidence,
+    role_permissions: rolePermissionEvidence,
     artifacts: {
         screenshots,
     },
@@ -361,6 +368,158 @@ async function authenticate(
     await targetPage.waitForURL(/dashboard|storyboards/, { timeout: 10000 });
     checks.push(
         check('authenticated', 'Authenticate as manifest actor', true, true),
+    );
+}
+
+async function inspectRolePermissionMatrix(targetPage, targetBaseUrl) {
+    const matrixUrl = `${targetBaseUrl}${manifest.resources.matrix_url}`;
+    await targetPage.goto(matrixUrl, { waitUntil: 'networkidle' });
+    const summary = targetPage.locator(
+        '[data-testid="role-permission-summary"]',
+    );
+    const matrix = targetPage.locator('[data-testid="role-permission-matrix"]');
+    await summary.waitFor();
+    await matrix.waitFor();
+
+    const roleCount = Number(await summary.getAttribute('data-role-count'));
+    const permissionCount = Number(
+        await summary.getAttribute('data-permission-count'),
+    );
+    const catalogInSync =
+        (await targetPage
+            .locator('[data-testid="permission-catalog-status"]')
+            .getAttribute('data-catalog-in-sync')) === 'true';
+    const adminOverrideRoleCount = await targetPage
+        .locator(
+            '[data-testid="role-summary"][data-access-mode="admin_override"]',
+        )
+        .count();
+    const roleEvidence = await targetPage
+        .locator('[data-testid="role-summary"]')
+        .evaluateAll((roleElements) =>
+            roleElements.map((roleElement) => ({
+                id: Number(roleElement.getAttribute('data-role-id')),
+                code: roleElement.getAttribute('data-role-code'),
+                user_count: Number(roleElement.getAttribute('data-user-count')),
+                access_mode: roleElement.getAttribute('data-access-mode'),
+                assigned_permission_count: Number(
+                    roleElement.getAttribute('data-assigned-permission-count'),
+                ),
+                effective_permission_count: Number(
+                    roleElement.getAttribute('data-effective-permission-count'),
+                ),
+                unknown_assigned_permission_count: Number(
+                    roleElement.getAttribute(
+                        'data-unknown-assigned-permission-count',
+                    ),
+                ),
+            })),
+        );
+    const mutationActionsVisible = await targetPage
+        .getByRole('button', {
+            name: /create role|edit role|delete role|assign permission/i,
+        })
+        .first()
+        .isVisible()
+        .catch(() => false);
+
+    Object.assign(rolePermissionEvidence, {
+        role_count: roleCount,
+        permission_count: permissionCount,
+        catalog_in_sync: catalogInSync,
+        admin_override_role_count: adminOverrideRoleCount,
+        role_evidence: roleEvidence,
+        mutation_actions_visible: mutationActionsVisible,
+    });
+    checks.push(
+        check(
+            'role-permission-role-count',
+            'Role count matches the prepared canonical projection',
+            manifest.resources.role_count,
+            roleCount,
+        ),
+        check(
+            'role-permission-permission-count',
+            'Permission count matches the runtime catalog',
+            manifest.resources.permission_count,
+            permissionCount,
+        ),
+        check(
+            'role-permission-catalog-status',
+            'Catalog status matches canonical evidence',
+            manifest.resources.catalog_in_sync,
+            catalogInSync,
+        ),
+        check(
+            'role-permission-admin-override-count',
+            'Admin override roles remain explicit',
+            manifest.resources.admin_override_role_count,
+            adminOverrideRoleCount,
+        ),
+        check(
+            'role-permission-access-sources',
+            'Stored assignments remain distinct from effective role access',
+            manifest.resources.role_evidence,
+            roleEvidence,
+        ),
+        check(
+            'role-permission-read-only',
+            'No role or permission mutation action is available',
+            false,
+            mutationActionsVisible,
+        ),
+    );
+    actionLog.push(
+        stepLog(
+            'role-permission-matrix-inspected',
+            'Inspect the manifest-bound role and permission matrix',
+            {
+                role_count: roleCount,
+                permission_count: permissionCount,
+            },
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '01-role-permission-matrix',
+        'browser/screenshots/01-role-permission-matrix.png',
+    );
+
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await targetPage.goto(matrixUrl, { waitUntil: 'networkidle' });
+    await targetPage
+        .locator('[data-testid="role-permission-matrix"]')
+        .waitFor();
+    const pageHorizontalOverflow = await targetPage.evaluate(
+        () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth + 1,
+    );
+    const mobileVisible = await targetPage
+        .locator('[data-testid="role-permission-matrix"]')
+        .isVisible();
+    Object.assign(rolePermissionEvidence, {
+        mobile_visible: mobileVisible,
+        page_horizontal_overflow: pageHorizontalOverflow,
+    });
+    checks.push(
+        check(
+            'role-permission-mobile-visible',
+            'Role matrix remains visible on mobile',
+            true,
+            mobileVisible,
+        ),
+        check(
+            'role-permission-mobile-no-page-overflow',
+            'Wide matrix scroll remains contained without page overflow',
+            false,
+            pageHorizontalOverflow,
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '02-role-permission-matrix-mobile',
+        'browser/screenshots/02-role-permission-matrix-mobile.png',
     );
 }
 

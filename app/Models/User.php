@@ -40,16 +40,19 @@ class User extends Authenticatable implements PasskeyUser
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
 
+    /** @return BelongsTo<Role, $this> */
     public function role(): BelongsTo
     {
         return $this->belongsTo(Role::class);
     }
 
+    /** @return BelongsTo<BusinessOwner, $this> */
     public function businessOwner(): BelongsTo
     {
         return $this->belongsTo(BusinessOwner::class);
     }
 
+    /** @return HasMany<PermitApplication, $this> */
     public function permitApplications(): HasMany
     {
         return $this->hasMany(PermitApplication::class, 'submitted_by_id');

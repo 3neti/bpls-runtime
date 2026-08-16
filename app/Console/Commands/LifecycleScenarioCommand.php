@@ -13,6 +13,7 @@ use App\LifecycleScenarios\PermitApplicationCancelledVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationPendingPaymentVisibilityScenario;
 use App\LifecycleScenarios\RevenueCodeExecutabilitySafetyScenario;
 use App\LifecycleScenarios\RevenueCodeFeeCatalogVisibilityScenario;
+use App\LifecycleScenarios\RolePermissionMatrixVisibilityScenario;
 use App\LifecycleScenarios\ScenarioActorResolver;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\LifecycleScenarios\StoryboardTerminalStateVisibilityScenario;
@@ -46,6 +47,7 @@ class LifecycleScenarioCommand extends Command
         PermitApplicationPendingPaymentVisibilityScenario $permitApplicationPendingPaymentScenario,
         RevenueCodeFeeCatalogVisibilityScenario $revenueCodeFeeCatalogVisibilityScenario,
         RevenueCodeExecutabilitySafetyScenario $revenueCodeExecutabilitySafetyScenario,
+        RolePermissionMatrixVisibilityScenario $rolePermissionMatrixVisibilityScenario,
         StoryboardTerminalStateVisibilityScenario $storyboardScenario,
     ): int {
         $scenario = $registry->get((string) $this->argument('scenario'));
@@ -71,6 +73,7 @@ class LifecycleScenarioCommand extends Command
                     'permit_application_cancelled_visibility' => $permitApplicationCancelledScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'revenue_code_fee_catalog_visibility' => $revenueCodeFeeCatalogVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'revenue_code_executability_safety' => $revenueCodeExecutabilitySafetyScenario->prepare($scenario, $runId, $actors, $artifactStore),
+                    'role_permission_matrix_visibility' => $rolePermissionMatrixVisibilityScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'amendment_permit_lifecycle_foundation' => $permitApplicationPendingPaymentScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'permit_application_pending_payment_visibility' => $permitApplicationPendingPaymentScenario->prepare($scenario, $runId, $actors, $artifactStore),
                     'renewal_permit_lifecycle_foundation' => $permitApplicationPendingPaymentScenario->prepare($scenario, $runId, $actors, $artifactStore),
@@ -99,6 +102,7 @@ class LifecycleScenarioCommand extends Command
                     'permit_application_cancelled_visibility' => $permitApplicationCancelledScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'revenue_code_fee_catalog_visibility' => $revenueCodeFeeCatalogVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'revenue_code_executability_safety' => $revenueCodeExecutabilitySafetyScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
+                    'role_permission_matrix_visibility' => $rolePermissionMatrixVisibilityScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'amendment_permit_lifecycle_foundation' => $permitApplicationPendingPaymentScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'permit_application_pending_payment_visibility' => $permitApplicationPendingPaymentScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),
                     'renewal_permit_lifecycle_foundation' => $permitApplicationPendingPaymentScenario->audit($manifest ?? $this->requireManifest($artifactStore), $artifactStore),

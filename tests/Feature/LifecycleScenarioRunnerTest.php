@@ -24,6 +24,7 @@ use App\LifecycleScenarios\PermitApplicationCancelledVisibilityScenario;
 use App\LifecycleScenarios\PermitApplicationPendingPaymentVisibilityScenario;
 use App\LifecycleScenarios\RevenueCodeExecutabilitySafetyScenario;
 use App\LifecycleScenarios\RevenueCodeFeeCatalogVisibilityScenario;
+use App\LifecycleScenarios\RolePermissionMatrixVisibilityScenario;
 use App\LifecycleScenarios\ScenarioActorResolver;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\LifecycleScenarios\StoryboardTerminalStateVisibilityScenario;
@@ -244,6 +245,17 @@ test('scenario registry discovers the manual collection receipt visibility scena
         ->and($scenario->expectations['receipt_status'])->toBe('issued')
         ->and($scenario->expectations['receipt_void_status'])->toBe('blocked')
         ->and($scenario->safety['external_integrations'])->toBeFalse();
+});
+
+test('scenario registry discovers the role and permission matrix visibility scenario', function () {
+    $scenario = app(LifecycleScenarioRegistry::class)->get('role_permission_matrix_visibility');
+
+    expect($scenario)
+        ->key->toBe('role_permission_matrix_visibility')
+        ->mode->toBe('role_permission_matrix_visibility')
+        ->risk->toBe('presentation-only')
+        ->and($scenario->actors)->toBe(['operator' => 'primary_operator'])
+        ->and($scenario->expectations['read_only'])->toBeTrue();
 });
 
 test('scenario registry discovers the new permit lifecycle authority boundary scenario', function () {
@@ -1309,6 +1321,64 @@ test('citizen-originated permit milestone composes the exact submitted record to
         ->and($storyboard['title'])->toBe('Citizen-originated new permit lifecycle to authority boundary')
         ->and($artifactStore->exists('terminal/prepare.json'))->toBeTrue()
         ->and($artifactStore->exists('storyboard/storyboard.html'))->toBeTrue();
+});
+
+test('role permission matrix scenario preserves read-only canonical and browser evidence idempotently', function () {
+    Storage::fake('local');
+
+    $operator = configuredScenarioUser('operator@example.test');
+    $scenario = app(LifecycleScenarioRegistry::class)->get('role_permission_matrix_visibility');
+    $artifactStore = new ScenarioArtifactStore($scenario->key, 'role-permission-matrix-test-001');
+    $runner = app(RolePermissionMatrixVisibilityScenario::class);
+
+    $firstManifest = $runner->prepare($scenario, 'role-permission-matrix-test-001', [
+        'operator' => $operator,
+    ], $artifactStore);
+    $secondManifest = $runner->prepare($scenario, 'role-permission-matrix-test-001', [
+        'operator' => $operator,
+    ], $artifactStore);
+    $execution = $artifactStore->readJson('terminal/execution.json');
+
+    expect($firstManifest['resources'])->toBe($secondManifest['resources'])
+        ->and($firstManifest['resources']['role_count'])->toBe(1)
+        ->and($firstManifest['resources']['permission_count'])->toBe(count(UserPermission::cases()))
+        ->and($firstManifest['resources']['admin_override_role_count'])->toBe(0)
+        ->and($firstManifest['resources']['catalog_in_sync'])->toBeFalse()
+        ->and($execution['read_only'])->toBeTrue()
+        ->and($execution['external_calls'])->toBe(0)
+        ->and($execution['irreversible_actions'])->toBeFalse();
+
+    $artifactStore->putJson('browser/report.json', [
+        'result' => ['passed' => true],
+        'role_permissions' => [
+            'role_count' => $firstManifest['resources']['role_count'],
+            'permission_count' => $firstManifest['resources']['permission_count'],
+            'catalog_in_sync' => $firstManifest['resources']['catalog_in_sync'],
+            'admin_override_role_count' => $firstManifest['resources']['admin_override_role_count'],
+            'role_evidence' => $firstManifest['resources']['role_evidence'],
+            'mutation_actions_visible' => false,
+            'mobile_visible' => true,
+            'page_horizontal_overflow' => false,
+        ],
+        'checks' => [],
+        'artifacts' => [
+            'screenshots' => [
+                '01-role-permission-matrix' => 'browser/screenshots/01-role-permission-matrix.png',
+                '02-role-permission-matrix-mobile' => 'browser/screenshots/02-role-permission-matrix-mobile.png',
+            ],
+        ],
+    ]);
+
+    $audited = $runner->audit($firstManifest, $artifactStore);
+
+    expect($audited['result'])
+        ->terminal->toBe('passed')
+        ->browser->toBe('passed')
+        ->audit->toBe('passed')
+        ->passed->toBeTrue()
+        ->and($artifactStore->exists('terminal/audit.json'))->toBeTrue()
+        ->and($artifactStore->exists('storyboard/storyboard.json'))->toBeTrue()
+        ->and($artifactStore->exists('summary.html'))->toBeTrue();
 });
 
 test('new permit lifecycle scenario preserves uniqueness for long run references with a shared prefix', function () {
@@ -2781,6 +2851,7 @@ function configuredScenarioUser(string $email): User
         UserPermission::ManageBillingGroups,
         UserPermission::ViewBillingGroupRecords,
         UserPermission::CreateBillingGroupRecords,
+        UserPermission::ViewRoles,
         UserPermission::ManageStoryboards,
     ])->map(fn (UserPermission $permission): int => Permission::factory()->create([
         'code' => $permission->value,

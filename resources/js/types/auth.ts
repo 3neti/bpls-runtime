@@ -15,6 +15,7 @@ export type Auth = {
     role: string | null;
     can_access_staff: boolean;
     can_access_citizen: boolean;
+    can_view_roles: boolean;
 };
 
 export type Passkey = {

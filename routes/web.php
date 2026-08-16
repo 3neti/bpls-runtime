@@ -30,6 +30,7 @@ use App\Http\Controllers\Staff\PermitApplicationDocumentController;
 use App\Http\Controllers\Staff\PldsReportController;
 use App\Http\Controllers\Staff\ReceiptController;
 use App\Http\Controllers\Staff\RevenueSourceReportController;
+use App\Http\Controllers\Staff\RolePermissionController;
 use App\Http\Controllers\Staff\StoryboardController;
 use App\Http\Controllers\Staff\TopEstablishmentTaxDueReportController;
 use App\Http\Controllers\Staff\TotalCapitalGrossSummaryReportController;
@@ -88,6 +89,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('fee-rules.index');
         Route::get('fee-rules/{feeRule}', [FeeRuleController::class, 'show'])
             ->name('fee-rules.show');
+        Route::get('roles', [RolePermissionController::class, 'index'])
+            ->name('roles.index');
         Route::resource('billing-groups', BillingGroupController::class)
             ->only(['index', 'store', 'show']);
         Route::post('billing-groups/{billingGroup}/records', [BillingGroupRecordController::class, 'store'])
