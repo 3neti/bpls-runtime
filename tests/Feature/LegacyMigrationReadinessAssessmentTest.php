@@ -12,8 +12,11 @@ use App\Models\BusinessOwner;
 use App\Models\LegacyApplicationIdMapping;
 use App\Models\LegacyApplicationMappingExecution;
 use App\Models\LegacyApplicationMappingPlan;
+use App\Models\LegacyDeclarationLineMapping;
+use App\Models\LegacyDeclarationMappingExecution;
 use App\Models\LegacyFinancialMappingPlan;
 use App\Models\LegacyImportBatch;
+use App\Models\LegacyLineOfBusinessReconciliation;
 use App\Models\LegacyMappingExecution;
 use App\Models\LegacyMappingPlan;
 use App\Models\LegacyMigrationException;
@@ -21,7 +24,9 @@ use App\Models\LegacyMigrationReadinessAssessment;
 use App\Models\LegacyPermitEvidencePlan;
 use App\Models\LegacyRecord;
 use App\Models\LegacySource;
+use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
+use App\Models\PermitApplicationLine;
 use Illuminate\Support\Facades\Storage;
 
 /** @return array{source: LegacySource, batch: LegacyImportBatch} */
@@ -248,7 +253,96 @@ test('readiness reports completed application mapping coverage without claiming 
             'application_execution' => true,
             'application_mapped_records' => 1,
             'application_required_records' => 1,
-            'declaration_execution' => false,
+            'declaration_execution' => true,
+            'declaration_mapped_records' => 0,
+            'declaration_required_records' => 0,
+            'financial_execution' => false,
+            'permit_evidence_execution' => false,
+        ]);
+});
+
+test('readiness reports complete declaration execution only when every source line has accepted mapping evidence', function () {
+    $fixture = readinessBatch('declaration-execution');
+    $record = $fixture['batch']->records()->where('dataset_key', 'business_permit_applications')->sole();
+    $payload = [
+        ...$record->payload,
+        'linesOfBusiness' => [[
+            'businessCategory' => 'Readiness Retail',
+            'permitApplicationType' => 'New',
+            'capitalInvestment' => '1000.00',
+        ]],
+    ];
+    $record->update([
+        'payload' => $payload,
+        'payload_hash' => hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR)),
+    ]);
+    $declarationPlan = $fixture['batch']->declarationMappingPlans()->create([
+        'run_reference' => 'readiness-declaration-plan',
+        'planner_version' => 'bpls.declaration-mapping-plan.v1',
+        'dependency_snapshot_hash' => hash('sha256', 'readiness-declaration-snapshot'),
+        'status' => LegacyMappingPlanStatus::Planned,
+        'proposal_count' => 1,
+        'ready_count' => 1,
+        'review_count' => 0,
+        'blocked_count' => 0,
+        'started_at' => now(),
+        'completed_at' => now(),
+        'metadata' => ['fixture' => true],
+    ]);
+    $application = PermitApplication::factory()->create(['legacy_source_id' => $record->legacy_id]);
+    $applicationPlan = $fixture['batch']->applicationMappingPlans()->sole();
+    $applicationExecution = LegacyApplicationMappingExecution::factory()->for($applicationPlan, 'mappingPlan')->create([
+        'status' => LegacyMappingExecutionStatus::Completed,
+        'selected_count' => 1,
+        'created_count' => 1,
+        'mapping_count' => 1,
+        'completed_at' => now(),
+    ]);
+    $applicationMapping = LegacyApplicationIdMapping::query()->create([
+        'legacy_application_mapping_execution_id' => $applicationExecution->id,
+        'legacy_source_id' => $fixture['source']->id,
+        'legacy_import_batch_id' => $fixture['batch']->id,
+        'permit_application_id' => $application->id,
+        'dataset_key' => 'business_permit_applications',
+        'legacy_id' => $record->legacy_id,
+        'status' => 'mapped',
+        'mapping_basis' => 'test_execution',
+        'metadata' => ['fixture' => true],
+    ]);
+    $lineOfBusiness = LineOfBusiness::factory()->create();
+    $reconciliation = LegacyLineOfBusinessReconciliation::factory()->for($fixture['source'], 'source')->for($lineOfBusiness)->create();
+    $line = PermitApplicationLine::factory()->for($application)->for($lineOfBusiness)->create();
+    $declarationExecution = LegacyDeclarationMappingExecution::factory()->for($declarationPlan, 'mappingPlan')->create([
+        'status' => LegacyMappingExecutionStatus::Completed,
+        'selected_count' => 1,
+        'created_count' => 1,
+        'mapping_count' => 1,
+        'completed_at' => now(),
+    ]);
+    LegacyDeclarationLineMapping::query()->create([
+        'legacy_declaration_mapping_execution_id' => $declarationExecution->id,
+        'legacy_application_id_mapping_id' => $applicationMapping->id,
+        'legacy_line_of_business_reconciliation_id' => $reconciliation->id,
+        'legacy_source_id' => $fixture['source']->id,
+        'legacy_import_batch_id' => $fixture['batch']->id,
+        'permit_application_line_id' => $line->id,
+        'dataset_key' => 'business_permit_applications',
+        'legacy_id' => $record->legacy_id,
+        'line_index' => 0,
+        'status' => 'mapped',
+        'mapping_basis' => 'test_execution',
+        'metadata' => ['fixture' => true],
+    ]);
+
+    $assessment = app(AssessLegacyMigrationReadiness::class)->handle($fixture['batch'], 'readiness-declaration-execution');
+    $check = collect($assessment->checks)->firstWhere('key', 'remaining_domain_execution_paths');
+
+    expect($check['passed'])->toBeFalse()
+        ->and($check['actual'])->toMatchArray([
+            'application_execution' => true,
+            'declaration_execution' => true,
+            'declaration_mapped_records' => 1,
+            'declaration_required_records' => 1,
             'financial_execution' => false,
             'permit_evidence_execution' => false,
         ]);

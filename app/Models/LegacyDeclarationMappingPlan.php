@@ -46,6 +46,12 @@ class LegacyDeclarationMappingPlan extends Model
         return $this->hasMany(LegacyDeclarationMappingProposal::class);
     }
 
+    /** @return HasMany<LegacyDeclarationMappingExecution, $this> */
+    public function executions(): HasMany
+    {
+        return $this->hasMany(LegacyDeclarationMappingExecution::class);
+    }
+
     /** @return array<string, string> */
     protected function casts(): array
     {

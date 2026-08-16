@@ -11,6 +11,8 @@ use App\Enums\MigrationExceptionStatus;
 use App\Enums\MigrationValidationStatus;
 use App\Models\LegacyApplicationIdMapping;
 use App\Models\LegacyApplicationMappingExecution;
+use App\Models\LegacyDeclarationLineMapping;
+use App\Models\LegacyDeclarationMappingExecution;
 use App\Models\LegacyImportBatch;
 use App\Models\LegacyMappingExecution;
 use App\Models\LegacyMappingPlan;
@@ -21,7 +23,7 @@ use RuntimeException;
 
 final class AssessLegacyMigrationReadiness
 {
-    public const AssessorVersion = 'bpls.legacy-migration-readiness.v1';
+    public const AssessorVersion = 'bpls.legacy-migration-readiness.v2';
 
     public function handle(LegacyImportBatch $batch, string $runReference): LegacyMigrationReadinessAssessment
     {
@@ -116,6 +118,14 @@ final class AssessLegacyMigrationReadiness
             ->whereHas('executions', fn ($query) => $query->where('status', LegacyMappingExecutionStatus::Completed))
             ->exists();
         $applicationExecutionComplete = $completedApplicationExecution && $applicationMappings >= $applications;
+        $declarationMappings = LegacyDeclarationLineMapping::query()
+            ->whereBelongsTo($batch, 'importBatch')
+            ->where('status', 'mapped')
+            ->count();
+        $completedDeclarationExecution = $batch->declarationMappingPlans()
+            ->whereHas('executions', fn ($query) => $query->where('status', LegacyMappingExecutionStatus::Completed))
+            ->exists();
+        $declarationExecutionComplete = $lineCount === 0 || ($completedDeclarationExecution && $declarationMappings >= $lineCount);
 
         array_push(
             $checks,
@@ -134,10 +144,12 @@ final class AssessLegacyMigrationReadiness
                 'application_execution' => $applicationExecutionComplete,
                 'application_mapped_records' => $applicationMappings,
                 'application_required_records' => $applications,
-                'declaration_execution' => false,
+                'declaration_execution' => $declarationExecutionComplete,
+                'declaration_mapped_records' => $declarationMappings,
+                'declaration_required_records' => $lineCount,
                 'financial_execution' => false,
                 'permit_evidence_execution' => false,
-            ], 'Application execution is bounded and reversible; declaration, financial, and permit-evidence migration paths remain required.'),
+            ], 'Application and declaration execution are bounded and reversible; financial and permit-evidence migration paths remain required.'),
             $this->check('document_object_transfer_verified', 'cutover', $documentCount === 0, [
                 'staged_document_metadata_records' => $documentCount,
                 'object_transfer_verified' => false,
@@ -264,6 +276,12 @@ final class AssessLegacyMigrationReadiness
         }
         foreach (LegacyApplicationIdMapping::query()->whereBelongsTo($batch, 'importBatch')->select(['id', 'status', 'updated_at'])->orderBy('id')->cursor() as $mapping) {
             $parts[] = ['application_mapping', $mapping->id, $mapping->status, $mapping->updated_at?->toIso8601String()];
+        }
+        foreach (LegacyDeclarationMappingExecution::query()->whereHas('mappingPlan', fn ($query) => $query->whereBelongsTo($batch, 'importBatch'))->orderBy('id')->get() as $execution) {
+            $parts[] = ['declaration_execution', $execution->id, $execution->status->value, $execution->selection_hash, $execution->updated_at?->toIso8601String()];
+        }
+        foreach (LegacyDeclarationLineMapping::query()->whereBelongsTo($batch, 'importBatch')->select(['id', 'status', 'updated_at'])->orderBy('id')->cursor() as $mapping) {
+            $parts[] = ['declaration_mapping', $mapping->id, $mapping->status, $mapping->updated_at?->toIso8601String()];
         }
 
         return hash('sha256', json_encode($parts, JSON_THROW_ON_ERROR));
