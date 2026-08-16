@@ -53,6 +53,7 @@ afterEach(function (): void {
 
 test('an authorized snapshot becomes immutable payload-free intake evidence and a valid staging manifest', function () {
     Storage::fake('local');
+    $storedDocument = "%PDF-1.4\nAuthorized snapshot fixture\n%%EOF\n";
     $archive = createConvexSnapshotArchive([
         'business_owners/documents.jsonl' => convexJsonLines([
             ['_id' => 'owner-001', 'firstName' => 'Sensitive', 'lastName' => 'Owner'],
@@ -63,7 +64,13 @@ test('an authorized snapshot becomes immutable payload-free intake evidence and 
         'business_permit_applications/documents.jsonl' => convexJsonLines([
             ['_id' => 'application-001', 'businessOwnerId' => 'owner-001', 'businessId' => 'business-001', 'status' => 'Draft', 'applicationNumber' => 'BPA-SECRET'],
         ]),
-        '_storage/documents.jsonl' => convexJsonLines([['_id' => 'storage-secret']]),
+        '_storage/documents.jsonl' => convexJsonLines([[
+            '_id' => 'storage-secret',
+            'sha256' => base64_encode(hash('sha256', $storedDocument, true)),
+            'size' => strlen($storedDocument),
+            'contentType' => 'application/pdf',
+        ]]),
+        '_storage/storage-secret.pdf' => $storedDocument,
         'businesses/generated_schema.jsonl' => "{}\n",
     ]);
 
@@ -75,10 +82,14 @@ test('an authorized snapshot becomes immutable payload-free intake evidence and 
     );
     $report = File::get($result['report_path']);
     $manifest = json_decode(File::get($result['manifest_path']), true, flags: JSON_THROW_ON_ERROR);
+    $storageIndex = json_decode(File::get($result['storage_index_path']), true, flags: JSON_THROW_ON_ERROR);
     $batch = app(StageLegacyExport::class)->handle($result['manifest_path'], 'convex-stage-001');
 
     expect($result['table_count'])->toBe(3)
+        ->and($storageIndex['schema_version'])->toBe(PrepareLegacyConvexSnapshot::FileStorageIndexSchemaVersion)
         ->and($result['record_count'])->toBe(3)
+        ->and($result['storage_file_count'])->toBe(1)
+        ->and($result['storage_bytes'])->toBe(strlen($storedDocument))
         ->and(hash_file('sha256', $result['archive_path']))->toBe(hash_file('sha256', $archive))
         ->and(collect($result['datasets'])->pluck('key')->all())->toBe([
             'business_owners',
@@ -88,6 +99,18 @@ test('an authorized snapshot becomes immutable payload-free intake evidence and 
         ->and($manifest['source']['source_type'])->toBe('convex_snapshot_export')
         ->and($manifest['source']['provenance']['production_data'])->toBeTrue()
         ->and($manifest['source']['provenance']['deployment_sha256'])->toBe(hash('sha256', 'adjoining-porcupine-740'))
+        ->and($manifest['source']['provenance'])->toMatchArray([
+            'file_storage_included' => true,
+            'file_storage_count' => 1,
+            'file_storage_bytes' => strlen($storedDocument),
+        ])
+        ->and($storageIndex['entries'][0])->toMatchArray([
+            'storage_id' => 'storage-secret',
+            'archive_entry' => '_storage/storage-secret.pdf',
+            'sha256' => hash('sha256', $storedDocument),
+            'size_bytes' => strlen($storedDocument),
+            'content_type' => 'application/pdf',
+        ])
         ->and($report)->not->toContain('Sensitive', 'BPA-SECRET', 'owner-001', 'business-001', 'storage-secret')
         ->and($batch->status)->toBe(LegacyImportBatchStatus::Staged)
         ->and($batch->staged_record_count)->toBe(3)
@@ -95,6 +118,53 @@ test('an authorized snapshot becomes immutable payload-free intake evidence and 
         ->and(BusinessOwner::query()->count())->toBe(0)
         ->and(Business::query()->count())->toBe(0)
         ->and(PermitApplication::query()->count())->toBe(0);
+});
+
+test('snapshot intake refuses incomplete or tampered file storage', function (array $storageEntries, string $message) {
+    Storage::fake('local');
+    $archive = createConvexSnapshotArchive([
+        'business_owners/documents.jsonl' => convexJsonLines([['_id' => 'owner-001']]),
+        ...$storageEntries,
+    ]);
+
+    expect(fn () => app(PrepareLegacyConvexSnapshot::class)->handle(
+        $archive,
+        'convex-storage-refusal',
+        'adjoining-porcupine-740',
+        '2026-08-16T16:00:00+08:00',
+    ))->toThrow(RuntimeException::class, $message);
+})->with(function (): array {
+    $expected = 'expected object';
+
+    return [
+        'metadata without blob' => [[
+            '_storage/documents.jsonl' => convexJsonLines([[
+                '_id' => 'storage-001',
+                'sha256' => base64_encode(hash('sha256', $expected, true)),
+                'size' => strlen($expected),
+            ]]),
+        ], 'metadata has no matching blob'],
+        'blob without metadata' => [[
+            '_storage/storage-001.pdf' => $expected,
+        ], 'blobs without documents.jsonl metadata'],
+        'tampered blob' => [[
+            '_storage/documents.jsonl' => convexJsonLines([[
+                '_id' => 'storage-001',
+                'sha256' => base64_encode(hash('sha256', $expected, true)),
+                'size' => strlen($expected),
+            ]]),
+            '_storage/storage-001.pdf' => 'tampered object',
+        ], 'blob checksum does not match'],
+        'orphan blob' => [[
+            '_storage/documents.jsonl' => convexJsonLines([[
+                '_id' => 'storage-001',
+                'sha256' => base64_encode(hash('sha256', $expected, true)),
+                'size' => strlen($expected),
+            ]]),
+            '_storage/storage-001.pdf' => $expected,
+            '_storage/storage-002.pdf' => $expected,
+        ], 'does not resolve to exactly one metadata record'],
+    ];
 });
 
 test('snapshot intake is idempotent and a stable run refuses changed source evidence', function () {

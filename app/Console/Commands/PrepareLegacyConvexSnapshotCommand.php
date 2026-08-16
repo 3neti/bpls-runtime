@@ -48,6 +48,8 @@ class PrepareLegacyConvexSnapshotCommand extends Command
             'archive_sha256' => $result['archive_checksum'],
             'tables' => $result['table_count'],
             'records' => $result['record_count'],
+            'storage_files' => $result['storage_file_count'],
+            'storage_bytes' => $result['storage_bytes'],
             'production_data_present' => true,
             'staged' => false,
             'domain_writes' => false,
@@ -62,6 +64,7 @@ class PrepareLegacyConvexSnapshotCommand extends Command
             $this->line('Convex snapshot intake: '.$runReference);
             $this->line('Source: '.$result['source_key']);
             $this->line("Records: {$result['record_count']} across {$result['table_count']} tables");
+            $this->line("File storage: {$result['storage_file_count']} files / {$result['storage_bytes']} bytes");
             $this->line('Staged: no');
             $this->line('Domain writes: none');
             $this->line('Manifest: '.$result['manifest_path']);

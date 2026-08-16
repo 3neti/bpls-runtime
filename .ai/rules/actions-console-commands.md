@@ -15,3 +15,6 @@ Operator-supplied production Convex snapshots are local/testing-only, require du
 
 ## Public legacy report query is not migration authority
 The deployed legacy dataExport queries lack an application authorization check and may expose personal/financial report rows. Do not invoke them for migration acquisition or treat accidental accessibility as authority. Production migration evidence must come from an authenticated administrative Convex snapshot with deployment, operator, timestamp, and checksum provenance.
+
+## Convex file storage stays private and checksum-bound
+Authorized snapshots with `_storage` must validate each metadata row against exactly one blob by size and SHA-256. Keep source storage IDs only in the private checksum-bound index; public/review evidence may contain aggregate counts, bytes, and checksums but no IDs or payloads. File-storage intake does not stage objects, execute migration, or grant document authority.

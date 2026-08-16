@@ -6,13 +6,16 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use JsonException;
 use RuntimeException;
 use Throwable;
 use ZipArchive;
 
 final class PrepareLegacyConvexSnapshot
 {
-    public const IntakeSchemaVersion = 'bpls.legacy-convex-snapshot-intake.v1';
+    public const IntakeSchemaVersion = 'bpls.legacy-convex-snapshot-intake.v2';
+
+    public const FileStorageIndexSchemaVersion = 'bpls.legacy-convex-file-storage-index.v1';
 
     private const MaxArchiveBytes = 2_147_483_648;
 
@@ -30,7 +33,10 @@ final class PrepareLegacyConvexSnapshot
      *   source_key: string,
      *   table_count: int,
      *   record_count: int,
-     *   datasets: list<array<string, mixed>>
+     *   datasets: list<array<string, mixed>>,
+     *   storage_file_count: int,
+     *   storage_bytes: int,
+     *   storage_index_path: string|null
      * }
      */
     public function handle(
@@ -74,9 +80,11 @@ final class PrepareLegacyConvexSnapshot
         $this->bindRun($absoluteRoot, $binding);
         $storedArchivePath = $absoluteRoot.'/snapshot.zip';
         $this->preserveArchive($absoluteArchivePath, $storedArchivePath, $archiveChecksum);
-        $datasets = $this->extractDatasets($storedArchivePath, $absoluteRoot);
+        $snapshot = $this->extractSnapshot($storedArchivePath, $absoluteRoot, $archiveChecksum);
+        $datasets = $snapshot['datasets'];
+        $fileStorage = $snapshot['file_storage'];
         $sourceKey = 'IPIL-CONVEX-SNAPSHOT-'.strtoupper(substr($archiveChecksum, 0, 16));
-        $manifest = $this->manifest($sourceKey, $archiveChecksum, $deployment, $capturedAt, $datasets);
+        $manifest = $this->manifest($sourceKey, $archiveChecksum, $deployment, $capturedAt, $datasets, $fileStorage);
         $manifestPath = $absoluteRoot.'/manifest.json';
         $this->writeImmutableJson($manifestPath, $manifest, 'manifest');
         $recordCount = array_sum(array_column($datasets, 'record_count'));
@@ -97,6 +105,10 @@ final class PrepareLegacyConvexSnapshot
             'result' => [
                 'table_count' => count($datasets),
                 'record_count' => $recordCount,
+                'file_storage_included' => $fileStorage['included'],
+                'storage_file_count' => $fileStorage['file_count'],
+                'storage_bytes' => $fileStorage['total_bytes'],
+                'storage_index_sha256' => $fileStorage['index_sha256'],
                 'manifest_sha256' => hash_file('sha256', $manifestPath),
                 'ready_for_checksum_staging' => true,
                 'staged' => false,
@@ -116,6 +128,8 @@ final class PrepareLegacyConvexSnapshot
                 'migration_executed' => false,
                 'external_integrations' => false,
                 'cutover_authorized' => false,
+                'storage_identifiers_in_report' => false,
+                'private_storage_index_contains_source_identifiers' => $fileStorage['included'],
             ],
             'completed_at' => $capturedAt,
         ];
@@ -134,6 +148,9 @@ final class PrepareLegacyConvexSnapshot
             'table_count' => count($datasets),
             'record_count' => $recordCount,
             'datasets' => $datasets,
+            'storage_file_count' => $fileStorage['file_count'],
+            'storage_bytes' => $fileStorage['total_bytes'],
+            'storage_index_path' => $fileStorage['index_path'],
         ];
     }
 
@@ -184,8 +201,13 @@ final class PrepareLegacyConvexSnapshot
         }
     }
 
-    /** @return list<array<string, mixed>> */
-    private function extractDatasets(string $archivePath, string $root): array
+    /**
+     * @return array{
+     *   datasets: list<array<string, mixed>>,
+     *   file_storage: array{included: bool, file_count: int, total_bytes: int, index_path: string|null, index_sha256: string|null}
+     * }
+     */
+    private function extractSnapshot(string $archivePath, string $root, string $archiveChecksum): array
     {
         $zip = new ZipArchive;
         $opened = $zip->open($archivePath, ZipArchive::RDONLY);
@@ -199,6 +221,7 @@ final class PrepareLegacyConvexSnapshot
             }
 
             $tableEntries = [];
+            $storageNamespaces = [];
             $uncompressedBytes = 0;
             for ($index = 0; $index < $zip->numFiles; $index++) {
                 $stat = $zip->statIndex($index);
@@ -212,6 +235,28 @@ final class PrepareLegacyConvexSnapshot
                 $uncompressedBytes += $entryBytes;
                 if ($uncompressedBytes > self::MaxUncompressedBytes) {
                     throw new RuntimeException('Convex snapshot uncompressed size exceeds the 8 GiB intake limit.');
+                }
+
+                if (preg_match('#^((?:_components/[A-Za-z0-9_-]+/)*)_storage/documents\.jsonl$#', $entry, $matches) === 1) {
+                    $namespace = $matches[1];
+                    $storage = $storageNamespaces[$namespace] ?? ['metadata' => null, 'blobs' => []];
+                    if ($storage['metadata'] !== null) {
+                        throw new RuntimeException('Convex snapshot contains duplicate file-storage metadata.');
+                    }
+                    $storage['metadata'] = $index;
+                    $storageNamespaces[$namespace] = $storage;
+
+                    continue;
+                }
+
+                if (preg_match('#^((?:_components/[A-Za-z0-9_-]+/)*)_storage/([^/]+)$#', $entry, $matches) === 1
+                    && ! in_array($matches[2], ['documents.jsonl', 'generated_schema.jsonl'], true)) {
+                    $namespace = $matches[1];
+                    $storage = $storageNamespaces[$namespace] ?? ['metadata' => null, 'blobs' => []];
+                    $storage['blobs'][] = $index;
+                    $storageNamespaces[$namespace] = $storage;
+
+                    continue;
                 }
 
                 if (preg_match('#^([A-Za-z][A-Za-z0-9_-]{0,99})/documents\.jsonl$#', $entry, $matches) !== 1) {
@@ -252,10 +297,194 @@ final class PrepareLegacyConvexSnapshot
                 ];
             }
 
-            return $datasets;
+            return [
+                'datasets' => $datasets,
+                'file_storage' => $this->inventoryFileStorage($zip, $storageNamespaces, $root, $archiveChecksum),
+            ];
         } finally {
             $zip->close();
         }
+    }
+
+    /**
+     * @param  array<string, array{metadata: int|null, blobs: list<int>}>  $namespaces
+     * @return array{included: bool, file_count: int, total_bytes: int, index_path: string|null, index_sha256: string|null}
+     */
+    private function inventoryFileStorage(ZipArchive $zip, array $namespaces, string $root, string $archiveChecksum): array
+    {
+        if ($namespaces === []) {
+            return [
+                'included' => false,
+                'file_count' => 0,
+                'total_bytes' => 0,
+                'index_path' => null,
+                'index_sha256' => null,
+            ];
+        }
+
+        ksort($namespaces);
+        $entries = [];
+        foreach ($namespaces as $namespace => $storage) {
+            if ($storage['metadata'] === null) {
+                throw new RuntimeException('Convex snapshot file storage contains blobs without documents.jsonl metadata.');
+            }
+
+            $metadata = $this->storageMetadata($zip, $storage['metadata']);
+            $blobs = $this->storageBlobs($zip, $storage['blobs'], array_keys($metadata));
+            foreach ($metadata as $storageId => $item) {
+                $blob = $blobs[$storageId] ?? null;
+                if (! is_array($blob)) {
+                    throw new RuntimeException('Convex snapshot file-storage metadata has no matching blob.');
+                }
+                if ($item['size_bytes'] !== $blob['size_bytes']) {
+                    throw new RuntimeException('Convex snapshot file-storage blob size does not match its metadata.');
+                }
+                if (! hash_equals($item['sha256_base64'], $blob['sha256_base64'])) {
+                    throw new RuntimeException('Convex snapshot file-storage blob checksum does not match its metadata.');
+                }
+
+                $entries[] = [
+                    'namespace' => $namespace === '' ? 'root' : rtrim($namespace, '/'),
+                    'storage_id' => $storageId,
+                    'archive_entry' => $blob['archive_entry'],
+                    'sha256' => $blob['sha256'],
+                    'size_bytes' => $blob['size_bytes'],
+                    'content_type' => $item['content_type'],
+                ];
+            }
+
+            if (count($blobs) !== count($metadata)) {
+                throw new RuntimeException('Convex snapshot file storage contains a blob without matching metadata.');
+            }
+        }
+
+        $index = [
+            'schema_version' => self::FileStorageIndexSchemaVersion,
+            'archive_sha256' => $archiveChecksum,
+            'file_count' => count($entries),
+            'total_bytes' => array_sum(array_column($entries, 'size_bytes')),
+            'entries' => $entries,
+        ];
+        $indexPath = $root.'/storage-index.json';
+        $this->writeImmutableJson($indexPath, $index, 'file-storage index');
+        $indexChecksum = hash_file('sha256', $indexPath);
+        if (! is_string($indexChecksum)) {
+            throw new RuntimeException('Convex snapshot file-storage index could not be checksummed.');
+        }
+
+        return [
+            'included' => true,
+            'file_count' => $index['file_count'],
+            'total_bytes' => $index['total_bytes'],
+            'index_path' => $indexPath,
+            'index_sha256' => $indexChecksum,
+        ];
+    }
+
+    /** @return array<string, array{sha256_base64: string, size_bytes: int, content_type: string|null}> */
+    private function storageMetadata(ZipArchive $zip, int $index): array
+    {
+        $entry = $zip->getNameIndex($index);
+        $stream = is_string($entry) ? $zip->getStream($entry) : false;
+        if (! is_resource($stream)) {
+            throw new RuntimeException('Convex snapshot file-storage metadata could not be opened.');
+        }
+
+        $metadata = [];
+        try {
+            while (($line = fgets($stream)) !== false) {
+                if (trim($line) === '') {
+                    continue;
+                }
+
+                try {
+                    $item = json_decode($line, true, flags: JSON_THROW_ON_ERROR);
+                } catch (JsonException $exception) {
+                    throw new RuntimeException('Convex snapshot file-storage metadata is not valid JSON.', previous: $exception);
+                }
+                if (! is_array($item)) {
+                    throw new RuntimeException('Convex snapshot file-storage metadata must contain JSON objects.');
+                }
+
+                $storageId = $item['_id'] ?? null;
+                $sha256 = $item['sha256'] ?? null;
+                $size = $item['size'] ?? null;
+                $contentType = $item['contentType'] ?? null;
+                $binaryChecksum = is_string($sha256) ? base64_decode($sha256, true) : false;
+                if (! is_string($storageId) || preg_match('/^[A-Za-z0-9_-]{1,255}$/', $storageId) !== 1
+                    || ! is_string($sha256) || ! is_string($binaryChecksum) || strlen($binaryChecksum) !== 32
+                    || ! is_int($size) || $size < 0
+                    || (! is_null($contentType) && (! is_string($contentType) || strlen($contentType) > 255))) {
+                    throw new RuntimeException('Convex snapshot file-storage metadata is incomplete or invalid.');
+                }
+                if (isset($metadata[$storageId])) {
+                    throw new RuntimeException('Convex snapshot file-storage metadata contains a duplicate storage ID.');
+                }
+
+                $metadata[$storageId] = [
+                    'sha256_base64' => $sha256,
+                    'size_bytes' => $size,
+                    'content_type' => $contentType,
+                ];
+            }
+        } finally {
+            fclose($stream);
+        }
+
+        return $metadata;
+    }
+
+    /**
+     * @param  list<int>  $indexes
+     * @param  list<string>  $storageIds
+     * @return array<string, array{archive_entry: string, sha256: string, sha256_base64: string, size_bytes: int}>
+     */
+    private function storageBlobs(ZipArchive $zip, array $indexes, array $storageIds): array
+    {
+        $blobs = [];
+        $storageIdLookup = array_fill_keys($storageIds, true);
+        foreach ($indexes as $index) {
+            $entry = $zip->getNameIndex($index);
+            $name = is_string($entry) ? basename($entry) : '';
+            $storageId = explode('.', $name, 2)[0];
+            if (! isset($storageIdLookup[$storageId])) {
+                throw new RuntimeException('Convex snapshot file-storage blob does not resolve to exactly one metadata record.');
+            }
+
+            if (isset($blobs[$storageId])) {
+                throw new RuntimeException('Convex snapshot file storage contains duplicate blobs for one storage ID.');
+            }
+
+            $stream = is_string($entry) ? $zip->getStream($entry) : false;
+            if (! is_resource($stream)) {
+                throw new RuntimeException('Convex snapshot file-storage blob could not be opened.');
+            }
+
+            try {
+                $hash = hash_init('sha256');
+                $size = hash_update_stream($hash, $stream);
+                $checksum = hash_final($hash);
+            } finally {
+                fclose($stream);
+            }
+            if (preg_match('/^[a-f0-9]{64}$/', $checksum) !== 1) {
+                throw new RuntimeException('Convex snapshot file-storage blob could not be inspected.');
+            }
+
+            $binaryChecksum = hex2bin($checksum);
+            if (! is_string($binaryChecksum)) {
+                throw new RuntimeException('Convex snapshot file-storage blob checksum could not be encoded.');
+            }
+
+            $blobs[$storageId] = [
+                'archive_entry' => $entry,
+                'sha256' => $checksum,
+                'sha256_base64' => base64_encode($binaryChecksum),
+                'size_bytes' => $size,
+            ];
+        }
+
+        return $blobs;
     }
 
     private function assertSafeEntry(ZipArchive $zip, int $index, string $entry): void
@@ -329,10 +558,17 @@ final class PrepareLegacyConvexSnapshot
 
     /**
      * @param  list<array<string, mixed>>  $datasets
+     * @param  array{included: bool, file_count: int, total_bytes: int, index_path: string|null, index_sha256: string|null}  $fileStorage
      * @return array<string, mixed>
      */
-    private function manifest(string $sourceKey, string $archiveChecksum, string $deployment, string $capturedAt, array $datasets): array
-    {
+    private function manifest(
+        string $sourceKey,
+        string $archiveChecksum,
+        string $deployment,
+        string $capturedAt,
+        array $datasets,
+        array $fileStorage,
+    ): array {
         return [
             'schema_version' => StageLegacyExport::SchemaVersion,
             'source' => [
@@ -350,6 +586,10 @@ final class PrepareLegacyConvexSnapshot
                     'legacy_source_baseline' => 'b5a66a6a8b3828ebae9916f4bde1da729b1b9154',
                     'production_data' => true,
                     'payloads_in_evidence_report' => false,
+                    'file_storage_included' => $fileStorage['included'],
+                    'file_storage_count' => $fileStorage['file_count'],
+                    'file_storage_bytes' => $fileStorage['total_bytes'],
+                    'file_storage_index_sha256' => $fileStorage['index_sha256'],
                 ],
             ],
             'datasets' => $datasets,
