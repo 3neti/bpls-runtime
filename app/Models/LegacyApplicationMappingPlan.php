@@ -54,6 +54,12 @@ class LegacyApplicationMappingPlan extends Model
         return $this->hasMany(LegacyApplicationMappingProposal::class);
     }
 
+    /** @return HasMany<LegacyApplicationMappingExecution, $this> */
+    public function executions(): HasMany
+    {
+        return $this->hasMany(LegacyApplicationMappingExecution::class);
+    }
+
     /** @return array<string, string> */
     protected function casts(): array
     {

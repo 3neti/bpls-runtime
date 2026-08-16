@@ -8,6 +8,7 @@ use App\Enums\LegacyMappingProposalAction;
 use App\Enums\LegacyMappingProposalStatus;
 use App\Models\Business;
 use App\Models\BusinessOwner;
+use App\Models\LegacyApplicationIdMapping;
 use App\Models\LegacyApplicationMappingPlan;
 use App\Models\LegacyDeclarationMappingPlan;
 use App\Models\LegacyIdMapping;
@@ -324,7 +325,7 @@ class PlanLegacyPermitApplications
         ]);
     }
 
-    private function dependencySnapshotHash(LegacyImportBatch $batch): string
+    public function dependencySnapshotHash(LegacyImportBatch $batch): string
     {
         $context = hash_init('sha256');
 
@@ -335,6 +336,17 @@ class PlanLegacyPermitApplications
                 hash('sha256', $mapping->legacy_id),
                 $mapping->target_type,
                 $mapping->target_id,
+                $mapping->status,
+                $mapping->updated_at?->toJSON(),
+            ], JSON_THROW_ON_ERROR));
+        }
+
+        foreach (LegacyApplicationIdMapping::query()->whereBelongsTo($batch, 'importBatch')->orderBy('id')->cursor() as $mapping) {
+            hash_update($context, json_encode([
+                'application_mapping',
+                $mapping->id,
+                hash('sha256', $mapping->legacy_id),
+                $mapping->permit_application_id,
                 $mapping->status,
                 $mapping->updated_at?->toJSON(),
             ], JSON_THROW_ON_ERROR));

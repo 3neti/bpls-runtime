@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
 use App\Models\LegacyRecord;
+use App\Models\PermitApplication;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
 use Throwable;
@@ -138,6 +139,25 @@ class LegacyPermitApplicationProjector
     public function hashCanonical(array $value): string
     {
         return hash('sha256', $this->canonicalJson($value));
+    }
+
+    public function targetSnapshotHash(PermitApplication $application): string
+    {
+        return $this->hashCanonical([
+            'id' => $application->id,
+            'business_id' => $application->business_id,
+            'submitted_by_id' => $application->submitted_by_id,
+            'application_number' => $application->application_number,
+            'type' => $application->type->value,
+            'status' => $application->status->value,
+            'application_year' => $application->application_year,
+            'submitted_at' => $application->submitted_at?->toIso8601String(),
+            'assessed_at' => $application->assessed_at?->toIso8601String(),
+            'legacy_source_id' => $application->legacy_source_id,
+            'metadata' => $application->metadata,
+            'created_at' => $application->created_at?->toIso8601String(),
+            'updated_at' => $application->updated_at?->toIso8601String(),
+        ]);
     }
 
     /** @return array{PermitApplicationStatus|null, list<string>, bool} */

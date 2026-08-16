@@ -9,6 +9,8 @@ use App\Enums\MigrationExceptionSeverity;
 use App\Enums\MigrationExceptionStatus;
 use App\Models\Business;
 use App\Models\BusinessOwner;
+use App\Models\LegacyApplicationIdMapping;
+use App\Models\LegacyApplicationMappingExecution;
 use App\Models\LegacyApplicationMappingPlan;
 use App\Models\LegacyFinancialMappingPlan;
 use App\Models\LegacyImportBatch;
@@ -213,6 +215,43 @@ test('stable readiness runs are idempotent and reject changed evidence', functio
 
     expect(fn () => $action->handle($fixture['batch'], 'readiness-stable-001'))
         ->toThrow(RuntimeException::class, 'different evidence');
+});
+
+test('readiness reports completed application mapping coverage without claiming other domain executors exist', function () {
+    $fixture = readinessBatch('application-execution');
+    $plan = $fixture['batch']->applicationMappingPlans()->sole();
+    $execution = LegacyApplicationMappingExecution::factory()->for($plan, 'mappingPlan')->create([
+        'status' => LegacyMappingExecutionStatus::Completed,
+        'selected_count' => 1,
+        'created_count' => 1,
+        'mapping_count' => 1,
+        'completed_at' => now(),
+    ]);
+    $application = PermitApplication::factory()->create(['legacy_source_id' => 'application-application-execution']);
+    LegacyApplicationIdMapping::query()->create([
+        'legacy_application_mapping_execution_id' => $execution->id,
+        'legacy_source_id' => $fixture['source']->id,
+        'legacy_import_batch_id' => $fixture['batch']->id,
+        'permit_application_id' => $application->id,
+        'dataset_key' => 'business_permit_applications',
+        'legacy_id' => 'application-application-execution',
+        'status' => 'mapped',
+        'mapping_basis' => 'test_execution',
+        'metadata' => ['fixture' => true],
+    ]);
+
+    $assessment = app(AssessLegacyMigrationReadiness::class)->handle($fixture['batch'], 'readiness-application-execution');
+    $check = collect($assessment->checks)->firstWhere('key', 'remaining_domain_execution_paths');
+
+    expect($check['passed'])->toBeFalse()
+        ->and($check['actual'])->toMatchArray([
+            'application_execution' => true,
+            'application_mapped_records' => 1,
+            'application_required_records' => 1,
+            'declaration_execution' => false,
+            'financial_execution' => false,
+            'permit_evidence_execution' => false,
+        ]);
 });
 
 test('command preserves redacted evidence and fails a requested cutover gate', function () {

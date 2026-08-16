@@ -9,6 +9,8 @@ use App\Enums\LegacyMigrationReadinessStatus;
 use App\Enums\MigrationExceptionSeverity;
 use App\Enums\MigrationExceptionStatus;
 use App\Enums\MigrationValidationStatus;
+use App\Models\LegacyApplicationIdMapping;
+use App\Models\LegacyApplicationMappingExecution;
 use App\Models\LegacyImportBatch;
 use App\Models\LegacyMappingExecution;
 use App\Models\LegacyMappingPlan;
@@ -106,6 +108,14 @@ final class AssessLegacyMigrationReadiness
         $completedRegistryExecution = $batch->mappingPlans()
             ->whereHas('executions', fn ($query) => $query->where('status', LegacyMappingExecutionStatus::Completed))
             ->exists();
+        $applicationMappings = LegacyApplicationIdMapping::query()
+            ->whereBelongsTo($batch, 'importBatch')
+            ->where('status', 'mapped')
+            ->count();
+        $completedApplicationExecution = $batch->applicationMappingPlans()
+            ->whereHas('executions', fn ($query) => $query->where('status', LegacyMappingExecutionStatus::Completed))
+            ->exists();
+        $applicationExecutionComplete = $completedApplicationExecution && $applicationMappings >= $applications;
 
         array_push(
             $checks,
@@ -121,11 +131,13 @@ final class AssessLegacyMigrationReadiness
                 'required_records' => $owners + $businesses,
             ], 'Registry proposals must be executed and mapped before cutover.'),
             $this->check('remaining_domain_execution_paths', 'cutover', false, [
-                'application_execution' => false,
+                'application_execution' => $applicationExecutionComplete,
+                'application_mapped_records' => $applicationMappings,
+                'application_required_records' => $applications,
                 'declaration_execution' => false,
                 'financial_execution' => false,
                 'permit_evidence_execution' => false,
-            ], 'Only registry execution is implemented; remaining domain migration paths require bounded, reversible executors.'),
+            ], 'Application execution is bounded and reversible; declaration, financial, and permit-evidence migration paths remain required.'),
             $this->check('document_object_transfer_verified', 'cutover', $documentCount === 0, [
                 'staged_document_metadata_records' => $documentCount,
                 'object_transfer_verified' => false,
@@ -246,6 +258,12 @@ final class AssessLegacyMigrationReadiness
         }
         foreach (LegacyMappingExecution::query()->whereHas('mappingPlan', fn ($query) => $query->whereBelongsTo($batch, 'importBatch'))->orderBy('id')->get() as $execution) {
             $parts[] = ['execution', $execution->id, $execution->status->value, $execution->selection_hash, $execution->updated_at?->toIso8601String()];
+        }
+        foreach (LegacyApplicationMappingExecution::query()->whereHas('mappingPlan', fn ($query) => $query->whereBelongsTo($batch, 'importBatch'))->orderBy('id')->get() as $execution) {
+            $parts[] = ['application_execution', $execution->id, $execution->status->value, $execution->selection_hash, $execution->updated_at?->toIso8601String()];
+        }
+        foreach (LegacyApplicationIdMapping::query()->whereBelongsTo($batch, 'importBatch')->select(['id', 'status', 'updated_at'])->orderBy('id')->cursor() as $mapping) {
+            $parts[] = ['application_mapping', $mapping->id, $mapping->status, $mapping->updated_at?->toIso8601String()];
         }
 
         return hash('sha256', json_encode($parts, JSON_THROW_ON_ERROR));
