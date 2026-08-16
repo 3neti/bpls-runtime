@@ -46,6 +46,12 @@ class LegacyPermitEvidencePlan extends Model
         return $this->hasMany(LegacyPermitEvidenceProposal::class);
     }
 
+    /** @return HasMany<LegacyPermitEvidenceExecution, $this> */
+    public function executions(): HasMany
+    {
+        return $this->hasMany(LegacyPermitEvidenceExecution::class);
+    }
+
     /** @return array<string, string> */
     protected function casts(): array
     {

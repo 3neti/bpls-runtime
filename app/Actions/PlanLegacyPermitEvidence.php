@@ -17,13 +17,13 @@ use RuntimeException;
 
 final class PlanLegacyPermitEvidence
 {
-    public const PlannerVersion = 'bpls.permit-evidence-plan.v1';
+    public const PlannerVersion = 'bpls.permit-evidence-plan.v2';
 
     public function handle(LegacyImportBatch $batch, string $runReference): LegacyPermitEvidencePlan
     {
         $this->assertReady($batch, $runReference);
         $datasets = $this->datasetKeys($batch);
-        $snapshot = $this->snapshotHash($batch);
+        $snapshot = $this->dependencySnapshotHash($batch);
         $plan = $this->resolvePlan($batch, $runReference, $snapshot, $datasets);
 
         if (in_array($plan->status, [LegacyMappingPlanStatus::Planned, LegacyMappingPlanStatus::PlannedWithExceptions], true)) {
@@ -413,14 +413,26 @@ final class PlanLegacyPermitEvidence
         return $available->first();
     }
 
-    private function snapshotHash(LegacyImportBatch $batch): string
+    public function dependencySnapshotHash(LegacyImportBatch $batch): string
     {
         $parts = [['batch', $batch->id, $batch->manifest_checksum]];
         foreach ($batch->records()->select(['id', 'dataset_key', 'payload_hash'])->orderBy('id')->cursor() as $record) {
             $parts[] = ['record', $record->id, $record->dataset_key, $record->payload_hash];
         }
         foreach (LegacyClearanceTypeReconciliation::query()->where('legacy_source_id', $batch->legacy_source_id)->orderBy('id')->get() as $reconciliation) {
-            $parts[] = ['clearance', $reconciliation->id, $reconciliation->updated_at?->toIso8601String(), $reconciliation->status->value, $reconciliation->target_code];
+            $parts[] = [
+                'clearance',
+                $reconciliation->id,
+                $reconciliation->status->value,
+                $reconciliation->source_dataset,
+                $reconciliation->source_legacy_id,
+                $reconciliation->target_code,
+                $reconciliation->target_label,
+                $reconciliation->decision_authority,
+                $reconciliation->evidence_reference,
+                $reconciliation->decided_at?->toIso8601String(),
+                $this->hash($reconciliation->metadata),
+            ];
         }
         foreach ($batch->applicationMappingPlans()->with('proposals:id,legacy_application_mapping_plan_id,legacy_record_id,status,projection_hash')->orderBy('id')->get() as $plan) {
             $parts[] = ['application_plan', $plan->id, $plan->status->value, $plan->dependency_snapshot_hash, $plan->proposals->toArray()];

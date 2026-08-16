@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -19,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property LegacyClearanceTypeReconciliationStatus $status
  * @property string|null $decision_authority
  * @property string|null $evidence_reference
+ * @property Carbon|null $decided_at
  * @property array<string, mixed>|null $metadata
  */
 #[Fillable(['legacy_source_id', 'source_dataset', 'source_legacy_id', 'target_code', 'target_label', 'status', 'decision_authority', 'evidence_reference', 'decided_at', 'metadata'])]

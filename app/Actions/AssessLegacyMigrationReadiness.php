@@ -20,13 +20,15 @@ use App\Models\LegacyImportBatch;
 use App\Models\LegacyMappingExecution;
 use App\Models\LegacyMappingPlan;
 use App\Models\LegacyMigrationReadinessAssessment;
+use App\Models\LegacyPermitClearanceMapping;
+use App\Models\LegacyPermitEvidenceExecution;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 final class AssessLegacyMigrationReadiness
 {
-    public const AssessorVersion = 'bpls.legacy-migration-readiness.v3';
+    public const AssessorVersion = 'bpls.legacy-migration-readiness.v4';
 
     public function handle(LegacyImportBatch $batch, string $runReference): LegacyMigrationReadinessAssessment
     {
@@ -143,6 +145,28 @@ final class AssessLegacyMigrationReadiness
             ->exists();
         $financialExecutionComplete = $financialSnapshots === 0
             || ($completedFinancialExecution && $financialMappings >= $financialSnapshots);
+        $permitEvidencePlan = $batch->permitEvidencePlans()->latest('id')->first();
+        $pendingClearanceProposals = $permitEvidencePlan?->proposals()
+            ->where('kind', 'clearance')
+            ->where('status', LegacyMappingProposalStatus::Ready)
+            ->count() ?? 0;
+        $unresolvedPermitEvidence = $permitEvidencePlan?->proposals()
+            ->where(function ($query): void {
+                $query->where('kind', '!=', 'clearance')
+                    ->orWhere('status', '!=', LegacyMappingProposalStatus::Ready);
+            })
+            ->count() ?? 0;
+        $permitClearanceMappings = LegacyPermitClearanceMapping::query()
+            ->whereBelongsTo($batch, 'importBatch')
+            ->where('status', 'mapped')
+            ->count();
+        $completedPermitEvidenceExecution = $permitEvidencePlan?->executions()
+            ->where('status', LegacyMappingExecutionStatus::Completed)
+            ->exists() ?? false;
+        $permitEvidenceExecutionComplete = $permitEvidencePlan !== null
+            && $unresolvedPermitEvidence === 0
+            && ($pendingClearanceProposals === 0
+                || ($completedPermitEvidenceExecution && $permitClearanceMappings >= $pendingClearanceProposals));
 
         array_push(
             $checks,
@@ -167,8 +191,11 @@ final class AssessLegacyMigrationReadiness
                 'financial_execution' => $financialExecutionComplete,
                 'financial_mapped_snapshots' => $financialMappings,
                 'financial_required_snapshots' => $financialSnapshots,
-                'permit_evidence_execution' => false,
-            ], 'Application, declaration, and bounded annual financial snapshot execution are reversible; permit-evidence execution and unresolved financial proposals remain required.'),
+                'permit_evidence_execution' => $permitEvidenceExecutionComplete,
+                'pending_clearance_proposals' => $pendingClearanceProposals,
+                'mapped_pending_clearances' => $permitClearanceMappings,
+                'unresolved_permit_evidence_proposals' => $unresolvedPermitEvidence,
+            ], 'Application, declaration, bounded annual financial snapshots, and reconciled pending-clearance assignments have reversible execution paths; unresolved financial and authority-bearing permit evidence remain required.'),
             $this->check('document_object_transfer_verified', 'cutover', $documentCount === 0, [
                 'staged_document_metadata_records' => $documentCount,
                 'object_transfer_verified' => false,
@@ -307,6 +334,12 @@ final class AssessLegacyMigrationReadiness
         }
         foreach (LegacyFinancialSnapshotMapping::query()->whereBelongsTo($batch, 'importBatch')->select(['id', 'status', 'updated_at'])->orderBy('id')->cursor() as $mapping) {
             $parts[] = ['financial_mapping', $mapping->id, $mapping->status, $mapping->updated_at?->toIso8601String()];
+        }
+        foreach (LegacyPermitEvidenceExecution::query()->whereHas('mappingPlan', fn ($query) => $query->whereBelongsTo($batch, 'importBatch'))->orderBy('id')->get() as $execution) {
+            $parts[] = ['permit_evidence_execution', $execution->id, $execution->status->value, $execution->selection_hash, $execution->updated_at?->toIso8601String()];
+        }
+        foreach (LegacyPermitClearanceMapping::query()->whereBelongsTo($batch, 'importBatch')->select(['id', 'status', 'updated_at'])->orderBy('id')->cursor() as $mapping) {
+            $parts[] = ['permit_clearance_mapping', $mapping->id, $mapping->status, $mapping->updated_at?->toIso8601String()];
         }
 
         return hash('sha256', json_encode($parts, JSON_THROW_ON_ERROR));

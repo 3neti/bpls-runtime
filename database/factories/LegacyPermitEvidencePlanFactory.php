@@ -22,7 +22,7 @@ class LegacyPermitEvidencePlanFactory extends Factory
         return [
             'legacy_import_batch_id' => LegacyImportBatch::factory(),
             'run_reference' => 'permit-evidence-'.fake()->unique()->uuid(),
-            'planner_version' => 'bpls.permit-evidence-plan.v1',
+            'planner_version' => 'bpls.permit-evidence-plan.v2',
             'dependency_snapshot_hash' => hash('sha256', fake()->uuid()),
             'status' => LegacyMappingPlanStatus::Planned,
             'proposal_count' => 0,

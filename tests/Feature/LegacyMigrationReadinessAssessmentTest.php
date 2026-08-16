@@ -259,7 +259,7 @@ test('readiness reports completed application mapping coverage and non-applicabl
             'financial_execution' => true,
             'financial_mapped_snapshots' => 0,
             'financial_required_snapshots' => 0,
-            'permit_evidence_execution' => false,
+            'permit_evidence_execution' => true,
         ]);
 });
 
@@ -348,7 +348,7 @@ test('readiness reports complete declaration execution only when every source li
             'financial_execution' => true,
             'financial_mapped_snapshots' => 0,
             'financial_required_snapshots' => 0,
-            'permit_evidence_execution' => false,
+            'permit_evidence_execution' => true,
         ]);
 });
 
