@@ -52,6 +52,9 @@ class StageLegacyExportCommand extends Command
             'staged_records' => $batch->staged_record_count,
             'exceptions' => $batch->exception_count,
             'mappings' => $batch->mapping_count,
+            'dataset_inventories' => $batch->metadata['dataset_inventory_count'] ?? 0,
+            'reference_checks' => $batch->metadata['reference_check_count'] ?? 0,
+            'unresolved_references' => $batch->metadata['unresolved_reference_count'] ?? 0,
             'domain_writes' => false,
             'artifacts' => Storage::disk('local')->path($artifactPath),
         ];
@@ -65,6 +68,9 @@ class StageLegacyExportCommand extends Command
             $this->line('Status: '.$batch->status->value);
             $this->line("Records: {$batch->staged_record_count} staged / {$batch->source_record_count} source");
             $this->line('Exceptions: '.$batch->exception_count);
+            $this->line('Dataset inventories: '.($batch->metadata['dataset_inventory_count'] ?? 0));
+            $this->line('Reference checks: '.($batch->metadata['reference_check_count'] ?? 0));
+            $this->line('Unresolved references: '.($batch->metadata['unresolved_reference_count'] ?? 0));
             $this->line('Mappings: 0');
             $this->line('Domain writes: none');
             $this->line('Artifacts: '.Storage::disk('local')->path($artifactPath));
@@ -98,6 +104,9 @@ class StageLegacyExportCommand extends Command
                 'staged_record_count' => $batch->staged_record_count,
                 'exception_count' => $batch->exception_count,
                 'mapping_count' => $batch->mapping_count,
+                'dataset_inventory_count' => $batch->metadata['dataset_inventory_count'] ?? 0,
+                'reference_check_count' => $batch->metadata['reference_check_count'] ?? 0,
+                'unresolved_reference_count' => $batch->metadata['unresolved_reference_count'] ?? 0,
                 'domain_writes' => false,
             ],
             'validations' => $batch->validationResults->map(fn (MigrationValidationResult $validation): array => [
@@ -154,6 +163,11 @@ class StageLegacyExportCommand extends Command
             'identity_field',
             'json_error',
             'legacy_id_sha256',
+            'field',
+            'target_dataset',
+            'required',
+            'cardinality',
+            'reference_sha256',
             'payload_sha256',
             'raw_sha256',
         ]);

@@ -8,6 +8,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Assessment/** | .ai/rules/assessment.md |
 | app/{Actions,Http/Controllers/Citizen}/** | .ai/rules/citizen.md |
 | {app/Actions/StageLegacyExport.php,app/Console/Commands/StageLegacyExportCommand.php,app/Models/Legacy*.php} | .ai/rules/commands-models.md |
+| {app/Actions/StageLegacyExport.php,app/Actions/ValidateStagedLegacyDatasets.php,app/Console/Commands/StageLegacyExportCommand.php} | .ai/rules/commands.md |
 | app/LifecycleScenarios/** | .ai/rules/lifecycle-scenarios.md |
 | app/Models/{User,BusinessOwner,Business,PermitApplication}.php | .ai/rules/models.md |
 | {app/Actions/*Report*.php,app/Http/Controllers/Staff/*ReportController.php,resources/js/pages/reports/**} | .ai/rules/pages-reports.md |

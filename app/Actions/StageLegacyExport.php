@@ -21,6 +21,8 @@ class StageLegacyExport
 {
     public const SchemaVersion = 'bpls.legacy-staging.v1';
 
+    public function __construct(private ValidateStagedLegacyDatasets $validateStagedLegacyDatasets) {}
+
     public function handle(string $manifestPath, string $runReference): LegacyImportBatch
     {
         $this->assertRunReference($runReference);
@@ -62,6 +64,9 @@ class StageLegacyExport
             $hasFatalFailure = $hasFatalFailure || $result['fatal'];
         }
 
+        $structureValidation = $this->validateStagedLegacyDatasets->handle($batch, $manifest['datasets'], ! $hasFatalFailure);
+        $exceptionCount += $structureValidation['exception_count'];
+
         $status = match (true) {
             $hasFatalFailure => LegacyImportBatchStatus::Failed,
             $exceptionCount > 0 => LegacyImportBatchStatus::StagedWithExceptions,
@@ -78,6 +83,9 @@ class StageLegacyExport
             'metadata' => [
                 ...($batch->metadata ?? []),
                 'dataset_count' => count($manifest['datasets']),
+                'dataset_inventory_count' => $structureValidation['inventory_count'],
+                'reference_check_count' => $structureValidation['reference_check_count'],
+                'unresolved_reference_count' => $structureValidation['unresolved_reference_count'],
                 'domain_writes' => false,
                 'payloads_in_report' => false,
             ],
@@ -369,7 +377,7 @@ class StageLegacyExport
      * @return array{
      *   schema_version: string,
      *   source: array{key: string, title: string, source_type: string, baseline?: string|null, archive_checksum?: string|null, provenance: array<string, mixed>},
-     *   datasets: list<array{key: string, entity_type: string, file: string, sha256: string, record_count: int, identity_field: string}>
+     *   datasets: list<array{key: string, entity_type: string, file: string, sha256: string, record_count: int, identity_field: string, references: list<array{field: string, target_dataset: string, required: bool, cardinality: 'one'|'many'}>}>
      * }
      */
     private function validatedManifest(string $contents): array
@@ -401,6 +409,12 @@ class StageLegacyExport
             'datasets.*.sha256' => ['required', 'string', 'regex:/^[a-f0-9]{64}$/'],
             'datasets.*.record_count' => ['required', 'integer', 'min:0'],
             'datasets.*.identity_field' => ['sometimes', 'string', 'max:100'],
+            'datasets.*.references' => ['sometimes', 'array', 'list'],
+            'datasets.*.references.*' => ['required', 'array'],
+            'datasets.*.references.*.field' => ['required', 'string', 'max:255', 'regex:/^[A-Za-z0-9_.*-]+$/'],
+            'datasets.*.references.*.target_dataset' => ['required', 'string', 'max:100', 'regex:/^[A-Za-z0-9][A-Za-z0-9._-]*$/'],
+            'datasets.*.references.*.required' => ['sometimes', 'boolean'],
+            'datasets.*.references.*.cardinality' => ['sometimes', 'in:one,many'],
         ]);
 
         if ($validator->fails()) {
@@ -415,11 +429,44 @@ class StageLegacyExport
             throw new RuntimeException('Legacy staging manifest validation returned an invalid normalized shape.');
         }
 
+        $datasetKeys = collect($validatedDatasets)->pluck('key')->all();
         $datasets = [];
 
         foreach ($validatedDatasets as $dataset) {
             if (! is_array($dataset)) {
                 throw new RuntimeException('Legacy staging dataset validation returned an invalid normalized shape.');
+            }
+
+            $references = [];
+            $seenReferenceSignatures = [];
+
+            foreach (($dataset['references'] ?? []) as $reference) {
+                if (! is_array($reference)) {
+                    throw new RuntimeException('Legacy staging reference validation returned an invalid normalized shape.');
+                }
+
+                if (! in_array($reference['target_dataset'], $datasetKeys, true)) {
+                    throw new RuntimeException("Legacy staging reference target [{$reference['target_dataset']}] is not declared as a dataset.");
+                }
+
+                $normalizedReference = [
+                    'field' => (string) $reference['field'],
+                    'target_dataset' => (string) $reference['target_dataset'],
+                    'required' => (bool) ($reference['required'] ?? false),
+                    'cardinality' => ($reference['cardinality'] ?? 'one') === 'many' ? 'many' : 'one',
+                ];
+                $referenceSignature = implode('|', [
+                    $normalizedReference['field'],
+                    $normalizedReference['target_dataset'],
+                    $normalizedReference['cardinality'],
+                ]);
+
+                if (isset($seenReferenceSignatures[$referenceSignature])) {
+                    throw new RuntimeException("Legacy staging dataset [{$dataset['key']}] declares duplicate reference [{$normalizedReference['field']} -> {$normalizedReference['target_dataset']}].");
+                }
+
+                $seenReferenceSignatures[$referenceSignature] = true;
+                $references[] = $normalizedReference;
             }
 
             $datasets[] = [
@@ -429,6 +476,7 @@ class StageLegacyExport
                 'sha256' => (string) $dataset['sha256'],
                 'record_count' => (int) $dataset['record_count'],
                 'identity_field' => isset($dataset['identity_field']) ? (string) $dataset['identity_field'] : '_id',
+                'references' => $references,
             ];
         }
 
