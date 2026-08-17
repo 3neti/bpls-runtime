@@ -1,16 +1,27 @@
 <?php
 
+use App\Actions\AcceptLegacyHistoricalFinancialCohortMappings;
+use App\Actions\AuditLegacyHistoricalFinancialPreservation;
+use App\Actions\AuditLegacyHistoricalFinancialPreservationRestoration;
+use App\Actions\BuildLegacyHistoricalFinancialRehearsalAuthorizationPacket;
 use App\Actions\CharacterizeLegacyHistoricalFinancialApplicationMappings;
 use App\Actions\CharacterizeLegacyHistoricalFinancialCohortPrerequisites;
+use App\Actions\ExecuteLegacyHistoricalFinancialPreservation;
 use App\Actions\PlanLegacyFinancialDependencies;
 use App\Actions\PlanLegacyRegistryMigration;
+use App\Actions\RollbackLegacyHistoricalFinancialPreservation;
 use App\Enums\LegacyImportBatchStatus;
 use App\Models\LegacyApplicationIdMapping;
+use App\Models\LegacyHistoricalFinancialMappingSet;
+use App\Models\LegacyHistoricalFinancialPreservationExecution;
+use App\Models\LegacyHistoricalFinancialPreservedBundle;
 use App\Models\LegacyIdMapping;
 use App\Models\LegacyImportBatch;
 use App\Models\LegacyLineOfBusinessReconciliation;
 use App\Models\LegacyRecord;
 use App\Models\LegacySource;
+use App\Models\LineOfBusiness;
+use App\Models\PermitApplication;
 use Illuminate\Support\Facades\Storage;
 
 /** @param array<string, mixed> $payload */
@@ -258,4 +269,202 @@ test('command writes immutable payload-safe proposal artifacts without creating 
         ->and(LegacyLineOfBusinessReconciliation::query()->count())->toBe(0)
         ->and(LegacyApplicationIdMapping::query()->count())->toBe(0)
         ->and(LegacyIdMapping::query()->count())->toBe(0);
+});
+
+test('board accepted five-record prerequisites create one frozen idempotent mapping set without operational finance', function () {
+    $plans = plannedCohortPrerequisites('acceptance');
+    $characterization = app(CharacterizeLegacyHistoricalFinancialCohortPrerequisites::class)->handle(
+        $plans['financial'],
+        $plans['registry'],
+        $plans['cohort_sha256'],
+    );
+    $package = $characterization['report']['fingerprints']['prerequisite_proposals_sha256'];
+    $action = app(AcceptLegacyHistoricalFinancialCohortMappings::class);
+
+    $first = $action->handle(
+        $plans['financial'],
+        $plans['registry'],
+        $plans['cohort_sha256'],
+        $package,
+        'five-record-acceptance-001',
+        'Architecture Review Board',
+        'BOARD-FIVE-RECORD-ACCEPTANCE',
+    );
+    $second = $action->handle(
+        $plans['financial'],
+        $plans['registry'],
+        $plans['cohort_sha256'],
+        $package,
+        'five-record-acceptance-001',
+        'Architecture Review Board',
+        'BOARD-FIVE-RECORD-ACCEPTANCE',
+    );
+
+    expect($first->status)->toBe('frozen')
+        ->and($first->accepted_mapping_set_sha256)->toMatch('/^[a-f0-9]{64}$/')
+        ->and($second->id)->toBe($first->id)
+        ->and(LegacyHistoricalFinancialMappingSet::query()->count())->toBe(1)
+        ->and(LineOfBusiness::query()->count())->toBe(5)
+        ->and(LegacyLineOfBusinessReconciliation::query()->where('status', 'accepted')->count())->toBe(5)
+        ->and(LegacyIdMapping::query()->count())->toBe(10)
+        ->and(LegacyApplicationIdMapping::query()->count())->toBe(5)
+        ->and(PermitApplication::query()->count())->toBe(5)
+        ->and(data_get($first->metadata, 'operational_counts_after'))->toBe([
+            'assessments' => 0,
+            'assessment_lines' => 0,
+            'payment_schedules' => 0,
+            'payment_schedule_lines' => 0,
+            'treasury_collections' => 0,
+            'receipts' => 0,
+        ])
+        ->and(data_get($first->manifest, 'safety.production_rehearsal_authorized'))->toBeFalse();
+});
+
+test('accepted cohort rejects divergent retry and rolls back incomplete prerequisite evidence', function () {
+    $plans = plannedCohortPrerequisites('divergent');
+    $characterization = app(CharacterizeLegacyHistoricalFinancialCohortPrerequisites::class)->handle($plans['financial'], $plans['registry'], $plans['cohort_sha256']);
+    $package = $characterization['report']['fingerprints']['prerequisite_proposals_sha256'];
+    $action = app(AcceptLegacyHistoricalFinancialCohortMappings::class);
+    $action->handle($plans['financial'], $plans['registry'], $plans['cohort_sha256'], $package, 'five-record-divergent-001', 'Architecture Review Board', 'BOARD-DIVERGENT');
+
+    expect(fn () => $action->handle($plans['financial'], $plans['registry'], $plans['cohort_sha256'], $package, 'five-record-divergent-002', 'Architecture Review Board', 'BOARD-DIVERGENT'))
+        ->toThrow(RuntimeException::class, 'different acceptance decision');
+
+    $freshPlans = plannedCohortPrerequisites('changed-source');
+    $freshCharacterization = app(CharacterizeLegacyHistoricalFinancialCohortPrerequisites::class)->handle($freshPlans['financial'], $freshPlans['registry'], $freshPlans['cohort_sha256']);
+    $barangay = $freshPlans['registry']->importBatch->records()->where('dataset_key', 'barangays')->firstOrFail();
+    $barangay->update(['payload_hash' => str_repeat('0', 64)]);
+
+    expect(fn () => $action->handle(
+        $freshPlans['financial'],
+        $freshPlans['registry'],
+        $freshPlans['cohort_sha256'],
+        $freshCharacterization['report']['fingerprints']['prerequisite_proposals_sha256'],
+        'five-record-changed-source-001',
+        'Architecture Review Board',
+        'BOARD-CHANGED-SOURCE',
+    ))->toThrow(RuntimeException::class);
+});
+
+test('frozen mapping audit refuses changed source or target evidence', function () {
+    $plans = plannedCohortPrerequisites('audit-refusal');
+    $characterization = app(CharacterizeLegacyHistoricalFinancialCohortPrerequisites::class)->handle($plans['financial'], $plans['registry'], $plans['cohort_sha256']);
+    $mappingSet = app(AcceptLegacyHistoricalFinancialCohortMappings::class)->handle(
+        $plans['financial'],
+        $plans['registry'],
+        $plans['cohort_sha256'],
+        $characterization['report']['fingerprints']['prerequisite_proposals_sha256'],
+        'five-record-audit-refusal-001',
+        'Architecture Review Board',
+        'BOARD-AUDIT-REFUSAL',
+    );
+    $targetId = (int) data_get($mappingSet->manifest, 'line_of_business_targets.0.target_id');
+    LineOfBusiness::query()->findOrFail($targetId)->update(['is_active' => false]);
+
+    expect(fn () => app(AcceptLegacyHistoricalFinancialCohortMappings::class)->audit($mappingSet))
+        ->toThrow(RuntimeException::class, 'target or reconciliation has changed');
+});
+
+test('authorization packet freezes exact five-record totals and commands without executing preservation', function () {
+    $plans = plannedCohortPrerequisites('packet');
+    $characterization = app(CharacterizeLegacyHistoricalFinancialCohortPrerequisites::class)->handle($plans['financial'], $plans['registry'], $plans['cohort_sha256']);
+    $mappingSet = app(AcceptLegacyHistoricalFinancialCohortMappings::class)->handle(
+        $plans['financial'],
+        $plans['registry'],
+        $plans['cohort_sha256'],
+        $characterization['report']['fingerprints']['prerequisite_proposals_sha256'],
+        'five-record-packet-acceptance-001',
+        'Architecture Review Board',
+        'BOARD-PACKET',
+    );
+
+    $result = app(BuildLegacyHistoricalFinancialRehearsalAuthorizationPacket::class)->handle($mappingSet, 'five-record-packet-plan-001');
+    $report = $result['report'];
+
+    expect($report['recommendation'])->toBe('READY FOR FIVE-RECORD REHEARSAL AUTHORIZATION')
+        ->and($report['applications'])->toHaveCount(5)
+        ->and($report['expected_totals'])->toMatchArray([
+            'historical_bundle_count' => 5,
+            'schedule_count' => 5,
+            'fee_line_count' => 5,
+            'completed_payment_count' => 0,
+            'unpaid_schedule_count' => 5,
+            'scheduled_amount_cents' => 50_000,
+            'fee_amount_cents' => 50_000,
+            'paid_amount_cents' => 0,
+            'payment_amount_cents' => 0,
+        ])
+        ->and($report['proposed_commands_not_executed']['execute'])->toContain('--execute --confirm-execute')
+        ->and($report['proposed_commands_not_executed']['restoration_audit'])->toContain('--mapping-set='.$mappingSet->id)
+        ->and(LegacyHistoricalFinancialPreservationExecution::query()->count())->toBe(0)
+        ->and(LegacyHistoricalFinancialPreservedBundle::query()->count())->toBe(0);
+});
+
+test('synthetic five-record preservation audit and rollback restore the exact pre-rehearsal state', function () {
+    $plans = plannedCohortPrerequisites('restoration');
+    $characterization = app(CharacterizeLegacyHistoricalFinancialCohortPrerequisites::class)->handle($plans['financial'], $plans['registry'], $plans['cohort_sha256']);
+    $mappingSet = app(AcceptLegacyHistoricalFinancialCohortMappings::class)->handle(
+        $plans['financial'],
+        $plans['registry'],
+        $plans['cohort_sha256'],
+        $characterization['report']['fingerprints']['prerequisite_proposals_sha256'],
+        'five-record-restoration-acceptance-001',
+        'Architecture Review Board',
+        'BOARD-RESTORATION',
+    );
+    $packet = app(BuildLegacyHistoricalFinancialRehearsalAuthorizationPacket::class)->handle($mappingSet, 'five-record-restoration-plan-001');
+    $proposalIds = $packet['plan']->proposals()->where('status', 'ready')->pluck('id')->all();
+    $sourceCount = LegacyRecord::query()->count();
+    $mappingCount = LegacyApplicationIdMapping::query()->count();
+
+    $execution = app(ExecuteLegacyHistoricalFinancialPreservation::class)->handle(
+        $packet['plan'],
+        $proposalIds,
+        'five-record-restoration-execute-001',
+    );
+    $audit = app(AuditLegacyHistoricalFinancialPreservation::class)->handle($execution);
+    $rolledBack = app(RollbackLegacyHistoricalFinancialPreservation::class)->handle($execution);
+    $restoration = app(AuditLegacyHistoricalFinancialPreservationRestoration::class)->handle($rolledBack, $mappingSet);
+
+    expect($audit['passed'])->toBeTrue()
+        ->and($audit['bundle_count'])->toBe(5)
+        ->and($restoration['passed'])->toBeTrue()
+        ->and($restoration['remaining_bundle_count'])->toBe(0)
+        ->and($restoration['rollback_bundle_count'])->toBe(5)
+        ->and(LegacyRecord::query()->count())->toBe($sourceCount)
+        ->and(LegacyApplicationIdMapping::query()->count())->toBe($mappingCount)
+        ->and(LegacyHistoricalFinancialPreservedBundle::query()->count())->toBe(0);
+});
+
+test('acceptance and authorization commands write immutable evidence and require explicit confirmation', function () {
+    Storage::fake('local');
+    $plans = plannedCohortPrerequisites('acceptance-command');
+    $characterization = app(CharacterizeLegacyHistoricalFinancialCohortPrerequisites::class)->handle($plans['financial'], $plans['registry'], $plans['cohort_sha256']);
+    $package = $characterization['report']['fingerprints']['prerequisite_proposals_sha256'];
+    $arguments = [
+        'financial-plan' => $plans['financial']->id,
+        'registry-plan' => $plans['registry']->id,
+        '--cohort-sha256' => $plans['cohort_sha256'],
+        '--proposal-package-sha256' => $package,
+        '--run-id' => 'five-record-command-001',
+        '--authority' => 'Architecture Review Board',
+        '--evidence' => 'BOARD-COMMAND',
+        '--accept' => true,
+        '--confirm-accept' => true,
+        '--json' => true,
+    ];
+
+    $this->artisan('legacy:accept-historical-financial-cohort-mappings', $arguments)->assertSuccessful();
+    $this->artisan('legacy:accept-historical-financial-cohort-mappings', $arguments)->assertSuccessful();
+    $mappingSet = LegacyHistoricalFinancialMappingSet::query()->sole();
+    $this->artisan('legacy:build-five-record-historical-preservation-authorization-packet', [
+        'mapping-set' => $mappingSet->id,
+        '--run-id' => 'five-record-command-packet-001',
+        '--json' => true,
+    ])->assertSuccessful();
+
+    $batch = $plans['financial']->importBatch;
+    Storage::disk('local')->assertExists("legacy-migrations/{$batch->source->key}/{$batch->run_reference}/reconciliation/historical-financial-application-mapping-acceptance/five-record-command-001/accepted-mapping-set.json");
+    Storage::disk('local')->assertExists("legacy-migrations/{$batch->source->key}/{$batch->run_reference}/historical-financial-preservation-authorization/five-record-command-packet-001/authorization-packet.json");
+    expect(LegacyHistoricalFinancialPreservationExecution::query()->count())->toBe(0);
 });

@@ -104,6 +104,101 @@ class PlanLegacyHistoricalFinancialPreservation
         return $this->evidence($plan);
     }
 
+    /** @param list<int> $applicationRecordIds */
+    public function handleSelection(
+        LegacyFinancialMappingPlan $financialPlan,
+        string $runReference,
+        array $applicationRecordIds,
+    ): LegacyHistoricalFinancialPreservationPlan {
+        $this->assertReady($financialPlan, $runReference);
+        $applicationRecordIds = array_values(array_unique($applicationRecordIds));
+        sort($applicationRecordIds);
+        if (count($applicationRecordIds) !== 5 || collect($applicationRecordIds)->contains(fn (int $id): bool => $id < 1)) {
+            throw new RuntimeException('Selected historical preservation planning requires exactly five positive application record IDs.');
+        }
+
+        $dependencyHash = $this->snapshotHash($financialPlan);
+        $selectionHash = hash('sha256', json_encode($applicationRecordIds, JSON_THROW_ON_ERROR));
+        $plan = DB::transaction(function () use ($financialPlan, $runReference, $dependencyHash, $selectionHash): LegacyHistoricalFinancialPreservationPlan {
+            $existing = LegacyHistoricalFinancialPreservationPlan::query()
+                ->where('legacy_import_batch_id', $financialPlan->legacy_import_batch_id)
+                ->where('run_reference', $runReference)
+                ->lockForUpdate()
+                ->first();
+            if ($existing instanceof LegacyHistoricalFinancialPreservationPlan) {
+                if ($existing->legacy_financial_mapping_plan_id !== $financialPlan->id
+                    || ! hash_equals($existing->dependency_snapshot_hash, $dependencyHash)
+                    || ! hash_equals((string) data_get($existing->metadata, 'selection_sha256'), $selectionHash)) {
+                    throw new RuntimeException("Selected historical preservation plan [{$runReference}] is bound to different evidence.");
+                }
+
+                return $existing;
+            }
+
+            return LegacyHistoricalFinancialPreservationPlan::query()->create([
+                'legacy_import_batch_id' => $financialPlan->legacy_import_batch_id,
+                'legacy_financial_mapping_plan_id' => $financialPlan->id,
+                'run_reference' => $runReference,
+                'planner_version' => self::PlannerVersion.'.selected-five-v1',
+                'dependency_snapshot_hash' => $dependencyHash,
+                'status' => LegacyMappingPlanStatus::Planning,
+                'started_at' => now(),
+                'metadata' => [
+                    ...$this->safetyMetadata(),
+                    'selection_count' => 5,
+                    'selection_sha256' => $selectionHash,
+                    'selection_expansion_allowed' => false,
+                ],
+            ]);
+        });
+
+        if (in_array($plan->status, [LegacyMappingPlanStatus::Planned, LegacyMappingPlanStatus::PlannedWithExceptions], true)) {
+            return $this->evidence($plan);
+        }
+
+        $financialProposals = $financialPlan->proposals()
+            ->with('legacyRecord')
+            ->whereIn('kind', ['payment_schedule', 'payment_schedule_fee', 'payment', 'receipt_claim'])
+            ->orderBy('id')
+            ->get();
+        $applications = LegacyRecord::query()->whereIn('id', $applicationRecordIds)->orderBy('id')->get();
+        if ($applications->count() !== 5) {
+            throw new RuntimeException('One or more selected historical application records are unavailable.');
+        }
+
+        foreach ($applications as $application) {
+            $result = $this->projector->project($financialPlan, $application, $financialProposals);
+            $projection = $result['projection'];
+            $reasons = $result['reasons'];
+            $plan->proposals()->updateOrCreate(
+                ['legacy_record_id' => $application->id],
+                [
+                    'legacy_application_id_mapping_id' => $result['application_mapping']?->id,
+                    'status' => $reasons === [] ? LegacyMappingProposalStatus::Ready : LegacyMappingProposalStatus::Blocked,
+                    'projection_hash' => $this->projector->hash($projection),
+                    'reasons' => $reasons,
+                    'metadata' => [
+                        'projection' => $projection,
+                        ...$this->safetyMetadata(),
+                        'selected_five_record_plan' => true,
+                    ],
+                ],
+            );
+        }
+
+        $ready = $plan->proposals()->where('status', LegacyMappingProposalStatus::Ready)->count();
+        $blocked = $plan->proposals()->where('status', LegacyMappingProposalStatus::Blocked)->count();
+        $plan->update([
+            'status' => $blocked > 0 ? LegacyMappingPlanStatus::PlannedWithExceptions : LegacyMappingPlanStatus::Planned,
+            'proposal_count' => $ready + $blocked,
+            'ready_count' => $ready,
+            'blocked_count' => $blocked,
+            'completed_at' => now(),
+        ]);
+
+        return $this->evidence($plan);
+    }
+
     public function snapshotHash(LegacyFinancialMappingPlan $financialPlan): string
     {
         $context = hash_init('sha256');

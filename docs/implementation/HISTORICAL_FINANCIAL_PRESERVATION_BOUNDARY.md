@@ -237,4 +237,18 @@ The proposal package SHA-256 is `06907e02c12209115fdd451cceac08b2fa20baba174dbdc
 5. Freeze the resulting exact five-record mapping set.
 6. Obtain separate Board authorization before a production-derived preservation rehearsal.
 
-The state model remains explicit: source facts are `observed`; the legacy `groups` interpretation is `inferred` from exact source behavior; crosswalks and mappings are `proposed`; nothing is yet `accepted`, `rehearsed`, or `production-applied`.
+The state model remains explicit: source facts are `observed`; the legacy `groups` interpretation is `inferred` from exact source behavior; crosswalks and mappings were `proposed` in this packet and subsequently accepted only through the Board decision recorded below; nothing has been `rehearsed` or `production-applied`.
+
+## Five-Record Accepted Mapping Set
+
+The 2026-08-17 Board decision accepted only the exact prerequisites bound to cohort SHA-256 `bf5af2693e471f336c54bf5e3345cc6b9df8709fceddd5ea1bc63360c3ebddb4` and proposal-package SHA-256 `06907e02c12209115fdd451cceac08b2fa20baba174dbdc1198dc5803b0faa36`.
+
+Acceptance run `prod-historical-financial-cohort-mapping-acceptance-20260817-001` revalidated the immutable snapshot and proposal package before creating five exact line-of-business targets and reconciliations, five owner mappings, five business mappings, and five application mappings through guarded local migration executors. It froze accepted mapping-set SHA-256 `4989d98fee490ba7f38fa294192e0f19592eab7f219f0744a4f36885b590bcf6`. Stable retry returned the same mapping set. Operational finance remained unchanged: 68 assessments, 395 assessment lines, 63 payment schedules, 390 schedule lines, 41 Treasury collections, and 41 receipts before and after acceptance.
+
+The generic application planner identified only `line_of_business_mapping_required` on the five production proposals. A Board-bound application acceptance plan removed only that identity prerequisite after exact targets and accepted reconciliations existed. It did not execute declaration migration, assign fee policy, authorize a future classification catalog, assign official application numbers, or create operational financial records.
+
+Authorization-packet run `prod-five-record-historical-preservation-authorization-20260817-002` uses the unchanged V1 projector and full financial dependency snapshot but plans only the frozen five source applications. This selected planning boundary avoids an unnecessary full-census projection while preserving the executor's snapshot and proposal invariants. Exactly five proposals are Ready; no selected history has a V1 eligibility exception.
+
+The packet expects five bundles, five schedules, 38 fee lines, zero completed payments, five unpaid schedules, and exactly 2,095,000 scheduled/fee centavos. Its private JSON and Markdown artifacts contain the full assertions and proposed commands. The payload-safe Board packet is `docs/implementation/FIVE_RECORD_HISTORICAL_PRESERVATION_REHEARSAL_AUTHORIZATION_PACKET.md`.
+
+The rehearsal has not been executed. Production mutation, operational financial migration, historical recalculation, inferred fee identity, cutover, and preservation execution remain unauthorized pending the next Board decision.
