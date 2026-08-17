@@ -79,6 +79,8 @@ test('an authorized snapshot becomes immutable payload-free intake evidence and 
         'convex-intake-001',
         'adjoining-porcupine-740',
         '2026-08-16T16:00:00+08:00',
+        'authorized@example.test',
+        'Convex Dashboard backup download',
     );
     $report = File::get($result['report_path']);
     $manifest = json_decode(File::get($result['manifest_path']), true, flags: JSON_THROW_ON_ERROR);
@@ -132,6 +134,8 @@ test('snapshot intake refuses incomplete or tampered file storage', function (ar
         'convex-storage-refusal',
         'adjoining-porcupine-740',
         '2026-08-16T16:00:00+08:00',
+        'authorized@example.test',
+        'Convex Dashboard backup download',
     ))->toThrow(RuntimeException::class, $message);
 })->with(function (): array {
     $expected = 'expected object';
@@ -176,12 +180,12 @@ test('snapshot intake is idempotent and a stable run refuses changed source evid
         'business_owners/documents.jsonl' => convexJsonLines([['_id' => 'owner-002']]),
     ]);
     $action = app(PrepareLegacyConvexSnapshot::class);
-    $first = $action->handle($firstArchive, 'convex-intake-stable', 'adjoining-porcupine-740', '2026-08-16T16:00:00+08:00');
-    $second = $action->handle($firstArchive, 'convex-intake-stable', 'adjoining-porcupine-740', '2026-08-16T16:00:00+08:00');
+    $first = $action->handle($firstArchive, 'convex-intake-stable', 'adjoining-porcupine-740', '2026-08-16T16:00:00+08:00', 'authorized@example.test', 'Convex Dashboard backup download');
+    $second = $action->handle($firstArchive, 'convex-intake-stable', 'adjoining-porcupine-740', '2026-08-16T16:00:00+08:00', 'authorized@example.test', 'Convex Dashboard backup download');
 
     expect($second['archive_checksum'])->toBe($first['archive_checksum'])
         ->and($second['manifest_path'])->toBe($first['manifest_path'])
-        ->and(fn () => $action->handle($secondArchive, 'convex-intake-stable', 'adjoining-porcupine-740', '2026-08-16T16:00:00+08:00'))
+        ->and(fn () => $action->handle($secondArchive, 'convex-intake-stable', 'adjoining-porcupine-740', '2026-08-16T16:00:00+08:00', 'authorized@example.test', 'Convex Dashboard backup download'))
         ->toThrow(RuntimeException::class, 'different source evidence');
 });
 
@@ -194,6 +198,8 @@ test('snapshot intake refuses unsafe paths and archives without table documents'
         'convex-intake-refusal',
         'adjoining-porcupine-740',
         '2026-08-16T16:00:00+08:00',
+        'authorized@example.test',
+        'Convex Dashboard backup download',
     ))->toThrow(RuntimeException::class, $message);
 })->with([
     'path traversal' => [
@@ -216,6 +222,8 @@ test('the command requires dual production-data confirmation and writes structur
         '--run-id' => 'convex-command-001',
         '--deployment' => 'adjoining-porcupine-740',
         '--captured-at' => '2026-08-16T16:00:00+08:00',
+        '--operator' => 'authorized@example.test',
+        '--tooling' => 'Convex Dashboard backup download',
         '--json' => true,
     ];
 
@@ -230,10 +238,17 @@ test('the command requires dual production-data confirmation and writes structur
     Storage::disk('local')->assertExists($root.'/snapshot.zip');
     Storage::disk('local')->assertExists($root.'/manifest.json');
     Storage::disk('local')->assertExists($root.'/intake.json');
+    Storage::disk('local')->assertExists($root.'/provenance.json');
     Storage::disk('local')->assertExists($root.'/review.md');
     $report = Storage::disk('local')->get($root.'/intake.json');
+    $provenance = json_decode(Storage::disk('local')->get($root.'/provenance.json'), true, flags: JSON_THROW_ON_ERROR);
 
-    expect($report)->not->toContain('owner-001', '@', 'password', 'token', 'cookie')
+    expect($report)->not->toContain('owner-001', 'authorized@example.test', 'password', 'token', 'cookie')
+        ->and($provenance)->toMatchArray([
+            'deployment' => 'adjoining-porcupine-740',
+            'operator' => 'authorized@example.test',
+            'tooling' => 'Convex Dashboard backup download',
+        ])
         ->and(json_decode($report, true, flags: JSON_THROW_ON_ERROR)['safety'])->toMatchArray([
             'production_data_present' => true,
             'payloads_in_report' => false,
@@ -255,6 +270,8 @@ test('snapshot intake refuses production execution even with confirmations', fun
         '--run-id' => 'convex-production-refusal',
         '--deployment' => 'adjoining-porcupine-740',
         '--captured-at' => '2026-08-16T16:00:00+08:00',
+        '--operator' => 'authorized@example.test',
+        '--tooling' => 'Convex Dashboard backup download',
         '--accept-production-data' => true,
         '--confirm-production-data' => true,
         '--json' => true,

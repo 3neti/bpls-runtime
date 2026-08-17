@@ -15,6 +15,8 @@ use Throwable;
     {--run-id= : Stable operator-provided intake reference}
     {--deployment= : Convex deployment name without URL or credentials}
     {--captured-at= : ISO-8601 snapshot capture timestamp including timezone}
+    {--operator= : Authorized operator identity recorded only in private provenance}
+    {--tooling= : Administrative export tooling used}
     {--accept-production-data : Confirm private handling of production row data}
     {--confirm-production-data : Second explicit production-data confirmation}
     {--json : Write only structured output}')]
@@ -31,11 +33,15 @@ class PrepareLegacyConvexSnapshotCommand extends Command
             $runReference = $this->requiredStringOption('run-id');
             $deployment = $this->requiredStringOption('deployment');
             $capturedAt = $this->requiredStringOption('captured-at');
+            $operator = $this->requiredStringOption('operator');
+            $tooling = $this->requiredStringOption('tooling');
             $result = $prepareSnapshot->handle(
                 (string) $this->argument('archive'),
                 $runReference,
                 $deployment,
                 $capturedAt,
+                $operator,
+                $tooling,
             );
         } catch (Throwable $exception) {
             return $this->failCommand($exception->getMessage());

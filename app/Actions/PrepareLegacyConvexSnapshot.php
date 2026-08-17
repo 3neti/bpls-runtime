@@ -13,7 +13,7 @@ use ZipArchive;
 
 final class PrepareLegacyConvexSnapshot
 {
-    public const IntakeSchemaVersion = 'bpls.legacy-convex-snapshot-intake.v2';
+    public const IntakeSchemaVersion = 'bpls.legacy-convex-snapshot-intake.v3';
 
     public const FileStorageIndexSchemaVersion = 'bpls.legacy-convex-file-storage-index.v1';
 
@@ -30,6 +30,7 @@ final class PrepareLegacyConvexSnapshot
      *   archive_checksum: string,
      *   manifest_path: string,
      *   report_path: string,
+     *   provenance_path: string,
      *   source_key: string,
      *   table_count: int,
      *   record_count: int,
@@ -44,10 +45,14 @@ final class PrepareLegacyConvexSnapshot
         string $runReference,
         string $deployment,
         string $capturedAt,
+        string $operator,
+        string $tooling,
     ): array {
         $this->assertEnvironment();
         $this->assertRunReference($runReference);
         $this->assertDeployment($deployment);
+        $this->assertProvenanceValue($operator, 'operator');
+        $this->assertProvenanceValue($tooling, 'tooling');
         $capturedAt = $this->normalizedCapturedAt($capturedAt);
         $absoluteArchivePath = realpath($archivePath);
 
@@ -74,10 +79,21 @@ final class PrepareLegacyConvexSnapshot
             'archive_sha256' => $archiveChecksum,
             'archive_bytes' => $archiveSize,
             'deployment_sha256' => hash('sha256', $deployment),
+            'operator_sha256' => hash('sha256', $operator),
+            'tooling_sha256' => hash('sha256', $tooling),
             'captured_at' => $capturedAt,
         ];
 
         $this->bindRun($absoluteRoot, $binding);
+        $provenancePath = $absoluteRoot.'/provenance.json';
+        $this->writeImmutableJson($provenancePath, [
+            'schema_version' => self::IntakeSchemaVersion,
+            'run_id' => $runReference,
+            'deployment' => $deployment,
+            'captured_at' => $capturedAt,
+            'operator' => $operator,
+            'tooling' => $tooling,
+        ], 'private provenance');
         $storedArchivePath = $absoluteRoot.'/snapshot.zip';
         $this->preserveArchive($absoluteArchivePath, $storedArchivePath, $archiveChecksum);
         $snapshot = $this->extractSnapshot($storedArchivePath, $absoluteRoot, $archiveChecksum);
@@ -99,6 +115,8 @@ final class PrepareLegacyConvexSnapshot
             ],
             'capture' => [
                 'deployment_sha256' => hash('sha256', $deployment),
+                'operator_sha256' => hash('sha256', $operator),
+                'tooling' => $tooling,
                 'captured_at' => $capturedAt,
                 'legacy_source_baseline' => 'b5a66a6a8b3828ebae9916f4bde1da729b1b9154',
             ],
@@ -144,6 +162,7 @@ final class PrepareLegacyConvexSnapshot
             'archive_checksum' => $archiveChecksum,
             'manifest_path' => $manifestPath,
             'report_path' => $reportPath,
+            'provenance_path' => $provenancePath,
             'source_key' => $sourceKey,
             'table_count' => count($datasets),
             'record_count' => $recordCount,
@@ -701,6 +720,13 @@ final class PrepareLegacyConvexSnapshot
     {
         if (preg_match('/^[a-z][a-z0-9-]{2,99}$/', $deployment) !== 1) {
             throw new RuntimeException('Convex deployment must be a safe deployment name, not a URL or credential.');
+        }
+    }
+
+    private function assertProvenanceValue(string $value, string $label): void
+    {
+        if ($value === '' || strlen($value) > 255 || preg_match('/[\x00-\x1F\x7F]/', $value) === 1) {
+            throw new RuntimeException("Snapshot {$label} must be a non-empty single-line value of at most 255 bytes.");
         }
     }
 }

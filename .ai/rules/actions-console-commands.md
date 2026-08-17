@@ -18,3 +18,6 @@ The deployed legacy dataExport queries lack an application authorization check a
 
 ## Convex file storage stays private and checksum-bound
 Authorized snapshots with `_storage` must validate each metadata row against exactly one blob by size and SHA-256. Keep source storage IDs only in the private checksum-bound index; public/review evidence may contain aggregate counts, bytes, and checksums but no IDs or payloads. File-storage intake does not stage objects, execute migration, or grant document authority.
+
+## Record private export operator and tooling provenance
+Authenticated production snapshot intake must bind the exact authorized operator and administrative export tooling in private provenance. Review-safe intake evidence may expose only the operator hash and non-sensitive tooling description; credentials, sessions, and raw payloads remain outside Git.

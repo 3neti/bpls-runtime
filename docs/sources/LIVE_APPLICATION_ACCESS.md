@@ -31,7 +31,7 @@ Read-only deployment/database boundary observation on 2026-08-16:
 - the public live login response references Convex deployment `adjoining-porcupine-740`, matching the production endpoint committed in the exact legacy source baseline
 - the legacy source contains a dedicated query `dataExport:getPermitReportCount`; one bounded unauthenticated read-only invocation against that deployment returned 3,065 non-deleted applications, matching the authenticated UI total
 - no report rows, personal data, financial values, stored objects, authentication material, or full database snapshot were requested or persisted
-- the workstation has no Convex CLI account/deploy-key configuration, so an authoritative full snapshot cannot be acquired from this checkout alone
+- at the time of this observation, the workstation had no Convex CLI account/deploy-key configuration; this was superseded by the authenticated administrative backup intake recorded below
 - the public query proves bounded database visibility, not administrative database ownership, complete export access, migration parity, or cutover authority
 
 Legacy report-query security characterization on 2026-08-16:
@@ -43,6 +43,22 @@ Legacy report-query security characterization on 2026-08-16:
 - Board boundary: this endpoint is legacy security evidence only and must not become a migration source; further production invocation requires a specific explicit observation authorization
 - required owner action: restrict/internalize the legacy query and review exposure independently; no production remediation was attempted by this rescue
 - canonical migration path remains an authenticated administrative Convex snapshot/export with deployment identity, operator, timestamp, checksum, immutable private intake, staging, reconciliation, and rehearsal
+
+Authenticated production snapshot intake on 2026-08-17:
+
+- exact deployment: `adjoining-porcupine-740` under the authorized ICubed Solutions Inc. team/project
+- source operation: one authenticated download of the latest completed automatic Convex backup; the backup explicitly included file storage
+- capture timestamp: 2026-08-16T22:44:00+08:00
+- archive SHA-256: `56fad41abbdeae8da23e9935550c753c82fb465d46a56b412342f27806bd0b57`
+- archive size: 55,455,446 bytes
+- private intake run: `prod-convex-20260816-224400`
+- validated inventory: 53 tables, 308,038 records, 34 stored files, and 44,093,196 stored-file bytes
+- private staging run: `prod-convex-stage-20260816-224400`; all 308,038 rows staged with no BPLS domain writes
+- staging result: 258 unresolved declared references across payment schedules, payments, permit clearances, and permits
+- registry planning result: 6,366 owner/business proposals; 981 ready, 3,186 review-required, and 2,199 blocked; no identity mappings accepted and no domain writes performed
+- readiness result: rehearsal and cutover both blocked; 3 of 15 readiness checks passed
+- privacy: raw rows, stored objects, source identifiers, operator identity, and detailed collision evidence remain in checksum-bound private storage outside Git
+- authority: snapshot acquisition and read-only reconciliation do not authorize migration execution, financial reinterpretation, record repair, or production cutover
 
 Observed high-level surfaces:
 
