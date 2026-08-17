@@ -147,7 +147,12 @@ test('clearance proposal command writes stable private evidence without leaking 
     $root = "legacy-migrations/{$fixture['source']->key}/{$fixture['batch']->run_reference}/reconciliation/clearance-types/clearance-command-001";
     Storage::disk('local')->assertExists($root.'/proposal.json');
     Storage::disk('local')->assertExists($root.'/review.md');
-    expect(json_decode(Storage::disk('local')->get($root.'/proposal.json'), true, flags: JSON_THROW_ON_ERROR)['result']['accepted_count'])->toBe(0);
+    Storage::disk('local')->assertExists($root.'/municipal-acceptance.md');
+    expect(json_decode(Storage::disk('local')->get($root.'/proposal.json'), true, flags: JSON_THROW_ON_ERROR)['result']['accepted_count'])
+        ->toBe(0)
+        ->and(Storage::disk('local')->get($root.'/municipal-acceptance.md'))
+        ->toContain('Status: Pending municipal decision', 'Accept exact historical-to-current crosswalk', 'This form itself creates no reconciliation row')
+        ->and(Storage::disk('local')->visibility($root.'/municipal-acceptance.md'))->toBe('private');
 });
 
 test('financial analysis characterizes configuration and refuses name-only historical attribution', function () {

@@ -50,6 +50,7 @@ class ProposeLegacyClearanceTypeReconciliationsCommand extends Command
         $root = "legacy-migrations/{$batch->source->key}/{$batch->run_reference}/reconciliation/clearance-types/{$runReference}";
         $this->writeImmutable($root.'/proposal.json', json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n");
         $this->writeImmutable($root.'/review.md', "# Clearance-Type Reconciliation Review\n\nReviewer status: Pending\nReviewer:\nAuthority / role:\nReviewed at:\nDecision reference:\nNotes:\n");
+        $this->writeImmutable($root.'/municipal-acceptance.md', $this->municipalAcceptancePacket($report));
 
         return $root;
     }
@@ -61,12 +62,88 @@ class ProposeLegacyClearanceTypeReconciliationsCommand extends Command
             if (! hash_equals(hash('sha256', $contents), hash('sha256', $disk->get($path)))) {
                 throw new RuntimeException('Stable clearance reconciliation run is already bound to different evidence.');
             }
+            if (! $disk->setVisibility($path, 'private')) {
+                throw new RuntimeException('Clearance reconciliation evidence could not be made private.');
+            }
 
             return;
         }
         if (! $disk->put($path, $contents)) {
             throw new RuntimeException('Clearance reconciliation evidence could not be written.');
         }
+        if (! $disk->setVisibility($path, 'private')) {
+            throw new RuntimeException('Clearance reconciliation evidence could not be made private.');
+        }
+    }
+
+    /** @param array<string, mixed> $report */
+    private function municipalAcceptancePacket(array $report): string
+    {
+        $lines = [
+            '# Municipal Clearance-Type Reconciliation Decision',
+            '',
+            'Status: Pending municipal decision',
+            '',
+            'This packet presents exact source-backed candidates. It does not accept a mapping or authorize migration.',
+            '',
+            'Snapshot SHA-256: `'.$report['source']['archive_sha256'].'`',
+            '',
+        ];
+
+        foreach ($report['proposals'] as $index => $proposal) {
+            $source = $proposal['source_evidence_variants'][0] ?? [];
+            $candidate = $proposal['candidate_evidence'] ?? [];
+            $lines = [...$lines,
+                '## Candidate '.($index + 1),
+                '',
+                '- Affected historical records: '.$proposal['affected_records'],
+                '- Historical source identifier: `'.$this->markdown($proposal['source_legacy_id']).'`',
+                '- Proposed target identifier: `'.$this->markdown($proposal['candidate_target_legacy_id'] ?? '').'`',
+                '- Evidence basis: `'.$this->markdown($proposal['basis']).'`',
+                '- Historical evidence: '.$this->evidenceLabel($source),
+                '- Proposed current evidence: '.$this->evidenceLabel($candidate),
+                '',
+                'Decision:',
+                '',
+                '- [ ] Accept exact historical-to-current crosswalk',
+                '- [ ] Reject proposed crosswalk',
+                '- [ ] Preserve as quarantined historical evidence',
+                '',
+                'Decision authority / role:',
+                '',
+                'Decision date:',
+                '',
+                'Decision reference and notes:',
+                '',
+            ];
+        }
+
+        $lines = [...$lines,
+            '## Execution Boundary',
+            '',
+            'Signed decisions must be recorded through the versioned reconciliation contract before any mapping or migration proposal can become executable.',
+            '',
+            'This form itself creates no reconciliation row, domain write, migration, or cutover authority.',
+            '',
+        ];
+
+        return implode("\n", $lines);
+    }
+
+    /** @param array<string, mixed> $evidence */
+    private function evidenceLabel(array $evidence): string
+    {
+        return implode(' / ', array_map(
+            fn (string $field): string => $this->markdown($evidence[$field] ?? ''),
+            ['name', 'short_name', 'certificate_name'],
+        ));
+    }
+
+    private function markdown(mixed $value): string
+    {
+        $value = is_string($value) ? trim($value) : '';
+
+        return str_replace(['|', "\r", "\n"], ['\\|', ' ', ' '], $value);
     }
 
     private function runReference(): string

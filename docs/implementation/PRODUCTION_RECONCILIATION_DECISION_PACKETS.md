@@ -47,7 +47,7 @@ These packets reduce recurring production exceptions to bounded questions for au
 
 **Authority / approver:** BPLO and the municipal official responsible for clearance configuration and historical records.
 
-**Current state:** `PENDING MUNICIPAL DECISION`. Engineering evidence is complete for presentation; migration treatment remains unchanged until each proposed crosswalk is accepted or rejected by an authorized official.
+**Current state:** `PENDING MUNICIPAL DECISION`. Engineering evidence is complete for presentation; private artifact `municipal-acceptance.md` presents separate accept, reject, or quarantine choices for all five candidates while recording no decision. Migration treatment remains unchanged until each proposed crosswalk is accepted or rejected by an authorized official.
 
 ## Packet 2: Missing-Parent Historical Records
 

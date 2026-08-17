@@ -1,12 +1,14 @@
 # Assessment Calibration CAL-2026-001
 
-Status: **Strong calibration convergence; policy decisions remain required**
+Status: **Golden Financial Specimen; historical reproduction passes, policy decisions remain required**
 
 Specimen SHA-256: `892d1c07377988ab17d12e60c7bfeb80ba9227bb5f5569bc441bf81092a9f995`
 
 Production snapshot SHA-256: `56fad41abbdeae8da23e9935550c753c82fb465d46a56b412342f27806bd0b57`
 
 The municipality-supplied JPEG and all identifying evidence remain private. This repository record uses only calibration ID `CAL-2026-001` and non-identifying financial findings. The specimen is operational evidence, not financial-policy authorization.
+
+`CAL-2026-001` is the first specimen in the Financial Calibration Suite. Its historical reproduction assertions are executable verification evidence. Its future-policy assertions remain separate and blocked pending municipal authority.
 
 ## Findings
 
