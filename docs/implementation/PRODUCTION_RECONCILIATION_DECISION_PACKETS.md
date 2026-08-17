@@ -31,6 +31,8 @@ These packets reduce recurring production exceptions to bounded questions for au
 
 **Observed evidence:** Each affected row retains denormalized clearance evidence matching exactly one surviving clearance type. This is strong reconciliation evidence, but it is not municipal approval.
 
+**Prepared proposal:** Read-only run `prod-clearance-proposal-20260817-001` grouped the 110 rows into five source identities and produced five unique exact three-field candidates. It recorded zero accepted mappings and created no reconciliation or domain rows. Private review evidence remains under the checksum-bound production intake.
+
 **Software can determine:** The five repeated exception classes, their affected counts, and the unique current candidate supported by source evidence.
 
 **Software cannot determine:** Whether the historical identifiers were renamed, replaced, deleted in error, or intentionally retired; whether the Municipality accepts the proposed crosswalk.
@@ -44,6 +46,8 @@ These packets reduce recurring production exceptions to bounded questions for au
 **Decision required:** Approve or reject each of the five proposed crosswalk entries.
 
 **Authority / approver:** BPLO and the municipal official responsible for clearance configuration and historical records.
+
+**Current state:** `PENDING MUNICIPAL DECISION`. Engineering evidence is complete for presentation; migration treatment remains unchanged until each proposed crosswalk is accepted or rejected by an authorized official.
 
 ## Packet 2: Missing-Parent Historical Records
 
