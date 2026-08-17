@@ -18,6 +18,10 @@ class StorePermitApplicationDocument
      */
     public function handle(PermitApplication $permitApplication, array $data, User $uploadedBy): PermitApplicationDocument
     {
+        if ($permitApplication->isHistoricalEvidenceOnly()) {
+            throw new RuntimeException("Historical evidence application [{$permitApplication->id}] cannot receive operational document uploads.");
+        }
+
         $file = $data['file'];
         $extension = $file->extension();
         $path = $file->storeAs(

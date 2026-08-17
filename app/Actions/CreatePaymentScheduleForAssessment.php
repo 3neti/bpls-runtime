@@ -21,6 +21,10 @@ class CreatePaymentScheduleForAssessment
         return DB::transaction(function () use ($assessment, $preparedBy): PaymentSchedule {
             $assessment->loadMissing(['permitApplication.business.owner', 'lines.lineOfBusiness']);
 
+            if ($assessment->permitApplication->isHistoricalEvidenceOnly()) {
+                throw new LogicException("Historical evidence application [{$assessment->permit_application_id}] cannot receive an operational payment schedule.");
+            }
+
             if ($assessment->status !== AssessmentStatus::Computed) {
                 throw new LogicException("Payment schedule cannot be prepared for assessment [{$assessment->id}] with status [{$assessment->status->value}].");
             }

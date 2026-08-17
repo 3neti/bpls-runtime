@@ -15,6 +15,10 @@ class CancelPermitApplication
         return DB::transaction(function () use ($permitApplication, $cancelledBy, $reason): PermitApplication {
             $permitApplication->refresh();
 
+            if ($permitApplication->isHistoricalEvidenceOnly()) {
+                throw new DomainException('Historical application evidence cannot be changed through the operational cancellation lifecycle.');
+            }
+
             if ($permitApplication->status === PermitApplicationStatus::Cancelled) {
                 throw new DomainException('This permit application is already cancelled.');
             }

@@ -10,8 +10,10 @@ use App\Actions\CharacterizeLegacyHistoricalFinancialNextScaleReadiness;
 use App\Actions\ExecuteLegacyHistoricalFinancialPreservation;
 use App\Actions\PlanLegacyFinancialDependencies;
 use App\Actions\PlanLegacyRegistryMigration;
+use App\Actions\PrepareLegacyHistoricalReleaseCohort;
 use App\Actions\RollbackLegacyHistoricalFinancialPreservation;
 use App\Enums\LegacyImportBatchStatus;
+use App\Enums\PermitApplicationStatus;
 use App\Models\LegacyApplicationIdMapping;
 use App\Models\LegacyHistoricalFinancialMappingSet;
 use App\Models\LegacyHistoricalFinancialPreservationExecution;
@@ -66,7 +68,7 @@ function cohortPrerequisiteBatches(string $suffix): array
 }
 
 /** @param array{registry: LegacyImportBatch, financial: LegacyImportBatch} $batches */
-function addCohortPrerequisiteFixtures(array $batches, int $count = 5): void
+function addCohortPrerequisiteFixtures(array $batches, int $count = 5, string $applicationStatus = 'Assessment'): void
 {
     cohortPrerequisiteRecord($batches['registry'], 'provinces', 'province-private', [
         'name' => 'Private Province',
@@ -106,7 +108,7 @@ function addCohortPrerequisiteFixtures(array $batches, int $count = 5): void
             'businessOwnerId' => $ownerId,
             'businessId' => $businessId,
             'applicationNumber' => 'PRIVATE-APP-'.$key,
-            'status' => 'Assessment',
+            'status' => $applicationStatus,
             'permitApplicationType' => 'New',
             'submittedAt' => '2026-01-10T08:00:00+08:00',
             'linesOfBusiness' => [[
@@ -161,10 +163,10 @@ function addCohortPrerequisiteFixtures(array $batches, int $count = 5): void
 }
 
 /** @return array{financial: mixed, registry: mixed, cohort_sha256: string} */
-function plannedCohortPrerequisites(string $suffix, int $count = 5): array
+function plannedCohortPrerequisites(string $suffix, int $count = 5, string $applicationStatus = 'Assessment'): array
 {
     $batches = cohortPrerequisiteBatches($suffix);
-    addCohortPrerequisiteFixtures($batches, $count);
+    addCohortPrerequisiteFixtures($batches, $count, $applicationStatus);
     $registryPlan = app(PlanLegacyRegistryMigration::class)->handle($batches['registry'], 'registry-'.$suffix);
     $financialPlan = app(PlanLegacyFinancialDependencies::class)->handle($batches['financial'], 'financial-'.$suffix);
     $readiness = app(CharacterizeLegacyHistoricalFinancialApplicationMappings::class)->handle($financialPlan, $registryPlan);
@@ -379,10 +381,15 @@ test('authorization packet freezes exact five-record totals and commands without
         'BOARD-PACKET',
     );
 
-    $result = app(BuildLegacyHistoricalFinancialRehearsalAuthorizationPacket::class)->handle($mappingSet, 'five-record-packet-plan-001');
+    $result = app(BuildLegacyHistoricalFinancialRehearsalAuthorizationPacket::class)->handle(
+        $mappingSet,
+        'five-record-packet-plan-001',
+        true,
+        'BOARD-PACKET-AUTHORIZATION',
+    );
     $report = $result['report'];
 
-    expect($report['recommendation'])->toBe('READY FOR FIVE-RECORD REHEARSAL AUTHORIZATION')
+    expect($report['recommendation'])->toBe('READY FOR BOUNDED HISTORICAL PRESERVATION REHEARSAL')
         ->and($report['applications'])->toHaveCount(5)
         ->and($report['expected_totals'])->toMatchArray([
             'historical_bundle_count' => 5,
@@ -397,6 +404,8 @@ test('authorization packet freezes exact five-record totals and commands without
         ])
         ->and($report['proposed_commands_not_executed']['execute'])->toContain('--execute --confirm-execute')
         ->and($report['proposed_commands_not_executed']['restoration_audit'])->toContain('--mapping-set='.$mappingSet->id)
+        ->and($report['safety']['production_rehearsal_authorized'])->toBeTrue()
+        ->and($report['safety']['authorization_reference'])->toBe('BOARD-PACKET-AUTHORIZATION')
         ->and(LegacyHistoricalFinancialPreservationExecution::query()->count())->toBe(0)
         ->and(LegacyHistoricalFinancialPreservedBundle::query()->count())->toBe(0);
 });
@@ -461,6 +470,8 @@ test('acceptance and authorization commands write immutable evidence and require
     $this->artisan('legacy:build-five-record-historical-preservation-authorization-packet', [
         'mapping-set' => $mappingSet->id,
         '--run-id' => 'five-record-command-packet-001',
+        '--authorized' => true,
+        '--authorization-reference' => 'BOARD-COMMAND-AUTHORIZATION',
         '--json' => true,
     ])->assertSuccessful();
 
@@ -468,6 +479,117 @@ test('acceptance and authorization commands write immutable evidence and require
     Storage::disk('local')->assertExists("legacy-migrations/{$batch->source->key}/{$batch->run_reference}/reconciliation/historical-financial-application-mapping-acceptance/five-record-command-001/accepted-mapping-set.json");
     Storage::disk('local')->assertExists("legacy-migrations/{$batch->source->key}/{$batch->run_reference}/historical-financial-preservation-authorization/five-record-command-packet-001/authorization-packet.json");
     expect(LegacyHistoricalFinancialPreservationExecution::query()->count())->toBe(0);
+});
+
+test('historical released cohort accepts exact identity while quarantining current authority', function () {
+    $plans = plannedCohortPrerequisites('historical-release-acceleration', 31, 'Released');
+    $prepared = app(PrepareLegacyHistoricalReleaseCohort::class)->handle(
+        $plans['financial'],
+        $plans['registry'],
+        25,
+    );
+
+    expect($prepared['report']['summary'])
+        ->historical_release_candidate_count->toBe(31)
+        ->exact_location_candidate_count->toBe(31)
+        ->selected_topology->toBe('schedules:1|payments:0|statuses:pending')
+        ->selected_topology_candidate_count->toBe(31)
+        ->cohort_size->toBe(25)
+        ->current_release_authorized_count->toBe(0)
+        ->operationally_eligible_count->toBe(0)
+        ->and($prepared['line_of_business_proposals'])->toBe([])
+        ->and($prepared['exact_mapping_proposals'])->toHaveCount(25);
+
+    $mappingSet = app(AcceptLegacyHistoricalFinancialCohortMappings::class)->handlePreparedEvidence(
+        $plans['financial'],
+        $plans['registry'],
+        $prepared,
+        $prepared['report']['fingerprints']['selected_cohort_sha256'],
+        $prepared['report']['fingerprints']['prerequisite_proposals_sha256'],
+        'historical-release-acceleration-acceptance',
+        'Architecture Review Board',
+        'BOARD-ACCELERATED-MIGRATION',
+        'historical_evidence',
+    );
+    $retry = app(AcceptLegacyHistoricalFinancialCohortMappings::class)->handlePreparedEvidence(
+        $plans['financial'],
+        $plans['registry'],
+        $prepared,
+        $prepared['report']['fingerprints']['selected_cohort_sha256'],
+        $prepared['report']['fingerprints']['prerequisite_proposals_sha256'],
+        'historical-release-acceleration-acceptance',
+        'Architecture Review Board',
+        'BOARD-ACCELERATED-MIGRATION',
+        'historical_evidence',
+    );
+
+    expect($mappingSet->cohort_size)->toBe(25)
+        ->and($retry->id)->toBe($mappingSet->id)
+        ->and(LegacyApplicationIdMapping::query()->count())->toBe(25)
+        ->and(PermitApplication::query()->count())->toBe(25)
+        ->and(PermitApplication::query()->where('status', PermitApplicationStatus::HistoricalEvidence->value)->count())->toBe(25)
+        ->and(PermitApplication::query()->get()->every(fn (PermitApplication $application): bool => $application->isHistoricalEvidenceOnly() && ! $application->canContinue()))->toBeTrue()
+        ->and(LegacyLineOfBusinessReconciliation::query()->count())->toBe(0)
+        ->and(LineOfBusiness::query()->count())->toBe(0)
+        ->and(LegacyHistoricalFinancialPreservedBundle::query()->count())->toBe(0);
+
+    $remaining = app(PrepareLegacyHistoricalReleaseCohort::class)->handle(
+        $plans['financial'],
+        $plans['registry'],
+        6,
+        true,
+    );
+
+    expect($remaining['report']['summary'])
+        ->cohort_size->toBe(6)
+        ->exact_location_candidate_count->toBe(6)
+        ->and($remaining['report']['fingerprints']['historical_release_class_sha256'])
+        ->toBe($prepared['report']['fingerprints']['historical_release_class_sha256'])
+        ->and($remaining['report']['fingerprints']['selected_cohort_sha256'])
+        ->not->toBe($prepared['report']['fingerprints']['selected_cohort_sha256']);
+});
+
+test('historical released cohort reuses exact shared registry dependencies without merging identities', function () {
+    $batches = cohortPrerequisiteBatches('historical-release-shared-identity');
+    addCohortPrerequisiteFixtures($batches, 6, 'Released');
+    foreach ([$batches['registry'], $batches['financial']] as $batch) {
+        $record = $batch->records()->where('dataset_key', 'business_permit_applications')->where('legacy_id', 'application-private-2')->sole();
+        $payload = [
+            ...$record->payload,
+            'businessOwnerId' => 'owner-private-1',
+            'businessId' => 'business-private-1',
+        ];
+        $record->update([
+            'payload' => $payload,
+            'payload_hash' => hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR)),
+        ]);
+    }
+    $registryPlan = app(PlanLegacyRegistryMigration::class)->handle($batches['registry'], 'registry-historical-release-shared-identity');
+    $financialPlan = app(PlanLegacyFinancialDependencies::class)->handle($batches['financial'], 'financial-historical-release-shared-identity');
+    $prepared = app(PrepareLegacyHistoricalReleaseCohort::class)->handle($financialPlan, $registryPlan, 6);
+
+    expect($prepared['report']['summary'])
+        ->cohort_size->toBe(6)
+        ->unique_owner_identity_count->toBe(5)
+        ->unique_business_identity_count->toBe(5)
+        ->shared_identity_dependency_count->toBe(2);
+
+    $mappingSet = app(AcceptLegacyHistoricalFinancialCohortMappings::class)->handlePreparedEvidence(
+        $financialPlan,
+        $registryPlan,
+        $prepared,
+        $prepared['report']['fingerprints']['selected_cohort_sha256'],
+        $prepared['report']['fingerprints']['prerequisite_proposals_sha256'],
+        'historical-release-shared-identity-acceptance',
+        'Architecture Review Board',
+        'BOARD-ACCELERATED-MIGRATION',
+        'historical_evidence',
+    );
+
+    expect($mappingSet->cohort_size)->toBe(6)
+        ->and(LegacyIdMapping::query()->count())->toBe(10)
+        ->and(LegacyApplicationIdMapping::query()->count())->toBe(6)
+        ->and(PermitApplication::query()->count())->toBe(6);
 });
 
 test('next scale readiness refuses a non material one record expansion and preserves the proven baseline', function () {

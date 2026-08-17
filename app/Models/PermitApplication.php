@@ -96,6 +96,12 @@ class PermitApplication extends Model
         return ($this->metadata['terminal_state']['can_continue'] ?? true) !== false;
     }
 
+    public function isHistoricalEvidenceOnly(): bool
+    {
+        return $this->status === PermitApplicationStatus::HistoricalEvidence
+            && data_get($this->metadata, 'historical_semantics.operationally_eligible') === false;
+    }
+
     /**
      * @return array<string, string>
      */

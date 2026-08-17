@@ -137,7 +137,7 @@ class ExecuteLegacyPermitApplications
     private function executeProposal(LegacyApplicationMappingExecution $execution, LegacyApplicationMappingProposal $proposal): string
     {
         $record = $proposal->legacyRecord;
-        $projection = $this->projector->project($record);
+        $projection = $this->projectionFor($proposal);
 
         if ($projection['blocked']
             || ! hash_equals($proposal->projection_hash, $this->projector->hashCanonical($projection['attributes']))
@@ -182,10 +182,23 @@ class ExecuteLegacyPermitApplications
                 'projection_hash' => $proposal->projection_hash,
                 'target_snapshot_hash' => $this->projector->targetSnapshotHash($target),
                 'official_application_number_assigned' => false,
+                'projection_mode' => $proposal->metadata['projection_mode'] ?? 'operational',
             ],
         ]);
 
         return $created ? 'created' : 'linked';
+    }
+
+    /** @return array<string, mixed> */
+    private function projectionFor(LegacyApplicationMappingProposal $proposal): array
+    {
+        $mode = $proposal->metadata['projection_mode'] ?? 'operational';
+
+        return match ($mode) {
+            'operational' => $this->projector->project($proposal->legacyRecord),
+            'historical_evidence' => $this->projector->projectHistoricalEvidence($proposal->legacyRecord),
+            default => throw new RuntimeException("Application mapping proposal [{$proposal->id}] has an unsupported projection mode."),
+        };
     }
 
     /** @param array<string, mixed> $attributes */

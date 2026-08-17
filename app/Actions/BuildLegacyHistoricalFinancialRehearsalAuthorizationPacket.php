@@ -10,7 +10,7 @@ use RuntimeException;
 
 class BuildLegacyHistoricalFinancialRehearsalAuthorizationPacket
 {
-    public const SchemaVersion = 'bpls.historical-financial-five-record-rehearsal-authorization.v1';
+    public const SchemaVersion = 'bpls.historical-financial-rehearsal-authorization.v2';
 
     public function __construct(
         private AcceptLegacyHistoricalFinancialCohortMappings $mappingAcceptance,
@@ -18,26 +18,34 @@ class BuildLegacyHistoricalFinancialRehearsalAuthorizationPacket
     ) {}
 
     /** @return array{plan: LegacyHistoricalFinancialPreservationPlan, report: array<string, mixed>} */
-    public function handle(LegacyHistoricalFinancialMappingSet $mappingSet, string $runReference): array
-    {
+    public function handle(
+        LegacyHistoricalFinancialMappingSet $mappingSet,
+        string $runReference,
+        bool $productionRehearsalAuthorized = false,
+        ?string $authorizationReference = null,
+    ): array {
         if (preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{2,99}$/', $runReference) !== 1) {
             throw new RuntimeException('Authorization planning run reference must be 3-100 safe characters.');
+        }
+        if ($productionRehearsalAuthorized && (! is_string($authorizationReference) || trim($authorizationReference) === '')) {
+            throw new RuntimeException('An explicit authorization reference is required for an authorized rehearsal packet.');
         }
         $this->mappingAcceptance->audit($mappingSet);
         $mappingSet->loadMissing('financialMappingPlan.importBatch.source');
         $applicationRecordIds = collect((array) data_get($mappingSet->manifest, 'application_mappings', []))
             ->pluck('source_record_id')->map(fn (mixed $id): int => (int) $id)->sort()->values()->all();
+        $cohortSize = $mappingSet->cohort_size;
         $plan = $this->planPreservation->handleSelection($mappingSet->financialMappingPlan, $runReference, array_values($applicationRecordIds));
         $proposals = $plan->proposals()->whereIn('legacy_record_id', $applicationRecordIds)->orderBy('legacy_record_id')->get();
 
-        if (count($applicationRecordIds) !== 5 || $proposals->count() !== 5) {
-            throw new RuntimeException('The preservation plan does not contain the exact frozen five-record cohort.');
+        if (count($applicationRecordIds) !== $cohortSize || $proposals->count() !== $cohortSize) {
+            throw new RuntimeException('The preservation plan does not contain the exact frozen cohort.');
         }
         if ($proposals->contains(fn (LegacyHistoricalFinancialPreservationProposal $proposal): bool => $proposal->status !== LegacyMappingProposalStatus::Ready)) {
             throw new RuntimeException('At least one frozen cohort preservation proposal is not ready.');
         }
-        if ($plan->ready_count !== 5) {
-            throw new RuntimeException('The preservation plan contains ready proposals outside the frozen five-record cohort.');
+        if ($plan->ready_count !== $cohortSize) {
+            throw new RuntimeException('The preservation plan contains ready proposals outside the frozen cohort.');
         }
 
         $totals = $this->emptyTotals();
@@ -85,7 +93,7 @@ class BuildLegacyHistoricalFinancialRehearsalAuthorizationPacket
             'plan' => $plan,
             'report' => [
                 'schema_version' => self::SchemaVersion,
-                'recommendation' => 'READY FOR FIVE-RECORD REHEARSAL AUTHORIZATION',
+                'recommendation' => 'READY FOR BOUNDED HISTORICAL PRESERVATION REHEARSAL',
                 'mapping_set_id' => $mappingSet->id,
                 'frozen_cohort_sha256' => $mappingSet->cohort_sha256,
                 'frozen_accepted_mapping_set_sha256' => $mappingSet->accepted_mapping_set_sha256,
@@ -108,13 +116,15 @@ class BuildLegacyHistoricalFinancialRehearsalAuthorizationPacket
                 ],
                 'pre_execution_assertions' => [
                     'The immutable source archive, financial plan, cohort, proposal package, and accepted mapping-set fingerprints still match.',
-                    'Exactly five accepted application mappings and five ready preservation proposals remain bound to the cohort.',
+                    "Exactly {$cohortSize} accepted application mappings and ready preservation proposals remain bound to the cohort.",
                     'No cohort application already has a preserved historical bundle.',
                     'The selected proposal IDs belong to the exact preservation plan and no ready proposal exists outside the cohort.',
-                    'Production execution remains separately unauthorized until the Board approves this packet.',
+                    $productionRehearsalAuthorized
+                        ? 'Production-derived rehearsal execution is authorized only under the recorded Board reference and every fail-closed gate in this packet.'
+                        : 'Production-derived rehearsal execution remains separately unauthorized until the Board approves this packet.',
                 ],
                 'post_execution_audit_assertions' => [
-                    'Exactly five immutable historical bundles exist.',
+                    "Exactly {$cohortSize} immutable historical bundles exist.",
                     'Source and target schedule, fee-line, payment, and centavo totals agree exactly.',
                     'Every bundle snapshot and source projection hash agrees.',
                     'Operational financial table counts are unchanged.',
@@ -122,7 +132,7 @@ class BuildLegacyHistoricalFinancialRehearsalAuthorizationPacket
                 ],
                 'rollback_assertions' => [
                     'Rollback is limited to unchanged bundles with no reviewer disposition or downstream references.',
-                    'Exactly five created bundles are removed.',
+                    "Exactly {$cohortSize} created bundles are removed.",
                     'Source records, accepted mappings, target registry records, and applications remain unchanged.',
                     'The execution becomes rolled_back and cannot be reused.',
                 ],
@@ -135,7 +145,7 @@ class BuildLegacyHistoricalFinancialRehearsalAuthorizationPacket
                 'fail_closed_conditions' => [
                     'Any immutable source, plan, cohort, proposal-package, mapping-set, target, or projection fingerprint changes.',
                     'Any accepted owner, business, application, location-provenance, or line-of-business dependency changes.',
-                    'The ready selection is not exactly five or expands beyond the frozen cohort.',
+                    "The ready selection is not exactly {$cohortSize} or expands beyond the frozen cohort.",
                     'Any source financial history has unresolved V1 eligibility reasons.',
                     'Any cohort application is already preserved.',
                     'Any operational financial count changes during execute, audit, rollback, or restoration audit.',
@@ -144,7 +154,8 @@ class BuildLegacyHistoricalFinancialRehearsalAuthorizationPacket
                 ],
                 'proposed_commands_not_executed' => $commands,
                 'safety' => [
-                    'production_rehearsal_authorized' => false,
+                    'production_rehearsal_authorized' => $productionRehearsalAuthorized,
+                    'authorization_reference' => $productionRehearsalAuthorized ? trim((string) $authorizationReference) : null,
                     'production_execution_performed' => false,
                     'historical_recalculation' => false,
                     'fee_identity_inference' => false,

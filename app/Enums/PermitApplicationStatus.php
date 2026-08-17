@@ -9,5 +9,6 @@ enum PermitApplicationStatus: string
     case Approval = 'approval';
     case PendingPayment = 'pending_payment';
     case Released = 'released';
+    case HistoricalEvidence = 'historical_evidence';
     case Cancelled = 'cancelled';
 }

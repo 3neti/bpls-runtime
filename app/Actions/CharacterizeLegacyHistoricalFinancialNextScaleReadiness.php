@@ -18,7 +18,7 @@ class CharacterizeLegacyHistoricalFinancialNextScaleReadiness
         private AcceptLegacyHistoricalFinancialCohortMappings $auditAcceptedMappings,
     ) {}
 
-    /** @return array{report: array<string, mixed>, same_semantic_candidates: list<array<string, mixed>>, expansion_candidates: list<array<string, mixed>>} */
+    /** @return array{report: array<string, mixed>, same_semantic_candidates: list<array<string, mixed>>, expansion_candidates: list<array<string, mixed>>, historical_release_candidates: list<array<string, mixed>>} */
     public function handle(
         LegacyFinancialMappingPlan $financialPlan,
         LegacyMappingPlan $registryPlan,
@@ -61,6 +61,10 @@ class CharacterizeLegacyHistoricalFinancialNextScaleReadiness
         $expansionCandidates = $sameSemanticCandidates
             ->whereNotIn('application.source_record_id', $baselineSourceRecordIds)
             ->values();
+        $historicalReleaseCandidates = $candidates
+            ->filter(fn (array $candidate): bool => $this->isHistoricalReleaseEvidenceCandidate($candidate))
+            ->sortBy('candidate_fingerprint')
+            ->values();
 
         if ($baselineCandidates->count() !== $baselineMappingSet->cohort_size) {
             throw new RuntimeException('The proven baseline is no longer an exact subset of the same-semantic production candidates.');
@@ -80,6 +84,11 @@ class CharacterizeLegacyHistoricalFinancialNextScaleReadiness
         $expansionFingerprint = $this->hash([
             ...$evidence,
             ...$expansionCandidates->map(fn (array $candidate): array => $this->candidateIdentity($candidate))->all(),
+        ]);
+        $historicalReleaseFingerprint = $this->hash([
+            ...$evidence,
+            'projection_mode' => 'historical_evidence',
+            ...$historicalReleaseCandidates->map(fn (array $candidate): array => $this->candidateIdentity($candidate))->all(),
         ]);
         $materiallyLarger = $expansionCandidates->count() >= $baselineMappingSet->cohort_size;
 
@@ -105,6 +114,8 @@ class CharacterizeLegacyHistoricalFinancialNextScaleReadiness
                     'same_semantic_baseline_count' => $baselineCandidates->count(),
                     'same_semantic_expansion_count' => $expansionCandidates->count(),
                     'maximum_same_semantic_cohort_size' => $sameSemanticCandidates->count(),
+                    'historical_release_evidence_candidate_count' => $historicalReleaseCandidates->count(),
+                    'historical_release_current_authority_count' => 0,
                     'materially_larger_cohort_available' => $materiallyLarger,
                     'semantic_class_counts' => $this->semanticClassCounts($candidates),
                     'accepted_mappings_created' => 0,
@@ -115,6 +126,7 @@ class CharacterizeLegacyHistoricalFinancialNextScaleReadiness
                 'fingerprints' => [
                     'maximum_same_semantic_cohort_sha256' => $sameSemanticFingerprint,
                     'same_semantic_expansion_sha256' => $expansionFingerprint,
+                    'historical_release_evidence_candidates_sha256' => $historicalReleaseFingerprint,
                 ],
                 'authorization_gates' => [
                     'no_new_policy_assumption' => true,
@@ -129,11 +141,17 @@ class CharacterizeLegacyHistoricalFinancialNextScaleReadiness
                     'no_unresolved_board_trigger' => false,
                 ],
                 'decision' => [
-                    'status' => $materiallyLarger ? 'candidate_prerequisites_required' : 'not_ready_for_next_scale_authorization',
-                    'reason' => $materiallyLarger
+                    'status' => $historicalReleaseCandidates->isNotEmpty()
+                        ? 'historical_release_evidence_prerequisites_required'
+                        : ($materiallyLarger ? 'candidate_prerequisites_required' : 'not_ready_for_next_scale_authorization'),
+                    'reason' => $historicalReleaseCandidates->isNotEmpty()
+                        ? 'Exact legacy Released assertions form a deterministic historical-evidence class. Identity and source facts may be migrated after exact prerequisites are accepted, while current release authority remains false.'
+                        : ($materiallyLarger
                         ? 'A materially larger same-semantic class exists, but its exact prerequisites and mappings remain unaccepted.'
-                        : 'Only one unused candidate shares the proven five-record semantics; a six-record cohort would not materially test scale. The next coherent class introduces unresolved legacy release authority.',
-                    'recommendation' => 'RECONCILIATION REQUIRED BEFORE FURTHER SCALE',
+                        : 'Only one unused candidate shares the proven five-record semantics and no accelerated historical-release class is available.'),
+                    'recommendation' => $historicalReleaseCandidates->isNotEmpty()
+                        ? 'PREPARE EVIDENCE-PRESERVING HISTORICAL RELEASE COHORT'
+                        : 'RECONCILIATION REQUIRED BEFORE FURTHER SCALE',
                 ],
                 'safety' => [
                     'read_only' => true,
@@ -151,7 +169,32 @@ class CharacterizeLegacyHistoricalFinancialNextScaleReadiness
             'expansion_candidates' => array_values($expansionCandidates
                 ->map(fn (array $candidate): array => $this->candidateIdentity($candidate))
                 ->all()),
+            'historical_release_candidates' => array_values($historicalReleaseCandidates
+                ->map(fn (array $candidate): array => [
+                    ...$this->candidateIdentity($candidate),
+                    'projection_mode' => 'historical_evidence',
+                    'source_status_confidence' => 'exact',
+                    'current_release_authorized' => false,
+                    'current_legal_effect_verified' => false,
+                    'operationally_eligible' => false,
+                ])
+                ->all()),
         ];
+    }
+
+    /** @param array<string, mixed> $candidate */
+    private function isHistoricalReleaseEvidenceCandidate(array $candidate): bool
+    {
+        $applicationReasons = $this->applicationReasons($candidate);
+        sort($applicationReasons);
+
+        return ($candidate['classification'] ?? null) === 'application_reconciliation_required'
+            && data_get($candidate, 'flags.deterministic_identity_chain') === true
+            && data_get($candidate, 'flags.preservation_executor_compatible') === true
+            && ($candidate['structural_reasons'] ?? null) === []
+            && data_get($candidate, 'owner.reasons', []) === []
+            && data_get($candidate, 'business.reasons', []) === ['reference_data_mapping_required']
+            && $applicationReasons === ['legacy_release_authority_unresolved', 'line_of_business_mapping_required'];
     }
 
     /** @param array<string, mixed> $candidate */

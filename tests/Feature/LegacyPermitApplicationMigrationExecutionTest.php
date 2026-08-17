@@ -1,10 +1,16 @@
 <?php
 
+use App\Actions\CancelPermitApplication;
+use App\Actions\CreateAssessmentForPermitApplication;
+use App\Actions\EnsurePermitApplicationClearances;
 use App\Actions\ExecuteLegacyPermitApplications;
+use App\Actions\LegacyPermitApplicationProjector;
 use App\Actions\PlanLegacyPermitApplications;
 use App\Actions\RollbackLegacyPermitApplications;
+use App\Actions\StorePermitApplicationDocument;
 use App\Enums\LegacyImportBatchStatus;
 use App\Enums\LegacyMappingExecutionStatus;
+use App\Enums\PermitApplicationStatus;
 use App\Models\Assessment;
 use App\Models\Business;
 use App\Models\BusinessOwner;
@@ -23,10 +29,12 @@ use App\Models\PermitApplicationLine;
 use App\Models\PermitClearance;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
+use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
 /** @return array{source: LegacySource, batch: LegacyImportBatch, owner: BusinessOwner, business: Business, record: LegacyRecord, plan: LegacyApplicationMappingPlan, proposal: LegacyApplicationMappingProposal} */
-function executableApplicationPlan(string $suffix, ?PermitApplication $existing = null, bool $alreadyMapped = false): array
+function executableApplicationPlan(string $suffix, ?PermitApplication $existing = null, bool $alreadyMapped = false, string $status = 'Assessment'): array
 {
     $source = LegacySource::factory()->create([
         'key' => 'LEGACY-APPLICATION-EXECUTION-'.$suffix,
@@ -49,7 +57,7 @@ function executableApplicationPlan(string $suffix, ?PermitApplication $existing 
         '_id' => 'legacy-application-record-'.$suffix,
         'businessOwnerId' => $owner->legacy_source_id,
         'businessId' => $business->legacy_source_id,
-        'status' => 'Assessment',
+        'status' => $status,
         'permitApplicationType' => 'New',
         'applicationNumber' => 'PRIVATE-BPA-'.$suffix,
         'submittedAt' => '2026-08-01T09:00:00+08:00',
@@ -101,6 +109,33 @@ function executableApplicationPlan(string $suffix, ?PermitApplication $existing 
     ];
 }
 
+/** @return array{source: LegacySource, batch: LegacyImportBatch, owner: BusinessOwner, business: Business, record: LegacyRecord, plan: LegacyApplicationMappingPlan, proposal: LegacyApplicationMappingProposal} */
+function acceptedHistoricalReleaseApplicationPlan(string $suffix): array
+{
+    $fixture = executableApplicationPlan($suffix, status: 'Released');
+    $projector = app(LegacyPermitApplicationProjector::class);
+    $projection = $projector->projectHistoricalEvidence($fixture['record']);
+
+    $fixture['proposal']->update([
+        'proposed_action' => 'create',
+        'status' => 'ready',
+        'projection_hash' => $projector->hashCanonical($projection['attributes']),
+        'identity_fingerprint' => $projector->hashCanonical($projection['identity']),
+        'reasons' => [],
+        'metadata' => [
+            ...($fixture['proposal']->metadata ?? []),
+            'projection_mode' => 'historical_evidence',
+            'semantic_acceptance' => [
+                'legacy_status' => 'Released',
+                'disposition' => 'historical_only',
+                'current_release_authorized' => false,
+            ],
+        ],
+    ]);
+
+    return $fixture;
+}
+
 function applicationExecutionRegistryMapping(LegacyImportBatch $batch, string $dataset, string $targetType, string $legacyId, int $targetId): LegacyIdMapping
 {
     return LegacyIdMapping::query()->create([
@@ -149,6 +184,57 @@ test('a selected ready proposal creates one unnumbered application through an id
 
     expect(fn () => $action->handle($fixture['plan'], [$fixture['proposal']->id], 'application-execution-other-run'))
         ->toThrow(RuntimeException::class, 'no longer matches its dependency snapshot');
+});
+
+test('legacy released identity is preserved without materializing current release authority', function () {
+    Storage::fake('local');
+    $fixture = acceptedHistoricalReleaseApplicationPlan('historical-release');
+    $execution = app(ExecuteLegacyPermitApplications::class)->handle(
+        $fixture['plan'],
+        [$fixture['proposal']->id],
+        'application-execution-historical-release-001',
+    );
+    $application = PermitApplication::query()->sole();
+
+    expect($execution->status)->toBe(LegacyMappingExecutionStatus::Completed)
+        ->and($application->status)->toBe(PermitApplicationStatus::HistoricalEvidence)
+        ->and($application->isHistoricalEvidenceOnly())->toBeTrue()
+        ->and($application->canContinue())->toBeFalse()
+        ->and($application->metadata['legacy_status'])->toBe('Released')
+        ->and($application->metadata['historical_semantics'])->toMatchArray([
+            'source_status_confidence' => 'exact',
+            'semantic_disposition' => 'historical_only',
+            'release_authority_provenance' => 'unresolved',
+            'current_release_authorized' => false,
+            'current_legal_effect_verified' => false,
+            'current_permit_validity_verified' => false,
+            'operationally_eligible' => false,
+        ])
+        ->and(LegacyApplicationIdMapping::query()->sole()->metadata['projection_mode'])->toBe('historical_evidence')
+        ->and(Assessment::query()->count())->toBe(0)
+        ->and(PaymentSchedule::query()->count())->toBe(0)
+        ->and(PermitClearance::query()->count())->toBe(0)
+        ->and(PermitApplicationDocument::query()->count())->toBe(0);
+
+    $actor = User::factory()->create();
+
+    expect(fn () => app(CreateAssessmentForPermitApplication::class)->handle($application, $actor))
+        ->toThrow(LogicException::class, 'cannot enter operational assessment')
+        ->and(fn () => app(CancelPermitApplication::class)->handle($application, $actor, 'Not permitted'))
+        ->toThrow(DomainException::class, 'cannot be changed through the operational cancellation lifecycle')
+        ->and(fn () => app(EnsurePermitApplicationClearances::class)->handle($application))
+        ->toThrow(LogicException::class, 'cannot receive operational clearance records')
+        ->and(fn () => app(StorePermitApplicationDocument::class)->handle($application, [
+            'label' => 'Historical attachment',
+            'file' => UploadedFile::fake()->create('historical.pdf', 10, 'application/pdf'),
+        ], $actor))
+        ->toThrow(RuntimeException::class, 'cannot receive operational document uploads');
+
+    expect($application->refresh()->status)->toBe(PermitApplicationStatus::HistoricalEvidence)
+        ->and(Assessment::query()->count())->toBe(0)
+        ->and(PaymentSchedule::query()->count())->toBe(0)
+        ->and(PermitClearance::query()->count())->toBe(0)
+        ->and(PermitApplicationDocument::query()->count())->toBe(0);
 });
 
 test('one run reference cannot be reused for a different proposal selection', function () {

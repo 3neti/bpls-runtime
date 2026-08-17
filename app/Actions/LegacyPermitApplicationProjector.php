@@ -135,6 +135,72 @@ class LegacyPermitApplicationProjector
         ];
     }
 
+    /**
+     * Project an exact legacy Released assertion without materializing current release authority.
+     *
+     * @return array{
+     *   attributes: array<string, mixed>,
+     *   identity: array<string, mixed>,
+     *   owner_legacy_id: string|null,
+     *   business_legacy_id: string|null,
+     *   source_application_number: string|null,
+     *   reasons: list<string>,
+     *   blocked: bool
+     * }
+     */
+    public function projectHistoricalEvidence(LegacyRecord $record): array
+    {
+        $projection = $this->project($record);
+
+        if (data_get($projection, 'attributes.metadata.legacy_status') !== 'Released') {
+            return [
+                ...$projection,
+                'reasons' => [...$projection['reasons'], 'historical_release_projection_requires_released_source_status'],
+                'blocked' => true,
+            ];
+        }
+
+        $metadata = $projection['attributes']['metadata'];
+        $sourceDeclarations = $record->payload['linesOfBusiness'] ?? null;
+        $sourceDeclarations = is_array($sourceDeclarations) ? $sourceDeclarations : [];
+        $metadata['historical_semantics'] = [
+            'schema_version' => 'bpls.legacy-application-historical-semantics.v1',
+            'source_status' => 'Released',
+            'source_status_confidence' => 'exact',
+            'semantic_disposition' => 'historical_only',
+            'release_authority_provenance' => 'unresolved',
+            'current_release_authorized' => false,
+            'current_legal_effect_verified' => false,
+            'current_permit_validity_verified' => false,
+            'operationally_eligible' => false,
+            'source_application_payload_hash' => $record->payload_hash,
+            'source_declarations' => collect($sourceDeclarations)
+                ->filter(fn (mixed $line): bool => is_array($line))
+                ->values()
+                ->map(fn (array $line, int $index): array => [
+                    'source_index' => $index,
+                    'source_fact_sha256' => $this->hashCanonical($line),
+                    'semantic_disposition' => 'historical_only',
+                    'current_line_of_business_identity' => 'unresolved',
+                ])
+                ->all(),
+        ];
+        $metadata['terminal_state'] = [
+            'status' => PermitApplicationStatus::HistoricalEvidence->value,
+            'is_terminal' => true,
+            'can_continue' => false,
+            'reason' => 'Exact legacy lifecycle assertion preserved as non-operational historical evidence.',
+        ];
+        $projection['attributes']['status'] = PermitApplicationStatus::HistoricalEvidence->value;
+        $projection['attributes']['metadata'] = $metadata;
+        $projection['reasons'] = array_values(array_filter(
+            $projection['reasons'],
+            fn (string $reason): bool => $reason !== 'legacy_release_authority_unresolved',
+        ));
+
+        return $projection;
+    }
+
     /** @param array<string, mixed> $value */
     public function hashCanonical(array $value): string
     {

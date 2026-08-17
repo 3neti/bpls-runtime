@@ -14,6 +14,8 @@ use Throwable;
 #[Signature('legacy:build-five-record-historical-preservation-authorization-packet
     {mapping-set : Exact frozen accepted mapping-set ID}
     {--run-id= : Stable preservation planning reference}
+    {--authorized : Record that the Board authorized this exact bounded rehearsal}
+    {--authorization-reference= : Durable Board authorization reference}
     {--json : Write only structured output}')]
 #[Description('Regenerate and freeze the payload-safe five-record historical preservation rehearsal authorization packet without executing it.')]
 class BuildLegacyHistoricalFinancialRehearsalAuthorizationPacketCommand extends Command
@@ -23,7 +25,12 @@ class BuildLegacyHistoricalFinancialRehearsalAuthorizationPacketCommand extends 
         try {
             $runId = $this->runId();
             $mappingSet = LegacyHistoricalFinancialMappingSet::query()->findOrFail($this->positiveId($this->argument('mapping-set')));
-            $result = $action->handle($mappingSet, $runId);
+            $result = $action->handle(
+                $mappingSet,
+                $runId,
+                (bool) $this->option('authorized'),
+                $this->optionalString('authorization-reference'),
+            );
             $mappingSet->loadMissing('financialMappingPlan.importBatch.source');
             $batch = $mappingSet->financialMappingPlan->importBatch;
             $root = "legacy-migrations/{$batch->source->key}/{$batch->run_reference}/historical-financial-preservation-authorization/{$runId}";
@@ -50,7 +57,7 @@ class BuildLegacyHistoricalFinancialRehearsalAuthorizationPacketCommand extends 
         $totals = $report['expected_totals'];
         $commands = $report['proposed_commands_not_executed'];
 
-        return "# Five-Record Historical Preservation Rehearsal Authorization Packet\n\n"
+        return "# Bounded Historical Preservation Rehearsal Authorization Packet\n\n"
             ."Status: **{$report['recommendation']}**\n\n"
             ."This packet requests authorization only. No production-derived historical preservation rehearsal was executed.\n\n"
             ."## Fingerprints\n\n"
@@ -105,5 +112,12 @@ class BuildLegacyHistoricalFinancialRehearsalAuthorizationPacketCommand extends 
         }
 
         return $value;
+    }
+
+    private function optionalString(string $option): ?string
+    {
+        $value = $this->option($option);
+
+        return is_string($value) && trim($value) !== '' ? trim($value) : null;
     }
 }

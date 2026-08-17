@@ -13,6 +13,7 @@ use App\Models\PermitApplicationLine;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 class CreateAssessmentForPermitApplication
 {
@@ -22,6 +23,10 @@ class CreateAssessmentForPermitApplication
     {
         return DB::transaction(function () use ($permitApplication, $assessedBy): Assessment {
             $permitApplication->loadMissing(['business', 'lines.lineOfBusiness']);
+
+            if ($permitApplication->isHistoricalEvidenceOnly()) {
+                throw new LogicException("Historical evidence application [{$permitApplication->id}] cannot enter operational assessment.");
+            }
 
             $permitApplication->assessments()
                 ->whereNull('superseded_at')
@@ -147,7 +152,9 @@ class CreateAssessmentForPermitApplication
         $assessment->lines()->create([
             'permit_application_line_id' => $applicationLine?->id,
             'fee_rule_id' => $feeRule->id,
-            'line_of_business_id' => $applicationLine?->line_of_business_id ?? $feeRule->line_of_business_id,
+            'line_of_business_id' => $applicationLine instanceof PermitApplicationLine
+                ? $applicationLine->line_of_business_id
+                : $feeRule->line_of_business_id,
             'code' => $feeRule->code,
             'name' => $feeRule->name,
             'category' => $feeRule->category,

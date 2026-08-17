@@ -161,6 +161,144 @@ class AcceptLegacyHistoricalFinancialCohortMappings
         }, 3);
     }
 
+    /**
+     * Accept an explicitly prepared evidence-preserving cohort using the same guarded mapping executors.
+     *
+     * @param  array{report: array<string, mixed>, location_proposals: list<array<string, mixed>>, line_of_business_proposals: list<array<string, mixed>>, exact_mapping_proposals: list<array<string, mixed>>}  $evidence
+     */
+    public function handlePreparedEvidence(
+        LegacyFinancialMappingPlan $financialPlan,
+        LegacyMappingPlan $registryPlan,
+        array $evidence,
+        string $expectedCohortSha256,
+        string $expectedProposalPackageSha256,
+        string $runReference,
+        string $decisionAuthority,
+        string $evidenceReference,
+        string $projectionMode,
+    ): LegacyHistoricalFinancialMappingSet {
+        $this->assertEnvironment();
+        $this->assertInputs($expectedCohortSha256, $expectedProposalPackageSha256, $runReference, $decisionAuthority, $evidenceReference);
+        $this->assertPlanRelationship($financialPlan, $registryPlan);
+
+        if ($projectionMode !== 'historical_evidence') {
+            throw new RuntimeException('Prepared cohort acceptance currently supports only the historical-evidence projection mode.');
+        }
+
+        $cohortSize = (int) data_get($evidence, 'report.summary.cohort_size', 0);
+        $actualCohort = (string) data_get($evidence, 'report.fingerprints.selected_cohort_sha256');
+        $actualPackage = (string) data_get($evidence, 'report.fingerprints.prerequisite_proposals_sha256');
+        if ($cohortSize < 1
+            || count($evidence['exact_mapping_proposals']) !== $cohortSize
+            || count($evidence['location_proposals']) !== $cohortSize
+            || ! hash_equals($expectedCohortSha256, $actualCohort)
+            || ! hash_equals($expectedProposalPackageSha256, $actualPackage)) {
+            throw new RuntimeException('Prepared cohort evidence no longer matches its expected size or fingerprints.');
+        }
+
+        $existing = LegacyHistoricalFinancialMappingSet::query()
+            ->where('legacy_source_id', $financialPlan->importBatch->legacy_source_id)
+            ->where('cohort_sha256', $expectedCohortSha256)
+            ->first();
+        if ($existing instanceof LegacyHistoricalFinancialMappingSet) {
+            $this->assertIdempotentRetry($existing, $runReference, $expectedProposalPackageSha256, $decisionAuthority, $evidenceReference);
+            $this->audit($existing);
+
+            return $existing;
+        }
+
+        return DB::transaction(function () use (
+            $financialPlan,
+            $registryPlan,
+            $evidence,
+            $expectedCohortSha256,
+            $expectedProposalPackageSha256,
+            $runReference,
+            $decisionAuthority,
+            $evidenceReference,
+            $projectionMode,
+            $cohortSize,
+        ): LegacyHistoricalFinancialMappingSet {
+            $operationalBefore = $this->operationalCounts();
+            $mappingSet = LegacyHistoricalFinancialMappingSet::query()->create([
+                'legacy_source_id' => $financialPlan->importBatch->legacy_source_id,
+                'financial_import_batch_id' => $financialPlan->legacy_import_batch_id,
+                'registry_import_batch_id' => $registryPlan->legacy_import_batch_id,
+                'legacy_financial_mapping_plan_id' => $financialPlan->id,
+                'legacy_mapping_plan_id' => $registryPlan->id,
+                'run_reference' => $runReference,
+                'cohort_sha256' => $expectedCohortSha256,
+                'proposal_package_sha256' => $expectedProposalPackageSha256,
+                'status' => 'accepting',
+                'cohort_size' => $cohortSize,
+                'decision_authority' => $decisionAuthority,
+                'evidence_reference' => $evidenceReference,
+                'metadata' => [
+                    ...$this->safetyMetadata(),
+                    'mapping_scope' => 'evidence_preserving_historical_release_cohort',
+                    'application_projection_mode' => $projectionMode,
+                ],
+            ]);
+
+            $lineOfBusinessEvidence = $this->acceptLineOfBusinesses($mappingSet, $evidence['line_of_business_proposals']);
+            $acceptedRegistryPlan = $this->acceptedRegistryPlan($mappingSet, $registryPlan, $evidence['exact_mapping_proposals'], $evidence['location_proposals']);
+            $registryExecution = $this->executeRegistry->handle(
+                $acceptedRegistryPlan,
+                array_values($acceptedRegistryPlan->proposals()->orderBy('id')->pluck('id')->map(fn (mixed $id): int => (int) $id)->all()),
+                $runReference.'-registry',
+            );
+            $declarationPlan = $this->planDeclarations->handle($financialPlan->importBatch, $runReference.'-declarations');
+            $characterizationApplicationPlan = $this->planApplications->handle($financialPlan->importBatch, $runReference.'-application-characterization');
+            $applicationRecordIds = collect($evidence['exact_mapping_proposals'])->pluck('application.source_record_id')->map(fn (mixed $id): int => (int) $id)->all();
+            $applicationPlan = $this->acceptedApplicationPlan($mappingSet, $characterizationApplicationPlan, array_values($applicationRecordIds));
+            $applicationExecution = $this->executeApplications->handle(
+                $applicationPlan,
+                array_values($applicationPlan->proposals()->orderBy('id')->pluck('id')->map(fn (mixed $id): int => (int) $id)->all()),
+                $runReference.'-applications',
+            );
+
+            $operationalAfter = $this->operationalCounts();
+            if ($operationalBefore !== $operationalAfter) {
+                throw new RuntimeException('Operational financial records changed while accepting historical mapping prerequisites.');
+            }
+
+            $manifest = $this->manifest(
+                $mappingSet,
+                $evidence,
+                $lineOfBusinessEvidence,
+                $acceptedRegistryPlan,
+                $registryExecution->id,
+                $declarationPlan->id,
+                $applicationPlan->id,
+                $applicationExecution->id,
+                $operationalBefore,
+            );
+            $mappingSet->update([
+                'accepted_registry_plan_id' => $acceptedRegistryPlan->id,
+                'registry_execution_id' => $registryExecution->id,
+                'declaration_plan_id' => $declarationPlan->id,
+                'application_plan_id' => $applicationPlan->id,
+                'application_execution_id' => $applicationExecution->id,
+                'accepted_mapping_set_sha256' => $this->hash($manifest),
+                'status' => 'frozen',
+                'accepted_at' => now(),
+                'manifest' => $manifest,
+                'metadata' => [
+                    ...$this->safetyMetadata(),
+                    'mapping_scope' => 'evidence_preserving_historical_release_cohort',
+                    'application_projection_mode' => $projectionMode,
+                    'operational_counts_before' => $operationalBefore,
+                    'operational_counts_after' => $operationalAfter,
+                ],
+            ]);
+
+            $frozen = $mappingSet->fresh() ?? $mappingSet;
+            $this->audit($frozen);
+
+            return $frozen;
+        }, 3);
+    }
+
     public function audit(LegacyHistoricalFinancialMappingSet $mappingSet): void
     {
         if ($mappingSet->status !== 'frozen' || ! is_array($mappingSet->manifest) || $mappingSet->accepted_mapping_set_sha256 === null) {
@@ -318,8 +456,13 @@ class AcceptLegacyHistoricalFinancialCohortMappings
             (int) data_get($proposal, 'business.registry_proposal_id'),
         ])->unique()->sort()->values();
         $sourceProposals = $sourcePlan->proposals()->whereIn('id', $sourceProposalIds)->get()->keyBy('id');
-        if ($sourceProposals->count() !== 10) {
-            throw new RuntimeException('The Board-accepted cohort no longer resolves to exactly ten registry proposals.');
+        if ($sourceProposals->count() !== $sourceProposalIds->count()) {
+            throw new RuntimeException('The accepted cohort no longer resolves to its exact unique registry dependency set.');
+        }
+        $ownerProposalCount = $sourceProposals->where('target_type', 'business_owner')->count();
+        $businessProposalCount = $sourceProposals->where('target_type', 'business')->count();
+        if ($ownerProposalCount < 1 || $businessProposalCount < 1) {
+            throw new RuntimeException('The accepted cohort requires exact owner and business registry dependencies.');
         }
 
         $plan = LegacyMappingPlan::query()->create([
@@ -328,9 +471,9 @@ class AcceptLegacyHistoricalFinancialCohortMappings
             'planner_version' => 'bpls.historical-financial-cohort-registry-acceptance.v1',
             'registry_snapshot_hash' => $this->registryProjector->registrySnapshotHash(),
             'status' => LegacyMappingPlanStatus::Planned,
-            'owner_proposal_count' => 5,
-            'business_proposal_count' => 5,
-            'ready_count' => 10,
+            'owner_proposal_count' => $ownerProposalCount,
+            'business_proposal_count' => $businessProposalCount,
+            'ready_count' => $sourceProposalIds->count(),
             'review_count' => 0,
             'blocked_count' => 0,
             'exact_link_count' => 0,
@@ -400,8 +543,9 @@ class AcceptLegacyHistoricalFinancialCohortMappings
         array $applicationRecordIds,
     ): LegacyApplicationMappingPlan {
         $sourceProposals = $sourcePlan->proposals()->whereIn('legacy_record_id', $applicationRecordIds)->orderBy('legacy_record_id')->get();
-        if ($sourceProposals->count() !== 5) {
-            throw new RuntimeException('The exact five application proposals are absent from the characterization plan.');
+        $cohortSize = $mappingSet->cohort_size;
+        if ($sourceProposals->count() !== $cohortSize) {
+            throw new RuntimeException('The exact cohort application proposals are absent from the characterization plan.');
         }
 
         $plan = LegacyApplicationMappingPlan::query()->create([
@@ -410,8 +554,8 @@ class AcceptLegacyHistoricalFinancialCohortMappings
             'planner_version' => 'bpls.historical-financial-cohort-application-acceptance.v1',
             'dependency_snapshot_hash' => $sourcePlan->dependency_snapshot_hash,
             'status' => LegacyMappingPlanStatus::Planned,
-            'proposal_count' => 5,
-            'ready_count' => 5,
+            'proposal_count' => $cohortSize,
+            'ready_count' => $cohortSize,
             'review_count' => 0,
             'blocked_count' => 0,
             'exact_link_count' => 0,
@@ -432,7 +576,11 @@ class AcceptLegacyHistoricalFinancialCohortMappings
 
         foreach ($sourceProposals as $source) {
             $reasons = $source->reasons ?? [];
-            if (! in_array($reasons, [[], ['line_of_business_mapping_required']], true)) {
+            $projectionMode = (string) data_get($mappingSet->metadata, 'application_projection_mode', 'operational');
+            $allowedReasonSets = $projectionMode === 'historical_evidence'
+                ? [['legacy_release_authority_unresolved', 'line_of_business_mapping_required']]
+                : [[], ['line_of_business_mapping_required']];
+            if (! in_array($reasons, $allowedReasonSets, true)) {
                 throw new RuntimeException('An application proposal has unresolved semantics beyond the accepted line-of-business identity boundary: '.json_encode([
                     'source_record_id' => $source->legacy_record_id,
                     'reasons' => $reasons,
@@ -447,14 +595,20 @@ class AcceptLegacyHistoricalFinancialCohortMappings
             if (! is_array($lines) || $lines === []) {
                 throw new RuntimeException('An accepted application mapping has no source line-of-business declaration.');
             }
-            foreach (array_keys(array_values($lines)) as $index) {
-                $projection = $this->declarationProjector->project($record, $index);
-                if ($projection['reconciliation'] === null
-                    || $projection['line_of_business'] === null
-                    || $projection['reconciliation']->status !== LegacyLineOfBusinessReconciliationStatus::Accepted) {
-                    throw new RuntimeException('An accepted application mapping lacks an exact accepted line-of-business identity.');
+            if ($projectionMode === 'operational') {
+                foreach (array_keys(array_values($lines)) as $index) {
+                    $projection = $this->declarationProjector->project($record, $index);
+                    if ($projection['reconciliation'] === null
+                        || $projection['line_of_business'] === null
+                        || $projection['reconciliation']->status !== LegacyLineOfBusinessReconciliationStatus::Accepted) {
+                        throw new RuntimeException('An accepted application mapping lacks an exact accepted line-of-business identity.');
+                    }
                 }
             }
+
+            $acceptedProjection = $projectionMode === 'historical_evidence'
+                ? $this->applicationProjector->projectHistoricalEvidence($record)
+                : $this->applicationProjector->project($record);
 
             $plan->proposals()->create([
                 'legacy_record_id' => $source->legacy_record_id,
@@ -464,7 +618,7 @@ class AcceptLegacyHistoricalFinancialCohortMappings
                 'proposed_action' => LegacyMappingProposalAction::Create,
                 'status' => LegacyMappingProposalStatus::Ready,
                 'identity_fingerprint' => $source->identity_fingerprint,
-                'projection_hash' => $source->projection_hash,
+                'projection_hash' => $this->applicationProjector->hashCanonical($acceptedProjection['attributes']),
                 'collision_fingerprints' => $source->collision_fingerprints,
                 'reasons' => [],
                 'metadata' => [
@@ -473,6 +627,8 @@ class AcceptLegacyHistoricalFinancialCohortMappings
                     'historical_mapping_set_id' => $mappingSet->id,
                     'line_of_business_identity_accepted' => true,
                     'declaration_migration_executed' => false,
+                    'projection_mode' => $projectionMode,
+                    'source_projection_hash' => $source->projection_hash,
                 ],
             ]);
         }

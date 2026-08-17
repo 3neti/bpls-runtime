@@ -4,6 +4,7 @@ namespace App\Actions;
 
 use App\Enums\PermitClearanceStatus;
 use App\Models\PermitApplication;
+use LogicException;
 
 class EnsurePermitApplicationClearances
 {
@@ -33,6 +34,10 @@ class EnsurePermitApplicationClearances
 
     public function handle(PermitApplication $permitApplication): PermitApplication
     {
+        if ($permitApplication->isHistoricalEvidenceOnly()) {
+            throw new LogicException("Historical evidence application [{$permitApplication->id}] cannot receive operational clearance records.");
+        }
+
         foreach ($this->defaultChecklist() as $item) {
             $permitApplication->clearances()->firstOrCreate(
                 ['code' => $item['code']],

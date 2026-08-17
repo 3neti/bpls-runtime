@@ -113,13 +113,14 @@ class PlanLegacyHistoricalFinancialPreservation
         $this->assertReady($financialPlan, $runReference);
         $applicationRecordIds = array_values(array_unique($applicationRecordIds));
         sort($applicationRecordIds);
-        if (count($applicationRecordIds) !== 5 || collect($applicationRecordIds)->contains(fn (int $id): bool => $id < 1)) {
-            throw new RuntimeException('Selected historical preservation planning requires exactly five positive application record IDs.');
+        $selectionCount = count($applicationRecordIds);
+        if ($selectionCount < 1 || $selectionCount > 500 || collect($applicationRecordIds)->contains(fn (int $id): bool => $id < 1)) {
+            throw new RuntimeException('Selected historical preservation planning requires 1-500 positive application record IDs.');
         }
 
         $dependencyHash = $this->snapshotHash($financialPlan);
         $selectionHash = hash('sha256', json_encode($applicationRecordIds, JSON_THROW_ON_ERROR));
-        $plan = DB::transaction(function () use ($financialPlan, $runReference, $dependencyHash, $selectionHash): LegacyHistoricalFinancialPreservationPlan {
+        $plan = DB::transaction(function () use ($financialPlan, $runReference, $dependencyHash, $selectionHash, $selectionCount): LegacyHistoricalFinancialPreservationPlan {
             $existing = LegacyHistoricalFinancialPreservationPlan::query()
                 ->where('legacy_import_batch_id', $financialPlan->legacy_import_batch_id)
                 ->where('run_reference', $runReference)
@@ -139,13 +140,13 @@ class PlanLegacyHistoricalFinancialPreservation
                 'legacy_import_batch_id' => $financialPlan->legacy_import_batch_id,
                 'legacy_financial_mapping_plan_id' => $financialPlan->id,
                 'run_reference' => $runReference,
-                'planner_version' => self::PlannerVersion.'.selected-five-v1',
+                'planner_version' => self::PlannerVersion.'.selected-bounded-v2',
                 'dependency_snapshot_hash' => $dependencyHash,
                 'status' => LegacyMappingPlanStatus::Planning,
                 'started_at' => now(),
                 'metadata' => [
                     ...$this->safetyMetadata(),
-                    'selection_count' => 5,
+                    'selection_count' => $selectionCount,
                     'selection_sha256' => $selectionHash,
                     'selection_expansion_allowed' => false,
                 ],
@@ -162,7 +163,7 @@ class PlanLegacyHistoricalFinancialPreservation
             ->orderBy('id')
             ->get();
         $applications = LegacyRecord::query()->whereIn('id', $applicationRecordIds)->orderBy('id')->get();
-        if ($applications->count() !== 5) {
+        if ($applications->count() !== $selectionCount) {
             throw new RuntimeException('One or more selected historical application records are unavailable.');
         }
 
@@ -180,7 +181,8 @@ class PlanLegacyHistoricalFinancialPreservation
                     'metadata' => [
                         'projection' => $projection,
                         ...$this->safetyMetadata(),
-                        'selected_five_record_plan' => true,
+                        'selected_bounded_plan' => true,
+                        'selection_count' => $selectionCount,
                     ],
                 ],
             );

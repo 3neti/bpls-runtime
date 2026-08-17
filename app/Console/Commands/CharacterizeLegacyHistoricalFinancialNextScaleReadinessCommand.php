@@ -72,13 +72,14 @@ class CharacterizeLegacyHistoricalFinancialNextScaleReadinessCommand extends Com
         return self::SUCCESS;
     }
 
-    /** @param array{report: array<string, mixed>, same_semantic_candidates: list<array<string, mixed>>, expansion_candidates: list<array<string, mixed>>} $result */
+    /** @param array{report: array<string, mixed>, same_semantic_candidates: list<array<string, mixed>>, expansion_candidates: list<array<string, mixed>>, historical_release_candidates: list<array<string, mixed>>} $result */
     private function writeEvidence(LegacyFinancialMappingPlan $plan, string $runId, array $result): string
     {
         $root = "legacy-migrations/{$plan->importBatch->source->key}/{$plan->importBatch->run_reference}/reconciliation/historical-financial-next-scale-readiness/{$runId}";
         $this->writeImmutable($root.'/summary.json', json_encode($result['report'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n");
         $this->writeImmutable($root.'/same-semantic-candidates.jsonl', $this->jsonLines($result['same_semantic_candidates']));
         $this->writeImmutable($root.'/expansion-candidates.jsonl', $this->jsonLines($result['expansion_candidates']));
+        $this->writeImmutable($root.'/historical-release-candidates.jsonl', $this->jsonLines($result['historical_release_candidates']));
         $this->writeImmutable($root.'/review.md', "# Next-Scale Historical Preservation Readiness Review\n\nReviewer status: Pending\nReviewer:\nReviewed at:\nDecision reference:\nNotes:\n");
 
         return $root;

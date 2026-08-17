@@ -1,72 +1,82 @@
-# Next-Scale Historical Preservation Rehearsal Authorization Packet
+# Accelerated Historical Preservation Rehearsal Report
 
-## Status
+## Result
 
-`NOT AUTHORIZED`
+The evidence-preserving migration boundary now separates exact historical source assertions from current operational authority. A legacy `Released` assertion is preserved as historical evidence while current release authority, legal effect, validity, and operational eligibility remain false.
 
-Production run `prod-historical-financial-next-scale-readiness-20260817-001` found no materially larger cohort that preserves the exact semantics proven by the five-record rehearsal. No mapping was accepted, no preservation plan or execution was created, and no rehearsal command was run.
+Recommendation: `ACCELERATED MIGRATION PATH PROVEN - CONTINUE SCALING`.
+
+## Readiness
+
+The corrected V1 population contains 1,223 application histories. Semantic-level classification now yields:
+
+| Class | Count | Current disposition |
+| --- | ---: | --- |
+| Exact historical-evidence migration class | 407 | Migratable after exact mapping acceptance |
+| Human identity reconciliation | 736 | Blocked from identity mapping; no similarity merge |
+| Registry policy reconciliation | 72 | Blocked pending Group-owner, deleted, or related registry disposition |
+| Soft-deleted and payment-schedule semantics | 5 | Quarantined pending application/registry reconciliation |
+| Financial override plus historical release | 3 | Quarantined pending exact override evidence |
+
+The exact class consists of 401 deterministic historical `Released` applications and six applications already compatible with the proven non-release preservation semantics. Of the 401 historical-release applications, 302 have accepted exact mappings and completed reversible rehearsals. The remaining 99 are exact candidates across different persisted schedule/payment topologies; they were not inferred or accepted by this slice.
+
+## Authority Separation
+
+Historical migration now preserves:
+
+- the exact legacy status and source payload hash;
+- an explicit historical-only disposition;
+- unresolved authority provenance;
+- source declaration hashes without guessed current classification;
+- false current release authority, legal effect, validity, and operational eligibility.
+
+Operational assessment, schedule creation, collection, receipt, clearance mutation, document mutation, and lifecycle continuation reject historical-only applications. `ExecuteLegacyFinancialSnapshots` and the operational assessment path remain unchanged.
+
+## Rehearsal Progression
+
+All production-derived rehearsals used the immutable production snapshot SHA-256 `56fad41abbdeae8da23e9935550c753c82fb465d46a56b412342f27806bd0b57` and the existing Historical Financial Preservation V1 executor.
+
+| Cohort | Bundles | Schedules | Fee lines | Payments | Centavos preserved | Execute | Audit | Rollback | Restoration |
+| ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- |
+| 25 | 25 | 25 | 166 | 25 | 17,283,133 | PASS | PASS | PASS | PASS |
+| 100 | 100 | 100 | 658 | 100 | 86,140,090 | PASS | PASS | PASS | PASS |
+| 177 | 177 | 177 | 1,163 | 177 | 157,556,907 | PASS | PASS | PASS | PASS |
+| **Total coherent class** | **302** | **302** | **1,987** | **302** | **260,980,130** | **PASS** | **PASS** | **PASS** | **PASS** |
+
+Each cohort had zero unpaid schedules. Source and target counts and centavo totals agreed exactly. All preserved bundles were rolled back; accepted mappings and target applications remain intact as prerequisite evidence.
+
+## Isolation
+
+The following operational counts were identical before, during, and after every rehearsal:
+
+| Table | Count |
+| --- | ---: |
+| assessments | 68 |
+| assessment_lines | 395 |
+| payment_schedules | 63 |
+| payment_schedule_lines | 390 |
+| treasury_collections | 41 |
+| receipts | 41 |
+
+No formula ran. No historical amount was recalculated. No fee identity, receipt, collection, lifecycle transition, external call, production-source mutation, or present authority assertion was created.
 
 ## Frozen Evidence
 
-| Evidence | SHA-256 |
-| --- | --- |
-| Production snapshot | `56fad41abbdeae8da23e9935550c753c82fb465d46a56b412342f27806bd0b57` |
-| Corrected V1 candidate set | `307ecf33dafb9c53fd16064288b3057edd3c3131851a0982f54f8e1fe3750d06` |
-| Proven five-record cohort | `bf5af2693e471f336c54bf5e3345cc6b9df8709fceddd5ea1bc63360c3ebddb4` |
-| Proven accepted mapping set | `4989d98fee490ba7f38fa294192e0f19592eab7f219f0744a4f36885b590bcf6` |
-| Proven preservation dependency | `e137307e9f7fde831741fbee885c1e04b830e55de491a9c83070e3248406180f` |
-| Maximum same-semantic six-record set | `25d0ba4bcc4b1c804b8da752397e184f6b549f2c94c61996128a2f9572f25380` |
-| One-record unused expansion | `3a753ff4ca8c0bcc878efdc86cd898aa7a50cf7b99f015c65b16a2e5453b2cb8` |
+The largest completed cohort is bound to:
 
-## Cohort Finding
+- cohort SHA-256 `384fc8aa939038fa115e4a0a84c542c1e4e7ea85fae2b144a0981f254d70c7ad`;
+- proposal package SHA-256 `17613b75e15bcb9dc24f9d36959baa79454442c01f9cfb607889c7e86af69230`;
+- accepted mapping-set SHA-256 `3168e68a0ef9152087dccd2ebc6b21b2469417a4e953388fc37198ea51cdceab`;
+- preservation dependency SHA-256 `5d8ff28a102188d3efa61a2e3c9406cfba920c57b76eeb730c7816caed083035`.
 
-The corrected V1 population contains `1,223` historical application bundles and `415` deterministic identity chains. Only six deterministic chains have the exact application semantics accepted for the baseline: location and line-of-business reconciliation followed by exact owner, business, and application mapping, with no application reason beyond `line_of_business_mapping_required`.
-
-Five of those six are the already rehearsed baseline. The one unused candidate is V1-compatible but remains unaccepted. Combining it with the baseline would produce only six records, a one-record increase that does not materially test scale.
-
-The next coherent deterministic class contains `401` applications. Every member adds `legacy_release_authority_unresolved`. Mapping those applications through the current guarded application executor would require resolving whether historical legacy `Released` evidence may become current `Released` domain state. That is a new authority semantic, not scale-only reuse of the proven contract.
-
-| Deterministic class | Count | Additional unresolved semantics |
-| --- | ---: | --- |
-| Proven baseline semantics | 6 | None beyond accepted reference-data and exact-mapping prerequisites |
-| Historical release evidence | 401 | Legacy release authority |
-| Soft-deleted pending-payment evidence | 5 | Operational financial migration and deletion policy |
-| Historical overrides plus release evidence | 3 | Fee-override reconciliation and legacy release authority |
-
-## Authorization Gates
-
-| Gate | Result |
-| --- | --- |
-| No new policy assumption | PASS for the six-record class only |
-| Every selected application has an accepted exact mapping | FAIL |
-| Every V1 preservation eligibility check passes | PASS for the six-record class |
-| Source and baseline fingerprints match | PASS |
-| Expected counts and centavo totals known before execution | NOT ESTABLISHED |
-| Operational baseline recorded immediately before execution | NOT RUN |
-| Same V1 executor | PASS |
-| Operational executor unchanged and unused | PASS |
-| No unresolved Board Trigger | FAIL: release authority is unresolved |
-
-Because all ten gates did not pass, execution authorization did not activate.
-
-## Writes And Isolation
-
-The characterization wrote only payload-safe private evidence under:
-
-`storage/app/private/legacy-migrations/IPIL-CONVEX-SNAPSHOT-56FAD41ABBDEAE8D/prod-convex-stage-reference-catalog-v2-20260816-224400/reconciliation/historical-financial-next-scale-readiness/prod-historical-financial-next-scale-readiness-20260817-001`
-
-It created no accepted reconciliation, identity mapping, target registry record, target application, preservation plan, preservation bundle, or preservation execution. It did not change operational assessments, assessment lines, payment schedules, payment schedule lines, Treasury collections, receipts, permit lifecycle, fee rules, or executable policy.
-
-## Commands
-
-The read-only characterization command was executed. No `execute`, `audit`, `rollback`, or `restoration audit` command is proposed or authorized because no next-scale cohort passed the authorization gates.
+Private execution evidence remains under `storage/app/private/legacy-migrations/` and is excluded from Git.
 
 ## Scale Observation
 
-Read-only characterization completed in `7.44` seconds. The private evidence package is `6,819` bytes (`16 KiB` allocated). Peak memory was not available from the sandboxed macOS timing facility. No preservation serialization, database-write scaling, rollback scaling, or restoration scaling claim is made because rehearsal execution correctly did not occur.
+The 177-record execute completed in 148.93 seconds, source-to-target audit in 380.05 seconds, rollback in 0.31 seconds, and restoration audit in 0.52 seconds. Integrity remained exact, but audit wall time increased materially. This is an evidence-processing performance concern, not a migration semantic failure; the next scaling slice should index financial proposals by application/schedule while preserving identical projection hashes and audit assertions.
 
-## Required Decision
+## Next Boundary
 
-Further scale requires conscious reconciliation of historical legacy `Released` application evidence with the current permit authority boundary. The existing application executor must not be weakened and the legacy status must not be silently mapped to legal issuance, release, validity, or effect.
+The next scale may proceed autonomously. It should exercise the remaining 99 exact historical-release candidates by their actual persisted topology, beginning with the 67-record four-paid-quarter class. Identity acceptance remains exact and evidence-backed; the 816 unresolved applications remain quarantined by their smallest unresolved semantic class.
 
-Recommendation: `RECONCILIATION REQUIRED BEFORE FURTHER SCALE`.
+Production migration, operational financial migration, cutover, current permit release, and future fiscal-policy activation remain unauthorized.
