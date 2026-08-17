@@ -1,6 +1,6 @@
 # Historical Financial Preservation Boundary
 
-Status: **PROPOSED - NOT IMPLEMENTED OR AUTHORIZED**
+Status: **IMPLEMENTED AND SYNTHETICALLY REHEARSED - PRODUCTION EXECUTION NOT AUTHORIZED**
 
 Prepared: 2026-08-17
 
@@ -169,10 +169,20 @@ This boundary does not:
 
 The five-item Municipal Fiscal Acceptance Packet remains the only current path toward future executable financial policy.
 
-## Recommended Next Decision
+## Implementation Outcome
 
-Approve or reject the separate immutable historical-preservation rehearsal boundary.
+The Board-approved V1 boundary is implemented as a separate planner/projector, immutable preservation store, guarded executor, source-to-target audit, and rollback path. The operational `ExecuteLegacyFinancialSnapshots` path was not changed and has no historical mode.
 
-If approved, implement only the V1 planner/projector, private persistence, executor, rollback, audit, and focused tests described above. Run it first against synthetic fixtures. Production-scale execution remains blocked until exact application mappings exist and production migration rehearsal is separately authorized.
+Synthetic rehearsal proves:
 
-The independent TOR engineering lane can continue while this bounded decision is reviewed.
+- one complete application history is the atomic unit;
+- exact paid and unpaid schedule facts, fee-line centavos, and completed-payment facts survive projection without formula execution or fee-identity inference;
+- source and target counts and centavo totals agree exactly;
+- no operational assessment, schedule, collection, receipt, liability, lifecycle, queue, notification, or integration write occurs;
+- stable retries do not duplicate bundles;
+- rollback returns preservation-bundle storage to its exact pre-rehearsal count while retaining source staging, application mappings, and operational records;
+- rollback refuses reviewed, referenced, or changed evidence.
+
+The `1,238` characterized production application histories remain candidates only. The exact prerequisite for a production-scale preservation rehearsal is an accepted `LegacyApplicationIdMapping` for every selected source application, followed by a separate Board authorization for that checksum-bound selection. Production migration and cutover remain unauthorized.
+
+The independent TOR engineering lane continues separately from production reconciliation and preservation authorization.

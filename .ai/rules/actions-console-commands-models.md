@@ -26,3 +26,6 @@ A migration rehearsal binds exact completed latest-plan executions from one stag
 
 ## Permit evidence execution includes reconciled documents
 Permit-evidence execution may handle Ready pending clearances and Ready supporting documents only after checksum, MIME, size, and exact application-scope reconciliation. Document transfer never migrates legacy approval as sufficiency or asserts permit issuance, release, or legal effect.
+
+## Separate historical financial preservation from operational finance
+Preserve eligible legacy finance only as one complete application-history bundle in the dedicated immutable preservation store. Missing fee-policy identity remains explicit incomplete provenance; never infer it from names or current rules. The preservation path must not write or feed Assessment, PaymentSchedule, TreasuryCollection, Receipt, balances, liability, or authority-bearing reports, and production execution requires separate authorization.
