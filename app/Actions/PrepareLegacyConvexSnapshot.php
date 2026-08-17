@@ -645,6 +645,14 @@ final class PrepareLegacyConvexSnapshot
                 ['field' => 'businessId', 'target_dataset' => 'businesses', 'required' => true, 'cardinality' => 'one'],
                 ['field' => 'applicationId', 'target_dataset' => 'business_permit_applications', 'required' => false, 'cardinality' => 'one'],
             ],
+            'unitsOfMeasurement' => [
+                ['field' => 'applicationId', 'target_dataset' => 'business_permit_applications', 'required' => false, 'cardinality' => 'one'],
+                ['field' => 'businessId', 'target_dataset' => 'businesses', 'required' => false, 'cardinality' => 'one'],
+            ],
+            'fee_overrides' => [
+                ['field' => 'divisionGroupId', 'target_dataset' => 'division_groups', 'required' => true, 'cardinality' => 'one'],
+                ['field' => 'feeId', 'target_dataset' => 'fees', 'required' => true, 'cardinality' => 'one'],
+            ],
         ];
 
         return array_values(array_filter(

@@ -189,6 +189,45 @@ test('snapshot intake is idempotent and a stable run refuses changed source evid
         ->toThrow(RuntimeException::class, 'different source evidence');
 });
 
+test('snapshot intake declares only source-backed unit and fee override relationships', function () {
+    Storage::fake('local');
+    $archive = createConvexSnapshotArchive([
+        'business_permit_applications/documents.jsonl' => convexJsonLines([['_id' => 'application-001']]),
+        'businesses/documents.jsonl' => convexJsonLines([['_id' => 'business-001']]),
+        'division_groups/documents.jsonl' => convexJsonLines([['_id' => 'division-group-001']]),
+        'fee_overrides/documents.jsonl' => convexJsonLines([[
+            '_id' => 'fee-override-001',
+            'divisionGroupId' => 'division-group-001',
+            'feeId' => 'fee-001',
+        ]]),
+        'fees/documents.jsonl' => convexJsonLines([['_id' => 'fee-001']]),
+        'unitsOfMeasurement/documents.jsonl' => convexJsonLines([[
+            '_id' => 'unit-001',
+            'applicationId' => 'application-001',
+            'businessId' => 'business-001',
+        ]]),
+    ]);
+
+    $result = app(PrepareLegacyConvexSnapshot::class)->handle(
+        $archive,
+        'convex-reference-catalog',
+        'adjoining-porcupine-740',
+        '2026-08-16T16:00:00+08:00',
+        'authorized@example.test',
+        'Convex Dashboard backup download',
+    );
+    $manifest = json_decode(File::get($result['manifest_path']), true, flags: JSON_THROW_ON_ERROR);
+    $datasets = collect($manifest['datasets'])->keyBy('key');
+
+    expect($datasets['unitsOfMeasurement']['references'])->toBe([
+        ['field' => 'applicationId', 'target_dataset' => 'business_permit_applications', 'required' => false, 'cardinality' => 'one'],
+        ['field' => 'businessId', 'target_dataset' => 'businesses', 'required' => false, 'cardinality' => 'one'],
+    ])->and($datasets['fee_overrides']['references'])->toBe([
+        ['field' => 'divisionGroupId', 'target_dataset' => 'division_groups', 'required' => true, 'cardinality' => 'one'],
+        ['field' => 'feeId', 'target_dataset' => 'fees', 'required' => true, 'cardinality' => 'one'],
+    ]);
+});
+
 test('snapshot intake refuses unsafe paths and archives without table documents', function (array $entries, string $message) {
     Storage::fake('local');
     $archive = createConvexSnapshotArchive($entries);
