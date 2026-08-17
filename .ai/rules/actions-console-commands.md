@@ -4,6 +4,7 @@ paths:
   - 'app/{Actions,Console/Commands}/**/*Legacy*Convex*Snapshot*.php'
   - 'app/{Actions,Console/Commands}/**/*Legacy*Convex*.php'
   - 'app/{Actions,Console/Commands}/**/*HistoricalFinancial*ApplicationMapping*.php'
+  - 'app/{Actions,Console/Commands}/**/*HistoricalFinancial*Scale*.php'
 ---
 
 # Actions Console Commands
@@ -28,3 +29,6 @@ Bind readiness analysis to exact source, financial-plan, and registry-plan finge
 
 ## V1 candidates must match projector invariants
 Keep the original production census as immutable characterization evidence, but exclude every application-level unassigned payment event from Historical Financial Preservation V1. Preserve excluded histories as a separate checksum-bound exception set; never weaken the projector, discard failed attempts, or admit them to a rehearsal cohort.
+
+## Scale rehearsals must increase volume, not authority assumptions
+A next-scale historical-preservation cohort must reuse the exact proven application semantics and guarded executors. Do not admit legacy Released applications while `legacy_release_authority_unresolved` remains; a deterministic identity chain does not authorize materializing release state. If only a trivial same-semantic expansion exists, report reconciliation required instead of executing.

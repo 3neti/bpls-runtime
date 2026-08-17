@@ -6,6 +6,7 @@ use App\Actions\AuditLegacyHistoricalFinancialPreservationRestoration;
 use App\Actions\BuildLegacyHistoricalFinancialRehearsalAuthorizationPacket;
 use App\Actions\CharacterizeLegacyHistoricalFinancialApplicationMappings;
 use App\Actions\CharacterizeLegacyHistoricalFinancialCohortPrerequisites;
+use App\Actions\CharacterizeLegacyHistoricalFinancialNextScaleReadiness;
 use App\Actions\ExecuteLegacyHistoricalFinancialPreservation;
 use App\Actions\PlanLegacyFinancialDependencies;
 use App\Actions\PlanLegacyRegistryMigration;
@@ -65,7 +66,7 @@ function cohortPrerequisiteBatches(string $suffix): array
 }
 
 /** @param array{registry: LegacyImportBatch, financial: LegacyImportBatch} $batches */
-function addCohortPrerequisiteFixtures(array $batches): void
+function addCohortPrerequisiteFixtures(array $batches, int $count = 5): void
 {
     cohortPrerequisiteRecord($batches['registry'], 'provinces', 'province-private', [
         'name' => 'Private Province',
@@ -81,7 +82,7 @@ function addCohortPrerequisiteFixtures(array $batches): void
         'createdAt' => '2026-01-01T00:00:00+08:00',
     ]);
 
-    foreach (range(1, 5) as $number) {
+    foreach (range(1, $count) as $number) {
         $key = (string) $number;
         $ownerId = 'owner-private-'.$key;
         $businessId = 'business-private-'.$key;
@@ -160,10 +161,10 @@ function addCohortPrerequisiteFixtures(array $batches): void
 }
 
 /** @return array{financial: mixed, registry: mixed, cohort_sha256: string} */
-function plannedCohortPrerequisites(string $suffix): array
+function plannedCohortPrerequisites(string $suffix, int $count = 5): array
 {
     $batches = cohortPrerequisiteBatches($suffix);
-    addCohortPrerequisiteFixtures($batches);
+    addCohortPrerequisiteFixtures($batches, $count);
     $registryPlan = app(PlanLegacyRegistryMigration::class)->handle($batches['registry'], 'registry-'.$suffix);
     $financialPlan = app(PlanLegacyFinancialDependencies::class)->handle($batches['financial'], 'financial-'.$suffix);
     $readiness = app(CharacterizeLegacyHistoricalFinancialApplicationMappings::class)->handle($financialPlan, $registryPlan);
@@ -413,7 +414,7 @@ test('synthetic five-record preservation audit and rollback restore the exact pr
         'BOARD-RESTORATION',
     );
     $packet = app(BuildLegacyHistoricalFinancialRehearsalAuthorizationPacket::class)->handle($mappingSet, 'five-record-restoration-plan-001');
-    $proposalIds = $packet['plan']->proposals()->where('status', 'ready')->pluck('id')->all();
+    $proposalIds = $packet['plan']->proposals()->where('status', 'ready')->pluck('id')->map(fn (mixed $id): int => (int) $id)->values()->all();
     $sourceCount = LegacyRecord::query()->count();
     $mappingCount = LegacyApplicationIdMapping::query()->count();
 
@@ -467,4 +468,86 @@ test('acceptance and authorization commands write immutable evidence and require
     Storage::disk('local')->assertExists("legacy-migrations/{$batch->source->key}/{$batch->run_reference}/reconciliation/historical-financial-application-mapping-acceptance/five-record-command-001/accepted-mapping-set.json");
     Storage::disk('local')->assertExists("legacy-migrations/{$batch->source->key}/{$batch->run_reference}/historical-financial-preservation-authorization/five-record-command-packet-001/authorization-packet.json");
     expect(LegacyHistoricalFinancialPreservationExecution::query()->count())->toBe(0);
+});
+
+test('next scale readiness refuses a non material one record expansion and preserves the proven baseline', function () {
+    Storage::fake('local');
+    $plans = plannedCohortPrerequisites('next-scale', 6);
+    $characterization = app(CharacterizeLegacyHistoricalFinancialCohortPrerequisites::class)->handle(
+        $plans['financial'],
+        $plans['registry'],
+        $plans['cohort_sha256'],
+    );
+    $mappingSet = app(AcceptLegacyHistoricalFinancialCohortMappings::class)->handle(
+        $plans['financial'],
+        $plans['registry'],
+        $plans['cohort_sha256'],
+        $characterization['report']['fingerprints']['prerequisite_proposals_sha256'],
+        'next-scale-baseline-acceptance',
+        'Architecture Review Board',
+        'BOARD-NEXT-SCALE-BASELINE',
+    );
+    $packet = app(BuildLegacyHistoricalFinancialRehearsalAuthorizationPacket::class)->handle($mappingSet, 'next-scale-baseline-plan');
+    $proposalIds = $packet['plan']->proposals()->where('status', 'ready')->pluck('id')->map(fn (mixed $id): int => (int) $id)->values()->all();
+    $execution = app(ExecuteLegacyHistoricalFinancialPreservation::class)->handle(
+        $packet['plan'],
+        $proposalIds,
+        'next-scale-baseline-execution',
+    );
+    app(RollbackLegacyHistoricalFinancialPreservation::class)->handle($execution);
+    $mappingCount = LegacyApplicationIdMapping::query()->count();
+    $registryMappingCount = LegacyIdMapping::query()->count();
+
+    $result = app(CharacterizeLegacyHistoricalFinancialNextScaleReadiness::class)->handle(
+        $plans['financial'],
+        $plans['registry'],
+        $mappingSet,
+        $execution->fresh(),
+        $plans['financial']->importBatch->source->archive_checksum,
+        $mappingSet->cohort_sha256,
+        $mappingSet->accepted_mapping_set_sha256,
+        $packet['plan']->dependency_snapshot_hash,
+    );
+
+    expect($result['report']['summary'])
+        ->strict_v1_candidate_count->toBe(6)
+        ->deterministic_identity_chain_count->toBe(6)
+        ->baseline_cohort_size->toBe(5)
+        ->same_semantic_candidate_count->toBe(6)
+        ->same_semantic_baseline_count->toBe(5)
+        ->same_semantic_expansion_count->toBe(1)
+        ->maximum_same_semantic_cohort_size->toBe(6)
+        ->materially_larger_cohort_available->toBeFalse()
+        ->accepted_mappings_created->toBe(0)
+        ->preservation_executions_created->toBe(0)
+        ->production_rehearsal_executed->toBeFalse()
+        ->and($result['report']['decision']['recommendation'])->toBe('RECONCILIATION REQUIRED BEFORE FURTHER SCALE')
+        ->and($result['expansion_candidates'])->toHaveCount(1)
+        ->and(LegacyApplicationIdMapping::query()->count())->toBe($mappingCount)
+        ->and(LegacyIdMapping::query()->count())->toBe($registryMappingCount)
+        ->and(LegacyHistoricalFinancialPreservedBundle::query()->count())->toBe(0);
+
+    $encoded = json_encode($result, JSON_THROW_ON_ERROR);
+    expect($encoded)
+        ->not->toContain('Private Business', 'Private Owner', 'PRIVATE-APP', 'application-private');
+
+    $this->artisan('legacy:characterize-historical-financial-next-scale-readiness', [
+        'financial-plan' => $plans['financial']->id,
+        'registry-plan' => $plans['registry']->id,
+        'mapping-set' => $mappingSet->id,
+        'baseline-execution' => $execution->id,
+        '--source-sha256' => $plans['financial']->importBatch->source->archive_checksum,
+        '--baseline-cohort-sha256' => $mappingSet->cohort_sha256,
+        '--baseline-mapping-set-sha256' => $mappingSet->accepted_mapping_set_sha256,
+        '--baseline-dependency-sha256' => $packet['plan']->dependency_snapshot_hash,
+        '--run-id' => 'next-scale-readiness-command',
+        '--json' => true,
+    ])->assertSuccessful();
+
+    $root = "legacy-migrations/{$plans['financial']->importBatch->source->key}/{$plans['financial']->importBatch->run_reference}/reconciliation/historical-financial-next-scale-readiness/next-scale-readiness-command";
+    Storage::disk('local')->assertExists($root.'/summary.json');
+    Storage::disk('local')->assertExists($root.'/same-semantic-candidates.jsonl');
+    Storage::disk('local')->assertExists($root.'/expansion-candidates.jsonl');
+    expect(Storage::disk('local')->get($root.'/summary.json'))
+        ->not->toContain('Private Business', 'Private Owner', 'PRIVATE-APP', 'application-private');
 });

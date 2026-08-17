@@ -251,4 +251,12 @@ Authorization-packet run `prod-five-record-historical-preservation-authorization
 
 The packet expects five bundles, five schedules, 38 fee lines, zero completed payments, five unpaid schedules, and exactly 2,095,000 scheduled/fee centavos. Its private JSON and Markdown artifacts contain the full assertions and proposed commands. The payload-safe Board packet is `docs/implementation/FIVE_RECORD_HISTORICAL_PRESERVATION_REHEARSAL_AUTHORIZATION_PACKET.md`.
 
-The rehearsal has not been executed. Production mutation, operational financial migration, historical recalculation, inferred fee identity, cutover, and preservation execution remain unauthorized pending the next Board decision.
+Board-authorized execution 1 completed execute, exact source-to-target audit, rollback, and restoration audit. It preserved the expected five bundles, five schedules, 38 fee lines, zero completed payments, five unpaid schedules, and 2,095,000 scheduled/fee centavos before removing only its own bundles. Operational finance counts remained unchanged, accepted mappings and target applications remained intact, and execution 1 is permanently recorded as rolled back.
+
+## Next-Scale Readiness
+
+Read-only run `prod-historical-financial-next-scale-readiness-20260817-001` revalidated the immutable production snapshot, corrected V1 candidate set, proven five-record cohort, accepted mapping set, permanently rolled-back baseline execution, and preservation dependency. It found six total candidates with the exact proven semantics: the five baseline applications plus one unused candidate. A six-record replay would add only one record and would not materially test scale.
+
+The next coherent deterministic class contains `401` applications, but every member carries `legacy_release_authority_unresolved` in addition to line-of-business reconciliation. The guarded application executor correctly refuses that class because mapping would otherwise materialize unresolved historical release authority in the current domain. No mappings, plans, bundles, or executions were created. `NEXT_SCALE_HISTORICAL_PRESERVATION_REHEARSAL_AUTHORIZATION_PACKET.md` records the failed authorization gates and payload-safe fingerprints.
+
+Production mutation, operational financial migration, historical recalculation, inferred fee identity, cutover, and further preservation execution remain unauthorized.
