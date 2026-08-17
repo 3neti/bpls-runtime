@@ -3,6 +3,7 @@ paths:
   - 'app/{Actions,Console/Commands}/**/*Legacy*Scale*.php'
   - 'app/{Actions,Console/Commands}/**/*Legacy*Convex*Snapshot*.php'
   - 'app/{Actions,Console/Commands}/**/*Legacy*Convex*.php'
+  - 'app/{Actions,Console/Commands}/**/*HistoricalFinancial*ApplicationMapping*.php'
 ---
 
 # Actions Console Commands
@@ -21,3 +22,6 @@ Authorized snapshots with `_storage` must validate each metadata row against exa
 
 ## Record private export operator and tooling provenance
 Authenticated production snapshot intake must bind the exact authorized operator and administrative export tooling in private provenance. Review-safe intake evidence may expose only the operator hash and non-sensitive tooling description; credentials, sessions, and raw payloads remain outside Git.
+
+## Characterize historical application mappings without accepting them
+Bind readiness analysis to exact source, financial-plan, and registry-plan fingerprints. Emit only hashed proposed mappings; never create LegacyIdMapping or LegacyApplicationIdMapping rows. Keep the frozen candidate census separate from preservation-executor compatibility, and require accepted reference/declaration mappings plus separate Board authority before any production rehearsal.

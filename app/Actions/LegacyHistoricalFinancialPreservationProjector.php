@@ -245,7 +245,7 @@ class LegacyHistoricalFinancialPreservationProjector
         }
 
         $result = $payments->map(function (LegacyFinancialMappingProposal $payment) use ($financialProposals, $reasons): array {
-            $allowed = ['completed_payment_collection_mapping_requires_acceptance', 'payment_processor_identity_requires_reconciliation'];
+            $allowed = ['application_mapping_not_ready', 'payment_application_mapping_not_ready', 'completed_payment_collection_mapping_requires_acceptance', 'payment_processor_identity_requires_reconciliation'];
             $this->rejectUnexpectedReasons($payment, $allowed, 'payment', $reasons);
             $metadata = $payment->metadata ?? [];
             if (($metadata['status'] ?? null) !== 'completed' || ! is_int($metadata['amount_cents'] ?? null)) {

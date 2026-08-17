@@ -207,7 +207,7 @@ test('planner blocks complete history without an accepted exact application mapp
     $proposal = $plan->proposals()->sole();
 
     expect($proposal->status)->toBe(LegacyMappingProposalStatus::Blocked)
-        ->and($proposal->reasons)->toContain('accepted_application_mapping_required');
+        ->and($proposal->reasons)->toBe(['accepted_application_mapping_required']);
 });
 
 test('planner blocks partial histories edited fee lines and late charge evidence', function () {

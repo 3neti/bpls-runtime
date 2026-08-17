@@ -48,7 +48,9 @@ Fee-line counts are not migration units. Complete schedules and complete applica
 | Schedules containing at least one fee line | 7,205 |
 | Schedules whose fee lines are all exact, unedited, and incomplete only in fee-policy provenance | 4,384 |
 | Structurally coherent source-preservation schedule candidates | 4,350 |
-| Strict complete application-history candidates | 1,238 applications |
+| Frozen complete application-history candidate census | 1,238 applications |
+| Compatible with the implemented V1 preservation projector | 1,223 applications |
+| Requiring sibling-payment reconciliation before V1 execution | 15 applications |
 | Schedules in those complete application histories | 1,930 |
 | Fee lines in those histories | 8,735 |
 | Exact single completed-payment events in those histories | 1,790 |
@@ -94,7 +96,7 @@ Every selected application bundle must satisfy all of the following:
 11. The complete application bundle has no quarantined sibling schedule or payment evidence.
 12. No target historical-preservation mapping already exists under a different source or projection hash.
 
-These criteria identify `1,238` source application histories as candidates. They are not currently executable because accepted application mappings do not yet exist.
+These criteria originally identified a frozen census of `1,238` source application histories. Subsequent executable-projector characterization confirmed `1,223` satisfy the implemented V1 projector unchanged. The remaining `15` reproduce the frozen aggregate totals but also contain unassigned application-level payment evidence; they remain in the census for traceability and are explicitly incompatible with V1 execution until reconciled. None are currently executable because accepted application mappings do not yet exist.
 
 ## Smallest Reversible Boundary
 
@@ -184,5 +186,23 @@ Synthetic rehearsal proves:
 - rollback refuses reviewed, referenced, or changed evidence.
 
 The `1,238` characterized production application histories remain candidates only. The exact prerequisite for a production-scale preservation rehearsal is an accepted `LegacyApplicationIdMapping` for every selected source application, followed by a separate Board authorization for that checksum-bound selection. Production migration and cutover remain unauthorized.
+
+## Exact Application Mapping Readiness
+
+Read-only characterization run `prod-historical-financial-application-mapping-readiness-20260817-010` binds financial plan 3 and registry plan 3 to production snapshot SHA-256 `56fad41abbdeae8da23e9935550c753c82fb465d46a56b412342f27806bd0b57`. It reproduces the frozen census exactly: `1,238` applications, `1,930` schedules, `8,735` fee lines, `1,790` completed payments, and `140` unpaid schedules.
+
+| Mapping-readiness class | Applications |
+|---|---:|
+| Deterministic identity chain | 419 |
+| Blocked only by reference-data crosswalks | 6 |
+| Human identity reconciliation required | 746 |
+| Registry-policy reconciliation required | 73 |
+| Other application/lifecycle reconciliation required | 413 |
+
+The mapping-readiness classes are mutually exclusive; the deterministic-chain count is an independent flag. Production flags include `746` collision cases, `193` Group-owner cases, `13` soft-deleted cases, and zero blacklisted cases within this frozen population. Similarity remains review evidence only and created no accepted mapping.
+
+All `1,238` businesses require an explicit source-backed reference-data crosswalk, and `1,236` applications require line-of-business declaration reconciliation. Of the deterministic identity chains, six are blocked only by those reference-data dependencies. Five preservation-compatible members of that six form the smallest proposed first rehearsal cohort. The cohort is pending reference-data reconciliation, exact owner/business/application mapping acceptance, and separate Board authorization; it is not executable.
+
+The candidate-set SHA-256 is `473ef7b8411724571e2a8e435e2cf391c897ff022ab04478a51ab089faac20d6`. The five-record conditional cohort SHA-256 is `bf5af2693e471f336c54bf5e3345cc6b9df8709fceddd5ea1bc63360c3ebddb4`. Both hashes bind the source archive, financial batch and plan, registry batch and plan, and selected evidence. Raw identifiers and payloads remain only in private checksum-bound artifacts.
 
 The independent TOR engineering lane continues separately from production reconciliation and preservation authorization.
