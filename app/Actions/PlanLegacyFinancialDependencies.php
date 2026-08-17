@@ -608,22 +608,37 @@ class PlanLegacyFinancialDependencies
 
     public function snapshotHash(LegacyImportBatch $batch): string
     {
-        $parts = [];
+        $context = hash_init('sha256');
+        $first = true;
+        hash_update($context, '[');
+        $append = function (array $part) use ($context, &$first): void {
+            if (! $first) {
+                hash_update($context, ',');
+            }
+
+            hash_update($context, json_encode($part, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+            $first = false;
+        };
+
         foreach ($batch->records()->select(['id', 'dataset_key', 'payload_hash'])->orderBy('id')->cursor() as $record) {
-            $parts[] = [$record->id, $record->dataset_key, $record->payload_hash];
+            $append([$record->id, $record->dataset_key, $record->payload_hash]);
         }
         foreach (LegacyFeeRuleReconciliation::query()->where('legacy_source_id', $batch->legacy_source_id)->orderBy('id')->cursor() as $item) {
-            $parts[] = ['fee_reconciliation', $item->id, hash('sha256', $item->source_legacy_id), $item->fee_rule_id, $item->status->value, $item->decision_authority, $item->evidence_reference, $item->updated_at?->toJSON()];
+            $append(['fee_reconciliation', $item->id, hash('sha256', $item->source_legacy_id), $item->fee_rule_id, $item->status->value, $item->decision_authority, $item->evidence_reference, $item->updated_at?->toJSON()]);
         }
         foreach (FeeRule::query()->select(['id', 'code', 'is_active', 'updated_at'])->orderBy('id')->cursor() as $feeRule) {
-            $parts[] = ['fee_rule', ...$feeRule->getAttributes()];
+            $append(['fee_rule', ...$feeRule->getAttributes()]);
         }
-        foreach ($batch->applicationMappingPlans()->with('proposals')->orderBy('id')->cursor() as $plan) {
-            $parts[] = ['application_plan', $plan->id, $plan->dependency_snapshot_hash, $plan->status->value,
-                $plan->proposals->map(fn ($proposal): array => [$proposal->id, $proposal->legacy_record_id, $proposal->status->value, $proposal->projection_hash])->all()];
+        foreach ($batch->applicationMappingPlans()->orderBy('id')->cursor() as $plan) {
+            $proposals = $plan->proposals()->select(['id', 'legacy_record_id', 'status', 'projection_hash'])->orderBy('id')->get()
+                ->map(fn ($proposal): array => [$proposal->id, $proposal->legacy_record_id, $proposal->status->value, $proposal->projection_hash])
+                ->all();
+            $append(['application_plan', $plan->id, $plan->dependency_snapshot_hash, $plan->status->value, $proposals]);
         }
 
-        return $this->hash($parts);
+        hash_update($context, ']');
+
+        return hash_final($context);
     }
 
     private function assertReady(LegacyImportBatch $batch, string $runReference): void
@@ -729,6 +744,6 @@ class PlanLegacyFinancialDependencies
 
     private function evidence(LegacyFinancialMappingPlan $plan): LegacyFinancialMappingPlan
     {
-        return $plan->fresh(['importBatch.source', 'proposals']) ?? $plan;
+        return $plan->fresh(['importBatch.source']) ?? $plan;
     }
 }

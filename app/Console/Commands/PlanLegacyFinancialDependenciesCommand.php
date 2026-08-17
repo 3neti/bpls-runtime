@@ -64,10 +64,10 @@ class PlanLegacyFinancialDependenciesCommand extends Command
 
     private function writeEvidence(LegacyFinancialMappingPlan $plan): string
     {
-        $plan->loadMissing(['importBatch.source', 'proposals']);
+        $plan->loadMissing('importBatch.source');
         $root = "legacy-migrations/{$plan->importBatch->source->key}/{$plan->importBatch->run_reference}/financial-mapping-plans/{$plan->run_reference}";
         $report = [
-            'schema_version' => 'bpls.financial-mapping-plan-report.v1',
+            'schema_version' => 'bpls.financial-mapping-plan-report.v2',
             'run_id' => $plan->run_reference,
             'plan_id' => $plan->id,
             'dependency_snapshot_hash' => $plan->dependency_snapshot_hash,
@@ -81,19 +81,11 @@ class PlanLegacyFinancialDependenciesCommand extends Command
                 'liability_calculations' => false,
                 'financial_domain_writes' => false,
             ],
-            'proposals' => $plan->proposals->sortBy('id')->map(fn (LegacyFinancialMappingProposal $proposal): array => [
-                'proposal_id' => $proposal->id,
-                'source_record_id' => $proposal->legacy_record_id,
-                'source_dataset' => $proposal->source_dataset,
-                'kind' => $proposal->kind,
-                'item_key' => $proposal->item_key,
-                'fee_reconciliation_id' => $proposal->legacy_fee_rule_reconciliation_id,
-                'fee_rule_id' => $proposal->fee_rule_id,
-                'status' => $proposal->status->value,
-                'projection_hash' => $proposal->projection_hash,
-                'reasons' => $proposal->reasons ?? [],
-                'metadata' => $proposal->metadata,
-            ])->values()->all(),
+            'proposal_evidence' => [
+                'path' => 'proposals.ndjson',
+                'format' => 'application/x-ndjson',
+                'count' => $plan->proposal_count,
+            ],
             'safety' => [
                 'payloads_in_report' => false,
                 'raw_transaction_references_in_report' => false,
@@ -109,11 +101,53 @@ class PlanLegacyFinancialDependenciesCommand extends Command
         ];
 
         if (! Storage::disk('local')->put($root.'/financial-plan.json', json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n")
+            || ! $this->writeProposalEvidence($plan, $root.'/proposals.ndjson')
             || ! Storage::disk('local')->put($root.'/review.md', "# Legacy Financial Dependency Plan Review\n\nReviewer status: Pending\nReviewer:\nReviewed at:\nNotes:\n")) {
             throw new RuntimeException('Financial mapping evidence could not be written.');
         }
 
         return $root;
+    }
+
+    private function writeProposalEvidence(LegacyFinancialMappingPlan $plan, string $path): bool
+    {
+        $stream = fopen('php://temp/maxmemory:1048576', 'w+b');
+        if ($stream === false) {
+            throw new RuntimeException('Financial proposal evidence stream could not be opened.');
+        }
+
+        try {
+            foreach ($plan->proposals()->orderBy('id')->cursor() as $proposal) {
+                $line = json_encode($this->proposalEvidence($proposal), JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n";
+                if (fwrite($stream, $line) === false) {
+                    return false;
+                }
+            }
+
+            rewind($stream);
+
+            return Storage::disk('local')->put($path, $stream) === true;
+        } finally {
+            fclose($stream);
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function proposalEvidence(LegacyFinancialMappingProposal $proposal): array
+    {
+        return [
+            'proposal_id' => $proposal->id,
+            'source_record_id' => $proposal->legacy_record_id,
+            'source_dataset' => $proposal->source_dataset,
+            'kind' => $proposal->kind,
+            'item_key' => $proposal->item_key,
+            'fee_reconciliation_id' => $proposal->legacy_fee_rule_reconciliation_id,
+            'fee_rule_id' => $proposal->fee_rule_id,
+            'status' => $proposal->status->value,
+            'projection_hash' => $proposal->projection_hash,
+            'reasons' => $proposal->reasons ?? [],
+            'metadata' => $proposal->metadata,
+        ];
     }
 
     private function failCommand(string $message): int

@@ -294,9 +294,16 @@ test('financial command writes redacted evidence and requires a stable run id', 
 
     $root = 'legacy-migrations/LEGACY-FINANCIAL-command/financial-staging-command/financial-mapping-plans/financial-plan-command';
     Storage::disk('local')->assertExists($root.'/financial-plan.json');
+    Storage::disk('local')->assertExists($root.'/proposals.ndjson');
     $report = Storage::disk('local')->get($root.'/financial-plan.json');
+    $proposals = Storage::disk('local')->get($root.'/proposals.ndjson');
     $decoded = json_decode($report, true, 512, JSON_THROW_ON_ERROR);
-    expect($report)->not->toContain('TXN-COMMAND-SECRET', 'BANK-COMMAND-SECRET', 'OR-COMMAND-SECRET', 'PROCESSOR-COMMAND-SECRET', 'Sensitive Fee Name')
+    expect($report.$proposals)->not->toContain('TXN-COMMAND-SECRET', 'BANK-COMMAND-SECRET', 'OR-COMMAND-SECRET', 'PROCESSOR-COMMAND-SECRET', 'Sensitive Fee Name')
+        ->and($decoded['proposal_evidence'])->toMatchArray([
+            'path' => 'proposals.ndjson',
+            'format' => 'application/x-ndjson',
+            'count' => 4,
+        ])
         ->and($decoded['safety'])->toMatchArray([
             'raw_transaction_references_in_report' => false,
             'raw_receipt_numbers_in_report' => false,

@@ -48,7 +48,7 @@ The suite records authority evidence but never executes the policy assertion. Ac
 
 ## Historical Divergences
 
-Specimens preserve contradictory historical facts without rewriting them. For `CAL-2026-001`, the PHP 13,000 client-computed application summary and PHP 14,535 evaluator/schedule assessment remain separately visible. The source of the summary is now explained, but its migration/report disposition remains unresolved.
+Specimens preserve contradictory historical facts without rewriting them. For `CAL-2026-001`, the PHP 13,000 client-computed application summary and PHP 14,535 evaluator/schedule assessment remain separately visible. The PHP 13,000 value is classified as a legacy application-summary divergence; it is preserved as provenance and must not override the authoritative historical fee/schedule/payment chain totaling PHP 14,535.
 
 Historical assessment lines without exact fee-policy identity remain immutable historical financial evidence with incomplete policy provenance. Fee names never manufacture missing identity.
 
@@ -92,6 +92,8 @@ A historical assertion mismatch returns a non-zero exit code while preserving di
 ## First Specimen
 
 `CAL-2026-001` is the first Golden Financial Specimen. It passes historical reproduction for the original assessment and schedule. A checksum-linked 2026-08-17 clarification from the Municipality of Ipil IT Head confirms the operational intent behind the fresh-fish half-rate and following-day delinquency trigger. The Board rejected the legacy inclusive-due-date behavior; positive executable policy remains pending the required fiscal authority. Quarterly allocation, surcharge/penalty basis, and rounding authority also remain pending.
+
+The five bounded future-policy questions are consolidated in `docs/implementation/MUNICIPAL_FISCAL_ACCEPTANCE_PACKET_CAL-2026-001.md`. That packet records decisions; it does not activate policy or authorize migration.
 
 Verified run: `financial-calibration-suite-20260817-003` - one specimen passed six historical assertions; one future-policy assertion was rejected, five remain pending, and none were executed. No formula was activated and no historical value was rewritten.
 
