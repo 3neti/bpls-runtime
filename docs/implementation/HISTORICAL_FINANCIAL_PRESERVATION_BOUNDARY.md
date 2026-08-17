@@ -210,3 +210,31 @@ The cohort prerequisite packet records three source location-reference fields an
 The corrected candidate-set SHA-256 is `307ecf33dafb9c53fd16064288b3057edd3c3131851a0982f54f8e1fe3750d06`; the 15-record exception-set SHA-256 is `c5f598029e1047d6579fa201718637fa6e39299fc4fc7758c4153f37e612adae`. The unchanged five-record conditional cohort SHA-256 is `bf5af2693e471f336c54bf5e3345cc6b9df8709fceddd5ea1bc63360c3ebddb4`, and its prerequisite-proposal SHA-256 is `7937edfa67048fde4253952529024a01f27a2fdb03e96ffcdc84370a2bee9c92`. All hashes bind the source archive, financial batch and plan, registry batch and plan, and selected evidence. Raw identifiers and payloads remain only in private checksum-bound artifacts.
 
 The independent TOR engineering lane continues separately from production reconciliation and preservation authorization.
+
+## Five-Record Mapping Prerequisites
+
+Read-only prerequisite run `prod-historical-financial-cohort-prerequisites-20260817-002` recomputed the same five-record cohort from financial plan 3 and registry plan 3 and refused to proceed unless the result matched frozen cohort SHA-256 `bf5af2693e471f336c54bf5e3345cc6b9df8709fceddd5ea1bc63360c3ebddb4`. The cohort did not change.
+
+Source-backed evidence now establishes:
+
+- all 15 province, city, and barangay references resolve by exact source identifier;
+- all five city-to-province and barangay-to-city edges are internally consistent;
+- each of the five application declarations matches exactly one legacy `groups` record by the exact behavior used by the legacy source;
+- each matched group has a complete `division_groups -> divisions -> majors` hierarchy in the immutable snapshot;
+- no existing Laravel `LineOfBusiness` is bound to any of those five exact legacy group identities;
+- no line-of-business reconciliation, registry mapping, or application mapping was accepted or created.
+
+The five location dispositions and five line-of-business target definitions are therefore `proposed`, not `accepted`. The proposed location disposition is to preserve the exact source lookup chain and hashes as registry provenance rather than invent normalized location identities that the current Laravel model does not possess. The proposed line-of-business action is to create or explicitly select a Laravel target from each exact legacy group and hierarchy only after acceptance; normalized name equality alone is not mapping authority.
+
+All five exact application-mapping proposals are now `evidence_complete_acceptance_pending`. This means their prerequisite evidence is reviewable. It does not mean that target records may be created, reconciliations accepted, mappings written, or a rehearsal executed.
+
+The proposal package SHA-256 is `06907e02c12209115fdd451cceac08b2fa20baba174dbdc1198dc5803b0faa36`. Its private artifacts remain under the checksum-bound production evidence hierarchy. The remaining dependency order is:
+
+1. Accept or reject the exact location-chain preservation disposition.
+2. Accept target definitions and create or select explicit Laravel line-of-business targets.
+3. Accept line-of-business reconciliations with authority and evidence references.
+4. Accept owner, business, and application mappings in dependency order.
+5. Freeze the resulting exact five-record mapping set.
+6. Obtain separate Board authorization before a production-derived preservation rehearsal.
+
+The state model remains explicit: source facts are `observed`; the legacy `groups` interpretation is `inferred` from exact source behavior; crosswalks and mappings are `proposed`; nothing is yet `accepted`, `rehearsed`, or `production-applied`.

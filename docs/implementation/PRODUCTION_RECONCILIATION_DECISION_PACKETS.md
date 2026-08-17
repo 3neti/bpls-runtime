@@ -203,6 +203,16 @@ These packets reduce recurring production exceptions to bounded questions for au
 
 **Authority / approver:** BPLO configuration owner and relevant municipal policy authority.
 
+### Five-Record Historical-Finance Cohort Proposal
+
+Read-only run `prod-historical-financial-cohort-prerequisites-20260817-002` narrows this packet for the frozen first-rehearsal cohort without accepting a crosswalk.
+
+**Location evidence:** All 15 source references resolve by exact identifier, and all five province-city-barangay hierarchies are internally consistent. Because the Laravel runtime has no normalized location catalog, engineering proposes preserving the exact source lookup chain and hashes as registry provenance. This disposition requires explicit acceptance; engineering did not invent target location identities.
+
+**Line-of-business evidence:** Every declaration uniquely matches one legacy `groups` record, and every matched group has a complete source-backed division and major hierarchy. No exact legacy-bound Laravel target currently exists for these five groups. Engineering therefore proposes creating or explicitly selecting five Laravel line-of-business targets from the exact source records after acceptance, followed by five authority-bearing reconciliation decisions. Names remain evidence only and were not used to create identity.
+
+**Current state:** Five proposals are `evidence_complete_acceptance_pending`; zero reconciliations and zero mappings are accepted. Cohort SHA-256 remains `bf5af2693e471f336c54bf5e3345cc6b9df8709fceddd5ea1bc63360c3ebddb4`. Proposal SHA-256 is `06907e02c12209115fdd451cceac08b2fa20baba174dbdc1198dc5803b0faa36`. Rehearsal and production migration remain unauthorized.
+
 ## Packet 9: Fee-Override Identity
 
 **Issue:** One of nine fee overrides references a fee absent from the production snapshot.
