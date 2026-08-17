@@ -42,13 +42,13 @@ They do not:
 
 ### Future Policy Assertions
 
-These track whether a reproduced behavior is `pending`, `accepted`, or `rejected` by municipal authority. An accepted assertion requires a decision reference, authority role, and decision date.
+These track whether a reproduced behavior is `pending`, `accepted`, or `rejected` by municipal authority. Accepted and rejected assertions require a decision reference, authority role, and decision date. Municipality-origin operational clarification may be attached as checksum-linked reconciliation evidence without being promoted to fiscal-policy authority.
 
 The suite records authority evidence but never executes the policy assertion. Actual Laravel policy remains owned by the authoritative assessment domain and requires its own implementation and tests after acceptance.
 
 ## Historical Divergences
 
-Specimens preserve contradictory historical facts without choosing among them. For `CAL-2026-001`, the PHP 13,000 application summary and PHP 14,535 assessment remain separately visible with disposition `preserve_both_unresolved`.
+Specimens preserve contradictory historical facts without rewriting them. For `CAL-2026-001`, the PHP 13,000 client-computed application summary and PHP 14,535 evaluator/schedule assessment remain separately visible. The source of the summary is now explained, but its migration/report disposition remains unresolved.
 
 Historical assessment lines without exact fee-policy identity remain immutable historical financial evidence with incomplete policy provenance. Fee names never manufacture missing identity.
 
@@ -91,8 +91,8 @@ A historical assertion mismatch returns a non-zero exit code while preserving di
 
 ## First Specimen
 
-`CAL-2026-001` is the first Golden Financial Specimen. It passes historical reproduction for the original assessment and schedule while leaving essential-commodity classification/rate, quarterly allocation policy, due-date delinquency, surcharge, penalty, and rounding authority pending.
+`CAL-2026-001` is the first Golden Financial Specimen. It passes historical reproduction for the original assessment and schedule. A checksum-linked 2026-08-17 clarification from the Municipality of Ipil IT Head confirms the operational intent behind the fresh-fish half-rate and following-day delinquency trigger. The Board rejected the legacy inclusive-due-date behavior; positive executable policy remains pending the required fiscal authority. Quarterly allocation, surcharge/penalty basis, and rounding authority also remain pending.
 
-Verified run: `financial-calibration-suite-20260817-001` - one specimen passed historical reproduction; five future-policy assertions remain blocked pending authority; no formulas or policy assertions executed.
+Verified run: `financial-calibration-suite-20260817-003` - one specimen passed six historical assertions; one future-policy assertion was rejected, five remain pending, and none were executed. No formula was activated and no historical value was rewritten.
 
 Additional specimens should be added only when municipality-issued evidence has private provenance and an exact production trace. Contradictions between specimens are Board Triggers; they must not be averaged, normalized, or resolved by choosing the most convenient outcome.

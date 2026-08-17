@@ -113,6 +113,42 @@ test('accepted future policy requires explicit authority evidence and is never e
         ->safety->financial_policy_activated->toBeFalse();
 });
 
+test('rejected future policy requires authority and municipal reconciliation evidence remains non executable', function () {
+    $missingAuthority = financialCalibrationManifest();
+    $missingAuthority['future_policy_assertions'] = [
+        ['key' => 'inclusive_due_date_delinquency_trigger', 'authorization_status' => 'rejected', 'authority' => null],
+    ];
+
+    expect(fn () => app(VerifyFinancialCalibrationSuite::class)->handle([$missingAuthority], 'calibration-suite-rejection-001'))
+        ->toThrow(RuntimeException::class, 'requires authority evidence');
+
+    $withEvidence = financialCalibrationManifest();
+    $withEvidence['future_policy_assertions'] = [[
+        'key' => 'following_day_delinquency_trigger',
+        'authorization_status' => 'pending',
+        'authority' => null,
+        'reconciliation_evidence' => [
+            'evidence_reference' => 'MUNICIPAL-CLARIFICATION-001',
+            'source_role' => 'Municipality IT Head',
+            'recorded_at' => '2026-08-17T00:00:00+08:00',
+            'evidence_status' => 'municipality_operational_clarification',
+            'evidence_sha256' => hash('sha256', 'clarification'),
+            'policy_authority_sufficient' => false,
+        ],
+    ]];
+
+    $report = app(VerifyFinancialCalibrationSuite::class)->handle([$withEvidence], 'calibration-suite-reconciliation-001');
+
+    expect($report)
+        ->summary->future_policy_pending->toBe(1)
+        ->specimens->{0}->future_policy->assertions->{0}->reconciliation_evidence->evidence_status
+        ->toBe('municipality_operational_clarification')
+        ->specimens->{0}->future_policy->assertions->{0}->reconciliation_evidence->policy_authority_sufficient
+        ->toBeFalse()
+        ->specimens->{0}->future_policy->assertions->{0}->executed->toBeFalse()
+        ->safety->financial_policy_activated->toBeFalse();
+});
+
 test('suite rejects sensitive identity fields in specimen manifests', function () {
     $manifest = financialCalibrationManifest(['application_number' => 'PRIVATE-APPLICATION']);
 

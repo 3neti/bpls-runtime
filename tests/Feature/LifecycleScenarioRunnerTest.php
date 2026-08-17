@@ -1473,14 +1473,29 @@ test('municipality configuration scenario preserves authority-safe canonical and
     config()->set('municipality.name', 'Municipality of Ipil');
     config()->set('municipality.province', 'Zamboanga Sibugay');
     config()->set('municipality.system_name', 'Business Permit and Licensing System');
-    config()->set('municipality.signatories.permit', [
-        [
+    config()->set('municipality.officials', [
+        'municipal_mayor' => [
             'role' => 'Municipal Mayor',
             'name' => 'Configured Mayor',
             'title' => 'Municipal Mayor',
-            'authority_status' => 'unverified',
+            'configured_authority_claim' => 'unverified',
+            'effective_from' => null,
+            'effective_until' => null,
+            'provenance' => [
+                'legacy_fields' => ['mayorName', 'mayorTitle'],
+                'legacy_source_status' => 'implemented',
+                'production_snapshot_status' => 'observed',
+            ],
         ],
     ]);
+    config()->set('municipality.document_associations', [[
+        'official_key' => 'municipal_mayor',
+        'document_type' => 'permit_artifact',
+        'relationship' => 'configured_signatory',
+        'current_runtime_use' => true,
+        'legacy_renderer_status' => 'supported',
+        'production_layout_status' => 'not_observed',
+    ]]);
     $operator = configuredScenarioUser('operator@example.test');
     $scenario = app(LifecycleScenarioRegistry::class)->get('municipality_configuration_visibility');
     $artifactStore = new ScenarioArtifactStore($scenario->key, 'municipality-configuration-test-001');
@@ -1497,13 +1512,29 @@ test('municipality configuration scenario preserves authority-safe canonical and
 
     expect($firstManifest['resources'])->toBe($secondManifest['resources'])
         ->and($firstManifest['resources']['municipality_name'])->toBe('Municipality of Ipil')
-        ->and($firstManifest['resources']['signatory_count'])->toBe(1)
-        ->and($firstManifest['resources']['verified_signatory_count'])->toBe(0)
+        ->and($firstManifest['resources']['official_count'])->toBe(1)
+        ->and($firstManifest['resources']['configured_official_count'])->toBe(1)
+        ->and($firstManifest['resources']['document_association_count'])->toBe(1)
+        ->and($firstManifest['resources']['authorized_signatory_count'])->toBe(0)
         ->and($firstManifest['resources']['permit_issuance_authorized'])->toBeFalse()
-        ->and($firstManifest['resources']['signatory_authority_statuses'])->toBe([
-            ['role' => 'Municipal Mayor', 'authority_status' => 'unverified'],
+        ->and($firstManifest['resources']['permit_release_authorized'])->toBeFalse()
+        ->and($firstManifest['resources']['legal_effect_authorized'])->toBeFalse()
+        ->and($firstManifest['resources']['official_evidence_statuses'])->toBe([
+            [
+                'key' => 'municipal_mayor',
+                'role' => 'Municipal Mayor',
+                'configuration_status' => 'configured',
+                'authorized_signatory' => false,
+                'effective_term_status' => 'not_evidenced',
+                'production_snapshot_status' => 'observed',
+            ],
         ])
-        ->and($prepare)->not->toHaveKey('permit_signatories')
+        ->and($firstManifest['resources']['authority_chain'][2])->toBe([
+            'key' => 'authorized_signatory',
+            'status' => 'unresolved',
+            'satisfied' => false,
+        ])
+        ->and($prepare)->not->toHaveKey('officials')
         ->and(json_encode($prepare))->not->toContain('Configured Mayor')
         ->and($execution['read_only'])->toBeTrue()
         ->and($execution['external_calls'])->toBe(0);
@@ -1512,14 +1543,21 @@ test('municipality configuration scenario preserves authority-safe canonical and
         'municipality_name' => $firstManifest['resources']['municipality_name'],
         'province' => $firstManifest['resources']['province'],
         'system_name' => $firstManifest['resources']['system_name'],
-        'signatory_count' => $firstManifest['resources']['signatory_count'],
-        'verified_signatory_count' => $firstManifest['resources']['verified_signatory_count'],
-        'unverified_signatory_count' => $firstManifest['resources']['unverified_signatory_count'],
-        'all_signatories_verified' => $firstManifest['resources']['all_signatories_verified'],
+        'official_count' => $firstManifest['resources']['official_count'],
+        'configured_official_count' => $firstManifest['resources']['configured_official_count'],
+        'document_association_count' => $firstManifest['resources']['document_association_count'],
+        'current_document_association_count' => $firstManifest['resources']['current_document_association_count'],
+        'effective_term_evidence_count' => $firstManifest['resources']['effective_term_evidence_count'],
+        'authorized_signatory_count' => 0,
         'permit_issuance_authorized' => false,
+        'permit_release_authorized' => false,
+        'legal_effect_authorized' => false,
         'read_only' => true,
         'source_type' => $firstManifest['resources']['source_type'],
-        'signatory_authority_statuses' => $firstManifest['resources']['signatory_authority_statuses'],
+        'production_snapshot_status' => $firstManifest['resources']['production_snapshot_status'],
+        'official_evidence_statuses' => $firstManifest['resources']['official_evidence_statuses'],
+        'document_association_statuses' => $firstManifest['resources']['document_association_statuses'],
+        'authority_chain' => $firstManifest['resources']['authority_chain'],
     ];
     $artifactStore->putJson('browser/report.json', [
         'result' => ['passed' => true],

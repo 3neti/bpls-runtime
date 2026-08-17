@@ -1,6 +1,6 @@
 # Assessment Calibration CAL-2026-001
 
-Status: **Golden Financial Specimen; historical reproduction passes, policy decisions remain required**
+Status: **Golden Financial Specimen; historical reproduction passes, municipal clarifications recorded, executable policy remains blocked**
 
 Specimen SHA-256: `892d1c07377988ab17d12e60c7bfeb80ba9227bb5f5569bc441bf81092a9f995`
 
@@ -20,7 +20,9 @@ Yes. The redacted application reference resolves to exactly one production appli
 
 The original persisted schedule fee snapshots match all seven printed lines and the PHP 14,535 grand total exactly.
 
-The application row's current summary field instead stores PHP 13,000. No surviving exact activity evidence explains that different summary value. For this calibration, the exact schedule fee snapshots are internally coherent while the application summary remains an unresolved historical discrepancy.
+The application row's `totalFees` summary field stores PHP 13,000. The legacy assessment screen computed this field independently as `(capital investment + gross sales) * 1%`; the exact record has a blank capital-investment input and PHP 1,300,000 gross sales, producing PHP 13,000. The assessment-submission mutation persisted that client-supplied summary when the application entered Approval. No surviving activity entry records a later change to the field.
+
+This was not the fee evaluator's result. Schedule generation consumed the independently aggregated fee lines and persisted PHP 14,535. The exact application's four schedules and two recorded payments use those schedule amounts, not the PHP 13,000 summary. The summary remained available to legacy application and report projections, including fallback behavior when schedules were absent, so it is preserved as a historical implementation divergence rather than discarded as harmless.
 
 ### 3. Do the original quarterly schedules match?
 
@@ -68,7 +70,7 @@ The legal evidence independently supplies the same mathematical components:
 - Section 2A.02(d): 2.52 percent on the first PHP 400,000 of retail gross sales and 1.26 percent on the excess.
 - Section 2A.02(c): listed essential commodities include agricultural, marine, and fresh-water products, subject to a rate not exceeding one-half of the applicable retailer rate.
 
-The specimen's activity classification and production formula apply that one-half relationship. Convergence is strong, but authority is incomplete because the ordinance states a ceiling and no accepted municipal procedure currently maps operational classifications to the legal essential-commodity category or establishes the chosen rate.
+The specimen's activity classification and production formula apply that one-half relationship. Convergence is strong. On 2026-08-17, the Municipality of Ipil IT Head directly confirmed that fresh-fish retail was intentionally charged at 50 percent of the normal retailer tax because it is treated as an essential commodity. This resolves the operational-intent question for the specimen but does not yet authorize executable fiscal policy under the reconciliation contract: approval from the municipal official or body authorized to establish Revenue Code implementation remains required.
 
 ### 8. Are rounding rules involved?
 
@@ -100,7 +102,7 @@ This explains the specimen exactly. It remains characterization of one deployed 
 
 No. The apparent PHP 500 addition and handwritten revised totals do not appear in this exact application's persisted fee snapshots, schedule lines, payments, or activity changes. The image alone cannot establish the fee identity, authority, timing, or whether it belonged to another municipal collection process.
 
-This remains a specific question for Nelson, BPLO, and Treasury.
+This remains a specific question for BPLO and Treasury.
 
 ### 12. What later historical changes are deterministic?
 
@@ -124,14 +126,14 @@ penalty = 2,677.50 * 1 month * 2% = 53.55
 payable = 2,677.50 + 669.375 + 53.55 = 3,400.425 -> 3,400.43
 ```
 
-The evaluator treats payment on the due date as late and assigns a minimum of one missed month. Reproduction does not authorize either semantic.
+The evaluator treats payment on the due date as late and assigns a minimum of one missed month. On 2026-08-17, the Municipality of Ipil IT Head clarified that surcharge and penalty begin on the following day. The Board therefore rejected the legacy inclusive-due-date behavior for future Laravel policy. The positive following-day rule remains non-executable until the municipal revenue authority, applicable scope, minimum-month rule, rate basis, and rounding sequence are accepted.
 
 ### 13. What still requires confirmation?
 
-1. Accepted essential-commodity classification and rate under the ordinance ceiling.
-2. Surcharge trigger date, due-date policy, minimum-month rule, period basis, and rounding authority.
+1. Fiscal-policy authority for the operationally confirmed essential-commodity classification and half-rate under the ordinance ceiling.
+2. Fiscal-policy authority for the operationally confirmed following-day trigger, plus the minimum-month rule, period basis, and rounding authority.
 3. Authority and reason for the Q2 due-date change and later active configuration change.
-4. Meaning and disposition of the application-level PHP 13,000 summary.
+4. Migration and report disposition of the explained application-level PHP 13,000 client summary versus the authoritative persisted schedule evidence.
 5. Meaning and authority of the handwritten apparent PHP 500 adjustment.
 6. Historical migration treatment when schedule amounts survive but exact fee identifiers do not.
 
@@ -147,6 +149,6 @@ Revenue Code retail bands and essential-commodity half-rate ceiling
         <-> municipality-issued assessment specimen
 ```
 
-It does not yet converge on municipal authority for classification, selected rate under the ceiling, surcharge timing, due-date changes, application-summary divergence, or the handwritten adjustment.
+It now converges on operational intent for the fresh-fish half-rate and following-day delinquency trigger through a checksum-linked 2026-08-17 municipal clarification. It does not yet converge on fiscal authority to execute those policies, the remaining surcharge/penalty basis and rounding rules, due-date changes, migration/report disposition of the application-summary divergence, or the handwritten adjustment.
 
 No financial policy was activated or generalized. No historical liability was rewritten. No production or Laravel domain record was changed.

@@ -997,18 +997,32 @@ test('staff users without view permission cannot open application form pdf artif
 });
 
 test('staff users with view permission can open a permit pdf artifact', function () {
-    config()->set('municipality.signatories.permit', [
-        [
+    config()->set('municipality.officials', [
+        'municipal_mayor' => [
             'role' => 'Municipal Mayor',
             'name' => 'Hon. Ipil Mayor',
             'title' => 'Municipal Mayor',
-            'authority_status' => 'unverified',
+            'configured_authority_claim' => 'unverified',
         ],
-        [
+        'bplo_officer' => [
             'role' => 'BPLO Officer',
             'name' => 'Maria BPLO',
             'title' => 'BPLO Officer',
-            'authority_status' => 'unverified',
+            'configured_authority_claim' => 'unverified',
+        ],
+    ]);
+    config()->set('municipality.document_associations', [
+        [
+            'official_key' => 'municipal_mayor',
+            'document_type' => 'permit_artifact',
+            'relationship' => 'configured_signatory',
+            'current_runtime_use' => true,
+        ],
+        [
+            'official_key' => 'bplo_officer',
+            'document_type' => 'permit_artifact',
+            'relationship' => 'configured_signatory',
+            'current_runtime_use' => true,
         ],
     ]);
 
@@ -1045,7 +1059,7 @@ test('staff users with view permission can open a permit pdf artifact', function
         ->toContain('DOCUMENT SIGNATORY CONFIGURATION')
         ->toContain('Hon. Ipil Mayor')
         ->toContain('Maria BPLO')
-        ->toContain('Configured signatories are document evidence only')
+        ->toContain('Configured signatories are document associations only')
         ->toContain('AUTHORITY BOUNDARY')
         ->toContain('Software knows')
         ->toContain('Human authority decides')
@@ -1180,18 +1194,32 @@ test('public permit verification refuses mismatched references', function () {
 test('permit document configuration keeps signatory authority explicit', function () {
     config()->set('municipality.name', 'Municipality of Ipil');
     config()->set('municipality.province', 'Zamboanga Sibugay');
-    config()->set('municipality.signatories.permit', [
-        [
+    config()->set('municipality.officials', [
+        'municipal_mayor' => [
             'role' => 'Municipal Mayor',
             'name' => 'Hon. Ipil Mayor',
             'title' => 'Municipal Mayor',
-            'authority_status' => 'verified',
+            'configured_authority_claim' => 'verified',
         ],
-        [
+        'bplo_officer' => [
             'role' => 'BPLO Officer',
             'name' => 'Maria BPLO',
             'title' => 'BPLO Officer',
-            'authority_status' => 'unverified',
+            'configured_authority_claim' => 'unverified',
+        ],
+    ]);
+    config()->set('municipality.document_associations', [
+        [
+            'official_key' => 'municipal_mayor',
+            'document_type' => 'permit_artifact',
+            'relationship' => 'configured_signatory',
+            'current_runtime_use' => true,
+        ],
+        [
+            'official_key' => 'bplo_officer',
+            'document_type' => 'permit_artifact',
+            'relationship' => 'configured_signatory',
+            'current_runtime_use' => true,
         ],
     ]);
 
@@ -1201,8 +1229,9 @@ test('permit document configuration keeps signatory authority explicit', functio
         ->and($configuration['municipality']['province'])->toBe('Zamboanga Sibugay')
         ->and($configuration['authority_verified'])->toBeFalse()
         ->and($configuration['permit_signatories'][0]['name'])->toBe('Hon. Ipil Mayor')
-        ->and($configuration['permit_signatories'][1]['authority_status'])->toBe('unverified')
-        ->and($configuration['policy_note'])->toContain('do not authorize permit release');
+        ->and($configuration['permit_signatories'][0]['authority_status'])->toBe('unresolved')
+        ->and($configuration['permit_signatories'][1]['authority_status'])->toBe('unresolved')
+        ->and($configuration['policy_note'])->toContain('do not establish authorized signatures');
 });
 
 test('permit pdf output is deterministic for the same persisted permit facts', function () {

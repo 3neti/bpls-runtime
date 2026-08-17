@@ -2,30 +2,16 @@
 
 namespace App\Actions;
 
-use Illuminate\Support\Arr;
-
 class BuildMunicipalityConfiguration
 {
+    public function __construct(
+        private readonly DescribeMunicipalityOfficialConfiguration $describeOfficials,
+    ) {}
+
     /** @return array<string, mixed> */
     public function handle(): array
     {
-        $configuredSignatories = config('municipality.signatories.permit', []);
-        $configuredSignatories = is_array($configuredSignatories)
-            ? array_values(array_filter($configuredSignatories, is_array(...)))
-            : [];
-        $signatories = collect($configuredSignatories)
-            ->map(fn (array $signatory): array => [
-                'role' => (string) Arr::get($signatory, 'role', 'Unspecified signatory'),
-                'name' => (string) Arr::get($signatory, 'name', 'Unverified signatory'),
-                'title' => (string) Arr::get($signatory, 'title', 'Unspecified title'),
-                'authority_status' => str((string) Arr::get($signatory, 'authority_status', 'unverified'))
-                    ->lower()
-                    ->toString(),
-            ])
-            ->values();
-        $verifiedCount = $signatories
-            ->where('authority_status', 'verified')
-            ->count();
+        $officialConfiguration = $this->describeOfficials->handle();
 
         return [
             'identity' => [
@@ -33,20 +19,25 @@ class BuildMunicipalityConfiguration
                 'province' => (string) config('municipality.province', 'Zamboanga Sibugay'),
                 'system_name' => (string) config('municipality.system_name', 'Business Permit and Licensing System'),
             ],
-            'permit_signatories' => $signatories->all(),
+            'officials' => $officialConfiguration['officials'],
+            'document_associations' => $officialConfiguration['document_associations'],
+            'authority_chain' => $officialConfiguration['authority_chain'],
             'authority' => [
-                'signatory_count' => $signatories->count(),
-                'verified_signatory_count' => $verifiedCount,
-                'unverified_signatory_count' => $signatories->count() - $verifiedCount,
-                'all_signatories_verified' => $signatories->isNotEmpty() && $verifiedCount === $signatories->count(),
+                ...$officialConfiguration['summary'],
                 'permit_issuance_authorized' => false,
-                'policy_note' => 'Configuration records document presentation evidence only. It does not authorize permit issuance, release, or legal effect.',
+                'permit_release_authorized' => false,
+                'legal_effect_authorized' => false,
+                'policy_note' => $officialConfiguration['policy_note'],
             ],
             'source' => [
                 'type' => 'runtime_configuration',
+                'legacy_source_status' => 'characterized',
+                'production_snapshot_status' => 'shape_observed_values_not_imported',
+                'production_settings_record_count' => 1,
+                'effective_dates_evidenced' => false,
                 'persisted_administration' => false,
                 'read_only' => true,
-                'policy_note' => 'Values are supplied through Laravel runtime configuration. Municipal acceptance and a governed change process remain separate requirements.',
+                'policy_note' => 'Values are supplied through Laravel runtime configuration. Production names and titles were observed but are not imported automatically; municipal acceptance and a governed change process remain separate requirements.',
             ],
         ];
     }

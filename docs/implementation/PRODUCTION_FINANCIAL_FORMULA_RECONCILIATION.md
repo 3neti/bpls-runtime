@@ -75,7 +75,7 @@ A financially material timing discrepancy requires municipal decision:
 - The Revenue Code evidence states that failure to pay **within the prescribed time** triggers a 25 percent surcharge and a monthly two percent penalty, subject to unresolved scope and mechanics.
 - The legacy evaluator explicitly treats payment **on the due date** as surcharge-eligible and assigns at least one missed month.
 
-The source wording and deployed evaluator do not establish the same trigger. The clause currently cataloged is also Article M evidence, while the deployed calculator is generic. The Municipality must establish the applicable scope and whether delinquency starts on or after the day following the due date. Laravel must not reproduce the legacy inclusive trigger without accepted authority.
+The source wording and deployed evaluator do not establish the same trigger. The clause currently cataloged is also Article M evidence, while the deployed calculator is generic. On 2026-08-17, the Municipality of Ipil IT Head clarified that surcharge and penalty start on the following day. The Board rejected the legacy inclusive trigger for future Laravel behavior. The positive following-day rule, applicable scope, minimum-month treatment, rates, and rounding remain non-executable pending the municipal fiscal authority required by the reconciliation contract.
 
 Rounding also remains unresolved. Legacy behavior rounds at different stages: formula results may remain unrounded until later composition, schedule allocation rounds per section, and surcharge outputs round to two decimals. JavaScript floating-point behavior is implementation evidence, not municipal rounding authority.
 
@@ -96,7 +96,7 @@ Production policies made executable: **0**
 ## Decisions Required
 
 1. Confirm the exact identity crosswalk between Revenue Code provisions, operational fee definitions, and future Laravel fee policies.
-2. Establish whether payment on the due date is timely and the exact first surcharge/penalty date.
+2. Obtain fiscal-policy authority for the operationally clarified following-day trigger and establish its applicable scope.
 3. Establish surcharge and penalty scope, basis, period counting, caps, partial-payment behavior, and rounding.
 4. Establish whether any authoritative source can recover exact fee identity for historical schedule items; otherwise accept a quarantined historical-snapshot disposition.
 5. Resolve the orphan fee override and confirm the authority and effective scope of the eight surviving overrides.

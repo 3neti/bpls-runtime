@@ -657,16 +657,61 @@ async function inspectMunicipalityConfiguration(targetPage, targetBaseUrl) {
     const summary = targetPage.getByTestId(
         'municipality-configuration-summary',
     );
-    const signatories = targetPage.getByTestId('municipality-signatories');
+    const officials = targetPage.getByTestId('municipality-officials');
+    const documentAssociations = targetPage.getByTestId(
+        'municipality-document-associations',
+    );
+    const authorityChain = targetPage.getByTestId(
+        'municipality-authority-chain',
+    );
     await summary.waitFor();
-    await signatories.waitFor();
+    await officials.waitFor();
+    await documentAssociations.waitFor();
+    await authorityChain.waitFor();
 
-    const signatoryAuthorityStatuses = await targetPage
-        .getByTestId('municipality-signatory')
+    const officialEvidenceStatuses = await targetPage
+        .getByTestId('municipality-official')
         .evaluateAll((elements) =>
             elements.map((element) => ({
+                key: element.getAttribute('data-official-key'),
                 role: element.getAttribute('data-role'),
-                authority_status: element.getAttribute('data-authority-status'),
+                configuration_status: element.getAttribute(
+                    'data-configuration-status',
+                ),
+                authorized_signatory:
+                    element.getAttribute('data-authorized-signatory') ===
+                    'true',
+                effective_term_status: element.getAttribute(
+                    'data-effective-term-status',
+                ),
+                production_snapshot_status: element.getAttribute(
+                    'data-production-status',
+                ),
+            })),
+        );
+    const documentAssociationStatuses = await targetPage
+        .getByTestId('municipality-document-association')
+        .evaluateAll((elements) =>
+            elements.map((element) => ({
+                official_key: element.getAttribute('data-official-key'),
+                document_type: element.getAttribute('data-document-type'),
+                current_runtime_use:
+                    element.getAttribute('data-current-runtime-use') === 'true',
+                production_layout_status: element.getAttribute(
+                    'data-production-layout-status',
+                ),
+                authorizes_signature:
+                    element.getAttribute('data-authorizes-signature') ===
+                    'true',
+            })),
+        );
+    const authorityStages = await targetPage
+        .getByTestId('municipality-authority-stage')
+        .evaluateAll((elements) =>
+            elements.map((element) => ({
+                key: element.getAttribute('data-stage'),
+                status: element.getAttribute('data-status'),
+                satisfied: element.getAttribute('data-satisfied') === 'true',
             })),
         );
     const visibleSummary = {
@@ -675,24 +720,43 @@ async function inspectMunicipalityConfiguration(targetPage, targetBaseUrl) {
         ).trim(),
         province: await summary.getAttribute('data-province'),
         system_name: await summary.getAttribute('data-system-name'),
-        signatory_count: Number(
-            await summary.getAttribute('data-signatory-count'),
+        official_count: Number(
+            await summary.getAttribute('data-official-count'),
         ),
-        verified_signatory_count: Number(
-            await summary.getAttribute('data-verified-signatory-count'),
+        configured_official_count: Number(
+            await summary.getAttribute('data-configured-official-count'),
         ),
-        unverified_signatory_count: Number(
-            await summary.getAttribute('data-unverified-signatory-count'),
+        document_association_count: Number(
+            await summary.getAttribute('data-document-association-count'),
         ),
-        all_signatories_verified:
-            (await summary.getAttribute('data-all-signatories-verified')) ===
-            'true',
+        current_document_association_count: Number(
+            await summary.getAttribute(
+                'data-current-document-association-count',
+            ),
+        ),
+        effective_term_evidence_count: Number(
+            await summary.getAttribute('data-effective-term-evidence-count'),
+        ),
+        authorized_signatory_count: Number(
+            await summary.getAttribute('data-authorized-signatory-count'),
+        ),
         permit_issuance_authorized:
             (await summary.getAttribute('data-permit-issuance-authorized')) ===
             'true',
+        permit_release_authorized:
+            (await summary.getAttribute('data-permit-release-authorized')) ===
+            'true',
+        legal_effect_authorized:
+            (await summary.getAttribute('data-legal-effect-authorized')) ===
+            'true',
         read_only: (await summary.getAttribute('data-read-only')) === 'true',
         source_type: await summary.getAttribute('data-source-type'),
-        signatory_authority_statuses: signatoryAuthorityStatuses,
+        production_snapshot_status: await summary.getAttribute(
+            'data-production-snapshot-status',
+        ),
+        official_evidence_statuses: officialEvidenceStatuses,
+        document_association_statuses: documentAssociationStatuses,
+        authority_chain: authorityStages,
     };
     const authorityBoundaryVisible = await targetPage
         .getByTestId('municipality-authority-boundary')
@@ -718,18 +782,28 @@ async function inspectMunicipalityConfiguration(targetPage, targetBaseUrl) {
                 municipality_name: manifest.resources.municipality_name,
                 province: manifest.resources.province,
                 system_name: manifest.resources.system_name,
-                signatory_count: manifest.resources.signatory_count,
-                verified_signatory_count:
-                    manifest.resources.verified_signatory_count,
-                unverified_signatory_count:
-                    manifest.resources.unverified_signatory_count,
-                all_signatories_verified:
-                    manifest.resources.all_signatories_verified,
+                official_count: manifest.resources.official_count,
+                configured_official_count:
+                    manifest.resources.configured_official_count,
+                document_association_count:
+                    manifest.resources.document_association_count,
+                current_document_association_count:
+                    manifest.resources.current_document_association_count,
+                effective_term_evidence_count:
+                    manifest.resources.effective_term_evidence_count,
+                authorized_signatory_count: 0,
                 permit_issuance_authorized: false,
+                permit_release_authorized: false,
+                legal_effect_authorized: false,
                 read_only: true,
                 source_type: manifest.resources.source_type,
-                signatory_authority_statuses:
-                    manifest.resources.signatory_authority_statuses,
+                production_snapshot_status:
+                    manifest.resources.production_snapshot_status,
+                official_evidence_statuses:
+                    manifest.resources.official_evidence_statuses,
+                document_association_statuses:
+                    manifest.resources.document_association_statuses,
+                authority_chain: manifest.resources.authority_chain,
             },
             visibleSummary,
         ),
@@ -749,8 +823,12 @@ async function inspectMunicipalityConfiguration(targetPage, targetBaseUrl) {
     actionLog.push(
         stepLog(
             'municipality-configuration-inspected',
-            'Inspect municipality identity and signatory authority status without changing runtime configuration',
-            { signatory_count: visibleSummary.signatory_count },
+            'Inspect municipality identity, official provenance, document associations, and authority boundaries without changing runtime configuration',
+            {
+                official_count: visibleSummary.official_count,
+                document_association_count:
+                    visibleSummary.document_association_count,
+            },
         ),
     );
     await screenshot(
@@ -762,7 +840,7 @@ async function inspectMunicipalityConfiguration(targetPage, targetBaseUrl) {
     await targetPage.setViewportSize({ width: 390, height: 844 });
     await targetPage.goto(configurationUrl, { waitUntil: 'networkidle' });
     const mobileVisible = await targetPage
-        .getByTestId('municipality-signatories')
+        .getByTestId('municipality-officials')
         .isVisible();
     const pageHorizontalOverflow = await targetPage.evaluate(
         () =>

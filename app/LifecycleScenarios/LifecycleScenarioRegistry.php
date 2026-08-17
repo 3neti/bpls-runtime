@@ -862,8 +862,12 @@ final class LifecycleScenarioRegistry
                 ],
                 expectations: [
                     'municipality_identity_visible' => true,
-                    'signatory_authority_visible' => true,
+                    'official_provenance_visible' => true,
+                    'document_associations_visible' => true,
+                    'authorized_signatory_count' => 0,
                     'permit_issuance_authorized' => false,
+                    'permit_release_authorized' => false,
+                    'legal_effect_authorized' => false,
                     'read_only' => true,
                     'external_calls' => 0,
                     'irreversible_actions' => false,

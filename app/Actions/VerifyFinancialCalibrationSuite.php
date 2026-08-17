@@ -199,12 +199,26 @@ final class VerifyFinancialCalibrationSuite
         }
 
         $authority = $assertion['authority'] ?? null;
-        if ($status === 'accepted') {
+        if (in_array($status, ['accepted', 'rejected'], true)) {
             if (! is_array($authority)) {
-                throw new RuntimeException("Accepted future policy assertion [{$calibrationId}:{$key}] requires authority evidence.");
+                throw new RuntimeException(ucfirst($status)." future policy assertion [{$calibrationId}:{$key}] requires authority evidence.");
             }
             foreach (['decision_reference', 'authority_role', 'decided_at'] as $field) {
                 $this->requiredString($authority, $field);
+            }
+        }
+
+        $reconciliationEvidence = $assertion['reconciliation_evidence'] ?? null;
+        if ($reconciliationEvidence !== null) {
+            if (! is_array($reconciliationEvidence)) {
+                throw new RuntimeException("Future policy assertion [{$calibrationId}:{$key}] has invalid reconciliation evidence.");
+            }
+            foreach (['evidence_reference', 'source_role', 'recorded_at', 'evidence_status'] as $field) {
+                $this->requiredString($reconciliationEvidence, $field);
+            }
+            $this->sha256($reconciliationEvidence, 'evidence_sha256');
+            if (! is_bool($reconciliationEvidence['policy_authority_sufficient'] ?? null)) {
+                throw new RuntimeException("Future policy assertion [{$calibrationId}:{$key}] reconciliation evidence must state whether policy authority is sufficient.");
             }
         }
 
@@ -212,6 +226,7 @@ final class VerifyFinancialCalibrationSuite
             'key' => $key,
             'authorization_status' => $status,
             'authority' => is_array($authority) ? $authority : null,
+            'reconciliation_evidence' => is_array($reconciliationEvidence) ? $reconciliationEvidence : null,
             'executed' => false,
         ];
     }
