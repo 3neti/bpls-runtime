@@ -25,3 +25,6 @@ Authenticated production snapshot intake must bind the exact authorized operator
 
 ## Characterize historical application mappings without accepting them
 Bind readiness analysis to exact source, financial-plan, and registry-plan fingerprints. Emit only hashed proposed mappings; never create LegacyIdMapping or LegacyApplicationIdMapping rows. Keep the frozen candidate census separate from preservation-executor compatibility, and require accepted reference/declaration mappings plus separate Board authority before any production rehearsal.
+
+## V1 candidates must match projector invariants
+Keep the original production census as immutable characterization evidence, but exclude every application-level unassigned payment event from Historical Financial Preservation V1. Preserve excluded histories as a separate checksum-bound exception set; never weaken the projector, discard failed attempts, or admit them to a rehearsal cohort.

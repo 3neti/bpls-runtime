@@ -96,7 +96,9 @@ Every selected application bundle must satisfy all of the following:
 11. The complete application bundle has no quarantined sibling schedule or payment evidence.
 12. No target historical-preservation mapping already exists under a different source or projection hash.
 
-These criteria originally identified a frozen census of `1,238` source application histories. Subsequent executable-projector characterization confirmed `1,223` satisfy the implemented V1 projector unchanged. The remaining `15` reproduce the frozen aggregate totals but also contain unassigned application-level payment evidence; they remain in the census for traceability and are explicitly incompatible with V1 execution until reconciled. None are currently executable because accepted application mappings do not yet exist.
+These criteria originally identified a frozen census of `1,238` source application histories. Root-cause replay against the implemented projector showed that the original classifier incorrectly treated `application_has_unassigned_payment_events` as census-compatible instead of enforcing it as a V1 exclusion. The corrected V1 candidate population is `1,223`; the original census remains immutable evidence, while the other `15` are a separate non-executable exception class.
+
+All 15 exceptions have the same legacy-data shape: the application has a valid persisted paid schedule and its completed payment, plus failed payment attempts whose non-empty source schedule identifiers refer to schedules absent from the production snapshot. There are `36` such failed attempts: eight applications contain one and seven contain four. The records are not discarded or repaired. V1 refuses them because complete application history is atomic and an absent referenced schedule prevents exact preservation.
 
 ## Smallest Reversible Boundary
 
@@ -185,24 +187,26 @@ Synthetic rehearsal proves:
 - rollback returns preservation-bundle storage to its exact pre-rehearsal count while retaining source staging, application mappings, and operational records;
 - rollback refuses reviewed, referenced, or changed evidence.
 
-The `1,238` characterized production application histories remain candidates only. The exact prerequisite for a production-scale preservation rehearsal is an accepted `LegacyApplicationIdMapping` for every selected source application, followed by a separate Board authorization for that checksum-bound selection. Production migration and cutover remain unauthorized.
+The `1,223` corrected V1 production application histories remain candidates only. The 15 excluded histories remain immutable exception evidence outside V1. The exact prerequisite for a production-scale preservation rehearsal is an accepted `LegacyApplicationIdMapping` for every selected source application, followed by a separate Board authorization for that checksum-bound selection. Production migration and cutover remain unauthorized.
 
 ## Exact Application Mapping Readiness
 
-Read-only characterization run `prod-historical-financial-application-mapping-readiness-20260817-010` binds financial plan 3 and registry plan 3 to production snapshot SHA-256 `56fad41abbdeae8da23e9935550c753c82fb465d46a56b412342f27806bd0b57`. It reproduces the frozen census exactly: `1,238` applications, `1,930` schedules, `8,735` fee lines, `1,790` completed payments, and `140` unpaid schedules.
+Corrected read-only characterization run `prod-historical-financial-application-mapping-readiness-20260817-012` binds financial plan 3 and registry plan 3 to production snapshot SHA-256 `56fad41abbdeae8da23e9935550c753c82fb465d46a56b412342f27806bd0b57`. It preserves the original frozen census exactly: `1,238` applications, `1,930` schedules, `8,735` fee lines, `1,790` completed payments, and `140` unpaid schedules. It separately establishes the exact V1-compatible population: `1,223` applications, `1,912` schedules, `8,642` fee lines, `1,773` completed payments, and `139` unpaid schedules.
 
 | Mapping-readiness class | Applications |
 |---|---:|
-| Deterministic identity chain | 419 |
+| Deterministic identity chain | 415 |
 | Blocked only by reference-data crosswalks | 6 |
-| Human identity reconciliation required | 746 |
-| Registry-policy reconciliation required | 73 |
-| Other application/lifecycle reconciliation required | 413 |
+| Human identity reconciliation required | 736 |
+| Registry-policy reconciliation required | 72 |
+| Other application/lifecycle reconciliation required | 409 |
 
-The mapping-readiness classes are mutually exclusive; the deterministic-chain count is an independent flag. Production flags include `746` collision cases, `193` Group-owner cases, `13` soft-deleted cases, and zero blacklisted cases within this frozen population. Similarity remains review evidence only and created no accepted mapping.
+The mapping-readiness classes are mutually exclusive; the deterministic-chain count is an independent flag. Production flags include `736` collision cases, `192` Group-owner cases, `13` soft-deleted cases, and zero blacklisted cases within corrected V1. Four otherwise deterministic identity chains, ten human-identity cases, and one registry-policy case belonged to the excluded 15-record class. Similarity remains review evidence only and created no accepted mapping.
 
-All `1,238` businesses require an explicit source-backed reference-data crosswalk, and `1,236` applications require line-of-business declaration reconciliation. Of the deterministic identity chains, six are blocked only by those reference-data dependencies. Five preservation-compatible members of that six form the smallest proposed first rehearsal cohort. The cohort is pending reference-data reconciliation, exact owner/business/application mapping acceptance, and separate Board authorization; it is not executable.
+All `1,223` V1 businesses require an explicit source-backed reference-data crosswalk, and `1,221` applications require line-of-business declaration reconciliation. Of the deterministic identity chains, six are blocked only by those reference-data dependencies. Five members form the smallest proposed first rehearsal cohort. None belong to the excluded 15-record class.
 
-The candidate-set SHA-256 is `473ef7b8411724571e2a8e435e2cf391c897ff022ab04478a51ab089faac20d6`. The five-record conditional cohort SHA-256 is `bf5af2693e471f336c54bf5e3345cc6b9df8709fceddd5ea1bc63360c3ebddb4`. Both hashes bind the source archive, financial batch and plan, registry batch and plan, and selected evidence. Raw identifiers and payloads remain only in private checksum-bound artifacts.
+The cohort prerequisite packet records three source location-reference fields and one line-of-business declaration for each cohort member as hashed, pending proposals. No accepted target evidence currently exists for those line-of-business values, so the packet explicitly records `target_evidence_required`; owner, business, and application mappings remain pending in dependency order. The packet created zero reconciliation or mapping rows and does not yet qualify for municipal acceptance or rehearsal authorization.
+
+The corrected candidate-set SHA-256 is `307ecf33dafb9c53fd16064288b3057edd3c3131851a0982f54f8e1fe3750d06`; the 15-record exception-set SHA-256 is `c5f598029e1047d6579fa201718637fa6e39299fc4fc7758c4153f37e612adae`. The unchanged five-record conditional cohort SHA-256 is `bf5af2693e471f336c54bf5e3345cc6b9df8709fceddd5ea1bc63360c3ebddb4`, and its prerequisite-proposal SHA-256 is `7937edfa67048fde4253952529024a01f27a2fdb03e96ffcdc84370a2bee9c92`. All hashes bind the source archive, financial batch and plan, registry batch and plan, and selected evidence. Raw identifiers and payloads remain only in private checksum-bound artifacts.
 
 The independent TOR engineering lane continues separately from production reconciliation and preservation authorization.

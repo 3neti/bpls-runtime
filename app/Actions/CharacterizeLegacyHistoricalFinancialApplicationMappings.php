@@ -14,7 +14,7 @@ use RuntimeException;
 
 class CharacterizeLegacyHistoricalFinancialApplicationMappings
 {
-    public const SchemaVersion = 'bpls.historical-financial-application-mapping-readiness.v1';
+    public const SchemaVersion = 'bpls.historical-financial-application-mapping-readiness.v2';
 
     public const CohortSize = 5;
 
@@ -41,7 +41,7 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappings
         'application_mapping_ambiguous',
     ];
 
-    private const FrozenPopulationCompatibilityReasons = [
+    private const FrozenCensusExceptionReasons = [
         'application_has_unassigned_payment_events',
     ];
 
@@ -50,7 +50,7 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappings
         private LegacyPermitApplicationProjector $applicationProjector,
     ) {}
 
-    /** @return array{report: array<string, mixed>, candidates: list<array<string, mixed>>, cohort: list<array<string, mixed>>} */
+    /** @return array{report: array<string, mixed>, candidates: list<array<string, mixed>>, exceptions: list<array<string, mixed>>, cohort: list<array<string, mixed>>, cohort_prerequisites: list<array<string, mixed>>} */
     public function handle(LegacyFinancialMappingPlan $financialPlan, LegacyMappingPlan $registryPlan): array
     {
         $this->assertEvidence($financialPlan, $registryPlan);
@@ -72,44 +72,47 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappings
             ->orderBy('id')
             ->get();
         $excludedReasonCounts = [];
-        $strictBundleTotals = [
+        $frozenCensusBundleTotals = $strictBundleTotals = [
             'schedule_count' => 0,
             'fee_line_count' => 0,
             'payment_count' => 0,
             'unpaid_schedule_count' => 0,
         ];
-        $strictCandidates = $applications
-            ->map(function (LegacyRecord $application) use ($financialPlan, $proposalsByApplication, &$excludedReasonCounts, &$strictBundleTotals): ?array {
+        $frozenCensus = $applications
+            ->map(function (LegacyRecord $application) use ($financialPlan, $proposalsByApplication, &$excludedReasonCounts, &$frozenCensusBundleTotals, &$strictBundleTotals): ?array {
+                $applicationProposals = $proposalsByApplication[$application->id] ?? collect();
                 $projection = $this->preservationProjector->project(
                     $financialPlan,
                     $application,
-                    $proposalsByApplication[$application->id] ?? collect(),
+                    $applicationProposals,
                 );
                 $structuralReasons = array_values(array_diff(
                     $projection['reasons'],
-                    [...self::MappingPrerequisiteReasons, ...self::FrozenPopulationCompatibilityReasons],
+                    [...self::MappingPrerequisiteReasons, ...self::FrozenCensusExceptionReasons],
                 ));
-                $compatibilityReasons = array_values(array_intersect(
+                $frozenCensusExceptionReasons = array_values(array_intersect(
                     $projection['reasons'],
-                    self::FrozenPopulationCompatibilityReasons,
+                    self::FrozenCensusExceptionReasons,
                 ));
                 foreach ($structuralReasons as $reason) {
                     $excludedReasonCounts[$reason] = ($excludedReasonCounts[$reason] ?? 0) + 1;
                 }
                 if ($structuralReasons === []) {
                     $totals = $projection['projection']['financial_history']['totals'];
-                    $strictBundleTotals['schedule_count'] += $totals['schedule_count'];
-                    $strictBundleTotals['fee_line_count'] += $totals['fee_line_count'];
-                    $strictBundleTotals['payment_count'] += $totals['payment_count'];
-                    $strictBundleTotals['unpaid_schedule_count'] += count(array_filter(
+                    $unpaidScheduleCount = count(array_filter(
                         $projection['projection']['financial_history']['schedules'],
                         fn (array $schedule): bool => $schedule['status'] === 'pending' && $schedule['payments'] === [],
                     ));
+                    $this->addBundleTotals($frozenCensusBundleTotals, $totals, $unpaidScheduleCount);
+                    if ($frozenCensusExceptionReasons === []) {
+                        $this->addBundleTotals($strictBundleTotals, $totals, $unpaidScheduleCount);
+                    }
                 }
 
                 return $structuralReasons === [] ? [
                     'application' => $application,
-                    'preservation_executor_compatibility_reasons' => $compatibilityReasons,
+                    'preservation_executor_compatibility_reasons' => $frozenCensusExceptionReasons,
+                    'compatibility_evidence' => $this->compatibilityEvidence($application, $applicationProposals, $projection['projection']),
                 ] : null;
             })
             ->filter()
@@ -118,32 +121,41 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappings
         unset($applications, $financialProposals, $proposalsByApplication);
         gc_collect_cycles();
 
-        $registryRecords = $this->registryRecords($registryBatch->id, $strictCandidates);
-        $financialRegistryRecords = $this->registryRecords($financialBatch->id, $strictCandidates);
+        $registryRecords = $this->registryRecords($registryBatch->id, $frozenCensus);
+        $financialRegistryRecords = $this->registryRecords($financialBatch->id, $frozenCensus);
         $registryProposals = $registryPlan->proposals()
             ->whereIn('legacy_record_id', $registryRecords->pluck('id'))
             ->get()
             ->keyBy('legacy_record_id');
 
-        $candidates = $strictCandidates
+        $characterizedCensus = $frozenCensus
             ->map(fn (array $candidate): array => $this->characterize(
                 $candidate['application'],
                 $financialPlan->dependency_snapshot_hash,
                 $candidate['preservation_executor_compatibility_reasons'],
+                $candidate['compatibility_evidence'],
                 $registryRecords,
                 $financialRegistryRecords,
                 $registryProposals,
             ))
             ->sortBy('candidate_fingerprint')
             ->values();
+        $candidates = $characterizedCensus
+            ->where('flags.preservation_executor_compatible', true)
+            ->values();
+        $exceptions = $characterizedCensus
+            ->where('flags.preservation_executor_compatible', false)
+            ->values();
+        unset($frozenCensus, $characterizedCensus);
+        gc_collect_cycles();
 
-        $cohort = $candidates
+        $cohortCandidates = $candidates
             ->filter(fn (array $candidate): bool => in_array($candidate['classification'], [
                 'deterministic_exact_mapping_candidate',
                 'reference_data_crosswalk_only',
             ], true))
-            ->where('flags.preservation_executor_compatible', true)
-            ->take(self::CohortSize)
+            ->take(self::CohortSize);
+        $cohort = $cohortCandidates
             ->map(fn (array $candidate): array => [
                 'candidate_fingerprint' => $candidate['candidate_fingerprint'],
                 'application_source_record_id' => $candidate['application']['source_record_id'],
@@ -152,6 +164,9 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappings
                     ? 'pending_reference_data_and_mapping_acceptance'
                     : 'pending_mapping_acceptance',
             ])
+            ->values();
+        $cohortPrerequisites = $cohortCandidates
+            ->map(fn (array $candidate): array => $this->cohortPrerequisiteProposal($candidate, $registryRecords))
             ->values();
 
         $classificationCounts = $candidates->countBy('classification')->sortKeys()->all();
@@ -199,6 +214,22 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappings
             ])->all(),
         ]);
         $cohortFingerprint = $this->hash([...$evidenceFingerprint, ...$cohort->all()]);
+        $exceptionFingerprint = $this->hash([
+            ...$evidenceFingerprint,
+            ...$exceptions->map(fn (array $exception): array => [
+                $exception['candidate_fingerprint'],
+                $exception['preservation_executor_compatibility_reasons'],
+                $exception['compatibility_evidence'],
+            ])->all(),
+        ]);
+        $cohortPrerequisiteFingerprint = $this->hash([...$evidenceFingerprint, ...$cohortPrerequisites->all()]);
+        $exceptionPaymentCounts = $exceptions
+            ->countBy(fn (array $exception): int => (int) ($exception['compatibility_evidence']['unassigned_payment_event_count'] ?? 0))
+            ->sortKeys()
+            ->mapWithKeys(fn (int $count, int $paymentCount): array => [(string) $paymentCount => $count])
+            ->all();
+        $exceptionEdgeClassCounts = $this->sumNestedCounts($exceptions, 'edge_class_counts');
+        $exceptionStatusCounts = $this->sumNestedCounts($exceptions, 'status_counts');
 
         return [
             'report' => [
@@ -217,11 +248,19 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappings
                     'preservation_bundle_schema' => 'bpls.historical-financial-preservation-bundle.v1',
                 ],
                 'summary' => [
+                    'original_frozen_candidate_census_count' => $candidates->count() + $exceptions->count(),
+                    'original_frozen_bundle_totals' => $frozenCensusBundleTotals,
                     'strict_preservation_candidate_count' => $candidates->count(),
                     'strict_bundle_totals' => $strictBundleTotals,
                     'deterministic_identity_chain_count' => $candidates->where('flags.deterministic_identity_chain', true)->count(),
-                    'preservation_executor_compatible_count' => $candidates->where('flags.preservation_executor_compatible', true)->count(),
-                    'preservation_executor_incompatible_count' => $candidates->where('flags.preservation_executor_compatible', false)->count(),
+                    'preservation_executor_compatible_count' => $candidates->count(),
+                    'preservation_executor_incompatible_count' => $exceptions->count(),
+                    'incompatible_deterministic_identity_chain_count' => $exceptions->where('flags.deterministic_identity_chain', true)->count(),
+                    'frozen_census_exception_class_counts' => $exceptions->flatMap(fn (array $exception): array => $exception['preservation_executor_compatibility_reasons'])->countBy()->sortKeys()->all(),
+                    'unassigned_payment_events_by_application' => $exceptionPaymentCounts,
+                    'unassigned_payment_event_count' => $exceptions->sum(fn (array $exception): int => (int) ($exception['compatibility_evidence']['unassigned_payment_event_count'] ?? 0)),
+                    'unassigned_payment_edge_class_counts' => $exceptionEdgeClassCounts,
+                    'unassigned_payment_status_counts' => $exceptionStatusCounts,
                     'classification_counts' => $classificationCounts,
                     'flag_counts' => $flagCounts,
                     'reason_counts' => $reasonCounts,
@@ -234,7 +273,9 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappings
                 ],
                 'fingerprints' => [
                     'candidate_set_sha256' => $candidateFingerprint,
+                    'frozen_census_exceptions_sha256' => $exceptionFingerprint,
                     'recommended_cohort_sha256' => $cohortFingerprint,
+                    'cohort_prerequisites_sha256' => $cohortPrerequisiteFingerprint,
                 ],
                 'classification_semantics' => [
                     'deterministic_exact_mapping_candidate' => 'The exact owner, business, and application chain is structurally deterministic under the existing plans. This is a proposed mapping candidate only and requires acceptance before any mapping is created.',
@@ -256,12 +297,14 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappings
                 ],
             ],
             'candidates' => array_values($candidates->all()),
+            'exceptions' => array_values($exceptions->all()),
             'cohort' => array_values($cohort->all()),
+            'cohort_prerequisites' => array_values($cohortPrerequisites->all()),
         ];
     }
 
     /**
-     * @param  Collection<int, array{application: LegacyRecord, preservation_executor_compatibility_reasons: list<string>}>  $strictCandidates
+     * @param  Collection<int, array{application: LegacyRecord, preservation_executor_compatibility_reasons: list<string>, compatibility_evidence: array<string, mixed>}>  $strictCandidates
      * @return Collection<string, LegacyRecord>
      */
     private function registryRecords(int $batchId, Collection $strictCandidates): Collection
@@ -316,7 +359,87 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappings
     }
 
     /**
+     * @param  array<string, int>  $bundleTotals
+     * @param  array<string, int>  $projectionTotals
+     */
+    private function addBundleTotals(array &$bundleTotals, array $projectionTotals, int $unpaidScheduleCount): void
+    {
+        $bundleTotals['schedule_count'] += $projectionTotals['schedule_count'];
+        $bundleTotals['fee_line_count'] += $projectionTotals['fee_line_count'];
+        $bundleTotals['payment_count'] += $projectionTotals['payment_count'];
+        $bundleTotals['unpaid_schedule_count'] += $unpaidScheduleCount;
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $exceptions
+     * @return array<string, int>
+     */
+    private function sumNestedCounts(Collection $exceptions, string $key): array
+    {
+        $counts = [];
+        foreach ($exceptions as $exception) {
+            foreach ($exception['compatibility_evidence'][$key] ?? [] as $value => $count) {
+                $counts[(string) $value] = ($counts[(string) $value] ?? 0) + (int) $count;
+            }
+        }
+        ksort($counts);
+
+        return $counts;
+    }
+
+    /**
+     * @param  Collection<int, LegacyFinancialMappingProposal>  $financialProposals
+     * @param  array<string, mixed>  $projection
+     * @return array<string, mixed>
+     */
+    private function compatibilityEvidence(LegacyRecord $application, Collection $financialProposals, array $projection): array
+    {
+        $schedules = data_get($projection, 'financial_history.schedules', []);
+        $schedules = is_array($schedules) ? $schedules : [];
+        $assignedPaymentIds = collect($schedules)
+            ->flatMap(fn (array $schedule): array => array_column($schedule['payments'] ?? [], 'source_record_id'))
+            ->map(fn (mixed $id): int => (int) $id)
+            ->unique()
+            ->values();
+        $unassignedPayments = $financialProposals
+            ->where('kind', 'payment')
+            ->filter(fn (LegacyFinancialMappingProposal $proposal): bool => (int) ($proposal->metadata['application_source_record_id'] ?? 0) === $application->id)
+            ->reject(fn (LegacyFinancialMappingProposal $proposal): bool => $assignedPaymentIds->contains($proposal->legacy_record_id))
+            ->values();
+
+        $edgeClassCounts = $unassignedPayments
+            ->countBy(function (LegacyFinancialMappingProposal $proposal): string {
+                $metadata = $proposal->metadata ?? [];
+                if (($metadata['schedule_source_record_id'] ?? null) !== null) {
+                    return 'referenced_schedule_outside_application_bundle';
+                }
+
+                return is_string($metadata['legacy_schedule_id_sha256'] ?? null)
+                    ? 'referenced_schedule_absent_from_snapshot'
+                    : 'source_schedule_identifier_missing';
+            })
+            ->sortKeys()
+            ->all();
+        $statusCounts = $unassignedPayments
+            ->countBy(fn (LegacyFinancialMappingProposal $proposal): string => (string) ($proposal->metadata['status'] ?? 'unknown'))
+            ->sortKeys()
+            ->all();
+
+        return [
+            'unassigned_payment_event_count' => $unassignedPayments->count(),
+            'edge_class_counts' => $edgeClassCounts,
+            'status_counts' => $statusCounts,
+            'all_source_schedule_identifiers_present' => $unassignedPayments->every(
+                fn (LegacyFinancialMappingProposal $proposal): bool => is_string($proposal->metadata['legacy_schedule_id_sha256'] ?? null),
+            ),
+            'source_identifiers_exposed' => false,
+            'source_payloads_exposed' => false,
+        ];
+    }
+
+    /**
      * @param  list<string>  $preservationExecutorCompatibilityReasons
+     * @param  array<string, mixed>  $compatibilityEvidence
      * @param  Collection<string, LegacyRecord>  $registryRecords
      * @param  Collection<string, LegacyRecord>  $financialRegistryRecords
      * @param  Collection<int, LegacyMappingProposal>  $registryProposals
@@ -326,6 +449,7 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappings
         LegacyRecord $application,
         string $financialDependencySnapshotHash,
         array $preservationExecutorCompatibilityReasons,
+        array $compatibilityEvidence,
         Collection $registryRecords,
         Collection $financialRegistryRecords,
         Collection $registryProposals,
@@ -412,6 +536,7 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappings
             'business' => $this->recordEvidence($business, $businessProposal),
             'structural_reasons' => $structuralReasons,
             'preservation_executor_compatibility_reasons' => $preservationExecutorCompatibilityReasons,
+            'compatibility_evidence' => $compatibilityEvidence,
             'flags' => [
                 'deterministic_identity_chain' => $deterministicIdentity,
                 'preservation_executor_compatible' => $preservationExecutorCompatibilityReasons === [],
@@ -423,6 +548,73 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappings
                 'blacklisted' => in_array('blacklist_state_requires_registry_policy', $allReasons, true),
                 'collision' => $collisionReasons !== [],
             ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $candidate
+     * @param  Collection<string, LegacyRecord>  $registryRecords
+     * @return array<string, mixed>
+     */
+    private function cohortPrerequisiteProposal(array $candidate, Collection $registryRecords): array
+    {
+        $businessRecord = $registryRecords->first(fn (LegacyRecord $record): bool => $record->dataset_key === 'businesses'
+            && hash_equals(hash('sha256', $record->legacy_id), (string) $candidate['business']['legacy_id_sha256']));
+        $applicationRecord = LegacyRecord::query()->find((int) $candidate['application']['source_record_id']);
+        $referenceFields = [];
+        if ($businessRecord instanceof LegacyRecord) {
+            foreach (['provinceId', 'cityId', 'barangayId', 'categoryId', 'subCategoryId'] as $field) {
+                $value = $businessRecord->payload[$field] ?? null;
+                if (is_string($value) && trim($value) !== '') {
+                    $referenceFields[] = [
+                        'field' => $field,
+                        'source_value_sha256' => hash('sha256', trim($value)),
+                        'proposed_disposition' => 'pending_source_backed_crosswalk',
+                        'acceptance_status' => 'pending',
+                    ];
+                }
+            }
+        }
+        $linesOfBusiness = $applicationRecord?->payload['linesOfBusiness'] ?? [];
+        $linesOfBusiness = is_array($linesOfBusiness) ? $linesOfBusiness : [];
+        $declarationValues = collect($linesOfBusiness)
+            ->map(fn (mixed $line): ?string => is_array($line) && is_string($line['businessCategory'] ?? null)
+                ? trim($line['businessCategory'])
+                : null)
+            ->filter(fn (?string $value): bool => $value !== null && $value !== '')
+            ->values()
+            ->map(fn (string $value): array => [
+                'source_value_sha256' => hash('sha256', $value),
+                'proposed_target_line_of_business_id' => null,
+                'proposal_status' => 'target_evidence_required',
+                'acceptance_status' => 'pending',
+            ])
+            ->all();
+
+        return [
+            'candidate_fingerprint' => $candidate['candidate_fingerprint'],
+            'cohort_acceptance_status' => 'pending',
+            'reference_data_crosswalk_proposals' => $referenceFields,
+            'line_of_business_crosswalk_proposals' => $declarationValues,
+            'exact_mapping_proposals' => [
+                'owner' => [
+                    'source_record_id' => $candidate['owner']['source_record_id'] ?? null,
+                    'registry_proposal_id' => $candidate['owner']['proposal_id'] ?? null,
+                    'acceptance_status' => 'pending',
+                ],
+                'business' => [
+                    'source_record_id' => $candidate['business']['source_record_id'] ?? null,
+                    'registry_proposal_id' => $candidate['business']['proposal_id'] ?? null,
+                    'acceptance_status' => 'blocked_by_reference_data_crosswalk',
+                ],
+                'application' => [
+                    'source_record_id' => $candidate['application']['source_record_id'],
+                    'acceptance_status' => 'blocked_by_registry_and_declaration_acceptance',
+                ],
+            ],
+            'accepted_reconciliations_created' => false,
+            'accepted_mappings_created' => false,
+            'production_rehearsal_authorized' => false,
         ];
     }
 

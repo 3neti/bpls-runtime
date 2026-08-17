@@ -57,7 +57,7 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappingsCommand extends Co
         return self::SUCCESS;
     }
 
-    /** @param array{report: array<string, mixed>, candidates: list<array<string, mixed>>, cohort: list<array<string, mixed>>} $result */
+    /** @param array{report: array<string, mixed>, candidates: list<array<string, mixed>>, exceptions: list<array<string, mixed>>, cohort: list<array<string, mixed>>, cohort_prerequisites: list<array<string, mixed>>} $result */
     private function writeEvidence(LegacyFinancialMappingPlan $plan, string $runId, array $result): string
     {
         $root = "legacy-migrations/{$plan->importBatch->source->key}/{$plan->importBatch->run_reference}/reconciliation/historical-financial-application-mapping-readiness/{$runId}";
@@ -65,14 +65,26 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappingsCommand extends Co
             fn (array $candidate): string => json_encode($candidate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)."\n",
             $result['candidates'],
         ));
+        $exceptionLines = implode('', array_map(
+            fn (array $exception): string => json_encode($exception, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)."\n",
+            $result['exceptions'],
+        ));
         $this->writeImmutable($root.'/summary.json', json_encode($result['report'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n");
         $this->writeImmutable($root.'/proposed-mappings.jsonl', $candidateLines);
+        $this->writeImmutable($root.'/frozen-census-exceptions.jsonl', $exceptionLines);
         $this->writeImmutable($root.'/recommended-first-cohort.json', json_encode([
             'schema_version' => CharacterizeLegacyHistoricalFinancialApplicationMappings::SchemaVersion,
             'selection_rule' => 'First five preservation-compatible deterministic identity chains requiring at most accepted reference-data crosswalks, ordered by candidate fingerprint.',
             'acceptance_status' => 'pending',
             'production_rehearsal_authorized' => false,
             'candidates' => $result['cohort'],
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n");
+        $this->writeImmutable($root.'/cohort-prerequisite-proposals.json', json_encode([
+            'schema_version' => CharacterizeLegacyHistoricalFinancialApplicationMappings::SchemaVersion,
+            'purpose' => 'Prepare payload-safe reference-data and exact-mapping proposals for explicit acceptance without creating reconciliation or mapping rows.',
+            'acceptance_status' => 'pending',
+            'production_rehearsal_authorized' => false,
+            'proposals' => $result['cohort_prerequisites'],
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n");
         $this->writeImmutable($root.'/review.md', "# Historical Financial Application Mapping Readiness Review\n\nReviewer status: Pending\nReviewer:\nMunicipal authority / role:\nReviewed at:\nDecision reference:\nNotes:\n");
 
