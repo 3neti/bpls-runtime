@@ -17,6 +17,7 @@ use Throwable;
     {financial-plan : Exact completed financial mapping plan ID}
     {registry-plan : Exact completed registry mapping plan ID}
     {--cohort-size=25 : Requested bounded cohort size from the largest coherent financial topology}
+    {--source-status=Released : Exact supported legacy source status to preserve as historical evidence}
     {--exclude-accepted-mappings : Select only candidates without an accepted application mapping}
     {--expected-class-sha256= : Expected complete historical Released class SHA-256}
     {--run-id= : Stable evidence reference}
@@ -41,6 +42,7 @@ class PrepareLegacyHistoricalReleaseCohortCommand extends Command
                 $registryPlan,
                 $this->positiveInteger($this->option('cohort-size')),
                 (bool) $this->option('exclude-accepted-mappings'),
+                $this->requiredOption('source-status'),
             );
             $actualClass = (string) data_get($prepared, 'report.fingerprints.historical_release_class_sha256');
             $expectedClass = $this->option('expected-class-sha256');

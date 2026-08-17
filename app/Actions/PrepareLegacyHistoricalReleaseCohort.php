@@ -26,6 +26,7 @@ class PrepareLegacyHistoricalReleaseCohort
         private CharacterizeLegacyHistoricalFinancialApplicationMappings $mappingReadiness,
         private LegacyHistoricalFinancialPreservationProjector $preservationProjector,
         private LegacyPermitApplicationProjector $applicationProjector,
+        private BuildLegacyHistoricalFinancialProposalIndex $buildProposalIndex,
     ) {}
 
     /**
@@ -42,14 +43,29 @@ class PrepareLegacyHistoricalReleaseCohort
         LegacyMappingPlan $registryPlan,
         int $cohortSize = self::DefaultCohortSize,
         bool $excludeAcceptedMappings = false,
+        string $sourceStatus = 'Released',
     ): array {
-        if ($cohortSize < 6 || $cohortSize > 500) {
-            throw new RuntimeException('Historical release cohort size must be between 6 and 500 records.');
+        if ($cohortSize < 1 || $cohortSize > 500) {
+            throw new RuntimeException('Historical release cohort size must be between 1 and 500 records.');
+        }
+        if (! in_array($sourceStatus, ['Assessment', 'Released'], true)) {
+            throw new RuntimeException('Historical evidence cohort source status must be Assessment or Released.');
         }
 
         $readiness = $this->mappingReadiness->handle($financialPlan, $registryPlan);
+        $candidateSourceRecordIds = collect($readiness['candidates'])
+            ->pluck('application.source_record_id')
+            ->filter(fn (mixed $id): bool => is_int($id))
+            ->all();
+        $sourceStatuses = LegacyRecord::query()
+            ->whereIn('id', $candidateSourceRecordIds)
+            ->get()
+            ->mapWithKeys(fn (LegacyRecord $record): array => [
+                $record->id => is_string($record->payload['status'] ?? null) ? $record->payload['status'] : '',
+            ]);
         $historicalReleaseCandidates = collect($readiness['candidates'])
-            ->filter(fn (array $candidate): bool => $this->isHistoricalReleaseCandidate($candidate))
+            ->filter(fn (array $candidate): bool => $this->isHistoricalEvidenceCandidate($candidate, $sourceStatus)
+                && $sourceStatuses->get((int) data_get($candidate, 'application.source_record_id')) === $sourceStatus)
             ->sortBy('candidate_fingerprint')
             ->values();
         $mappedSourceRecordIds = $excludeAcceptedMappings
@@ -60,6 +76,7 @@ class PrepareLegacyHistoricalReleaseCohort
             ->whereIn('kind', ['payment_schedule', 'payment_schedule_fee', 'payment', 'receipt_claim'])
             ->orderBy('id')
             ->get();
+        $proposalsByApplication = $this->buildProposalIndex->handle($financialProposals);
         $lookupRecords = LegacyRecord::query()
             ->where('legacy_import_batch_id', $registryPlan->legacy_import_batch_id)
             ->whereIn('dataset_key', array_values(self::LocationFields))
@@ -70,7 +87,7 @@ class PrepareLegacyHistoricalReleaseCohort
             ->map(fn (array $candidate): array => $this->enrichCandidate(
                 $candidate,
                 $financialPlan,
-                $financialProposals,
+                $proposalsByApplication,
                 $lookupRecords,
             ))
             ->filter(fn (array $candidate): bool => $candidate['location']['proposal_status'] === 'evidence_complete_acceptance_pending')
@@ -115,6 +132,7 @@ class PrepareLegacyHistoricalReleaseCohort
             'registry_snapshot_hash' => $registryPlan->registry_snapshot_hash,
             'strict_candidate_set_sha256' => data_get($readiness, 'report.fingerprints.candidate_set_sha256'),
             'projection_mode' => 'historical_evidence',
+            ...($sourceStatus === 'Released' ? [] : ['source_status' => $sourceStatus]),
         ];
         $evidenceBinding = [
             ...$classEvidenceBinding,
@@ -196,30 +214,34 @@ class PrepareLegacyHistoricalReleaseCohort
     }
 
     /** @param array<string, mixed> $candidate */
-    private function isHistoricalReleaseCandidate(array $candidate): bool
+    private function isHistoricalEvidenceCandidate(array $candidate, string $sourceStatus): bool
     {
         $applicationReasons = data_get($candidate, 'application.reasons', []);
         $applicationReasons = is_array($applicationReasons) ? array_values($applicationReasons) : [];
         sort($applicationReasons);
+
+        $expectedApplicationReasons = $sourceStatus === 'Released'
+            ? ['legacy_release_authority_unresolved', 'line_of_business_mapping_required']
+            : ['line_of_business_mapping_required'];
 
         return data_get($candidate, 'flags.deterministic_identity_chain') === true
             && data_get($candidate, 'flags.preservation_executor_compatible') === true
             && ($candidate['structural_reasons'] ?? null) === []
             && data_get($candidate, 'owner.reasons', []) === []
             && data_get($candidate, 'business.reasons', []) === ['reference_data_mapping_required']
-            && $applicationReasons === ['legacy_release_authority_unresolved', 'line_of_business_mapping_required'];
+            && $applicationReasons === $expectedApplicationReasons;
     }
 
     /**
      * @param  array<string, mixed>  $candidate
-     * @param  Collection<int, LegacyFinancialMappingProposal>  $financialProposals
+     * @param  array<int, Collection<int, LegacyFinancialMappingProposal>>  $proposalsByApplication
      * @param  Collection<string, LegacyRecord>  $lookupRecords
      * @return array<string, mixed>
      */
     private function enrichCandidate(
         array $candidate,
         LegacyFinancialMappingPlan $financialPlan,
-        Collection $financialProposals,
+        array $proposalsByApplication,
         Collection $lookupRecords,
     ): array {
         $application = LegacyRecord::query()->find((int) data_get($candidate, 'application.source_record_id'));
@@ -228,15 +250,7 @@ class PrepareLegacyHistoricalReleaseCohort
             throw new RuntimeException('A deterministic historical release candidate lost an exact source dependency.');
         }
 
-        $scheduleRecordIds = $financialProposals
-            ->where('kind', 'payment_schedule')
-            ->filter(fn (LegacyFinancialMappingProposal $proposal): bool => (int) ($proposal->metadata['application_source_record_id'] ?? 0) === $application->id)
-            ->pluck('legacy_record_id')
-            ->all();
-        $applicationProposals = $financialProposals->filter(
-            fn (LegacyFinancialMappingProposal $proposal): bool => in_array($proposal->legacy_record_id, $scheduleRecordIds, true)
-                || ($proposal->kind === 'payment' && (int) ($proposal->metadata['application_source_record_id'] ?? 0) === $application->id),
-        )->values();
+        $applicationProposals = $proposalsByApplication[$application->id] ?? collect();
         $financialProjection = $this->preservationProjector->project($financialPlan, $application, $applicationProposals);
         $schedules = data_get($financialProjection, 'projection.financial_history.schedules', []);
         $totals = data_get($financialProjection, 'projection.financial_history.totals', []);

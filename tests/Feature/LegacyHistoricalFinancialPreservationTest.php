@@ -1,7 +1,9 @@
 <?php
 
 use App\Actions\AuditLegacyHistoricalFinancialPreservation;
+use App\Actions\BuildLegacyHistoricalFinancialProposalIndex;
 use App\Actions\ExecuteLegacyHistoricalFinancialPreservation;
+use App\Actions\LegacyHistoricalFinancialPreservationProjector;
 use App\Actions\PlanLegacyFinancialDependencies;
 use App\Actions\PlanLegacyHistoricalFinancialPreservation;
 use App\Actions\RollbackLegacyHistoricalFinancialPreservation;
@@ -12,6 +14,7 @@ use App\Models\Assessment;
 use App\Models\LegacyApplicationIdMapping;
 use App\Models\LegacyApplicationMappingPlan;
 use App\Models\LegacyApplicationMappingProposal;
+use App\Models\LegacyFinancialMappingProposal;
 use App\Models\LegacyHistoricalFinancialPreservationExecution;
 use App\Models\LegacyHistoricalFinancialPreservationPlan;
 use App\Models\LegacyHistoricalFinancialPreservedBundle;
@@ -164,6 +167,35 @@ test('complete historical application history is preserved atomically without op
         ->and(TreasuryCollection::query()->count())->toBe(0)
         ->and(Receipt::query()->count())->toBe(0)
         ->and($fixture['target']->refresh()->status)->toBe($status);
+});
+
+test('indexed financial proposals preserve the exact projection reasons ordering and hash', function () {
+    $fixture = historicalPreservationFixture('proposal-index');
+    $financialPlan = app(PlanLegacyFinancialDependencies::class)->handle($fixture['batch'], 'financial-plan-proposal-index');
+    $decoy = historicalPreservationRecord($fixture['batch'], 'payment_schedules', 'decoy-schedule-proposal-index', [
+        'applicationId' => 'decoy-application-proposal-index',
+    ]);
+    LegacyFinancialMappingProposal::factory()->for($financialPlan, 'mappingPlan')->for($decoy, 'legacyRecord')->create([
+        'kind' => 'payment_schedule',
+        'metadata' => ['application_source_record_id' => PHP_INT_MAX],
+    ]);
+    $proposals = $financialPlan->proposals()
+        ->with('legacyRecord')
+        ->whereIn('kind', ['payment_schedule', 'payment_schedule_fee', 'payment', 'receipt_claim'])
+        ->orderBy('id')
+        ->get();
+    $indexed = app(BuildLegacyHistoricalFinancialProposalIndex::class)->handle($proposals);
+    $applicationProposals = $indexed[$fixture['application']->id];
+    $projector = app(LegacyHistoricalFinancialPreservationProjector::class);
+    $fullProjection = $projector->project($financialPlan, $fixture['application'], $proposals);
+    $indexedProjection = $projector->project($financialPlan, $fixture['application'], $applicationProposals);
+
+    expect($applicationProposals->count())->toBeLessThan($proposals->count())
+        ->and($applicationProposals->pluck('id')->all())->toBe($applicationProposals->pluck('id')->sort()->values()->all())
+        ->and($indexedProjection['application_mapping']?->id)->toBe($fullProjection['application_mapping']?->id)
+        ->and($indexedProjection['reasons'])->toBe($fullProjection['reasons'])
+        ->and($indexedProjection['projection'])->toBe($fullProjection['projection'])
+        ->and($projector->hash($indexedProjection['projection']))->toBe($projector->hash($fullProjection['projection']));
 });
 
 test('audit reproduces source counts and centavo totals and stable retry does not duplicate bundles', function () {

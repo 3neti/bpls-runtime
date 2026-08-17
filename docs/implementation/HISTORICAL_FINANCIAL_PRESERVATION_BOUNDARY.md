@@ -211,6 +211,16 @@ The corrected candidate-set SHA-256 is `307ecf33dafb9c53fd16064288b3057edd3c3131
 
 The independent TOR engineering lane continues separately from production reconciliation and preservation authorization.
 
+## Exact-Class Completion And Human-Identity Frontier
+
+The exact 407-application class has completed execute, source-to-target audit, rollback, and restoration audit across every persisted financial topology. In aggregate, the rehearsals reproduced 696 schedules, 3,007 fee lines, 660 completed payments, 36 unpaid schedules, 412,770,810 scheduled centavos, and 397,445,008 paid centavos. All operational financial counts remained unchanged and no preservation bundle remains after rollback.
+
+The preservation audit now builds one exact application/schedule proposal index and reuses it in planning, execution, and audit. This changes evidence lookup cost only. Projection membership, canonical serialization, hashes, counts, centavo assertions, and fail-closed behavior remain unchanged.
+
+Read-only human-identity frontier run `prod-human-identity-frontier-20260818-001` binds the unchanged corrected V1 evidence to frontier SHA-256 `8b1b80d4b2f38eb186186930c567e1e9eb7b83c4b28490307117381056064bbc`. The 736 applications represent 708 unique owner proposals and 727 unique business proposals across 40 evidence shapes. They contain 469 owner collision groups and 80 business collision groups; raw collision fingerprints and source values remain private.
+
+Of these, 727 carry only identity collision/reference-data/lifecycle-authority evidence and nine carry additional deletion, financial-override, or lifecycle reconciliation semantics. A bounded 12-application subclass has nine unique collision-free owner proposals but unresolved business collisions. Only those owner identities may be prepared for independent acceptance review; business and application mappings remain unaccepted. Similarity has not established or merged any legal identity.
+
 ## Five-Record Mapping Prerequisites
 
 Read-only prerequisite run `prod-historical-financial-cohort-prerequisites-20260817-002` recomputed the same five-record cohort from financial plan 3 and registry plan 3 and refused to proceed unless the result matched frozen cohort SHA-256 `bf5af2693e471f336c54bf5e3345cc6b9df8709fceddd5ea1bc63360c3ebddb4`. The cohort did not change.

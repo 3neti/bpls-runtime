@@ -48,6 +48,7 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappings
     public function __construct(
         private LegacyHistoricalFinancialPreservationProjector $preservationProjector,
         private LegacyPermitApplicationProjector $applicationProjector,
+        private BuildLegacyHistoricalFinancialProposalIndex $buildProposalIndex,
     ) {}
 
     /** @return array{report: array<string, mixed>, candidates: list<array<string, mixed>>, exceptions: list<array<string, mixed>>, cohort: list<array<string, mixed>>, cohort_prerequisites: list<array<string, mixed>>} */
@@ -62,7 +63,7 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappings
             ->whereIn('kind', ['payment_schedule', 'payment_schedule_fee', 'payment', 'receipt_claim'])
             ->orderBy('id')
             ->get();
-        $proposalsByApplication = $this->financialProposalsByApplication($financialProposals);
+        $proposalsByApplication = $this->buildProposalIndex->handle($financialProposals);
         $applicationIds = collect(array_keys($proposalsByApplication))->sort()->values();
 
         $applications = LegacyRecord::query()
@@ -324,38 +325,6 @@ class CharacterizeLegacyHistoricalFinancialApplicationMappings
             ->whereIn('legacy_id', $ids)
             ->get()
             ->keyBy(fn (LegacyRecord $record): string => $record->dataset_key.'|'.$record->legacy_id);
-    }
-
-    /**
-     * @param  Collection<int, LegacyFinancialMappingProposal>  $proposals
-     * @return array<int, Collection<int, LegacyFinancialMappingProposal>>
-     */
-    private function financialProposalsByApplication(Collection $proposals): array
-    {
-        $bySourceRecord = $proposals->groupBy('legacy_record_id');
-        $schedulesByApplication = $proposals
-            ->where('kind', 'payment_schedule')
-            ->groupBy(fn (LegacyFinancialMappingProposal $proposal): int => (int) ($proposal->metadata['application_source_record_id'] ?? 0));
-        $paymentsByApplication = $proposals
-            ->where('kind', 'payment')
-            ->groupBy(fn (LegacyFinancialMappingProposal $proposal): int => (int) ($proposal->metadata['application_source_record_id'] ?? 0));
-        $result = [];
-
-        foreach ($schedulesByApplication as $applicationId => $schedules) {
-            if ((int) $applicationId < 1) {
-                continue;
-            }
-            $applicationProposals = collect();
-            foreach ($schedules as $schedule) {
-                $applicationProposals->push(...($bySourceRecord->get($schedule->legacy_record_id) ?? collect()));
-            }
-            foreach ($paymentsByApplication->get($applicationId, collect()) as $payment) {
-                $applicationProposals->push(...($bySourceRecord->get($payment->legacy_record_id) ?? collect()));
-            }
-            $result[(int) $applicationId] = $applicationProposals->unique('id')->sortBy('id')->values();
-        }
-
-        return $result;
     }
 
     /**

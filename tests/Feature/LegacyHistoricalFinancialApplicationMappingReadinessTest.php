@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\CharacterizeLegacyHistoricalFinancialApplicationMappings;
+use App\Actions\CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier;
 use App\Actions\PlanLegacyFinancialDependencies;
 use App\Actions\PlanLegacyRegistryMigration;
 use App\Enums\LegacyImportBatchStatus;
@@ -207,6 +208,83 @@ test('strict preservation candidates are classified by exact identity evidence w
             'production_mutation' => false,
             'migration_executed' => false,
         ]);
+});
+
+test('human identity frontier isolates collision classes without accepting similarity based mappings', function () {
+    Storage::fake('local');
+    $batches = mappingReadinessBatches('human-identity-frontier');
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'owner-collision',
+        owner: ['email' => 'shared-owner@example.test'],
+    );
+    foreach ([$batches['registry'], $batches['financial']] as $batch) {
+        mappingReadinessRecord($batch, 'business_owners', 'owner-collision-decoy', [
+            'ownerType' => 'Individual',
+            'firstName' => 'Unrelated',
+            'lastName' => 'Person',
+            'email' => 'shared-owner@example.test',
+        ]);
+    }
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'business-collision-a',
+        business: ['registrationNumber' => 'SHARED-REGISTRATION'],
+    );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'business-collision-b',
+        business: ['registrationNumber' => 'SHARED-REGISTRATION'],
+    );
+
+    $registryPlan = app(PlanLegacyRegistryMigration::class)->handle($batches['registry'], 'registry-human-identity-frontier');
+    $financialPlan = app(PlanLegacyFinancialDependencies::class)->handle($batches['financial'], 'financial-human-identity-frontier');
+    $result = app(CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier::class)->handle($financialPlan, $registryPlan);
+
+    expect($result['report']['summary'])
+        ->human_identity_application_count->toBe(3)
+        ->identity_collision_only_count->toBe(3)
+        ->additional_semantic_reconciliation_count->toBe(0)
+        ->exact_owner_mapping_candidate_count->toBe(2)
+        ->business_or_application_mapping_candidate_count->toBe(0)
+        ->accepted_mapping_count->toBe(0)
+        ->and(data_get($result, 'report.collision_clusters.owner.unique_collision_group_count'))->toBe(1)
+        ->and(data_get($result, 'report.collision_clusters.owner.collision_group_size_distribution'))->toBe(['2' => 1])
+        ->and(data_get($result, 'report.collision_clusters.business.unique_collision_group_count'))->toBe(1)
+        ->and(data_get($result, 'report.collision_clusters.business.collision_group_size_distribution'))->toBe(['2' => 1])
+        ->and($result['classes'])->toHaveCount(2)
+        ->and(LegacyApplicationIdMapping::query()->count())->toBe(0)
+        ->and(LegacyIdMapping::query()->count())->toBe(0)
+        ->and($result['report']['safety'])->toMatchArray([
+            'read_only' => true,
+            'similarity_based_mapping' => false,
+            'identity_merge_performed' => false,
+            'accepted_mappings_created' => false,
+        ]);
+
+    $arguments = [
+        'financial-plan' => $financialPlan->id,
+        'registry-plan' => $registryPlan->id,
+        '--run-id' => 'human-identity-frontier-001',
+        '--json' => true,
+    ];
+    $this->artisan('legacy:characterize-historical-financial-human-identities', $arguments)->assertSuccessful();
+    $this->artisan('legacy:characterize-historical-financial-human-identities', $arguments)->assertSuccessful();
+    $root = "legacy-migrations/{$batches['financial']->source->key}/{$batches['financial']->run_reference}/reconciliation/historical-financial-human-identity-frontier/human-identity-frontier-001";
+    Storage::disk('local')->assertExists($root.'/summary.json');
+    Storage::disk('local')->assertExists($root.'/classes.json');
+    Storage::disk('local')->assertExists($root.'/candidate-membership.jsonl');
+    Storage::disk('local')->assertExists($root.'/review.md');
+    $evidence = Storage::disk('local')->get($root.'/summary.json')
+        .Storage::disk('local')->get($root.'/classes.json')
+        .Storage::disk('local')->get($root.'/candidate-membership.jsonl');
+
+    expect($evidence)
+        ->not->toContain('shared-owner@example.test')
+        ->not->toContain('SHARED-REGISTRATION');
 });
 
 test('characterization refuses cross-batch payload drift and reports structural reference breaks', function () {

@@ -8,7 +8,10 @@ use RuntimeException;
 
 class AuditLegacyHistoricalFinancialPreservation
 {
-    public function __construct(private LegacyHistoricalFinancialPreservationProjector $projector) {}
+    public function __construct(
+        private LegacyHistoricalFinancialPreservationProjector $projector,
+        private BuildLegacyHistoricalFinancialProposalIndex $buildProposalIndex,
+    ) {}
 
     /** @return array<string, mixed> */
     public function handle(LegacyHistoricalFinancialPreservationExecution $execution): array
@@ -23,6 +26,7 @@ class AuditLegacyHistoricalFinancialPreservation
             ->whereIn('kind', ['payment_schedule', 'payment_schedule_fee', 'payment', 'receipt_claim'])
             ->orderBy('id')
             ->get();
+        $proposalsByApplication = $this->buildProposalIndex->handle($financialProposals);
         $sourceTotals = $this->emptyTotals();
         $targetTotals = $this->emptyTotals();
         $checks = [];
@@ -31,7 +35,7 @@ class AuditLegacyHistoricalFinancialPreservation
             $result = $this->projector->project(
                 $execution->preservationPlan->financialMappingPlan,
                 $bundle->proposal->legacyRecord,
-                $financialProposals,
+                $proposalsByApplication[$bundle->legacy_record_id] ?? collect(),
             );
             $source = $result['projection'];
             $target = $bundle->snapshot;

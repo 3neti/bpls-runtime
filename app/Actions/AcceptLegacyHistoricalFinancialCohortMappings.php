@@ -578,7 +578,10 @@ class AcceptLegacyHistoricalFinancialCohortMappings
             $reasons = $source->reasons ?? [];
             $projectionMode = (string) data_get($mappingSet->metadata, 'application_projection_mode', 'operational');
             $allowedReasonSets = $projectionMode === 'historical_evidence'
-                ? [['legacy_release_authority_unresolved', 'line_of_business_mapping_required']]
+                ? [
+                    ['legacy_release_authority_unresolved', 'line_of_business_mapping_required'],
+                    ['line_of_business_mapping_required'],
+                ]
                 : [[], ['line_of_business_mapping_required']];
             if (! in_array($reasons, $allowedReasonSets, true)) {
                 throw new RuntimeException('An application proposal has unresolved semantics beyond the accepted line-of-business identity boundary: '.json_encode([

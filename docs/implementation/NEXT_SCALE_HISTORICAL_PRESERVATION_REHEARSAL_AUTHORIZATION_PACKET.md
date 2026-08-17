@@ -12,13 +12,13 @@ The corrected V1 population contains 1,223 application histories. Semantic-level
 
 | Class | Count | Current disposition |
 | --- | ---: | --- |
-| Exact historical-evidence migration class | 407 | Migratable after exact mapping acceptance |
+| Exact historical-evidence migration class | 407 | Exact mappings accepted; preservation mechanism proven and rolled back |
 | Human identity reconciliation | 736 | Blocked from identity mapping; no similarity merge |
 | Registry policy reconciliation | 72 | Blocked pending Group-owner, deleted, or related registry disposition |
 | Soft-deleted and payment-schedule semantics | 5 | Quarantined pending application/registry reconciliation |
 | Financial override plus historical release | 3 | Quarantined pending exact override evidence |
 
-The exact class consists of 401 deterministic historical `Released` applications and six applications already compatible with the proven non-release preservation semantics. Of the 401 historical-release applications, 302 have accepted exact mappings and completed reversible rehearsals. The remaining 99 are exact candidates across different persisted schedule/payment topologies; they were not inferred or accepted by this slice.
+The exact class consists of 401 deterministic historical `Released` applications and six applications compatible with the proven non-release preservation semantics. All 407 now have exact accepted mappings and have completed reversible execute, source-to-target audit, rollback, and restoration-audit rehearsals. No preserved bundle remains.
 
 ## Authority Separation
 
@@ -41,9 +41,15 @@ All production-derived rehearsals used the immutable production snapshot SHA-256
 | 25 | 25 | 25 | 166 | 25 | 17,283,133 | PASS | PASS | PASS | PASS |
 | 100 | 100 | 100 | 658 | 100 | 86,140,090 | PASS | PASS | PASS | PASS |
 | 177 | 177 | 177 | 1,163 | 177 | 157,556,907 | PASS | PASS | PASS | PASS |
-| **Total coherent class** | **302** | **302** | **1,987** | **302** | **260,980,130** | **PASS** | **PASS** | **PASS** | **PASS** |
+| 67 four-paid-quarter | 67 | 268 | 664 | 268 | 81,836,524 | PASS | PASS | PASS | PASS |
+| 27 three-paid-quarter | 27 | 108 | 268 | 81 | 61,636,116 | PASS | PASS | PASS | PASS |
+| 4 two-paid-schedule | 4 | 8 | 33 | 8 | 5,135,676 | PASS | PASS | PASS | PASS |
+| 1 one-paid-of-four | 1 | 4 | 9 | 1 | 704,864 | PASS | PASS | PASS | PASS |
+| 5 baseline unpaid | 5 | 5 | 38 | 0 | 2,095,000 | PASS | PASS | PASS | PASS |
+| 1 remaining assessment | 1 | 1 | 8 | 0 | 382,500 | PASS | PASS | PASS | PASS |
+| **Complete exact class** | **407** | **696** | **3,007** | **660** | **412,770,810** | **PASS** | **PASS** | **PASS** | **PASS** |
 
-Each cohort had zero unpaid schedules. Source and target counts and centavo totals agreed exactly. All preserved bundles were rolled back; accepted mappings and target applications remain intact as prerequisite evidence.
+The complete class contains 36 unpaid schedules and 397,445,008 paid centavos. Source and target counts and centavo totals agreed exactly. All preserved bundles were rolled back; accepted mappings and target applications remain intact as prerequisite evidence.
 
 ## Isolation
 
@@ -73,10 +79,10 @@ Private execution evidence remains under `storage/app/private/legacy-migrations/
 
 ## Scale Observation
 
-The 177-record execute completed in 148.93 seconds, source-to-target audit in 380.05 seconds, rollback in 0.31 seconds, and restoration audit in 0.52 seconds. Integrity remained exact, but audit wall time increased materially. This is an evidence-processing performance concern, not a migration semantic failure; the next scaling slice should index financial proposals by application/schedule while preserving identical projection hashes and audit assertions.
+The 177-record execute completed in 148.93 seconds and originally required 380.05 seconds for source-to-target audit. Financial proposals are now indexed once by exact application/schedule relationships and reused by planning, execution, and audit. The 67-record four-quarter audit completed in 2.50 seconds with unchanged source projections, projection hashes, centavo assertions, operational isolation, rollback, and restoration guarantees.
 
 ## Next Boundary
 
-The next scale may proceed autonomously. It should exercise the remaining 99 exact historical-release candidates by their actual persisted topology, beginning with the 67-record four-paid-quarter class. Identity acceptance remains exact and evidence-backed; the 816 unresolved applications remain quarantined by their smallest unresolved semantic class.
+Scaling stops at the completed 407-record exact class. The next frontier is the 736 human-identity cases. Read-only characterization reduces them to 40 evidence shapes, 469 owner collision groups, and 80 business collision groups. Twelve applications expose a bounded subclass in which nine unique owner proposals are collision-free while business identity remains ambiguous. These are proposals for independent owner review only; no owner, business, or application mapping was accepted from similarity evidence.
 
 Production migration, operational financial migration, cutover, current permit release, and future fiscal-policy activation remain unauthorized.

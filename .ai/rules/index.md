@@ -6,7 +6,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | --- | --- |
 | app/{Actions,Console/Commands,Models}/**/*Legacy*Application*.php, app/{Actions,Console/Commands,Models}/**/*Legacy*Declaration*.php, app/{Actions,Console/Commands,Models}/**/*Legacy*Financial*.php, app/{Actions,Console/Commands,Models}/**/*Legacy*Permit*Evidence*.php, app/{Actions,Console/Commands,Models}/**/*Legacy*Migration*Rehearsal*.php | .ai/rules/actions-console-commands-models.md |
 | app/{Actions,Console/Commands}/**/*Legacy*Scale*.php, app/{Actions,Console/Commands}/**/*Legacy*Convex*Snapshot*.php, app/{Actions,Console/Commands}/**/*Legacy*Convex*.php, app/{Actions,Console/Commands}/**/*HistoricalFinancial*ApplicationMapping*.php, app/{Actions,Console/Commands}/**/*HistoricalFinancial*Scale*.php | .ai/rules/actions-console-commands.md |
-| app/Actions/*CitizenPermitApplication*.php, app/Actions/*Legacy*Document*.php | .ai/rules/actions.md |
+| app/Actions/*CitizenPermitApplication*.php, app/Actions/*Legacy*Document*.php, app/Actions/** | .ai/rules/actions.md |
 | app/Assessment/** | .ai/rules/assessment.md |
 | app/{Actions,Http/Controllers/Citizen,Models,Notifications}/** | .ai/rules/citizen-models-notifications.md |
 | app/{Actions,Http/Controllers/Citizen}/** | .ai/rules/citizen.md |

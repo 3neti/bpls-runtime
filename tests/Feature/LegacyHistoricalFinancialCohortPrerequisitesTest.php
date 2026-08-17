@@ -14,6 +14,7 @@ use App\Actions\PrepareLegacyHistoricalReleaseCohort;
 use App\Actions\RollbackLegacyHistoricalFinancialPreservation;
 use App\Enums\LegacyImportBatchStatus;
 use App\Enums\PermitApplicationStatus;
+use App\Models\Assessment;
 use App\Models\LegacyApplicationIdMapping;
 use App\Models\LegacyHistoricalFinancialMappingSet;
 use App\Models\LegacyHistoricalFinancialPreservationExecution;
@@ -24,6 +25,7 @@ use App\Models\LegacyLineOfBusinessReconciliation;
 use App\Models\LegacyRecord;
 use App\Models\LegacySource;
 use App\Models\LineOfBusiness;
+use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use Illuminate\Support\Facades\Storage;
 
@@ -590,6 +592,42 @@ test('historical released cohort reuses exact shared registry dependencies witho
         ->and(LegacyIdMapping::query()->count())->toBe(10)
         ->and(LegacyApplicationIdMapping::query()->count())->toBe(6)
         ->and(PermitApplication::query()->count())->toBe(6);
+});
+
+test('exact legacy assessment cohort is preserved without activating municipal processing', function () {
+    $plans = plannedCohortPrerequisites('historical-assessment-evidence', 6, 'Assessment');
+    $prepared = app(PrepareLegacyHistoricalReleaseCohort::class)->handle(
+        $plans['financial'],
+        $plans['registry'],
+        6,
+        false,
+        'Assessment',
+    );
+
+    expect($prepared['report']['summary'])
+        ->cohort_size->toBe(6)
+        ->historical_release_candidate_count->toBe(6)
+        ->current_release_authorized_count->toBe(0)
+        ->operationally_eligible_count->toBe(0)
+        ->and(data_get($prepared, 'report.evidence.source_status'))->toBe('Assessment');
+
+    $mappingSet = app(AcceptLegacyHistoricalFinancialCohortMappings::class)->handlePreparedEvidence(
+        $plans['financial'],
+        $plans['registry'],
+        $prepared,
+        $prepared['report']['fingerprints']['selected_cohort_sha256'],
+        $prepared['report']['fingerprints']['prerequisite_proposals_sha256'],
+        'historical-assessment-evidence-acceptance',
+        'Architecture Review Board',
+        'BOARD-ACCELERATED-MIGRATION',
+        'historical_evidence',
+    );
+
+    expect($mappingSet->cohort_size)->toBe(6)
+        ->and(PermitApplication::query()->where('status', PermitApplicationStatus::HistoricalEvidence->value)->count())->toBe(6)
+        ->and(PermitApplication::query()->get()->every(fn (PermitApplication $application): bool => $application->isHistoricalEvidenceOnly() && ! $application->canContinue()))->toBeTrue()
+        ->and(Assessment::query()->count())->toBe(0)
+        ->and(PaymentSchedule::query()->count())->toBe(0);
 });
 
 test('next scale readiness refuses a non material one record expansion and preserves the proven baseline', function () {

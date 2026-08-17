@@ -19,6 +19,7 @@ class PlanLegacyHistoricalFinancialPreservation
     public function __construct(
         private LegacyHistoricalFinancialPreservationProjector $projector,
         private PlanLegacyFinancialDependencies $financialPlanner,
+        private BuildLegacyHistoricalFinancialProposalIndex $buildProposalIndex,
     ) {}
 
     public function handle(LegacyFinancialMappingPlan $financialPlan, string $runReference): LegacyHistoricalFinancialPreservationPlan
@@ -62,17 +63,12 @@ class PlanLegacyHistoricalFinancialPreservation
             ->whereIn('kind', ['payment_schedule', 'payment_schedule_fee', 'payment', 'receipt_claim'])
             ->orderBy('id')
             ->get();
-        $applicationIds = $financialProposals
-            ->where('kind', 'payment_schedule')
-            ->map(fn ($proposal): int => (int) ($proposal->metadata['application_source_record_id'] ?? 0))
-            ->filter()
-            ->unique()
-            ->sort()
-            ->values();
+        $proposalsByApplication = $this->buildProposalIndex->handle($financialProposals);
+        $applicationIds = collect(array_keys($proposalsByApplication));
 
-        LegacyRecord::query()->whereIn('id', $applicationIds)->orderBy('id')->chunkById(100, function (Collection $applications) use ($plan, $financialPlan, $financialProposals): void {
+        LegacyRecord::query()->whereIn('id', $applicationIds)->orderBy('id')->chunkById(100, function (Collection $applications) use ($plan, $financialPlan, $proposalsByApplication): void {
             foreach ($applications as $application) {
-                $result = $this->projector->project($financialPlan, $application, $financialProposals);
+                $result = $this->projector->project($financialPlan, $application, $proposalsByApplication[$application->id] ?? collect());
                 $projection = $result['projection'];
                 $reasons = $result['reasons'];
                 $plan->proposals()->updateOrCreate(
@@ -162,13 +158,14 @@ class PlanLegacyHistoricalFinancialPreservation
             ->whereIn('kind', ['payment_schedule', 'payment_schedule_fee', 'payment', 'receipt_claim'])
             ->orderBy('id')
             ->get();
+        $proposalsByApplication = $this->buildProposalIndex->handle($financialProposals);
         $applications = LegacyRecord::query()->whereIn('id', $applicationRecordIds)->orderBy('id')->get();
         if ($applications->count() !== $selectionCount) {
             throw new RuntimeException('One or more selected historical application records are unavailable.');
         }
 
         foreach ($applications as $application) {
-            $result = $this->projector->project($financialPlan, $application, $financialProposals);
+            $result = $this->projector->project($financialPlan, $application, $proposalsByApplication[$application->id] ?? collect());
             $projection = $result['projection'];
             $reasons = $result['reasons'];
             $plan->proposals()->updateOrCreate(

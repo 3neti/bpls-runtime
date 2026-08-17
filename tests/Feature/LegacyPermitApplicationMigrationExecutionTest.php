@@ -110,9 +110,9 @@ function executableApplicationPlan(string $suffix, ?PermitApplication $existing 
 }
 
 /** @return array{source: LegacySource, batch: LegacyImportBatch, owner: BusinessOwner, business: Business, record: LegacyRecord, plan: LegacyApplicationMappingPlan, proposal: LegacyApplicationMappingProposal} */
-function acceptedHistoricalReleaseApplicationPlan(string $suffix): array
+function acceptedHistoricalApplicationPlan(string $suffix, string $status = 'Released'): array
 {
-    $fixture = executableApplicationPlan($suffix, status: 'Released');
+    $fixture = executableApplicationPlan($suffix, status: $status);
     $projector = app(LegacyPermitApplicationProjector::class);
     $projection = $projector->projectHistoricalEvidence($fixture['record']);
 
@@ -126,9 +126,9 @@ function acceptedHistoricalReleaseApplicationPlan(string $suffix): array
             ...($fixture['proposal']->metadata ?? []),
             'projection_mode' => 'historical_evidence',
             'semantic_acceptance' => [
-                'legacy_status' => 'Released',
+                'legacy_status' => $status,
                 'disposition' => 'historical_only',
-                'current_release_authorized' => false,
+                'current_operational_authority' => false,
             ],
         ],
     ]);
@@ -188,7 +188,7 @@ test('a selected ready proposal creates one unnumbered application through an id
 
 test('legacy released identity is preserved without materializing current release authority', function () {
     Storage::fake('local');
-    $fixture = acceptedHistoricalReleaseApplicationPlan('historical-release');
+    $fixture = acceptedHistoricalApplicationPlan('historical-release');
     $execution = app(ExecuteLegacyPermitApplications::class)->handle(
         $fixture['plan'],
         [$fixture['proposal']->id],
@@ -235,6 +235,30 @@ test('legacy released identity is preserved without materializing current releas
         ->and(PaymentSchedule::query()->count())->toBe(0)
         ->and(PermitClearance::query()->count())->toBe(0)
         ->and(PermitApplicationDocument::query()->count())->toBe(0);
+});
+
+test('legacy assessment identity may be preserved without activating municipal processing', function () {
+    $fixture = acceptedHistoricalApplicationPlan('historical-assessment', 'Assessment');
+    app(ExecuteLegacyPermitApplications::class)->handle(
+        $fixture['plan'],
+        [$fixture['proposal']->id],
+        'application-execution-historical-assessment-001',
+    );
+    $application = PermitApplication::query()->sole();
+
+    expect($application->status)->toBe(PermitApplicationStatus::HistoricalEvidence)
+        ->and($application->isHistoricalEvidenceOnly())->toBeTrue()
+        ->and($application->canContinue())->toBeFalse()
+        ->and($application->metadata['legacy_status'])->toBe('Assessment')
+        ->and($application->metadata['historical_semantics'])->toMatchArray([
+            'source_status' => 'Assessment',
+            'source_status_confidence' => 'exact',
+            'semantic_disposition' => 'historical_only',
+            'current_processing_authorized' => false,
+            'operationally_eligible' => false,
+        ])
+        ->and(Assessment::query()->count())->toBe(0)
+        ->and(PaymentSchedule::query()->count())->toBe(0);
 });
 
 test('one run reference cannot be reused for a different proposal selection', function () {

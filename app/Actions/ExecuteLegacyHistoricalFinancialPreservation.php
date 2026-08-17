@@ -25,6 +25,7 @@ class ExecuteLegacyHistoricalFinancialPreservation
     public function __construct(
         private LegacyHistoricalFinancialPreservationProjector $projector,
         private PlanLegacyHistoricalFinancialPreservation $planner,
+        private BuildLegacyHistoricalFinancialProposalIndex $buildProposalIndex,
     ) {}
 
     /** @param list<int> $proposalIds */
@@ -76,6 +77,7 @@ class ExecuteLegacyHistoricalFinancialPreservation
                 ->whereIn('kind', ['payment_schedule', 'payment_schedule_fee', 'payment', 'receipt_claim'])
                 ->orderBy('id')
                 ->get();
+            $proposalsByApplication = $this->buildProposalIndex->handle($financialProposals);
             $before = $this->operationalCounts();
             $execution = $lockedPlan->executions()->create([
                 'run_reference' => $runReference,
@@ -91,7 +93,12 @@ class ExecuteLegacyHistoricalFinancialPreservation
             ]);
 
             foreach ($proposals as $proposal) {
-                $this->preserve($execution, $lockedPlan, $proposal, $financialProposals);
+                $this->preserve(
+                    $execution,
+                    $lockedPlan,
+                    $proposal,
+                    $proposalsByApplication[$proposal->legacy_record_id] ?? collect(),
+                );
             }
 
             $after = $this->operationalCounts();
@@ -114,8 +121,8 @@ class ExecuteLegacyHistoricalFinancialPreservation
         }, 3);
     }
 
-    /** @param Collection<int, LegacyFinancialMappingProposal> $financialProposals */
-    private function preserve(LegacyHistoricalFinancialPreservationExecution $execution, LegacyHistoricalFinancialPreservationPlan $plan, LegacyHistoricalFinancialPreservationProposal $proposal, Collection $financialProposals): void
+    /** @param Collection<int, LegacyFinancialMappingProposal> $applicationProposals */
+    private function preserve(LegacyHistoricalFinancialPreservationExecution $execution, LegacyHistoricalFinancialPreservationPlan $plan, LegacyHistoricalFinancialPreservationProposal $proposal, Collection $applicationProposals): void
     {
         $existing = LegacyHistoricalFinancialPreservedBundle::query()
             ->where('legacy_source_id', $proposal->legacyRecord->legacy_source_id)
@@ -125,7 +132,7 @@ class ExecuteLegacyHistoricalFinancialPreservation
             throw new RuntimeException("Historical application record [{$proposal->legacy_record_id}] is already preserved by another execution.");
         }
 
-        $result = $this->projector->project($plan->financialMappingPlan, $proposal->legacyRecord, $financialProposals);
+        $result = $this->projector->project($plan->financialMappingPlan, $proposal->legacyRecord, $applicationProposals);
         $projection = $result['projection'];
         if ($result['reasons'] !== [] || ! hash_equals($proposal->projection_hash, $this->projector->hash($projection))) {
             throw new RuntimeException("Historical preservation proposal [{$proposal->id}] no longer matches its source projection.");

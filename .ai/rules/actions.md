@@ -2,6 +2,7 @@
 paths:
   - 'app/Actions/*CitizenPermitApplication*.php'
   - 'app/Actions/*Legacy*Document*.php'
+  - 'app/Actions/**'
 ---
 
 # Actions
@@ -11,3 +12,6 @@ Citizen drafts are status=draft, submitted_at=null, and officially unnumbered. F
 
 ## Legacy document objects require verified scope and bytes
 Legacy business documents may enter permit applications only through an operator-authorized reconciliation to one exact accepted application mapping. Verify checksum, size, and MIME before staging, execution, readiness, and rollback. Legacy document status remains observational and must not assert documentary sufficiency or permit authority.
+
+## Preserve lifecycle evidence without operational activation
+Exact legacy lifecycle assertions may be projected into HistoricalEvidence when the supported source status is preserved verbatim and current operational authority remains false. Do not map historical Assessment/Released facts into active processing merely to migrate identity. Existing Released historical projection serialization is fingerprinted evidence; preserve its canonical field order and hash behavior.

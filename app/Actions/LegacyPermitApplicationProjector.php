@@ -136,7 +136,7 @@ class LegacyPermitApplicationProjector
     }
 
     /**
-     * Project an exact legacy Released assertion without materializing current release authority.
+     * Project an exact legacy lifecycle assertion without materializing current operational authority.
      *
      * @return array{
      *   attributes: array<string, mixed>,
@@ -151,11 +151,12 @@ class LegacyPermitApplicationProjector
     public function projectHistoricalEvidence(LegacyRecord $record): array
     {
         $projection = $this->project($record);
+        $sourceStatus = data_get($projection, 'attributes.metadata.legacy_status');
 
-        if (data_get($projection, 'attributes.metadata.legacy_status') !== 'Released') {
+        if (! in_array($sourceStatus, ['Assessment', 'Released'], true)) {
             return [
                 ...$projection,
-                'reasons' => [...$projection['reasons'], 'historical_release_projection_requires_released_source_status'],
+                'reasons' => [...$projection['reasons'], 'historical_evidence_projection_requires_supported_exact_source_status'],
                 'blocked' => true,
             ];
         }
@@ -163,28 +164,42 @@ class LegacyPermitApplicationProjector
         $metadata = $projection['attributes']['metadata'];
         $sourceDeclarations = $record->payload['linesOfBusiness'] ?? null;
         $sourceDeclarations = is_array($sourceDeclarations) ? $sourceDeclarations : [];
-        $metadata['historical_semantics'] = [
-            'schema_version' => 'bpls.legacy-application-historical-semantics.v1',
-            'source_status' => 'Released',
-            'source_status_confidence' => 'exact',
-            'semantic_disposition' => 'historical_only',
-            'release_authority_provenance' => 'unresolved',
-            'current_release_authorized' => false,
-            'current_legal_effect_verified' => false,
-            'current_permit_validity_verified' => false,
-            'operationally_eligible' => false,
-            'source_application_payload_hash' => $record->payload_hash,
-            'source_declarations' => collect($sourceDeclarations)
-                ->filter(fn (mixed $line): bool => is_array($line))
-                ->values()
-                ->map(fn (array $line, int $index): array => [
-                    'source_index' => $index,
-                    'source_fact_sha256' => $this->hashCanonical($line),
-                    'semantic_disposition' => 'historical_only',
-                    'current_line_of_business_identity' => 'unresolved',
-                ])
-                ->all(),
-        ];
+        $sourceDeclarationsEvidence = collect($sourceDeclarations)
+            ->filter(fn (mixed $line): bool => is_array($line))
+            ->values()
+            ->map(fn (array $line, int $index): array => [
+                'source_index' => $index,
+                'source_fact_sha256' => $this->hashCanonical($line),
+                'semantic_disposition' => 'historical_only',
+                'current_line_of_business_identity' => 'unresolved',
+            ])
+            ->all();
+        if ($sourceStatus === 'Released') {
+            $metadata['historical_semantics'] = [
+                'schema_version' => 'bpls.legacy-application-historical-semantics.v1',
+                'source_status' => 'Released',
+                'source_status_confidence' => 'exact',
+                'semantic_disposition' => 'historical_only',
+                'release_authority_provenance' => 'unresolved',
+                'current_release_authorized' => false,
+                'current_legal_effect_verified' => false,
+                'current_permit_validity_verified' => false,
+                'operationally_eligible' => false,
+                'source_application_payload_hash' => $record->payload_hash,
+                'source_declarations' => $sourceDeclarationsEvidence,
+            ];
+        } else {
+            $metadata['historical_semantics'] = [
+                'schema_version' => 'bpls.legacy-application-historical-semantics.v1',
+                'source_status' => $sourceStatus,
+                'source_status_confidence' => 'exact',
+                'semantic_disposition' => 'historical_only',
+                'current_processing_authorized' => false,
+                'operationally_eligible' => false,
+                'source_application_payload_hash' => $record->payload_hash,
+                'source_declarations' => $sourceDeclarationsEvidence,
+            ];
+        }
         $metadata['terminal_state'] = [
             'status' => PermitApplicationStatus::HistoricalEvidence->value,
             'is_terminal' => true,
