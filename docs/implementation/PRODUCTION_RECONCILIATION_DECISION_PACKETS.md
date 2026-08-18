@@ -27,6 +27,8 @@ These packets reduce recurring production exceptions to bounded questions for au
 
 The current municipal identity questions should be reviewed together rather than issued as one-off engineering questions. Counts below are bounded decision views: the 450 and 69 partition the unchanged 519 collision-free-business-source evidence class; the 120 and 12 belong to other disjoint human-frontier cohorts.
 
+Two municipal-facing packets now carry this bundle. `MUNICIPAL_IDENTITY_AND_REGISTRY_REVIEW_PACKET.md` remains unchanged and canonical for the 450 shared-contact and 120 `Group`-owner questions. `MUNICIPAL_PRIORITY_IDENTITY_AND_REGISTRY_COLLISION_REVIEW_PACKET.md` is the second packet for the priority non-contact and registration queues plus authority-routed exceptions; it records no disposition or acceptance.
+
 | Review item | Quantified scope | Exact decision boundary | Effect of an accepted decision |
 | --- | ---: | --- | --- |
 | Shared contact points only | 450 applications / 443 owner proposals / 447 business proposals; 254 hashed email/phone collision groups | Whether shared email/phone alone creates a legal-owner identity conflict; what authoritative evidence validates distinct owners; approving office; quarantine rule | Could advance the class to bounded reference-data and exact owner/business/application mapping review; does not accept mappings or make the class rehearsal-ready |
