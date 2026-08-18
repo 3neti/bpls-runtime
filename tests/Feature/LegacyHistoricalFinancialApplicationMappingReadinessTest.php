@@ -265,6 +265,8 @@ test('human identity frontier isolates collision classes without accepting simil
         ->values();
     $ownerCollisionCandidate = collect($result['candidates'])
         ->firstWhere('application_legacy_id_sha256', hash('sha256', 'application-owner-collision'));
+    $decisionCohorts = collect($result['report']['decision_ready_cohorts'])
+        ->keyBy('key');
 
     expect($result['report']['summary'])
         ->human_identity_application_count->toBe(5)
@@ -276,6 +278,7 @@ test('human identity frontier isolates collision classes without accepting simil
         ->exact_business_source_evidence_unique_proposal_count->toBe(1)
         ->business_or_application_mapping_candidate_count->toBe(0)
         ->group_owner_overlay_count->toBe(2)
+        ->decision_cohort_count->toBe(3)
         ->accepted_mapping_count->toBe(0)
         ->and(data_get($result, 'report.collision_clusters.owner.unique_collision_group_count'))->toBe(1)
         ->and(data_get($result, 'report.collision_clusters.owner.collision_group_size_distribution'))->toBe(['2' => 1])
@@ -292,6 +295,40 @@ test('human identity frontier isolates collision classes without accepting simil
         ->and($groupOwnerCandidates->pluck('business_source_evidence_disposition')->unique()->all())->toBe(['business_source_evidence_quarantined'])
         ->and($ownerCollisionCandidate['business_source_evidence_disposition'])->toBe('business_source_evidence_may_be_prepared_independently')
         ->and($ownerCollisionCandidate['business_mapping_acceptance_status'])->toBe('not_accepted')
+        ->and($ownerCollisionCandidate['decision_cohort_key'])->toBe('collision_free_business_source_owner_decision_non_released')
+        ->and($ownerCollisionCandidate['blocker_categories'])->toContain(
+            'exact_mapping_acceptance',
+            'municipal_identity_decision',
+        )
+        ->and($decisionCohorts->keys()->sort()->values()->all())->toBe([
+            'collision_free_business_source_owner_decision_non_released',
+            'collision_free_owner_business_decision',
+            'group_owner_registry_policy',
+        ])
+        ->and($decisionCohorts->get('collision_free_business_source_owner_decision_non_released'))->toMatchArray([
+            'application_count' => 1,
+            'records_that_would_advance' => 1,
+            'decision_status' => 'characterized_not_ready_for_acceptance',
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+        ])
+        ->and($decisionCohorts->get('collision_free_owner_business_decision'))->toMatchArray([
+            'application_count' => 2,
+            'unique_owner_proposal_count' => 2,
+            'decision_status' => 'ready_for_owner_acceptance_review',
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+        ])
+        ->and($decisionCohorts->get('group_owner_registry_policy'))->toMatchArray([
+            'application_count' => 2,
+            'decision_status' => 'blocked_by_registry_policy',
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+        ])
+        ->and(data_get($result, 'report.fingerprints.decision_cohort_set_sha256'))->toHaveLength(64)
         ->and(LegacyApplicationIdMapping::query()->count())->toBe(0)
         ->and(LegacyIdMapping::query()->count())->toBe(0)
         ->and($result['report']['safety'])->toMatchArray([

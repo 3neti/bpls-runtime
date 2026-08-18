@@ -9,7 +9,18 @@ use Illuminate\Support\Collection;
 
 class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
 {
-    public const SchemaVersion = 'bpls.historical-financial-human-identity-frontier.v2';
+    public const SchemaVersion = 'bpls.historical-financial-human-identity-frontier.v3';
+
+    private const BlockerCategories = [
+        'exact_mapping_acceptance',
+        'municipal_identity_decision',
+        'registry_policy_decision',
+        'reference_data_reconciliation',
+        'treasury_interpretation',
+        'financial_policy_authority',
+        'permit_authority_semantics',
+        'genuine_source_data_contradiction',
+    ];
 
     private const BusinessEvidenceReasons = [
         'owner_mapping_proposal_not_ready',
@@ -74,6 +85,11 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
         $mixedSemanticCandidates = $candidateEvidence
             ->where('shape.semantic_scope', 'identity_collision_with_additional_semantic_reconciliation')
             ->values();
+        $decisionCohorts = $candidateEvidence
+            ->groupBy('decision_cohort_key')
+            ->map(fn (Collection $members, string $key): array => $this->decisionCohort($key, $members))
+            ->sortByDesc('application_count')
+            ->values();
         $evidenceBinding = [
             'source_archive_checksum' => $financialPlan->importBatch->source->archive_checksum,
             'financial_plan_id' => $financialPlan->id,
@@ -110,6 +126,7 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                     'exact_business_source_evidence_unique_proposal_count' => $exactBusinessEvidenceCandidates->pluck('business_proposal_id')->unique()->count(),
                     'business_or_application_mapping_candidate_count' => 0,
                     'class_count' => $classes->count(),
+                    'decision_cohort_count' => $decisionCohorts->count(),
                     'accepted_mapping_count' => 0,
                     'historical_preservation_executed' => false,
                 ],
@@ -135,6 +152,7 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                         'acceptance_status' => 'evidence_only_not_accepted',
                     ],
                 ],
+                'decision_ready_cohorts' => array_values($decisionCohorts->all()),
                 'fingerprints' => [
                     'human_identity_frontier_sha256' => $frontierSha256,
                     'business_source_evidence_subclass_sha256' => $this->hash([
@@ -142,6 +160,15 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                         ...$exactBusinessEvidenceCandidates->map(fn (array $candidate): array => [
                             $candidate['candidate_fingerprint'],
                             $candidate['class_sha256'],
+                        ])->all(),
+                    ]),
+                    'decision_cohort_set_sha256' => $this->hash([
+                        $evidenceBinding,
+                        ...$decisionCohorts->map(fn (array $cohort): array => [
+                            $cohort['key'],
+                            $cohort['cohort_sha256'],
+                            $cohort['application_count'],
+                            $cohort['blocker_categories'],
                         ])->all(),
                     ]),
                 ],
@@ -222,6 +249,16 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
             && $businessProposal?->status->value === 'blocked'
             && in_array('owner_mapping_proposal_not_ready', $businessReasons, true)
             && array_diff($businessReasons, self::BusinessEvidenceReasons) === [];
+        $decisionCohortKey = $this->decisionCohortKey(
+            businessEvidenceMayProceed: $businessEvidenceMayProceed,
+            ownerMayProceed: $ownerMayProceed,
+            shape: $shape,
+        );
+        $blockerCategories = $this->blockerCategories(
+            ownerReasons: $ownerReasons,
+            businessReasons: $businessReasons,
+            applicationReasons: $applicationReasons,
+        );
 
         return [
             'candidate_fingerprint' => $candidate['candidate_fingerprint'],
@@ -241,7 +278,179 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
             'owner_mapping_acceptance_status' => 'not_accepted',
             'business_mapping_acceptance_status' => 'not_accepted',
             'application_mapping_acceptance_status' => 'not_accepted',
+            'decision_cohort_key' => $decisionCohortKey,
+            'blocker_categories' => $blockerCategories,
         ];
+    }
+
+    /** @param array<string, mixed> $shape */
+    private function decisionCohortKey(bool $businessEvidenceMayProceed, bool $ownerMayProceed, array $shape): string
+    {
+        if ($businessEvidenceMayProceed) {
+            return $shape['source_lifecycle_assertion'] === 'Released'
+                ? 'collision_free_business_source_owner_decision_released'
+                : 'collision_free_business_source_owner_decision_non_released';
+        }
+
+        if ($ownerMayProceed) {
+            return 'collision_free_owner_business_decision';
+        }
+
+        if ($shape['group_owner_policy_overlay'] === true) {
+            return 'group_owner_registry_policy';
+        }
+
+        if ($shape['soft_deleted_overlay'] === true) {
+            return 'soft_deleted_registry_policy';
+        }
+
+        if ($shape['semantic_scope'] === 'identity_collision_with_additional_semantic_reconciliation') {
+            return 'identity_collision_with_semantic_exception';
+        }
+
+        return 'compound_owner_business_identity_collision';
+    }
+
+    /**
+     * @param  list<string>  $ownerReasons
+     * @param  list<string>  $businessReasons
+     * @param  list<string>  $applicationReasons
+     * @return list<string>
+     */
+    private function blockerCategories(array $ownerReasons, array $businessReasons, array $applicationReasons): array
+    {
+        $allReasons = [...$ownerReasons, ...$businessReasons, ...$applicationReasons];
+        $categories = ['exact_mapping_acceptance'];
+
+        if (array_intersect($allReasons, self::CollisionReasons) !== []) {
+            $categories[] = 'municipal_identity_decision';
+        }
+
+        if (array_intersect($allReasons, self::RegistryPolicyReasons) !== []
+            || in_array('soft_deleted_application_policy_unresolved', $applicationReasons, true)
+            || in_array('legacy_rejection_state_not_represented', $applicationReasons, true)) {
+            $categories[] = 'registry_policy_decision';
+        }
+
+        if (in_array('reference_data_mapping_required', $businessReasons, true)
+            || in_array('line_of_business_mapping_required', $applicationReasons, true)) {
+            $categories[] = 'reference_data_reconciliation';
+        }
+
+        if (in_array('assessment_and_payment_schedule_migration_required', $applicationReasons, true)) {
+            $categories[] = 'treasury_interpretation';
+        }
+
+        if (in_array('financial_override_reconciliation_required', $applicationReasons, true)) {
+            $categories[] = 'financial_policy_authority';
+        }
+
+        if (in_array('legacy_release_authority_unresolved', $applicationReasons, true)) {
+            $categories[] = 'permit_authority_semantics';
+        }
+
+        if (in_array('legacy_draft_submission_timestamp_conflict', $applicationReasons, true)) {
+            $categories[] = 'genuine_source_data_contradiction';
+        }
+
+        return array_values(array_intersect(self::BlockerCategories, array_unique($categories)));
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $members
+     * @return array<string, mixed>
+     */
+    private function decisionCohort(string $key, Collection $members): array
+    {
+        $blockerOrder = array_flip(self::BlockerCategories);
+        $blockerCategories = $members
+            ->pluck('blocker_categories')
+            ->flatten()
+            ->unique()
+            ->sortBy(fn (string $category): int => $blockerOrder[$category])
+            ->values()
+            ->all();
+        $profile = $this->decisionCohortProfile($key);
+
+        return [
+            'key' => $key,
+            'cohort_sha256' => $this->hash($members
+                ->map(fn (array $candidate): array => [
+                    $candidate['candidate_fingerprint'],
+                    $candidate['class_sha256'],
+                    $candidate['blocker_categories'],
+                ])
+                ->all()),
+            'application_count' => $members->count(),
+            'unique_owner_proposal_count' => $members->pluck('owner_proposal_id')->unique()->count(),
+            'unique_business_proposal_count' => $members->pluck('business_proposal_id')->unique()->count(),
+            'what_is_proven' => $profile['what_is_proven'],
+            'blocker_categories' => $blockerCategories,
+            'accepting_the_cohort_would_mean' => $profile['accepting_the_cohort_would_mean'],
+            'accepting_the_cohort_would_not_mean' => $profile['accepting_the_cohort_would_not_mean'],
+            'records_that_would_advance' => $members->count(),
+            'reversible_rehearsal_that_would_become_possible' => $profile['reversible_rehearsal_that_would_become_possible'],
+            'decision_status' => $profile['decision_status'],
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+        ];
+    }
+
+    /** @return array{what_is_proven: string, accepting_the_cohort_would_mean: string, accepting_the_cohort_would_not_mean: string, reversible_rehearsal_that_would_become_possible: string, decision_status: string} */
+    private function decisionCohortProfile(string $key): array
+    {
+        return match ($key) {
+            'collision_free_business_source_owner_decision_released' => [
+                'what_is_proven' => 'Each source business record, its exact source-owner edge, and its business projection are collision-free; Released remains historical evidence only.',
+                'accepting_the_cohort_would_mean' => 'Authorized reviewers have resolved every legal-owner identity, reference-data crosswalk, and exact owner, business, and application mapping for this frozen cohort.',
+                'accepting_the_cohort_would_not_mean' => 'It would not infer legal identity, activate Released, authorize permit issuance or release, accept fee identity, recalculate history, authorize rehearsal, or authorize production migration.',
+                'reversible_rehearsal_that_would_become_possible' => 'A separately authorized historical-preservation rehearsal could bind the accepted application mappings while retaining Released as non-operational historical evidence.',
+                'decision_status' => 'characterized_not_ready_for_acceptance',
+            ],
+            'collision_free_business_source_owner_decision_non_released' => [
+                'what_is_proven' => 'Each source business record, its exact source-owner edge, and its business projection are collision-free without a Released-authority overlay.',
+                'accepting_the_cohort_would_mean' => 'Authorized reviewers have resolved every legal-owner identity, reference-data crosswalk, and exact owner, business, and application mapping for this frozen cohort.',
+                'accepting_the_cohort_would_not_mean' => 'It would not infer legal identity, accept fee identity, recalculate history, authorize rehearsal, or authorize production migration.',
+                'reversible_rehearsal_that_would_become_possible' => 'A separately authorized historical-preservation rehearsal could bind the accepted application mappings for this non-Released cohort.',
+                'decision_status' => 'characterized_not_ready_for_acceptance',
+            ],
+            'collision_free_owner_business_decision' => [
+                'what_is_proven' => 'The exact source owner proposals are collision-free and can be decided independently from the unresolved business collisions.',
+                'accepting_the_cohort_would_mean' => 'Authorized reviewers accept only the exact owner proposals represented by this cohort.',
+                'accepting_the_cohort_would_not_mean' => 'It would not accept business or application identity, resolve reference data, activate Released, authorize historical-preservation rehearsal, or authorize production migration.',
+                'reversible_rehearsal_that_would_become_possible' => 'A separately authorized registry rehearsal could exercise only the accepted owner proposals; historical-preservation rehearsal would remain blocked by business and application mappings.',
+                'decision_status' => 'ready_for_owner_acceptance_review',
+            ],
+            'group_owner_registry_policy' => [
+                'what_is_proven' => 'Exact source records and ownership edges are preserved, while Group-owner semantics remain isolated from all other frontier records.',
+                'accepting_the_cohort_would_mean' => 'The Municipality has adopted a Group-owner registry disposition and reviewers have accepted the resulting exact identity and reference mappings.',
+                'accepting_the_cohort_would_not_mean' => 'It would not convert a Group label into inferred legal identity, activate Released, authorize rehearsal, or authorize production migration.',
+                'reversible_rehearsal_that_would_become_possible' => 'Only after policy disposition and exact mapping acceptance could a separately authorized reversible registry and historical-preservation rehearsal be prepared.',
+                'decision_status' => 'blocked_by_registry_policy',
+            ],
+            'soft_deleted_registry_policy' => [
+                'what_is_proven' => 'The soft-deleted source histories and their additional lifecycle or financial exception signals are isolated as a distinct cohort.',
+                'accepting_the_cohort_would_mean' => 'Authorized reviewers have recorded the deletion, identity, reference-data, and any financial or lifecycle dispositions for every member.',
+                'accepting_the_cohort_would_not_mean' => 'It would not restore deleted records, discard contradictory evidence, recalculate history, authorize rehearsal, or authorize production migration.',
+                'reversible_rehearsal_that_would_become_possible' => 'Only a separately authorized rehearsal matching the accepted deletion and exception dispositions could proceed.',
+                'decision_status' => 'blocked_by_registry_policy_and_exceptions',
+            ],
+            'identity_collision_with_semantic_exception' => [
+                'what_is_proven' => 'The identity collision is preserved together with an independently visible non-identity semantic exception.',
+                'accepting_the_cohort_would_mean' => 'Authorized reviewers have resolved both exact identity mappings and the separately classified semantic exception.',
+                'accepting_the_cohort_would_not_mean' => 'It would not infer identity, infer financial authority, activate Released, authorize rehearsal, or authorize production migration.',
+                'reversible_rehearsal_that_would_become_possible' => 'Only after both decisions could a separately authorized exception-aware rehearsal be prepared.',
+                'decision_status' => 'blocked_by_identity_and_semantic_exception',
+            ],
+            default => [
+                'what_is_proven' => 'Exact source records, source-owner edges, and collision evidence are preserved without choosing a legal identity.',
+                'accepting_the_cohort_would_mean' => 'Authorized reviewers have resolved the owner and business identity collisions and accepted every required exact mapping and reference crosswalk.',
+                'accepting_the_cohort_would_not_mean' => 'It would not use similarity, activate Released, authorize rehearsal, or authorize production migration.',
+                'reversible_rehearsal_that_would_become_possible' => 'Only after exact decisions and separate authorization could a reversible registry and historical-preservation rehearsal be prepared.',
+                'decision_status' => 'blocked_by_municipal_identity_decision',
+            ],
+        };
     }
 
     /**
