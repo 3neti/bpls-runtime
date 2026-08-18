@@ -448,6 +448,7 @@ function fileSize(sizeBytes: number): string {
                         :href="release(permitApplication.id)"
                         method="post"
                         as="button"
+                        title="Records a refused release attempt as evidence. The permit is not released or issued."
                         :class="buttonVariants({ variant: 'outline' })"
                     >
                         <LockKeyhole />
@@ -622,12 +623,21 @@ function fileSize(sizeBytes: number): string {
                         </dd>
                     </div>
                     <div>
+                        <dt class="text-xs text-muted-foreground">Can issue</dt>
+                        <dd>
+                            {{
+                                permitApplication.permit_artifact.can_issue
+                                    ? 'Yes'
+                                    : 'No'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
                         <dt class="text-xs text-muted-foreground">
-                            Can issue / release
+                            Can release
                         </dt>
                         <dd>
                             {{
-                                permitApplication.permit_artifact.can_issue ||
                                 permitApplication.permit_artifact.can_release
                                     ? 'Yes'
                                     : 'No'
@@ -1673,7 +1683,9 @@ function fileSize(sizeBytes: number): string {
                                     {{ clearance.label }}
                                 </h3>
                                 <Badge variant="secondary" class="capitalize">
-                                    {{ clearance.status.replace('_', ' ') }}
+                                    <span class="sr-only"
+                                        >Clearance status: </span
+                                    >{{ clearance.status.replace('_', ' ') }}
                                 </Badge>
                             </div>
                             <p

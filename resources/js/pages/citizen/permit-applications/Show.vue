@@ -280,6 +280,23 @@ function submissionBoundaryError(): string | undefined {
     return (submissionForm.errors as Record<string, string | undefined>)
         .submission;
 }
+
+function isGenericReferenceFallback(value: string): boolean {
+    return /^(Draft|Application record) #\d+$/.test(value);
+}
+
+function referenceLabel(application: {
+    display_reference: string;
+    application_number: string | null;
+}): string {
+    if (application.application_number) {
+        return 'Application No.';
+    }
+
+    return isGenericReferenceFallback(application.display_reference)
+        ? 'Reference'
+        : 'Tracking reference';
+}
 </script>
 
 <template>
@@ -297,6 +314,9 @@ function submissionBoundaryError(): string | undefined {
                             {{ permitApplication.status.replace('_', ' ') }}
                         </Badge>
                     </div>
+                    <p class="text-xs text-muted-foreground">
+                        {{ referenceLabel(permitApplication) }}
+                    </p>
                     <p class="text-sm text-muted-foreground">
                         {{ permitApplication.business.name }} ·
                         {{ permitApplication.application_year }} new permit
@@ -828,6 +848,7 @@ function submissionBoundaryError(): string | undefined {
                                 clearance.label
                             }}</span>
                             <Badge variant="secondary" class="capitalize">
+                                <span class="sr-only">Clearance status: </span>
                                 {{ clearance.status.replace('_', ' ') }}
                             </Badge>
                         </li>

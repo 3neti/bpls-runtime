@@ -57,6 +57,33 @@ function savedDate(value: string | null): string {
 function paginationLabel(label: string): string {
     return label.replace('&laquo;', '‹').replace('&raquo;', '›');
 }
+
+function isGenericReferenceFallback(value: string): boolean {
+    return /^(Draft|Application record) #\d+$/.test(value);
+}
+
+function referenceLabel(permitApplication: {
+    display_reference: string;
+    application_number: string | null;
+}): string {
+    if (permitApplication.application_number) {
+        return 'Application No.';
+    }
+
+    return isGenericReferenceFallback(permitApplication.display_reference)
+        ? 'Reference'
+        : 'Tracking reference';
+}
+
+function referenceValue(permitApplication: {
+    display_reference: string;
+    application_number: string | null;
+}): string {
+    return (
+        permitApplication.application_number ??
+        permitApplication.display_reference
+    );
+}
 </script>
 
 <template>
@@ -112,7 +139,10 @@ function paginationLabel(label: string): string {
                             </Badge>
                         </div>
                         <p class="mt-1 text-sm text-muted-foreground">
-                            {{ permitApplication.display_reference }} ·
+                            <span class="font-medium text-foreground"
+                                >{{ referenceLabel(permitApplication) }}:</span
+                            >
+                            {{ referenceValue(permitApplication) }} ·
                             {{ permitApplication.activity_count }}
                             {{
                                 permitApplication.activity_count === 1

@@ -185,7 +185,11 @@ function label(value: string): string {
                         size="sm"
                         class="w-fit px-0"
                     >
-                        <Link :href="assessmentShow(paymentSchedule.assessment.id)">
+                        <Link
+                            :href="
+                                assessmentShow(paymentSchedule.assessment.id)
+                            "
+                        >
                             <ArrowLeft />
                             Back
                         </Link>
@@ -224,7 +228,9 @@ function label(value: string): string {
                     </div>
                     <div class="text-sm text-muted-foreground capitalize">
                         {{ paymentSchedule.permit_application.type }} ·
-                        {{ paymentSchedule.permit_application.application_year }}
+                        {{
+                            paymentSchedule.permit_application.application_year
+                        }}
                     </div>
                 </div>
                 <div
@@ -278,8 +284,8 @@ function label(value: string): string {
                             Record Collection
                         </h2>
                         <p class="text-xs text-muted-foreground">
-                            Over-the-counter collection only. Receipt issuance is
-                            handled separately below.
+                            Over-the-counter collection only. Receipt issuance
+                            is handled separately below.
                         </p>
                     </div>
                 </div>
@@ -308,7 +314,7 @@ function label(value: string): string {
                             id="method"
                             name="method"
                             required
-                            class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                            class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <option
                                 v-for="method in collectionMethods"
@@ -338,7 +344,11 @@ function label(value: string): string {
                     <div class="md:col-span-5">
                         <Button type="submit" :disabled="processing">
                             <Banknote />
-                            {{ processing ? 'Recording...' : 'Record Collection' }}
+                            {{
+                                processing
+                                    ? 'Recording...'
+                                    : 'Record Collection'
+                            }}
                         </Button>
                     </div>
                 </Form>
@@ -399,9 +409,7 @@ function label(value: string): string {
                         </dd>
                     </div>
                     <div>
-                        <dt class="text-xs text-muted-foreground">
-                            Surcharge
-                        </dt>
+                        <dt class="text-xs text-muted-foreground">Surcharge</dt>
                         <dd>
                             {{
                                 paymentSchedule.payment_policy_boundary
@@ -424,12 +432,23 @@ function label(value: string): string {
                     </div>
                     <div>
                         <dt class="text-xs text-muted-foreground">
-                            PIL / deficiency
+                            PIL validation
                         </dt>
                         <dd>
                             {{
                                 paymentSchedule.payment_policy_boundary
-                                    .can_validate_pil ||
+                                    .can_validate_pil
+                                    ? 'Active'
+                                    : 'Policy boundary'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Deficiency tax
+                        </dt>
+                        <dd>
+                            {{
                                 paymentSchedule.payment_policy_boundary
                                     .can_calculate_deficiency_tax
                                     ? 'Active'
@@ -461,7 +480,8 @@ function label(value: string): string {
                         <dd class="mt-2 flex flex-wrap gap-2">
                             <Badge
                                 v-for="calculation in paymentSchedule
-                                    .payment_policy_boundary.blocked_calculations"
+                                    .payment_policy_boundary
+                                    .blocked_calculations"
                                 :key="calculation"
                                 variant="secondary"
                                 class="capitalize"
@@ -478,7 +498,8 @@ function label(value: string): string {
                             <ul class="grid gap-1">
                                 <li
                                     v-for="gap in paymentSchedule
-                                        .payment_policy_boundary.unresolved_policy"
+                                        .payment_policy_boundary
+                                        .unresolved_policy"
                                     :key="gap"
                                 >
                                     {{ gap }}
@@ -505,8 +526,8 @@ function label(value: string): string {
                             Online payment boundary
                         </h2>
                         <p class="text-xs text-muted-foreground">
-                            Electronic payment and reconciliation are not
-                            active in this rescue path.
+                            Electronic payment and reconciliation are not active
+                            in this rescue path.
                         </p>
                     </div>
                 </div>
@@ -716,14 +737,18 @@ function label(value: string): string {
                                 </td>
                                 <td class="px-4 py-3 align-top">
                                     <Badge variant="outline" class="capitalize">
-                                        {{ collection.status.replace('_', ' ') }}
+                                        {{
+                                            collection.status.replace('_', ' ')
+                                        }}
                                     </Badge>
                                 </td>
                                 <td class="px-4 py-3 align-top capitalize">
                                     {{ collection.method.replace('_', ' ') }}
                                 </td>
                                 <td class="px-4 py-3 align-top">
-                                    {{ collection.payer_name ?? 'Not recorded' }}
+                                    {{
+                                        collection.payer_name ?? 'Not recorded'
+                                    }}
                                 </td>
                                 <td class="px-4 py-3 align-top">
                                     {{
@@ -749,7 +774,11 @@ function label(value: string): string {
                                         </Badge>
                                         <Link
                                             v-if="can.view_receipts"
-                                            :href="receiptShow(collection.receipt.id)"
+                                            :href="
+                                                receiptShow(
+                                                    collection.receipt.id,
+                                                )
+                                            "
                                             class="mt-1 block w-fit font-mono text-xs text-primary underline-offset-4 hover:underline"
                                         >
                                             {{
@@ -786,7 +815,9 @@ function label(value: string): string {
                                             collection.status ===
                                                 'pending_receipt'
                                         "
-                                        v-bind="receiptStore.form(collection.id)"
+                                        v-bind="
+                                            receiptStore.form(collection.id)
+                                        "
                                         v-slot="{ errors, processing }"
                                         class="grid min-w-72 gap-2"
                                     >

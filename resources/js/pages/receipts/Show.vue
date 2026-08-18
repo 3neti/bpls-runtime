@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
 import { ArrowLeft, Ban, FileText, LockKeyhole, Printer } from '@lucide/vue';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import AppLayout from '@/layouts/AppLayout.vue';
 import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import {
     pdf as receiptPdf,
     show as receiptShow,
     voidReceipt as receiptVoidReceipt,
 } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
 type ReceiptAllocation = {
@@ -110,6 +110,10 @@ function money(amountCents: number): string {
 
 function printReceipt(): void {
     window.print();
+}
+
+function label(value: string): string {
+    return value.replaceAll('_', ' ');
 }
 </script>
 
@@ -457,7 +461,7 @@ function printReceipt(): void {
                                 Status
                             </dt>
                             <dd class="capitalize">
-                                {{ receipt.void_boundary.status }}
+                                {{ label(receipt.void_boundary.status) }}
                             </dd>
                         </div>
                         <div>

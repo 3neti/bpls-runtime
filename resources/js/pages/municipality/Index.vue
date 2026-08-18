@@ -7,7 +7,6 @@ import {
     CircleAlert,
     Database,
     FileSignature,
-    Link2,
     ShieldAlert,
     UserRoundCog,
 } from '@lucide/vue';
@@ -371,8 +370,18 @@ function effectiveTerm(official: Official): string {
                             <Badge variant="outline">
                                 {{ label(official.configuration_status) }}
                             </Badge>
-                            <Badge variant="secondary">
-                                Signatory authority unresolved
+                            <Badge
+                                :variant="
+                                    official.authorized_signatory
+                                        ? 'default'
+                                        : 'secondary'
+                                "
+                            >
+                                {{
+                                    official.authorized_signatory
+                                        ? 'Authorized signatory'
+                                        : 'Signatory authority unresolved'
+                                }}
                             </Badge>
                         </div>
                     </article>
@@ -460,10 +469,60 @@ function effectiveTerm(official: Official): string {
                                     }}
                                 </td>
                                 <td class="px-4 py-3">
-                                    <Badge variant="outline">
-                                        <Link2 />
+                                    <Badge
+                                        v-if="
+                                            !association.authorizes_signature &&
+                                            !association.authorizes_issuance &&
+                                            !association.authorizes_legal_effect
+                                        "
+                                        variant="outline"
+                                    >
                                         Does not authorize
                                     </Badge>
+                                    <dl v-else class="grid gap-1 text-xs">
+                                        <div
+                                            class="flex items-center justify-between gap-3"
+                                        >
+                                            <dt class="text-muted-foreground">
+                                                Signature
+                                            </dt>
+                                            <dd class="font-medium">
+                                                {{
+                                                    association.authorizes_signature
+                                                        ? 'Yes'
+                                                        : 'No'
+                                                }}
+                                            </dd>
+                                        </div>
+                                        <div
+                                            class="flex items-center justify-between gap-3"
+                                        >
+                                            <dt class="text-muted-foreground">
+                                                Issuance
+                                            </dt>
+                                            <dd class="font-medium">
+                                                {{
+                                                    association.authorizes_issuance
+                                                        ? 'Yes'
+                                                        : 'No'
+                                                }}
+                                            </dd>
+                                        </div>
+                                        <div
+                                            class="flex items-center justify-between gap-3"
+                                        >
+                                            <dt class="text-muted-foreground">
+                                                Legal effect
+                                            </dt>
+                                            <dd class="font-medium">
+                                                {{
+                                                    association.authorizes_legal_effect
+                                                        ? 'Yes'
+                                                        : 'No'
+                                                }}
+                                            </dd>
+                                        </div>
+                                    </dl>
                                 </td>
                             </tr>
                         </tbody>
