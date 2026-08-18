@@ -118,7 +118,7 @@ final class ManualCollectionReceiptVisibilityScenario
 
         $operator = $actors['operator'] ?? throw new RuntimeException('Scenario operator actor was not resolved.');
         $isCitizenOriginated = $this->isCitizenOriginated($scenario->key);
-        $isNelsonWalkthrough = $scenario->key === 'nelson_walkthrough';
+        $isNelsonWalkthrough = $this->isStakeholderWalkthrough($scenario->key);
         $applicant = $isCitizenOriginated
             ? ($actors['applicant'] ?? throw new RuntimeException('Scenario applicant actor was not resolved.'))
             : null;
@@ -790,7 +790,7 @@ final class ManualCollectionReceiptVisibilityScenario
         $timeline = $this->buildPermitApplicationTimeline->handle($permitApplication);
         $timelineKeys = collect($timeline)->pluck('key')->all();
         $isCitizenOriginated = $this->isCitizenOriginated((string) ($manifest['scenario']['key'] ?? ''));
-        $isNelsonWalkthrough = ($manifest['scenario']['key'] ?? null) === 'nelson_walkthrough';
+        $isNelsonWalkthrough = $this->isStakeholderWalkthrough((string) ($manifest['scenario']['key'] ?? ''));
         $applicant = $isCitizenOriginated
             ? User::query()->findOrFail((int) data_get($manifest, 'actors.applicant.id'))
             : null;
@@ -1198,7 +1198,7 @@ final class ManualCollectionReceiptVisibilityScenario
     private function storyboard(LifecycleScenarioDefinition $scenario, string $runId, PermitApplication $permitApplication, PaymentSchedule $paymentSchedule, TreasuryCollection $collection, Receipt $receipt): array
     {
         $isCitizenOriginated = $this->isCitizenOriginated($scenario->key);
-        $isNelsonWalkthrough = $scenario->key === 'nelson_walkthrough';
+        $isNelsonWalkthrough = $this->isStakeholderWalkthrough($scenario->key);
         $isUnifiedPermitLifecycle = $isCitizenOriginated || $scenario->key === 'new_permit_lifecycle_authority_boundary';
 
         return [
@@ -1324,6 +1324,15 @@ final class ManualCollectionReceiptVisibilityScenario
         return in_array($scenarioKey, [
             'citizen_new_permit_lifecycle_authority_boundary',
             'nelson_walkthrough',
+            'stakeholder_preview_cycle_1',
+        ], true);
+    }
+
+    private function isStakeholderWalkthrough(string $scenarioKey): bool
+    {
+        return in_array($scenarioKey, [
+            'nelson_walkthrough',
+            'stakeholder_preview_cycle_1',
         ], true);
     }
 

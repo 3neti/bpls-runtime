@@ -37,6 +37,7 @@ const supportedScenarios = [
     'manual_collection_receipt_visibility',
     'municipality_configuration_visibility',
     'nelson_walkthrough',
+    'stakeholder_preview_cycle_1',
     'storyboard_terminal_state_visibility',
     'permit_application_cancelled_visibility',
     'amendment_permit_lifecycle_foundation',
@@ -58,6 +59,10 @@ const email = process.env.LIFECYCLE_BROWSER_EMAIL;
 const password = process.env.LIFECYCLE_BROWSER_PASSWORD;
 const operatorEmail = process.env.LIFECYCLE_BROWSER_OPERATOR_EMAIL;
 const operatorPassword = process.env.LIFECYCLE_BROWSER_OPERATOR_PASSWORD;
+const bploEmail = process.env.LIFECYCLE_BROWSER_BPLO_EMAIL;
+const bploPassword = process.env.LIFECYCLE_BROWSER_BPLO_PASSWORD;
+const treasuryEmail = process.env.LIFECYCLE_BROWSER_TREASURY_EMAIL;
+const treasuryPassword = process.env.LIFECYCLE_BROWSER_TREASURY_PASSWORD;
 
 if (!email || !password) {
     fail(
@@ -69,11 +74,25 @@ if (
     [
         'citizen_new_permit_lifecycle_authority_boundary',
         'nelson_walkthrough',
+        'stakeholder_preview_cycle_1',
     ].includes(manifest.scenario.key) &&
     (!operatorEmail || !operatorPassword)
 ) {
     fail(
         'LIFECYCLE_BROWSER_OPERATOR_EMAIL and LIFECYCLE_BROWSER_OPERATOR_PASSWORD are required for citizen milestone staff evidence.',
+    );
+}
+
+if (
+    manifest.scenario.key === 'stakeholder_preview_cycle_1' &&
+    (!bploEmail ||
+        !bploPassword ||
+        !treasuryEmail ||
+        !treasuryPassword ||
+        !manifest.preview)
+) {
+    fail(
+        'Stakeholder preview requires BPLO and Treasury runtime credentials plus the prepared preview composition.',
     );
 }
 
@@ -111,6 +130,7 @@ const rolePermissionEvidence = {};
 const userDirectoryEvidence = {};
 const municipalityConfigurationEvidence = {};
 const nelsonWalkthroughEvidence = {};
+const stakeholderPreviewEvidence = {};
 
 let browser;
 
@@ -150,6 +170,7 @@ try {
             'citizen_permit_authority_review_visibility',
             'citizen_permit_processing_visibility',
             'nelson_walkthrough',
+            'stakeholder_preview_cycle_1',
         ].includes(manifest.scenario.key)
     ) {
         await inspectCitizenPermitProcessing(page, baseUrl);
@@ -160,6 +181,7 @@ try {
             'citizen_new_permit_lifecycle_authority_boundary',
             'citizen_permit_authority_review_visibility',
             'nelson_walkthrough',
+            'stakeholder_preview_cycle_1',
         ].includes(manifest.scenario.key)
     ) {
         await inspectCitizenPermitAuthorityReview(page, baseUrl);
@@ -169,6 +191,7 @@ try {
         [
             'citizen_new_permit_lifecycle_authority_boundary',
             'nelson_walkthrough',
+            'stakeholder_preview_cycle_1',
         ].includes(manifest.scenario.key)
     ) {
         await context.clearCookies();
@@ -266,6 +289,7 @@ try {
             'new_permit_lifecycle_authority_boundary',
             'manual_collection_receipt_visibility',
             'nelson_walkthrough',
+            'stakeholder_preview_cycle_1',
         ].includes(manifest.scenario.key)
     ) {
         await inspectManualReceiptPaymentScheduleQueue(page, baseUrl);
@@ -289,10 +313,18 @@ try {
         await inspectManualReceiptMobile(page, baseUrl);
     }
 
-    if (manifest.scenario.key === 'nelson_walkthrough') {
+    if (
+        ['nelson_walkthrough', 'stakeholder_preview_cycle_1'].includes(
+            manifest.scenario.key,
+        )
+    ) {
         await inspectNelsonAuthorityConfiguration(page, baseUrl);
         await inspectNelsonMigrationEvidence(page);
         await inspectNelsonStakeholderSummary(page);
+    }
+
+    if (manifest.scenario.key === 'stakeholder_preview_cycle_1') {
+        await inspectStakeholderPreviewComposition(page, context, baseUrl);
     }
 } catch (error) {
     checks.push(
@@ -352,6 +384,7 @@ const report = {
     user_directory: userDirectoryEvidence,
     municipality_configuration: municipalityConfigurationEvidence,
     nelson_walkthrough: nelsonWalkthroughEvidence,
+    stakeholder_preview: stakeholderPreviewEvidence,
     artifacts: {
         screenshots,
     },
@@ -376,6 +409,380 @@ fs.writeFileSync(
 
 if (!passed) {
     process.exit(1);
+}
+
+async function inspectStakeholderPreviewComposition(
+    targetPage,
+    targetContext,
+    targetBaseUrl,
+) {
+    const preview = manifest.preview;
+    const managementPages = [
+        ['report-catalog', preview.urls.report_catalog, 'h1', 'Reports'],
+        ['users', preview.urls.users, '[data-testid="user-directory"]', null],
+        [
+            'roles',
+            preview.urls.roles,
+            '[data-testid="role-permission-matrix"]',
+            null,
+        ],
+        [
+            'municipality',
+            preview.urls.municipality,
+            '[data-testid="municipality-authority-boundary"]',
+            null,
+        ],
+        [
+            'fee-rules',
+            preview.urls.fee_rules,
+            '[data-testid="revenue-code-provision-register"]',
+            null,
+        ],
+        [
+            'billing-groups',
+            preview.urls.billing_groups,
+            '[data-testid="billing-group-policy-boundary"]',
+            null,
+        ],
+        [
+            'billing-group-detail',
+            preview.urls.billing_group_detail,
+            '[data-testid="billing-group-financial-readiness"]',
+            null,
+        ],
+        [
+            'billing-group-abstract',
+            preview.urls.billing_group_abstract,
+            '[data-testid="billing-group-abstract-status"]',
+            null,
+        ],
+    ];
+    const authorityPages = [
+        [
+            'all-abstract',
+            manifest.resources.all_abstract_report_url,
+            '[data-testid="all-abstract-boundary-status"]',
+        ],
+        [
+            'cmci-ldcs',
+            manifest.resources.cmci_ldcs_report_url,
+            '[data-testid="cmci-boundary-status"]',
+        ],
+        [
+            'plds',
+            manifest.resources.plds_report_url,
+            '[data-testid="plds-boundary-status"]',
+        ],
+        [
+            'bsp',
+            manifest.resources.bsp_report_url,
+            '[data-testid="bsp-boundary-status"]',
+        ],
+        [
+            'dnfbp',
+            manifest.resources.annex_c_dnfbp_report_url,
+            '[data-testid="dnfbp-boundary-status"]',
+        ],
+    ];
+
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+    const catalogFamilies = await targetPage
+        .locator('[data-report-family]')
+        .count()
+        .catch(() => 0);
+    const authorityCatalogEntries = await targetPage
+        .locator('[data-report-family="authority_pending"] [data-report-key]')
+        .count()
+        .catch(() => 0);
+
+    for (const [key, relativeUrl, selector, expectedText] of managementPages) {
+        await inspectPreviewPage(
+            targetPage,
+            targetBaseUrl,
+            `management-${key}`,
+            relativeUrl,
+            selector,
+            expectedText,
+            true,
+        );
+    }
+
+    for (const [key, relativeUrl, selector] of authorityPages) {
+        await inspectPreviewPage(
+            targetPage,
+            targetBaseUrl,
+            `authority-${key}`,
+            relativeUrl,
+            selector,
+            null,
+            true,
+        );
+    }
+
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+    await targetPage.goto(`${targetBaseUrl}${preview.urls.report_catalog}`, {
+        waitUntil: 'networkidle',
+    });
+    const reportCatalogFamilyCount = await targetPage
+        .locator('[data-report-family]')
+        .count();
+    const reportCatalogAuthorityCount = await targetPage
+        .locator('[data-report-family="authority_pending"] [data-report-key]')
+        .count();
+    checks.push(
+        check(
+            'preview-report-catalog-families',
+            'Report catalog distinguishes operational, management, and authority-pending families',
+            3,
+            reportCatalogFamilyCount,
+        ),
+        check(
+            'preview-report-catalog-authority-pending',
+            'Report catalog exposes every implemented authority-pending family including billing-group abstract selection',
+            6,
+            reportCatalogAuthorityCount,
+        ),
+    );
+
+    await targetContext.clearCookies();
+    await authenticate(targetPage, targetBaseUrl, bploEmail, bploPassword);
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+    await inspectPreviewPage(
+        targetPage,
+        targetBaseUrl,
+        'bplo-application',
+        manifest.resources.permit_application_url,
+        'h1',
+        null,
+        false,
+    );
+    const bploNavigation = {
+        permit_applications: await targetPage
+            .getByText('Permit Applications', { exact: true })
+            .first()
+            .isVisible()
+            .catch(() => false),
+        taxes_and_fees: await targetPage
+            .getByText('Taxes & Fees', { exact: true })
+            .first()
+            .isVisible()
+            .catch(() => false),
+        users: await targetPage
+            .getByText('Users', { exact: true })
+            .first()
+            .isVisible()
+            .catch(() => false),
+        treasury_receipts: await targetPage
+            .getByText('Receipts', { exact: true })
+            .first()
+            .isVisible()
+            .catch(() => false),
+    };
+    checks.push(
+        check(
+            'preview-bplo-navigation-permissions',
+            'BPLO preview navigation agrees with its explicit effective permissions',
+            {
+                permit_applications: true,
+                taxes_and_fees: true,
+                users: false,
+                treasury_receipts: false,
+            },
+            bploNavigation,
+        ),
+    );
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await inspectPreviewPage(
+        targetPage,
+        targetBaseUrl,
+        'bplo-application-mobile',
+        manifest.resources.permit_application_url,
+        'h1',
+        null,
+        false,
+    );
+
+    await targetContext.clearCookies();
+    await authenticate(
+        targetPage,
+        targetBaseUrl,
+        treasuryEmail,
+        treasuryPassword,
+    );
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+    await inspectPreviewPage(
+        targetPage,
+        targetBaseUrl,
+        'treasury-schedule',
+        manifest.resources.payment_schedule_url,
+        'h1',
+        null,
+        false,
+    );
+    await inspectPreviewPage(
+        targetPage,
+        targetBaseUrl,
+        'treasury-receipt',
+        manifest.resources.receipt_url,
+        'h1',
+        null,
+        false,
+    );
+    const treasuryNavigation = {
+        payment_schedules: await targetPage
+            .getByText('Payment Schedules', { exact: true })
+            .first()
+            .isVisible()
+            .catch(() => false),
+        receipts: await targetPage
+            .getByText('Receipts', { exact: true })
+            .first()
+            .isVisible()
+            .catch(() => false),
+        report_catalog: await targetPage
+            .getByText('Report Catalog', { exact: true })
+            .first()
+            .isVisible()
+            .catch(() => false),
+        users: await targetPage
+            .getByText('Users', { exact: true })
+            .first()
+            .isVisible()
+            .catch(() => false),
+    };
+    checks.push(
+        check(
+            'preview-treasury-navigation-permissions',
+            'Treasury preview navigation agrees with its explicit effective permissions',
+            {
+                payment_schedules: true,
+                receipts: true,
+                report_catalog: true,
+                users: false,
+            },
+            treasuryNavigation,
+        ),
+    );
+    await targetPage.setViewportSize({ width: 390, height: 844 });
+    await inspectPreviewPage(
+        targetPage,
+        targetBaseUrl,
+        'treasury-receipt-mobile',
+        manifest.resources.receipt_url,
+        'h1',
+        null,
+        false,
+    );
+
+    Object.assign(stakeholderPreviewEvidence, {
+        data_classification: preview.data_classification,
+        production_migration_executed: preview.production_migration_executed,
+        role_mapping_status: preview.role_mapping_status,
+        account_count: Object.keys(preview.accounts).length,
+        report_catalog_family_count: reportCatalogFamilyCount,
+        authority_pending_catalog_count: reportCatalogAuthorityCount,
+        bplo_navigation: bploNavigation,
+        treasury_navigation: treasuryNavigation,
+        prepared_catalog_family_count_before_navigation: catalogFamilies,
+        prepared_authority_catalog_count_before_navigation:
+            authorityCatalogEntries,
+    });
+    checks.push(
+        check(
+            'preview-synthetic-production-separation',
+            'Preview data remains synthetic and the production migration campaign remains unexecuted',
+            {
+                data_classification: 'synthetic_local_demo_only',
+                production_migration_executed: false,
+            },
+            {
+                data_classification: preview.data_classification,
+                production_migration_executed:
+                    preview.production_migration_executed,
+            },
+        ),
+    );
+}
+
+async function inspectPreviewPage(
+    targetPage,
+    targetBaseUrl,
+    key,
+    relativeUrl,
+    selector,
+    expectedText,
+    verifyBothViewports,
+) {
+    const viewports = verifyBothViewports
+        ? [
+              ['desktop', 1440, 900],
+              ['mobile', 390, 844],
+          ]
+        : [
+              [
+                  targetPage.viewportSize()?.width === 390
+                      ? 'mobile'
+                      : 'desktop',
+                  targetPage.viewportSize()?.width ?? 1440,
+                  targetPage.viewportSize()?.height ?? 900,
+              ],
+          ];
+
+    for (const [viewportName, width, height] of viewports) {
+        await targetPage.setViewportSize({ width, height });
+        const response = await targetPage.goto(
+            `${targetBaseUrl}${relativeUrl}`,
+            {
+                waitUntil: 'networkidle',
+            },
+        );
+        const target = targetPage.locator(selector).first();
+        await target.waitFor();
+        const visible = await target.isVisible();
+        const textMatches = expectedText
+            ? (await target.textContent())?.trim() === expectedText
+            : true;
+        const horizontalOverflow = await targetPage.evaluate(
+            () =>
+                document.documentElement.scrollWidth >
+                document.documentElement.clientWidth + 1,
+        );
+        const evidence = {
+            url: relativeUrl,
+            viewport: viewportName,
+            status: response?.status() ?? null,
+            visible,
+            horizontal_overflow: horizontalOverflow,
+        };
+        checks.push(
+            check(
+                `preview-${key}-${viewportName}-status`,
+                `${key} opens through the real application route on ${viewportName}`,
+                200,
+                response?.status() ?? null,
+                evidence,
+            ),
+            check(
+                `preview-${key}-${viewportName}-visible`,
+                `${key} keeps its critical boundary or content visible on ${viewportName}`,
+                true,
+                visible && textMatches,
+                evidence,
+            ),
+            check(
+                `preview-${key}-${viewportName}-overflow`,
+                `${key} has no page-level horizontal overflow on ${viewportName}`,
+                false,
+                horizontalOverflow,
+                evidence,
+            ),
+        );
+        await screenshot(
+            targetPage,
+            `preview-${key}-${viewportName}`,
+            `browser/screenshots/preview-${key}-${viewportName}.png`,
+        );
+    }
 }
 
 async function inspectNelsonAuthorityConfiguration(targetPage, targetBaseUrl) {
