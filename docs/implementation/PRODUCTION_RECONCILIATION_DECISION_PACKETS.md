@@ -23,6 +23,21 @@ These packets reduce recurring production exceptions to bounded questions for au
 | 9 | Fee-override identity | One override has no surviving fee parent; eight others remain structurally linked. |
 | 10 | Unreferenced stored objects and media retention | Retention and ownership authority are required before object migration or exclusion. |
 
+## Current Migration Acceptance Review Bundle
+
+The current municipal identity questions should be reviewed together rather than issued as one-off engineering questions. Counts below are bounded decision views: the 450 and 69 partition the unchanged 519 collision-free-business-source evidence class; the 120 and 12 belong to other disjoint human-frontier cohorts.
+
+| Review item | Quantified scope | Exact decision boundary | Effect of an accepted decision |
+| --- | ---: | --- | --- |
+| Shared contact points only | 450 applications / 443 owner proposals / 447 business proposals; 254 hashed email/phone collision groups | Whether shared email/phone alone creates a legal-owner identity conflict; what authoritative evidence validates distinct owners; approving office; quarantine rule | Could advance the class to bounded reference-data and exact owner/business/application mapping review; does not accept mappings or make the class rehearsal-ready |
+| Non-contact identity signal present | 69 applications / 68 owner proposals / 68 business proposals | Required authoritative legal-owner evidence and record- or collision-group disposition; current production evidence observes `name_birth` | Evidence-backed members could advance individually; a contact-point policy alone cannot advance this class |
+| Legacy `ownerType = Group` | 120 applications / 110 owner proposals / 119 business proposals | Meaning of `Group`, applicable legal-owner categories, evidence, authority, and insufficient/contradictory-evidence disposition | Policy acceptance only; exact owner proposals and every dependent mapping remain separate decisions |
+| Collision-free owner proposals | 12 applications / nine owner proposals | Accept or reject the nine exact owner proposals independently of unresolved business collisions | Makes only an owner-level registry rehearsal eligible for separate authorization; historical preservation remains blocked |
+
+The 120-case Organizational-Owner Registry-Policy Decision Packet remains the controlling detailed packet for `Group`. It is preserved unchanged and must not be heuristically subdivided without new exact source evidence.
+
+Municipal identity evidence-class set SHA-256: `5aed72372bb3cf5260946196f23ab6f5e126eff6e1918b8947fcdfa9b14699c5`. Contact-signal-only class SHA-256: `2833fc6ff6fd3d9cc581f1755bb1982aea7becc29d36b64a3d78380276e0d93b`. Non-contact-identity-signal class SHA-256: `3c6e7efda2352b40d6d6a25522d3c7ebd1b1a1cffceb79664a0bbb5e329b055d`.
+
 ## Packet 1: Clearance-Type Replacement
 
 **Issue:** 110 historical clearance rows reference five clearance-type identifiers absent from the current source table.
@@ -93,6 +108,27 @@ These packets reduce recurring production exceptions to bounded questions for au
 
 **Authority / approver:** BPLO registry custodian and municipal data-privacy/records authority.
 
+### Historical-Preservation Frontier Decision
+
+Read-only v4 run `prod-human-identity-frontier-20260818-004` narrows the collision question for the 519 collision-free-business-source applications without changing the frozen frontier or seven decision cohorts.
+
+The first class contains 450 applications, 443 owner proposals, and 447 business proposals. Every class member has source-owner collision signals limited to normalized email and/or phone; no non-contact collision signal is present on that member. The class includes 442 historical `Released` applications and eight non-`Released` applications. Its 254 hashed contact groups comprise 125 email and 129 phone groups. Group counts may overlap the second class and are not additive.
+
+The second class contains 69 applications, 68 owner proposals, and 68 business proposals. Every member carries at least one non-contact identity signal; the current production evidence observes `name_birth`. It includes 68 historical `Released` applications and one non-`Released` application. These signals remain collision evidence only.
+
+**Consolidated decision required for the 450:**
+
+1. Does shared email or phone, without a non-contact identity collision signal, require a legal-owner conflict under actual Ipil registry practice?
+2. What authoritative records are sufficient to establish that two source owner records sharing a contact point are distinct legal owners?
+3. Who may approve that determination and the later exact mapping: BPLO registry custodian, municipal records/privacy authority, legal officer, or a defined combination?
+4. Must the rule be applied by collision group, by source owner record, or to a precisely defined evidence class?
+5. When evidence is missing or contradictory, must the affected source owner and dependent applications remain quarantined?
+6. After that policy is adopted, may engineering prepare exact owner-mapping proposals for compliant members, with business/application mappings and reference data still separately unaccepted?
+
+An accepted decision would not make email/phone identity authority, merge or split owners, accept any mapping, activate historical `Released`, infer fee identity, recalculate history, authorize rehearsal, mutate production, or authorize migration/cutover. Even compliant members would still require reference-data reconciliation, exact owner/business/application mapping acceptance, cohort freeze, and separate rehearsal authorization.
+
+For the 69, a contact-point rule is insufficient. Authorized reviewers must reconcile the person-oriented or other non-contact evidence against authoritative legal-owner records before an exact disposition can be proposed.
+
 ## Packet 4: Business Collision Groups
 
 **Issue:** Registration-number and owner-plus-name signals identify possible duplicate business records without proving equivalence.
@@ -136,6 +172,8 @@ These packets reduce recurring production exceptions to bounded questions for au
 **Decision required:** Confirm how group-owner records map to the Municipality's accepted legal-owner categories.
 
 **Authority / approver:** BPLO registry authority with municipal legal guidance where required.
+
+The detailed controlling packet for the 120-application historical-preservation subset is `docs/implementation/ORGANIZATIONAL_OWNER_REGISTRY_POLICY_DECISION_PACKET.md`. Its cohort remains quarantined at SHA-256 `517318c19a152a483a7285467aeaaf8f32a0e372571ca0a1f703ec08f5581f74`; nothing in the contact-point review changes or subdivides that cohort.
 
 ## Packet 6: Soft-Deleted And Blacklisted Registry Records
 

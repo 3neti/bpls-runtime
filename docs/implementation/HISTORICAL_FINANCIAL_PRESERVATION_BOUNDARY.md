@@ -221,6 +221,12 @@ Read-only human-identity frontier run `prod-human-identity-frontier-20260818-001
 
 Of these, 727 carry only identity collision/reference-data/lifecycle-authority evidence and nine carry additional deletion, financial-override, or lifecycle reconciliation semantics. A bounded 12-application subclass has nine unique collision-free owner proposals but unresolved business collisions. Only those owner identities may be prepared for independent acceptance review; business and application mappings remain unaccepted. Similarity has not established or merged any legal identity.
 
+Additive read-only run `prod-human-identity-frontier-20260818-004` uses characterization schema `bpls.historical-financial-human-identity-frontier.v4`. It preserves the human-frontier SHA-256 `8b1b80d4b2f38eb186186930c567e1e9eb7b83c4b28490307117381056064bbc`, business-source subclass SHA-256 `ab4380ec8b56e928e0b73671c424ccc7048a032ca7a2bc4095577cb50e2ead03`, and seven-cohort set SHA-256 `dcbfaadec88b19ed564951af29b24c194049a903036c9c98c3ef922dc0c05d41` exactly.
+
+Within the unchanged 519 business-source evidence class, v4 identifies 450 applications / 443 owner proposals / 447 business proposals whose owner collisions use only email/phone signals, and 69 applications / 68 owner proposals / 68 business proposals with a non-contact identity signal present. The 450 include 442 historical `Released` and eight non-`Released` applications across 254 hashed contact collision groups. The 69 include 68 historical `Released` and one non-`Released`; current production evidence observes `name_birth`. Evidence-class set SHA-256 is `5aed72372bb3cf5260946196f23ab6f5e126eff6e1918b8947fcdfa9b14699c5`.
+
+This split narrows the municipal decision without deciding identity. A source-backed rule for shared contact points could move the 450 into bounded exact mapping/reference-data review, but it would not accept mappings or make the class rehearsal-ready. The 69 remain subject to authoritative person-oriented identity reconciliation. Collision-group counts across the two evidence classes may overlap and are not additive.
+
 ## Five-Record Mapping Prerequisites
 
 Read-only prerequisite run `prod-historical-financial-cohort-prerequisites-20260817-002` recomputed the same five-record cohort from financial plan 3 and registry plan 3 and refused to proceed unless the result matched frozen cohort SHA-256 `bf5af2693e471f336c54bf5e3345cc6b9df8709fceddd5ea1bc63360c3ebddb4`. The cohort did not change.
