@@ -34,6 +34,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
+import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue';
 import type { BreadcrumbItem } from '@/types';
 
 type PermitApplication = {
@@ -304,7 +306,7 @@ function referenceLabel(application: {
         <Head :title="permitApplication.display_reference" />
 
         <main class="flex h-full flex-1 flex-col gap-4 p-4">
-            <section class="flex flex-wrap items-start justify-between gap-3">
+            <section>
                 <div>
                     <div class="flex flex-wrap items-center gap-2">
                         <h1 class="text-xl font-semibold text-foreground">
@@ -322,41 +324,94 @@ function referenceLabel(application: {
                         {{ permitApplication.application_year }} new permit
                     </p>
                 </div>
-                <div class="flex flex-wrap gap-2">
-                    <Button
-                        v-if="permitApplication.can_submit"
-                        type="button"
-                        data-testid="citizen-submit-application"
-                        :disabled="submissionForm.processing"
-                        @click="submitApplication"
-                    >
-                        <Send />
-                        Submit Application
-                    </Button>
-                    <Button
-                        v-if="permitApplication.can_edit"
-                        as-child
-                        variant="outline"
-                    >
-                        <Link :href="edit(permitApplication.id)">
-                            <FilePenLine />
-                            Edit Draft
-                        </Link>
-                    </Button>
-                    <Button as-child variant="outline">
-                        <Link :href="index()">
-                            <ArrowLeft />
-                            Back
-                        </Link>
-                    </Button>
-                    <Button as-child>
-                        <Link :href="create()">
-                            <FilePlus2 />
-                            New Draft
-                        </Link>
-                    </Button>
-                </div>
             </section>
+
+            <WorkflowStageSummary
+                eyebrow="Applicant journey"
+                :title="
+                    permitApplication.processing
+                        .has_entered_municipal_processing
+                        ? 'Municipal processing is underway'
+                        : 'Application draft and submission'
+                "
+                :description="
+                    permitApplication.processing
+                        .has_entered_municipal_processing
+                        ? permitApplication.processing.statement
+                        : permitApplication.submission_boundary.statement
+                "
+                :items="[
+                    {
+                        label: 'Current state',
+                        value: permitApplication.status.replace('_', ' '),
+                        detail: permitApplication.draft_boundary.statement,
+                    },
+                    {
+                        label: referenceLabel(permitApplication),
+                        value: permitApplication.display_reference,
+                        detail: permitApplication.application_number
+                            ? 'Official application number recorded'
+                            : 'Applicant-facing tracking identity only',
+                    },
+                    {
+                        label: 'Submission',
+                        value: permitApplication.submission_boundary
+                            .citizen_submitted_at
+                            ? 'Submitted'
+                            : 'Not submitted',
+                        detail: permitApplication.submission_boundary
+                            .municipality_received_at
+                            ? 'Municipality receipt recorded'
+                            : 'Municipality receipt not recorded',
+                    },
+                    {
+                        label: 'Current authorized task',
+                        value: permitApplication.can_submit
+                            ? 'Submit this application'
+                            : permitApplication.can_edit
+                              ? 'Continue editing this draft'
+                              : 'Review the recorded progress',
+                        detail: permitApplication.processing.statement,
+                    },
+                ]"
+            >
+                <template #actions>
+                    <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                        <Button
+                            v-if="permitApplication.can_submit"
+                            type="button"
+                            data-testid="citizen-submit-application"
+                            :disabled="submissionForm.processing"
+                            @click="submitApplication"
+                        >
+                            <Send />
+                            Submit Application
+                        </Button>
+                        <Button
+                            v-if="permitApplication.can_edit"
+                            as-child
+                            variant="outline"
+                        >
+                            <Link :href="edit(permitApplication.id)">
+                                <FilePenLine />
+                                Edit Draft
+                            </Link>
+                        </Button>
+                        <Button as-child variant="outline">
+                            <Link :href="index()">
+                                <ArrowLeft />
+                                Back
+                            </Link>
+                        </Button>
+                        <Button as-child>
+                            <Link :href="create()">
+                                <FilePlus2 />
+                                New Draft
+                            </Link>
+                        </Button>
+                    </div>
+                </template>
+            </WorkflowStageSummary>
 
             <section
                 data-testid="citizen-draft-boundary"
@@ -855,7 +910,7 @@ function referenceLabel(application: {
                     </ul>
                 </div>
 
-                <div
+                <AuthorityBoundaryPanel
                     v-if="permitApplication.processing.authority_review"
                     data-testid="citizen-authority-review-boundary"
                     :data-authority-review-status="
@@ -869,21 +924,42 @@ function referenceLabel(application: {
                         permitApplication.processing.authority_review
                             .can_release
                     "
-                    class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
-                >
-                    <p class="font-medium">Authority review boundary</p>
-                    <p class="mt-1">
-                        {{
-                            permitApplication.processing.authority_review
-                                .statement
-                        }}
-                    </p>
-                    <p class="mt-2 text-xs">
-                        {{
-                            permitApplication.processing.authority_review.reason
-                        }}
-                    </p>
-                </div>
+                    title="Ready for Authority Review is not permit release"
+                    :status="
+                        permitApplication.processing.authority_review.status
+                    "
+                    :statement="
+                        permitApplication.processing.authority_review.statement
+                    "
+                    :facts="[
+                        {
+                            label: 'Payment schedule paid',
+                            value: permitApplication.processing.authority_review
+                                .prerequisites.payment_schedule_paid,
+                        },
+                        {
+                            label: 'Receipt issued',
+                            value: permitApplication.processing.authority_review
+                                .prerequisites.receipt_issued,
+                        },
+                        {
+                            label: 'Clearances complete',
+                            value: permitApplication.processing.authority_review
+                                .prerequisites.clearances_completed,
+                        },
+                        {
+                            label: 'Permit artifact available',
+                            value: permitApplication.processing.authority_review
+                                .prerequisites.permit_artifact_available,
+                        },
+                        {
+                            label: 'Can release',
+                            value: permitApplication.processing.authority_review
+                                .can_release,
+                        },
+                    ]"
+                    :note="permitApplication.processing.authority_review.reason"
+                />
 
                 <div
                     v-if="permitApplication.permit_artifact"

@@ -1,13 +1,8 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
-import {
-    BadgeCheck,
-    FileText,
-    Landmark,
-    LockKeyhole,
-    ShieldAlert,
-} from '@lucide/vue';
+import { BadgeCheck, FileText, Landmark, LockKeyhole } from '@lucide/vue';
 import { Badge } from '@/components/ui/badge';
+import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
 
 type VerificationBoundary = {
     reference: string;
@@ -73,7 +68,9 @@ function label(value: string): string {
                     <h1 class="text-2xl font-semibold tracking-normal">
                         Permit verification
                     </h1>
-                    <p class="max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
+                    <p
+                        class="max-w-2xl text-sm text-zinc-600 dark:text-zinc-300"
+                    >
                         This public page confirms the generated permit artifact
                         reference. It does not confirm permit release or legal
                         effect.
@@ -140,13 +137,13 @@ function label(value: string): string {
                 >
                     <div class="mb-4 flex items-center gap-2">
                         <FileText class="size-4 text-zinc-500" />
-                        <h2 class="text-base font-semibold">
-                            Permit artifact
-                        </h2>
+                        <h2 class="text-base font-semibold">Permit artifact</h2>
                     </div>
                     <dl class="space-y-3 text-sm">
                         <div>
-                            <dt class="text-xs text-zinc-500 dark:text-zinc-400">
+                            <dt
+                                class="text-xs text-zinc-500 dark:text-zinc-400"
+                            >
                                 Application number
                             </dt>
                             <dd class="font-medium">
@@ -157,7 +154,9 @@ function label(value: string): string {
                             </dd>
                         </div>
                         <div>
-                            <dt class="text-xs text-zinc-500 dark:text-zinc-400">
+                            <dt
+                                class="text-xs text-zinc-500 dark:text-zinc-400"
+                            >
                                 Business
                             </dt>
                             <dd class="font-medium">
@@ -193,59 +192,36 @@ function label(value: string): string {
                     </dl>
                 </div>
 
-                <div
-                    class="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
-                >
-                    <div class="mb-4 flex items-center gap-2">
-                        <ShieldAlert
-                            class="size-4 text-amber-700 dark:text-amber-300"
-                        />
-                        <h2 class="text-base font-semibold">
-                            Authority boundary
-                        </h2>
-                    </div>
-                    <dl class="grid gap-4 text-sm sm:grid-cols-2">
-                        <div>
-                            <dt class="text-xs text-zinc-500 dark:text-zinc-400">
-                                Ready for authority review
-                            </dt>
-                            <dd>
-                                {{
-                                    releaseReadiness.ready_for_authority_review
-                                        ? 'Yes'
-                                        : 'No'
-                                }}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt class="text-xs text-zinc-500 dark:text-zinc-400">
-                                Can release
-                            </dt>
-                            <dd>
-                                {{ releaseReadiness.can_release ? 'Yes' : 'No' }}
-                            </dd>
-                        </div>
-                        <div class="sm:col-span-2">
-                            <dt class="text-xs text-zinc-500 dark:text-zinc-400">
-                                Boundary status
-                            </dt>
-                            <dd class="capitalize">
-                                {{
-                                    label(
-                                        releaseReadiness.authority_boundary
-                                            .status,
-                                    )
-                                }}
-                            </dd>
-                        </div>
-                    </dl>
-                    <p class="mt-4 text-sm text-zinc-600 dark:text-zinc-300">
-                        {{
-                            releaseReadiness.authority_boundary
-                                .artifact_statement
-                        }}
-                    </p>
-                </div>
+                <AuthorityBoundaryPanel
+                    title="Release is not verified"
+                    :status="releaseReadiness.authority_boundary.status"
+                    :statement="
+                        releaseReadiness.authority_boundary.artifact_statement
+                    "
+                    :facts="[
+                        {
+                            label: 'Ready for authority review',
+                            value: releaseReadiness.ready_for_authority_review
+                                ? 'Yes'
+                                : 'No',
+                        },
+                        {
+                            label: 'Can release',
+                            value: releaseReadiness.can_release ? 'Yes' : 'No',
+                        },
+                        {
+                            label: 'Can verify release',
+                            value: verification.can_verify_release
+                                ? 'Yes'
+                                : 'No',
+                        },
+                        {
+                            label: 'Released',
+                            value: verification.released ? 'Yes' : 'No',
+                        },
+                    ]"
+                    :note="releaseReadiness.reason"
+                />
             </section>
 
             <section

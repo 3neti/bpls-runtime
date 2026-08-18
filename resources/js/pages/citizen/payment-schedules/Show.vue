@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { Head, Link, setLayoutProps } from '@inertiajs/vue3';
-import { ArrowLeft, Banknote, ReceiptText, ShieldAlert } from '@lucide/vue';
+import { ArrowLeft } from '@lucide/vue';
 import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Citizen/PaymentScheduleController';
 import { show as permitApplicationShow } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
+import WorkflowSectionHeader from '@/components/workflow/WorkflowSectionHeader.vue';
+import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue';
 import type { BreadcrumbItem } from '@/types';
 
 type PaymentScheduleLine = {
@@ -109,7 +112,9 @@ const props = defineProps<{
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'My Permit Applications',
-        href: permitApplicationShow(props.paymentSchedule.permit_application.id),
+        href: permitApplicationShow(
+            props.paymentSchedule.permit_application.id,
+        ),
     },
     {
         title: `Payment Schedule #${props.paymentSchedule.sequence}`,
@@ -149,7 +154,12 @@ function dateTime(value: string | null): string {
         <main class="flex h-full flex-1 flex-col gap-5 p-4">
             <section class="flex flex-wrap items-start justify-between gap-3">
                 <div class="min-w-0">
-                    <Button as-child variant="ghost" size="sm" class="mb-2 px-0">
+                    <Button
+                        as-child
+                        variant="ghost"
+                        size="sm"
+                        class="mb-2 px-0"
+                    >
                         <Link
                             :href="
                                 permitApplicationShow(
@@ -161,11 +171,15 @@ function dateTime(value: string | null): string {
                             Back to application
                         </Link>
                     </Button>
-                    <h1 class="text-xl font-semibold break-words text-foreground">
+                    <h1
+                        class="text-xl font-semibold break-words text-foreground"
+                    >
                         Payment Schedule #{{ paymentSchedule.sequence }}
                     </h1>
                     <p class="text-sm break-words text-muted-foreground">
-                        {{ paymentSchedule.permit_application.display_reference }}
+                        {{
+                            paymentSchedule.permit_application.display_reference
+                        }}
                         · {{ paymentSchedule.permit_application.business_name }}
                     </p>
                 </div>
@@ -174,79 +188,66 @@ function dateTime(value: string | null): string {
                 </Badge>
             </section>
 
-            <section
+            <WorkflowStageSummary
                 data-testid="citizen-payment-detail"
                 :data-payment-schedule-id="paymentSchedule.id"
                 :data-payment-status="paymentSchedule.status"
                 :data-payment-total-cents="paymentSchedule.total_amount_cents"
                 :data-payment-paid-cents="paymentSchedule.paid_amount_cents"
-                :data-payment-balance-cents="paymentSchedule.balance_amount_cents"
-                class="grid gap-4 border-y border-sidebar-border/70 bg-background py-4 dark:border-sidebar-border"
-            >
-                <div class="flex items-start gap-2">
-                    <Banknote class="mt-0.5 size-4 text-muted-foreground" />
-                    <div>
-                        <h2 class="text-sm font-semibold text-foreground">
-                            Authoritative payment evidence
-                        </h2>
-                        <p class="text-xs text-muted-foreground">
-                            Assessment #{{ paymentSchedule.assessment.sequence }} ·
-                            {{ label(paymentSchedule.payment_mode) }} schedule
-                        </p>
-                    </div>
-                </div>
-                <dl class="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                    <div>
-                        <dt class="text-xs text-muted-foreground">Total</dt>
-                        <dd class="font-medium tabular-nums">
-                            {{ money(paymentSchedule.total_amount_cents) }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">Paid</dt>
-                        <dd class="font-medium tabular-nums">
-                            {{ money(paymentSchedule.paid_amount_cents) }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">Balance</dt>
-                        <dd class="font-medium tabular-nums">
-                            {{ money(paymentSchedule.balance_amount_cents) }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">Due date</dt>
-                        <dd class="font-medium">
-                            {{ paymentSchedule.due_on ?? 'Policy not resolved' }}
-                        </dd>
-                    </div>
-                </dl>
-                <p
-                    class="border-l-4 border-sky-500 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:bg-sky-950/30 dark:text-sky-100"
-                >
-                    {{ paymentSchedule.artifact_statement }}
-                </p>
-            </section>
+                :data-payment-balance-cents="
+                    paymentSchedule.balance_amount_cents
+                "
+                eyebrow="Current payment evidence"
+                :title="`Balance ${money(paymentSchedule.balance_amount_cents)}`"
+                :description="paymentSchedule.artifact_statement"
+                :items="[
+                    {
+                        label: 'Schedule status',
+                        value: label(paymentSchedule.status),
+                    },
+                    {
+                        label: 'Total assessed',
+                        value: money(paymentSchedule.total_amount_cents),
+                        detail: `Assessment #${paymentSchedule.assessment.sequence}`,
+                    },
+                    {
+                        label: 'Paid',
+                        value: money(paymentSchedule.paid_amount_cents),
+                        detail: `${label(paymentSchedule.payment_mode)} schedule`,
+                    },
+                    {
+                        label: 'Due date',
+                        value: paymentSchedule.due_on ?? 'Policy not resolved',
+                    },
+                ]"
+            />
 
             <section class="grid gap-3">
-                <div>
-                    <h2 class="text-sm font-semibold text-foreground">
-                        Assessed lines
-                    </h2>
-                    <p class="text-xs text-muted-foreground">
-                        Persisted schedule lines; amounts are not recalculated here.
-                    </p>
-                </div>
+                <WorkflowSectionHeader
+                    eyebrow="Supporting evidence"
+                    title="Assessed lines"
+                    description="Persisted schedule lines; amounts are not recalculated here."
+                />
                 <div class="overflow-x-auto border-y border-border">
                     <table class="w-full min-w-[720px] text-left text-sm">
-                        <thead class="bg-muted/40 text-xs text-muted-foreground">
+                        <thead
+                            class="bg-muted/40 text-xs text-muted-foreground"
+                        >
                             <tr>
                                 <th class="px-3 py-2 font-medium">Code</th>
-                                <th class="px-3 py-2 font-medium">Assessment line</th>
+                                <th class="px-3 py-2 font-medium">
+                                    Assessment line
+                                </th>
                                 <th class="px-3 py-2 font-medium">Status</th>
-                                <th class="px-3 py-2 text-right font-medium">Amount</th>
-                                <th class="px-3 py-2 text-right font-medium">Paid</th>
-                                <th class="px-3 py-2 text-right font-medium">Balance</th>
+                                <th class="px-3 py-2 text-right font-medium">
+                                    Amount
+                                </th>
+                                <th class="px-3 py-2 text-right font-medium">
+                                    Paid
+                                </th>
+                                <th class="px-3 py-2 text-right font-medium">
+                                    Balance
+                                </th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-border">
@@ -265,11 +266,22 @@ function dateTime(value: string | null): string {
                                 <td class="px-3 py-3">
                                     <p class="font-medium">{{ line.name }}</p>
                                     <p class="text-xs text-muted-foreground">
-                                        {{ label(line.category) }}<template v-if="line.line_of_business"> · {{ line.line_of_business }}</template>
+                                        {{ label(line.category)
+                                        }}<template
+                                            v-if="line.line_of_business"
+                                        >
+                                            ·
+                                            {{
+                                                line.line_of_business
+                                            }}</template
+                                        >
                                     </p>
                                 </td>
                                 <td class="px-3 py-3">
-                                    <Badge variant="secondary" class="capitalize">
+                                    <Badge
+                                        variant="secondary"
+                                        class="capitalize"
+                                    >
                                         {{ label(line.status) }}
                                     </Badge>
                                 </td>
@@ -289,17 +301,11 @@ function dateTime(value: string | null): string {
             </section>
 
             <section class="grid gap-3">
-                <div class="flex items-start gap-2">
-                    <ReceiptText class="mt-0.5 size-4 text-muted-foreground" />
-                    <div>
-                        <h2 class="text-sm font-semibold text-foreground">
-                            Treasury evidence
-                        </h2>
-                        <p class="text-xs text-muted-foreground">
-                            Recorded collections, allocations, and receipt identity.
-                        </p>
-                    </div>
-                </div>
+                <WorkflowSectionHeader
+                    eyebrow="Recorded after scheduling"
+                    title="Treasury evidence"
+                    description="Recorded collections, allocations, and receipt identity remain separate facts."
+                />
                 <p
                     v-if="paymentSchedule.collections.length === 0"
                     class="border border-dashed border-sidebar-border p-5 text-sm text-muted-foreground"
@@ -316,7 +322,9 @@ function dateTime(value: string | null): string {
                     :data-collection-amount-cents="collection.amount_cents"
                     class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
-                    <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div
+                        class="flex flex-wrap items-start justify-between gap-3"
+                    >
                         <div>
                             <h3 class="text-sm font-semibold text-foreground">
                                 Collection #{{ collection.id }}
@@ -336,17 +344,23 @@ function dateTime(value: string | null): string {
                             </p>
                         </div>
                     </div>
-                    <ul class="divide-y divide-border border-y border-border text-sm">
+                    <ul
+                        class="divide-y divide-border border-y border-border text-sm"
+                    >
                         <li
                             v-for="allocation in collection.allocations"
                             :key="allocation.id"
                             data-testid="citizen-payment-allocation"
                             :data-allocation-code="allocation.code"
-                            :data-allocation-amount-cents="allocation.amount_cents"
+                            :data-allocation-amount-cents="
+                                allocation.amount_cents
+                            "
                             class="flex flex-wrap items-center justify-between gap-2 py-2"
                         >
                             <span>
-                                <span class="font-mono text-xs">{{ allocation.code }}</span>
+                                <span class="font-mono text-xs">{{
+                                    allocation.code
+                                }}</span>
                                 · {{ allocation.name }}
                             </span>
                             <span class="font-medium tabular-nums">
@@ -363,25 +377,33 @@ function dateTime(value: string | null): string {
                         class="grid gap-3 text-sm sm:grid-cols-4"
                     >
                         <div>
-                            <dt class="text-xs text-muted-foreground">Receipt</dt>
+                            <dt class="text-xs text-muted-foreground">
+                                Receipt
+                            </dt>
                             <dd class="font-medium break-all">
                                 {{ collection.receipt.receipt_number }}
                             </dd>
                         </div>
                         <div>
-                            <dt class="text-xs text-muted-foreground">Status</dt>
+                            <dt class="text-xs text-muted-foreground">
+                                Status
+                            </dt>
                             <dd class="font-medium capitalize">
                                 {{ label(collection.receipt.status) }}
                             </dd>
                         </div>
                         <div>
-                            <dt class="text-xs text-muted-foreground">Amount</dt>
+                            <dt class="text-xs text-muted-foreground">
+                                Amount
+                            </dt>
                             <dd class="font-medium tabular-nums">
                                 {{ money(collection.receipt.amount_cents) }}
                             </dd>
                         </div>
                         <div>
-                            <dt class="text-xs text-muted-foreground">Issued</dt>
+                            <dt class="text-xs text-muted-foreground">
+                                Issued
+                            </dt>
                             <dd class="font-medium">
                                 {{ dateTime(collection.receipt.issued_at) }}
                             </dd>
@@ -390,27 +412,41 @@ function dateTime(value: string | null): string {
                 </article>
             </section>
 
-            <section
+            <AuthorityBoundaryPanel
                 data-testid="citizen-payment-policy-boundary"
-                :data-policy-status="paymentSchedule.payment_policy_boundary.status"
-                :data-can-split-installments="
-                    paymentSchedule.payment_policy_boundary.can_split_installments
+                :data-policy-status="
+                    paymentSchedule.payment_policy_boundary.status
                 "
-                class="grid gap-3 border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+                :data-can-split-installments="
+                    paymentSchedule.payment_policy_boundary
+                        .can_split_installments
+                "
+                title="Payment policy boundary"
+                :status="paymentSchedule.payment_policy_boundary.status"
+                :statement="
+                    paymentSchedule.payment_policy_boundary.artifact_statement
+                "
+                :facts="[
+                    {
+                        label: 'Can split installments',
+                        value: paymentSchedule.payment_policy_boundary
+                            .can_split_installments
+                            ? 'Yes'
+                            : 'No',
+                    },
+                    {
+                        label: 'Can assign statutory due dates',
+                        value: paymentSchedule.payment_policy_boundary
+                            .can_assign_statutory_due_dates
+                            ? 'Yes'
+                            : 'No',
+                    },
+                ]"
             >
-                <div class="flex items-start gap-2">
-                    <ShieldAlert class="mt-0.5 size-4" />
-                    <div>
-                        <h2 class="font-medium">Payment policy boundary</h2>
-                        <p class="mt-1">
-                            {{ paymentSchedule.payment_policy_boundary.artifact_statement }}
-                        </p>
-                    </div>
-                </div>
                 <div class="flex flex-wrap gap-2">
                     <Badge
-                        v-for="calculation in paymentSchedule.payment_policy_boundary
-                            .blocked_calculations"
+                        v-for="calculation in paymentSchedule
+                            .payment_policy_boundary.blocked_calculations"
                         :key="calculation"
                         variant="outline"
                         class="capitalize"
@@ -418,9 +454,9 @@ function dateTime(value: string | null): string {
                         {{ label(calculation) }}
                     </Badge>
                 </div>
-            </section>
+            </AuthorityBoundaryPanel>
 
-            <section
+            <AuthorityBoundaryPanel
                 data-testid="citizen-online-payment-detail-boundary"
                 :data-online-payment-status="
                     paymentSchedule.online_payment_boundary.status
@@ -431,21 +467,32 @@ function dateTime(value: string | null): string {
                 :data-can-reconcile-online="
                     paymentSchedule.online_payment_boundary.can_reconcile_online
                 "
-                class="grid gap-3 border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+                title="Online payment boundary"
+                :status="paymentSchedule.online_payment_boundary.status"
+                :statement="
+                    paymentSchedule.online_payment_boundary.artifact_statement
+                "
+                :facts="[
+                    {
+                        label: 'Can pay online',
+                        value: paymentSchedule.online_payment_boundary
+                            .can_pay_online
+                            ? 'Yes'
+                            : 'No',
+                    },
+                    {
+                        label: 'Can reconcile online',
+                        value: paymentSchedule.online_payment_boundary
+                            .can_reconcile_online
+                            ? 'Yes'
+                            : 'No',
+                    },
+                ]"
             >
-                <div class="flex items-start gap-2">
-                    <ShieldAlert class="mt-0.5 size-4" />
-                    <div>
-                        <h2 class="font-medium">Online payment boundary</h2>
-                        <p class="mt-1">
-                            {{ paymentSchedule.online_payment_boundary.artifact_statement }}
-                        </p>
-                    </div>
-                </div>
                 <div class="flex flex-wrap gap-2">
                     <Badge
-                        v-for="transition in paymentSchedule.online_payment_boundary
-                            .blocked_transitions"
+                        v-for="transition in paymentSchedule
+                            .online_payment_boundary.blocked_transitions"
                         :key="transition"
                         variant="outline"
                         class="capitalize"
@@ -453,7 +500,7 @@ function dateTime(value: string | null): string {
                         {{ label(transition) }}
                     </Badge>
                 </div>
-            </section>
+            </AuthorityBoundaryPanel>
         </main>
     </div>
 </template>

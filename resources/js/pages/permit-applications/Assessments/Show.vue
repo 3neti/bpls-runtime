@@ -11,6 +11,8 @@ import {
 } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
+import WorkflowSectionHeader from '@/components/workflow/WorkflowSectionHeader.vue';
+import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
@@ -110,14 +112,41 @@ function money(amountCents: number): string {
                         {{ assessment.permit_application.owner_name }}
                     </p>
                 </div>
-                <div class="text-right">
-                    <div class="text-xs text-muted-foreground uppercase">
-                        Total assessed
-                    </div>
-                    <div class="text-2xl font-semibold">
-                        {{ money(assessment.total_amount_cents) }}
-                    </div>
-                    <div class="mt-3 flex justify-end gap-2">
+            </div>
+
+            <WorkflowStageSummary
+                eyebrow="Assessment snapshot"
+                :title="money(assessment.total_amount_cents)"
+                description="This total and every line below come from the persisted assessment snapshot; this page does not recalculate liability."
+                :items="[
+                    {
+                        label: 'Assessment status',
+                        value: assessment.status.replaceAll('_', ' '),
+                    },
+                    {
+                        label: 'Application status',
+                        value: assessment.permit_application.status.replaceAll(
+                            '_',
+                            ' ',
+                        ),
+                    },
+                    {
+                        label: 'Assessed by',
+                        value: assessment.assessed_by ?? 'System',
+                        detail: assessment.assessed_at ?? 'No timestamp',
+                    },
+                    {
+                        label: 'Current task',
+                        value: assessment.latest_payment_schedule
+                            ? 'Review payment schedule'
+                            : can.prepare_payment_schedule
+                              ? 'Prepare payment schedule'
+                              : 'Review assessment evidence',
+                    },
+                ]"
+            >
+                <template #actions>
+                    <div class="flex flex-wrap gap-2">
                         <Button
                             v-if="can.view_assessment_documents"
                             as-child
@@ -163,8 +192,8 @@ function money(amountCents: number): string {
                             Prepare Payment
                         </Link>
                     </div>
-                </div>
-            </div>
+                </template>
+            </WorkflowStageSummary>
 
             <section class="grid gap-3 md:grid-cols-3">
                 <div
@@ -222,6 +251,15 @@ function money(amountCents: number): string {
             <section
                 class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
             >
+                <div
+                    class="border-b border-sidebar-border/70 p-4 dark:border-sidebar-border"
+                >
+                    <WorkflowSectionHeader
+                        eyebrow="Supporting evidence"
+                        title="Persisted assessment lines"
+                        description="Amounts, bases, and classifications are displayed exactly as stored in this assessment snapshot."
+                    />
+                </div>
                 <div class="overflow-x-auto">
                     <table class="w-full min-w-[820px] text-sm">
                         <thead
@@ -292,9 +330,11 @@ function money(amountCents: number): string {
             <section
                 class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
             >
-                <h2 class="mb-2 text-sm font-semibold text-foreground">
-                    Assessment document gaps
-                </h2>
+                <WorkflowSectionHeader
+                    eyebrow="Reference boundary"
+                    title="Assessment document gaps"
+                    description="These unresolved document and policy facts remain outside the persisted snapshot."
+                />
                 <ul
                     class="list-disc space-y-1 pl-5 text-sm text-muted-foreground"
                 >

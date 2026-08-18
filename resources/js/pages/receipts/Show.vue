@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, Ban, FileText, LockKeyhole, Printer } from '@lucide/vue';
+import { ArrowLeft, Ban, FileText, Printer } from '@lucide/vue';
 import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import {
     pdf as receiptPdf,
@@ -9,6 +9,8 @@ import {
 } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
+import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
@@ -185,6 +187,34 @@ function label(value: string): string {
                     </Button>
                 </div>
             </div>
+
+            <WorkflowStageSummary
+                class="print:hidden"
+                eyebrow="Current receipt evidence"
+                :title="money(receipt.amount_cents)"
+                description="This receipt records a collection separately from its source payment schedule and application."
+                :items="[
+                    {
+                        label: 'Receipt status',
+                        value: label(receipt.status),
+                    },
+                    {
+                        label: 'Receipt number',
+                        value: receipt.receipt_number,
+                        detail: `${label(receipt.numbering_authority)} numbering`,
+                    },
+                    {
+                        label: 'Collection status',
+                        value: label(receipt.collection.status),
+                        detail: label(receipt.collection.channel),
+                    },
+                    {
+                        label: 'Current task',
+                        value: 'Review, print, or open PDF',
+                        detail: 'Void and reversal remain unavailable.',
+                    },
+                ]"
+            />
 
             <section
                 class="rounded-lg border border-sidebar-border/70 bg-background p-6 dark:border-sidebar-border print:rounded-none print:border-black print:bg-white print:p-0"
@@ -438,65 +468,34 @@ function label(value: string): string {
                     <p class="mt-1 text-sm">{{ receipt.remarks }}</p>
                 </div>
 
-                <div class="mt-6 border-t pt-4 print:hidden">
-                    <div class="mb-3 flex items-center gap-2">
-                        <LockKeyhole class="size-4 text-muted-foreground" />
-                        <div
-                            class="text-xs font-medium text-muted-foreground uppercase"
-                        >
-                            Void / reversal boundary
-                        </div>
-                    </div>
-                    <dl class="grid gap-3 text-sm md:grid-cols-4">
-                        <div>
-                            <dt class="text-xs text-muted-foreground">
-                                Reference
-                            </dt>
-                            <dd class="font-mono text-xs break-all">
-                                {{ receipt.void_boundary.reference }}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt class="text-xs text-muted-foreground">
-                                Status
-                            </dt>
-                            <dd class="capitalize">
-                                {{ label(receipt.void_boundary.status) }}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt class="text-xs text-muted-foreground">
-                                Can void
-                            </dt>
-                            <dd>
-                                {{
-                                    receipt.void_boundary.can_void
-                                        ? 'Yes'
-                                        : 'No'
-                                }}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt class="text-xs text-muted-foreground">
-                                Receipt remains
-                            </dt>
-                            <dd class="capitalize">
-                                {{ receipt.void_boundary.receipt_status }}
-                            </dd>
-                        </div>
-                        <div class="md:col-span-4">
-                            <dt class="text-xs text-muted-foreground">
-                                Collection remains
-                            </dt>
-                            <dd class="capitalize">
-                                {{ receipt.void_boundary.collection_status }}
-                            </dd>
-                        </div>
-                    </dl>
-                    <p class="mt-3 text-sm text-muted-foreground">
-                        {{ receipt.void_boundary.policy_note }}
-                    </p>
-                </div>
+                <AuthorityBoundaryPanel
+                    class="mt-6 print:hidden"
+                    title="Void and reversal remain unavailable"
+                    :status="receipt.void_boundary.status"
+                    :statement="receipt.void_boundary.policy_note"
+                    :facts="[
+                        {
+                            label: 'Boundary reference',
+                            value: receipt.void_boundary.reference,
+                        },
+                        {
+                            label: 'Can void',
+                            value: receipt.void_boundary.can_void
+                                ? 'Yes'
+                                : 'No',
+                        },
+                        {
+                            label: 'Receipt remains',
+                            value: label(receipt.void_boundary.receipt_status),
+                        },
+                        {
+                            label: 'Collection remains',
+                            value: label(
+                                receipt.void_boundary.collection_status,
+                            ),
+                        },
+                    ]"
+                />
 
                 <div class="mt-6 border-t pt-4 print:hidden">
                     <div

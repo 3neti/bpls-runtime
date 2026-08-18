@@ -16,6 +16,8 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import WorkflowSectionHeader from '@/components/workflow/WorkflowSectionHeader.vue';
+import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue';
 import type { BreadcrumbItem } from '@/types';
 
 type Option = {
@@ -131,6 +133,42 @@ const intakeBack = computed(() =>
         ? citizenShow(props.draft.id)
         : intakeIndex.value,
 );
+const intakeSummaryItems = computed(() => [
+    {
+        label: 'Record',
+        value: isEditing.value
+            ? `Draft #${props.draft?.id}`
+            : isCitizenIntake.value
+              ? 'New citizen draft'
+              : 'New staff application',
+        detail: isCitizenIntake.value
+            ? 'A saved draft remains outside municipal processing.'
+            : 'Staff intake uses the existing application action.',
+    },
+    {
+        label: 'Current task',
+        value: 'Complete intake facts',
+        detail: 'Owner, establishment, application, and activity fields.',
+    },
+    {
+        label: 'Save action',
+        value: isEditing.value
+            ? 'Save changes'
+            : isCitizenIntake.value
+              ? 'Save draft'
+              : 'Save application',
+        detail: 'Existing validation and submission endpoint are unchanged.',
+    },
+    {
+        label: 'Boundary',
+        value: isCitizenIntake.value
+            ? 'Not submitted or officially numbered'
+            : 'No authority decision is made here',
+        detail: isCitizenIntake.value
+            ? 'Formal submission remains a separate citizen action.'
+            : 'Assessment, payment, and permit authority remain later actions.',
+    },
+]);
 
 const businessActivities = ref<BusinessActivityRow[]>(
     props.draft?.lines.map((line) => ({ ...line, key: line.id })) ?? [
@@ -228,6 +266,19 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                 </Button>
             </section>
 
+            <WorkflowStageSummary
+                eyebrow="Intake workspace"
+                :title="
+                    isCitizenIntake
+                        ? isEditing
+                            ? 'Review and update this saved draft'
+                            : 'Prepare an unsubmitted permit draft'
+                        : 'Record the application intake facts'
+                "
+                description="Complete the existing sections in order. Saving preserves the current action boundary and does not create later lifecycle decisions."
+                :items="intakeSummaryItems"
+            />
+
             <Form
                 v-bind="intakeAction"
                 v-slot="{ errors, processing }"
@@ -254,9 +305,11 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 dark:border-sidebar-border"
                 >
                     <div class="md:col-span-2">
-                        <h2 class="text-sm font-semibold text-foreground">
-                            Legal business owner
-                        </h2>
+                        <WorkflowSectionHeader
+                            eyebrow="Step 1"
+                            title="Legal business owner"
+                            description="Confirm the owner identity associated with this application."
+                        />
                         <p
                             v-if="isCitizenIntake && registry?.linked"
                             class="mt-1 text-xs text-muted-foreground"
@@ -419,9 +472,11 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 lg:grid-cols-3 dark:border-sidebar-border"
                 >
                     <div class="md:col-span-2 lg:col-span-3">
-                        <h2 class="text-sm font-semibold text-foreground">
-                            Business and establishment
-                        </h2>
+                        <WorkflowSectionHeader
+                            eyebrow="Step 2"
+                            title="Business and establishment"
+                            description="Record the existing business and establishment fields without changing shared registry identity."
+                        />
                         <p
                             v-if="registryBusinessReadOnly"
                             class="mt-1 text-xs text-muted-foreground"
@@ -709,9 +764,11 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 dark:border-sidebar-border"
                 >
                     <div class="md:col-span-2">
-                        <h2 class="text-sm font-semibold text-foreground">
-                            Application
-                        </h2>
+                        <WorkflowSectionHeader
+                            eyebrow="Step 3"
+                            title="Application"
+                            description="Confirm the application year and existing application-type fields."
+                        />
                     </div>
                     <div v-if="!isCitizenIntake" class="grid gap-2">
                         <Label for="application_number">
@@ -768,20 +825,26 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     <div
                         class="flex flex-wrap items-center justify-between gap-3"
                     >
-                        <h2 class="text-sm font-semibold text-foreground">
-                            Business activities
-                        </h2>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            data-testid="permit-add-business-activity"
-                            :disabled="businessActivities.length >= 20"
-                            @click="addBusinessActivity"
+                        <WorkflowSectionHeader
+                            class="w-full"
+                            eyebrow="Step 4"
+                            title="Business activities"
+                            description="Add the lines of business and their existing declared financial facts."
                         >
-                            <Plus />
-                            Add activity
-                        </Button>
+                            <template #actions>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    data-testid="permit-add-business-activity"
+                                    :disabled="businessActivities.length >= 20"
+                                    @click="addBusinessActivity"
+                                >
+                                    <Plus />
+                                    Add activity
+                                </Button>
+                            </template>
+                        </WorkflowSectionHeader>
                     </div>
 
                     <InputError :message="errors.lines" />
@@ -923,8 +986,18 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     </div>
                 </section>
 
-                <div class="flex justify-end">
-                    <Button type="submit" :disabled="processing">
+                <div
+                    class="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-sidebar-border/70 bg-background/95 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between dark:border-sidebar-border"
+                >
+                    <p class="text-sm text-muted-foreground">
+                        Review all four sections before using the existing save
+                        action.
+                    </p>
+                    <Button
+                        type="submit"
+                        class="w-full sm:w-auto"
+                        :disabled="processing"
+                    >
                         <Save />
                         {{
                             isEditing

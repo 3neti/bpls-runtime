@@ -33,6 +33,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
+import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
@@ -351,111 +353,156 @@ function fileSize(sizeBytes: number): string {
                         {{ permitApplication.business.name }}
                     </p>
                 </div>
-                <div class="flex gap-2">
-                    <Button
-                        v-if="can.view_permit_documents"
-                        as-child
-                        variant="outline"
-                    >
-                        <a
-                            :href="applicationFormPdf.url(permitApplication.id)"
-                            target="_blank"
-                        >
-                            <FileText />
-                            Application PDF
-                        </a>
-                    </Button>
-                    <Button
-                        v-if="can.view_permit_documents"
-                        as-child
-                        variant="outline"
-                    >
-                        <a
-                            :href="permitPdf.url(permitApplication.id)"
-                            target="_blank"
-                        >
-                            <FileText />
-                            Permit PDF
-                        </a>
-                    </Button>
-                    <Button
-                        v-if="permitApplication.latest_assessment"
-                        as-child
-                        variant="outline"
-                    >
-                        <Link
-                            :href="
-                                showAssessment(
-                                    permitApplication.latest_assessment.id,
-                                )
-                            "
-                        >
-                            <ListChecks />
-                            Assessment
-                        </Link>
-                    </Button>
-                    <Button
-                        v-if="permitApplication.latest_payment_schedule"
-                        as-child
-                        variant="outline"
-                    >
-                        <Link
-                            :href="
-                                showPaymentSchedule(
-                                    permitApplication.latest_payment_schedule
-                                        .id,
-                                )
-                            "
-                        >
-                            <WalletCards />
-                            Payment Schedule
-                        </Link>
-                    </Button>
-                    <Link
-                        v-if="
-                            can.assess_permit_applications &&
-                            permitApplication.can_continue
-                        "
-                        :href="assess(permitApplication.id)"
-                        method="post"
-                        as="button"
-                        :class="buttonVariants()"
-                    >
-                        <Calculator />
-                        Assess
-                    </Link>
-                    <Link
-                        v-if="
-                            can.update_permit_application_status &&
-                            permitApplication.can_continue
-                        "
-                        :href="cancel(permitApplication.id)"
-                        method="post"
-                        as="button"
-                        :data="{
-                            reason: 'Cancelled from staff review surface.',
-                        }"
-                        :class="buttonVariants({ variant: 'destructive' })"
-                    >
-                        <CircleX />
-                        Cancel
-                    </Link>
-                    <Link
-                        v-if="
-                            can.attempt_release &&
-                            permitApplication.latest_payment_schedule
-                        "
-                        :href="release(permitApplication.id)"
-                        method="post"
-                        as="button"
-                        title="Records a refused release attempt as evidence. The permit is not released or issued."
-                        :class="buttonVariants({ variant: 'outline' })"
-                    >
-                        <LockKeyhole />
-                        Release unavailable
-                    </Link>
-                </div>
             </section>
+
+            <WorkflowStageSummary
+                eyebrow="Current application record"
+                :title="label(permitApplication.status)"
+                description="Use only the actions currently authorized for this record. Financial, clearance, artifact, and authority facts remain separate evidence below."
+                :items="[
+                    {
+                        label: 'Application type',
+                        value: label(permitApplication.type),
+                        detail: String(permitApplication.application_year),
+                    },
+                    {
+                        label: 'Latest assessment',
+                        value: permitApplication.latest_assessment
+                            ? `Assessment #${permitApplication.latest_assessment.sequence}`
+                            : 'Not assessed',
+                        detail:
+                            permitApplication.latest_assessment?.status ?? null,
+                    },
+                    {
+                        label: 'Payment schedule',
+                        value: permitApplication.latest_payment_schedule
+                            ? `Schedule #${permitApplication.latest_payment_schedule.sequence}`
+                            : 'Not prepared',
+                        detail: permitApplication.latest_payment_schedule
+                            ? `${label(permitApplication.latest_payment_schedule.status)} · Balance ${money(permitApplication.latest_payment_schedule.total_amount_cents - permitApplication.latest_payment_schedule.paid_amount_cents)}`
+                            : null,
+                    },
+                    {
+                        label: 'Authority review',
+                        value: permitApplication.release_readiness
+                            .ready_for_authority_review
+                            ? 'Ready for Authority Review'
+                            : 'Not ready for authority review',
+                        detail: permitApplication.release_readiness.can_release
+                            ? 'Release action available'
+                            : 'Release remains unavailable',
+                    },
+                ]"
+            >
+                <template #actions>
+                    <div class="flex flex-wrap gap-2 sm:justify-end">
+                        <Button
+                            v-if="can.view_permit_documents"
+                            as-child
+                            variant="outline"
+                        >
+                            <a
+                                :href="
+                                    applicationFormPdf.url(permitApplication.id)
+                                "
+                                target="_blank"
+                            >
+                                <FileText />
+                                Application PDF
+                            </a>
+                        </Button>
+                        <Button
+                            v-if="can.view_permit_documents"
+                            as-child
+                            variant="outline"
+                        >
+                            <a
+                                :href="permitPdf.url(permitApplication.id)"
+                                target="_blank"
+                            >
+                                <FileText />
+                                Permit PDF
+                            </a>
+                        </Button>
+                        <Button
+                            v-if="permitApplication.latest_assessment"
+                            as-child
+                            variant="outline"
+                        >
+                            <Link
+                                :href="
+                                    showAssessment(
+                                        permitApplication.latest_assessment.id,
+                                    )
+                                "
+                            >
+                                <ListChecks />
+                                Assessment
+                            </Link>
+                        </Button>
+                        <Button
+                            v-if="permitApplication.latest_payment_schedule"
+                            as-child
+                            variant="outline"
+                        >
+                            <Link
+                                :href="
+                                    showPaymentSchedule(
+                                        permitApplication
+                                            .latest_payment_schedule.id,
+                                    )
+                                "
+                            >
+                                <WalletCards />
+                                Payment Schedule
+                            </Link>
+                        </Button>
+                        <Link
+                            v-if="
+                                can.assess_permit_applications &&
+                                permitApplication.can_continue
+                            "
+                            :href="assess(permitApplication.id)"
+                            method="post"
+                            as="button"
+                            :class="buttonVariants()"
+                        >
+                            <Calculator />
+                            Assess
+                        </Link>
+                        <Link
+                            v-if="
+                                can.update_permit_application_status &&
+                                permitApplication.can_continue
+                            "
+                            :href="cancel(permitApplication.id)"
+                            method="post"
+                            as="button"
+                            :data="{
+                                reason: 'Cancelled from staff review surface.',
+                            }"
+                            :class="buttonVariants({ variant: 'destructive' })"
+                        >
+                            <CircleX />
+                            Cancel
+                        </Link>
+                        <Link
+                            v-if="
+                                can.attempt_release &&
+                                permitApplication.latest_payment_schedule
+                            "
+                            :href="release(permitApplication.id)"
+                            method="post"
+                            as="button"
+                            title="Records a refused release attempt as evidence. The permit is not released or issued."
+                            :class="buttonVariants({ variant: 'outline' })"
+                        >
+                            <LockKeyhole />
+                            Release unavailable
+                        </Link>
+                    </div>
+                </template>
+            </WorkflowStageSummary>
 
             <section
                 class="grid gap-4 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-3 dark:border-sidebar-border"
@@ -1733,77 +1780,48 @@ function fileSize(sizeBytes: number): string {
                 </div>
             </section>
 
-            <section
-                class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+            <AuthorityBoundaryPanel
+                title="Ready for Authority Review is not permit release"
+                :status="
+                    permitApplication.release_readiness.authority_boundary
+                        .status
+                "
+                :statement="
+                    permitApplication.release_readiness.authority_boundary
+                        .artifact_statement
+                "
+                :facts="[
+                    {
+                        label: 'Ready for authority review',
+                        value: permitApplication.release_readiness
+                            .ready_for_authority_review
+                            ? 'Yes'
+                            : 'No',
+                    },
+                    {
+                        label: 'Paid schedule',
+                        value: permitApplication.release_readiness.prerequisites
+                            .payment_schedule_paid
+                            ? 'Yes'
+                            : 'No',
+                    },
+                    {
+                        label: 'Receipt issued',
+                        value: permitApplication.release_readiness.prerequisites
+                            .receipt_issued
+                            ? 'Yes'
+                            : 'No',
+                    },
+                    {
+                        label: 'Can release',
+                        value: permitApplication.release_readiness.can_release
+                            ? 'Yes'
+                            : 'No',
+                    },
+                ]"
+                :note="permitApplication.release_readiness.reason"
             >
-                <div class="mb-3 flex items-center gap-2">
-                    <LockKeyhole class="size-4 text-muted-foreground" />
-                    <h2 class="text-sm font-semibold text-foreground">
-                        Permit release boundary
-                    </h2>
-                </div>
-                <p class="text-sm text-muted-foreground">
-                    Permit release is unavailable until clearance completion,
-                    issuance authority, signatories, QR verification, and legacy
-                    Released status semantics are reconciled.
-                </p>
-                <div class="mt-4 grid gap-3 text-sm md:grid-cols-4">
-                    <div>
-                        <dt class="text-xs text-muted-foreground">
-                            Authority review
-                        </dt>
-                        <dd>
-                            {{
-                                permitApplication.release_readiness
-                                    .ready_for_authority_review
-                                    ? 'Ready'
-                                    : 'Not ready'
-                            }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">
-                            Paid schedule
-                        </dt>
-                        <dd>
-                            {{
-                                permitApplication.release_readiness
-                                    .prerequisites.payment_schedule_paid
-                                    ? 'Yes'
-                                    : 'No'
-                            }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">
-                            Receipt issued
-                        </dt>
-                        <dd>
-                            {{
-                                permitApplication.release_readiness
-                                    .prerequisites.receipt_issued
-                                    ? 'Yes'
-                                    : 'No'
-                            }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">
-                            Can release
-                        </dt>
-                        <dd>
-                            {{
-                                permitApplication.release_readiness.can_release
-                                    ? 'Yes'
-                                    : 'No'
-                            }}
-                        </dd>
-                    </div>
-                </div>
-                <p class="mt-3 text-sm text-muted-foreground">
-                    {{ permitApplication.release_readiness.reason }}
-                </p>
-                <div class="mt-5 space-y-3 border-t pt-4">
+                <div class="space-y-3">
                     <div class="flex flex-wrap items-center gap-2">
                         <h3 class="text-sm font-semibold text-foreground">
                             Authority boundary
@@ -1928,7 +1946,7 @@ function fileSize(sizeBytes: number): string {
                         </dd>
                     </div>
                 </dl>
-            </section>
+            </AuthorityBoundaryPanel>
 
             <section
                 class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"

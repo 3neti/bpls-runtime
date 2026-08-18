@@ -12,6 +12,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import WorkflowSectionHeader from '@/components/workflow/WorkflowSectionHeader.vue';
+import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
@@ -202,93 +204,60 @@ function label(value: string): string {
                         · {{ paymentSchedule.permit_application.owner_name }}
                     </p>
                 </div>
-                <div class="text-right">
-                    <div class="text-xs text-muted-foreground uppercase">
-                        Balance due
-                    </div>
-                    <div class="text-2xl font-semibold">
-                        {{ money(balanceDueCents) }}
-                    </div>
-                </div>
             </div>
 
-            <section class="grid gap-3 md:grid-cols-4">
-                <div
-                    class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
-                >
-                    <div class="text-xs text-muted-foreground uppercase">
-                        Application
-                    </div>
-                    <div class="mt-1 font-medium">
-                        {{
+            <WorkflowStageSummary
+                eyebrow="Current Treasury record"
+                :title="`Balance ${money(balanceDueCents)}`"
+                description="The schedule, collection, and receipt remain separate persisted records."
+                :items="[
+                    {
+                        label: 'Schedule status',
+                        value: label(paymentSchedule.status),
+                        detail: `Total ${money(paymentSchedule.total_amount_cents)} · Paid ${money(paymentSchedule.paid_amount_cents)}`,
+                    },
+                    {
+                        label: 'Application',
+                        value:
                             paymentSchedule.permit_application
                                 .application_number ??
-                            `Application #${paymentSchedule.permit_application.id}`
-                        }}
-                    </div>
-                    <div class="text-sm text-muted-foreground capitalize">
-                        {{ paymentSchedule.permit_application.type }} ·
-                        {{
-                            paymentSchedule.permit_application.application_year
-                        }}
-                    </div>
-                </div>
-                <div
-                    class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
-                >
-                    <div class="text-xs text-muted-foreground uppercase">
-                        Schedule status
-                    </div>
-                    <div class="mt-2">
-                        <Badge variant="secondary" class="capitalize">
-                            {{ paymentSchedule.status.replace('_', ' ') }}
-                        </Badge>
-                    </div>
-                </div>
-                <div
-                    class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
-                >
-                    <div class="text-xs text-muted-foreground uppercase">
-                        Payment mode
-                    </div>
-                    <div class="mt-1 font-medium capitalize">
-                        {{ paymentSchedule.payment_mode }}
-                    </div>
-                    <div class="text-sm text-muted-foreground">
-                        {{ paymentSchedule.due_on ?? 'No due date set' }}
-                    </div>
-                </div>
-                <div
-                    class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
-                >
-                    <div class="text-xs text-muted-foreground uppercase">
-                        Prepared by
-                    </div>
-                    <div class="mt-1 font-medium">
-                        {{ paymentSchedule.prepared_by ?? 'System' }}
-                    </div>
-                    <div class="text-sm text-muted-foreground">
-                        {{ paymentSchedule.created_at ?? 'No timestamp' }}
-                    </div>
-                </div>
-            </section>
+                            `Application #${paymentSchedule.permit_application.id}`,
+                        detail: `${paymentSchedule.permit_application.type} · ${paymentSchedule.permit_application.application_year}`,
+                    },
+                    {
+                        label: 'Payment mode',
+                        value: label(paymentSchedule.payment_mode),
+                        detail: paymentSchedule.due_on ?? 'No due date set',
+                    },
+                    {
+                        label: 'Current task',
+                        value:
+                            can.record_collections && balanceDueCents > 0
+                                ? 'Record over-the-counter collection'
+                                : can.issue_receipts &&
+                                    paymentSchedule.collections.some(
+                                        (collection) =>
+                                            collection.status ===
+                                                'pending_receipt' &&
+                                            collection.receipt === null,
+                                    )
+                                  ? 'Issue pending receipt'
+                                  : 'Review collection evidence',
+                        detail: `Prepared by ${paymentSchedule.prepared_by ?? 'System'}`,
+                    },
+                ]"
+            />
 
             <section
                 v-if="can.record_collections && balanceDueCents > 0"
                 class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
             >
-                <div class="mb-4 flex items-center gap-2">
-                    <Banknote class="size-4 text-muted-foreground" />
-                    <div>
-                        <h2 class="text-sm font-semibold text-foreground">
-                            Record Collection
-                        </h2>
-                        <p class="text-xs text-muted-foreground">
-                            Over-the-counter collection only. Receipt issuance
-                            is handled separately below.
-                        </p>
-                    </div>
-                </div>
+                <WorkflowSectionHeader
+                    class="mb-4"
+                    eyebrow="Current authorized task"
+                    title="Record collection"
+                    :description="`Over-the-counter collection only. The current balance is ${money(balanceDueCents)}; receipt issuance remains a separate action below.`"
+                />
 
                 <Form
                     v-bind="collectionStore.form(paymentSchedule.id)"
@@ -702,9 +671,11 @@ function label(value: string): string {
                 class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
             >
                 <div class="border-b px-4 py-3">
-                    <h2 class="text-sm font-semibold text-foreground">
-                        Collection History
-                    </h2>
+                    <WorkflowSectionHeader
+                        eyebrow="Recorded after scheduling"
+                        title="Collection and receipt evidence"
+                        description="Review recorded collections and use the existing receipt action only where it is available."
+                    />
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full min-w-[820px] text-sm">
