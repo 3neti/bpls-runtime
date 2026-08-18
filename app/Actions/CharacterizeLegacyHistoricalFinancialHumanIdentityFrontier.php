@@ -9,7 +9,7 @@ use Illuminate\Support\Collection;
 
 class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
 {
-    public const SchemaVersion = 'bpls.historical-financial-human-identity-frontier.v4';
+    public const SchemaVersion = 'bpls.historical-financial-human-identity-frontier.v5';
 
     private const BlockerCategories = [
         'exact_mapping_acceptance',
@@ -94,6 +94,7 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
             ->map(fn (Collection $members, string $key): array => $this->decisionCohort($key, $members))
             ->sortByDesc('application_count')
             ->values();
+        $priorityReviewClasses = collect($this->priorityReviewClasses($candidateEvidence, $proposals));
         $evidenceBinding = [
             'source_archive_checksum' => $financialPlan->importBatch->source->archive_checksum,
             'financial_plan_id' => $financialPlan->id,
@@ -109,6 +110,32 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                 $candidate['class_sha256'],
                 $candidate['owner_collision_signal_names'],
                 $candidate['business_collision_signal_names'],
+            ])->all(),
+        ]);
+        $businessSourceEvidenceSubclassSha256 = $this->hash([
+            $evidenceBinding,
+            ...$exactBusinessEvidenceCandidates->map(fn (array $candidate): array => [
+                $candidate['candidate_fingerprint'],
+                $candidate['class_sha256'],
+            ])->all(),
+        ]);
+        $decisionCohortSetSha256 = $this->hash([
+            $evidenceBinding,
+            ...$decisionCohorts->map(fn (array $cohort): array => [
+                $cohort['key'],
+                $cohort['cohort_sha256'],
+                $cohort['application_count'],
+                $cohort['blocker_categories'],
+            ])->all(),
+        ]);
+        $municipalIdentityEvidenceClassSetSha256 = $this->hash([
+            $evidenceBinding,
+            ...$municipalIdentityEvidenceClasses->map(fn (array $class): array => [
+                $class['key'],
+                $class['class_sha256'],
+                $class['application_count'],
+                $class['collision_review_unit_count'],
+                $class['observed_collision_signal_names'],
             ])->all(),
         ]);
 
@@ -132,6 +159,7 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                     'class_count' => $classes->count(),
                     'decision_cohort_count' => $decisionCohorts->count(),
                     'municipal_identity_evidence_class_count' => $municipalIdentityEvidenceClasses->count(),
+                    'priority_review_class_count' => $priorityReviewClasses->count(),
                     'contact_signals_only_application_count' => $municipalIdentityEvidenceClasses
                         ->firstWhere('key', 'contact_signals_only')['application_count'] ?? 0,
                     'non_contact_identity_signal_application_count' => $municipalIdentityEvidenceClasses
@@ -163,34 +191,35 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                 ],
                 'municipal_identity_evidence_classes' => array_values($municipalIdentityEvidenceClasses->all()),
                 'decision_ready_cohorts' => array_values($decisionCohorts->all()),
+                'priority_review_classes' => array_values($priorityReviewClasses->all()),
                 'fingerprints' => [
                     'human_identity_frontier_sha256' => $frontierSha256,
-                    'business_source_evidence_subclass_sha256' => $this->hash([
+                    'business_source_evidence_subclass_sha256' => $businessSourceEvidenceSubclassSha256,
+                    'decision_cohort_set_sha256' => $decisionCohortSetSha256,
+                    'municipal_identity_evidence_class_set_sha256' => $municipalIdentityEvidenceClassSetSha256,
+                    'priority_review_class_set_sha256' => $this->hash([
                         $evidenceBinding,
-                        ...$exactBusinessEvidenceCandidates->map(fn (array $candidate): array => [
-                            $candidate['candidate_fingerprint'],
-                            $candidate['class_sha256'],
-                        ])->all(),
-                    ]),
-                    'decision_cohort_set_sha256' => $this->hash([
-                        $evidenceBinding,
-                        ...$decisionCohorts->map(fn (array $cohort): array => [
-                            $cohort['key'],
-                            $cohort['cohort_sha256'],
-                            $cohort['application_count'],
-                            $cohort['blocker_categories'],
-                        ])->all(),
-                    ]),
-                    'municipal_identity_evidence_class_set_sha256' => $this->hash([
-                        $evidenceBinding,
-                        ...$municipalIdentityEvidenceClasses->map(fn (array $class): array => [
+                        ...$priorityReviewClasses->map(fn (array $class): array => [
                             $class['key'],
                             $class['class_sha256'],
                             $class['application_count'],
-                            $class['collision_review_unit_count'],
-                            $class['observed_collision_signal_names'],
+                            $class['review_units'],
+                            $class['blocker_categories'],
                         ])->all(),
                     ]),
+                ],
+                'preserved_v4_outputs' => [
+                    'schema_version' => 'bpls.historical-financial-human-identity-frontier.v4',
+                    'human_identity_application_count' => $humanCandidates->count(),
+                    'decision_cohort_count' => $decisionCohorts->count(),
+                    'contact_signals_only_application_count' => $municipalIdentityEvidenceClasses
+                        ->firstWhere('key', 'contact_signals_only')['application_count'] ?? 0,
+                    'non_contact_identity_signal_application_count' => $municipalIdentityEvidenceClasses
+                        ->firstWhere('key', 'non_contact_identity_signal_present')['application_count'] ?? 0,
+                    'human_identity_frontier_sha256' => $frontierSha256,
+                    'business_source_evidence_subclass_sha256' => $businessSourceEvidenceSubclassSha256,
+                    'decision_cohort_set_sha256' => $decisionCohortSetSha256,
+                    'municipal_identity_evidence_class_set_sha256' => $municipalIdentityEvidenceClassSetSha256,
                 ],
                 'state_model' => [
                     'observed' => 'Exact source records, ownership edges, collision signals, and frozen proposal reasons.',
@@ -315,6 +344,251 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
             ->sortBy(fn (string $category): int => $blockerOrder[$category])
             ->values()
             ->all());
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $candidates
+     * @param  Collection<int, LegacyMappingProposal>  $proposals
+     * @return list<array<string, mixed>>
+     */
+    private function priorityReviewClasses(Collection $candidates, Collection $proposals): array
+    {
+        $nonContactCollisionFreeBusiness = $candidates
+            ->where('business_source_evidence_disposition', 'business_source_evidence_may_be_prepared_independently')
+            ->filter(fn (array $candidate): bool => array_diff(
+                $candidate['owner_collision_signal_names'],
+                ['email', 'phone'],
+            ) !== [])
+            ->values();
+        $compound = $candidates
+            ->where('decision_cohort_key', 'compound_owner_business_identity_collision')
+            ->values();
+        $compoundRegistration = $compound
+            ->where('business_collision_signal_names', ['registration'])
+            ->values();
+        $compoundContactRegistration = $compound
+            ->filter(fn (array $candidate): bool => $candidate['owner_collision_signal_names'] !== []
+                && array_diff($candidate['owner_collision_signal_names'], ['email', 'phone']) === []
+                && $candidate['business_collision_signal_names'] === ['registration'])
+            ->values();
+        $compoundNonContactRegistration = $compound
+            ->filter(fn (array $candidate): bool => array_diff(
+                $candidate['owner_collision_signal_names'],
+                ['email', 'phone'],
+            ) !== [] && $candidate['business_collision_signal_names'] === ['registration'])
+            ->values();
+        $compoundOther = $compound
+            ->reject(fn (array $candidate): bool => $compoundContactRegistration
+                ->contains('candidate_fingerprint', $candidate['candidate_fingerprint'])
+                || $compoundNonContactRegistration
+                    ->contains('candidate_fingerprint', $candidate['candidate_fingerprint']))
+            ->values();
+        $softDeleted = $candidates
+            ->where('decision_cohort_key', 'soft_deleted_registry_policy')
+            ->values();
+        $identityFinancial = $candidates
+            ->where('decision_cohort_key', 'identity_collision_with_semantic_exception')
+            ->values();
+
+        return array_values(collect([
+            $this->priorityReviewClass(
+                key: 'non_contact_identity_collision_free_business',
+                members: $nonContactCollisionFreeBusiness,
+                reviewUnits: [
+                    'owner_non_contact_collision_groups' => $this->collisionClusterSummary(
+                        $nonContactCollisionFreeBusiness,
+                        $proposals,
+                        'owner',
+                        ['name_birth'],
+                    ),
+                ],
+                whatIsProven: 'The collision-free-business non-contact class is reducible to exact hashed name-and-birth collision groups. Each group is a bounded review unit; the signal does not establish legal identity.',
+                exactBlocker: 'An authorized reviewer must reconcile every name-and-birth collision group against authoritative legal-owner records, followed by reference-data and exact mapping acceptance.',
+                acceptanceWouldMean: 'Every reviewed member has an evidence-backed legal-owner disposition and accepted exact owner, business, application, and reference mappings.',
+                acceptanceWouldNotMean: 'It would not make name or birth date identity authority, activate Released, accept fee identity, authorize rehearsal, or authorize production migration.',
+                oneDecisionCouldMakeRehearsalReady: false,
+                whyNotOneDecision: 'The class requires group-level legal-identity reconciliation, reference-data reconciliation, exact mapping acceptance, cohort freeze, and separate rehearsal authorization.',
+            ),
+            $this->priorityReviewClass(
+                key: 'compound_registration_business_collision',
+                members: $compoundRegistration,
+                reviewUnits: [
+                    'business_registration_collision_groups' => $this->collisionClusterSummary(
+                        $compoundRegistration,
+                        $proposals,
+                        'business',
+                        ['registration'],
+                    ),
+                ],
+                whatIsProven: 'The dominant compound class shares one independently reproducible business-registration collision dimension, regardless of whether its owner evidence is contact-only or non-contact.',
+                exactBlocker: 'Authorized reviewers must reconcile each hashed registration-number collision group as business identity evidence; owner identity, reference-data, and exact mapping decisions remain independent.',
+                acceptanceWouldMean: 'Authorized reviewers have resolved every business-registration review unit and the separately routed owner dependencies, then accepted every required exact mapping and reference crosswalk.',
+                acceptanceWouldNotMean: 'It would not make registration number, contact points, name, birth date, or similarity identity authority; activate Released; authorize rehearsal; or authorize production migration.',
+                oneDecisionCouldMakeRehearsalReady: false,
+                whyNotOneDecision: 'Registration reconciliation leaves owner identity, reference data, exact mapping acceptance, cohort freeze, and separate rehearsal authorization unresolved.',
+            ),
+            $this->priorityReviewClass(
+                key: 'compound_contact_owner_registration_business_collision',
+                members: $compoundContactRegistration,
+                reviewUnits: [
+                    'owner_contact_collision_groups' => $this->collisionClusterSummary(
+                        $compoundContactRegistration,
+                        $proposals,
+                        'owner',
+                        ['email', 'phone'],
+                    ),
+                    'business_registration_collision_groups' => $this->collisionClusterSummary(
+                        $compoundContactRegistration,
+                        $proposals,
+                        'business',
+                        ['registration'],
+                    ),
+                ],
+                whatIsProven: 'Owner collision evidence is limited to shared contact points, while a separate registration-number collision independently blocks each business identity.',
+                exactBlocker: 'The bounded municipal shared-contact decision can address only the owner-evidence dependency; authorized business-registration reconciliation and exact reference/mapping acceptance remain separate.',
+                acceptanceWouldMean: 'Authorized reviewers have resolved both legal-owner and business-registration review units and accepted every required exact mapping and reference crosswalk.',
+                acceptanceWouldNotMean: 'It would not infer identity from contact or registration signals, activate Released, authorize rehearsal, or authorize production migration.',
+                oneDecisionCouldMakeRehearsalReady: false,
+                whyNotOneDecision: 'Even a favorable shared-contact rule leaves business-registration collisions, reference data, exact business/application acceptance, cohort freeze, and rehearsal authorization unresolved.',
+            ),
+            $this->priorityReviewClass(
+                key: 'compound_non_contact_owner_registration_business_collision',
+                members: $compoundNonContactRegistration,
+                reviewUnits: [
+                    'owner_non_contact_collision_groups' => $this->collisionClusterSummary(
+                        $compoundNonContactRegistration,
+                        $proposals,
+                        'owner',
+                        ['name_birth'],
+                    ),
+                    'business_registration_collision_groups' => $this->collisionClusterSummary(
+                        $compoundNonContactRegistration,
+                        $proposals,
+                        'business',
+                        ['registration'],
+                    ),
+                ],
+                whatIsProven: 'The owner and business dependencies are independently reproducible as hashed name-and-birth and registration-number collision review groups.',
+                exactBlocker: 'Authorized legal-owner reconciliation and business-registration reconciliation are both required, followed by reference-data and exact mapping acceptance.',
+                acceptanceWouldMean: 'Authorized reviewers have resolved both collision-group sets and accepted every required exact mapping and reference crosswalk.',
+                acceptanceWouldNotMean: 'It would not infer identity from name, birth date, registration number, or similarity; activate Released; authorize rehearsal; or authorize production migration.',
+                oneDecisionCouldMakeRehearsalReady: false,
+                whyNotOneDecision: 'Two independent identity dimensions, reference data, exact mapping acceptance, cohort freeze, and separate rehearsal authorization remain.',
+            ),
+            $this->priorityReviewClass(
+                key: 'compound_other_collision_topology',
+                members: $compoundOther,
+                reviewUnits: [
+                    'owner_collision_groups' => $this->collisionClusterSummary($compoundOther, $proposals, 'owner'),
+                    'business_collision_groups' => $this->collisionClusterSummary($compoundOther, $proposals, 'business'),
+                ],
+                whatIsProven: 'The residual compound topology is isolated from the registration-number subclasses without changing the frozen compound cohort.',
+                exactBlocker: 'Its owner and business collision evidence requires record-level authorized reconciliation and exact mapping acceptance.',
+                acceptanceWouldMean: 'Authorized reviewers have resolved the exact owner and business identity evidence and accepted the required mappings and reference crosswalks.',
+                acceptanceWouldNotMean: 'It would not establish identity from the observed signals or authorize rehearsal or production migration.',
+                oneDecisionCouldMakeRehearsalReady: false,
+                whyNotOneDecision: 'Owner identity, business identity, reference data, exact mappings, cohort freeze, and separate rehearsal authorization remain.',
+            ),
+            $this->priorityReviewClass(
+                key: 'soft_deleted_exception_matrix',
+                members: $softDeleted,
+                reviewUnits: [
+                    'owner_collision_groups' => $this->collisionClusterSummary($softDeleted, $proposals, 'owner'),
+                    'business_collision_groups' => $this->collisionClusterSummary($softDeleted, $proposals, 'business'),
+                ],
+                whatIsProven: 'All soft-deleted histories remain quarantined together, while their independently observed Treasury, financial-authority, permit-authority, and source-contradiction overlays remain explicit.',
+                exactBlocker: 'A municipal deletion/retention disposition is required for all members; the independently present identity, reference-data, Treasury, financial, permit, or contradiction blockers must also be resolved by their proper authorities.',
+                acceptanceWouldMean: 'Authorized reviewers have recorded the deletion disposition and every applicable independent exception disposition, then accepted the exact mappings and reference crosswalks.',
+                acceptanceWouldNotMean: 'It would not restore deleted records, discard contradictory evidence, infer identity or liability, activate Released, authorize rehearsal, or authorize production migration.',
+                oneDecisionCouldMakeRehearsalReady: false,
+                whyNotOneDecision: 'Deletion policy cannot resolve the independently present identity, reference-data, Treasury, financial, permit-authority, source-contradiction, mapping, and rehearsal gates.',
+                additional: [
+                    'contact_signal_only_application_count' => $softDeleted
+                        ->filter(fn (array $candidate): bool => $candidate['owner_collision_signal_names'] !== []
+                            && array_diff($candidate['owner_collision_signal_names'], ['email', 'phone']) === [])
+                        ->count(),
+                    'non_contact_identity_signal_application_count' => $softDeleted
+                        ->filter(fn (array $candidate): bool => array_diff(
+                            $candidate['owner_collision_signal_names'],
+                            ['email', 'phone'],
+                        ) !== [])
+                        ->count(),
+                    'treasury_interpretation_application_count' => $softDeleted
+                        ->filter(fn (array $candidate): bool => in_array('treasury_interpretation', $candidate['blocker_categories'], true))
+                        ->count(),
+                    'financial_policy_authority_application_count' => $softDeleted
+                        ->filter(fn (array $candidate): bool => in_array('financial_policy_authority', $candidate['blocker_categories'], true))
+                        ->count(),
+                    'permit_authority_semantics_application_count' => $softDeleted
+                        ->filter(fn (array $candidate): bool => in_array('permit_authority_semantics', $candidate['blocker_categories'], true))
+                        ->count(),
+                    'genuine_source_data_contradiction_application_count' => $softDeleted
+                        ->filter(fn (array $candidate): bool => in_array('genuine_source_data_contradiction', $candidate['blocker_categories'], true))
+                        ->count(),
+                ],
+            ),
+            $this->priorityReviewClass(
+                key: 'identity_plus_financial_exception',
+                members: $identityFinancial,
+                reviewUnits: [
+                    'owner_collision_groups' => $this->collisionClusterSummary($identityFinancial, $proposals, 'owner'),
+                ],
+                whatIsProven: 'The identity collision and financial-override exception are independent blockers on one preserved history.',
+                exactBlocker: 'The legal-owner disposition and authorized financial-override disposition must both be recorded, followed by reference-data and exact mapping acceptance.',
+                acceptanceWouldMean: 'Authorized reviewers have resolved the exact identity and financial exception without recalculating history, then accepted the required mappings and reference crosswalks.',
+                acceptanceWouldNotMean: 'It would not infer identity or fee policy, alter taxpayer liability, activate Released, authorize rehearsal, or authorize production migration.',
+                oneDecisionCouldMakeRehearsalReady: false,
+                whyNotOneDecision: 'Identity authority, financial authority, reference data, exact mappings, cohort freeze, and separate rehearsal authorization remain independent gates.',
+            ),
+        ])->filter(fn (array $class): bool => $class['application_count'] > 0)->all());
+    }
+
+    /**
+     * @param  iterable<array-key, array<string, mixed>>  $members
+     * @param  array<string, array<string, mixed>>  $reviewUnits
+     * @param  array<string, mixed>  $additional
+     * @return array<string, mixed>
+     */
+    private function priorityReviewClass(
+        string $key,
+        iterable $members,
+        array $reviewUnits,
+        string $whatIsProven,
+        string $exactBlocker,
+        string $acceptanceWouldMean,
+        string $acceptanceWouldNotMean,
+        bool $oneDecisionCouldMakeRehearsalReady,
+        string $whyNotOneDecision,
+        array $additional = [],
+    ): array {
+        $members = collect($members);
+
+        return [
+            'key' => $key,
+            'class_sha256' => $this->hash($members
+                ->map(fn (array $candidate): array => [
+                    $candidate['candidate_fingerprint'],
+                    $candidate['class_sha256'],
+                    $candidate['blocker_categories'],
+                ])->all()),
+            'application_count' => $members->count(),
+            'unique_owner_proposal_count' => $members->pluck('owner_proposal_id')->unique()->count(),
+            'unique_business_proposal_count' => $members->pluck('business_proposal_id')->unique()->count(),
+            'review_units' => $reviewUnits,
+            'what_is_proven' => $whatIsProven,
+            'exact_blocker' => $exactBlocker,
+            'acceptance_would_mean' => $acceptanceWouldMean,
+            'acceptance_would_not_mean' => $acceptanceWouldNotMean,
+            'records_that_would_advance' => $members->count(),
+            'one_bounded_decision_could_make_rehearsal_ready' => $oneDecisionCouldMakeRehearsalReady,
+            'why_not_one_bounded_decision' => $whyNotOneDecision,
+            'what_remains_quarantined' => 'Every member remains unaccepted, unrehearsed, and production-unapplied until all listed blockers and separate authorization gates are resolved.',
+            'blocker_categories' => $this->classBlockerCategories($members),
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+            ...$additional,
+        ];
     }
 
     /**
@@ -578,17 +852,31 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
     /**
      * @param  iterable<array-key, array<string, mixed>>  $candidates
      * @param  Collection<int, LegacyMappingProposal>  $proposals
+     * @param  list<string>|null  $includedSignals
      * @return array<string, mixed>
      */
-    private function collisionClusterSummary(iterable $candidates, Collection $proposals, string $entity): array
-    {
+    private function collisionClusterSummary(
+        iterable $candidates,
+        Collection $proposals,
+        string $entity,
+        ?array $includedSignals = null,
+    ): array {
         $candidateProposalIds = collect($candidates)->pluck($entity.'_proposal_id')->unique();
         $collisionFingerprints = $candidateProposalIds
-            ->flatMap(fn (mixed $proposalId): array => array_values($proposals->get((int) $proposalId)->collision_fingerprints ?? []))
+            ->flatMap(function (mixed $proposalId) use ($includedSignals, $proposals): array {
+                $fingerprints = $proposals->get((int) $proposalId)->collision_fingerprints ?? [];
+
+                return array_values($includedSignals === null
+                    ? $fingerprints
+                    : array_intersect_key($fingerprints, array_flip($includedSignals)));
+            })
             ->unique();
         $clusters = [];
         foreach ($proposals as $proposalId => $proposal) {
             foreach ($proposal->collision_fingerprints ?? [] as $signal => $fingerprint) {
+                if ($includedSignals !== null && ! in_array($signal, $includedSignals, true)) {
+                    continue;
+                }
                 if (! $collisionFingerprints->contains($fingerprint)) {
                     continue;
                 }

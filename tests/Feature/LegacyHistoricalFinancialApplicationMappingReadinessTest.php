@@ -425,6 +425,195 @@ test('human identity frontier isolates collision classes without accepting simil
         ->not->toContain('Historical group B');
 });
 
+test('priority review classes separate compound contact and non contact identity review units', function () {
+    $batches = mappingReadinessBatches('priority-review-classes');
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'compound-contact-a',
+        owner: ['email' => 'compound-contact@example.test'],
+        business: ['registrationNumber' => 'CONTACT-REGISTRATION'],
+    );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'compound-contact-b',
+        owner: ['email' => 'compound-contact@example.test'],
+        business: ['registrationNumber' => 'CONTACT-REGISTRATION'],
+    );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'compound-non-contact-a',
+        owner: [
+            'firstName' => 'Compound',
+            'lastName' => 'Non Contact',
+            'birthDate' => '1981-02-03',
+        ],
+        business: ['registrationNumber' => 'NON-CONTACT-REGISTRATION'],
+    );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'compound-non-contact-b',
+        owner: [
+            'firstName' => 'Compound',
+            'lastName' => 'Non Contact',
+            'birthDate' => '1981-02-03',
+        ],
+        business: ['registrationNumber' => 'NON-CONTACT-REGISTRATION'],
+    );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'non-contact-collision-free-business-a',
+        owner: [
+            'firstName' => 'Collision Free',
+            'lastName' => 'Non Contact',
+            'birthDate' => '1982-03-04',
+        ],
+    );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'non-contact-collision-free-business-b',
+        owner: [
+            'firstName' => 'Collision Free',
+            'lastName' => 'Non Contact',
+            'birthDate' => '1982-03-04',
+        ],
+    );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'soft-deleted-contact',
+        owner: ['email' => 'soft-deleted-contact@example.test'],
+        application: ['isDeleted' => true],
+    );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'identity-financial-contact',
+        owner: ['email' => 'identity-financial-contact@example.test'],
+        application: ['feeOverrides' => [['reason' => 'preserved-test-evidence']]],
+    );
+    foreach ($batches as $batch) {
+        mappingReadinessRecord($batch, 'business_owners', 'soft-deleted-contact-decoy', [
+            'ownerType' => 'Individual',
+            'firstName' => 'Soft Deleted Decoy',
+            'lastName' => 'Example',
+            'email' => 'soft-deleted-contact@example.test',
+        ]);
+        mappingReadinessRecord($batch, 'business_owners', 'identity-financial-contact-decoy', [
+            'ownerType' => 'Individual',
+            'firstName' => 'Identity Financial Decoy',
+            'lastName' => 'Example',
+            'email' => 'identity-financial-contact@example.test',
+        ]);
+    }
+
+    $registryPlan = app(PlanLegacyRegistryMigration::class)->handle($batches['registry'], 'registry-priority-review-classes');
+    $financialPlan = app(PlanLegacyFinancialDependencies::class)->handle($batches['financial'], 'financial-priority-review-classes');
+    $result = app(CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier::class)->handle($financialPlan, $registryPlan);
+    $repeat = app(CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier::class)->handle($financialPlan, $registryPlan);
+    $priorityReviewClasses = collect($result['report']['priority_review_classes'])->keyBy('key');
+
+    expect($result['report']['schema_version'])->toBe('bpls.historical-financial-human-identity-frontier.v5')
+        ->and($result['report']['summary']['human_identity_application_count'])->toBe(8)
+        ->and($result['report']['summary']['priority_review_class_count'])->toBe(6)
+        ->and($priorityReviewClasses->keys()->all())->toBe([
+            'non_contact_identity_collision_free_business',
+            'compound_registration_business_collision',
+            'compound_contact_owner_registration_business_collision',
+            'compound_non_contact_owner_registration_business_collision',
+            'soft_deleted_exception_matrix',
+            'identity_plus_financial_exception',
+        ])
+        ->and($priorityReviewClasses->get('non_contact_identity_collision_free_business'))->toMatchArray([
+            'application_count' => 2,
+            'unique_owner_proposal_count' => 2,
+            'unique_business_proposal_count' => 2,
+            'records_that_would_advance' => 2,
+            'one_bounded_decision_could_make_rehearsal_ready' => false,
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+        ])
+        ->and(data_get($priorityReviewClasses, 'non_contact_identity_collision_free_business.review_units.owner_non_contact_collision_groups.unique_collision_group_count'))->toBe(1)
+        ->and($priorityReviewClasses->get('compound_registration_business_collision'))->toMatchArray([
+            'application_count' => 4,
+            'unique_owner_proposal_count' => 4,
+            'unique_business_proposal_count' => 4,
+            'records_that_would_advance' => 4,
+            'one_bounded_decision_could_make_rehearsal_ready' => false,
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+        ])
+        ->and(data_get($priorityReviewClasses, 'compound_registration_business_collision.review_units.business_registration_collision_groups.unique_collision_group_count'))->toBe(2)
+        ->and($priorityReviewClasses->get('compound_contact_owner_registration_business_collision'))->toMatchArray([
+            'application_count' => 2,
+            'unique_owner_proposal_count' => 2,
+            'unique_business_proposal_count' => 2,
+            'records_that_would_advance' => 2,
+            'one_bounded_decision_could_make_rehearsal_ready' => false,
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+        ])
+        ->and(data_get($priorityReviewClasses, 'compound_contact_owner_registration_business_collision.review_units.owner_contact_collision_groups.unique_collision_group_count'))->toBe(1)
+        ->and(data_get($priorityReviewClasses, 'compound_contact_owner_registration_business_collision.review_units.business_registration_collision_groups.unique_collision_group_count'))->toBe(1)
+        ->and($priorityReviewClasses->get('compound_non_contact_owner_registration_business_collision'))->toMatchArray([
+            'application_count' => 2,
+            'unique_owner_proposal_count' => 2,
+            'unique_business_proposal_count' => 2,
+            'records_that_would_advance' => 2,
+            'one_bounded_decision_could_make_rehearsal_ready' => false,
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+        ])
+        ->and(data_get($priorityReviewClasses, 'compound_non_contact_owner_registration_business_collision.review_units.owner_non_contact_collision_groups.unique_collision_group_count'))->toBe(1)
+        ->and(data_get($priorityReviewClasses, 'compound_non_contact_owner_registration_business_collision.review_units.business_registration_collision_groups.unique_collision_group_count'))->toBe(1)
+        ->and($priorityReviewClasses->get('soft_deleted_exception_matrix'))->toMatchArray([
+            'application_count' => 1,
+            'contact_signal_only_application_count' => 1,
+            'non_contact_identity_signal_application_count' => 0,
+            'treasury_interpretation_application_count' => 0,
+            'financial_policy_authority_application_count' => 0,
+            'permit_authority_semantics_application_count' => 0,
+            'genuine_source_data_contradiction_application_count' => 0,
+            'one_bounded_decision_could_make_rehearsal_ready' => false,
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+        ])
+        ->and($priorityReviewClasses->get('identity_plus_financial_exception'))->toMatchArray([
+            'application_count' => 1,
+            'one_bounded_decision_could_make_rehearsal_ready' => false,
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+        ])
+        ->and($priorityReviewClasses->get('identity_plus_financial_exception')['blocker_categories'])->toContain('financial_policy_authority')
+        ->and(data_get($result, 'report.fingerprints.priority_review_class_set_sha256'))->toHaveLength(64)
+        ->and($result['report']['preserved_v4_outputs'])->toMatchArray([
+            'schema_version' => 'bpls.historical-financial-human-identity-frontier.v4',
+            'human_identity_application_count' => 8,
+            'decision_cohort_count' => 4,
+            'contact_signals_only_application_count' => 0,
+            'non_contact_identity_signal_application_count' => 2,
+            'human_identity_frontier_sha256' => data_get($result, 'report.fingerprints.human_identity_frontier_sha256'),
+            'business_source_evidence_subclass_sha256' => data_get($result, 'report.fingerprints.business_source_evidence_subclass_sha256'),
+            'decision_cohort_set_sha256' => data_get($result, 'report.fingerprints.decision_cohort_set_sha256'),
+            'municipal_identity_evidence_class_set_sha256' => data_get($result, 'report.fingerprints.municipal_identity_evidence_class_set_sha256'),
+        ])
+        ->and($repeat['report']['preserved_v4_outputs'])->toBe($result['report']['preserved_v4_outputs'])
+        ->and($repeat['report']['fingerprints'])->toBe($result['report']['fingerprints'])
+        ->and(LegacyApplicationIdMapping::query()->count())->toBe(0)
+        ->and(LegacyIdMapping::query()->count())->toBe(0);
+});
+
 test('characterization refuses cross-batch payload drift and reports structural reference breaks', function () {
     $batches = mappingReadinessBatches('drift');
     addMappingReadinessCandidate($batches['registry'], $batches['financial'], 'drift');
