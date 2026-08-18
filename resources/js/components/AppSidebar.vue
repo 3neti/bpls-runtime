@@ -1,23 +1,19 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import {
-    BookOpen,
     Bell,
     Building2,
     Calculator,
     ChartColumn,
-    ChartNoAxesColumnIncreasing,
     ClipboardCheck,
     ClipboardX,
     Coins,
     FileText,
-    Film,
-    FolderGit2,
-    LayoutGrid,
+    LayoutDashboard,
     ReceiptText,
     ShieldCheck,
-    Trophy,
     TableProperties,
+    Trophy,
     Users,
     WalletCards,
 } from '@lucide/vue';
@@ -44,13 +40,11 @@ import { index as pldsReportIndex } from '@/actions/App/Http/Controllers/Staff/P
 import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
 import { index as revenueSourceReportIndex } from '@/actions/App/Http/Controllers/Staff/RevenueSourceReportController';
 import { index as rolePermissionIndex } from '@/actions/App/Http/Controllers/Staff/RolePermissionController';
-import { index as storyboardIndex } from '@/actions/App/Http/Controllers/Staff/StoryboardController';
 import { index as topEstablishmentTaxDueReportIndex } from '@/actions/App/Http/Controllers/Staff/TopEstablishmentTaxDueReportController';
 import { index as totalCapitalGrossSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/TotalCapitalGrossSummaryReportController';
 import { index as unpaidEstablishmentReportIndex } from '@/actions/App/Http/Controllers/Staff/UnpaidEstablishmentReportController';
 import { index as userDirectoryIndex } from '@/actions/App/Http/Controllers/Staff/UserDirectoryController';
 import AppLogo from '@/components/AppLogo.vue';
-import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import {
@@ -63,208 +57,276 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
-import type { NavItem } from '@/types';
+import type { NavItem, NavSection } from '@/types';
 
 const page = usePage();
 
-const staffNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-    {
-        title: 'Permit Applications',
-        href: permitApplicationIndex(),
-        icon: FileText,
-    },
-    {
-        title: 'Permit Assessments',
-        href: assessmentIndex(),
-        icon: Calculator,
-    },
-    {
-        title: 'Payment Schedules',
-        href: paymentScheduleIndex(),
-        icon: WalletCards,
-    },
-    {
-        title: 'Receipts',
-        href: receiptIndex(),
-        icon: ReceiptText,
-    },
-    {
-        title: 'Taxes and Fees',
-        href: feeRuleIndex(),
-        icon: Coins,
-    },
-    {
-        title: 'Billing Groups',
-        href: billingGroupIndex(),
-        icon: WalletCards,
-    },
-    {
+const overviewItem: NavItem = {
+    title: 'Overview',
+    href: dashboard(),
+    icon: LayoutDashboard,
+};
+
+const reportItems = {
+    dailyCollections: {
         title: 'Daily Collections',
         href: dailyCollectionReportIndex(),
         icon: ChartColumn,
     },
-    {
-        title: 'Assessment Summary',
-        href: assessmentSummaryReportIndex(),
-        icon: ChartNoAxesColumnIncreasing,
+    revenueSources: {
+        title: 'Revenue Sources',
+        href: revenueSourceReportIndex(),
+        icon: ChartColumn,
     },
-    {
-        title: 'Payment Summary',
-        href: paymentSummaryReportIndex(),
-        icon: WalletCards,
-    },
-    {
-        title: 'Collectibles',
+    collectibles: {
+        title: 'Breakdown of Collectibles',
         href: collectiblesReportIndex(),
         icon: ChartColumn,
     },
-    {
-        title: 'Tax by Major Type',
-        href: businessTaxByMajorTypeReportIndex(),
-        icon: ChartNoAxesColumnIncreasing,
-    },
-    {
-        title: 'Capital / Gross',
-        href: totalCapitalGrossSummaryReportIndex(),
-        icon: ChartColumn,
-    },
-    {
-        title: 'CMCI LDCS',
-        href: cmciLdcsReportIndex(),
-        icon: TableProperties,
-    },
-    {
-        title: 'PLDS',
-        href: pldsReportIndex(),
-        icon: TableProperties,
-    },
-    {
-        title: 'BSP Non-Bank Entities',
-        href: bspReportIndex(),
-        icon: TableProperties,
-    },
-    {
-        title: 'ANNEX C - DNFBP',
-        href: annexCDnfbpReportIndex(),
-        icon: TableProperties,
-    },
-    {
-        title: 'All Abstract',
-        href: allAbstractReportIndex(),
-        icon: TableProperties,
-    },
-    {
-        title: 'Revenue Sources',
-        href: revenueSourceReportIndex(),
-        icon: ChartNoAxesColumnIncreasing,
-    },
-    {
+    paidEstablishments: {
         title: 'Paid Establishments',
         href: paidEstablishmentReportIndex(),
         icon: ClipboardCheck,
     },
-    {
+    unpaidEstablishments: {
         title: 'Unpaid Establishments',
         href: unpaidEstablishmentReportIndex(),
         icon: ClipboardX,
     },
-    {
-        title: 'Top Tax Due',
+    assessmentSummary: {
+        title: 'Assessment Summary',
+        href: assessmentSummaryReportIndex(),
+        icon: Calculator,
+    },
+    paymentSummary: {
+        title: 'Payment Summary',
+        href: paymentSummaryReportIndex(),
+        icon: WalletCards,
+    },
+    businessTax: {
+        title: 'Business Tax by Major Type',
+        href: businessTaxByMajorTypeReportIndex(),
+        icon: ChartColumn,
+    },
+    capitalGross: {
+        title: 'Total Capital and Gross Summary',
+        href: totalCapitalGrossSummaryReportIndex(),
+        icon: ChartColumn,
+    },
+    topTaxDue: {
+        title: 'Top Establishments by Tax Due',
         href: topEstablishmentTaxDueReportIndex(),
         icon: Trophy,
     },
-    {
-        title: 'Storyboards',
-        href: storyboardIndex(),
-        icon: Film,
+    allAbstract: {
+        title: 'All Abstract',
+        href: allAbstractReportIndex(),
+        icon: TableProperties,
     },
-    ...(page.props.auth.can_view_users
-        ? [
-              {
-                  title: 'Users',
-                  href: userDirectoryIndex(),
-                  icon: Users,
-              },
-          ]
-        : []),
-    ...(page.props.auth.can_view_roles
-        ? [
-              {
-                  title: 'Roles & Permissions',
-                  href: rolePermissionIndex(),
-                  icon: ShieldCheck,
-              },
-          ]
-        : []),
-    ...(page.props.auth.can_view_municipality_configuration
-        ? [
-              {
-                  title: 'Municipality',
-                  href: municipalityConfigurationIndex(),
-                  icon: Building2,
-              },
-          ]
-        : []),
+    cmci: {
+        title: 'CMCI LDCS Annex B',
+        href: cmciLdcsReportIndex(),
+        icon: TableProperties,
+    },
+    plds: {
+        title: 'PLDS',
+        href: pldsReportIndex(),
+        icon: TableProperties,
+    },
+    bsp: {
+        title: 'BSP Non-Bank Entities',
+        href: bspReportIndex(),
+        icon: TableProperties,
+    },
+    annexC: {
+        title: 'ANNEX C–DNFBP',
+        href: annexCDnfbpReportIndex(),
+        icon: TableProperties,
+    },
+} satisfies Record<string, NavItem>;
+
+const staffSections = computed<NavSection[]>(() => {
+    const sections: NavSection[] = [
+        { title: 'Overview', items: [overviewItem] },
+    ];
+
+    if (page.props.auth.can_view_permit_applications) {
+        sections.push({
+            title: 'Applications',
+            collapsible: true,
+            items: [
+                {
+                    title: 'All Applications',
+                    href: permitApplicationIndex(),
+                    icon: FileText,
+                },
+                {
+                    title: 'Assessments',
+                    href: assessmentIndex(),
+                    icon: Calculator,
+                },
+            ],
+        });
+    }
+
+    const treasuryItems: NavItem[] = [];
+
+    if (page.props.auth.can_view_payment_schedules) {
+        treasuryItems.push({
+            title: 'Payment Schedules',
+            href: paymentScheduleIndex(),
+            icon: WalletCards,
+        });
+    }
+
+    if (page.props.auth.can_view_receipts) {
+        treasuryItems.push({
+            title: 'Receipts',
+            href: receiptIndex(),
+            icon: ReceiptText,
+        });
+    }
+
+    if (page.props.auth.can_view_billing_groups) {
+        treasuryItems.push({
+            title: 'Billing Groups — Policy Pending',
+            href: billingGroupIndex(),
+            icon: WalletCards,
+        });
+    }
+
+    if (page.props.auth.can_view_reports) {
+        treasuryItems.push(
+            reportItems.dailyCollections,
+            reportItems.revenueSources,
+        );
+    }
+
+    if (treasuryItems.length > 0) {
+        sections.push({
+            title: 'Treasury',
+            collapsible: true,
+            items: treasuryItems,
+        });
+    }
+
+    if (page.props.auth.can_view_reports) {
+        sections.push(
+            {
+                title: 'Reports · Operational',
+                collapsible: true,
+                items: [
+                    reportItems.dailyCollections,
+                    reportItems.revenueSources,
+                    reportItems.collectibles,
+                    reportItems.paidEstablishments,
+                    reportItems.unpaidEstablishments,
+                ],
+            },
+            {
+                title: 'Reports · Management',
+                collapsible: true,
+                items: [
+                    reportItems.assessmentSummary,
+                    reportItems.paymentSummary,
+                    reportItems.businessTax,
+                    reportItems.capitalGross,
+                    reportItems.topTaxDue,
+                ],
+            },
+            {
+                title: 'Reports · Authority Pending',
+                collapsible: true,
+                items: [
+                    reportItems.allAbstract,
+                    reportItems.cmci,
+                    reportItems.plds,
+                    reportItems.bsp,
+                    reportItems.annexC,
+                ],
+            },
+        );
+    }
+
+    const administrationItems: NavItem[] = [];
+
+    if (page.props.auth.can_view_fee_rules) {
+        administrationItems.push({
+            title: 'Taxes & Fees',
+            href: feeRuleIndex(),
+            icon: Coins,
+        });
+    }
+
+    if (page.props.auth.can_view_users) {
+        administrationItems.push({
+            title: 'Users',
+            href: userDirectoryIndex(),
+            icon: Users,
+        });
+    }
+
+    if (page.props.auth.can_view_roles) {
+        administrationItems.push({
+            title: 'Roles & Permissions',
+            href: rolePermissionIndex(),
+            icon: ShieldCheck,
+        });
+    }
+
+    if (page.props.auth.can_view_municipality_configuration) {
+        administrationItems.push({
+            title: 'Municipality & Officials',
+            href: municipalityConfigurationIndex(),
+            icon: Building2,
+        });
+    }
+
+    if (administrationItems.length > 0) {
+        sections.push({
+            title: 'Administration',
+            collapsible: true,
+            items: administrationItems,
+        });
+    }
+
+    return sections;
+});
+
+const citizenSections: NavSection[] = [
+    { title: 'Overview', items: [overviewItem] },
+    {
+        title: 'Permit Services',
+        items: [
+            {
+                title: 'My Permit Applications',
+                href: citizenPermitApplicationIndex(),
+                icon: FileText,
+            },
+            {
+                title: 'Notices',
+                href: citizenNotificationIndex(),
+                icon: Bell,
+            },
+        ],
+    },
 ];
 
-const citizenNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-    {
-        title: 'My Permit Applications',
-        href: citizenPermitApplicationIndex(),
-        icon: FileText,
-    },
-    {
-        title: 'Notices',
-        href: citizenNotificationIndex(),
-        icon: Bell,
-    },
+const authenticatedSections: NavSection[] = [
+    { title: 'Overview', items: [overviewItem] },
 ];
 
-const authenticatedNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-];
-
-const staffFooterNavItems: NavItem[] = [
-    {
-        title: 'Repository',
-        href: 'https://github.com/laravel/vue-starter-kit',
-        icon: FolderGit2,
-    },
-    {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#vue',
-        icon: BookOpen,
-    },
-];
-
-const mainNavItems = computed(() => {
+const mainNavSections = computed(() => {
     if (page.props.auth.can_access_staff) {
-        return staffNavItems;
+        return staffSections.value;
     }
 
     if (page.props.auth.can_access_citizen) {
-        return citizenNavItems;
+        return citizenSections;
     }
 
-    return authenticatedNavItems;
+    return authenticatedSections;
 });
-const footerNavItems = computed(() =>
-    page.props.auth.can_access_staff ? staffFooterNavItems : [],
-);
 </script>
 
 <template>
@@ -272,8 +334,15 @@ const footerNavItems = computed(() =>
         <SidebarHeader>
             <SidebarMenu>
                 <SidebarMenuItem>
-                    <SidebarMenuButton size="lg" as-child>
-                        <Link :href="dashboard()">
+                    <SidebarMenuButton
+                        size="lg"
+                        as-child
+                        tooltip="Municipality of Ipil BPLS"
+                    >
+                        <Link
+                            :href="dashboard()"
+                            aria-label="Go to BPLS overview"
+                        >
                             <AppLogo />
                         </Link>
                     </SidebarMenuButton>
@@ -281,12 +350,11 @@ const footerNavItems = computed(() =>
             </SidebarMenu>
         </SidebarHeader>
 
-        <SidebarContent>
-            <NavMain :items="mainNavItems" />
+        <SidebarContent class="overflow-y-auto">
+            <NavMain :sections="mainNavSections" />
         </SidebarContent>
 
         <SidebarFooter>
-            <NavFooter :items="footerNavItems" />
             <NavUser />
         </SidebarFooter>
     </Sidebar>

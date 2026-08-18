@@ -16,7 +16,30 @@ test('authenticated users can visit the dashboard', function () {
     $this->actingAs($user);
 
     $response = $this->get(route('dashboard'));
-    $response->assertOk();
+    $response
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Dashboard')
+        );
+});
+
+test('citizen dashboard receives citizen access without staff navigation access', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessCitizen,
+        UserPermission::ViewOwnPermitApplications,
+    ], UserRole::Citizen);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Dashboard')
+            ->where('auth.can_access_citizen', true)
+            ->where('auth.can_access_staff', false)
+            ->where('auth.can_view_permit_applications', false)
+            ->where('auth.can_view_payment_schedules', false)
+            ->where('auth.can_view_reports', false)
+        );
 });
 
 test('shared navigation permissions project only effective assigned access', function () {

@@ -12,3 +12,9 @@ export type NavItem = {
     icon?: LucideIcon;
     isActive?: boolean;
 };
+
+export type NavSection = {
+    title: string;
+    items: NavItem[];
+    collapsible?: boolean;
+};
