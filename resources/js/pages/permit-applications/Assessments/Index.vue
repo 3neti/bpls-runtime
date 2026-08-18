@@ -36,9 +36,19 @@ type PermitApplicationRow = {
     } | null;
 };
 
+type PaginationLink = {
+    url: string | null;
+    label: string;
+    active: boolean;
+};
+
 defineProps<{
     permitApplications: {
         data: PermitApplicationRow[];
+        links: PaginationLink[];
+        from: number | null;
+        to: number | null;
+        total: number;
     };
     can: {
         assess_permit_applications: boolean;
@@ -61,13 +71,17 @@ function money(amountCents: number): string {
         currency: 'PHP',
     }).format(amountCents / 100);
 }
+
+function statusLabel(value: string): string {
+    return value.replaceAll('_', ' ');
+}
 </script>
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head title="Permit Assessments" />
 
-        <main class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
+        <main class="flex h-full min-w-0 flex-1 flex-col gap-4 p-4">
             <section class="flex flex-col gap-2">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -99,8 +113,155 @@ function money(amountCents: number): string {
 
             <section
                 class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
+                aria-label="Assessment queue records"
             >
-                <div class="overflow-x-auto">
+                <div
+                    v-if="permitApplications.data.length === 0"
+                    class="px-4 py-10 text-center text-sm text-muted-foreground"
+                >
+                    No permit applications are available for assessment.
+                </div>
+
+                <ul
+                    v-else
+                    class="divide-y divide-border md:hidden"
+                    aria-label="Assessment queue"
+                >
+                    <li
+                        v-for="permitApplication in permitApplications.data"
+                        :key="permitApplication.id"
+                        class="grid min-w-0 gap-4 p-4"
+                    >
+                        <div
+                            class="flex min-w-0 items-start justify-between gap-3"
+                        >
+                            <div class="min-w-0">
+                                <p class="font-medium break-words">
+                                    {{
+                                        permitApplication.application_number ??
+                                        `Application #${permitApplication.id}`
+                                    }}
+                                </p>
+                                <p class="text-xs text-muted-foreground">
+                                    {{ permitApplication.application_year }} ·
+                                    <span class="capitalize">{{
+                                        permitApplication.type
+                                    }}</span>
+                                </p>
+                            </div>
+                            <Badge
+                                variant="secondary"
+                                class="shrink-0 capitalize"
+                            >
+                                {{ statusLabel(permitApplication.status) }}
+                            </Badge>
+                        </div>
+
+                        <div
+                            v-if="permitApplication.assessment_policy_boundary"
+                            class="min-w-0 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+                        >
+                            <p class="font-medium">
+                                Assessment policy boundary
+                            </p>
+                            <p class="mt-1 break-words">
+                                {{
+                                    permitApplication.assessment_policy_boundary
+                                        .reason
+                                }}
+                            </p>
+                        </div>
+
+                        <dl
+                            class="grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 text-sm"
+                        >
+                            <div class="col-span-2 min-w-0">
+                                <dt class="text-xs text-muted-foreground">
+                                    Business
+                                </dt>
+                                <dd class="font-medium break-words">
+                                    {{ permitApplication.business_name }}
+                                </dd>
+                                <dd
+                                    class="text-xs break-words text-muted-foreground"
+                                >
+                                    {{ permitApplication.owner_name }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Lines
+                                </dt>
+                                <dd>{{ permitApplication.line_count }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Latest assessment
+                                </dt>
+                                <dd
+                                    v-if="permitApplication.latest_assessment"
+                                    class="font-medium"
+                                >
+                                    {{
+                                        money(
+                                            permitApplication.latest_assessment
+                                                .total_amount_cents,
+                                        )
+                                    }}
+                                </dd>
+                                <dd
+                                    v-if="permitApplication.latest_assessment"
+                                    class="text-xs text-muted-foreground"
+                                >
+                                    Sequence
+                                    {{
+                                        permitApplication.latest_assessment
+                                            .sequence
+                                    }}
+                                </dd>
+                                <dd v-else class="text-muted-foreground">
+                                    Not assessed
+                                </dd>
+                            </div>
+                        </dl>
+
+                        <div class="flex flex-wrap gap-2 border-t pt-3">
+                            <Button
+                                v-if="permitApplication.latest_assessment"
+                                as-child
+                                variant="outline"
+                                size="sm"
+                            >
+                                <Link
+                                    :href="
+                                        show(
+                                            permitApplication.latest_assessment
+                                                .id,
+                                        )
+                                    "
+                                >
+                                    <Eye />
+                                    View
+                                </Link>
+                            </Button>
+                            <Link
+                                v-if="can.assess_permit_applications"
+                                :href="store(permitApplication.id)"
+                                method="post"
+                                as="button"
+                                :class="buttonVariants({ size: 'sm' })"
+                            >
+                                <Calculator />
+                                Assess
+                            </Link>
+                        </div>
+                    </li>
+                </ul>
+
+                <div
+                    v-if="permitApplications.data.length > 0"
+                    class="hidden overflow-x-auto md:block"
+                >
                     <table class="w-full min-w-[860px] text-sm">
                         <thead
                             class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
@@ -174,9 +335,8 @@ function money(amountCents: number): string {
                                         class="capitalize"
                                     >
                                         {{
-                                            permitApplication.status.replace(
-                                                '_',
-                                                ' ',
+                                            statusLabel(
+                                                permitApplication.status,
                                             )
                                         }}
                                     </Badge>
@@ -237,7 +397,9 @@ function money(amountCents: number): string {
                                             </Link>
                                         </Button>
                                         <Link
-                                            v-if="can.assess_permit_applications"
+                                            v-if="
+                                                can.assess_permit_applications
+                                            "
                                             :href="store(permitApplication.id)"
                                             method="post"
                                             as="button"
@@ -251,19 +413,49 @@ function money(amountCents: number): string {
                                     </div>
                                 </td>
                             </tr>
-                            <tr v-if="permitApplications.data.length === 0">
-                                <td
-                                    colspan="7"
-                                    class="px-4 py-10 text-center text-muted-foreground"
-                                >
-                                    No permit applications are available for
-                                    assessment.
-                                </td>
-                            </tr>
                         </tbody>
                     </table>
                 </div>
             </section>
+
+            <nav
+                v-if="permitApplications.links.length > 3"
+                class="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+                aria-label="Assessment queue pagination"
+            >
+                <div class="text-muted-foreground">
+                    Showing {{ permitApplications.from ?? 0 }} to
+                    {{ permitApplications.to ?? 0 }} of
+                    {{ permitApplications.total }}
+                </div>
+                <div class="flex flex-wrap gap-1">
+                    <template
+                        v-for="link in permitApplications.links"
+                        :key="link.label"
+                    >
+                        <Link
+                            v-if="link.url"
+                            :href="link.url"
+                            preserve-scroll
+                            :aria-current="link.active ? 'page' : undefined"
+                            :class="[
+                                'rounded-md border px-3 py-1.5 outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                                link.active
+                                    ? 'border-primary bg-primary text-primary-foreground'
+                                    : 'border-sidebar-border/70 text-foreground',
+                            ]"
+                        >
+                            <span v-html="link.label" />
+                        </Link>
+                        <span
+                            v-else
+                            class="rounded-md border border-sidebar-border/70 px-3 py-1.5 text-muted-foreground opacity-50"
+                            aria-disabled="true"
+                            v-html="link.label"
+                        />
+                    </template>
+                </div>
+            </nav>
         </main>
     </AppLayout>
 </template>

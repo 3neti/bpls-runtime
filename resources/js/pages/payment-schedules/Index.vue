@@ -2,14 +2,14 @@
 import { Head, Link, router } from '@inertiajs/vue3';
 import { Eye, Search, X } from '@lucide/vue';
 import { ref } from 'vue';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import AppLayout from '@/layouts/AppLayout.vue';
 import {
     index,
     show,
 } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
 type PaymentScheduleRow = {
@@ -111,7 +111,7 @@ function statusLabel(value: string): string {
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head title="Payment Schedules" />
 
-        <main class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
+        <main class="flex h-full min-w-0 flex-1 flex-col gap-4 p-4">
             <section class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold text-foreground">
@@ -172,13 +172,14 @@ function statusLabel(value: string): string {
                     </select>
                 </div>
                 <div class="flex gap-2">
-                    <Button type="submit">
+                    <Button type="submit" class="flex-1 sm:flex-none">
                         <Search />
                         Search
                     </Button>
                     <Button
                         type="button"
                         variant="outline"
+                        class="flex-1 sm:flex-none"
                         @click="clearFilters"
                     >
                         <X />
@@ -189,9 +190,143 @@ function statusLabel(value: string): string {
 
             <section
                 class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
+                aria-label="Payment schedule records"
             >
-                <div class="overflow-x-auto">
-                    <table class="w-full min-w-[980px] text-sm">
+                <div
+                    v-if="paymentSchedules.data.length === 0"
+                    class="px-4 py-10 text-center text-sm text-muted-foreground"
+                >
+                    No payment schedules match the current filters.
+                </div>
+
+                <ul
+                    v-else
+                    class="divide-y divide-border md:hidden"
+                    aria-label="Payment schedules"
+                >
+                    <li
+                        v-for="paymentSchedule in paymentSchedules.data"
+                        :key="paymentSchedule.id"
+                        class="grid min-w-0 gap-4 p-4"
+                    >
+                        <div
+                            class="flex min-w-0 items-start justify-between gap-3"
+                        >
+                            <div class="min-w-0">
+                                <p class="font-medium">
+                                    Schedule #{{ paymentSchedule.sequence }}
+                                </p>
+                                <p
+                                    class="text-xs break-words text-muted-foreground capitalize"
+                                >
+                                    {{ paymentSchedule.payment_mode }} ·
+                                    {{
+                                        paymentSchedule.due_on ?? 'No due date'
+                                    }}
+                                </p>
+                            </div>
+                            <Badge
+                                variant="secondary"
+                                class="shrink-0 capitalize"
+                            >
+                                {{ statusLabel(paymentSchedule.status) }}
+                            </Badge>
+                        </div>
+
+                        <dl
+                            class="grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 text-sm"
+                        >
+                            <div class="col-span-2 min-w-0">
+                                <dt class="text-xs text-muted-foreground">
+                                    Application
+                                </dt>
+                                <dd class="font-medium break-words">
+                                    {{
+                                        paymentSchedule.permit_application
+                                            .application_number ??
+                                        `Application #${paymentSchedule.permit_application.id}`
+                                    }}
+                                </dd>
+                                <dd class="text-xs text-muted-foreground">
+                                    {{
+                                        paymentSchedule.permit_application
+                                            .application_year
+                                    }}
+                                </dd>
+                            </div>
+                            <div class="col-span-2 min-w-0">
+                                <dt class="text-xs text-muted-foreground">
+                                    Business
+                                </dt>
+                                <dd class="font-medium break-words">
+                                    {{
+                                        paymentSchedule.permit_application
+                                            .business_name
+                                    }}
+                                </dd>
+                                <dd
+                                    class="text-xs break-words text-muted-foreground"
+                                >
+                                    {{
+                                        paymentSchedule.permit_application
+                                            .owner_name
+                                    }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Paid
+                                </dt>
+                                <dd>
+                                    {{
+                                        money(paymentSchedule.paid_amount_cents)
+                                    }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Balance
+                                </dt>
+                                <dd class="font-medium">
+                                    {{
+                                        money(
+                                            paymentSchedule.total_amount_cents -
+                                                paymentSchedule.paid_amount_cents,
+                                        )
+                                    }}
+                                </dd>
+                                <dd class="text-xs text-muted-foreground">
+                                    Total
+                                    {{
+                                        money(
+                                            paymentSchedule.total_amount_cents,
+                                        )
+                                    }}
+                                </dd>
+                            </div>
+                        </dl>
+
+                        <div class="flex border-t pt-3">
+                            <Button
+                                as-child
+                                variant="outline"
+                                size="sm"
+                                class="w-full"
+                            >
+                                <Link :href="show(paymentSchedule.id)">
+                                    <Eye />
+                                    View
+                                </Link>
+                            </Button>
+                        </div>
+                    </li>
+                </ul>
+
+                <div
+                    v-if="paymentSchedules.data.length > 0"
+                    class="hidden overflow-x-auto md:block"
+                >
+                    <table class="w-full min-w-[900px] text-sm">
                         <thead
                             class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
                         >
@@ -312,15 +447,6 @@ function statusLabel(value: string): string {
                                     </div>
                                 </td>
                             </tr>
-                            <tr v-if="paymentSchedules.data.length === 0">
-                                <td
-                                    colspan="7"
-                                    class="px-4 py-10 text-center text-muted-foreground"
-                                >
-                                    No payment schedules match the current
-                                    filters.
-                                </td>
-                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -328,7 +454,8 @@ function statusLabel(value: string): string {
 
             <nav
                 v-if="paymentSchedules.links.length > 3"
-                class="flex flex-wrap items-center justify-between gap-3 text-sm"
+                class="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+                aria-label="Payment schedules pagination"
             >
                 <div class="text-muted-foreground">
                     Showing {{ paymentSchedules.from ?? 0 }} to
@@ -336,22 +463,31 @@ function statusLabel(value: string): string {
                     {{ paymentSchedules.total }}
                 </div>
                 <div class="flex flex-wrap gap-1">
-                    <Link
+                    <template
                         v-for="link in paymentSchedules.links"
                         :key="link.label"
-                        :href="link.url ?? '#'"
-                        preserve-scroll
-                        :class="[
-                            'rounded-md border px-3 py-1.5',
-                            link.active
-                                ? 'border-primary bg-primary text-primary-foreground'
-                                : 'border-sidebar-border/70 text-foreground',
-                            link.url === null
-                                ? 'pointer-events-none opacity-50'
-                                : '',
-                        ]"
-                        v-html="link.label"
-                    />
+                    >
+                        <Link
+                            v-if="link.url"
+                            :href="link.url"
+                            preserve-scroll
+                            :aria-current="link.active ? 'page' : undefined"
+                            :class="[
+                                'rounded-md border px-3 py-1.5 outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                                link.active
+                                    ? 'border-primary bg-primary text-primary-foreground'
+                                    : 'border-sidebar-border/70 text-foreground',
+                            ]"
+                        >
+                            <span v-html="link.label" />
+                        </Link>
+                        <span
+                            v-else
+                            class="rounded-md border border-sidebar-border/70 px-3 py-1.5 text-muted-foreground opacity-50"
+                            aria-disabled="true"
+                            v-html="link.label"
+                        />
+                    </template>
                 </div>
             </nav>
         </main>

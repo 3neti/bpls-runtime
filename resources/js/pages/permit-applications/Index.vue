@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
 import { Calculator, Eye, Plus, WalletCards } from '@lucide/vue';
+import { show as showPaymentSchedule } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
+import { store as assess } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
+import {
+    create,
+    index,
+    show,
+} from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { create, index, show } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
-import { show as showPaymentSchedule } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
-import { store as assess } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import type { BreadcrumbItem } from '@/types';
 
 type PermitApplicationRow = {
@@ -47,9 +51,19 @@ type PermitApplicationRow = {
     can_continue: boolean;
 };
 
+type PaginationLink = {
+    url: string | null;
+    label: string;
+    active: boolean;
+};
+
 defineProps<{
     permitApplications: {
         data: PermitApplicationRow[];
+        links: PaginationLink[];
+        from: number | null;
+        to: number | null;
+        total: number;
     };
     can: {
         create_permit_applications: boolean;
@@ -71,13 +85,17 @@ function money(amountCents: number): string {
         currency: 'PHP',
     }).format(amountCents / 100);
 }
+
+function statusLabel(value: string): string {
+    return value.replaceAll('_', ' ');
+}
 </script>
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head title="Permit Applications" />
 
-        <main class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
+        <main class="flex h-full min-w-0 flex-1 flex-col gap-4 p-4">
             <section class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold text-foreground">
@@ -98,9 +116,172 @@ function money(amountCents: number): string {
 
             <section
                 class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
+                aria-label="All applications records"
             >
-                <div class="overflow-x-auto">
-                    <table class="w-full min-w-[920px] text-sm">
+                <div
+                    v-if="permitApplications.data.length === 0"
+                    class="px-4 py-10 text-center text-sm text-muted-foreground"
+                >
+                    No permit applications have been recorded.
+                </div>
+
+                <ul
+                    v-else
+                    class="divide-y divide-border md:hidden"
+                    aria-label="All applications"
+                >
+                    <li
+                        v-for="permitApplication in permitApplications.data"
+                        :key="permitApplication.id"
+                        class="grid min-w-0 gap-4 p-4"
+                    >
+                        <div
+                            class="flex min-w-0 items-start justify-between gap-3"
+                        >
+                            <div class="min-w-0">
+                                <p class="font-medium break-words">
+                                    {{
+                                        permitApplication.application_number ??
+                                        `Application #${permitApplication.id}`
+                                    }}
+                                </p>
+                                <p class="text-xs text-muted-foreground">
+                                    {{ permitApplication.application_year }} ·
+                                    <span class="capitalize">{{
+                                        permitApplication.type
+                                    }}</span>
+                                </p>
+                            </div>
+                            <Badge
+                                variant="secondary"
+                                class="shrink-0 capitalize"
+                            >
+                                {{ statusLabel(permitApplication.status) }}
+                            </Badge>
+                        </div>
+
+                        <dl
+                            class="grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 text-sm"
+                        >
+                            <div class="col-span-2 min-w-0">
+                                <dt class="text-xs text-muted-foreground">
+                                    Business
+                                </dt>
+                                <dd class="font-medium break-words">
+                                    {{ permitApplication.business.name }}
+                                </dd>
+                                <dd
+                                    class="text-xs break-words text-muted-foreground"
+                                >
+                                    {{ permitApplication.business.owner.name }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Activity
+                                </dt>
+                                <dd>
+                                    {{ permitApplication.lines.length }} line
+                                </dd>
+                                <dd
+                                    v-if="permitApplication.lines[0]"
+                                    class="text-xs break-words text-muted-foreground"
+                                >
+                                    {{
+                                        money(
+                                            permitApplication.lines[0]
+                                                .declared_gross_sales_cents,
+                                        )
+                                    }}
+                                    gross
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Assessment
+                                </dt>
+                                <dd
+                                    v-if="permitApplication.latest_assessment"
+                                    class="font-medium"
+                                >
+                                    {{
+                                        money(
+                                            permitApplication.latest_assessment
+                                                .total_amount_cents,
+                                        )
+                                    }}
+                                </dd>
+                                <dd
+                                    v-if="permitApplication.latest_assessment"
+                                    class="text-xs text-muted-foreground"
+                                >
+                                    Sequence
+                                    {{
+                                        permitApplication.latest_assessment
+                                            .sequence
+                                    }}
+                                </dd>
+                                <dd v-else class="text-muted-foreground">
+                                    Not assessed
+                                </dd>
+                            </div>
+                        </dl>
+
+                        <div
+                            class="flex flex-wrap items-center gap-2 border-t pt-3"
+                        >
+                            <Button as-child variant="outline" size="sm">
+                                <Link :href="show(permitApplication.id)">
+                                    <Eye />
+                                    View
+                                </Link>
+                            </Button>
+                            <Link
+                                v-if="
+                                    can.assess_permit_applications &&
+                                    permitApplication.can_continue
+                                "
+                                :href="assess(permitApplication.id)"
+                                method="post"
+                                as="button"
+                                :class="buttonVariants({ size: 'sm' })"
+                            >
+                                <Calculator />
+                                Assess
+                            </Link>
+                            <Button
+                                v-if="permitApplication.latest_payment_schedule"
+                                as-child
+                                variant="outline"
+                                size="sm"
+                            >
+                                <Link
+                                    :href="
+                                        showPaymentSchedule(
+                                            permitApplication
+                                                .latest_payment_schedule.id,
+                                        )
+                                    "
+                                >
+                                    <WalletCards />
+                                    Payment
+                                </Link>
+                            </Button>
+                            <span
+                                v-if="!permitApplication.can_continue"
+                                class="text-xs text-muted-foreground"
+                            >
+                                Terminal
+                            </span>
+                        </div>
+                    </li>
+                </ul>
+
+                <div
+                    v-if="permitApplications.data.length > 0"
+                    class="hidden overflow-x-auto md:block"
+                >
+                    <table class="w-full min-w-[860px] text-sm">
                         <thead
                             class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
                         >
@@ -159,9 +340,8 @@ function money(amountCents: number): string {
                                         class="capitalize"
                                     >
                                         {{
-                                            permitApplication.status.replace(
-                                                '_',
-                                                ' ',
+                                            statusLabel(
+                                                permitApplication.status,
                                             )
                                         }}
                                     </Badge>
@@ -276,18 +456,49 @@ function money(amountCents: number): string {
                                     </div>
                                 </td>
                             </tr>
-                            <tr v-if="permitApplications.data.length === 0">
-                                <td
-                                    colspan="7"
-                                    class="px-4 py-10 text-center text-muted-foreground"
-                                >
-                                    No permit applications have been recorded.
-                                </td>
-                            </tr>
                         </tbody>
                     </table>
                 </div>
             </section>
+
+            <nav
+                v-if="permitApplications.links.length > 3"
+                class="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+                aria-label="All applications pagination"
+            >
+                <div class="text-muted-foreground">
+                    Showing {{ permitApplications.from ?? 0 }} to
+                    {{ permitApplications.to ?? 0 }} of
+                    {{ permitApplications.total }}
+                </div>
+                <div class="flex flex-wrap gap-1">
+                    <template
+                        v-for="link in permitApplications.links"
+                        :key="link.label"
+                    >
+                        <Link
+                            v-if="link.url"
+                            :href="link.url"
+                            preserve-scroll
+                            :aria-current="link.active ? 'page' : undefined"
+                            :class="[
+                                'rounded-md border px-3 py-1.5 outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                                link.active
+                                    ? 'border-primary bg-primary text-primary-foreground'
+                                    : 'border-sidebar-border/70 text-foreground',
+                            ]"
+                        >
+                            <span v-html="link.label" />
+                        </Link>
+                        <span
+                            v-else
+                            class="rounded-md border border-sidebar-border/70 px-3 py-1.5 text-muted-foreground opacity-50"
+                            aria-disabled="true"
+                            v-html="link.label"
+                        />
+                    </template>
+                </div>
+            </nav>
         </main>
     </AppLayout>
 </template>
