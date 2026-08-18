@@ -1,3 +1,7 @@
+## Multi-Agent Workspace Induction
+
+Before beginning any repository work, read `docs/agents/README.md` and follow its role-specific reading order. The Chief Architect and Integrator owns architecture decisions, shared ledgers, cross-cutting scenario infrastructure, and integration to `main`. Specialist agents must work from a clean, explicitly assigned worktree and must not broaden their role boundary without an integrator decision.
+
 <laravel-boost-guidelines>
 === foundation rules ===
 

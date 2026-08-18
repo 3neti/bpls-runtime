@@ -16,7 +16,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | {app/Actions/StageLegacyExport.php,app/Actions/ValidateStagedLegacyDatasets.php,app/Console/Commands/StageLegacyExportCommand.php} | .ai/rules/commands.md |
 | {app/Actions/*LegacyPermitApplication*.php,app/Actions/PlanLegacyPermitApplications.php,app/Console/Commands/PlanLegacyPermitApplicationsCommand.php,app/Models/LegacyApplicationMapping*.php} | .ai/rules/console-commands-models.md |
 | {config/municipality.php,app/Actions/*Municipality*Configuration*.php,app/Http/Controllers/Staff/*Municipality*Configuration*.php} | .ai/rules/controllers-staff.md |
-| **/*FinancialCalibration*.php | .ai/rules/general.md |
+| **/*FinancialCalibration*.php, ** | .ai/rules/general.md |
 | app/LifecycleScenarios/** | .ai/rules/lifecycle-scenarios.md |
 | app/Models/{User,BusinessOwner,Business,PermitApplication}.php | .ai/rules/models.md |
 | {app/Actions/*Report*.php,app/Http/Controllers/Staff/*ReportController.php,resources/js/pages/reports/**} | .ai/rules/pages-reports.md |

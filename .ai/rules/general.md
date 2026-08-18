@@ -1,6 +1,7 @@
 ---
 paths:
   - '**/*FinancialCalibration*.php'
+  - '**'
 ---
 
 # General
@@ -10,3 +11,6 @@ Golden Financial Specimens verify five-layer historical evidence without evaluat
 
 ## Separate municipal clarification from fiscal authority
 Municipality-origin operational clarification strengthens reconciliation evidence but does not activate taxpayer-liability policy unless the accepted fiscal authority is recorded. CAL-2026-001 preserves legacy inclusive-due-date behavior only as history; future Laravel behavior must not treat the due date itself as delinquent, and the positive following-day rule remains non-executable pending fiscal authority and remaining surcharge/rounding policy.
+
+## Use one integrator and separate agent worktrees
+All Codex specialists must read docs/agents/README.md, work from a clean integrator-assigned base in a separate worktree/branch, and stay within assigned file ownership. The Chief Architect and Integrator alone updates shared ledgers/architecture and integrates to main; specialist handoffs must distinguish implemented, tested, browser-verified, and parity-verified claims.
