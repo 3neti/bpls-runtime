@@ -8,6 +8,7 @@ use App\Enums\LegacyImportBatchStatus;
 use App\Models\LegacyApplicationIdMapping;
 use App\Models\LegacyIdMapping;
 use App\Models\LegacyImportBatch;
+use App\Models\LegacyMappingProposal;
 use App\Models\LegacyRecord;
 use App\Models\LegacySource;
 use Illuminate\Support\Facades\Storage;
@@ -426,6 +427,7 @@ test('human identity frontier isolates collision classes without accepting simil
 });
 
 test('priority review classes separate compound contact and non contact identity review units', function () {
+    Storage::fake('local');
     $batches = mappingReadinessBatches('priority-review-classes');
     addMappingReadinessCandidate(
         $batches['registry'],
@@ -486,9 +488,61 @@ test('priority review classes separate compound contact and non contact identity
     addMappingReadinessCandidate(
         $batches['registry'],
         $batches['financial'],
+        'non-contact-externally-coupled-a',
+        owner: [
+            'firstName' => 'Externally Coupled',
+            'lastName' => 'Owner',
+            'birthDate' => '1983-04-05',
+        ],
+    );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'non-contact-externally-coupled-b',
+        owner: [
+            'firstName' => 'Externally Coupled',
+            'lastName' => 'Owner',
+            'birthDate' => '1983-04-05',
+        ],
+    );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'compound-registration-externally-coupled-a',
+        owner: [
+            'firstName' => 'Compound Coupled',
+            'lastName' => 'Owner',
+            'birthDate' => '1984-05-06',
+        ],
+        business: ['registrationNumber' => 'EXTERNALLY-COUPLED-REGISTRATION'],
+    );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'compound-registration-externally-coupled-b',
+        owner: [
+            'firstName' => 'Compound Coupled',
+            'lastName' => 'Owner',
+            'birthDate' => '1984-05-06',
+        ],
+        business: ['registrationNumber' => 'EXTERNALLY-COUPLED-REGISTRATION'],
+    );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
         'soft-deleted-contact',
         owner: ['email' => 'soft-deleted-contact@example.test'],
         application: ['isDeleted' => true],
+    );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'soft-deleted-financial',
+        owner: ['email' => 'soft-deleted-financial@example.test'],
+        application: [
+            'isDeleted' => true,
+            'feeOverrides' => [['reason' => 'preserved-soft-deleted-test-evidence']],
+        ],
     );
     addMappingReadinessCandidate(
         $batches['registry'],
@@ -510,6 +564,23 @@ test('priority review classes separate compound contact and non contact identity
             'lastName' => 'Example',
             'email' => 'identity-financial-contact@example.test',
         ]);
+        mappingReadinessRecord($batch, 'business_owners', 'soft-deleted-financial-decoy', [
+            'ownerType' => 'Individual',
+            'firstName' => 'Soft Deleted Financial Decoy',
+            'lastName' => 'Example',
+            'email' => 'soft-deleted-financial@example.test',
+        ]);
+        mappingReadinessRecord($batch, 'business_owners', 'non-contact-externally-coupled-decoy', [
+            'ownerType' => 'Individual',
+            'firstName' => 'Externally Coupled',
+            'lastName' => 'Owner',
+            'birthDate' => '1983-04-05',
+        ]);
+        mappingReadinessRecord($batch, 'businesses', 'compound-registration-externally-coupled-decoy', [
+            'ownerId' => 'owner-compound-registration-externally-coupled-a',
+            'name' => 'Externally coupled registration decoy',
+            'registrationNumber' => 'EXTERNALLY-COUPLED-REGISTRATION',
+        ]);
     }
 
     $registryPlan = app(PlanLegacyRegistryMigration::class)->handle($batches['registry'], 'registry-priority-review-classes');
@@ -517,10 +588,28 @@ test('priority review classes separate compound contact and non contact identity
     $result = app(CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier::class)->handle($financialPlan, $registryPlan);
     $repeat = app(CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier::class)->handle($financialPlan, $registryPlan);
     $priorityReviewClasses = collect($result['report']['priority_review_classes'])->keyBy('key');
+    $softDeletedDecisionRoutes = collect($result['report']['soft_deleted_decision_routes'])->keyBy('key');
+    $arguments = [
+        'financial-plan' => $financialPlan->id,
+        'registry-plan' => $registryPlan->id,
+        '--run-id' => 'priority-decision-unlocks-v6-001',
+        '--json' => true,
+    ];
+    $this->artisan('legacy:characterize-historical-financial-human-identities', $arguments)->assertSuccessful();
+    $root = "legacy-migrations/{$batches['financial']->source->key}/{$batches['financial']->run_reference}/reconciliation/historical-financial-human-identity-frontier/priority-decision-unlocks-v6-001";
+    $evidence = Storage::disk('local')->get($root.'/summary.json')
+        .Storage::disk('local')->get($root.'/classes.json')
+        .Storage::disk('local')->get($root.'/candidate-membership.jsonl');
+    $rawCollisionFingerprints = LegacyMappingProposal::query()
+        ->where('legacy_mapping_plan_id', $registryPlan->id)
+        ->get()
+        ->flatMap(fn (LegacyMappingProposal $proposal): array => array_values($proposal->collision_fingerprints ?? []))
+        ->unique();
 
-    expect($result['report']['schema_version'])->toBe('bpls.historical-financial-human-identity-frontier.v5')
-        ->and($result['report']['summary']['human_identity_application_count'])->toBe(8)
+    expect($result['report']['schema_version'])->toBe('bpls.historical-financial-human-identity-frontier.v6')
+        ->and($result['report']['summary']['human_identity_application_count'])->toBe(13)
         ->and($result['report']['summary']['priority_review_class_count'])->toBe(6)
+        ->and($result['report']['summary']['soft_deleted_decision_route_count'])->toBe(2)
         ->and($priorityReviewClasses->keys()->all())->toBe([
             'non_contact_identity_collision_free_business',
             'compound_registration_business_collision',
@@ -530,17 +619,6 @@ test('priority review classes separate compound contact and non contact identity
             'identity_plus_financial_exception',
         ])
         ->and($priorityReviewClasses->get('non_contact_identity_collision_free_business'))->toMatchArray([
-            'application_count' => 2,
-            'unique_owner_proposal_count' => 2,
-            'unique_business_proposal_count' => 2,
-            'records_that_would_advance' => 2,
-            'one_bounded_decision_could_make_rehearsal_ready' => false,
-            'accepted_mapping_count' => 0,
-            'rehearsed_mapping_count' => 0,
-            'production_applied_count' => 0,
-        ])
-        ->and(data_get($priorityReviewClasses, 'non_contact_identity_collision_free_business.review_units.owner_non_contact_collision_groups.unique_collision_group_count'))->toBe(1)
-        ->and($priorityReviewClasses->get('compound_registration_business_collision'))->toMatchArray([
             'application_count' => 4,
             'unique_owner_proposal_count' => 4,
             'unique_business_proposal_count' => 4,
@@ -550,7 +628,42 @@ test('priority review classes separate compound contact and non contact identity
             'rehearsed_mapping_count' => 0,
             'production_applied_count' => 0,
         ])
-        ->and(data_get($priorityReviewClasses, 'compound_registration_business_collision.review_units.business_registration_collision_groups.unique_collision_group_count'))->toBe(2)
+        ->and(data_get($priorityReviewClasses, 'non_contact_identity_collision_free_business.review_units.owner_non_contact_collision_groups.unique_collision_group_count'))->toBe(2)
+        ->and(data_get($priorityReviewClasses, 'non_contact_identity_collision_free_business.review_units.owner_non_contact_collision_groups.closed_collision_group_count'))->toBe(1)
+        ->and(data_get($priorityReviewClasses, 'non_contact_identity_collision_free_business.review_units.owner_non_contact_collision_groups.closed_candidate_proposal_membership_count'))->toBe(2)
+        ->and(data_get($priorityReviewClasses, 'non_contact_identity_collision_free_business.review_units.owner_non_contact_collision_groups.closed_candidate_application_membership_count'))->toBe(2)
+        ->and(data_get($priorityReviewClasses, 'non_contact_identity_collision_free_business.review_units.owner_non_contact_collision_groups.externally_coupled_collision_group_count'))->toBe(1)
+        ->and(data_get($priorityReviewClasses, 'non_contact_identity_collision_free_business.review_units.owner_non_contact_collision_groups.externally_coupled_candidate_proposal_membership_count'))->toBe(2)
+        ->and(data_get($priorityReviewClasses, 'non_contact_identity_collision_free_business.review_units.owner_non_contact_collision_groups.externally_coupled_candidate_application_membership_count'))->toBe(2)
+        ->and(data_get($priorityReviewClasses, 'non_contact_identity_collision_free_business.review_units.owner_non_contact_collision_groups.external_proposal_membership_count'))->toBe(1)
+        ->and(data_get($priorityReviewClasses, 'non_contact_identity_collision_free_business.review_units.owner_non_contact_collision_groups.closed_non_released_application_count'))->toBe(2)
+        ->and(data_get($priorityReviewClasses, 'non_contact_identity_collision_free_business.review_units.owner_non_contact_collision_groups.externally_coupled_non_released_application_count'))->toBe(2)
+        ->and(data_get($priorityReviewClasses, 'non_contact_identity_collision_free_business.review_units.owner_non_contact_collision_groups.closed_group_authoritative_disposition_could_unlock_exact_proposal_preparation'))->toBeTrue()
+        ->and(data_get($priorityReviewClasses, 'non_contact_identity_collision_free_business.review_units.owner_non_contact_collision_groups.externally_coupled_group_requires_full_global_group_review'))->toBeTrue()
+        ->and($priorityReviewClasses->get('compound_registration_business_collision'))->toMatchArray([
+            'application_count' => 6,
+            'unique_owner_proposal_count' => 6,
+            'unique_business_proposal_count' => 6,
+            'records_that_would_advance' => 6,
+            'one_bounded_decision_could_make_rehearsal_ready' => false,
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+        ])
+        ->and(data_get($priorityReviewClasses, 'compound_registration_business_collision.review_units.business_registration_collision_groups.unique_collision_group_count'))->toBe(3)
+        ->and(data_get($priorityReviewClasses, 'compound_registration_business_collision.review_units.business_registration_collision_groups.closed_collision_group_count'))->toBe(2)
+        ->and(data_get($priorityReviewClasses, 'compound_registration_business_collision.review_units.business_registration_collision_groups.closed_candidate_application_membership_count'))->toBe(4)
+        ->and(data_get($priorityReviewClasses, 'compound_registration_business_collision.review_units.business_registration_collision_groups.externally_coupled_collision_group_count'))->toBe(1)
+        ->and(data_get($priorityReviewClasses, 'compound_registration_business_collision.review_units.business_registration_collision_groups.externally_coupled_candidate_proposal_membership_count'))->toBe(2)
+        ->and(data_get($priorityReviewClasses, 'compound_registration_business_collision.review_units.business_registration_collision_groups.externally_coupled_candidate_application_membership_count'))->toBe(2)
+        ->and(data_get($priorityReviewClasses, 'compound_registration_business_collision.review_units.business_registration_collision_groups.externally_coupled_total_proposal_membership_count'))->toBe(3)
+        ->and(data_get($priorityReviewClasses, 'compound_registration_business_collision.review_units.business_registration_collision_groups.external_proposal_membership_count'))->toBe(1)
+        ->and(data_get($priorityReviewClasses, 'compound_registration_business_collision.review_units.business_registration_collision_groups.closed_contact_owner_application_count'))->toBe(2)
+        ->and(data_get($priorityReviewClasses, 'compound_registration_business_collision.review_units.business_registration_collision_groups.closed_non_contact_owner_application_count'))->toBe(2)
+        ->and(data_get($priorityReviewClasses, 'compound_registration_business_collision.review_units.business_registration_collision_groups.externally_coupled_contact_owner_application_count'))->toBe(0)
+        ->and(data_get($priorityReviewClasses, 'compound_registration_business_collision.review_units.business_registration_collision_groups.externally_coupled_non_contact_owner_application_count'))->toBe(2)
+        ->and(data_get($priorityReviewClasses, 'compound_registration_business_collision.review_units.business_registration_collision_groups.closed_group_authoritative_disposition_could_unlock_exact_proposal_preparation'))->toBeTrue()
+        ->and(data_get($priorityReviewClasses, 'compound_registration_business_collision.review_units.business_registration_collision_groups.externally_coupled_group_requires_full_global_group_review'))->toBeTrue()
         ->and($priorityReviewClasses->get('compound_contact_owner_registration_business_collision'))->toMatchArray([
             'application_count' => 2,
             'unique_owner_proposal_count' => 2,
@@ -564,23 +677,23 @@ test('priority review classes separate compound contact and non contact identity
         ->and(data_get($priorityReviewClasses, 'compound_contact_owner_registration_business_collision.review_units.owner_contact_collision_groups.unique_collision_group_count'))->toBe(1)
         ->and(data_get($priorityReviewClasses, 'compound_contact_owner_registration_business_collision.review_units.business_registration_collision_groups.unique_collision_group_count'))->toBe(1)
         ->and($priorityReviewClasses->get('compound_non_contact_owner_registration_business_collision'))->toMatchArray([
-            'application_count' => 2,
-            'unique_owner_proposal_count' => 2,
-            'unique_business_proposal_count' => 2,
-            'records_that_would_advance' => 2,
+            'application_count' => 4,
+            'unique_owner_proposal_count' => 4,
+            'unique_business_proposal_count' => 4,
+            'records_that_would_advance' => 4,
             'one_bounded_decision_could_make_rehearsal_ready' => false,
             'accepted_mapping_count' => 0,
             'rehearsed_mapping_count' => 0,
             'production_applied_count' => 0,
         ])
-        ->and(data_get($priorityReviewClasses, 'compound_non_contact_owner_registration_business_collision.review_units.owner_non_contact_collision_groups.unique_collision_group_count'))->toBe(1)
-        ->and(data_get($priorityReviewClasses, 'compound_non_contact_owner_registration_business_collision.review_units.business_registration_collision_groups.unique_collision_group_count'))->toBe(1)
+        ->and(data_get($priorityReviewClasses, 'compound_non_contact_owner_registration_business_collision.review_units.owner_non_contact_collision_groups.unique_collision_group_count'))->toBe(2)
+        ->and(data_get($priorityReviewClasses, 'compound_non_contact_owner_registration_business_collision.review_units.business_registration_collision_groups.unique_collision_group_count'))->toBe(2)
         ->and($priorityReviewClasses->get('soft_deleted_exception_matrix'))->toMatchArray([
-            'application_count' => 1,
-            'contact_signal_only_application_count' => 1,
+            'application_count' => 2,
+            'contact_signal_only_application_count' => 2,
             'non_contact_identity_signal_application_count' => 0,
             'treasury_interpretation_application_count' => 0,
-            'financial_policy_authority_application_count' => 0,
+            'financial_policy_authority_application_count' => 1,
             'permit_authority_semantics_application_count' => 0,
             'genuine_source_data_contradiction_application_count' => 0,
             'one_bounded_decision_could_make_rehearsal_ready' => false,
@@ -588,8 +701,35 @@ test('priority review classes separate compound contact and non contact identity
             'rehearsed_mapping_count' => 0,
             'production_applied_count' => 0,
         ])
+        ->and(data_get($priorityReviewClasses, 'soft_deleted_exception_matrix.review_units.owner_collision_groups.closed_collision_group_count'))->toBe(0)
+        ->and(data_get($priorityReviewClasses, 'soft_deleted_exception_matrix.review_units.owner_collision_groups.externally_coupled_collision_group_count'))->toBe(2)
+        ->and(data_get($priorityReviewClasses, 'soft_deleted_exception_matrix.review_units.owner_collision_groups.external_proposal_membership_count'))->toBe(2)
+        ->and($softDeletedDecisionRoutes->keys()->all())->toBe([
+            'deletion_identity_reference_only',
+            'financial_policy_authority',
+        ])
+        ->and($softDeletedDecisionRoutes->get('deletion_identity_reference_only'))->toMatchArray([
+            'application_count' => 1,
+            'one_bounded_decision_would_unlock_exact_proposal_preparation' => false,
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+        ])
+        ->and($softDeletedDecisionRoutes->get('financial_policy_authority'))->toMatchArray([
+            'application_count' => 1,
+            'one_bounded_decision_would_unlock_exact_proposal_preparation' => false,
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+        ])
         ->and($priorityReviewClasses->get('identity_plus_financial_exception'))->toMatchArray([
             'application_count' => 1,
+            'identity_decision_required' => true,
+            'financial_authority_decision_required' => true,
+            'decisions_are_independent' => true,
+            'identity_disposition_alone_could_unlock_exact_proposal_preparation' => false,
+            'financial_disposition_alone_could_unlock_exact_proposal_preparation' => false,
+            'full_global_owner_collision_group_review_required' => true,
             'one_bounded_decision_could_make_rehearsal_ready' => false,
             'accepted_mapping_count' => 0,
             'rehearsed_mapping_count' => 0,
@@ -597,21 +737,38 @@ test('priority review classes separate compound contact and non contact identity
         ])
         ->and($priorityReviewClasses->get('identity_plus_financial_exception')['blocker_categories'])->toContain('financial_policy_authority')
         ->and(data_get($result, 'report.fingerprints.priority_review_class_set_sha256'))->toHaveLength(64)
+        ->and(data_get($result, 'report.fingerprints.priority_decision_unlock_set_sha256'))->toHaveLength(64)
+        ->and($result['report']['preserved_v5_outputs'])->toMatchArray([
+            'schema_version' => 'bpls.historical-financial-human-identity-frontier.v5',
+            'human_identity_frontier_sha256' => data_get($result, 'report.fingerprints.human_identity_frontier_sha256'),
+            'business_source_evidence_subclass_sha256' => data_get($result, 'report.fingerprints.business_source_evidence_subclass_sha256'),
+            'decision_cohort_set_sha256' => data_get($result, 'report.fingerprints.decision_cohort_set_sha256'),
+            'municipal_identity_evidence_class_set_sha256' => data_get($result, 'report.fingerprints.municipal_identity_evidence_class_set_sha256'),
+            'priority_review_class_set_sha256' => data_get($result, 'report.fingerprints.priority_review_class_set_sha256'),
+        ])
         ->and($result['report']['preserved_v4_outputs'])->toMatchArray([
             'schema_version' => 'bpls.historical-financial-human-identity-frontier.v4',
-            'human_identity_application_count' => 8,
+            'human_identity_application_count' => 13,
             'decision_cohort_count' => 4,
             'contact_signals_only_application_count' => 0,
-            'non_contact_identity_signal_application_count' => 2,
+            'non_contact_identity_signal_application_count' => 4,
             'human_identity_frontier_sha256' => data_get($result, 'report.fingerprints.human_identity_frontier_sha256'),
             'business_source_evidence_subclass_sha256' => data_get($result, 'report.fingerprints.business_source_evidence_subclass_sha256'),
             'decision_cohort_set_sha256' => data_get($result, 'report.fingerprints.decision_cohort_set_sha256'),
             'municipal_identity_evidence_class_set_sha256' => data_get($result, 'report.fingerprints.municipal_identity_evidence_class_set_sha256'),
         ])
+        ->and($repeat['report']['preserved_v5_outputs'])->toBe($result['report']['preserved_v5_outputs'])
         ->and($repeat['report']['preserved_v4_outputs'])->toBe($result['report']['preserved_v4_outputs'])
         ->and($repeat['report']['fingerprints'])->toBe($result['report']['fingerprints'])
         ->and(LegacyApplicationIdMapping::query()->count())->toBe(0)
         ->and(LegacyIdMapping::query()->count())->toBe(0);
+
+    expect($evidence)
+        ->not->toContain('Externally Coupled')
+        ->not->toContain('1983-04-05')
+        ->not->toContain('EXTERNALLY-COUPLED-REGISTRATION')
+        ->not->toContain('soft-deleted-financial@example.test');
+    $rawCollisionFingerprints->each(fn (string $fingerprint) => expect($evidence)->not->toContain($fingerprint));
 });
 
 test('characterization refuses cross-batch payload drift and reports structural reference breaks', function () {

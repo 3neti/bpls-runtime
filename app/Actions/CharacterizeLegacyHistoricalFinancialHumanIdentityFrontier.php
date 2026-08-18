@@ -9,7 +9,7 @@ use Illuminate\Support\Collection;
 
 class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
 {
-    public const SchemaVersion = 'bpls.historical-financial-human-identity-frontier.v5';
+    public const SchemaVersion = 'bpls.historical-financial-human-identity-frontier.v6';
 
     private const BlockerCategories = [
         'exact_mapping_acceptance',
@@ -95,6 +95,9 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
             ->sortByDesc('application_count')
             ->values();
         $priorityReviewClasses = collect($this->priorityReviewClasses($candidateEvidence, $proposals));
+        $softDeletedDecisionRoutes = collect($this->softDeletedDecisionRoutes(
+            $candidateEvidence->where('decision_cohort_key', 'soft_deleted_registry_policy')->values(),
+        ));
         $evidenceBinding = [
             'source_archive_checksum' => $financialPlan->importBatch->source->archive_checksum,
             'financial_plan_id' => $financialPlan->id,
@@ -160,6 +163,7 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                     'decision_cohort_count' => $decisionCohorts->count(),
                     'municipal_identity_evidence_class_count' => $municipalIdentityEvidenceClasses->count(),
                     'priority_review_class_count' => $priorityReviewClasses->count(),
+                    'soft_deleted_decision_route_count' => $softDeletedDecisionRoutes->count(),
                     'contact_signals_only_application_count' => $municipalIdentityEvidenceClasses
                         ->firstWhere('key', 'contact_signals_only')['application_count'] ?? 0,
                     'non_contact_identity_signal_application_count' => $municipalIdentityEvidenceClasses
@@ -192,6 +196,7 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                 'municipal_identity_evidence_classes' => array_values($municipalIdentityEvidenceClasses->all()),
                 'decision_ready_cohorts' => array_values($decisionCohorts->all()),
                 'priority_review_classes' => array_values($priorityReviewClasses->all()),
+                'soft_deleted_decision_routes' => array_values($softDeletedDecisionRoutes->all()),
                 'fingerprints' => [
                     'human_identity_frontier_sha256' => $frontierSha256,
                     'business_source_evidence_subclass_sha256' => $businessSourceEvidenceSubclassSha256,
@@ -203,7 +208,37 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                             $class['key'],
                             $class['class_sha256'],
                             $class['application_count'],
-                            $class['review_units'],
+                            $this->v5ReviewUnits($class['review_units']),
+                            $class['blocker_categories'],
+                        ])->all(),
+                    ]),
+                    'priority_decision_unlock_set_sha256' => $this->hash([
+                        $evidenceBinding,
+                        ...$priorityReviewClasses->map(fn (array $class): array => [
+                            $class['key'],
+                            $this->v6ReviewUnitClosureFingerprintRows($class['review_units']),
+                        ])->all(),
+                        ...$softDeletedDecisionRoutes->map(fn (array $route): array => [
+                            $route['key'],
+                            $route['route_sha256'],
+                            $route['application_count'],
+                            $route['blocker_categories'],
+                        ])->all(),
+                    ]),
+                ],
+                'preserved_v5_outputs' => [
+                    'schema_version' => 'bpls.historical-financial-human-identity-frontier.v5',
+                    'human_identity_frontier_sha256' => $frontierSha256,
+                    'business_source_evidence_subclass_sha256' => $businessSourceEvidenceSubclassSha256,
+                    'decision_cohort_set_sha256' => $decisionCohortSetSha256,
+                    'municipal_identity_evidence_class_set_sha256' => $municipalIdentityEvidenceClassSetSha256,
+                    'priority_review_class_set_sha256' => $this->hash([
+                        $evidenceBinding,
+                        ...$priorityReviewClasses->map(fn (array $class): array => [
+                            $class['key'],
+                            $class['class_sha256'],
+                            $class['application_count'],
+                            $this->v5ReviewUnits($class['review_units']),
                             $class['blocker_categories'],
                         ])->all(),
                     ]),
@@ -400,6 +435,7 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                         $proposals,
                         'owner',
                         ['name_birth'],
+                        proposalPreparationAfterDisposition: true,
                     ),
                 ],
                 whatIsProven: 'The collision-free-business non-contact class is reducible to exact hashed name-and-birth collision groups. Each group is a bounded review unit; the signal does not establish legal identity.',
@@ -418,6 +454,7 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                         $proposals,
                         'business',
                         ['registration'],
+                        proposalPreparationAfterDisposition: true,
                     ),
                 ],
                 whatIsProven: 'The dominant compound class shares one independently reproducible business-registration collision dimension, regardless of whether its owner evidence is contact-only or non-contact.',
@@ -539,6 +576,14 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                 acceptanceWouldNotMean: 'It would not infer identity or fee policy, alter taxpayer liability, activate Released, authorize rehearsal, or authorize production migration.',
                 oneDecisionCouldMakeRehearsalReady: false,
                 whyNotOneDecision: 'Identity authority, financial authority, reference data, exact mappings, cohort freeze, and separate rehearsal authorization remain independent gates.',
+                additional: [
+                    'identity_decision_required' => true,
+                    'financial_authority_decision_required' => true,
+                    'decisions_are_independent' => true,
+                    'identity_disposition_alone_could_unlock_exact_proposal_preparation' => false,
+                    'financial_disposition_alone_could_unlock_exact_proposal_preparation' => false,
+                    'full_global_owner_collision_group_review_required' => true,
+                ],
             ),
         ])->filter(fn (array $class): bool => $class['application_count'] > 0)->all());
     }
@@ -589,6 +634,137 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
             'production_applied_count' => 0,
             ...$additional,
         ];
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $members
+     * @return list<array<string, mixed>>
+     */
+    private function softDeletedDecisionRoutes(Collection $members): array
+    {
+        $authorityCategories = [
+            'treasury_interpretation',
+            'financial_policy_authority',
+            'permit_authority_semantics',
+            'genuine_source_data_contradiction',
+        ];
+        $routes = $members
+            ->groupBy(function (array $candidate) use ($authorityCategories): string {
+                $signature = array_values(array_intersect($authorityCategories, $candidate['blocker_categories']));
+
+                return $signature === []
+                    ? 'deletion_identity_reference_only'
+                    : implode('__', $signature);
+            })
+            ->map(function (Collection $routeMembers, string $key): array {
+                $profile = $this->softDeletedDecisionRouteProfile($key);
+
+                return [
+                    'key' => $key,
+                    'route_sha256' => $this->hash($routeMembers
+                        ->map(fn (array $candidate): array => [
+                            $candidate['candidate_fingerprint'],
+                            $candidate['class_sha256'],
+                            $candidate['blocker_categories'],
+                        ])
+                        ->all()),
+                    'application_count' => $routeMembers->count(),
+                    'unique_owner_proposal_count' => $routeMembers->pluck('owner_proposal_id')->unique()->count(),
+                    'unique_business_proposal_count' => $routeMembers->pluck('business_proposal_id')->unique()->count(),
+                    'deterministic_fact' => $profile['deterministic_fact'],
+                    'blocker_categories' => $this->classBlockerCategories($routeMembers),
+                    'one_bounded_decision_would_unlock_exact_proposal_preparation' => false,
+                    'why_not_one_bounded_decision' => $profile['why_not_one_bounded_decision'],
+                    'acceptance_would_mean' => $profile['acceptance_would_mean'],
+                    'acceptance_would_not_mean' => 'It would not restore deleted records, infer legal identity or liability, discard contradictory evidence, accept mappings, activate historical status, authorize rehearsal, or authorize production migration.',
+                    'reversible_rehearsal_after_route_acceptance' => 'None. Identity, reference-data, exact-mapping, cohort-freeze, and separate rehearsal-authorization gates remain.',
+                    'what_remains_quarantined' => 'Every member remains unaccepted, unrehearsed, and production-unapplied until the deletion disposition and every listed independent blocker are resolved.',
+                    'accepted_mapping_count' => 0,
+                    'rehearsed_mapping_count' => 0,
+                    'production_applied_count' => 0,
+                ];
+            });
+        $routeOrder = array_flip([
+            'deletion_identity_reference_only',
+            'treasury_interpretation',
+            'financial_policy_authority',
+            'permit_authority_semantics',
+            'genuine_source_data_contradiction',
+        ]);
+
+        return array_values($routes
+            ->sortBy(fn (array $route): int => $routeOrder[$route['key']] ?? count($routeOrder))
+            ->values()
+            ->all());
+    }
+
+    /** @return array{deterministic_fact: string, why_not_one_bounded_decision: string, acceptance_would_mean: string} */
+    private function softDeletedDecisionRouteProfile(string $key): array
+    {
+        return match ($key) {
+            'deletion_identity_reference_only' => [
+                'deterministic_fact' => 'No Treasury, fiscal, permit-authority, or source-contradiction overlay is observed; deletion policy, legal-owner identity, reference data, and exact mapping remain independent blockers.',
+                'why_not_one_bounded_decision' => 'A deletion/retention decision would remove only the registry-policy blocker; identity, reference data, exact mappings, cohort freeze, and rehearsal authorization would remain.',
+                'acceptance_would_mean' => 'The authorized registry reviewer has accepted only the deletion/retention disposition for these source histories.',
+            ],
+            'treasury_interpretation' => [
+                'deterministic_fact' => 'The Treasury interpretation overlay is present without a fiscal, permit-authority, or source-contradiction overlay.',
+                'why_not_one_bounded_decision' => 'A bounded Treasury decision would resolve only the schedule/payment interpretation; deletion, identity, reference data, exact mappings, cohort freeze, and rehearsal authorization would remain.',
+                'acceptance_would_mean' => 'Treasury has accepted only the preserved schedule/payment disposition for these source histories.',
+            ],
+            'financial_policy_authority' => [
+                'deterministic_fact' => 'The fiscal-authority overlay is present without a Treasury, permit-authority, or source-contradiction overlay.',
+                'why_not_one_bounded_decision' => 'A bounded fiscal decision would resolve only the financial override; deletion, identity, business-registration, reference data, exact mappings, cohort freeze, and rehearsal authorization would remain.',
+                'acceptance_would_mean' => 'The authorized fiscal reviewer has accepted only the preserved financial-override disposition without recalculating liability.',
+            ],
+            'permit_authority_semantics' => [
+                'deterministic_fact' => 'The historical Released evidence overlay is present without a Treasury, fiscal, or source-contradiction overlay.',
+                'why_not_one_bounded_decision' => 'A bounded permit-authority decision would resolve only treatment of the historical assertion; deletion, identity, reference data, exact mappings, cohort freeze, and rehearsal authorization would remain.',
+                'acceptance_would_mean' => 'The authorized permit reviewer has accepted only the non-operational treatment of the preserved historical lifecycle assertion.',
+            ],
+            'genuine_source_data_contradiction' => [
+                'deterministic_fact' => 'A source lifecycle contradiction is present without a Treasury, fiscal, or permit-authority overlay.',
+                'why_not_one_bounded_decision' => 'Resolving the source contradiction would remove only that exception; deletion, identity, reference data, exact mappings, cohort freeze, and rehearsal authorization would remain.',
+                'acceptance_would_mean' => 'The authorized records reviewer has accepted only an evidence-preserving disposition for the contradictory source facts.',
+            ],
+            default => [
+                'deterministic_fact' => 'Multiple authority or contradiction overlays coexist and remain fail-closed as one exact signature.',
+                'why_not_one_bounded_decision' => 'Every authority represented by the signature must act independently before the remaining deletion, identity, reference-data, mapping, freeze, and rehearsal gates can advance.',
+                'acceptance_would_mean' => 'Each proper authority has accepted only its own exact exception disposition.',
+            ],
+        };
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $reviewUnits
+     * @return array<string, array<string, mixed>>
+     */
+    private function v5ReviewUnits(array $reviewUnits): array
+    {
+        return collect($reviewUnits)
+            ->map(fn (array $reviewUnit): array => array_intersect_key($reviewUnit, array_flip([
+                'unique_collision_group_count',
+                'collision_group_size_distribution',
+                'collision_group_count_by_signal',
+                'raw_collision_fingerprints_exposed',
+            ])))
+            ->all();
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $reviewUnits
+     * @return array<string, array{string, int, int, int}>
+     */
+    private function v6ReviewUnitClosureFingerprintRows(array $reviewUnits): array
+    {
+        return collect($reviewUnits)
+            ->map(fn (array $reviewUnit): array => [
+                $reviewUnit['collision_group_closure_sha256'],
+                $reviewUnit['closed_collision_group_count'],
+                $reviewUnit['externally_coupled_collision_group_count'],
+                $reviewUnit['external_proposal_membership_count'],
+            ])
+            ->all();
     }
 
     /**
@@ -860,8 +1036,10 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
         Collection $proposals,
         string $entity,
         ?array $includedSignals = null,
+        bool $proposalPreparationAfterDisposition = false,
     ): array {
-        $candidateProposalIds = collect($candidates)->pluck($entity.'_proposal_id')->unique();
+        $candidates = collect($candidates);
+        $candidateProposalIds = $candidates->pluck($entity.'_proposal_id')->map(fn (mixed $id): int => (int) $id)->unique();
         $collisionFingerprints = $candidateProposalIds
             ->flatMap(function (mixed $proposalId) use ($includedSignals, $proposals): array {
                 $fingerprints = $proposals->get((int) $proposalId)->collision_fingerprints ?? [];
@@ -887,11 +1065,49 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
         }
         $sizeDistribution = [];
         $signalCounts = [];
-        foreach ($clusters as $cluster) {
+        $closedCandidateProposalIds = [];
+        $externallyCoupledCandidateProposalIds = [];
+        $externalProposalIds = [];
+        $closedCollisionGroupCount = 0;
+        $externallyCoupledCollisionGroupCount = 0;
+        $closureFingerprintRows = [];
+        ksort($clusters);
+        foreach ($clusters as $clusterKey => $cluster) {
             $size = count($cluster['proposal_ids']);
             $sizeDistribution[(string) $size] = ($sizeDistribution[(string) $size] ?? 0) + 1;
             $signalCounts[$cluster['signal']] = ($signalCounts[$cluster['signal']] ?? 0) + 1;
+            $proposalIds = array_map('intval', array_keys($cluster['proposal_ids']));
+            $candidateIds = array_values(array_intersect($proposalIds, $candidateProposalIds->all()));
+            $outsideIds = array_values(array_diff($proposalIds, $candidateProposalIds->all()));
+            if ($outsideIds === []) {
+                $closedCollisionGroupCount++;
+                $closedCandidateProposalIds = [...$closedCandidateProposalIds, ...$candidateIds];
+            } else {
+                $externallyCoupledCollisionGroupCount++;
+                $externallyCoupledCandidateProposalIds = [...$externallyCoupledCandidateProposalIds, ...$candidateIds];
+                $externalProposalIds = [...$externalProposalIds, ...$outsideIds];
+            }
+            $closureFingerprintRows[] = [
+                $clusterKey,
+                ...collect($proposalIds)
+                    ->map(fn (int $proposalId): string => $proposals->get($proposalId)->identity_fingerprint)
+                    ->sort()
+                    ->values()
+                    ->all(),
+            ];
         }
+        $externallyCoupledCandidateProposalIds = array_values(array_unique($externallyCoupledCandidateProposalIds));
+        $candidateProposalClosureOverlapCount = count(array_intersect(
+            array_unique($closedCandidateProposalIds),
+            $externallyCoupledCandidateProposalIds,
+        ));
+        $closedCandidateProposalIds = array_values(array_diff(
+            array_unique($closedCandidateProposalIds),
+            $externallyCoupledCandidateProposalIds,
+        ));
+        $externalProposalIds = array_values(array_unique($externalProposalIds));
+        $closedCandidates = $candidates->whereIn($entity.'_proposal_id', $closedCandidateProposalIds);
+        $externallyCoupledCandidates = $candidates->whereIn($entity.'_proposal_id', $externallyCoupledCandidateProposalIds);
         ksort($sizeDistribution);
         ksort($signalCounts);
 
@@ -900,7 +1116,39 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
             'collision_group_size_distribution' => $sizeDistribution,
             'collision_group_count_by_signal' => $signalCounts,
             'raw_collision_fingerprints_exposed' => false,
+            'closed_collision_group_count' => $closedCollisionGroupCount,
+            'externally_coupled_collision_group_count' => $externallyCoupledCollisionGroupCount,
+            'closed_candidate_proposal_membership_count' => count($closedCandidateProposalIds),
+            'closed_candidate_application_membership_count' => $closedCandidates->count(),
+            'externally_coupled_candidate_proposal_membership_count' => count($externallyCoupledCandidateProposalIds),
+            'externally_coupled_candidate_application_membership_count' => $externallyCoupledCandidates->count(),
+            'externally_coupled_total_proposal_membership_count' => count($externallyCoupledCandidateProposalIds) + count($externalProposalIds),
+            'external_proposal_membership_count' => count($externalProposalIds),
+            'candidate_proposal_closure_overlap_count' => $candidateProposalClosureOverlapCount,
+            'closed_historical_released_application_count' => $closedCandidates->where('shape.source_lifecycle_assertion', 'Released')->count(),
+            'closed_non_released_application_count' => $closedCandidates->where('shape.source_lifecycle_assertion', 'non_Released')->count(),
+            'externally_coupled_historical_released_application_count' => $externallyCoupledCandidates->where('shape.source_lifecycle_assertion', 'Released')->count(),
+            'externally_coupled_non_released_application_count' => $externallyCoupledCandidates->where('shape.source_lifecycle_assertion', 'non_Released')->count(),
+            'closed_contact_owner_application_count' => $closedCandidates->filter(fn (array $candidate): bool => $this->hasOnlyContactOwnerSignals($candidate))->count(),
+            'closed_non_contact_owner_application_count' => $closedCandidates->reject(fn (array $candidate): bool => $this->hasOnlyContactOwnerSignals($candidate))->count(),
+            'externally_coupled_contact_owner_application_count' => $externallyCoupledCandidates->filter(fn (array $candidate): bool => $this->hasOnlyContactOwnerSignals($candidate))->count(),
+            'externally_coupled_non_contact_owner_application_count' => $externallyCoupledCandidates->reject(fn (array $candidate): bool => $this->hasOnlyContactOwnerSignals($candidate))->count(),
+            'collision_group_closure_sha256' => $this->hash($closureFingerprintRows),
+            'closed_group_authoritative_disposition_could_unlock_exact_proposal_preparation' => $proposalPreparationAfterDisposition && $closedCollisionGroupCount > 0,
+            'externally_coupled_group_requires_full_global_group_review' => $externallyCoupledCollisionGroupCount > 0,
+            'decision_unlock_scope' => $proposalPreparationAfterDisposition
+                ? 'An authoritative disposition covering every member of a complete closed group can unlock exact proposal preparation for that identity dimension and its cohort members. An externally coupled group must be reviewed across its full global membership.'
+                : 'Collision topology is evidence only; this exception class retains independent blockers before exact proposal preparation can advance.',
+            'decision_would_not_mean' => 'A group disposition would not establish identity from the collision signal, accept a mapping, resolve other blocker dimensions, authorize rehearsal, or authorize production migration.',
+            'one_group_disposition_could_make_rehearsal_ready' => false,
         ];
+    }
+
+    /** @param array<string, mixed> $candidate */
+    private function hasOnlyContactOwnerSignals(array $candidate): bool
+    {
+        return $candidate['owner_collision_signal_names'] !== []
+            && array_diff($candidate['owner_collision_signal_names'], ['email', 'phone']) === [];
     }
 
     /** @return list<string> */
