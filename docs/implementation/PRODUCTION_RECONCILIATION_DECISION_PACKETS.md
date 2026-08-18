@@ -30,8 +30,8 @@ The current municipal identity questions should be reviewed together rather than
 | Review item | Quantified scope | Exact decision boundary | Effect of an accepted decision |
 | --- | ---: | --- | --- |
 | Shared contact points only | 450 applications / 443 owner proposals / 447 business proposals; 254 hashed email/phone collision groups | Whether shared email/phone alone creates a legal-owner identity conflict; what authoritative evidence validates distinct owners; approving office; quarantine rule | Could advance the class to bounded reference-data and exact owner/business/application mapping review; does not accept mappings or make the class rehearsal-ready |
-| Non-contact identity signal present | 69 applications / 68 owner proposals / 68 business proposals; 51 exact hashed `name_birth` review groups | Required authoritative legal-owner evidence and group disposition; current production evidence observes `name_birth` | Evidence-backed members could advance by bounded review group; a contact-point policy alone cannot advance this class |
-| Compound registration collision dimension | 75 applications / 72 owner proposals / 75 business proposals; 52 globally deduplicated registration review groups | Required evidence and authorized disposition for shared registration numbers; separate owner-evidence routing for 34 contact-only and 41 non-contact applications | Could resolve one business-identity dependency for 75 applications; does not resolve owner identity, reference data, mappings, or rehearsal readiness |
+| Non-contact identity signal present | 69 applications / 68 owner proposals / 68 business proposals; 51 exact hashed `name_birth` review groups: 14 closed / 37 externally coupled | Required authoritative legal-owner evidence and complete-group disposition; coupled groups must include 52 owner proposals outside the cohort | A complete group disposition could unlock exact owner-proposal preparation for its cohort members; it does not accept mappings or make the class rehearsal-ready |
+| Compound registration collision dimension | 75 applications / 72 owner proposals / 75 business proposals; 52 registration review groups: 18 closed / 34 externally coupled | Required evidence and complete-group disposition for shared registration numbers; coupled groups must include 37 business proposals outside the cohort; separate owner-evidence routing remains | A complete group disposition could unlock exact business-proposal preparation for its cohort members; it does not resolve owner identity, reference data, mappings, or rehearsal readiness |
 | Legacy `ownerType = Group` | 120 applications / 110 owner proposals / 119 business proposals | Meaning of `Group`, applicable legal-owner categories, evidence, authority, and insufficient/contradictory-evidence disposition | Policy acceptance only; exact owner proposals and every dependent mapping remain separate decisions |
 | Collision-free owner proposals | 12 applications / nine owner proposals | Accept or reject the nine exact owner proposals independently of unresolved business collisions | Makes only an owner-level registry rehearsal eligible for separate authorization; historical preservation remains blocked |
 
@@ -132,6 +132,8 @@ For the 69, a contact-point rule is insufficient. Authorized reviewers must reco
 
 The v5 replay makes that workload exact without deciding identity: the same 69 applications reduce to 51 hashed `name_birth` collision review groups. Group sizes are 41 groups of two, five of three, two of four, and three of five. Review may proceed by these checksum-bound units, but neither shared nor distinct legal identity may be inferred from the signal.
 
+The additive v6 replay separates decision scope without changing that workload. Fourteen groups are closed within the named cohort and cover 28 owner proposals / applications, all carrying historical `Released`. The other 37 groups cover 40 cohort owner proposals / 41 applications but are externally coupled to 52 additional source owner proposals; the single non-`Released` member is in this route. Review of a coupled group must include its full global membership. A complete authoritative group disposition can unlock exact owner-proposal preparation for affected cohort members, but it does not accept those proposals, resolve reference data, activate `Released`, freeze a cohort, or authorize rehearsal.
+
 ## Packet 4: Business Collision Groups
 
 **Issue:** Registration-number and owner-plus-name signals identify possible duplicate business records without proving equivalence.
@@ -165,6 +167,8 @@ Additive v5 run `prod-human-identity-frontier-20260818-006` preserves the frozen
 - one non-`Released` application remains a separate phone-plus-owner/name topology.
 
 The 34/41 routing counts are disjoint by application, but their registration-group counts overlap. The 52-group aggregate is the authoritative review workload.
+
+The v6 containment replay further separates 18 closed registration groups covering 39 businesses/applications from 34 externally coupled groups covering 36 cohort businesses/applications plus 37 source business proposals outside the cohort. Closed members route into 17 contact-owner and 22 non-contact-owner applications; coupled members route into 17 and 19. All 75 carry historical `Released`. A coupled registration decision must cover the full global group. A complete group disposition can unlock exact business-proposal preparation for that identity dimension only; owner identity and every downstream acceptance or authorization gate remain separate.
 
 **Consolidated registration decision required:**
 
@@ -222,7 +226,7 @@ The detailed controlling packet for the 120-application historical-preservation 
 
 **Authority / approver:** BPLO administrator and the authority responsible for blacklist policy.
 
-Within the 736-case historical-preservation frontier, the eight soft-deleted applications remain one checksum-bound quarantine. Five carry contact-only owner signals and three carry non-contact signals. Two also require Treasury interpretation, one financial authority, one permit-authority semantics, and one a genuine source-contradiction disposition; these overlays are not asserted disjoint. A deletion/retention rule cannot resolve those independent gates, so no member is one decision from rehearsal-ready.
+Within the 736-case historical-preservation frontier, the eight soft-deleted applications remain one checksum-bound quarantine. V6 proves the previously reported overlays are disjoint decision routes: three have deletion/identity/reference blockers without Treasury, fiscal, permit-authority, or contradiction overlays; two require Treasury interpretation; one requires fiscal authority; one requires permit-authority semantics; and one requires a genuine source-contradiction disposition. A deletion/retention rule resolves only the registry-policy dimension. Every member still requires identity, reference-data, exact-mapping, freeze, and separate rehearsal gates as applicable, so no member is one decision from exact proposal preparation or rehearsal-ready.
 
 ## Packet 7: Receipt-Number And Failed-Payment Semantics
 
