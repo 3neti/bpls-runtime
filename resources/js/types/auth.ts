@@ -15,6 +15,12 @@ export type Auth = {
     role: string | null;
     can_access_staff: boolean;
     can_access_citizen: boolean;
+    can_view_permit_applications: boolean;
+    can_view_payment_schedules: boolean;
+    can_view_receipts: boolean;
+    can_view_billing_groups: boolean;
+    can_view_reports: boolean;
+    can_view_fee_rules: boolean;
     can_view_users: boolean;
     can_view_roles: boolean;
     can_view_municipality_configuration: boolean;
