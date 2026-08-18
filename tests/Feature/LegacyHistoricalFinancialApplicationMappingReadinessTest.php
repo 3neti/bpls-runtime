@@ -230,6 +230,24 @@ test('human identity frontier isolates collision classes without accepting simil
     addMappingReadinessCandidate(
         $batches['registry'],
         $batches['financial'],
+        'person-oriented-owner-collision',
+        owner: [
+            'firstName' => 'Shared',
+            'lastName' => 'Person',
+            'birthDate' => '1980-01-01',
+        ],
+    );
+    foreach ([$batches['registry'], $batches['financial']] as $batch) {
+        mappingReadinessRecord($batch, 'business_owners', 'person-oriented-owner-collision-decoy', [
+            'ownerType' => 'Individual',
+            'firstName' => 'Shared',
+            'lastName' => 'Person',
+            'birthDate' => '1980-01-01',
+        ]);
+    }
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
         'business-collision-a',
         business: ['registrationNumber' => 'SHARED-REGISTRATION'],
     );
@@ -265,26 +283,33 @@ test('human identity frontier isolates collision classes without accepting simil
         ->values();
     $ownerCollisionCandidate = collect($result['candidates'])
         ->firstWhere('application_legacy_id_sha256', hash('sha256', 'application-owner-collision'));
+    $personOrientedOwnerCollisionCandidate = collect($result['candidates'])
+        ->firstWhere('application_legacy_id_sha256', hash('sha256', 'application-person-oriented-owner-collision'));
     $decisionCohorts = collect($result['report']['decision_ready_cohorts'])
+        ->keyBy('key');
+    $municipalIdentityEvidenceClasses = collect($result['report']['municipal_identity_evidence_classes'])
         ->keyBy('key');
 
     expect($result['report']['summary'])
-        ->human_identity_application_count->toBe(5)
-        ->identity_collision_only_count->toBe(5)
+        ->human_identity_application_count->toBe(6)
+        ->identity_collision_only_count->toBe(6)
         ->additional_semantic_reconciliation_count->toBe(0)
         ->exact_owner_mapping_candidate_count->toBe(2)
         ->exact_owner_mapping_unique_proposal_count->toBe(2)
-        ->exact_business_source_evidence_candidate_count->toBe(1)
-        ->exact_business_source_evidence_unique_proposal_count->toBe(1)
+        ->exact_business_source_evidence_candidate_count->toBe(2)
+        ->exact_business_source_evidence_unique_proposal_count->toBe(2)
         ->business_or_application_mapping_candidate_count->toBe(0)
         ->group_owner_overlay_count->toBe(2)
         ->decision_cohort_count->toBe(3)
+        ->municipal_identity_evidence_class_count->toBe(2)
+        ->contact_signals_only_application_count->toBe(1)
+        ->non_contact_identity_signal_application_count->toBe(1)
         ->accepted_mapping_count->toBe(0)
-        ->and(data_get($result, 'report.collision_clusters.owner.unique_collision_group_count'))->toBe(1)
-        ->and(data_get($result, 'report.collision_clusters.owner.collision_group_size_distribution'))->toBe(['2' => 1])
+        ->and(data_get($result, 'report.collision_clusters.owner.unique_collision_group_count'))->toBe(2)
+        ->and(data_get($result, 'report.collision_clusters.owner.collision_group_size_distribution'))->toBe(['2' => 2])
         ->and(data_get($result, 'report.collision_clusters.business.unique_collision_group_count'))->toBe(2)
         ->and(data_get($result, 'report.collision_clusters.business.collision_group_size_distribution'))->toBe(['2' => 2])
-        ->and($result['classes'])->toHaveCount(3)
+        ->and($result['classes'])->toHaveCount(4)
         // Counterexample: Group-owner semantics leave the owner collision-reason
         // subset empty, but must still block the collision-free-owner disposition.
         ->and($groupOwnerCandidates)->toHaveCount(2)
@@ -300,14 +325,48 @@ test('human identity frontier isolates collision classes without accepting simil
             'exact_mapping_acceptance',
             'municipal_identity_decision',
         )
+        ->and($personOrientedOwnerCollisionCandidate['owner_collision_signal_names'])->toBe(['name_birth'])
+        ->and($personOrientedOwnerCollisionCandidate['business_source_evidence_disposition'])->toBe('business_source_evidence_may_be_prepared_independently')
+        ->and($municipalIdentityEvidenceClasses->keys()->all())->toBe([
+            'contact_signals_only',
+            'non_contact_identity_signal_present',
+        ])
+        ->and($municipalIdentityEvidenceClasses->get('contact_signals_only'))->toMatchArray([
+            'application_count' => 1,
+            'unique_owner_proposal_count' => 1,
+            'unique_business_proposal_count' => 1,
+            'historical_released_application_count' => 0,
+            'non_released_application_count' => 1,
+            'collision_review_unit_count' => 1,
+            'observed_collision_signal_names' => ['email'],
+            'one_decision_from_rehearsal' => false,
+            'decision_status' => 'bounded_municipal_identity_evidence_decision_required',
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+        ])
+        ->and($municipalIdentityEvidenceClasses->get('non_contact_identity_signal_present'))->toMatchArray([
+            'application_count' => 1,
+            'unique_owner_proposal_count' => 1,
+            'unique_business_proposal_count' => 1,
+            'historical_released_application_count' => 0,
+            'non_released_application_count' => 1,
+            'collision_review_unit_count' => 1,
+            'observed_collision_signal_names' => ['name_birth'],
+            'one_decision_from_rehearsal' => false,
+            'decision_status' => 'human_legal_identity_reconciliation_required',
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+        ])
         ->and($decisionCohorts->keys()->sort()->values()->all())->toBe([
             'collision_free_business_source_owner_decision_non_released',
             'collision_free_owner_business_decision',
             'group_owner_registry_policy',
         ])
         ->and($decisionCohorts->get('collision_free_business_source_owner_decision_non_released'))->toMatchArray([
-            'application_count' => 1,
-            'records_that_would_advance' => 1,
+            'application_count' => 2,
+            'records_that_would_advance' => 2,
             'decision_status' => 'characterized_not_ready_for_acceptance',
             'accepted_mapping_count' => 0,
             'rehearsed_mapping_count' => 0,
@@ -329,6 +388,7 @@ test('human identity frontier isolates collision classes without accepting simil
             'production_applied_count' => 0,
         ])
         ->and(data_get($result, 'report.fingerprints.decision_cohort_set_sha256'))->toHaveLength(64)
+        ->and(data_get($result, 'report.fingerprints.municipal_identity_evidence_class_set_sha256'))->toHaveLength(64)
         ->and(LegacyApplicationIdMapping::query()->count())->toBe(0)
         ->and(LegacyIdMapping::query()->count())->toBe(0)
         ->and($result['report']['safety'])->toMatchArray([
@@ -357,6 +417,8 @@ test('human identity frontier isolates collision classes without accepting simil
 
     expect($evidence)
         ->not->toContain('shared-owner@example.test')
+        ->not->toContain('Shared Person')
+        ->not->toContain('1980-01-01')
         ->not->toContain('SHARED-REGISTRATION')
         ->not->toContain('GROUP-SHARED-REGISTRATION')
         ->not->toContain('Historical group A')

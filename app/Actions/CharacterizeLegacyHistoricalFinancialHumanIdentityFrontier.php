@@ -9,7 +9,7 @@ use Illuminate\Support\Collection;
 
 class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
 {
-    public const SchemaVersion = 'bpls.historical-financial-human-identity-frontier.v3';
+    public const SchemaVersion = 'bpls.historical-financial-human-identity-frontier.v4';
 
     private const BlockerCategories = [
         'exact_mapping_acceptance',
@@ -82,6 +82,10 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
         $exactBusinessEvidenceCandidates = $candidateEvidence
             ->where('business_source_evidence_disposition', 'business_source_evidence_may_be_prepared_independently')
             ->values();
+        $municipalIdentityEvidenceClasses = collect($this->municipalIdentityEvidenceClasses(
+            $exactBusinessEvidenceCandidates,
+            $proposals,
+        ));
         $mixedSemanticCandidates = $candidateEvidence
             ->where('shape.semantic_scope', 'identity_collision_with_additional_semantic_reconciliation')
             ->values();
@@ -127,6 +131,11 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                     'business_or_application_mapping_candidate_count' => 0,
                     'class_count' => $classes->count(),
                     'decision_cohort_count' => $decisionCohorts->count(),
+                    'municipal_identity_evidence_class_count' => $municipalIdentityEvidenceClasses->count(),
+                    'contact_signals_only_application_count' => $municipalIdentityEvidenceClasses
+                        ->firstWhere('key', 'contact_signals_only')['application_count'] ?? 0,
+                    'non_contact_identity_signal_application_count' => $municipalIdentityEvidenceClasses
+                        ->firstWhere('key', 'non_contact_identity_signal_present')['application_count'] ?? 0,
                     'accepted_mapping_count' => 0,
                     'historical_preservation_executed' => false,
                 ],
@@ -152,6 +161,7 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                         'acceptance_status' => 'evidence_only_not_accepted',
                     ],
                 ],
+                'municipal_identity_evidence_classes' => array_values($municipalIdentityEvidenceClasses->all()),
                 'decision_ready_cohorts' => array_values($decisionCohorts->all()),
                 'fingerprints' => [
                     'human_identity_frontier_sha256' => $frontierSha256,
@@ -169,6 +179,16 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                             $cohort['cohort_sha256'],
                             $cohort['application_count'],
                             $cohort['blocker_categories'],
+                        ])->all(),
+                    ]),
+                    'municipal_identity_evidence_class_set_sha256' => $this->hash([
+                        $evidenceBinding,
+                        ...$municipalIdentityEvidenceClasses->map(fn (array $class): array => [
+                            $class['key'],
+                            $class['class_sha256'],
+                            $class['application_count'],
+                            $class['collision_review_unit_count'],
+                            $class['observed_collision_signal_names'],
                         ])->all(),
                     ]),
                 ],
@@ -193,6 +213,108 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
             'classes' => array_values($classes->all()),
             'candidates' => array_values($candidateEvidence->all()),
         ];
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $candidates
+     * @param  Collection<int, LegacyMappingProposal>  $proposals
+     * @return list<array<string, mixed>>
+     */
+    private function municipalIdentityEvidenceClasses(Collection $candidates, Collection $proposals): array
+    {
+        return array_values(collect([
+            'contact_signals_only' => $candidates
+                ->filter(fn (array $candidate): bool => $candidate['owner_collision_signal_names'] !== []
+                    && array_diff($candidate['owner_collision_signal_names'], ['email', 'phone']) === [])
+                ->values(),
+            'non_contact_identity_signal_present' => $candidates
+                ->filter(fn (array $candidate): bool => array_diff(
+                    $candidate['owner_collision_signal_names'],
+                    ['email', 'phone'],
+                ) !== [])
+                ->values(),
+        ])->filter(fn (Collection $members): bool => $members->isNotEmpty())
+            ->map(function (Collection $members, string $key) use ($proposals): array {
+                $profile = $this->municipalIdentityEvidenceProfile($key);
+                $observedCollisionSignalNames = $members
+                    ->pluck('owner_collision_signal_names')
+                    ->flatten()
+                    ->unique()
+                    ->sort()
+                    ->values()
+                    ->all();
+                $collisionClusters = $this->collisionClusterSummary($members, $proposals, 'owner');
+
+                return [
+                    'key' => $key,
+                    'class_sha256' => $this->hash($members
+                        ->map(fn (array $candidate): array => [
+                            $candidate['candidate_fingerprint'],
+                            $candidate['class_sha256'],
+                            $candidate['owner_collision_signal_names'],
+                        ])
+                        ->all()),
+                    'application_count' => $members->count(),
+                    'unique_owner_proposal_count' => $members->pluck('owner_proposal_id')->unique()->count(),
+                    'unique_business_proposal_count' => $members->pluck('business_proposal_id')->unique()->count(),
+                    'historical_released_application_count' => $members->where('shape.source_lifecycle_assertion', 'Released')->count(),
+                    'non_released_application_count' => $members->where('shape.source_lifecycle_assertion', 'non_Released')->count(),
+                    'collision_review_unit_count' => $collisionClusters['unique_collision_group_count'],
+                    'observed_collision_signal_names' => $observedCollisionSignalNames,
+                    'collision_clusters' => $collisionClusters,
+                    'collision_group_counts_may_overlap_evidence_classes' => true,
+                    'what_is_proven' => $profile['what_is_proven'],
+                    'municipal_decision_required' => $profile['municipal_decision_required'],
+                    'decision_would_advance_to' => $profile['decision_would_advance_to'],
+                    'decision_would_not_mean' => $profile['decision_would_not_mean'],
+                    'remaining_blocker_categories' => $this->classBlockerCategories($members),
+                    'one_decision_from_rehearsal' => false,
+                    'why_not_one_decision_from_rehearsal' => 'Reference-data reconciliation, exact owner/business/application mapping acceptance, cohort freeze, and separate rehearsal authorization would still remain.',
+                    'decision_status' => $profile['decision_status'],
+                    'accepted_mapping_count' => 0,
+                    'rehearsed_mapping_count' => 0,
+                    'production_applied_count' => 0,
+                ];
+            })->values()->all());
+    }
+
+    /** @return array{what_is_proven: string, municipal_decision_required: string, decision_would_advance_to: string, decision_would_not_mean: string, decision_status: string} */
+    private function municipalIdentityEvidenceProfile(string $key): array
+    {
+        if ($key === 'contact_signals_only') {
+            return [
+                'what_is_proven' => 'Every owner collision in this class is evidenced only by shared normalized email and/or phone signals; no name_birth collision signal is present. Exact source owner records, source-owner edges, and collision-free business projections remain distinct and preserved.',
+                'municipal_decision_required' => 'Decide whether shared contact points alone are legal-owner identity conflicts in Municipality of Ipil registry practice, and identify the authoritative evidence required to validate distinct legal owners when those contact points are reused.',
+                'decision_would_advance_to' => 'If the Municipality adopts a deterministic source-backed disposition, this class could advance to bounded reference-data and exact owner/business/application mapping review.',
+                'decision_would_not_mean' => 'It would not make email or phone an identity authority, merge or split owners automatically, accept any mapping, activate historical Released, authorize rehearsal, or authorize production migration.',
+                'decision_status' => 'bounded_municipal_identity_evidence_decision_required',
+            ];
+        }
+
+        return [
+            'what_is_proven' => 'Every owner collision in this class includes at least one non-contact identity signal; the current production class observes the planner name_birth signal, with shared email or phone signals preserved separately. Every signal remains collision evidence and not legal identity authority.',
+            'municipal_decision_required' => 'Reconcile the person-oriented or other non-contact collision evidence against authoritative municipal legal-owner records before any exact owner disposition is proposed.',
+            'decision_would_advance_to' => 'Only evidence-backed owner dispositions could advance individual members to reference-data and exact mapping review.',
+            'decision_would_not_mean' => 'It would not treat normalized name, birth date, email, phone, or similarity as identity authority; accept any mapping; activate historical Released; authorize rehearsal; or authorize production migration.',
+            'decision_status' => 'human_legal_identity_reconciliation_required',
+        ];
+    }
+
+    /**
+     * @param  iterable<array-key, array<string, mixed>>  $members
+     * @return list<string>
+     */
+    private function classBlockerCategories(iterable $members): array
+    {
+        $blockerOrder = array_flip(self::BlockerCategories);
+
+        return array_values(collect($members)
+            ->pluck('blocker_categories')
+            ->flatten()
+            ->unique()
+            ->sortBy(fn (string $category): int => $blockerOrder[$category])
+            ->values()
+            ->all());
     }
 
     /**
@@ -454,13 +576,13 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
     }
 
     /**
-     * @param  Collection<int, array<string, mixed>>  $candidates
+     * @param  iterable<array-key, array<string, mixed>>  $candidates
      * @param  Collection<int, LegacyMappingProposal>  $proposals
      * @return array<string, mixed>
      */
-    private function collisionClusterSummary(Collection $candidates, Collection $proposals, string $entity): array
+    private function collisionClusterSummary(iterable $candidates, Collection $proposals, string $entity): array
     {
-        $candidateProposalIds = $candidates->pluck($entity.'_proposal_id')->unique();
+        $candidateProposalIds = collect($candidates)->pluck($entity.'_proposal_id')->unique();
         $collisionFingerprints = $candidateProposalIds
             ->flatMap(fn (mixed $proposalId): array => array_values($proposals->get((int) $proposalId)->collision_fingerprints ?? []))
             ->unique();
