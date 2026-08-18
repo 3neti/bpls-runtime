@@ -4,6 +4,40 @@ This file records implementation-era milestone scenarios. Discovery lifecycle fa
 
 Milestone scenarios are composed from completed vertical slices. They are not a second workflow engine and must not duplicate business logic. They invoke the same domain actions, policies, application services, generated documents, browser UI, audit evidence, and storage conventions used by the application.
 
+## MS-004: Deterministic Stakeholder Preview
+
+Status: **MILESTONE EVIDENCE PACKAGE — STAKEHOLDER PREVIEW READY**
+
+Scenario key: `stakeholder_preview_cycle_1`
+
+Cycle 3 run: `stakeholder-preview-cycle3-reports-administration-20260819-001`
+
+Cycle 4 run: `stakeholder-preview-cycle4-integrated-20260819-001`
+
+Artifact roots:
+
+- `storage/app/private/lifecycle-scenarios/stakeholder_preview_cycle_1/stakeholder-preview-cycle3-reports-administration-20260819-001`
+- `storage/app/private/lifecycle-scenarios/stakeholder_preview_cycle_1/stakeholder-preview-cycle4-integrated-20260819-001`
+
+Purpose: compose existing domain actions into a safe, synthetic, cross-role local preview that stakeholders operate through the real application shell. It covers Citizen, BPLO, Assessment, Treasury, Receipts, Clearances, Reports, Administration, Municipality/configuration, and the deliberate authority boundaries without creating a second workflow or activating unresolved policy.
+
+### Verification Matrix
+
+| Verification layer | Result |
+| --- | --- |
+| Deterministic terminal preparation | PASS |
+| Cycle 3 managed browser acceptance | 53 checks; 46 screenshots; PASS |
+| Cycle 4 cross-role managed browser acceptance | 55 checks; 46 screenshots; PASS |
+| Desktop 1440x900 and mobile 390x844 | PASS |
+| Application console warnings/errors | 0 |
+| Failed internal requests | 0 |
+| Unexpected application resources | 0 |
+| Page-level horizontal overflow | 0 |
+| Canonical post-run audit | 21 checks; PASS |
+| Production migration | 0 records; UNEXECUTED |
+
+The Board operating guide, accounts, walkthrough, working/constrained matrix, stakeholder questions, evidence index, and exclusions are in `docs/implementation/STAKEHOLDER_PREVIEW_READY_PACKAGE.md`.
+
 ## MS-003: Nelson Municipal Walkthrough
 
 Status: MILESTONE EVIDENCE PACKAGE

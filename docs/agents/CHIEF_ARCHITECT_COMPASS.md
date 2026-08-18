@@ -1,16 +1,31 @@
 # Chief Architect Compass
 
-Status: **Active program control**
+Status: **STAKEHOLDER PREVIEW READY — Board internal operation**
 
-Cycle baseline: `c775cde278887c7e43daf4c2dd98086fb24871db`
+Stakeholder preview implementation baseline: `f7aab2e`
 
 Latest migration evidence baseline: `eefc5d1`
 
-As of: 2026-08-18
+As of: 2026-08-19
 
 ## Direction
 
-Continue the rescue in two independent lanes while the Municipality reviews the frozen Nelson Visual Walkthrough / UI/UX Cycle 1. Do not start UI Cycle 2 until Nelson feedback is received, classified, checked against canonical evidence, and routed to the correct engineering, municipal-confirmation, or Board path.
+Operate the verified local stakeholder preview internally, preserve all frozen evidence, and route feedback without crossing the independent migration or municipal-authority boundaries. External municipal presentation and any persistent deployment remain Board decisions. Do not start the Nelson-driven UI Cycle 2 until Nelson feedback is received, classified, checked against canonical evidence, and routed to the correct engineering, municipal-confirmation, or Board path.
+
+## Stakeholder Preview Status
+
+| Capability | Position |
+| --- | --- |
+| Cycles 1 and 2 | Proven and frozen |
+| Cycle 3 | Reports, Administration & Visible Boundaries proven; 53 browser checks and 46 screenshots |
+| Cycle 4 | Deterministic cross-role preview proven; 55 browser checks and 46 screenshots |
+| Environment | Verified local target `http://bpls-runtime.test`; no persistent public/staging deployment exists |
+| Accounts | Synthetic Citizen, BPLO, Treasury, and Municipal Management accounts; runtime-delivered credential only |
+| Authority | Numbering, fiscal policy, official reports, issuance, release, and legal effect remain explicit non-executable boundaries |
+| Migration | Synthetic preview is separate; 407-member production campaign remains unexecuted and Board-controlled |
+| Verdict | **STAKEHOLDER PREVIEW READY** for Board internal operation; external presentation not authorized here |
+
+Operating package: `docs/implementation/STAKEHOLDER_PREVIEW_READY_PACKAGE.md`.
 
 ## Program Position
 

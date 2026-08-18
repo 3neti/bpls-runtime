@@ -87,6 +87,37 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
         ->and($manifest['preview']['billing_group']['financial_effect'])->toBe('none')
         ->and($manifest['resources']['ready_for_authority_review'])->toBeTrue()
         ->and($manifest['resources']['can_release'])->toBeFalse();
+
+    $screenshotPath = $store->rootRelativePath().'/browser/screenshots/preview.png';
+    Storage::disk('local')->put($screenshotPath, 'synthetic screenshot evidence');
+    $store->putJson('browser/managed-report.json', [
+        'checks' => [['key' => 'synthetic-browser-check', 'passed' => true]],
+        'result' => [
+            'passed' => true,
+            'check_count' => 1,
+            'screenshot_count' => 1,
+            'application_console_error_or_warning_count' => 0,
+            'failed_internal_request_count' => 0,
+            'unexpected_external_resource_count' => 0,
+            'horizontal_overflow_count' => 0,
+        ],
+        'artifacts' => [
+            'screenshots' => ['preview' => 'browser/screenshots/preview.png'],
+        ],
+    ]);
+
+    $this->artisan('lifecycle:finalize-stakeholder-preview-evidence', [
+        'run-id' => 'stakeholder-preview-test-001',
+    ])->assertSuccessful();
+
+    $finalManifest = $store->readJson('manifest.json');
+
+    expect($finalManifest['result']['browser'])->toBe('passed')
+        ->and($finalManifest['result']['audit'])->toBe('passed')
+        ->and($finalManifest['result']['passed'])->toBeTrue()
+        ->and($finalManifest['preview']['managed_acceptance']['check_count'])->toBe(1)
+        ->and($store->readJson('terminal/managed-audit.json')['passed'])->toBeTrue()
+        ->and(Storage::disk('local')->exists($store->rootRelativePath().'/preview-summary.md'))->toBeTrue();
 });
 
 test('preview preparation refuses a missing runtime credential', function () {
