@@ -6,6 +6,7 @@ import {
     download,
     index,
 } from '@/actions/App/Http/Controllers/Staff/TotalCapitalGrossSummaryReportController';
+import ReportFamilyBanner from '@/components/reports/ReportFamilyBanner.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -114,6 +115,8 @@ function label(value: string): string {
                     </a>
                 </Button>
             </section>
+
+            <ReportFamilyBanner family="management" availability="working" />
 
             <form
                 class="grid gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 sm:grid-cols-2 dark:border-sidebar-border"

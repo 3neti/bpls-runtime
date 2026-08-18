@@ -6,6 +6,7 @@ import {
     download,
     index,
 } from '@/actions/App/Http/Controllers/Staff/CollectiblesReportController';
+import ReportFamilyBanner from '@/components/reports/ReportFamilyBanner.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -129,6 +130,8 @@ function label(value: string): string {
                     </a>
                 </Button>
             </section>
+
+            <ReportFamilyBanner family="operational" availability="working" />
 
             <form
                 class="grid gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 xl:grid-cols-[10rem_14rem_minmax(18rem,1fr)_auto] xl:items-end dark:border-sidebar-border"

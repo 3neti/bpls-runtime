@@ -6,6 +6,7 @@ import {
     download,
     index,
 } from '@/actions/App/Http/Controllers/Staff/DailyCollectionReportController';
+import ReportFamilyBanner from '@/components/reports/ReportFamilyBanner.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -139,6 +140,8 @@ function label(value: string | null): string {
                 </Button>
             </section>
 
+            <ReportFamilyBanner family="operational" availability="working" />
+
             <form
                 class="flex flex-col gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 md:flex-row md:items-end dark:border-sidebar-border"
                 @submit.prevent="applyFilters"
@@ -253,16 +256,10 @@ function label(value: string | null): string {
                             class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
                         >
                             <tr>
-                                <th class="px-4 py-3 font-medium">
-                                    Receipt
-                                </th>
-                                <th class="px-4 py-3 font-medium">
-                                    Received
-                                </th>
+                                <th class="px-4 py-3 font-medium">Receipt</th>
+                                <th class="px-4 py-3 font-medium">Received</th>
                                 <th class="px-4 py-3 font-medium">Payer</th>
-                                <th class="px-4 py-3 font-medium">
-                                    Business
-                                </th>
+                                <th class="px-4 py-3 font-medium">Business</th>
                                 <th class="px-4 py-3 font-medium">
                                     Application
                                 </th>
@@ -278,8 +275,8 @@ function label(value: string | null): string {
                                     colspan="7"
                                     class="px-4 py-8 text-center text-muted-foreground"
                                 >
-                                    No receipted collections found for this
-                                    date range.
+                                    No receipted collections found for this date
+                                    range.
                                 </td>
                             </tr>
                             <tr
@@ -291,9 +288,7 @@ function label(value: string | null): string {
                                     <div class="font-medium">
                                         {{ row.receipt_number }}
                                     </div>
-                                    <div
-                                        class="text-xs text-muted-foreground"
-                                    >
+                                    <div class="text-xs text-muted-foreground">
                                         {{ label(row.numbering_authority) }}
                                     </div>
                                 </td>
@@ -302,9 +297,7 @@ function label(value: string | null): string {
                                 </td>
                                 <td class="px-4 py-3 align-top">
                                     <div>{{ row.payer_name ?? '-' }}</div>
-                                    <div
-                                        class="text-xs text-muted-foreground"
-                                    >
+                                    <div class="text-xs text-muted-foreground">
                                         {{ row.reference_number ?? '-' }}
                                     </div>
                                 </td>
@@ -312,9 +305,7 @@ function label(value: string | null): string {
                                     <div class="font-medium">
                                         {{ row.business_name }}
                                     </div>
-                                    <div
-                                        class="text-xs text-muted-foreground"
-                                    >
+                                    <div class="text-xs text-muted-foreground">
                                         {{ row.owner_name }}
                                     </div>
                                 </td>
@@ -327,9 +318,7 @@ function label(value: string | null): string {
                                 <td class="px-4 py-3 align-top">
                                     <div class="flex flex-wrap gap-2">
                                         <Badge variant="outline">
-                                            {{
-                                                label(row.collection_status)
-                                            }}
+                                            {{ label(row.collection_status) }}
                                         </Badge>
                                         <Badge variant="secondary">
                                             {{ label(row.receipt_status) }}
@@ -340,7 +329,7 @@ function label(value: string | null): string {
                                     </div>
                                 </td>
                                 <td
-                                    class="px-4 py-3 text-right font-medium align-top"
+                                    class="px-4 py-3 text-right align-top font-medium"
                                 >
                                     {{ money(row.amount_cents) }}
                                 </td>

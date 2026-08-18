@@ -6,6 +6,7 @@ import {
     download,
     index,
 } from '@/actions/App/Http/Controllers/Staff/RevenueSourceReportController';
+import ReportFamilyBanner from '@/components/reports/ReportFamilyBanner.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,10 +67,14 @@ function query(): Record<string, string | undefined> {
 }
 
 function applyFilters(): void {
-    router.get(index.url({ query: query() }), {}, {
-        preserveState: true,
-        replace: true,
-    });
+    router.get(
+        index.url({ query: query() }),
+        {},
+        {
+            preserveState: true,
+            replace: true,
+        },
+    );
 }
 
 function clearFilters(): void {
@@ -117,6 +122,8 @@ function label(value: string | null): string {
                     </a>
                 </Button>
             </section>
+
+            <ReportFamilyBanner family="operational" availability="working" />
 
             <form
                 class="flex flex-col gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 md:flex-row md:items-end dark:border-sidebar-border"
@@ -277,8 +284,8 @@ function label(value: string | null): string {
                                     colspan="6"
                                     class="px-3 py-8 text-center text-muted-foreground"
                                 >
-                                    No revenue source allocations found for
-                                    this date range.
+                                    No revenue source allocations found for this
+                                    date range.
                                 </td>
                             </tr>
                             <tr
@@ -287,11 +294,11 @@ function label(value: string | null): string {
                                 class="border-b last:border-0"
                             >
                                 <td class="px-3 py-3 align-top">
-                                    <div class="break-words font-medium">
+                                    <div class="font-medium break-words">
                                         {{ row.code }}
                                     </div>
                                     <div
-                                        class="break-words text-xs text-muted-foreground"
+                                        class="text-xs break-words text-muted-foreground"
                                     >
                                         {{ row.name }}
                                     </div>
@@ -311,7 +318,7 @@ function label(value: string | null): string {
                                     {{ row.receipt_count }}
                                 </td>
                                 <td
-                                    class="whitespace-nowrap px-3 py-3 text-right font-medium align-top"
+                                    class="px-3 py-3 text-right align-top font-medium whitespace-nowrap"
                                 >
                                     {{ money(row.amount_cents) }}
                                 </td>

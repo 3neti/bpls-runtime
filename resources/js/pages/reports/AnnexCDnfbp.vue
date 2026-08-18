@@ -7,6 +7,7 @@ import {
     TableProperties,
 } from '@lucide/vue';
 import { index } from '@/actions/App/Http/Controllers/Staff/AnnexCDnfbpReportController';
+import ReportFamilyBanner from '@/components/reports/ReportFamilyBanner.vue';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
@@ -100,6 +101,11 @@ function sourceClass(status: string): string {
                     Blocked pending authority and classification
                 </Badge>
             </section>
+
+            <ReportFamilyBanner
+                family="authority_pending"
+                availability="policy_bound"
+            />
 
             <section
                 class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"

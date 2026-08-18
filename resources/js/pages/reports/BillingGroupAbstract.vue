@@ -9,6 +9,7 @@ import {
 } from '@lucide/vue';
 import { index } from '@/actions/App/Http/Controllers/Staff/BillingGroupAbstractReportController';
 import { show as billingGroupShow } from '@/actions/App/Http/Controllers/Staff/BillingGroupController';
+import ReportFamilyBanner from '@/components/reports/ReportFamilyBanner.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -118,6 +119,11 @@ function statusClass(status: string): string {
                     </Button>
                 </div>
             </section>
+
+            <ReportFamilyBanner
+                family="authority_pending"
+                availability="policy_bound"
+            />
 
             <section
                 class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
