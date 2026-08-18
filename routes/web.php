@@ -30,6 +30,7 @@ use App\Http\Controllers\Staff\PermitApplicationController;
 use App\Http\Controllers\Staff\PermitApplicationDocumentController;
 use App\Http\Controllers\Staff\PldsReportController;
 use App\Http\Controllers\Staff\ReceiptController;
+use App\Http\Controllers\Staff\ReportCatalogController;
 use App\Http\Controllers\Staff\RevenueSourceReportController;
 use App\Http\Controllers\Staff\RolePermissionController;
 use App\Http\Controllers\Staff\StoryboardController;
@@ -127,6 +128,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('receipts.pdf');
         Route::post('receipts/{receipt}/void', [ReceiptController::class, 'voidReceipt'])
             ->name('receipts.void');
+        Route::get('reports', [ReportCatalogController::class, 'index'])
+            ->name('reports.index');
         Route::get('reports/assessment-summary', [AssessmentSummaryReportController::class, 'index'])
             ->name('reports.assessment-summary.index');
         Route::get('reports/assessment-summary/download', [AssessmentSummaryReportController::class, 'download'])

@@ -5,44 +5,27 @@ import {
     Building2,
     Calculator,
     ChartColumn,
-    ClipboardCheck,
-    ClipboardX,
     Coins,
     FileText,
     LayoutDashboard,
     ReceiptText,
     ShieldCheck,
     TableProperties,
-    Trophy,
     Users,
     WalletCards,
 } from '@lucide/vue';
 import { computed } from 'vue';
 import { index as citizenNotificationIndex } from '@/actions/App/Http/Controllers/Citizen/NotificationController';
 import { index as citizenPermitApplicationIndex } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
-import { index as allAbstractReportIndex } from '@/actions/App/Http/Controllers/Staff/AllAbstractReportController';
-import { index as annexCDnfbpReportIndex } from '@/actions/App/Http/Controllers/Staff/AnnexCDnfbpReportController';
 import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
-import { index as assessmentSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentSummaryReportController';
 import { index as billingGroupIndex } from '@/actions/App/Http/Controllers/Staff/BillingGroupController';
-import { index as bspReportIndex } from '@/actions/App/Http/Controllers/Staff/BspReportController';
-import { index as businessTaxByMajorTypeReportIndex } from '@/actions/App/Http/Controllers/Staff/BusinessTaxByMajorTypeReportController';
-import { index as cmciLdcsReportIndex } from '@/actions/App/Http/Controllers/Staff/CmciLdcsReportController';
-import { index as collectiblesReportIndex } from '@/actions/App/Http/Controllers/Staff/CollectiblesReportController';
-import { index as dailyCollectionReportIndex } from '@/actions/App/Http/Controllers/Staff/DailyCollectionReportController';
 import { index as feeRuleIndex } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
 import { index as municipalityConfigurationIndex } from '@/actions/App/Http/Controllers/Staff/MunicipalityConfigurationController';
-import { index as paidEstablishmentReportIndex } from '@/actions/App/Http/Controllers/Staff/PaidEstablishmentReportController';
-import { index as paymentSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/PaymentSummaryReportController';
 import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import { index as permitApplicationIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
-import { index as pldsReportIndex } from '@/actions/App/Http/Controllers/Staff/PldsReportController';
 import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
-import { index as revenueSourceReportIndex } from '@/actions/App/Http/Controllers/Staff/RevenueSourceReportController';
+import { index as reportCatalogIndex } from '@/actions/App/Http/Controllers/Staff/ReportCatalogController';
 import { index as rolePermissionIndex } from '@/actions/App/Http/Controllers/Staff/RolePermissionController';
-import { index as topEstablishmentTaxDueReportIndex } from '@/actions/App/Http/Controllers/Staff/TopEstablishmentTaxDueReportController';
-import { index as totalCapitalGrossSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/TotalCapitalGrossSummaryReportController';
-import { index as unpaidEstablishmentReportIndex } from '@/actions/App/Http/Controllers/Staff/UnpaidEstablishmentReportController';
 import { index as userDirectoryIndex } from '@/actions/App/Http/Controllers/Staff/UserDirectoryController';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -56,6 +39,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { reportCatalog } from '@/lib/reportCatalog';
 import { dashboard } from '@/routes';
 import type { NavItem, NavSection } from '@/types';
 
@@ -67,83 +51,21 @@ const overviewItem: NavItem = {
     icon: LayoutDashboard,
 };
 
-const reportItems = {
-    dailyCollections: {
-        title: 'Daily Collections',
-        href: dailyCollectionReportIndex(),
-        icon: ChartColumn,
-    },
-    revenueSources: {
-        title: 'Revenue Sources',
-        href: revenueSourceReportIndex(),
-        icon: ChartColumn,
-    },
-    collectibles: {
-        title: 'Breakdown of Collectibles',
-        href: collectiblesReportIndex(),
-        icon: ChartColumn,
-    },
-    paidEstablishments: {
-        title: 'Paid Establishments',
-        href: paidEstablishmentReportIndex(),
-        icon: ClipboardCheck,
-    },
-    unpaidEstablishments: {
-        title: 'Unpaid Establishments',
-        href: unpaidEstablishmentReportIndex(),
-        icon: ClipboardX,
-    },
-    assessmentSummary: {
-        title: 'Assessment Summary',
-        href: assessmentSummaryReportIndex(),
-        icon: Calculator,
-    },
-    paymentSummary: {
-        title: 'Payment Summary',
-        href: paymentSummaryReportIndex(),
-        icon: WalletCards,
-    },
-    businessTax: {
-        title: 'Business Tax by Major Type',
-        href: businessTaxByMajorTypeReportIndex(),
-        icon: ChartColumn,
-    },
-    capitalGross: {
-        title: 'Total Capital and Gross Summary',
-        href: totalCapitalGrossSummaryReportIndex(),
-        icon: ChartColumn,
-    },
-    topTaxDue: {
-        title: 'Top Establishments by Tax Due',
-        href: topEstablishmentTaxDueReportIndex(),
-        icon: Trophy,
-    },
-    allAbstract: {
-        title: 'All Abstract',
-        href: allAbstractReportIndex(),
-        icon: TableProperties,
-    },
-    cmci: {
-        title: 'CMCI LDCS Annex B',
-        href: cmciLdcsReportIndex(),
-        icon: TableProperties,
-    },
-    plds: {
-        title: 'PLDS',
-        href: pldsReportIndex(),
-        icon: TableProperties,
-    },
-    bsp: {
-        title: 'BSP Non-Bank Entities',
-        href: bspReportIndex(),
-        icon: TableProperties,
-    },
-    annexC: {
-        title: 'ANNEX C–DNFBP',
-        href: annexCDnfbpReportIndex(),
-        icon: TableProperties,
-    },
-} satisfies Record<string, NavItem>;
+const reportItems = Object.fromEntries(
+    reportCatalog
+        .filter((report) => report.navigation)
+        .map((report) => [
+            report.key,
+            {
+                title: report.navigationTitle,
+                href: report.href,
+                icon:
+                    report.family === 'authority_pending'
+                        ? TableProperties
+                        : ChartColumn,
+            },
+        ]),
+) as Record<string, NavItem>;
 
 const staffSections = computed<NavSection[]>(() => {
     const sections: NavSection[] = [
@@ -187,18 +109,10 @@ const staffSections = computed<NavSection[]>(() => {
         });
     }
 
-    if (page.props.auth.can_view_billing_groups) {
-        treasuryItems.push({
-            title: 'Billing Groups — Policy Pending',
-            href: billingGroupIndex(),
-            icon: WalletCards,
-        });
-    }
-
     if (page.props.auth.can_view_reports) {
         treasuryItems.push(
-            reportItems.dailyCollections,
-            reportItems.revenueSources,
+            reportItems['daily-collections'],
+            reportItems['revenue-sources'],
         );
     }
 
@@ -216,33 +130,38 @@ const staffSections = computed<NavSection[]>(() => {
                 title: 'Reports · Operational',
                 collapsible: true,
                 items: [
-                    reportItems.dailyCollections,
-                    reportItems.revenueSources,
+                    {
+                        title: 'Report Catalog',
+                        href: reportCatalogIndex(),
+                        icon: ChartColumn,
+                    },
+                    reportItems['daily-collections'],
+                    reportItems['revenue-sources'],
                     reportItems.collectibles,
-                    reportItems.paidEstablishments,
-                    reportItems.unpaidEstablishments,
+                    reportItems['paid-establishments'],
+                    reportItems['unpaid-establishments'],
                 ],
             },
             {
                 title: 'Reports · Management',
                 collapsible: true,
                 items: [
-                    reportItems.assessmentSummary,
-                    reportItems.paymentSummary,
-                    reportItems.businessTax,
-                    reportItems.capitalGross,
-                    reportItems.topTaxDue,
+                    reportItems['assessment-summary'],
+                    reportItems['payment-summary'],
+                    reportItems['business-tax-by-major-type'],
+                    reportItems['total-capital-gross-summary'],
+                    reportItems['top-establishments-tax-due'],
                 ],
             },
             {
                 title: 'Reports · Authority Pending',
                 collapsible: true,
                 items: [
-                    reportItems.allAbstract,
-                    reportItems.cmci,
+                    reportItems['all-abstract'],
+                    reportItems['cmci-ldcs'],
                     reportItems.plds,
                     reportItems.bsp,
-                    reportItems.annexC,
+                    reportItems['annex-c-dnfbp'],
                 ],
             },
         );
@@ -255,6 +174,14 @@ const staffSections = computed<NavSection[]>(() => {
             title: 'Taxes & Fees',
             href: feeRuleIndex(),
             icon: Coins,
+        });
+    }
+
+    if (page.props.auth.can_view_billing_groups) {
+        administrationItems.push({
+            title: 'Billing Groups — Policy Pending',
+            href: billingGroupIndex(),
+            icon: WalletCards,
         });
     }
 
