@@ -50,10 +50,10 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
 
     $accounts = User::query()
         ->whereIn('email', [
-            'preview.citizen@example.test',
-            'preview.bplo@example.test',
-            'preview.treasury@example.test',
-            'preview.management@example.test',
+            'stakeholder.preview.citizen@example.test',
+            'stakeholder.preview.bplo@example.test',
+            'stakeholder.preview.treasury@example.test',
+            'stakeholder.preview.management@example.test',
         ])
         ->with('role.permissions')
         ->get()
@@ -66,17 +66,17 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
 
     expect($accounts)->toHaveCount(4)
         ->and($accounts)->each(fn ($user) => $user->password->not->toBe($password))
-        ->and(Hash::check($password, $accounts['preview.citizen@example.test']->password))->toBeTrue()
-        ->and($accounts['preview.citizen@example.test']->role?->code)->toBe('citizen')
-        ->and($accounts['preview.bplo@example.test']->role?->code)->toBe('preview_bplo')
-        ->and($accounts['preview.treasury@example.test']->role?->code)->toBe('preview_treasury')
-        ->and($accounts['preview.management@example.test']->role?->code)->toBe('preview_management')
-        ->and($accounts['preview.bplo@example.test']->can(UserPermission::AssessPermitApplications->value))->toBeTrue()
-        ->and($accounts['preview.bplo@example.test']->can(UserPermission::ViewUsers->value))->toBeFalse()
-        ->and($accounts['preview.treasury@example.test']->can(UserPermission::IssueReceipts->value))->toBeTrue()
-        ->and($accounts['preview.treasury@example.test']->can(UserPermission::ViewUsers->value))->toBeFalse()
-        ->and($accounts['preview.management@example.test']->can(UserPermission::ViewReports->value))->toBeTrue()
-        ->and($accounts['preview.management@example.test']->can(UserPermission::ViewMunicipalityConfiguration->value))->toBeTrue()
+        ->and(Hash::check($password, $accounts['stakeholder.preview.citizen@example.test']->password))->toBeTrue()
+        ->and($accounts['stakeholder.preview.citizen@example.test']->role?->code)->toBe('citizen')
+        ->and($accounts['stakeholder.preview.bplo@example.test']->role?->code)->toBe('preview_bplo')
+        ->and($accounts['stakeholder.preview.treasury@example.test']->role?->code)->toBe('preview_treasury')
+        ->and($accounts['stakeholder.preview.management@example.test']->role?->code)->toBe('preview_management')
+        ->and($accounts['stakeholder.preview.bplo@example.test']->can(UserPermission::AssessPermitApplications->value))->toBeTrue()
+        ->and($accounts['stakeholder.preview.bplo@example.test']->can(UserPermission::ViewUsers->value))->toBeFalse()
+        ->and($accounts['stakeholder.preview.treasury@example.test']->can(UserPermission::IssueReceipts->value))->toBeTrue()
+        ->and($accounts['stakeholder.preview.treasury@example.test']->can(UserPermission::ViewUsers->value))->toBeFalse()
+        ->and($accounts['stakeholder.preview.management@example.test']->can(UserPermission::ViewReports->value))->toBeTrue()
+        ->and($accounts['stakeholder.preview.management@example.test']->can(UserPermission::ViewMunicipalityConfiguration->value))->toBeTrue()
         ->and($manifest['scenario']['key'])->toBe('stakeholder_preview_cycle_1')
         ->and($manifest['preview']['data_classification'])->toBe('synthetic_local_demo_only')
         ->and($manifest['preview']['production_migration_executed'])->toBeFalse()

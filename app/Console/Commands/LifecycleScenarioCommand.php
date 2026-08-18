@@ -173,7 +173,8 @@ class LifecycleScenarioCommand extends Command
 
     private function runBrowserEvidence(ScenarioArtifactStore $artifactStore, string $baseUrl): void
     {
-        $result = Process::timeout(120)
+        $timeout = $artifactStore->scenarioKey === 'stakeholder_preview_cycle_1' ? 300 : 120;
+        $result = Process::timeout($timeout)
             ->path(base_path())
             ->run([
                 'node',

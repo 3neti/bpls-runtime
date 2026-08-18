@@ -151,25 +151,25 @@ class PrepareStakeholderPreviewCommand extends Command
     {
         return [
             'citizen' => $this->prepareUser(
-                $this->runtimeEmail('STAKEHOLDER_PREVIEW_CITIZEN_EMAIL', 'preview.citizen@example.test'),
+                $this->runtimeEmail('STAKEHOLDER_PREVIEW_CITIZEN_EMAIL', 'stakeholder.preview.citizen@example.test'),
                 'Preview Citizen',
                 $password,
                 $ensureCitizenRole->handle(),
             ),
             'bplo' => $this->prepareUser(
-                $this->runtimeEmail('STAKEHOLDER_PREVIEW_BPLO_EMAIL', 'preview.bplo@example.test'),
+                $this->runtimeEmail('STAKEHOLDER_PREVIEW_BPLO_EMAIL', 'stakeholder.preview.bplo@example.test'),
                 'Preview BPLO Operator',
                 $password,
                 $this->previewRole('preview_bplo', 'Preview BPLO', self::BploPermissions),
             ),
             'treasury' => $this->prepareUser(
-                $this->runtimeEmail('STAKEHOLDER_PREVIEW_TREASURY_EMAIL', 'preview.treasury@example.test'),
+                $this->runtimeEmail('STAKEHOLDER_PREVIEW_TREASURY_EMAIL', 'stakeholder.preview.treasury@example.test'),
                 'Preview Treasury Operator',
                 $password,
                 $this->previewRole('preview_treasury', 'Preview Treasury', self::TreasuryPermissions),
             ),
             'management' => $this->prepareUser(
-                $this->runtimeEmail('STAKEHOLDER_PREVIEW_MANAGEMENT_EMAIL', 'preview.management@example.test'),
+                $this->runtimeEmail('STAKEHOLDER_PREVIEW_MANAGEMENT_EMAIL', 'stakeholder.preview.management@example.test'),
                 'Preview Municipal Management',
                 $password,
                 $this->previewRole('preview_management', 'Preview Municipal Management', self::ManagementPermissions),
