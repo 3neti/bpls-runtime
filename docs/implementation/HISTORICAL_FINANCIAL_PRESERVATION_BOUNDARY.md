@@ -227,6 +227,14 @@ Within the unchanged 519 business-source evidence class, v4 identifies 450 appli
 
 This split narrows the municipal decision without deciding identity. A source-backed rule for shared contact points could move the 450 into bounded exact mapping/reference-data review, but it would not accept mappings or make the class rehearsal-ready. The 69 remain subject to authoritative person-oriented identity reconciliation. Collision-group counts across the two evidence classes may overlap and are not additive.
 
+Additive read-only run `prod-human-identity-frontier-20260818-006` uses characterization schema `bpls.historical-financial-human-identity-frontier.v5`. It reproduces the complete v4 summary and all frozen fingerprints unchanged, then adds priority-review topology SHA-256 `53790859b7bd63430c4e3f35e0a212b22cade849202d56aa25a45def80a59c7f`.
+
+The 69 non-contact applications reduce to 51 exact hashed `name_birth` collision review groups: 41 groups of two, five of three, two of four, and three of five. These are review units only; name and birth date remain collision evidence rather than legal-identity authority.
+
+The 76 compound owner/business collision applications separate into 75 applications / 72 owner proposals / 75 business proposals carrying a registration-number collision dimension across 52 globally deduplicated review groups, plus one non-`Released` phone-plus-owner/name outlier. The 75 registration cases route into 34 contact-only-owner applications and 41 non-contact-owner applications. Registration-group counts inside those two routes overlap, so the 52-group aggregate is authoritative. A shared-contact decision could address only the owner-evidence dependency for the 34; business-registration identity, reference data, exact mappings, cohort freeze, and rehearsal authorization would remain.
+
+The eight soft-deleted applications remain quarantined as one exception matrix: five carry contact-only owner signals, three carry non-contact signals, two carry Treasury interpretation, one carries financial-policy authority, one carries permit-authority semantics, and one carries a genuine source contradiction. These overlays are not asserted disjoint. The single identity-plus-financial application preserves separate identity and financial-override blockers. No newly characterized class has an accepted mapping, has been rehearsed, is production-applied, or is one bounded decision from rehearsal-ready.
+
 ## Five-Record Mapping Prerequisites
 
 Read-only prerequisite run `prod-historical-financial-cohort-prerequisites-20260817-002` recomputed the same five-record cohort from financial plan 3 and registry plan 3 and refused to proceed unless the result matched frozen cohort SHA-256 `bf5af2693e471f336c54bf5e3345cc6b9df8709fceddd5ea1bc63360c3ebddb4`. The cohort did not change.

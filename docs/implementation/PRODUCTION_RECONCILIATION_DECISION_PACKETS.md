@@ -30,7 +30,8 @@ The current municipal identity questions should be reviewed together rather than
 | Review item | Quantified scope | Exact decision boundary | Effect of an accepted decision |
 | --- | ---: | --- | --- |
 | Shared contact points only | 450 applications / 443 owner proposals / 447 business proposals; 254 hashed email/phone collision groups | Whether shared email/phone alone creates a legal-owner identity conflict; what authoritative evidence validates distinct owners; approving office; quarantine rule | Could advance the class to bounded reference-data and exact owner/business/application mapping review; does not accept mappings or make the class rehearsal-ready |
-| Non-contact identity signal present | 69 applications / 68 owner proposals / 68 business proposals | Required authoritative legal-owner evidence and record- or collision-group disposition; current production evidence observes `name_birth` | Evidence-backed members could advance individually; a contact-point policy alone cannot advance this class |
+| Non-contact identity signal present | 69 applications / 68 owner proposals / 68 business proposals; 51 exact hashed `name_birth` review groups | Required authoritative legal-owner evidence and group disposition; current production evidence observes `name_birth` | Evidence-backed members could advance by bounded review group; a contact-point policy alone cannot advance this class |
+| Compound registration collision dimension | 75 applications / 72 owner proposals / 75 business proposals; 52 globally deduplicated registration review groups | Required evidence and authorized disposition for shared registration numbers; separate owner-evidence routing for 34 contact-only and 41 non-contact applications | Could resolve one business-identity dependency for 75 applications; does not resolve owner identity, reference data, mappings, or rehearsal readiness |
 | Legacy `ownerType = Group` | 120 applications / 110 owner proposals / 119 business proposals | Meaning of `Group`, applicable legal-owner categories, evidence, authority, and insufficient/contradictory-evidence disposition | Policy acceptance only; exact owner proposals and every dependent mapping remain separate decisions |
 | Collision-free owner proposals | 12 applications / nine owner proposals | Accept or reject the nine exact owner proposals independently of unresolved business collisions | Makes only an owner-level registry rehearsal eligible for separate authorization; historical preservation remains blocked |
 
@@ -129,6 +130,8 @@ An accepted decision would not make email/phone identity authority, merge or spl
 
 For the 69, a contact-point rule is insufficient. Authorized reviewers must reconcile the person-oriented or other non-contact evidence against authoritative legal-owner records before an exact disposition can be proposed.
 
+The v5 replay makes that workload exact without deciding identity: the same 69 applications reduce to 51 hashed `name_birth` collision review groups. Group sizes are 41 groups of two, five of three, two of four, and three of five. Review may proceed by these checksum-bound units, but neither shared nor distinct legal identity may be inferred from the signal.
+
 ## Packet 4: Business Collision Groups
 
 **Issue:** Registration-number and owner-plus-name signals identify possible duplicate business records without proving equivalence.
@@ -150,6 +153,28 @@ For the 69, a contact-point rule is insufficient. Authorized reviewers must reco
 **Decision required:** Establish the evidence required to merge, preserve, or quarantine each collision class.
 
 **Authority / approver:** BPLO registry custodian.
+
+### Historical-Preservation Compound-Collision Frontier
+
+Additive v5 run `prod-human-identity-frontier-20260818-006` preserves the frozen 76-application compound cohort while isolating its dominant review dimension:
+
+- 75 applications / 72 owner proposals / 75 business proposals carry a registration-number collision;
+- those records reduce to 52 globally deduplicated registration review groups: 45 groups of two, six of three, and one of four;
+- 34 applications have contact-only owner evidence plus the registration collision;
+- 41 have non-contact owner evidence plus the registration collision;
+- one non-`Released` application remains a separate phone-plus-owner/name topology.
+
+The 34/41 routing counts are disjoint by application, but their registration-group counts overlap. The 52-group aggregate is the authoritative review workload.
+
+**Consolidated registration decision required:**
+
+1. Under actual Municipality of Ipil registry practice, what did reuse of a business registration number mean across historical business records?
+2. What authoritative evidence distinguishes duplicate, renewal/version, branch, correction, or genuinely separate business identities?
+3. Who may approve the disposition for each collision group, and must review occur by group or by source record?
+4. When evidence is insufficient or contradictory, must the business, owner dependency, and affected application remain quarantined?
+5. After a disposition is recorded, may engineering prepare exact business-mapping proposals while owner identity, reference data, application mappings, acceptance, freeze, and rehearsal authorization remain separate?
+
+An accepted registration disposition would not make registration number an identity authority, merge or split businesses automatically, resolve legal-owner identity, activate historical `Released`, accept mappings, authorize rehearsal, or authorize production migration. The shared-contact decision can address only the owner-evidence dimension of the 34 contact-owner applications; the 41 non-contact-owner applications still require authoritative legal-owner reconciliation.
 
 ## Packet 5: Group-Owner Semantics
 
@@ -196,6 +221,8 @@ The detailed controlling packet for the 120-application historical-preservation 
 **Decision required:** Define migration and operational meaning for each flag.
 
 **Authority / approver:** BPLO administrator and the authority responsible for blacklist policy.
+
+Within the 736-case historical-preservation frontier, the eight soft-deleted applications remain one checksum-bound quarantine. Five carry contact-only owner signals and three carry non-contact signals. Two also require Treasury interpretation, one financial authority, one permit-authority semantics, and one a genuine source-contradiction disposition; these overlays are not asserted disjoint. A deletion/retention rule cannot resolve those independent gates, so no member is one decision from rehearsal-ready.
 
 ## Packet 7: Receipt-Number And Failed-Payment Semantics
 
