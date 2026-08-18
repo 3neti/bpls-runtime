@@ -588,15 +588,16 @@ test('priority review classes separate compound contact and non contact identity
     $result = app(CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier::class)->handle($financialPlan, $registryPlan);
     $repeat = app(CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier::class)->handle($financialPlan, $registryPlan);
     $priorityReviewClasses = collect($result['report']['priority_review_classes'])->keyBy('key');
+    $registrationDecisionRoutes = collect($result['report']['registration_decision_routes'])->keyBy('key');
     $softDeletedDecisionRoutes = collect($result['report']['soft_deleted_decision_routes'])->keyBy('key');
     $arguments = [
         'financial-plan' => $financialPlan->id,
         'registry-plan' => $registryPlan->id,
-        '--run-id' => 'priority-decision-unlocks-v6-001',
+        '--run-id' => 'registration-decision-routes-v7-001',
         '--json' => true,
     ];
     $this->artisan('legacy:characterize-historical-financial-human-identities', $arguments)->assertSuccessful();
-    $root = "legacy-migrations/{$batches['financial']->source->key}/{$batches['financial']->run_reference}/reconciliation/historical-financial-human-identity-frontier/priority-decision-unlocks-v6-001";
+    $root = "legacy-migrations/{$batches['financial']->source->key}/{$batches['financial']->run_reference}/reconciliation/historical-financial-human-identity-frontier/registration-decision-routes-v7-001";
     $evidence = Storage::disk('local')->get($root.'/summary.json')
         .Storage::disk('local')->get($root.'/classes.json')
         .Storage::disk('local')->get($root.'/candidate-membership.jsonl');
@@ -606,9 +607,10 @@ test('priority review classes separate compound contact and non contact identity
         ->flatMap(fn (LegacyMappingProposal $proposal): array => array_values($proposal->collision_fingerprints ?? []))
         ->unique();
 
-    expect($result['report']['schema_version'])->toBe('bpls.historical-financial-human-identity-frontier.v6')
+    expect($result['report']['schema_version'])->toBe('bpls.historical-financial-human-identity-frontier.v7')
         ->and($result['report']['summary']['human_identity_application_count'])->toBe(13)
         ->and($result['report']['summary']['priority_review_class_count'])->toBe(6)
+        ->and($result['report']['summary']['registration_decision_route_count'])->toBe(3)
         ->and($result['report']['summary']['soft_deleted_decision_route_count'])->toBe(2)
         ->and($priorityReviewClasses->keys()->all())->toBe([
             'non_contact_identity_collision_free_business',
@@ -688,6 +690,35 @@ test('priority review classes separate compound contact and non contact identity
         ])
         ->and(data_get($priorityReviewClasses, 'compound_non_contact_owner_registration_business_collision.review_units.owner_non_contact_collision_groups.unique_collision_group_count'))->toBe(2)
         ->and(data_get($priorityReviewClasses, 'compound_non_contact_owner_registration_business_collision.review_units.business_registration_collision_groups.unique_collision_group_count'))->toBe(2)
+        ->and($registrationDecisionRoutes->keys()->all())->toBe([
+            'contact_only_closed',
+            'non_contact_only_closed',
+            'non_contact_only_externally_coupled',
+        ])
+        ->and($registrationDecisionRoutes->get('contact_only_closed'))->toMatchArray([
+            'collision_group_count' => 1,
+            'candidate_application_membership_count' => 2,
+            'candidate_business_proposal_membership_count' => 2,
+            'external_business_proposal_membership_count' => 0,
+            'one_bounded_registry_decision_would_unlock_exact_business_proposal_preparation' => true,
+            'accepted_mapping_count' => 0,
+            'rehearsed_mapping_count' => 0,
+            'production_applied_count' => 0,
+        ])
+        ->and($registrationDecisionRoutes->get('non_contact_only_closed'))->toMatchArray([
+            'collision_group_count' => 1,
+            'candidate_application_membership_count' => 2,
+            'candidate_business_proposal_membership_count' => 2,
+            'external_business_proposal_membership_count' => 0,
+            'one_bounded_registry_decision_would_unlock_exact_business_proposal_preparation' => true,
+        ])
+        ->and($registrationDecisionRoutes->get('non_contact_only_externally_coupled'))->toMatchArray([
+            'collision_group_count' => 1,
+            'candidate_application_membership_count' => 2,
+            'candidate_business_proposal_membership_count' => 2,
+            'external_business_proposal_membership_count' => 1,
+            'one_bounded_registry_decision_would_unlock_exact_business_proposal_preparation' => false,
+        ])
         ->and($priorityReviewClasses->get('soft_deleted_exception_matrix'))->toMatchArray([
             'application_count' => 2,
             'contact_signal_only_application_count' => 2,
@@ -738,6 +769,16 @@ test('priority review classes separate compound contact and non contact identity
         ->and($priorityReviewClasses->get('identity_plus_financial_exception')['blocker_categories'])->toContain('financial_policy_authority')
         ->and(data_get($result, 'report.fingerprints.priority_review_class_set_sha256'))->toHaveLength(64)
         ->and(data_get($result, 'report.fingerprints.priority_decision_unlock_set_sha256'))->toHaveLength(64)
+        ->and(data_get($result, 'report.fingerprints.registration_decision_route_set_sha256'))->toHaveLength(64)
+        ->and($result['report']['preserved_v6_outputs'])->toMatchArray([
+            'schema_version' => 'bpls.historical-financial-human-identity-frontier.v6',
+            'human_identity_frontier_sha256' => data_get($result, 'report.fingerprints.human_identity_frontier_sha256'),
+            'business_source_evidence_subclass_sha256' => data_get($result, 'report.fingerprints.business_source_evidence_subclass_sha256'),
+            'decision_cohort_set_sha256' => data_get($result, 'report.fingerprints.decision_cohort_set_sha256'),
+            'municipal_identity_evidence_class_set_sha256' => data_get($result, 'report.fingerprints.municipal_identity_evidence_class_set_sha256'),
+            'priority_review_class_set_sha256' => data_get($result, 'report.fingerprints.priority_review_class_set_sha256'),
+            'priority_decision_unlock_set_sha256' => data_get($result, 'report.fingerprints.priority_decision_unlock_set_sha256'),
+        ])
         ->and($result['report']['preserved_v5_outputs'])->toMatchArray([
             'schema_version' => 'bpls.historical-financial-human-identity-frontier.v5',
             'human_identity_frontier_sha256' => data_get($result, 'report.fingerprints.human_identity_frontier_sha256'),
@@ -758,6 +799,7 @@ test('priority review classes separate compound contact and non contact identity
             'municipal_identity_evidence_class_set_sha256' => data_get($result, 'report.fingerprints.municipal_identity_evidence_class_set_sha256'),
         ])
         ->and($repeat['report']['preserved_v5_outputs'])->toBe($result['report']['preserved_v5_outputs'])
+        ->and($repeat['report']['preserved_v6_outputs'])->toBe($result['report']['preserved_v6_outputs'])
         ->and($repeat['report']['preserved_v4_outputs'])->toBe($result['report']['preserved_v4_outputs'])
         ->and($repeat['report']['fingerprints'])->toBe($result['report']['fingerprints'])
         ->and(LegacyApplicationIdMapping::query()->count())->toBe(0)

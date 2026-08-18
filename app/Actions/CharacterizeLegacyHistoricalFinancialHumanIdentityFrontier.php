@@ -9,7 +9,7 @@ use Illuminate\Support\Collection;
 
 class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
 {
-    public const SchemaVersion = 'bpls.historical-financial-human-identity-frontier.v6';
+    public const SchemaVersion = 'bpls.historical-financial-human-identity-frontier.v7';
 
     private const BlockerCategories = [
         'exact_mapping_acceptance',
@@ -95,6 +95,13 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
             ->sortByDesc('application_count')
             ->values();
         $priorityReviewClasses = collect($this->priorityReviewClasses($candidateEvidence, $proposals));
+        $registrationDecisionRoutes = collect($this->registrationDecisionRoutes(
+            $candidateEvidence
+                ->where('decision_cohort_key', 'compound_owner_business_identity_collision')
+                ->where('business_collision_signal_names', ['registration'])
+                ->values(),
+            $proposals,
+        ));
         $softDeletedDecisionRoutes = collect($this->softDeletedDecisionRoutes(
             $candidateEvidence->where('decision_cohort_key', 'soft_deleted_registry_policy')->values(),
         ));
@@ -163,6 +170,7 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                     'decision_cohort_count' => $decisionCohorts->count(),
                     'municipal_identity_evidence_class_count' => $municipalIdentityEvidenceClasses->count(),
                     'priority_review_class_count' => $priorityReviewClasses->count(),
+                    'registration_decision_route_count' => $registrationDecisionRoutes->count(),
                     'soft_deleted_decision_route_count' => $softDeletedDecisionRoutes->count(),
                     'contact_signals_only_application_count' => $municipalIdentityEvidenceClasses
                         ->firstWhere('key', 'contact_signals_only')['application_count'] ?? 0,
@@ -196,8 +204,49 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                 'municipal_identity_evidence_classes' => array_values($municipalIdentityEvidenceClasses->all()),
                 'decision_ready_cohorts' => array_values($decisionCohorts->all()),
                 'priority_review_classes' => array_values($priorityReviewClasses->all()),
+                'registration_decision_routes' => array_values($registrationDecisionRoutes->all()),
                 'soft_deleted_decision_routes' => array_values($softDeletedDecisionRoutes->all()),
                 'fingerprints' => [
+                    'human_identity_frontier_sha256' => $frontierSha256,
+                    'business_source_evidence_subclass_sha256' => $businessSourceEvidenceSubclassSha256,
+                    'decision_cohort_set_sha256' => $decisionCohortSetSha256,
+                    'municipal_identity_evidence_class_set_sha256' => $municipalIdentityEvidenceClassSetSha256,
+                    'priority_review_class_set_sha256' => $this->hash([
+                        $evidenceBinding,
+                        ...$priorityReviewClasses->map(fn (array $class): array => [
+                            $class['key'],
+                            $class['class_sha256'],
+                            $class['application_count'],
+                            $this->v5ReviewUnits($class['review_units']),
+                            $class['blocker_categories'],
+                        ])->all(),
+                    ]),
+                    'priority_decision_unlock_set_sha256' => $this->hash([
+                        $evidenceBinding,
+                        ...$priorityReviewClasses->map(fn (array $class): array => [
+                            $class['key'],
+                            $this->v6ReviewUnitClosureFingerprintRows($class['review_units']),
+                        ])->all(),
+                        ...$softDeletedDecisionRoutes->map(fn (array $route): array => [
+                            $route['key'],
+                            $route['route_sha256'],
+                            $route['application_count'],
+                            $route['blocker_categories'],
+                        ])->all(),
+                    ]),
+                    'registration_decision_route_set_sha256' => $this->hash([
+                        $evidenceBinding,
+                        ...$registrationDecisionRoutes->map(fn (array $route): array => [
+                            $route['key'],
+                            $route['route_sha256'],
+                            $route['collision_group_count'],
+                            $route['candidate_application_membership_count'],
+                            $route['external_business_proposal_membership_count'],
+                        ])->all(),
+                    ]),
+                ],
+                'preserved_v6_outputs' => [
+                    'schema_version' => 'bpls.historical-financial-human-identity-frontier.v6',
                     'human_identity_frontier_sha256' => $frontierSha256,
                     'business_source_evidence_subclass_sha256' => $businessSourceEvidenceSubclassSha256,
                     'decision_cohort_set_sha256' => $decisionCohortSetSha256,
@@ -633,6 +682,161 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
             'rehearsed_mapping_count' => 0,
             'production_applied_count' => 0,
             ...$additional,
+        ];
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $members
+     * @param  Collection<int, LegacyMappingProposal>  $proposals
+     * @return list<array<string, mixed>>
+     */
+    private function registrationDecisionRoutes(Collection $members, Collection $proposals): array
+    {
+        $candidateBusinessProposalIds = $members
+            ->pluck('business_proposal_id')
+            ->map(fn (mixed $proposalId): int => (int) $proposalId)
+            ->unique();
+        $registrationFingerprints = $candidateBusinessProposalIds
+            ->map(fn (int $proposalId): ?string => data_get(
+                $proposals->get($proposalId)?->collision_fingerprints,
+                'registration',
+            ))
+            ->filter()
+            ->unique();
+        $groups = [];
+
+        foreach ($proposals as $proposalId => $proposal) {
+            $fingerprint = data_get($proposal->collision_fingerprints, 'registration');
+            if (! is_string($fingerprint) || ! $registrationFingerprints->contains($fingerprint)) {
+                continue;
+            }
+
+            $groups[$fingerprint][(int) $proposalId] = true;
+        }
+
+        $routeGroups = collect($groups)
+            ->map(function (array $proposalMembership, string $fingerprint) use ($candidateBusinessProposalIds, $members, $proposals): array {
+                $proposalIds = array_map('intval', array_keys($proposalMembership));
+                $candidateProposalIds = array_values(array_intersect(
+                    $proposalIds,
+                    $candidateBusinessProposalIds->all(),
+                ));
+                $outsideProposalIds = array_values(array_diff(
+                    $proposalIds,
+                    $candidateBusinessProposalIds->all(),
+                ));
+                $candidateMembers = $members->whereIn('business_proposal_id', $candidateProposalIds);
+                $ownerEvidenceLanes = $candidateMembers
+                    ->map(fn (array $candidate): string => $this->hasOnlyContactOwnerSignals($candidate)
+                        ? 'contact_only'
+                        : 'non_contact_only')
+                    ->unique()
+                    ->sort()
+                    ->values()
+                    ->all();
+                $ownerEvidenceLane = count($ownerEvidenceLanes) === 1
+                    ? $ownerEvidenceLanes[0]
+                    : 'mixed';
+                $closure = $outsideProposalIds === [] ? 'closed' : 'externally_coupled';
+
+                return [
+                    'key' => $ownerEvidenceLane.'_'.$closure,
+                    'group_sha256' => $this->hash([
+                        $fingerprint,
+                        ...collect($proposalIds)
+                            ->map(fn (int $proposalId): string => $proposals->get($proposalId)->identity_fingerprint)
+                            ->sort()
+                            ->values()
+                            ->all(),
+                    ]),
+                    'candidate_application_membership_count' => $candidateMembers->count(),
+                    'candidate_business_proposal_membership_count' => count($candidateProposalIds),
+                    'external_business_proposal_membership_count' => count($outsideProposalIds),
+                    'historical_released_application_count' => $candidateMembers
+                        ->where('shape.source_lifecycle_assertion', 'Released')
+                        ->count(),
+                    'non_released_application_count' => $candidateMembers
+                        ->where('shape.source_lifecycle_assertion', 'non_Released')
+                        ->count(),
+                ];
+            })
+            ->groupBy('key')
+            ->map(function (Collection $routeGroups, string $key): array {
+                [$ownerEvidenceLane, $closure] = str_ends_with($key, '_externally_coupled')
+                    ? [substr($key, 0, -strlen('_externally_coupled')), 'externally_coupled']
+                    : [substr($key, 0, -strlen('_closed')), 'closed'];
+                $profile = $this->registrationDecisionRouteProfile($ownerEvidenceLane, $closure);
+
+                return [
+                    'key' => $key,
+                    'route_sha256' => $this->hash($routeGroups
+                        ->map(fn (array $group): array => [
+                            $group['group_sha256'],
+                            $group['candidate_application_membership_count'],
+                            $group['candidate_business_proposal_membership_count'],
+                            $group['external_business_proposal_membership_count'],
+                        ])
+                        ->sortBy(fn (array $group): string => $group[0])
+                        ->values()
+                        ->all()),
+                    'owner_evidence_lane' => $ownerEvidenceLane,
+                    'registration_group_closure' => $closure,
+                    'collision_group_count' => $routeGroups->count(),
+                    'candidate_application_membership_count' => $routeGroups
+                        ->sum('candidate_application_membership_count'),
+                    'candidate_business_proposal_membership_count' => $routeGroups
+                        ->sum('candidate_business_proposal_membership_count'),
+                    'external_business_proposal_membership_count' => $routeGroups
+                        ->sum('external_business_proposal_membership_count'),
+                    'historical_released_application_count' => $routeGroups
+                        ->sum('historical_released_application_count'),
+                    'non_released_application_count' => $routeGroups
+                        ->sum('non_released_application_count'),
+                    'deterministic_fact' => $profile['deterministic_fact'],
+                    'exact_remaining_blocker' => $profile['exact_remaining_blocker'],
+                    'one_bounded_registry_decision_would_unlock_exact_business_proposal_preparation' => $closure === 'closed',
+                    'acceptance_would_mean' => $profile['acceptance_would_mean'],
+                    'acceptance_would_not_mean' => 'It would not make registration number, contact points, name, birth date, or similarity identity authority; accept an owner, business, or application mapping; resolve reference data; activate historical Released; authorize rehearsal; or authorize production migration.',
+                    'reversible_rehearsal_after_registration_acceptance' => 'None. Owner identity, reference-data, exact-mapping, cohort-freeze, and separate rehearsal-authorization gates remain.',
+                    'what_remains_quarantined' => 'Every group member remains unaccepted, unrehearsed, and production-unapplied until the registration disposition and every independent owner, reference-data, mapping, freeze, and authorization gate are resolved.',
+                    'accepted_mapping_count' => 0,
+                    'rehearsed_mapping_count' => 0,
+                    'production_applied_count' => 0,
+                ];
+            });
+        $routeOrder = array_flip([
+            'contact_only_closed',
+            'contact_only_externally_coupled',
+            'non_contact_only_closed',
+            'non_contact_only_externally_coupled',
+            'mixed_closed',
+            'mixed_externally_coupled',
+        ]);
+
+        return array_values($routeGroups
+            ->sortBy(fn (array $route): int => $routeOrder[$route['key']] ?? count($routeOrder))
+            ->values()
+            ->all());
+    }
+
+    /** @return array{deterministic_fact: string, exact_remaining_blocker: string, acceptance_would_mean: string} */
+    private function registrationDecisionRouteProfile(string $ownerEvidenceLane, string $closure): array
+    {
+        $ownerScope = match ($ownerEvidenceLane) {
+            'contact_only' => 'Every cohort member routes to the unchanged shared-contact municipal dependency for its owner-evidence dimension.',
+            'non_contact_only' => 'Every cohort member routes to authoritative person-oriented legal-owner review for its owner-evidence dimension.',
+            default => 'The registration groups span both shared-contact and person-oriented legal-owner review lanes, so their owner evidence requires coordinated routing.',
+        };
+        $registrationScope = $closure === 'closed'
+            ? 'The complete global membership of each registration group is contained in this route.'
+            : 'Each registration group includes business proposals outside the 75-application cohort and requires full global membership review.';
+
+        return [
+            'deterministic_fact' => $registrationScope.' '.$ownerScope.' Neither signal establishes legal identity.',
+            'exact_remaining_blocker' => $closure === 'closed'
+                ? 'An authoritative complete-group business-registry disposition can unlock exact business-proposal preparation for this dimension; the routed owner decision and later reference-data and mapping gates remain independent.'
+                : 'The business-registry disposition must cover the full externally coupled group, including proposals outside this cohort; the routed owner decision and later reference-data and mapping gates remain independent.',
+            'acceptance_would_mean' => 'The authorized registry reviewer has accepted only the evidence-backed disposition for every member of each complete registration group represented by this route.',
         ];
     }
 

@@ -245,6 +245,12 @@ A complete authoritative disposition for a closed group can unlock exact proposa
 
 The eight soft-deleted applications now reproduce as five disjoint, fingerprinted routes: three deletion/identity/reference-only, two Treasury, one fiscal-authority, one permit-authority, and one genuine source-contradiction application. Each route remains behind deletion, identity, reference-data, exact-mapping, freeze, and separate rehearsal-authorization gates as applicable. The identity-plus-financial exception separately requires full global owner-collision-group review and fiscal authority; neither decision alone unlocks exact proposal preparation.
 
+Additive read-only run `prod-human-identity-frontier-20260818-009` uses characterization schema `bpls.historical-financial-human-identity-frontier.v7`. It preserves the complete v6 output and priority decision-unlock SHA-256 `b627a317ccff26133ea5b98d3afcf0ee5c4fb356154480de3fe6eae7bc5bfceb`, then routes the unchanged 52 registration groups by closure and owner-evidence lane under registration decision-route SHA-256 `f64c014c67354ed0700e54ad06d069dd6fbb5ba2d8a311a059f8322932359e57`.
+
+Seven closed contact-only groups cover 14 applications; 16 coupled contact-only groups cover 17 applications plus 18 outside business proposals. Eight closed non-contact-only groups cover 17 applications; 18 coupled non-contact-only groups cover 19 applications plus 19 outside business proposals. Three closed mixed-owner-evidence groups cover eight applications, and no coupled registration group mixes the owner-evidence lanes. All 52 groups, 75 applications, and 37 outside business proposals reproduce exactly.
+
+This routing reduces reviewer coordination without deciding identity: 49 registration groups stay within one owner-evidence lane, while three closed groups require coordinated shared-contact and person-oriented owner review. A complete closed-group registry disposition can unlock exact business-proposal preparation only for that dimension. Coupled groups still require full global membership, and every route retains independent owner, reference-data, exact-mapping, freeze, rehearsal-authorization, and production gates.
+
 ## Five-Record Mapping Prerequisites
 
 Read-only prerequisite run `prod-historical-financial-cohort-prerequisites-20260817-002` recomputed the same five-record cohort from financial plan 3 and registry plan 3 and refused to proceed unless the result matched frozen cohort SHA-256 `bf5af2693e471f336c54bf5e3345cc6b9df8709fceddd5ea1bc63360c3ebddb4`. The cohort did not change.

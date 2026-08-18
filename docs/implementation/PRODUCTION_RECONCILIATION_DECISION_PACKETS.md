@@ -170,6 +170,18 @@ The 34/41 routing counts are disjoint by application, but their registration-gro
 
 The v6 containment replay further separates 18 closed registration groups covering 39 businesses/applications from 34 externally coupled groups covering 36 cohort businesses/applications plus 37 source business proposals outside the cohort. Closed members route into 17 contact-owner and 22 non-contact-owner applications; coupled members route into 17 and 19. All 75 carry historical `Released`. A coupled registration decision must cover the full global group. A complete group disposition can unlock exact business-proposal preparation for that identity dimension only; owner identity and every downstream acceptance or authorization gate remain separate.
 
+The additive v7 routing replay makes the reviewer handoff exact. Contact-only owner evidence contains seven closed registration groups / 14 applications and 16 coupled groups / 17 applications plus 18 outside business proposals. Non-contact owner evidence contains eight closed groups / 17 applications and 18 coupled groups / 19 applications plus 19 outside business proposals. Three closed registration groups / eight applications span both owner-evidence lanes; no coupled group is mixed. The 52 groups therefore reduce to 49 single-lane packets and three closed coordinated packets. Registration decision-route SHA-256 is `f64c014c67354ed0700e54ad06d069dd6fbb5ba2d8a311a059f8322932359e57`; every v6 fingerprint remains exact.
+
+| Registration route | Exact population | Route SHA-256 | Decision effect |
+| --- | --- | --- | --- |
+| Contact-only, closed | 7 groups / 14 applications | `0462da1689b4e317747ed7ee29ec3f06aa90dfdcbf60e2f8a59975e00ba75090` | Complete registry disposition can unlock business-proposal preparation for this dimension; shared-contact owner review remains independent |
+| Contact-only, coupled | 16 groups / 17 applications + 18 outside business proposals | `27c596d7813f0d2e7538f26d6bf1617aa1db426b4791c9b5ca3761a70daad272` | Full global registration-group review is required; shared-contact owner review remains independent |
+| Non-contact-only, closed | 8 groups / 17 applications | `abc920be1e7125dd7d8c03149eda2713510f25858f190ea25fd7733a8a87755e` | Complete registry disposition can unlock business-proposal preparation for this dimension; person-oriented owner review remains independent |
+| Non-contact-only, coupled | 18 groups / 19 applications + 19 outside business proposals | `7ee607938366ff39940cf44b1980ec3603e7dc2cc4aec8b4ee6a6af36654656a` | Full global registration-group review is required; person-oriented owner review remains independent |
+| Mixed owner evidence, closed | 3 groups / 8 applications | `e303b2c1d9d4c5a1f65115ceeaff71cdae485ff43725d72c661278d4bba6c722` | Complete registry disposition can unlock business-proposal preparation for this dimension, but owner review must be coordinated across both lanes |
+
+Acceptance of any route means only that the authorized registry reviewer has recorded an evidence-backed disposition for every member of each complete registration group. It does not infer business or owner identity from any signal, resolve reference data, accept mappings, activate historical `Released`, freeze a cohort, authorize rehearsal, or authorize production migration. No reversible rehearsal becomes available from registration acceptance alone; every affected record remains quarantined behind its owner, reference-data, exact-mapping, freeze, and separate authorization gates.
+
 **Consolidated registration decision required:**
 
 1. Under actual Municipality of Ipil registry practice, what did reuse of a business registration number mean across historical business records?
@@ -177,6 +189,7 @@ The v6 containment replay further separates 18 closed registration groups coveri
 3. Who may approve the disposition for each collision group, and must review occur by group or by source record?
 4. When evidence is insufficient or contradictory, must the business, owner dependency, and affected application remain quarantined?
 5. After a disposition is recorded, may engineering prepare exact business-mapping proposals while owner identity, reference data, application mappings, acceptance, freeze, and rehearsal authorization remain separate?
+6. For the three closed mixed-owner-evidence groups, who coordinates the business-registry disposition with both the shared-contact and person-oriented legal-owner reviews?
 
 An accepted registration disposition would not make registration number an identity authority, merge or split businesses automatically, resolve legal-owner identity, activate historical `Released`, accept mappings, authorize rehearsal, or authorize production migration. The shared-contact decision can address only the owner-evidence dimension of the 34 contact-owner applications; the 41 non-contact-owner applications still require authoritative legal-owner reconciliation.
 
