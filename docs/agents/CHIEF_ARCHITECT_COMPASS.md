@@ -42,6 +42,7 @@ Continue the rescue in two independent lanes while the Municipality reviews the 
 - The shared-contact municipal decision is relevant to the owner-evidence dimension of the 34 contact-owner/registration applications, but it cannot resolve their business-registration, reference-data, mapping, freeze, or rehearsal gates.
 - The eight soft-deleted applications remain one quarantine: five carry contact-only owner signals and three carry non-contact signals; two carry Treasury interpretation, one financial-authority, one permit-authority, and one source-contradiction overlay. The overlays are not asserted disjoint. The single identity-plus-financial exception also remains quarantined behind separate identity and financial-authority decisions.
 - Human-frontier accepted mappings, rehearsed mappings, and production-applied records remain zero.
+- The municipal-facing review for the 450 shared-contact applications and the separate 120 Group-owner applications is consolidated in `docs/implementation/MUNICIPAL_IDENTITY_AND_REGISTRY_REVIEW_PACKET.md`. It summarizes but does not replace the canonical Group-owner technical packet and records no municipal answer or acceptance.
 
 ## Migration Readiness Compass
 
@@ -96,6 +97,6 @@ For the 75 compound registration-collision applications, a municipal business-re
 ## Active Gates
 
 1. Engineering/Product: remain parked until accepted evidence creates an obvious bounded packet.
-2. Migration/Reconciliation: submit a consolidated municipal registry review package for the 450-case contact-point rule, 51 non-contact legal-owner review groups, and 52 business-registration review groups, while preserving the 120-case Group policy and nine-owner acceptance boundary unchanged. Keep all mappings unaccepted and do not revisit the frozen Group cohort without new exact source evidence.
+2. Migration/Reconciliation: submit `docs/implementation/MUNICIPAL_IDENTITY_AND_REGISTRY_REVIEW_PACKET.md` for the 450-case contact-point rule and the separate 120-case Group policy. Keep the 51 non-contact legal-owner groups and 52 business-registration groups as the next municipal review queue; keep all mappings unaccepted and do not revisit the frozen Group cohort without new exact source evidence.
 3. Nelson/UI: intake and evidence organization only; UI Cycle 2 remains parked.
 4. Integration: verify every specialist diff and return before any new acceptance, authority, identity-policy, liability, production, cutover, or substantial integration boundary.
