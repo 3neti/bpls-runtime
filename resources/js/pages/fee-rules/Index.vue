@@ -6,6 +6,7 @@ import {
     index,
     show,
 } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
+import AdministrationScopePanel from '@/components/administration/AdministrationScopePanel.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -320,6 +321,12 @@ function decodePaginationLabel(value: string): string {
                     </p>
                 </div>
             </section>
+
+            <AdministrationScopePanel
+                available="Inspect accepted executable fee-rule evidence separately from Revenue Code provisions and reconciliation-required candidates."
+                evidence="Source extraction, catalog coverage, and candidate values support review; only accepted executable policy can affect an assessment."
+                unavailable="Activating candidate policy, editing rates, inventing formula behavior, or executing any unresolved fiscal rule."
+            />
 
             <form
                 class="grid gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 lg:grid-cols-6 dark:border-sidebar-border"

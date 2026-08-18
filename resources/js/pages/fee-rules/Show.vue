@@ -5,6 +5,7 @@ import {
     index,
     show,
 } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
+import AdministrationScopePanel from '@/components/administration/AdministrationScopePanel.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -161,6 +162,12 @@ function basisRange(range: FeeRuleRange): string {
                     </Link>
                 </Button>
             </section>
+
+            <AdministrationScopePanel
+                available="Inspect this persisted rule, its legal provenance, calculation inputs, effective dates, and current reconciliation evidence."
+                evidence="The source rule, municipal decision evidence, and execution status are separate facts and remain visible independently."
+                unavailable="Editing the rule, accepting fiscal policy, or executing a reconciliation-required candidate from this page."
+            />
 
             <section
                 class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"

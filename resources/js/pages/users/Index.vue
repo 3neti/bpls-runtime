@@ -3,6 +3,7 @@ import { Head, Link, router, setLayoutProps } from '@inertiajs/vue3';
 import { Search, UserRoundCheck, Users, X } from '@lucide/vue';
 import { ref } from 'vue';
 import { index } from '@/actions/App/Http/Controllers/Staff/UserDirectoryController';
+import AdministrationScopePanel from '@/components/administration/AdministrationScopePanel.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -117,6 +118,12 @@ function paginationLabel(label: string): string {
                     >
                 </Badge>
             </section>
+
+            <AdministrationScopePanel
+                available="Search and inspect application accounts, verification state, current role labels, and recorded legal-owner links."
+                evidence="An account, a legal BusinessOwner identity, and an application submission actor are separate facts. This directory shows only links recorded by the canonical model."
+                unavailable="Account provisioning, role assignment, activation or deactivation, password reset, and account mutation."
+            />
 
             <section
                 class="grid border border-sidebar-border/70 sm:grid-cols-2 lg:grid-cols-4 dark:border-sidebar-border"

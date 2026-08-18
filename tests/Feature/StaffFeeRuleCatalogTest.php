@@ -449,3 +449,17 @@ it('blocks fee rule detail from staff without fee-rule view permission', functio
         ->get(route('staff.fee-rules.show', $feeRule))
         ->assertForbidden();
 });
+
+it('presents accepted fee evidence separately from reconciliation-required policy', function () {
+    $indexPage = file_get_contents(resource_path('js/pages/fee-rules/Index.vue'));
+    $detailPage = file_get_contents(resource_path('js/pages/fee-rules/Show.vue'));
+
+    expect($indexPage)
+        ->toContain('AdministrationScopePanel')
+        ->toContain('only accepted executable policy can affect an assessment')
+        ->toContain('executing any unresolved fiscal rule')
+        ->and($detailPage)
+        ->toContain('AdministrationScopePanel')
+        ->toContain('source rule, municipal decision evidence, and execution status are separate facts')
+        ->toContain('executing a reconciliation-required candidate from this page');
+});

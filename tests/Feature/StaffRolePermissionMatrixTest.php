@@ -73,3 +73,12 @@ test('admin effective access does not depend on assigned permission rows', funct
         ->get(route('staff.roles.index'))
         ->assertSuccessful();
 });
+
+test('role matrix presents stored and effective access as read-only evidence', function () {
+    $page = file_get_contents(resource_path('js/pages/roles/Index.vue'));
+
+    expect($page)
+        ->toContain('AdministrationScopePanel')
+        ->toContain('Stored assignments and effective runtime access remain distinct')
+        ->toContain('Role creation or editing, permission assignment, user-role assignment, and catalog reconciliation.');
+});

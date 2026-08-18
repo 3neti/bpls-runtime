@@ -147,3 +147,12 @@ test('admin can inspect municipality configuration through the runtime role over
         ->get(route('staff.municipality-configuration.index'))
         ->assertSuccessful();
 });
+
+test('municipality workspace separates configuration evidence from legal authority', function () {
+    $page = file_get_contents(resource_path('js/pages/municipality/Index.vue'));
+
+    expect($page)
+        ->toContain('AdministrationScopePanel')
+        ->toContain('Configured identity and document association are presentation evidence; neither establishes an authorized signatory.')
+        ->toContain('Governed configuration changes, signature authority, permit issuance or release, and any claim of legal effect.');
+});

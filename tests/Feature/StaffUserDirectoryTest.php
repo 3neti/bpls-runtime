@@ -79,3 +79,17 @@ test('admin can view users through the runtime role override', function () {
         ->get(route('staff.users.index'))
         ->assertSuccessful();
 });
+
+test('user directory presents its read-only identity boundary', function () {
+    $page = file_get_contents(resource_path('js/pages/users/Index.vue'));
+    $scopePanel = file_get_contents(resource_path('js/components/administration/AdministrationScopePanel.vue'));
+
+    expect($page)
+        ->toContain('AdministrationScopePanel')
+        ->toContain('An account, a legal BusinessOwner identity, and an application submission actor are separate facts.')
+        ->toContain('Account provisioning, role assignment, activation or deactivation, password reset, and account mutation.')
+        ->and($scopePanel)
+        ->toContain('Available now')
+        ->toContain('Evidence boundary')
+        ->toContain('Unavailable here');
+});

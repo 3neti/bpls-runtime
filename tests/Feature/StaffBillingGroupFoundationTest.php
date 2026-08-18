@@ -383,3 +383,18 @@ test('billing group pages expose provisional definition and draft-only boundarie
             ->where('can.record_reconciliation_evidence', true)
             ->where('policyNote', fn (string $note): bool => str_contains($note, 'no amount, liability, collection, receipt')));
 });
+
+test('billing group workspace distinguishes evidence preparation from financial execution', function () {
+    $indexPage = file_get_contents(resource_path('js/pages/billing-groups/Index.vue'));
+    $detailPage = file_get_contents(resource_path('js/pages/billing-groups/Show.vue'));
+
+    expect($indexPage)
+        ->toContain('AdministrationScopePanel')
+        ->toContain('authorized staff may record structure-only definitions for later reconciliation')
+        ->toContain('does not accept a Treasury module or establish taxpayer liability')
+        ->and($detailPage)
+        ->toContain('AdministrationScopePanel')
+        ->toContain('prepare drafts and append reconciliation evidence')
+        ->toContain('have no financial effect and do not change policy acceptance or execution readiness')
+        ->toContain('Liability, collection, receipt or official numbering');
+});

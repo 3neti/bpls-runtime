@@ -11,6 +11,7 @@ import {
     UserRoundCog,
 } from '@lucide/vue';
 import { index } from '@/actions/App/Http/Controllers/Staff/MunicipalityConfigurationController';
+import AdministrationScopePanel from '@/components/administration/AdministrationScopePanel.vue';
 import { Badge } from '@/components/ui/badge';
 import type { BreadcrumbItem } from '@/types';
 
@@ -129,6 +130,12 @@ function effectiveTerm(official: Official): string {
                     Read only
                 </Badge>
             </section>
+
+            <AdministrationScopePanel
+                available="Inspect configured municipal identity, official-role values, source status, effective-term evidence, and document associations."
+                evidence="Configured identity and document association are presentation evidence; neither establishes an authorized signatory."
+                unavailable="Governed configuration changes, signature authority, permit issuance or release, and any claim of legal effect."
+            />
 
             <section
                 class="grid border border-sidebar-border/70 md:grid-cols-[minmax(0,1fr)_20rem] dark:border-sidebar-border"

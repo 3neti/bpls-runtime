@@ -2,6 +2,7 @@
 import { Head, setLayoutProps } from '@inertiajs/vue3';
 import { Check, Minus, ShieldCheck, TriangleAlert } from '@lucide/vue';
 import { index } from '@/actions/App/Http/Controllers/Staff/RolePermissionController';
+import AdministrationScopePanel from '@/components/administration/AdministrationScopePanel.vue';
 import { Badge } from '@/components/ui/badge';
 import type { BreadcrumbItem } from '@/types';
 
@@ -113,6 +114,12 @@ function accessLabel(source: PermissionState['source']): string {
                     }}
                 </Badge>
             </section>
+
+            <AdministrationScopePanel
+                available="Inspect current roles, stored permission assignments, effective access, user counts, and permission-catalog differences."
+                evidence="Stored assignments and effective runtime access remain distinct; the Admin override is shown as its own access source."
+                unavailable="Role creation or editing, permission assignment, user-role assignment, and catalog reconciliation."
+            />
 
             <section
                 class="grid border border-sidebar-border/70 sm:grid-cols-2 lg:grid-cols-4 dark:border-sidebar-border"

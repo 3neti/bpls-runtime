@@ -14,6 +14,7 @@ import {
 } from '@/actions/App/Http/Controllers/Staff/BillingGroupController';
 import { store as storeReconciliation } from '@/actions/App/Http/Controllers/Staff/BillingGroupReconciliationController';
 import { store } from '@/actions/App/Http/Controllers/Staff/BillingGroupRecordController';
+import AdministrationScopePanel from '@/components/administration/AdministrationScopePanel.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -200,6 +201,12 @@ function submitReconciliationEvidence(): void {
                     </Button>
                 </div>
             </section>
+
+            <AdministrationScopePanel
+                available="Inspect the provisional definition and draft records; where authorized, prepare drafts and append reconciliation evidence."
+                evidence="Draft preparation and append-only evidence have no financial effect and do not change policy acceptance or execution readiness."
+                unavailable="Liability, collection, receipt or official numbering, and any unresolved municipal or fiscal-policy execution."
+            />
 
             <section
                 class="border-l-4 border-amber-500 bg-amber-50 p-4 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"

@@ -6,6 +6,7 @@ import {
     index,
     show,
 } from '@/actions/App/Http/Controllers/Staff/BillingGroupController';
+import AdministrationScopePanel from '@/components/administration/AdministrationScopePanel.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -97,6 +98,12 @@ function submit(): void {
                     Configure provisional non-permit record schemas.
                 </p>
             </section>
+
+            <AdministrationScopePanel
+                available="Inspect provisional billing-group definitions; authorized staff may record structure-only definitions for later reconciliation."
+                evidence="A definition records draft structure and fields only. It does not accept a Treasury module or establish taxpayer liability."
+                unavailable="Liability calculation, collection, receipt or official numbering, and financial-policy execution."
+            />
 
             <section
                 class="border-l-4 border-amber-500 bg-amber-50 p-4 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
