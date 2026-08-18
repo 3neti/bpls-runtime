@@ -141,6 +141,7 @@ Current production findings:
 - 816 V1 histories remain outside exact mapping: 736 require human identity reconciliation, 72 require registry-policy reconciliation, five require soft-delete/payment-schedule reconciliation, and three require financial-override reconciliation.
 - The 736 human-identity applications remain quarantined rather than guessed.
 - The current human-identity frontier contains 40 evidence shapes, 469 owner-collision groups, and 80 business-collision groups. A 12-application subclass has collision-free owner proposals but unresolved business collisions.
+- A separate evidence-only subclass contains 519 applications and 515 unique business proposals with collision-free source business records, exact source owner edges, and collision-free business projections. Legal-owner identity, reference-data reconciliation, and all business/application mapping acceptance remain unresolved; this class contains zero mapping candidates and authorizes no rehearsal.
 
 The acceleration principle is: quarantine ambiguity at the smallest semantic boundary rather than blocking an otherwise exact historical fact. This does not authorize identity merges, invented parents, inferred fee identity, current release authority, historical recalculation, production migration, or cutover.
 
