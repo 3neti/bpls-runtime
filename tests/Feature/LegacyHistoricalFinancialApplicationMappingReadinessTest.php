@@ -239,23 +239,52 @@ test('human identity frontier isolates collision classes without accepting simil
         'business-collision-b',
         business: ['registrationNumber' => 'SHARED-REGISTRATION'],
     );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'group-owner-business-collision-a',
+        owner: ['ownerType' => 'Group', 'groupName' => 'Historical group A'],
+        business: ['registrationNumber' => 'GROUP-SHARED-REGISTRATION'],
+    );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'group-owner-business-collision-b',
+        owner: ['ownerType' => 'Group', 'groupName' => 'Historical group B'],
+        business: ['registrationNumber' => 'GROUP-SHARED-REGISTRATION'],
+    );
 
     $registryPlan = app(PlanLegacyRegistryMigration::class)->handle($batches['registry'], 'registry-human-identity-frontier');
     $financialPlan = app(PlanLegacyFinancialDependencies::class)->handle($batches['financial'], 'financial-human-identity-frontier');
     $result = app(CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier::class)->handle($financialPlan, $registryPlan);
+    $groupOwnerCandidates = collect($result['candidates'])
+        ->whereIn('application_legacy_id_sha256', [
+            hash('sha256', 'application-group-owner-business-collision-a'),
+            hash('sha256', 'application-group-owner-business-collision-b'),
+        ])
+        ->values();
 
     expect($result['report']['summary'])
-        ->human_identity_application_count->toBe(3)
-        ->identity_collision_only_count->toBe(3)
+        ->human_identity_application_count->toBe(5)
+        ->identity_collision_only_count->toBe(5)
         ->additional_semantic_reconciliation_count->toBe(0)
         ->exact_owner_mapping_candidate_count->toBe(2)
+        ->exact_owner_mapping_unique_proposal_count->toBe(2)
         ->business_or_application_mapping_candidate_count->toBe(0)
+        ->group_owner_overlay_count->toBe(2)
         ->accepted_mapping_count->toBe(0)
         ->and(data_get($result, 'report.collision_clusters.owner.unique_collision_group_count'))->toBe(1)
         ->and(data_get($result, 'report.collision_clusters.owner.collision_group_size_distribution'))->toBe(['2' => 1])
-        ->and(data_get($result, 'report.collision_clusters.business.unique_collision_group_count'))->toBe(1)
-        ->and(data_get($result, 'report.collision_clusters.business.collision_group_size_distribution'))->toBe(['2' => 1])
-        ->and($result['classes'])->toHaveCount(2)
+        ->and(data_get($result, 'report.collision_clusters.business.unique_collision_group_count'))->toBe(2)
+        ->and(data_get($result, 'report.collision_clusters.business.collision_group_size_distribution'))->toBe(['2' => 2])
+        ->and($result['classes'])->toHaveCount(3)
+        // Counterexample: Group-owner semantics leave the owner collision-reason
+        // subset empty, but must still block the collision-free-owner disposition.
+        ->and($groupOwnerCandidates)->toHaveCount(2)
+        ->and($groupOwnerCandidates->pluck('proposed_disposition')->unique()->all())->toBe(['human_identity_reconciliation_required'])
+        ->and($groupOwnerCandidates->pluck('shape.owner_collision_reasons')->all())->toBe([[], []])
+        ->and($groupOwnerCandidates->pluck('shape.business_collision_reasons')->all())->toBe([['potential_source_business_collision'], ['potential_source_business_collision']])
+        ->and($groupOwnerCandidates->pluck('shape.group_owner_policy_overlay')->unique()->all())->toBe([true])
         ->and(LegacyApplicationIdMapping::query()->count())->toBe(0)
         ->and(LegacyIdMapping::query()->count())->toBe(0)
         ->and($result['report']['safety'])->toMatchArray([
@@ -284,7 +313,10 @@ test('human identity frontier isolates collision classes without accepting simil
 
     expect($evidence)
         ->not->toContain('shared-owner@example.test')
-        ->not->toContain('SHARED-REGISTRATION');
+        ->not->toContain('SHARED-REGISTRATION')
+        ->not->toContain('GROUP-SHARED-REGISTRATION')
+        ->not->toContain('Historical group A')
+        ->not->toContain('Historical group B');
 });
 
 test('characterization refuses cross-batch payload drift and reports structural reference breaks', function () {
