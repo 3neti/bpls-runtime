@@ -4,6 +4,65 @@ This file records implementation-era milestone scenarios. Discovery lifecycle fa
 
 Milestone scenarios are composed from completed vertical slices. They are not a second workflow engine and must not duplicate business logic. They invoke the same domain actions, policies, application services, generated documents, browser UI, audit evidence, and storage conventions used by the application.
 
+## MS-003: Nelson Municipal Walkthrough
+
+Status: MILESTONE EVIDENCE PACKAGE
+
+Scenario key: `nelson_walkthrough`
+
+Run ID: `nelson-walkthrough-20260818-002`
+
+Artifact root: `storage/app/private/lifecycle-scenarios/nelson_walkthrough/nelson-walkthrough-20260818-002`
+
+Purpose: replay one citizen-originated application through the current municipal workflow and present the exact boundary between operationally proven behavior, unresolved municipal authority, and production migration reconciliation.
+
+The scenario composes existing domain actions and browser surfaces. It does not contain a second implementation of submission, assessment, collection, clearance, permit, or migration behavior.
+
+### Walkthrough Order
+
+1. Citizen establishment and activity intake.
+2. Supporting-document evidence and formal submission.
+3. Municipal receipt and assessment.
+4. Payment schedule, over-the-counter collection, and receipt.
+5. Clearance completion and readiness for authority review.
+6. Permit artifact identity and public artifact-only verification.
+7. Deliberate refusal of issuance, release, and legal effect.
+8. Payload-safe production migration and calibration evidence.
+
+### Evidence Package
+
+- Presenter script: `walkthrough/presenter-script.md`
+- One-page stakeholder summary: `walkthrough/what-nelson-is-seeing.html`
+- Migration evidence: `walkthrough/migration-evidence.html`
+- Manifest and canonical resources: `manifest.json`
+- Terminal and post-run audit: `terminal/*.json`
+- Browser acceptance: `browser/report.json`
+- Representative screenshots:
+  - `browser/screenshots/02-citizen-processing-detail.png`
+  - `browser/screenshots/03-permit-release-boundary.png`
+  - `browser/screenshots/08-citizen-public-artifact-verification.png`
+  - `browser/screenshots/09-nelson-authority-boundary.png`
+  - `browser/screenshots/10-nelson-migration-evidence.png`
+  - `browser/screenshots/11-nelson-stakeholder-summary.png`
+
+### Verification Matrix
+
+| Verification layer | Result | Evidence |
+| --- | --- | --- |
+| Terminal preparation and execution | PASS | exact manifest resources and action log |
+| Desktop browser walkthrough | PASS | browser report and screenshots |
+| Secondary mobile checks | PASS | responsive screenshots and overflow checks |
+| Canonical post-run audit | PASS | terminal audit |
+| Browser console errors | 0 | browser report |
+| Failed application requests | 0 | browser report |
+| External or irreversible actions | NONE | scenario safety manifest |
+| Permit issuance, release, or legal effect | REFUSED | staff, citizen, public, and audit evidence |
+| Operational financial mutation by migration evidence | 0 | stakeholder-safe migration evidence |
+
+### Explicit Non-Claims
+
+The walkthrough does not claim accepted official numbering, online payment, unresolved fiscal policy, receipt reversal, permit issuance or release, production migration, cutover, or automatic identity matching. The 736 identity-reconciliation applications remain quarantined rather than guessed.
+
 ## Status Vocabulary
 
 - `PLANNED`: identified but not executable.

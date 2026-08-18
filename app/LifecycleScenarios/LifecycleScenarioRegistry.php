@@ -12,6 +12,53 @@ final class LifecycleScenarioRegistry
     public function all(): array
     {
         return [
+            'nelson_walkthrough' => new LifecycleScenarioDefinition(
+                key: 'nelson_walkthrough',
+                label: 'Nelson municipal workflow walkthrough',
+                mode: 'nelson_walkthrough',
+                risk: 'local transactional',
+                actors: [
+                    'applicant' => 'citizen_applicant',
+                    'operator' => 'primary_operator',
+                    'recipient' => 'sample_recipient',
+                ],
+                safety: [
+                    'environments' => ['local', 'testing'],
+                    'external_integrations' => false,
+                    'irreversible_actions' => false,
+                    'notifications' => true,
+                    'external_notifications' => false,
+                ],
+                expectations: [
+                    'application_type' => 'new',
+                    'citizen_submitted' => true,
+                    'municipality_received' => true,
+                    'official_application_number' => null,
+                    'tracking_reference_assigned' => true,
+                    'payment_schedule_status' => 'paid',
+                    'collection_status' => 'receipted',
+                    'receipt_status' => 'issued',
+                    'clearances_completed' => true,
+                    'ready_for_authority_review' => true,
+                    'can_release' => false,
+                    'permit_release_status' => 'blocked',
+                    'public_verification_status' => 'artifact_only',
+                    'exact_historical_application_count' => 407,
+                    'identity_reconciliation_count' => 736,
+                    'external_calls' => 0,
+                    'irreversible_actions' => false,
+                ],
+                viewports: [
+                    'desktop' => [
+                        'width' => 1440,
+                        'height' => 900,
+                    ],
+                    'mobile' => [
+                        'width' => 390,
+                        'height' => 844,
+                    ],
+                ],
+            ),
             'citizen_new_permit_lifecycle_authority_boundary' => new LifecycleScenarioDefinition(
                 key: 'citizen_new_permit_lifecycle_authority_boundary',
                 label: 'Citizen-originated new permit lifecycle to authority boundary',

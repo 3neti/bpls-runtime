@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
 const [manifestPath, baseUrl = 'http://bpls-runtime.test'] =
@@ -35,6 +36,7 @@ const supportedScenarios = [
     'new_permit_lifecycle_authority_boundary',
     'manual_collection_receipt_visibility',
     'municipality_configuration_visibility',
+    'nelson_walkthrough',
     'storyboard_terminal_state_visibility',
     'permit_application_cancelled_visibility',
     'amendment_permit_lifecycle_foundation',
@@ -64,8 +66,10 @@ if (!email || !password) {
 }
 
 if (
-    manifest.scenario.key ===
-        'citizen_new_permit_lifecycle_authority_boundary' &&
+    [
+        'citizen_new_permit_lifecycle_authority_boundary',
+        'nelson_walkthrough',
+    ].includes(manifest.scenario.key) &&
     (!operatorEmail || !operatorPassword)
 ) {
     fail(
@@ -106,6 +110,7 @@ const billingGroupEvidence = {};
 const rolePermissionEvidence = {};
 const userDirectoryEvidence = {};
 const municipalityConfigurationEvidence = {};
+const nelsonWalkthroughEvidence = {};
 
 let browser;
 
@@ -144,6 +149,7 @@ try {
             'citizen_new_permit_lifecycle_authority_boundary',
             'citizen_permit_authority_review_visibility',
             'citizen_permit_processing_visibility',
+            'nelson_walkthrough',
         ].includes(manifest.scenario.key)
     ) {
         await inspectCitizenPermitProcessing(page, baseUrl);
@@ -153,14 +159,17 @@ try {
         [
             'citizen_new_permit_lifecycle_authority_boundary',
             'citizen_permit_authority_review_visibility',
+            'nelson_walkthrough',
         ].includes(manifest.scenario.key)
     ) {
         await inspectCitizenPermitAuthorityReview(page, baseUrl);
     }
 
     if (
-        manifest.scenario.key ===
-        'citizen_new_permit_lifecycle_authority_boundary'
+        [
+            'citizen_new_permit_lifecycle_authority_boundary',
+            'nelson_walkthrough',
+        ].includes(manifest.scenario.key)
     ) {
         await context.clearCookies();
         await authenticate(page, baseUrl, operatorEmail, operatorPassword);
@@ -256,6 +265,7 @@ try {
             'citizen_new_permit_lifecycle_authority_boundary',
             'new_permit_lifecycle_authority_boundary',
             'manual_collection_receipt_visibility',
+            'nelson_walkthrough',
         ].includes(manifest.scenario.key)
     ) {
         await inspectManualReceiptPaymentScheduleQueue(page, baseUrl);
@@ -277,6 +287,12 @@ try {
         await inspectManualReceiptPermitVerificationBoundary(page, baseUrl);
         await inspectManualReceiptPdf(page, baseUrl);
         await inspectManualReceiptMobile(page, baseUrl);
+    }
+
+    if (manifest.scenario.key === 'nelson_walkthrough') {
+        await inspectNelsonAuthorityConfiguration(page, baseUrl);
+        await inspectNelsonMigrationEvidence(page);
+        await inspectNelsonStakeholderSummary(page);
     }
 } catch (error) {
     checks.push(
@@ -335,6 +351,7 @@ const report = {
     role_permissions: rolePermissionEvidence,
     user_directory: userDirectoryEvidence,
     municipality_configuration: municipalityConfigurationEvidence,
+    nelson_walkthrough: nelsonWalkthroughEvidence,
     artifacts: {
         screenshots,
     },
@@ -359,6 +376,195 @@ fs.writeFileSync(
 
 if (!passed) {
     process.exit(1);
+}
+
+async function inspectNelsonAuthorityConfiguration(targetPage, targetBaseUrl) {
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+    const url = `${targetBaseUrl}/staff/municipality-configuration`;
+    await targetPage.goto(url, { waitUntil: 'networkidle' });
+    const summary = targetPage.getByTestId(
+        'municipality-configuration-summary',
+    );
+    const authority = {
+        configured_official_count: Number(
+            await summary.getAttribute('data-configured-official-count'),
+        ),
+        authorized_signatory_count: Number(
+            await summary.getAttribute('data-authorized-signatory-count'),
+        ),
+        permit_issuance_authorized:
+            (await summary.getAttribute('data-permit-issuance-authorized')) ===
+            'true',
+        permit_release_authorized:
+            (await summary.getAttribute('data-permit-release-authorized')) ===
+            'true',
+        legal_effect_authorized:
+            (await summary.getAttribute('data-legal-effect-authorized')) ===
+            'true',
+    };
+    const visibleBoundary =
+        (await targetPage
+            .getByText('Configured officials', { exact: true })
+            .isVisible()) &&
+        (await targetPage
+            .getByText('Signatory authority unresolved', { exact: true })
+            .first()
+            .isVisible()) &&
+        (await targetPage
+            .getByText('Does not authorize', { exact: true })
+            .first()
+            .isVisible());
+    const expected = manifest.walkthrough.authority;
+
+    checks.push(
+        check(
+            'nelson-configured-official-authority-boundary',
+            'Configured officials remain separate from signatory, issuance, release, and legal-effect authority',
+            true,
+            visibleBoundary &&
+                authority.configured_official_count ===
+                    expected.configured_official_count &&
+                authority.authorized_signatory_count === 0 &&
+                authority.permit_issuance_authorized === false &&
+                authority.permit_release_authorized === false &&
+                authority.legal_effect_authorized === false,
+            { url, ...authority },
+        ),
+    );
+    nelsonWalkthroughEvidence.authority = authority;
+    await screenshot(
+        targetPage,
+        '09-nelson-authority-boundary',
+        'browser/screenshots/09-nelson-authority-boundary.png',
+    );
+}
+
+async function inspectNelsonMigrationEvidence(targetPage) {
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+    const relativePath = manifest.walkthrough.artifacts.migration_evidence;
+    const absolutePath = path.join(runDirectory, relativePath);
+    await targetPage.goto(pathToFileURL(absolutePath).href, {
+        waitUntil: 'load',
+    });
+
+    const snapshot = targetPage.getByTestId('nelson-production-snapshot');
+    const calibration = targetPage.getByTestId('nelson-calibration');
+    const history = targetPage.getByTestId('nelson-historical-evidence');
+    const identity = targetPage.getByTestId('nelson-identity-frontier');
+    const migration = {
+        application_count: Number(
+            await history.getAttribute('data-application-count'),
+        ),
+        schedule_count: Number(
+            await history.getAttribute('data-schedule-count'),
+        ),
+        fee_line_count: Number(
+            await history.getAttribute('data-fee-line-count'),
+        ),
+        completed_payment_count: Number(
+            await history.getAttribute('data-completed-payment-count'),
+        ),
+        unpaid_schedule_count: Number(
+            await history.getAttribute('data-unpaid-schedule-count'),
+        ),
+        scheduled_amount_cents: Number(
+            await history.getAttribute('data-scheduled-amount-cents'),
+        ),
+        paid_amount_cents: Number(
+            await history.getAttribute('data-paid-amount-cents'),
+        ),
+        operational_financial_mutation_count: Number(
+            await history.getAttribute('data-operational-mutation-count'),
+        ),
+        rehearsal_passed:
+            (await targetPage.getByText('PASSED', { exact: true }).count()) ===
+            4,
+        identity_reconciliation_count: Number(
+            await identity.getAttribute('data-reconciliation-count'),
+        ),
+    };
+    const expected = manifest.walkthrough.evidence.historical_evidence;
+    const summaryVisible = await targetPage
+        .getByText(manifest.walkthrough.evidence.identity_frontier.summary, {
+            exact: true,
+        })
+        .isVisible();
+    const matches =
+        (await snapshot.getAttribute('data-status')) === 'immutable' &&
+        (await calibration.getAttribute('data-reference')) === 'CAL-2026-001' &&
+        migration.application_count === expected.application_count &&
+        migration.schedule_count === expected.schedule_count &&
+        migration.fee_line_count === expected.fee_line_count &&
+        migration.completed_payment_count ===
+            expected.completed_payment_count &&
+        migration.unpaid_schedule_count === expected.unpaid_schedule_count &&
+        migration.scheduled_amount_cents === expected.scheduled_amount_cents &&
+        migration.paid_amount_cents === expected.paid_amount_cents &&
+        migration.operational_financial_mutation_count === 0 &&
+        migration.rehearsal_passed &&
+        migration.identity_reconciliation_count === 736 &&
+        summaryVisible;
+
+    checks.push(
+        check(
+            'nelson-migration-evidence-visible',
+            'Payload-safe migration evidence shows the immutable snapshot, calibration specimen, exact rehearsal totals, restoration, and quarantined identity frontier',
+            true,
+            matches,
+            migration,
+        ),
+    );
+    nelsonWalkthroughEvidence.migration = migration;
+    await screenshot(
+        targetPage,
+        '10-nelson-migration-evidence',
+        'browser/screenshots/10-nelson-migration-evidence.png',
+    );
+}
+
+async function inspectNelsonStakeholderSummary(targetPage) {
+    await targetPage.setViewportSize({ width: 1440, height: 900 });
+    const relativePath = manifest.walkthrough.artifacts.summary_html;
+    const absolutePath = path.join(runDirectory, relativePath);
+    await targetPage.goto(pathToFileURL(absolutePath).href, {
+        waitUntil: 'load',
+    });
+
+    const operationallyProven = await targetPage
+        .getByText('Operationally proven', { exact: true })
+        .isVisible();
+    const deliberatelyNotAsserted = await targetPage
+        .getByText('Deliberately not asserted', { exact: true })
+        .isVisible();
+    const identityFrontier = await targetPage
+        .getByText(manifest.walkthrough.evidence.identity_frontier.summary, {
+            exact: false,
+        })
+        .isVisible();
+    const authorityBoundary = await targetPage
+        .getByText(
+            'Configured official ≠ authorized signatory ≠ permit issuance authority ≠ legal effect.',
+            { exact: true },
+        )
+        .isVisible();
+
+    checks.push(
+        check(
+            'nelson-stakeholder-summary-visible',
+            'The one-page stakeholder summary separates proven operations, unresolved authority, and quarantined identity evidence',
+            true,
+            operationallyProven &&
+                deliberatelyNotAsserted &&
+                identityFrontier &&
+                authorityBoundary,
+            { relative_path: relativePath },
+        ),
+    );
+    await screenshot(
+        targetPage,
+        '11-nelson-stakeholder-summary',
+        'browser/screenshots/11-nelson-stakeholder-summary.png',
+    );
 }
 
 async function authenticate(
@@ -5159,7 +5365,7 @@ async function inspectManualReceiptPaymentSchedule(targetPage, targetBaseUrl) {
         .isVisible()
         .catch(() => false);
     const receiptNumberVisible = await targetPage
-        .getByText(manifest.resources.public_reference, { exact: false })
+        .getByText(manifest.resources.receipt_number, { exact: false })
         .first()
         .isVisible()
         .catch(() => false);
@@ -5346,7 +5552,7 @@ async function inspectManualReceiptDailyCollectionReport(
     const reportUrl = `${targetBaseUrl}${manifest.resources.daily_collection_report_url}`;
     await targetPage.goto(reportUrl, { waitUntil: 'networkidle' });
     const receiptVisible = await targetPage
-        .getByText(manifest.resources.public_reference, { exact: false })
+        .getByText(manifest.resources.receipt_number, { exact: false })
         .first()
         .isVisible()
         .catch(() => false);
@@ -6643,7 +6849,7 @@ async function inspectManualReceiptDetail(targetPage, targetBaseUrl) {
     const receiptUrl = `${targetBaseUrl}${manifest.resources.receipt_url}`;
     await targetPage.goto(receiptUrl, { waitUntil: 'networkidle' });
     const receiptVisible = await targetPage
-        .getByText(manifest.resources.public_reference, { exact: false })
+        .getByText(manifest.resources.receipt_number, { exact: false })
         .first()
         .isVisible()
         .catch(() => false);
@@ -8027,7 +8233,7 @@ async function inspectManualReceiptPdf(targetPage, targetBaseUrl) {
         pdfResponse.ok() &&
         contentType.includes('application/pdf') &&
         body.startsWith('%PDF-1.4') &&
-        body.includes(manifest.resources.public_reference);
+        body.includes(manifest.resources.receipt_number);
 
     checks.push(
         check(
@@ -8050,7 +8256,7 @@ async function inspectManualReceiptMobile(targetPage, targetBaseUrl) {
         waitUntil: 'networkidle',
     });
     const receiptVisible = await targetPage
-        .getByText(manifest.resources.public_reference, { exact: false })
+        .getByText(manifest.resources.receipt_number, { exact: false })
         .first()
         .isVisible()
         .catch(() => false);

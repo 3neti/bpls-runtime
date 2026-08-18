@@ -1,5 +1,11 @@
 # Parity Ledger
 
+## Nelson Walkthrough Cross-Capability Evidence
+
+Scenario `nelson-walkthrough-20260818-002` browser and audit verified the current citizen-to-authority-review journey through one exact local application. It composes existing CAP-010, CAP-016, CAP-017, CAP-019, CAP-026, CAP-039, CAP-040, CAP-041, CAP-060, CAP-061, CAP-063, CAP-064, CAP-065, CAP-066, CAP-070, and CAP-072 behavior without changing their individual parity status or unresolved conditions. The evidence package is at `storage/app/private/lifecycle-scenarios/nelson_walkthrough/nelson-walkthrough-20260818-002`.
+
+The same package presents payload-safe migration evidence for 407 exact historical applications and explicitly quarantines 736 identity-reconciliation applications. This presentation is evidence navigation only; it does not declare production migration, cutover, financial-policy acceptance, official numbering, issuance, release, or legal effect.
+
 This ledger tracks Laravel replacement status against the Discovery Capability Ledger. Discovery evidence remains in `docs/discovery/CAPABILITY_LEDGER.md`; this file records implementation and verification state only.
 
 Status vocabulary:

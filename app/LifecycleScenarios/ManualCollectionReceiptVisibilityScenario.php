@@ -6,6 +6,8 @@ use App\Actions\AttemptPermitApplicationRelease;
 use App\Actions\BuildBusinessTaxByMajorTypeReport;
 use App\Actions\BuildCollectionsByRevenueSourceReport;
 use App\Actions\BuildDailyCollectionsReport;
+use App\Actions\BuildMunicipalityConfiguration;
+use App\Actions\BuildNelsonWalkthroughEvidence;
 use App\Actions\BuildPaidEstablishmentsReport;
 use App\Actions\BuildPaymentSummaryReport;
 use App\Actions\BuildPermitApplicationTimeline;
@@ -96,8 +98,11 @@ final class ManualCollectionReceiptVisibilityScenario
         private readonly DescribePermitVerificationBoundary $describeVerificationBoundary,
         private readonly DescribeReceiptVoidBoundary $describeReceiptVoidBoundary,
         private readonly VoidReceipt $voidReceipt,
+        private readonly BuildMunicipalityConfiguration $buildMunicipalityConfiguration,
+        private readonly BuildNelsonWalkthroughEvidence $buildNelsonWalkthroughEvidence,
         private readonly ScenarioManifest $scenarioManifest,
         private readonly ScenarioSummaryRenderer $summaryRenderer,
+        private readonly NelsonWalkthroughRenderer $nelsonWalkthroughRenderer,
     ) {}
 
     /**
@@ -112,7 +117,8 @@ final class ManualCollectionReceiptVisibilityScenario
         }
 
         $operator = $actors['operator'] ?? throw new RuntimeException('Scenario operator actor was not resolved.');
-        $isCitizenOriginated = $scenario->key === 'citizen_new_permit_lifecycle_authority_boundary';
+        $isCitizenOriginated = $this->isCitizenOriginated($scenario->key);
+        $isNelsonWalkthrough = $scenario->key === 'nelson_walkthrough';
         $applicant = $isCitizenOriginated
             ? ($actors['applicant'] ?? throw new RuntimeException('Scenario applicant actor was not resolved.'))
             : null;
@@ -226,9 +232,14 @@ final class ManualCollectionReceiptVisibilityScenario
         $receipt->refresh();
         $permitApplication = $paymentSchedule->permitApplication()->firstOrFail();
         $permitApplication->load('business');
-        $applicationDisplayReference = $permitApplication->application_number
+        $applicationDisplayReference = $isNelsonWalkthrough
+            ? ($permitApplication->application_number ?? 'Application #'.$permitApplication->id)
+            : ($permitApplication->application_number
+                ?? $permitApplication->tracking_reference
+                ?? 'Application #'.$permitApplication->id);
+        $citizenApplicationDisplayReference = $permitApplication->application_number
             ?? $permitApplication->tracking_reference
-            ?? 'Application #'.$permitApplication->id;
+            ?? 'Application record #'.$permitApplication->id;
         $receiptNotices = $isCitizenOriginated
             ? $applicant?->notifications
                 ->where('type', PermitApplicationReceived::class)
@@ -286,6 +297,12 @@ final class ManualCollectionReceiptVisibilityScenario
         $receiptVoidBoundary = $this->describeReceiptVoidBoundary->handle($receipt);
         $timeline = $this->buildPermitApplicationTimeline->handle($permitApplication);
         $timelineKeys = collect($timeline)->pluck('key')->all();
+        $walkthroughEvidence = $isNelsonWalkthrough
+            ? $this->buildNelsonWalkthroughEvidence->handle()
+            : null;
+        $municipalityConfiguration = $isNelsonWalkthrough
+            ? $this->buildMunicipalityConfiguration->handle()
+            : null;
 
         $steps = [
             $this->step('actors-resolved', $isCitizenOriginated ? 'Resolve actual citizen and municipal operator' : 'Resolve actual application users', $isCitizenOriginated ? ['applicant_id' => $applicant?->id, 'operator_id' => $operator->id] : ['operator_id' => $operator->id], $isCitizenOriginated ? ['applicant_id' => $applicant?->id, 'operator_id' => $operator->id] : ['operator_id' => $operator->id]),
@@ -329,7 +346,7 @@ final class ManualCollectionReceiptVisibilityScenario
             'application_number' => $permitApplication->application_number,
             'tracking_reference' => $permitApplication->tracking_reference,
             'application_display_reference' => $applicationDisplayReference,
-            'citizen_application_display_reference' => $permitApplication->application_number ?? $permitApplication->tracking_reference ?? 'Application record #'.$permitApplication->id,
+            'citizen_application_display_reference' => $citizenApplicationDisplayReference,
             'public_application_display_reference' => $permitApplication->application_number ?? 'Unnumbered application',
             'application_status' => $permitApplication->status->value,
             'submitted_by_id' => $permitApplication->submitted_by_id,
@@ -500,7 +517,7 @@ final class ManualCollectionReceiptVisibilityScenario
             'permit_timeline_event_count' => count($timelineKeys),
             'permit_timeline_event_keys' => $timelineKeys,
             ...($isCitizenOriginated ? [
-                'public_reference' => $applicationDisplayReference,
+                'public_reference' => $citizenApplicationDisplayReference,
                 'clearances_completed' => $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count(),
                 'clearances_total' => $permitApplication->clearances->count(),
                 'ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'],
@@ -532,6 +549,25 @@ final class ManualCollectionReceiptVisibilityScenario
         $manifest['artifacts'] = [
             'root' => '.',
         ];
+
+        if ($isNelsonWalkthrough) {
+            $manifest['walkthrough'] = [
+                'evidence' => $walkthroughEvidence,
+                'authority' => [
+                    'configured_official_count' => data_get($municipalityConfiguration, 'authority.configured_official_count'),
+                    'authorized_signatory_count' => data_get($municipalityConfiguration, 'authority.authorized_signatory_count'),
+                    'permit_issuance_authorized' => data_get($municipalityConfiguration, 'authority.permit_issuance_authorized'),
+                    'permit_release_authorized' => data_get($municipalityConfiguration, 'authority.permit_release_authorized'),
+                    'legal_effect_authorized' => data_get($municipalityConfiguration, 'authority.legal_effect_authorized'),
+                ],
+                'artifacts' => [
+                    'presenter_script' => 'walkthrough/presenter-script.md',
+                    'summary_markdown' => 'walkthrough/what-nelson-is-seeing.md',
+                    'summary_html' => 'walkthrough/what-nelson-is-seeing.html',
+                    'migration_evidence' => 'walkthrough/migration-evidence.html',
+                ],
+            ];
+        }
 
         $artifactStore->putJson('terminal/prepare.json', [
             'permit_application_id' => $permitApplication->id,
@@ -674,6 +710,15 @@ final class ManualCollectionReceiptVisibilityScenario
         ]);
         $artifactStore->putJson('storyboard/storyboard.json', $this->storyboard($scenario, $runId, $permitApplication, $paymentSchedule, $collection, $receipt));
         $artifactStore->put('storyboard/storyboard.html', $this->storyboardHtml($scenario, $runId, $permitApplication, $paymentSchedule, $collection, $receipt));
+
+        if ($isNelsonWalkthrough && is_array($walkthroughEvidence)) {
+            $artifactStore->putJson('walkthrough/evidence.json', $walkthroughEvidence);
+            $artifactStore->put('walkthrough/presenter-script.md', $this->nelsonWalkthroughRenderer->presenterScript($manifest));
+            $artifactStore->put('walkthrough/what-nelson-is-seeing.md', $this->nelsonWalkthroughRenderer->summaryMarkdown($walkthroughEvidence));
+            $artifactStore->put('walkthrough/what-nelson-is-seeing.html', $this->nelsonWalkthroughRenderer->summaryHtml($walkthroughEvidence));
+            $artifactStore->put('walkthrough/migration-evidence.html', $this->nelsonWalkthroughRenderer->migrationEvidenceHtml($walkthroughEvidence));
+        }
+
         $artifactStore->putJson('manifest.json', $manifest);
         $artifactStore->put('review.md', $this->summaryRenderer->reviewMarkdown());
 
@@ -744,7 +789,8 @@ final class ManualCollectionReceiptVisibilityScenario
         $receiptVoidBoundary = $this->describeReceiptVoidBoundary->handle($receipt);
         $timeline = $this->buildPermitApplicationTimeline->handle($permitApplication);
         $timelineKeys = collect($timeline)->pluck('key')->all();
-        $isCitizenOriginated = ($manifest['scenario']['key'] ?? null) === 'citizen_new_permit_lifecycle_authority_boundary';
+        $isCitizenOriginated = $this->isCitizenOriginated((string) ($manifest['scenario']['key'] ?? ''));
+        $isNelsonWalkthrough = ($manifest['scenario']['key'] ?? null) === 'nelson_walkthrough';
         $applicant = $isCitizenOriginated
             ? User::query()->findOrFail((int) data_get($manifest, 'actors.applicant.id'))
             : null;
@@ -818,6 +864,28 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('audit-browser-public-verification', 'Browser evidence confirms public verification is artifact-only', ['status' => 'artifact_only', 'can_verify_release' => false, 'page_visible' => true, 'mobile_visible' => true], ['status' => data_get($browserReport, 'verification.public_status'), 'can_verify_release' => data_get($browserReport, 'verification.can_verify_release'), 'page_visible' => data_get($browserReport, 'verification.public_page_visible'), 'mobile_visible' => data_get($browserReport, 'verification.public_page_mobile_visible')]),
             $this->step('audit-browser-result', 'Browser evidence runner passed', ['browser' => true], ['browser' => (bool) data_get($browserReport, 'result.passed')]),
         ];
+
+        if ($isNelsonWalkthrough) {
+            $checks[] = $this->step('audit-nelson-authority-configuration', 'Browser presentation preserves the configured-official and legal-authority distinction', [
+                'configured_official_count' => data_get($manifest, 'walkthrough.authority.configured_official_count'),
+                'authorized_signatory_count' => 0,
+                'permit_issuance_authorized' => false,
+                'permit_release_authorized' => false,
+                'legal_effect_authorized' => false,
+            ], data_get($browserReport, 'nelson_walkthrough.authority', []));
+            $checks[] = $this->step('audit-nelson-migration-evidence', 'Browser presentation agrees with the accepted migration evidence summary', [
+                'application_count' => 407,
+                'schedule_count' => 696,
+                'fee_line_count' => 3_007,
+                'completed_payment_count' => 660,
+                'unpaid_schedule_count' => 36,
+                'scheduled_amount_cents' => 412_770_810,
+                'paid_amount_cents' => 397_445_008,
+                'operational_financial_mutation_count' => 0,
+                'rehearsal_passed' => true,
+                'identity_reconciliation_count' => 736,
+            ], data_get($browserReport, 'nelson_walkthrough.migration', []));
+        }
 
         $passed = collect($checks)->every(fn (array $check): bool => $check['passed']);
 
@@ -1129,17 +1197,22 @@ final class ManualCollectionReceiptVisibilityScenario
      */
     private function storyboard(LifecycleScenarioDefinition $scenario, string $runId, PermitApplication $permitApplication, PaymentSchedule $paymentSchedule, TreasuryCollection $collection, Receipt $receipt): array
     {
-        $isCitizenOriginated = $scenario->key === 'citizen_new_permit_lifecycle_authority_boundary';
+        $isCitizenOriginated = $this->isCitizenOriginated($scenario->key);
+        $isNelsonWalkthrough = $scenario->key === 'nelson_walkthrough';
         $isUnifiedPermitLifecycle = $isCitizenOriginated || $scenario->key === 'new_permit_lifecycle_authority_boundary';
 
         return [
-            'title' => $isCitizenOriginated
+            'title' => $isNelsonWalkthrough
+                ? 'Nelson walkthrough: permit lifecycle and evidence boundary'
+                : ($isCitizenOriginated
                 ? 'Citizen-originated new permit lifecycle to authority boundary'
-                : ($isUnifiedPermitLifecycle ? 'New permit lifecycle to authority boundary' : 'Manual collection receipt visibility'),
+                : ($isUnifiedPermitLifecycle ? 'New permit lifecycle to authority boundary' : 'Manual collection receipt visibility')),
             'summary' => $isUnifiedPermitLifecycle
-                ? ($isCitizenOriginated
+                ? ($isNelsonWalkthrough
+                    ? 'A replayable municipal walkthrough follows one citizen application through BPLO and Treasury to authority review, then presents redacted production-migration evidence without claiming legal release, cutover, or unresolved policy.'
+                    : ($isCitizenOriginated
                     ? 'A citizen creates and formally submits an unnumbered new permit application; BPLO and Treasury continue the exact record through assessment, collection, receipt, clearances, artifact verification, and the authority boundary without legally issuing or releasing the permit.'
-                    : 'BPLO/Treasury staff execute a new permit lifecycle through intake, assessment, payment schedule, collection, receipt, clearances, permit artifact generation, public verification, and the explicit authority boundary without legally issuing or releasing the permit.')
+                    : 'BPLO/Treasury staff execute a new permit lifecycle through intake, assessment, payment schedule, collection, receipt, clearances, permit artifact generation, public verification, and the explicit authority boundary without legally issuing or releasing the permit.'))
                 : 'BPLO/Treasury staff prepare a collectible assessment, record full over-the-counter payment, issue a manual receipt, and verify the receipt is visible from Treasury surfaces.',
             'run_id' => $runId,
             'record' => [
@@ -1211,6 +1284,20 @@ final class ManualCollectionReceiptVisibilityScenario
                     'dialogue' => 'Visible UI state, document evidence, public verification, and canonical records agree.',
                     'duration_seconds' => 5,
                 ],
+                ...($isNelsonWalkthrough ? [
+                    [
+                        'title' => 'Municipal authority remains explicit',
+                        'description' => 'Configured officials and document associations are shown separately from signatory, issuance, release, and legal-effect authority.',
+                        'dialogue' => 'Configuration is evidence. It is not authority by itself.',
+                        'duration_seconds' => 5,
+                    ],
+                    [
+                        'title' => 'Migration evidence is reviewable',
+                        'description' => 'The walkthrough presents payload-safe production, calibration, rehearsal, and identity-reconciliation evidence.',
+                        'dialogue' => 'Exact history is preserved; uncertain identities remain quarantined rather than guessed.',
+                        'duration_seconds' => 5,
+                    ],
+                ] : []),
             ],
         ];
     }
@@ -1230,6 +1317,14 @@ final class ManualCollectionReceiptVisibilityScenario
     private function safeRunReference(string $runId): string
     {
         return $this->boundedRunReference($runId, 60);
+    }
+
+    private function isCitizenOriginated(string $scenarioKey): bool
+    {
+        return in_array($scenarioKey, [
+            'citizen_new_permit_lifecycle_authority_boundary',
+            'nelson_walkthrough',
+        ], true);
     }
 
     private function boundedRunReference(string $runId, int $maximumLength): string

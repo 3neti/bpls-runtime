@@ -1,0 +1,66 @@
+# Nelson Walkthrough Storyboard
+
+Status: BROWSER VERIFIED
+
+Scenario key: `nelson_walkthrough`
+
+## Purpose
+
+Demonstrate the current Ipil BPLS replacement as one coherent municipal journey while showing, rather than hiding, the remaining authority and migration boundaries.
+
+This storyboard describes the business journey. The executable scenario invokes the same domain actions and policies used by the application. It does not contain permit, assessment, Treasury, clearance, or release logic.
+
+## Journey
+
+1. A citizen creates a new business-permit draft under a durable owner identity.
+2. The citizen records business activities and establishment facts.
+3. The citizen attaches supporting evidence.
+4. The citizen formally submits the application and receives a tracking reference.
+5. BPLO receives the same record and computes its assessment through the accepted scenario fee rules.
+6. The Municipality prepares a payment schedule.
+7. Treasury records a full over-the-counter collection.
+8. Treasury issues a manual receipt under the explicit numbering boundary.
+9. Municipal staff complete the clearance checklist.
+10. The system generates a permit artifact and marks the record Ready for Authority Review.
+11. Staff and the public verification page inspect artifact identity.
+12. The system deliberately refuses to call the permit released or legally effective.
+13. The presenter shows payload-safe production, calibration, rehearsal, and identity-reconciliation evidence.
+
+## Authority Boundary
+
+```text
+Configured official
+        !=
+Authorized signatory
+        !=
+Permit issuance authority
+        !=
+Legal effect
+```
+
+The walkthrough ends at Ready for Authority Review. It does not cross this boundary.
+
+## Migration Segment
+
+The presenter shows only aggregate, non-identifying evidence:
+
+- authenticated production snapshot preserved as immutable read-only evidence;
+- Golden Financial Specimen `CAL-2026-001`;
+- 407 exact historical applications rehearsed;
+- 696 schedules;
+- 3,007 historical fee lines;
+- 660 completed payments;
+- 36 unpaid schedules;
+- PHP 4,127,708.10 scheduled;
+- PHP 3,974,450.08 paid;
+- execute, audit, rollback, and restoration all passed;
+- zero operational financial records changed;
+- 736 additional applications remain quarantined for identity reconciliation rather than guessed.
+
+## Explicit Non-Claims
+
+The walkthrough does not claim official application numbering, online payment, accepted unresolved fiscal policy, receipt reversal, legal permit issuance or release, production migration, cutover, or automatic identity matching.
+
+## Replay
+
+Use the local-only `lifecycle:prepare-nelson-walkthrough` command with a runtime password and a stable run ID. The generated evidence package contains the presenter script, one-page summary, browser report, screenshots, canonical audit, and storyboard.
