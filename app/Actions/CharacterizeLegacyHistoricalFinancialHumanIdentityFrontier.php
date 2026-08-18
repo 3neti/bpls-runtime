@@ -9,13 +9,24 @@ use Illuminate\Support\Collection;
 
 class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
 {
-    public const SchemaVersion = 'bpls.historical-financial-human-identity-frontier.v1';
+    public const SchemaVersion = 'bpls.historical-financial-human-identity-frontier.v2';
+
+    private const BusinessEvidenceReasons = [
+        'owner_mapping_proposal_not_ready',
+        'reference_data_mapping_required',
+    ];
 
     private const CollisionReasons = [
         'potential_existing_business_collision',
         'potential_existing_owner_collision',
         'potential_source_business_collision',
         'potential_source_owner_collision',
+    ];
+
+    private const RegistryPolicyReasons = [
+        'blacklist_state_requires_registry_policy',
+        'group_owner_semantics_require_reconciliation',
+        'soft_deleted_record_policy_unresolved',
     ];
 
     public function __construct(
@@ -57,6 +68,9 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
         $exactOwnerOnlyCandidates = $candidateEvidence
             ->where('proposed_disposition', 'owner_identity_may_be_proposed_independently')
             ->values();
+        $exactBusinessEvidenceCandidates = $candidateEvidence
+            ->where('business_source_evidence_disposition', 'business_source_evidence_may_be_prepared_independently')
+            ->values();
         $mixedSemanticCandidates = $candidateEvidence
             ->where('shape.semantic_scope', 'identity_collision_with_additional_semantic_reconciliation')
             ->values();
@@ -92,6 +106,8 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                     'group_owner_overlay_count' => $candidateEvidence->where('shape.group_owner_policy_overlay', true)->count(),
                     'exact_owner_mapping_candidate_count' => $exactOwnerOnlyCandidates->count(),
                     'exact_owner_mapping_unique_proposal_count' => $exactOwnerOnlyCandidates->pluck('owner_proposal_id')->unique()->count(),
+                    'exact_business_source_evidence_candidate_count' => $exactBusinessEvidenceCandidates->count(),
+                    'exact_business_source_evidence_unique_proposal_count' => $exactBusinessEvidenceCandidates->pluck('business_proposal_id')->unique()->count(),
                     'business_or_application_mapping_candidate_count' => 0,
                     'class_count' => $classes->count(),
                     'accepted_mapping_count' => 0,
@@ -110,14 +126,29 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                         'still_unresolved' => 'Business identity collision and application mapping remain human-review boundaries.',
                         'acceptance_status' => 'proposed_not_accepted',
                     ],
+                    [
+                        'key' => 'collision_free_business_source_owner_collision_pending',
+                        'application_count' => $exactBusinessEvidenceCandidates->count(),
+                        'unique_business_proposal_count' => $exactBusinessEvidenceCandidates->pluck('business_proposal_id')->unique()->count(),
+                        'deterministic_fact' => 'The exact source business record, source owner edge, and business projection are collision-free and may be reviewed independently.',
+                        'still_unresolved' => 'Legal owner identity, reference-data reconciliation, business mapping acceptance, and application mapping remain blocked.',
+                        'acceptance_status' => 'evidence_only_not_accepted',
+                    ],
                 ],
                 'fingerprints' => [
                     'human_identity_frontier_sha256' => $frontierSha256,
+                    'business_source_evidence_subclass_sha256' => $this->hash([
+                        $evidenceBinding,
+                        ...$exactBusinessEvidenceCandidates->map(fn (array $candidate): array => [
+                            $candidate['candidate_fingerprint'],
+                            $candidate['class_sha256'],
+                        ])->all(),
+                    ]),
                 ],
                 'state_model' => [
                     'observed' => 'Exact source records, ownership edges, collision signals, and frozen proposal reasons.',
                     'inferred' => 'Repeated collision shapes define bounded review classes; they do not establish shared legal identity.',
-                    'proposed' => 'Only collision-free owner proposals are candidates for an independent future mapping decision.',
+                    'proposed' => 'Collision-free owner proposals may be reviewed for a future mapping decision. Collision-free business source evidence may be prepared independently, but remains ineligible for mapping acceptance while legal owner identity is unresolved.',
                     'accepted' => 'No identity, registry, business, or application mapping was accepted.',
                     'rehearsed' => 'No human-identity candidate was rehearsed.',
                     'production_applied' => 'No source or target production mutation occurred.',
@@ -166,6 +197,10 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                 : 'identity_collision_with_additional_semantic_reconciliation';
         $ownerCollisionSignalNames = $this->collisionSignalNames($ownerProposal);
         $businessCollisionSignalNames = $this->collisionSignalNames($businessProposal);
+        $registryPolicyReasons = array_values(array_intersect(
+            [...$ownerReasons, ...$businessReasons],
+            self::RegistryPolicyReasons,
+        ));
         $shape = [
             'semantic_scope' => $semanticScope,
             'source_lifecycle_assertion' => in_array('legacy_release_authority_unresolved', $applicationReasons, true) ? 'Released' : 'non_Released',
@@ -180,6 +215,13 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
         $ownerMayProceed = $ownerReasons === []
             && $ownerProposal?->status->value === 'ready'
             && $businessCollisionReasons !== [];
+        $businessEvidenceMayProceed = $ownerCollisionReasons !== []
+            && $businessCollisionReasons === []
+            && $semanticScope === 'identity_collision_only'
+            && $registryPolicyReasons === []
+            && $businessProposal?->status->value === 'blocked'
+            && in_array('owner_mapping_proposal_not_ready', $businessReasons, true)
+            && array_diff($businessReasons, self::BusinessEvidenceReasons) === [];
 
         return [
             'candidate_fingerprint' => $candidate['candidate_fingerprint'],
@@ -193,6 +235,9 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
             'proposed_disposition' => $ownerMayProceed
                 ? 'owner_identity_may_be_proposed_independently'
                 : 'human_identity_reconciliation_required',
+            'business_source_evidence_disposition' => $businessEvidenceMayProceed
+                ? 'business_source_evidence_may_be_prepared_independently'
+                : 'business_source_evidence_quarantined',
             'owner_mapping_acceptance_status' => 'not_accepted',
             'business_mapping_acceptance_status' => 'not_accepted',
             'application_mapping_acceptance_status' => 'not_accepted',

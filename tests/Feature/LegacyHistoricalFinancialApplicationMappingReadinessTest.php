@@ -263,6 +263,8 @@ test('human identity frontier isolates collision classes without accepting simil
             hash('sha256', 'application-group-owner-business-collision-b'),
         ])
         ->values();
+    $ownerCollisionCandidate = collect($result['candidates'])
+        ->firstWhere('application_legacy_id_sha256', hash('sha256', 'application-owner-collision'));
 
     expect($result['report']['summary'])
         ->human_identity_application_count->toBe(5)
@@ -270,6 +272,8 @@ test('human identity frontier isolates collision classes without accepting simil
         ->additional_semantic_reconciliation_count->toBe(0)
         ->exact_owner_mapping_candidate_count->toBe(2)
         ->exact_owner_mapping_unique_proposal_count->toBe(2)
+        ->exact_business_source_evidence_candidate_count->toBe(1)
+        ->exact_business_source_evidence_unique_proposal_count->toBe(1)
         ->business_or_application_mapping_candidate_count->toBe(0)
         ->group_owner_overlay_count->toBe(2)
         ->accepted_mapping_count->toBe(0)
@@ -285,6 +289,9 @@ test('human identity frontier isolates collision classes without accepting simil
         ->and($groupOwnerCandidates->pluck('shape.owner_collision_reasons')->all())->toBe([[], []])
         ->and($groupOwnerCandidates->pluck('shape.business_collision_reasons')->all())->toBe([['potential_source_business_collision'], ['potential_source_business_collision']])
         ->and($groupOwnerCandidates->pluck('shape.group_owner_policy_overlay')->unique()->all())->toBe([true])
+        ->and($groupOwnerCandidates->pluck('business_source_evidence_disposition')->unique()->all())->toBe(['business_source_evidence_quarantined'])
+        ->and($ownerCollisionCandidate['business_source_evidence_disposition'])->toBe('business_source_evidence_may_be_prepared_independently')
+        ->and($ownerCollisionCandidate['business_mapping_acceptance_status'])->toBe('not_accepted')
         ->and(LegacyApplicationIdMapping::query()->count())->toBe(0)
         ->and(LegacyIdMapping::query()->count())->toBe(0)
         ->and($result['report']['safety'])->toMatchArray([
