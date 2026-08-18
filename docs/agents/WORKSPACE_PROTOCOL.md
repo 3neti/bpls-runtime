@@ -148,3 +148,11 @@ Routine implementation uncertainty is not a Board Trigger. The Chief Architect d
 - Production access is read-only unless a written authorization names the exact operation.
 - Never use the unauthenticated legacy report endpoint for migration acquisition.
 - Never use names, contact details, amounts, adjacency, or similarity as identity authority.
+
+## Knowledge And Environment Discipline
+
+- Promote a lesson into shared rules or control-plane documentation only when it is durable, cross-packet, payload-safe, and likely to prevent repeated error. Keep packet-specific findings in the specialist handoff or private evidence rather than broadening shared rules.
+- Private evidence does not appear automatically in a fresh worktree. The integrator supplies an explicit read-only path or verifies a checksum-bound copy; specialists never substitute regenerated, newest-record, or unbound evidence.
+- Treat Laravel Boost and Herd as environment services that may refresh or auto-update independently of the branch. Reconfirm the application URL, runtime/package versions, and relevant tool behavior before attributing a change to repository code.
+- A fresh worktree may not contain ignored prerequisites such as `vendor`, `node_modules`, built frontend assets, environment configuration, or private scenario evidence. Verify prerequisites before testing; reuse or provision them without committing generated dependencies or secrets.
+- Keep legacy and Laravel evidence separate in notes, assertions, screenshots, and conclusions. Legacy behavior proves what was observable; Laravel tests and browser evidence prove what is implemented; neither evidence class silently authorizes the other.

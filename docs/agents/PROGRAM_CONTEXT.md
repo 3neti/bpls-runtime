@@ -24,6 +24,8 @@ Production reconciliation lane
 
 Production migration execution and cutover are not authorized.
 
+The Nelson Visual Walkthrough and UI/UX Cycle 1 are the frozen stakeholder baseline while municipal operational feedback is pending. Do not begin UI Cycle 2 or make speculative navigation, workflow, terminology, status, clearance, or report changes. Use `docs/agents/NELSON_FEEDBACK_INTAKE.md` to preserve and classify feedback when it arrives, and `docs/agents/LEGACY_VISUAL_PARITY_COMPARISON.md` to compare separately proven legacy and Laravel visual evidence.
+
 ## Canonical Evidence
 
 The four canonical discovery sources are registered under `docs/sources/`:
@@ -160,6 +162,8 @@ Do not restate a capability as complete unless its parity row, tests, browser ev
 - Git must not contain raw production rows, personal information, receipt/payment identifiers, storage IDs, documents, credentials, cookies, or tokens.
 - Browser verification is complete only when actually executed. Report `NOT RUN` when credentials or environment are unavailable.
 - Production is evidence, not a test sandbox. Mutation requires explicit authorization.
+- Nelson feedback is operational evidence, not automatic legal, fiscal, Treasury, numbering, signatory, issuance, release, or legal-effect authority.
+- Legacy screenshots and Laravel screenshots remain separate evidence classes with separate provenance. Familiarity does not override an approved authority or safety boundary.
 
 ## Canonical References
 
