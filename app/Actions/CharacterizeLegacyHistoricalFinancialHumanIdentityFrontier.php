@@ -2,14 +2,38 @@
 
 namespace App\Actions;
 
+use App\Enums\LegacyMappingExecutionStatus;
 use App\Models\LegacyFinancialMappingPlan;
+use App\Models\LegacyHistoricalFinancialPreservationExecution;
+use App\Models\LegacyHistoricalFinancialPreservationProposal;
+use App\Models\LegacyHistoricalFinancialPreservedBundle;
 use App\Models\LegacyMappingPlan;
 use App\Models\LegacyMappingProposal;
+use App\Models\LegacyRecord;
 use Illuminate\Support\Collection;
+use RuntimeException;
 
 class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
 {
-    public const SchemaVersion = 'bpls.historical-financial-human-identity-frontier.v7';
+    public const SchemaVersion = 'bpls.historical-financial-human-identity-frontier.v8';
+
+    public const CanonicalProductionSourceArchiveChecksum = '56fad41abbdeae8da23e9935550c753c82fb465d46a56b412342f27806bd0b57';
+
+    public const CanonicalProductionV7Fingerprints = [
+        'human_identity_frontier_sha256' => '8b1b80d4b2f38eb186186930c567e1e9eb7b83c4b28490307117381056064bbc',
+        'business_source_evidence_subclass_sha256' => 'ab4380ec8b56e928e0b73671c424ccc7048a032ca7a2bc4095577cb50e2ead03',
+        'decision_cohort_set_sha256' => 'dcbfaadec88b19ed564951af29b24c194049a903036c9c98c3ef922dc0c05d41',
+        'municipal_identity_evidence_class_set_sha256' => '5aed72372bb3cf5260946196f23ab6f5e126eff6e1918b8947fcdfa9b14699c5',
+        'priority_review_class_set_sha256' => '53790859b7bd63430c4e3f35e0a212b22cade849202d56aa25a45def80a59c7f',
+        'priority_decision_unlock_set_sha256' => 'b627a317ccff26133ea5b98d3afcf0ee5c4fb356154480de3fe6eae7bc5bfceb',
+        'registration_decision_route_set_sha256' => 'f64c014c67354ed0700e54ad06d069dd6fbb5ba2d8a311a059f8322932359e57',
+    ];
+
+    private const LocationReferenceFields = [
+        'provinceId' => 'provinces',
+        'cityId' => 'cities',
+        'barangayId' => 'barangays',
+    ];
 
     private const BlockerCategories = [
         'exact_mapping_acceptance',
@@ -42,6 +66,8 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
 
     public function __construct(
         private CharacterizeLegacyHistoricalFinancialApplicationMappings $mappingReadiness,
+        private LegacyHistoricalFinancialPreservationProjector $preservationProjector,
+        private BuildLegacyHistoricalFinancialProposalIndex $buildProposalIndex,
     ) {}
 
     /** @return array{report: array<string, mixed>, classes: list<array<string, mixed>>, candidates: list<array<string, mixed>>} */
@@ -56,8 +82,17 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
             ->where('legacy_mapping_plan_id', $registryPlan->id)
             ->get()
             ->keyBy('id');
+        $exceptionEvidence = $this->deterministicExceptionEvidence(
+            $humanCandidates,
+            $financialPlan,
+            $registryPlan,
+        );
         $candidateEvidence = $humanCandidates
-            ->map(fn (array $candidate): array => $this->candidateEvidence($candidate, $proposals))
+            ->map(fn (array $candidate): array => $this->candidateEvidence(
+                $candidate,
+                $proposals,
+                $exceptionEvidence->get($candidate['candidate_fingerprint']),
+            ))
             ->values();
         $classes = $candidateEvidence
             ->groupBy('class_sha256')
@@ -105,6 +140,7 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
         $softDeletedDecisionRoutes = collect($this->softDeletedDecisionRoutes(
             $candidateEvidence->where('decision_cohort_key', 'soft_deleted_registry_policy')->values(),
         ));
+        $campaignReadiness = $this->campaignReadiness($financialPlan, $readiness, $candidateEvidence);
         $evidenceBinding = [
             'source_archive_checksum' => $financialPlan->importBatch->source->archive_checksum,
             'financial_plan_id' => $financialPlan->id,
@@ -148,6 +184,52 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                 $class['observed_collision_signal_names'],
             ])->all(),
         ]);
+        $priorityReviewClassSetSha256 = $this->hash([
+            $evidenceBinding,
+            ...$priorityReviewClasses->map(fn (array $class): array => [
+                $class['key'],
+                $class['class_sha256'],
+                $class['application_count'],
+                $this->v5ReviewUnits($class['review_units']),
+                $class['blocker_categories'],
+            ])->all(),
+        ]);
+        $priorityDecisionUnlockSetSha256 = $this->hash([
+            $evidenceBinding,
+            ...$priorityReviewClasses->map(fn (array $class): array => [
+                $class['key'],
+                $this->v6ReviewUnitClosureFingerprintRows($class['review_units']),
+            ])->all(),
+            ...$softDeletedDecisionRoutes->map(fn (array $route): array => [
+                $route['key'],
+                $route['route_sha256'],
+                $route['application_count'],
+                $route['blocker_categories'],
+            ])->all(),
+        ]);
+        $registrationDecisionRouteSetSha256 = $this->hash([
+            $evidenceBinding,
+            ...$registrationDecisionRoutes->map(fn (array $route): array => [
+                $route['key'],
+                $route['route_sha256'],
+                $route['collision_group_count'],
+                $route['candidate_application_membership_count'],
+                $route['external_business_proposal_membership_count'],
+            ])->all(),
+        ]);
+        $preservedV7Fingerprints = [
+            'human_identity_frontier_sha256' => $frontierSha256,
+            'business_source_evidence_subclass_sha256' => $businessSourceEvidenceSubclassSha256,
+            'decision_cohort_set_sha256' => $decisionCohortSetSha256,
+            'municipal_identity_evidence_class_set_sha256' => $municipalIdentityEvidenceClassSetSha256,
+            'priority_review_class_set_sha256' => $priorityReviewClassSetSha256,
+            'priority_decision_unlock_set_sha256' => $priorityDecisionUnlockSetSha256,
+            'registration_decision_route_set_sha256' => $registrationDecisionRouteSetSha256,
+        ];
+        if (hash_equals(self::CanonicalProductionSourceArchiveChecksum, $evidenceBinding['source_archive_checksum'])
+            && $preservedV7Fingerprints !== self::CanonicalProductionV7Fingerprints) {
+            throw new RuntimeException('Canonical production v4-v7 frontier fingerprints did not reproduce.');
+        }
 
         return [
             'report' => [
@@ -206,44 +288,32 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                 'priority_review_classes' => array_values($priorityReviewClasses->all()),
                 'registration_decision_routes' => array_values($registrationDecisionRoutes->all()),
                 'soft_deleted_decision_routes' => array_values($softDeletedDecisionRoutes->all()),
+                'campaign_readiness' => $campaignReadiness,
                 'fingerprints' => [
                     'human_identity_frontier_sha256' => $frontierSha256,
                     'business_source_evidence_subclass_sha256' => $businessSourceEvidenceSubclassSha256,
                     'decision_cohort_set_sha256' => $decisionCohortSetSha256,
                     'municipal_identity_evidence_class_set_sha256' => $municipalIdentityEvidenceClassSetSha256,
-                    'priority_review_class_set_sha256' => $this->hash([
+                    'priority_review_class_set_sha256' => $priorityReviewClassSetSha256,
+                    'priority_decision_unlock_set_sha256' => $priorityDecisionUnlockSetSha256,
+                    'registration_decision_route_set_sha256' => $registrationDecisionRouteSetSha256,
+                    'deterministic_exception_evidence_set_sha256' => $this->hash([
                         $evidenceBinding,
-                        ...$priorityReviewClasses->map(fn (array $class): array => [
-                            $class['key'],
-                            $class['class_sha256'],
-                            $class['application_count'],
-                            $this->v5ReviewUnits($class['review_units']),
-                            $class['blocker_categories'],
-                        ])->all(),
+                        ...$candidateEvidence
+                            ->whereNotNull('deterministic_historical_evidence')
+                            ->map(fn (array $candidate): array => [
+                                $candidate['candidate_fingerprint'],
+                                $candidate['deterministic_historical_evidence'],
+                            ])->all(),
                     ]),
-                    'priority_decision_unlock_set_sha256' => $this->hash([
+                    'campaign_readiness_sha256' => $this->hash([
                         $evidenceBinding,
-                        ...$priorityReviewClasses->map(fn (array $class): array => [
-                            $class['key'],
-                            $this->v6ReviewUnitClosureFingerprintRows($class['review_units']),
-                        ])->all(),
-                        ...$softDeletedDecisionRoutes->map(fn (array $route): array => [
-                            $route['key'],
-                            $route['route_sha256'],
-                            $route['application_count'],
-                            $route['blocker_categories'],
-                        ])->all(),
+                        $campaignReadiness,
                     ]),
-                    'registration_decision_route_set_sha256' => $this->hash([
-                        $evidenceBinding,
-                        ...$registrationDecisionRoutes->map(fn (array $route): array => [
-                            $route['key'],
-                            $route['route_sha256'],
-                            $route['collision_group_count'],
-                            $route['candidate_application_membership_count'],
-                            $route['external_business_proposal_membership_count'],
-                        ])->all(),
-                    ]),
+                ],
+                'preserved_v7_outputs' => [
+                    'schema_version' => 'bpls.historical-financial-human-identity-frontier.v7',
+                    ...$preservedV7Fingerprints,
                 ],
                 'preserved_v6_outputs' => [
                     'schema_version' => 'bpls.historical-financial-human-identity-frontier.v6',
@@ -251,29 +321,8 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                     'business_source_evidence_subclass_sha256' => $businessSourceEvidenceSubclassSha256,
                     'decision_cohort_set_sha256' => $decisionCohortSetSha256,
                     'municipal_identity_evidence_class_set_sha256' => $municipalIdentityEvidenceClassSetSha256,
-                    'priority_review_class_set_sha256' => $this->hash([
-                        $evidenceBinding,
-                        ...$priorityReviewClasses->map(fn (array $class): array => [
-                            $class['key'],
-                            $class['class_sha256'],
-                            $class['application_count'],
-                            $this->v5ReviewUnits($class['review_units']),
-                            $class['blocker_categories'],
-                        ])->all(),
-                    ]),
-                    'priority_decision_unlock_set_sha256' => $this->hash([
-                        $evidenceBinding,
-                        ...$priorityReviewClasses->map(fn (array $class): array => [
-                            $class['key'],
-                            $this->v6ReviewUnitClosureFingerprintRows($class['review_units']),
-                        ])->all(),
-                        ...$softDeletedDecisionRoutes->map(fn (array $route): array => [
-                            $route['key'],
-                            $route['route_sha256'],
-                            $route['application_count'],
-                            $route['blocker_categories'],
-                        ])->all(),
-                    ]),
+                    'priority_review_class_set_sha256' => $priorityReviewClassSetSha256,
+                    'priority_decision_unlock_set_sha256' => $priorityDecisionUnlockSetSha256,
                 ],
                 'preserved_v5_outputs' => [
                     'schema_version' => 'bpls.historical-financial-human-identity-frontier.v5',
@@ -281,16 +330,7 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                     'business_source_evidence_subclass_sha256' => $businessSourceEvidenceSubclassSha256,
                     'decision_cohort_set_sha256' => $decisionCohortSetSha256,
                     'municipal_identity_evidence_class_set_sha256' => $municipalIdentityEvidenceClassSetSha256,
-                    'priority_review_class_set_sha256' => $this->hash([
-                        $evidenceBinding,
-                        ...$priorityReviewClasses->map(fn (array $class): array => [
-                            $class['key'],
-                            $class['class_sha256'],
-                            $class['application_count'],
-                            $this->v5ReviewUnits($class['review_units']),
-                            $class['blocker_categories'],
-                        ])->all(),
-                    ]),
+                    'priority_review_class_set_sha256' => $priorityReviewClassSetSha256,
                 ],
                 'preserved_v4_outputs' => [
                     'schema_version' => 'bpls.historical-financial-human-identity-frontier.v4',
@@ -611,6 +651,7 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                     'genuine_source_data_contradiction_application_count' => $softDeleted
                         ->filter(fn (array $candidate): bool => in_array('genuine_source_data_contradiction', $candidate['blocker_categories'], true))
                         ->count(),
+                    'deterministic_historical_evidence' => $this->summarizeDeterministicEvidence($softDeleted),
                 ],
             ),
             $this->priorityReviewClass(
@@ -632,6 +673,7 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                     'identity_disposition_alone_could_unlock_exact_proposal_preparation' => false,
                     'financial_disposition_alone_could_unlock_exact_proposal_preparation' => false,
                     'full_global_owner_collision_group_review_required' => true,
+                    'deterministic_historical_evidence' => $this->summarizeDeterministicEvidence($identityFinancial),
                 ],
             ),
         ])->filter(fn (array $class): bool => $class['application_count'] > 0)->all());
@@ -876,6 +918,7 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
                     'unique_owner_proposal_count' => $routeMembers->pluck('owner_proposal_id')->unique()->count(),
                     'unique_business_proposal_count' => $routeMembers->pluck('business_proposal_id')->unique()->count(),
                     'deterministic_fact' => $profile['deterministic_fact'],
+                    'deterministic_historical_evidence' => $this->summarizeDeterministicEvidence($routeMembers),
                     'blocker_categories' => $this->classBlockerCategories($routeMembers),
                     'one_bounded_decision_would_unlock_exact_proposal_preparation' => false,
                     'why_not_one_bounded_decision' => $profile['why_not_one_bounded_decision'],
@@ -972,12 +1015,598 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
     }
 
     /**
-     * @param  array<string, mixed>  $candidate
-     * @param  Collection<int, LegacyMappingProposal>  $proposals
+     * @param  Collection<int, array<string, mixed>>  $humanCandidates
+     * @return Collection<string, array{
+     *   source_history: array{
+     *     source_application_status: string,
+     *     application_soft_deleted_marker: bool,
+     *     owner_soft_deleted_marker: bool,
+     *     business_soft_deleted_marker: bool,
+     *     submitted_timestamp_present: bool,
+     *     draft_submission_timestamp_conflict_preserved: bool,
+     *     financial_override_entry_count: int,
+     *     source_owner_business_edges_exact: bool,
+     *     deletion_semantics_normalized: bool,
+     *     record_reactivated: bool
+     *   },
+     *   historical_financial_projection: array{
+     *     v1_structure_exact: bool,
+     *     schedule_count: int,
+     *     fee_line_count: int,
+     *     completed_payment_count: int,
+     *     unpaid_schedule_count: int,
+     *     scheduled_centavos: int,
+     *     paid_centavos: int,
+     *     fee_policy_provenance: string,
+     *     historical_recalculation_performed: bool,
+     *     fee_identity_inferred: bool,
+     *     operational_financial_record: bool
+     *   },
+     *   source_reference_evidence: array<string, mixed>,
+     *   authority_and_migration_state: array{
+     *     identity_accepted: bool,
+     *     reference_crosswalk_accepted: bool,
+     *     treasury_interpretation_accepted: bool,
+     *     financial_policy_accepted: bool,
+     *     permit_authority_accepted: bool,
+     *     rehearsal_authorized: bool,
+     *     production_authorized: bool
+     *   }
+     * }>
+     */
+    private function deterministicExceptionEvidence(
+        Collection $humanCandidates,
+        LegacyFinancialMappingPlan $financialPlan,
+        LegacyMappingPlan $registryPlan,
+    ): Collection {
+        $exceptionCandidates = $humanCandidates
+            ->filter(fn (array $candidate): bool => data_get($candidate, 'flags.soft_deleted') === true
+                || in_array(
+                    'financial_override_reconciliation_required',
+                    $this->strings(data_get($candidate, 'application.reasons', [])),
+                    true,
+                ))
+            ->values();
+        if ($exceptionCandidates->isEmpty()) {
+            return collect();
+        }
+
+        $recordIds = $exceptionCandidates
+            ->flatMap(fn (array $candidate): array => [
+                data_get($candidate, 'application.source_record_id'),
+                data_get($candidate, 'owner.source_record_id'),
+                data_get($candidate, 'business.source_record_id'),
+            ])
+            ->filter(fn (mixed $id): bool => is_int($id) || ctype_digit((string) $id))
+            ->map(fn (mixed $id): int => (int) $id)
+            ->unique()
+            ->values();
+        $records = LegacyRecord::query()->whereIn('id', $recordIds)->get()->keyBy('id');
+        $exceptionApplicationRecordIds = $exceptionCandidates
+            ->pluck('application.source_record_id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->unique()
+            ->values();
+        $exceptionFinancialRecordIds = $financialPlan->proposals()
+            ->whereIn('kind', ['payment_schedule', 'payment', 'receipt_claim'])
+            ->where(function ($query) use ($exceptionApplicationRecordIds): void {
+                foreach ($exceptionApplicationRecordIds as $recordId) {
+                    $query->orWhere('metadata->application_source_record_id', $recordId);
+                }
+            })
+            ->pluck('legacy_record_id')
+            ->unique();
+        $financialProposals = $financialPlan->proposals()
+            ->with('legacyRecord')
+            ->whereIn('kind', ['payment_schedule', 'payment_schedule_fee', 'payment', 'receipt_claim'])
+            ->whereIn('legacy_record_id', $exceptionFinancialRecordIds)
+            ->orderBy('id')
+            ->get();
+        $proposalsByApplication = $this->buildProposalIndex->handle($financialProposals);
+        $lookupRecords = LegacyRecord::query()
+            ->where('legacy_import_batch_id', $registryPlan->legacy_import_batch_id)
+            ->whereIn('dataset_key', [
+                ...array_values(self::LocationReferenceFields),
+                'groups',
+                'division_groups',
+                'divisions',
+                'majors',
+            ])
+            ->orderBy('dataset_key')
+            ->orderBy('id')
+            ->get();
+        $lookupsByIdentity = $lookupRecords->keyBy(
+            fn (LegacyRecord $record): string => $record->dataset_key.'|'.$record->legacy_id,
+        );
+
+        return $exceptionCandidates->mapWithKeys(function (array $candidate) use (
+            $financialPlan,
+            $lookupRecords,
+            $lookupsByIdentity,
+            $proposalsByApplication,
+            $records,
+        ): array {
+            $candidateFingerprint = $candidate['candidate_fingerprint'] ?? null;
+            if (! is_string($candidateFingerprint)) {
+                throw new RuntimeException('A deterministic exception candidate fingerprint is invalid.');
+            }
+            $application = $records->get((int) data_get($candidate, 'application.source_record_id'));
+            $owner = $records->get((int) data_get($candidate, 'owner.source_record_id'));
+            $business = $records->get((int) data_get($candidate, 'business.source_record_id'));
+            if (! $application instanceof LegacyRecord
+                || ! $owner instanceof LegacyRecord
+                || ! $business instanceof LegacyRecord) {
+                throw new RuntimeException('A deterministic exception source record is absent from the bound batch.');
+            }
+
+            $projection = $this->preservationProjector->project(
+                $financialPlan,
+                $application,
+                $proposalsByApplication[$application->id] ?? collect(),
+            );
+            $history = data_get($projection, 'projection.financial_history', []);
+            $schedules = is_array($history['schedules'] ?? null) ? $history['schedules'] : [];
+            $totals = is_array($history['totals'] ?? null) ? $history['totals'] : [];
+            $referenceEvidence = $this->sourceReferenceEvidence(
+                $application,
+                $business,
+                $lookupRecords,
+                $lookupsByIdentity,
+            );
+            $lines = is_array($application->payload['linesOfBusiness'] ?? null)
+                ? array_values($application->payload['linesOfBusiness'])
+                : [];
+            $globalOverrides = is_array($application->payload['feeOverrides'] ?? null)
+                ? array_values($application->payload['feeOverrides'])
+                : [];
+            $lineOverrideCount = collect($lines)->sum(fn (mixed $line): int => is_array($line)
+                && is_array($line['feeOverrides'] ?? null)
+                    ? count($line['feeOverrides'])
+                    : 0);
+            $sourceStatus = is_string($application->payload['status'] ?? null)
+                ? trim($application->payload['status'])
+                : '';
+            $submittedTimestampPresent = is_string($application->payload['submittedAt'] ?? null)
+                && trim($application->payload['submittedAt']) !== '';
+
+            return [$candidateFingerprint => [
+                'source_history' => [
+                    'source_application_status' => $sourceStatus !== '' ? $sourceStatus : 'unrecorded',
+                    'application_soft_deleted_marker' => ($application->payload['isDeleted'] ?? false) === true,
+                    'owner_soft_deleted_marker' => ($owner->payload['isDeleted'] ?? false) === true,
+                    'business_soft_deleted_marker' => ($business->payload['isDeleted'] ?? false) === true,
+                    'submitted_timestamp_present' => $submittedTimestampPresent,
+                    'draft_submission_timestamp_conflict_preserved' => $sourceStatus === 'Draft'
+                        && $submittedTimestampPresent,
+                    'financial_override_entry_count' => count($globalOverrides) + $lineOverrideCount,
+                    'source_owner_business_edges_exact' => true,
+                    'deletion_semantics_normalized' => false,
+                    'record_reactivated' => false,
+                ],
+                'historical_financial_projection' => [
+                    'v1_structure_exact' => data_get($candidate, 'flags.preservation_executor_compatible') === true,
+                    'schedule_count' => (int) ($totals['schedule_count'] ?? count($schedules)),
+                    'fee_line_count' => (int) ($totals['fee_line_count'] ?? 0),
+                    'completed_payment_count' => (int) ($totals['payment_count'] ?? 0),
+                    'unpaid_schedule_count' => collect($schedules)
+                        ->filter(fn (array $schedule): bool => ($schedule['status'] ?? null) === 'pending'
+                            && ($schedule['payments'] ?? []) === [])
+                        ->count(),
+                    'scheduled_centavos' => (int) ($totals['scheduled_amount_cents'] ?? 0),
+                    'paid_centavos' => (int) ($totals['paid_amount_cents'] ?? 0),
+                    'fee_policy_provenance' => 'incomplete',
+                    'historical_recalculation_performed' => false,
+                    'fee_identity_inferred' => false,
+                    'operational_financial_record' => false,
+                ],
+                'source_reference_evidence' => $referenceEvidence,
+                'authority_and_migration_state' => [
+                    'identity_accepted' => false,
+                    'reference_crosswalk_accepted' => false,
+                    'treasury_interpretation_accepted' => false,
+                    'financial_policy_accepted' => false,
+                    'permit_authority_accepted' => false,
+                    'rehearsal_authorized' => false,
+                    'production_authorized' => false,
+                ],
+            ]];
+        });
+    }
+
+    /**
+     * @param  Collection<int, LegacyRecord>  $lookupRecords
+     * @param  Collection<string, LegacyRecord>  $lookupsByIdentity
      * @return array<string, mixed>
      */
-    private function candidateEvidence(array $candidate, Collection $proposals): array
+    private function sourceReferenceEvidence(
+        LegacyRecord $application,
+        LegacyRecord $business,
+        Collection $lookupRecords,
+        Collection $lookupsByIdentity,
+    ): array {
+        $locationReferenceCount = 0;
+        $resolvedLocationReferenceCount = 0;
+        $resolvedLocations = [];
+        foreach (self::LocationReferenceFields as $field => $dataset) {
+            $sourceValue = is_string($business->payload[$field] ?? null)
+                ? trim($business->payload[$field])
+                : '';
+            if ($sourceValue === '') {
+                $resolvedLocations[$field] = null;
+
+                continue;
+            }
+            $locationReferenceCount++;
+            $record = $lookupsByIdentity->get($dataset.'|'.$sourceValue);
+            $resolvedLocations[$field] = $record;
+            if ($record instanceof LegacyRecord) {
+                $resolvedLocationReferenceCount++;
+            }
+        }
+        $provinceId = is_string($business->payload['provinceId'] ?? null)
+            ? trim($business->payload['provinceId'])
+            : '';
+        $cityId = is_string($business->payload['cityId'] ?? null)
+            ? trim($business->payload['cityId'])
+            : '';
+        $city = $resolvedLocations['cityId'] ?? null;
+        $barangay = $resolvedLocations['barangayId'] ?? null;
+        $locationHierarchyExact = $locationReferenceCount === count(self::LocationReferenceFields)
+            && $resolvedLocationReferenceCount === $locationReferenceCount
+            && $city instanceof LegacyRecord
+            && $barangay instanceof LegacyRecord
+            && hash_equals($provinceId, $this->sourceString($city->payload['provinceId'] ?? null))
+            && hash_equals($cityId, $this->sourceString($barangay->payload['cityId'] ?? null));
+
+        $lines = is_array($application->payload['linesOfBusiness'] ?? null)
+            ? array_values($application->payload['linesOfBusiness'])
+            : [];
+        $declarationCount = count($lines);
+        $exactGroupMatchCount = 0;
+        $exactGroupHierarchyCount = 0;
+        foreach ($lines as $line) {
+            $category = is_array($line) ? $this->sourceString($line['businessCategory'] ?? null) : '';
+            $matches = $category === '' ? collect() : $lookupRecords
+                ->where('dataset_key', 'groups')
+                ->filter(fn (LegacyRecord $record): bool => $this->sourceString($record->payload['name'] ?? null) === $category)
+                ->values();
+            if ($matches->count() !== 1) {
+                continue;
+            }
+            $exactGroupMatchCount++;
+            $group = $matches->first();
+            $divisionGroups = $lookupRecords
+                ->where('dataset_key', 'division_groups')
+                ->filter(fn (LegacyRecord $record): bool => $this->sourceString($record->payload['groupId'] ?? null) === $group->legacy_id)
+                ->values();
+            $hierarchyExact = $divisionGroups->isNotEmpty()
+                && $divisionGroups->every(function (LegacyRecord $edge) use ($lookupsByIdentity): bool {
+                    $divisionId = $this->sourceString($edge->payload['divisionId'] ?? null);
+                    $division = $divisionId === '' ? null : $lookupsByIdentity->get('divisions|'.$divisionId);
+                    $majorId = $division instanceof LegacyRecord
+                        ? $this->sourceString($division->payload['majorId'] ?? null)
+                        : '';
+
+                    return $division instanceof LegacyRecord
+                        && $majorId !== ''
+                        && $lookupsByIdentity->get('majors|'.$majorId) instanceof LegacyRecord;
+                });
+            if ($hierarchyExact) {
+                $exactGroupHierarchyCount++;
+            }
+        }
+
+        return [
+            'location_reference_count' => $locationReferenceCount,
+            'exact_source_id_resolved_location_reference_count' => $resolvedLocationReferenceCount,
+            'exact_source_location_hierarchy' => $locationHierarchyExact,
+            'line_of_business_declaration_count' => $declarationCount,
+            'exact_source_group_match_count' => $exactGroupMatchCount,
+            'exact_source_group_hierarchy_count' => $exactGroupHierarchyCount,
+            'declaration_group_match_basis' => 'exact_legacy_source_name_lookup_behavior',
+            'source_facts_preservable_without_identity_acceptance' => true,
+            'authoritative_target_reference_identity' => false,
+            'target_reference_identity_inferred' => false,
+            'target_reference_crosswalk_accepted' => false,
+        ];
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $members
+     * @return array<string, mixed>
+     */
+    private function summarizeDeterministicEvidence(Collection $members): array
     {
+        $evidence = $members->pluck('deterministic_historical_evidence')->filter()->values();
+        $statuses = $evidence
+            ->countBy(fn (array $member): string => (string) data_get($member, 'source_history.source_application_status'))
+            ->sortKeys()
+            ->all();
+
+        return [
+            'application_count' => $evidence->count(),
+            'source_application_status_counts' => $statuses,
+            'application_soft_deleted_marker_count' => $evidence->where('source_history.application_soft_deleted_marker', true)->count(),
+            'owner_soft_deleted_marker_count' => $evidence->where('source_history.owner_soft_deleted_marker', true)->count(),
+            'business_soft_deleted_marker_count' => $evidence->where('source_history.business_soft_deleted_marker', true)->count(),
+            'draft_submission_timestamp_conflict_count' => $evidence->where('source_history.draft_submission_timestamp_conflict_preserved', true)->count(),
+            'financial_override_entry_count' => $evidence->sum('source_history.financial_override_entry_count'),
+            'v1_structurally_exact_application_count' => $evidence->where('historical_financial_projection.v1_structure_exact', true)->count(),
+            'schedule_count' => $evidence->sum('historical_financial_projection.schedule_count'),
+            'fee_line_count' => $evidence->sum('historical_financial_projection.fee_line_count'),
+            'completed_payment_count' => $evidence->sum('historical_financial_projection.completed_payment_count'),
+            'unpaid_schedule_count' => $evidence->sum('historical_financial_projection.unpaid_schedule_count'),
+            'scheduled_centavos' => $evidence->sum('historical_financial_projection.scheduled_centavos'),
+            'paid_centavos' => $evidence->sum('historical_financial_projection.paid_centavos'),
+            'location_reference_count' => $evidence->sum('source_reference_evidence.location_reference_count'),
+            'exact_source_id_resolved_location_reference_count' => $evidence->sum('source_reference_evidence.exact_source_id_resolved_location_reference_count'),
+            'exact_source_location_hierarchy_count' => $evidence->where('source_reference_evidence.exact_source_location_hierarchy', true)->count(),
+            'line_of_business_declaration_count' => $evidence->sum('source_reference_evidence.line_of_business_declaration_count'),
+            'exact_source_group_match_count' => $evidence->sum('source_reference_evidence.exact_source_group_match_count'),
+            'exact_source_group_hierarchy_count' => $evidence->sum('source_reference_evidence.exact_source_group_hierarchy_count'),
+            'deletion_semantics_normalized' => false,
+            'record_reactivated' => false,
+            'identity_or_reference_mapping_accepted' => false,
+            'authority_decision_accepted' => false,
+            'rehearsal_authorized' => false,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $readiness
+     * @param  Collection<int, array<string, mixed>>  $candidateEvidence
+     * @return array<string, mixed>
+     */
+    private function campaignReadiness(
+        LegacyFinancialMappingPlan $financialPlan,
+        array $readiness,
+        Collection $candidateEvidence,
+    ): array {
+        $executions = LegacyHistoricalFinancialPreservationExecution::query()
+            ->whereHas('preservationPlan', fn ($query) => $query
+                ->where('legacy_financial_mapping_plan_id', $financialPlan->id))
+            ->orderBy('id')
+            ->get();
+        $controlledExecutions = $executions
+            ->filter(fn (LegacyHistoricalFinancialPreservationExecution $execution): bool => $this->hasExactRollbackControls($execution))
+            ->values();
+        $selectedProposalIds = $controlledExecutions
+            ->flatMap(fn (LegacyHistoricalFinancialPreservationExecution $execution): array => array_map(
+                'intval',
+                (array) data_get($execution, 'metadata.proposal_ids', []),
+            ));
+        $uniqueProposalIds = $selectedProposalIds->unique()->sort()->values();
+        $proposals = LegacyHistoricalFinancialPreservationProposal::query()
+            ->with('applicationMapping')
+            ->whereHas('preservationPlan', fn ($query) => $query
+                ->where('legacy_financial_mapping_plan_id', $financialPlan->id))
+            ->whereIn('id', $uniqueProposalIds)
+            ->orderBy('id')
+            ->get();
+        $rehearsalRecordIds = $proposals->pluck('legacy_record_id')->map(fn (mixed $id): int => (int) $id)->unique()->sort()->values();
+        $rehearsalTotals = [
+            'schedule_count' => 0,
+            'fee_line_count' => 0,
+            'completed_payment_count' => 0,
+            'unpaid_schedule_count' => 0,
+            'scheduled_centavos' => 0,
+            'paid_centavos' => 0,
+        ];
+        foreach ($proposals as $proposal) {
+            $totals = data_get($proposal, 'metadata.projection.financial_history.totals', []);
+            $schedules = data_get($proposal, 'metadata.projection.financial_history.schedules', []);
+            $schedules = is_array($schedules) ? $schedules : [];
+            $rehearsalTotals['schedule_count'] += (int) ($totals['schedule_count'] ?? count($schedules));
+            $rehearsalTotals['fee_line_count'] += (int) ($totals['fee_line_count'] ?? 0);
+            $rehearsalTotals['completed_payment_count'] += (int) ($totals['payment_count'] ?? 0);
+            $rehearsalTotals['unpaid_schedule_count'] += collect($schedules)
+                ->filter(fn (array $schedule): bool => ($schedule['status'] ?? null) === 'pending'
+                    && ($schedule['payments'] ?? []) === [])
+                ->count();
+            $rehearsalTotals['scheduled_centavos'] += (int) ($totals['scheduled_amount_cents'] ?? 0);
+            $rehearsalTotals['paid_centavos'] += (int) ($totals['paid_amount_cents'] ?? 0);
+        }
+
+        $readinessCandidateValues = $readiness['candidates'] ?? [];
+        if (! is_array($readinessCandidateValues)) {
+            throw new RuntimeException('Campaign readiness candidates are unavailable.');
+        }
+        $readinessCandidates = collect(array_values(array_filter(
+            $readinessCandidateValues,
+            fn (mixed $candidate): bool => is_array($candidate),
+        )));
+        $candidateIds = fn (Collection $candidates): Collection => $candidates
+            ->map(fn (array $candidate): int => (int) data_get($candidate, 'application.source_record_id'))
+            ->unique()
+            ->sort()
+            ->values();
+        $strictCandidateIds = $candidateIds($readinessCandidates);
+        $rehearsedCandidates = $readinessCandidates
+            ->whereIn('application.source_record_id', $rehearsalRecordIds)
+            ->values();
+        $rehearsedCandidateIds = $candidateIds($rehearsedCandidates);
+        $humanIdentityCandidates = $readinessCandidates
+            ->where('classification', 'human_identity_reconciliation')
+            ->values();
+        $humanIdentityIds = $candidateIds($humanIdentityCandidates);
+        $registryPolicyCandidates = $readinessCandidates
+            ->where('classification', 'registry_policy_reconciliation')
+            ->values();
+        $registryPolicyIds = $candidateIds($registryPolicyCandidates);
+        $strictCandidateCount = (int) data_get($readiness, 'report.summary.strict_preservation_candidate_count', 0);
+        $otherExceptions = $readinessCandidates
+            ->reject(fn (array $candidate): bool => $rehearsedCandidateIds->contains((int) data_get($candidate, 'application.source_record_id')))
+            ->reject(fn (array $candidate): bool => $humanIdentityIds->contains((int) data_get($candidate, 'application.source_record_id')))
+            ->reject(fn (array $candidate): bool => $registryPolicyIds->contains((int) data_get($candidate, 'application.source_record_id')))
+            ->values();
+        $otherExceptionIds = $candidateIds($otherExceptions);
+        $residualExceptionClassCounts = $otherExceptions
+            ->countBy(function (array $candidate): string {
+                $reasons = $this->strings(data_get($candidate, 'application.reasons', []));
+                sort($reasons);
+
+                return match ([$candidate['classification'] ?? null, data_get($candidate, 'flags.soft_deleted'), $reasons]) {
+                    ['application_reconciliation_required', true, [
+                        'assessment_and_payment_schedule_migration_required',
+                        'line_of_business_mapping_required',
+                        'soft_deleted_application_policy_unresolved',
+                    ]] => 'soft_deleted_treasury_and_reference_exception',
+                    ['application_reconciliation_required', false, [
+                        'financial_override_reconciliation_required',
+                        'legacy_release_authority_unresolved',
+                        'line_of_business_mapping_required',
+                    ]] => 'financial_override_release_and_reference_exception',
+                    default => 'unclassified_residual_exception',
+                };
+            })
+            ->sortKeys()
+            ->all();
+        $outsideV1ExceptionValues = $readiness['exceptions'] ?? [];
+        if (! is_array($outsideV1ExceptionValues)) {
+            throw new RuntimeException('Campaign readiness structural exceptions are unavailable.');
+        }
+        $outsideV1Exceptions = collect(array_values(array_filter(
+            $outsideV1ExceptionValues,
+            fn (mixed $exception): bool => is_array($exception),
+        )));
+        $outsideV1ExceptionClassCounts = $outsideV1Exceptions
+            ->flatMap(fn (array $exception): array => $this->strings($exception['preservation_executor_compatibility_reasons'] ?? []))
+            ->countBy()
+            ->sortKeys()
+            ->all();
+        $pairwiseOverlapCounts = [
+            'rehearsal_human' => $rehearsedCandidateIds->intersect($humanIdentityIds)->count(),
+            'rehearsal_registry' => $rehearsedCandidateIds->intersect($registryPolicyIds)->count(),
+            'rehearsal_residual' => $rehearsedCandidateIds->intersect($otherExceptionIds)->count(),
+            'human_registry' => $humanIdentityIds->intersect($registryPolicyIds)->count(),
+            'human_residual' => $humanIdentityIds->intersect($otherExceptionIds)->count(),
+            'registry_residual' => $registryPolicyIds->intersect($otherExceptionIds)->count(),
+        ];
+        $partitionIds = $rehearsedCandidateIds
+            ->concat($humanIdentityIds)
+            ->concat($registryPolicyIds)
+            ->concat($otherExceptionIds)
+            ->unique()
+            ->sort()
+            ->values();
+        $partitionIsDisjoint = collect($pairwiseOverlapCounts)->every(fn (int $count): bool => $count === 0);
+        $partitionIsComplete = $partitionIsDisjoint
+            && $partitionIds->all() === $strictCandidateIds->all()
+            && $strictCandidateIds->count() === $strictCandidateCount;
+        $rehearsedCandidateCount = $rehearsedCandidateIds->count();
+        $humanIdentityCount = $humanIdentityIds->count();
+        $registryPolicyCount = $registryPolicyIds->count();
+        $partitionCount = $partitionIds->count();
+        $exactMembershipSha256 = $this->hash([
+            'bpls.historical-financial-controlled-campaign-membership.v1',
+            ...$rehearsedCandidates
+                ->sortBy('application.source_record_id')
+                ->map(fn (array $candidate): array => [
+                    'candidate_fingerprint' => $candidate['candidate_fingerprint'],
+                    'application_legacy_id_sha256' => data_get($candidate, 'application.legacy_id_sha256'),
+                ])
+                ->values()
+                ->all(),
+        ]);
+        $exactMappingCount = $proposals
+            ->filter(fn (LegacyHistoricalFinancialPreservationProposal $proposal): bool => $proposal->applicationMapping !== null
+                && $proposal->applicationMapping->status === 'mapped')
+            ->count();
+        $allReady = $proposals->every(fn (LegacyHistoricalFinancialPreservationProposal $proposal): bool => $proposal->status->value === 'ready');
+        $currentPreservedBundleCount = LegacyHistoricalFinancialPreservedBundle::query()
+            ->whereIn('legacy_historical_financial_preservation_proposal_id', $uniqueProposalIds)
+            ->count();
+        $allControlsExact = $proposals->isNotEmpty()
+            && $executions->count() === $controlledExecutions->count()
+            && $selectedProposalIds->count() === $uniqueProposalIds->count()
+            && $proposals->count() === $uniqueProposalIds->count()
+            && $rehearsedCandidateCount === $proposals->count()
+            && $rehearsalRecordIds->diff($strictCandidateIds)->isEmpty()
+            && $partitionIsComplete
+            && $exactMappingCount === $proposals->count()
+            && $allReady
+            && $currentPreservedBundleCount === 0;
+
+        return [
+            'estate_partition' => [
+                'strict_v1_application_count' => $strictCandidateCount,
+                'reversible_execution_and_rollback_exact_class_count' => $rehearsedCandidateCount,
+                'human_identity_decision_class_count' => $humanIdentityCount,
+                'registry_policy_decision_class_count' => $registryPolicyCount,
+                'other_quarantined_exception_count' => $otherExceptions->count(),
+                'residual_exception_class_counts' => $residualExceptionClassCounts,
+                'residual_exception_classification_complete' => ! array_key_exists('unclassified_residual_exception', $residualExceptionClassCounts),
+                'outside_v1_structural_exception_count' => $outsideV1Exceptions->count(),
+                'outside_v1_structural_exception_class_counts' => $outsideV1ExceptionClassCounts,
+                'original_frozen_candidate_census_count' => $strictCandidateCount + $outsideV1Exceptions->count(),
+                'human_frontier_exception_overlay_count' => $candidateEvidence
+                    ->whereNotNull('deterministic_historical_evidence')
+                    ->count(),
+                'human_frontier_exception_overlays_are_nested_not_additive' => true,
+                'partition_count' => $partitionCount,
+                'pairwise_overlap_counts' => $pairwiseOverlapCounts,
+                'partition_is_disjoint' => $partitionIsDisjoint,
+                'partition_is_complete' => $partitionIsComplete,
+                'completion_percentage_reported' => false,
+            ],
+            'first_controlled_production_campaign_candidate' => [
+                'application_count' => $rehearsedCandidateCount,
+                'exact_membership_sha256' => $exactMembershipSha256,
+                ...$rehearsalTotals,
+                'exact_application_mapping_count' => $exactMappingCount,
+                'ready_preservation_proposal_count' => $proposals
+                    ->filter(fn (LegacyHistoricalFinancialPreservationProposal $proposal): bool => $proposal->status->value === 'ready')
+                    ->count(),
+                'reversible_execution_count' => $controlledExecutions->count(),
+                'selection_membership_count' => $selectedProposalIds->count(),
+                'unique_selection_membership_count' => $uniqueProposalIds->count(),
+                'execution_and_rollback_controls_reproduced' => $allControlsExact,
+                'source_to_target_audit_revalidated_by_this_characterization' => false,
+                'restoration_audit_revalidated_by_this_characterization' => false,
+                'canonical_external_audit_evidence_required_for_campaign_freeze' => true,
+                'current_preserved_bundle_count' => $currentPreservedBundleCount,
+                'campaign_status' => $allControlsExact && $rehearsedCandidateCount > 0
+                    ? 'bounded_execution_and_rollback_selection_requires_canonical_audit_binding_and_production_authorization'
+                    : 'no_controlled_campaign_selection_proven',
+                'campaign_freeze_required' => true,
+                'production_authorization_required' => true,
+                'production_authorized' => false,
+                'production_applied' => false,
+            ],
+            'decision_effect' => 'The campaign structure quantifies a first bounded candidate from exact execution-and-rollback records and the remaining decision-dependent or quarantined classes. Canonical source-to-target and restoration audit evidence must be bound separately before campaign freeze. This characterization does not authorize execution or alter any mapping or authority state.',
+        ];
+    }
+
+    private function hasExactRollbackControls(LegacyHistoricalFinancialPreservationExecution $execution): bool
+    {
+        $proposalIds = (array) data_get($execution, 'metadata.proposal_ids', []);
+
+        return $execution->status === LegacyMappingExecutionStatus::RolledBack
+            && $execution->selected_count === count($proposalIds)
+            && $execution->selected_count === $execution->created_count
+            && $execution->created_count === (int) data_get($execution, 'metadata.rollback_bundle_count', -1)
+            && data_get($execution, 'metadata.operational_counts_before') === data_get($execution, 'metadata.operational_counts_after')
+            && data_get($execution, 'metadata.source_records_deleted') === false
+            && data_get($execution, 'metadata.application_mappings_deleted') === false
+            && data_get($execution, 'metadata.operational_financial_records_deleted') === false;
+    }
+
+    private function sourceString(mixed $value): string
+    {
+        return is_string($value) ? trim($value) : '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $candidate
+     * @param  Collection<int, LegacyMappingProposal>  $proposals
+     * @param  array<string, mixed>|null  $deterministicHistoricalEvidence
+     * @return array<string, mixed>
+     */
+    private function candidateEvidence(
+        array $candidate,
+        Collection $proposals,
+        ?array $deterministicHistoricalEvidence,
+    ): array {
         $ownerProposalId = (int) data_get($candidate, 'owner.proposal_id');
         $businessProposalId = (int) data_get($candidate, 'business.proposal_id');
         $ownerProposal = $proposals->get($ownerProposalId);
@@ -1056,6 +1685,7 @@ class CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier
             'application_mapping_acceptance_status' => 'not_accepted',
             'decision_cohort_key' => $decisionCohortKey,
             'blocker_categories' => $blockerCategories,
+            'deterministic_historical_evidence' => $deterministicHistoricalEvidence,
         ];
     }
 

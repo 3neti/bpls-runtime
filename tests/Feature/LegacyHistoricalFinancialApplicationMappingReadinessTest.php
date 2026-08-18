@@ -5,12 +5,19 @@ use App\Actions\CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier;
 use App\Actions\PlanLegacyFinancialDependencies;
 use App\Actions\PlanLegacyRegistryMigration;
 use App\Enums\LegacyImportBatchStatus;
+use App\Enums\LegacyMappingExecutionStatus;
+use App\Enums\LegacyMappingPlanStatus;
+use App\Enums\LegacyMappingProposalStatus;
 use App\Models\LegacyApplicationIdMapping;
+use App\Models\LegacyHistoricalFinancialPreservationExecution;
+use App\Models\LegacyHistoricalFinancialPreservationPlan;
+use App\Models\LegacyHistoricalFinancialPreservationProposal;
 use App\Models\LegacyIdMapping;
 use App\Models\LegacyImportBatch;
 use App\Models\LegacyMappingProposal;
 use App\Models\LegacyRecord;
 use App\Models\LegacySource;
+use App\Models\PermitApplication;
 use Illuminate\Support\Facades\Storage;
 
 /** @param array<string, mixed> $payload */
@@ -209,6 +216,177 @@ test('strict preservation candidates are classified by exact identity evidence w
             'production_mutation' => false,
             'migration_executed' => false,
         ]);
+});
+
+test('canonical production v7 lineage fingerprints are pinned as literal controls', function () {
+    expect(CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier::CanonicalProductionV7Fingerprints)->toBe([
+        'human_identity_frontier_sha256' => '8b1b80d4b2f38eb186186930c567e1e9eb7b83c4b28490307117381056064bbc',
+        'business_source_evidence_subclass_sha256' => 'ab4380ec8b56e928e0b73671c424ccc7048a032ca7a2bc4095577cb50e2ead03',
+        'decision_cohort_set_sha256' => 'dcbfaadec88b19ed564951af29b24c194049a903036c9c98c3ef922dc0c05d41',
+        'municipal_identity_evidence_class_set_sha256' => '5aed72372bb3cf5260946196f23ab6f5e126eff6e1918b8947fcdfa9b14699c5',
+        'priority_review_class_set_sha256' => '53790859b7bd63430c4e3f35e0a212b22cade849202d56aa25a45def80a59c7f',
+        'priority_decision_unlock_set_sha256' => 'b627a317ccff26133ea5b98d3afcf0ee5c4fb356154480de3fe6eae7bc5bfceb',
+        'registration_decision_route_set_sha256' => 'f64c014c67354ed0700e54ad06d069dd6fbb5ba2d8a311a059f8322932359e57',
+    ]);
+});
+
+test('campaign readiness proves exact disjoint membership and retains structural exceptions outside v1', function () {
+    Storage::fake('local');
+    $batches = mappingReadinessBatches('campaign-partition');
+    addMappingReadinessCandidate($batches['registry'], $batches['financial'], 'exact');
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'human',
+        owner: ['email' => 'campaign-shared@example.test'],
+    );
+    foreach ([$batches['registry'], $batches['financial']] as $batch) {
+        mappingReadinessRecord($batch, 'business_owners', 'owner-human-decoy', [
+            'ownerType' => 'Individual',
+            'firstName' => 'Different',
+            'lastName' => 'Person',
+            'email' => 'campaign-shared@example.test',
+        ]);
+    }
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'registry',
+        owner: ['ownerType' => 'Group', 'groupName' => 'Campaign historical group'],
+    );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'soft-residual',
+        application: [
+            'status' => 'Pending Payment',
+            'isDeleted' => true,
+            'linesOfBusiness' => [['businessCategory' => 'Historical residual category']],
+        ],
+    );
+    addMappingReadinessCandidate(
+        $batches['registry'],
+        $batches['financial'],
+        'financial-residual',
+        application: [
+            'status' => 'Released',
+            'feeOverrides' => [['reason' => 'historical test evidence']],
+            'linesOfBusiness' => [['businessCategory' => 'Historical residual category']],
+        ],
+    );
+    addMappingReadinessCandidate($batches['registry'], $batches['financial'], 'outside-v1');
+    addMappingReadinessUnassignedFailedPayment($batches['financial'], 'outside-v1');
+
+    $registryPlan = app(PlanLegacyRegistryMigration::class)->handle($batches['registry'], 'registry-campaign-partition');
+    $financialPlan = app(PlanLegacyFinancialDependencies::class)->handle($batches['financial'], 'financial-campaign-partition');
+    $readiness = app(CharacterizeLegacyHistoricalFinancialApplicationMappings::class)->handle($financialPlan, $registryPlan);
+    $exactCandidate = collect($readiness['candidates'])
+        ->firstWhere('classification', 'deterministic_exact_mapping_candidate');
+    expect($exactCandidate)->toBeArray();
+    $applicationRecord = LegacyRecord::query()->findOrFail((int) data_get($exactCandidate, 'application.source_record_id'));
+    $mapping = LegacyApplicationIdMapping::factory()->create([
+        'legacy_source_id' => $batches['financial']->legacy_source_id,
+        'legacy_import_batch_id' => $batches['financial']->id,
+        'permit_application_id' => PermitApplication::factory(),
+        'dataset_key' => 'business_permit_applications',
+        'legacy_id' => $applicationRecord->legacy_id,
+        'status' => 'mapped',
+        'mapping_basis' => 'accepted_test_fixture',
+    ]);
+    $preservationPlan = LegacyHistoricalFinancialPreservationPlan::factory()->create([
+        'legacy_import_batch_id' => $batches['financial']->id,
+        'legacy_financial_mapping_plan_id' => $financialPlan->id,
+        'status' => LegacyMappingPlanStatus::Planned,
+        'proposal_count' => 1,
+        'ready_count' => 1,
+        'blocked_count' => 0,
+    ]);
+    $proposal = LegacyHistoricalFinancialPreservationProposal::factory()->create([
+        'legacy_historical_financial_preservation_plan_id' => $preservationPlan->id,
+        'legacy_record_id' => $applicationRecord->id,
+        'legacy_application_id_mapping_id' => $mapping->id,
+        'status' => LegacyMappingProposalStatus::Ready,
+        'reasons' => [],
+        'metadata' => [
+            'projection' => [
+                'financial_history' => [
+                    'totals' => [
+                        'schedule_count' => 1,
+                        'fee_line_count' => 1,
+                        'payment_count' => 0,
+                        'scheduled_amount_cents' => 10000,
+                        'paid_amount_cents' => 0,
+                    ],
+                    'schedules' => [[
+                        'status' => 'pending',
+                        'payments' => [],
+                    ]],
+                ],
+            ],
+        ],
+    ]);
+    LegacyHistoricalFinancialPreservationExecution::factory()->create([
+        'legacy_historical_financial_preservation_plan_id' => $preservationPlan->id,
+        'status' => LegacyMappingExecutionStatus::RolledBack,
+        'selected_count' => 1,
+        'created_count' => 1,
+        'rolled_back_at' => now(),
+        'metadata' => [
+            'proposal_ids' => [$proposal->id],
+            'rollback_bundle_count' => 1,
+            'operational_counts_before' => ['permit_applications' => 1],
+            'operational_counts_after' => ['permit_applications' => 1],
+            'source_records_deleted' => false,
+            'application_mappings_deleted' => false,
+            'operational_financial_records_deleted' => false,
+        ],
+    ]);
+
+    $result = app(CharacterizeLegacyHistoricalFinancialHumanIdentityFrontier::class)->handle($financialPlan, $registryPlan);
+    $partition = data_get($result, 'report.campaign_readiness.estate_partition');
+    $campaign = data_get($result, 'report.campaign_readiness.first_controlled_production_campaign_candidate');
+
+    expect($partition)->toMatchArray([
+        'strict_v1_application_count' => 5,
+        'reversible_execution_and_rollback_exact_class_count' => 1,
+        'human_identity_decision_class_count' => 1,
+        'registry_policy_decision_class_count' => 1,
+        'other_quarantined_exception_count' => 2,
+        'residual_exception_class_counts' => [
+            'financial_override_release_and_reference_exception' => 1,
+            'soft_deleted_treasury_and_reference_exception' => 1,
+        ],
+        'residual_exception_classification_complete' => true,
+        'outside_v1_structural_exception_count' => 1,
+        'outside_v1_structural_exception_class_counts' => [
+            'application_has_unassigned_payment_events' => 1,
+        ],
+        'original_frozen_candidate_census_count' => 6,
+        'pairwise_overlap_counts' => [
+            'rehearsal_human' => 0,
+            'rehearsal_registry' => 0,
+            'rehearsal_residual' => 0,
+            'human_registry' => 0,
+            'human_residual' => 0,
+            'registry_residual' => 0,
+        ],
+        'partition_is_disjoint' => true,
+        'partition_is_complete' => true,
+    ])->and($campaign)->toMatchArray([
+        'application_count' => 1,
+        'exact_application_mapping_count' => 1,
+        'ready_preservation_proposal_count' => 1,
+        'reversible_execution_count' => 1,
+        'selection_membership_count' => 1,
+        'unique_selection_membership_count' => 1,
+        'execution_and_rollback_controls_reproduced' => true,
+        'source_to_target_audit_revalidated_by_this_characterization' => false,
+        'restoration_audit_revalidated_by_this_characterization' => false,
+        'current_preserved_bundle_count' => 0,
+        'campaign_status' => 'bounded_execution_and_rollback_selection_requires_canonical_audit_binding_and_production_authorization',
+        'production_authorized' => false,
+        'production_applied' => false,
+    ])->and($campaign['exact_membership_sha256'])->toHaveLength(64);
 });
 
 test('human identity frontier isolates collision classes without accepting similarity based mappings', function () {
@@ -590,6 +768,10 @@ test('priority review classes separate compound contact and non contact identity
     $priorityReviewClasses = collect($result['report']['priority_review_classes'])->keyBy('key');
     $registrationDecisionRoutes = collect($result['report']['registration_decision_routes'])->keyBy('key');
     $softDeletedDecisionRoutes = collect($result['report']['soft_deleted_decision_routes'])->keyBy('key');
+    $deterministicExceptionEvidence = collect($result['candidates'])
+        ->pluck('deterministic_historical_evidence')
+        ->filter()
+        ->values();
     $arguments = [
         'financial-plan' => $financialPlan->id,
         'registry-plan' => $registryPlan->id,
@@ -607,7 +789,7 @@ test('priority review classes separate compound contact and non contact identity
         ->flatMap(fn (LegacyMappingProposal $proposal): array => array_values($proposal->collision_fingerprints ?? []))
         ->unique();
 
-    expect($result['report']['schema_version'])->toBe('bpls.historical-financial-human-identity-frontier.v7')
+    expect($result['report']['schema_version'])->toBe('bpls.historical-financial-human-identity-frontier.v8')
         ->and($result['report']['summary']['human_identity_application_count'])->toBe(13)
         ->and($result['report']['summary']['priority_review_class_count'])->toBe(6)
         ->and($result['report']['summary']['registration_decision_route_count'])->toBe(3)
@@ -746,12 +928,39 @@ test('priority review classes separate compound contact and non contact identity
             'rehearsed_mapping_count' => 0,
             'production_applied_count' => 0,
         ])
+        ->and($softDeletedDecisionRoutes->get('deletion_identity_reference_only')['deterministic_historical_evidence'])->toMatchArray([
+            'application_count' => 1,
+            'source_application_status_counts' => ['Assessment' => 1],
+            'application_soft_deleted_marker_count' => 1,
+            'financial_override_entry_count' => 0,
+            'v1_structurally_exact_application_count' => 1,
+            'schedule_count' => 1,
+            'fee_line_count' => 1,
+            'completed_payment_count' => 0,
+            'unpaid_schedule_count' => 1,
+            'scheduled_centavos' => 10000,
+            'paid_centavos' => 0,
+            'identity_or_reference_mapping_accepted' => false,
+            'authority_decision_accepted' => false,
+            'rehearsal_authorized' => false,
+        ])
         ->and($softDeletedDecisionRoutes->get('financial_policy_authority'))->toMatchArray([
             'application_count' => 1,
             'one_bounded_decision_would_unlock_exact_proposal_preparation' => false,
             'accepted_mapping_count' => 0,
             'rehearsed_mapping_count' => 0,
             'production_applied_count' => 0,
+        ])
+        ->and($softDeletedDecisionRoutes->get('financial_policy_authority')['deterministic_historical_evidence'])->toMatchArray([
+            'application_count' => 1,
+            'application_soft_deleted_marker_count' => 1,
+            'financial_override_entry_count' => 1,
+            'v1_structurally_exact_application_count' => 1,
+            'schedule_count' => 1,
+            'fee_line_count' => 1,
+            'unpaid_schedule_count' => 1,
+            'scheduled_centavos' => 10000,
+            'paid_centavos' => 0,
         ])
         ->and($priorityReviewClasses->get('identity_plus_financial_exception'))->toMatchArray([
             'application_count' => 1,
@@ -767,9 +976,63 @@ test('priority review classes separate compound contact and non contact identity
             'production_applied_count' => 0,
         ])
         ->and($priorityReviewClasses->get('identity_plus_financial_exception')['blocker_categories'])->toContain('financial_policy_authority')
+        ->and($priorityReviewClasses->get('identity_plus_financial_exception')['deterministic_historical_evidence'])->toMatchArray([
+            'application_count' => 1,
+            'application_soft_deleted_marker_count' => 0,
+            'financial_override_entry_count' => 1,
+            'v1_structurally_exact_application_count' => 1,
+            'schedule_count' => 1,
+            'fee_line_count' => 1,
+            'unpaid_schedule_count' => 1,
+            'scheduled_centavos' => 10000,
+            'paid_centavos' => 0,
+        ])
         ->and(data_get($result, 'report.fingerprints.priority_review_class_set_sha256'))->toHaveLength(64)
         ->and(data_get($result, 'report.fingerprints.priority_decision_unlock_set_sha256'))->toHaveLength(64)
         ->and(data_get($result, 'report.fingerprints.registration_decision_route_set_sha256'))->toHaveLength(64)
+        ->and(data_get($result, 'report.fingerprints.deterministic_exception_evidence_set_sha256'))->toHaveLength(64)
+        ->and(data_get($result, 'report.fingerprints.campaign_readiness_sha256'))->toHaveLength(64)
+        ->and($result['report']['campaign_readiness']['estate_partition'])->toMatchArray([
+            'strict_v1_application_count' => 13,
+            'reversible_execution_and_rollback_exact_class_count' => 0,
+            'human_identity_decision_class_count' => 13,
+            'registry_policy_decision_class_count' => 0,
+            'other_quarantined_exception_count' => 0,
+            'human_frontier_exception_overlay_count' => 3,
+            'human_frontier_exception_overlays_are_nested_not_additive' => true,
+            'partition_count' => 13,
+            'partition_is_complete' => true,
+            'completion_percentage_reported' => false,
+        ])
+        ->and($result['report']['campaign_readiness']['first_controlled_production_campaign_candidate'])->toMatchArray([
+            'application_count' => 0,
+            'exact_application_mapping_count' => 0,
+            'ready_preservation_proposal_count' => 0,
+            'reversible_execution_count' => 0,
+            'execution_and_rollback_controls_reproduced' => false,
+            'source_to_target_audit_revalidated_by_this_characterization' => false,
+            'restoration_audit_revalidated_by_this_characterization' => false,
+            'canonical_external_audit_evidence_required_for_campaign_freeze' => true,
+            'campaign_status' => 'no_controlled_campaign_selection_proven',
+            'production_authorized' => false,
+            'production_applied' => false,
+        ])
+        ->and($deterministicExceptionEvidence)->toHaveCount(3)
+        ->and($deterministicExceptionEvidence->every(
+            fn (array $evidence): bool => data_get($evidence, 'source_reference_evidence.declaration_group_match_basis') === 'exact_legacy_source_name_lookup_behavior'
+                && data_get($evidence, 'source_reference_evidence.authoritative_target_reference_identity') === false
+                && data_get($evidence, 'source_reference_evidence.target_reference_identity_inferred') === false,
+        ))->toBeTrue()
+        ->and($result['report']['preserved_v7_outputs'])->toMatchArray([
+            'schema_version' => 'bpls.historical-financial-human-identity-frontier.v7',
+            'human_identity_frontier_sha256' => data_get($result, 'report.fingerprints.human_identity_frontier_sha256'),
+            'business_source_evidence_subclass_sha256' => data_get($result, 'report.fingerprints.business_source_evidence_subclass_sha256'),
+            'decision_cohort_set_sha256' => data_get($result, 'report.fingerprints.decision_cohort_set_sha256'),
+            'municipal_identity_evidence_class_set_sha256' => data_get($result, 'report.fingerprints.municipal_identity_evidence_class_set_sha256'),
+            'priority_review_class_set_sha256' => data_get($result, 'report.fingerprints.priority_review_class_set_sha256'),
+            'priority_decision_unlock_set_sha256' => data_get($result, 'report.fingerprints.priority_decision_unlock_set_sha256'),
+            'registration_decision_route_set_sha256' => data_get($result, 'report.fingerprints.registration_decision_route_set_sha256'),
+        ])
         ->and($result['report']['preserved_v6_outputs'])->toMatchArray([
             'schema_version' => 'bpls.historical-financial-human-identity-frontier.v6',
             'human_identity_frontier_sha256' => data_get($result, 'report.fingerprints.human_identity_frontier_sha256'),
@@ -798,6 +1061,7 @@ test('priority review classes separate compound contact and non contact identity
             'decision_cohort_set_sha256' => data_get($result, 'report.fingerprints.decision_cohort_set_sha256'),
             'municipal_identity_evidence_class_set_sha256' => data_get($result, 'report.fingerprints.municipal_identity_evidence_class_set_sha256'),
         ])
+        ->and($repeat['report']['preserved_v7_outputs'])->toBe($result['report']['preserved_v7_outputs'])
         ->and($repeat['report']['preserved_v5_outputs'])->toBe($result['report']['preserved_v5_outputs'])
         ->and($repeat['report']['preserved_v6_outputs'])->toBe($result['report']['preserved_v6_outputs'])
         ->and($repeat['report']['preserved_v4_outputs'])->toBe($result['report']['preserved_v4_outputs'])
