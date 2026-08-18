@@ -73,6 +73,18 @@ export default defineConfigWithVueTs(
         },
     },
     {
+        files: ['tests/Frontend/CurrentUrlPathTest.ts'],
+        languageOptions: {
+            parserOptions: {
+                projectService: {
+                    allowDefaultProject: [
+                        'tests/Frontend/CurrentUrlPathTest.ts',
+                    ],
+                },
+            },
+        },
+    },
+    {
         ignores: [
             'vendor',
             'node_modules',
