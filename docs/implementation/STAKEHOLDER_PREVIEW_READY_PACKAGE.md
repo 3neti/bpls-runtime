@@ -1,6 +1,6 @@
 # Stakeholder Preview Ready Package
 
-Status: **APPROVAL-STAGE UAT UPDATE IN VERIFICATION — prior evidence preserved**
+Status: **APPROVAL-STAGE UAT UPDATE DEPLOYED AND LIVE-VERIFIED — prior evidence preserved**
 
 As of: 2026-08-19
 
@@ -8,13 +8,16 @@ This package hands the existing BPLS application to the Board for internal opera
 
 ## Open The Preview
 
-- Verified environment: local Laravel/Herd development environment
-- Verified URL: `http://bpls-runtime.test`
-- Persistent public or staging deployment: none established
-- Deployment gap: the verified target exists only on the prepared local workstation. Creating a persistent public or municipal environment remains a separate infrastructure objective.
-- Data classification: synthetic local demo data only
+- Verified environment: sole non-production Laravel Cloud `uat` environment
+- Verified URL: `https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud`
+- Canonical application commit: `045d33799269a7166d92f41181e060393088e6a1`
+- Cloud deployment: `depl-a289dc3d-85c6-4840-a7fa-e6df5da293af` — succeeded 2026-08-19
+- Deterministic preparation: `stakeholder-preview-approval-cloud-20260819-001` — domain passed; no external calls or irreversible actions
+- Data classification: synthetic UAT data only
 
 Run the deterministic preparation command with `STAKEHOLDER_PREVIEW_PASSWORD` supplied in the operator's runtime environment. The password must be at least 16 characters and must be delivered through an approved secret channel; it is not stored in Git, the manifest, screenshots, or this package.
+
+Live browser verification covered Treasury/BPLO capability separation, the exact approved assessment snapshot, paid payment schedule, OTC collection and issued receipt, completed clearances, citizen timeline, and the post-clearance release refusal boundary. Desktop and 390px mobile views had zero application console errors and no horizontal overflow.
 
 ## Preview Accounts
 
@@ -104,7 +107,7 @@ The real shell and real application pages are the walkthrough. Scenario tooling 
 
 ## Exact Exclusions
 
-- No public or persistent staging deployment was created.
+- No production deployment or production environment mutation occurred; only the existing non-production `uat` environment advanced.
 - No production data or production PII was used.
 - No production system was changed.
 - The 407-member production migration campaign remains unexecuted and Board-controlled.
@@ -115,6 +118,6 @@ The real shell and real application pages are the walkthrough. Scenario tooling 
 
 ## Verdict
 
-The verified local environment is ready for Board internal operation and structured stakeholder feedback. External municipal presentation remains a Board decision after internal operation and any required deployment planning.
+The existing non-production Laravel Cloud UAT is ready for Board internal operation and structured stakeholder feedback. External municipal presentation remains a Board decision.
 
 **STAKEHOLDER PREVIEW READY**

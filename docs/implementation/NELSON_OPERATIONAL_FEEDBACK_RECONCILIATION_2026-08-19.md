@@ -65,7 +65,7 @@ The current catalog remains correctly split between working evidence projections
 | BSP Non-Bank Entities | Permit issuance/release and number/date; BSP registration identity; regulated non-bank classification; adverse permit-status meaning; production reconciliation |
 | ANNEX C — DNFBP | Permit issuance/release and number/date; accepted DNFBP classification; reporting-semester scope; production reconciliation and municipal acceptance |
 
-## UAT Impact Assessment — New Evidence Cycle Authorized
+## UAT Impact Assessment — New Evidence Cycle Completed
 
 The prior frozen/cloud UAT evidence remains unchanged. The accepted approval decision authorizes a new deterministic evidence cycle and non-production UAT update after domain verification.
 
@@ -74,7 +74,7 @@ The prior frozen/cloud UAT evidence remains unchanged. The accepted approval dec
 - Supporting documents are visible, but the deterministic UAT contains one generic **Business registration evidence** artifact rather than separately identified Barangay Business Clearance, DTI, SEC, and CDA evidence. The four high-priority types are not first-class or immediately summarized.
 - The report catalog is discoverable and grouped, but Nelson's answer supports a later presentation review for completeness and day-to-day access.
 
-The approval-stage packet may proceed through domain, presentation, deterministic UAT, and a new browser/audit evidence run. Documentary prominence and report discoverability remain separate packets. Do not amend prior frozen evidence.
+The approval-stage packet completed domain, presentation, deterministic UAT, deployment, and live browser verification at commit `045d33799269a7166d92f41181e060393088e6a1`. Cloud deployment `depl-a289dc3d-85c6-4840-a7fa-e6df5da293af` and synthetic run `stakeholder-preview-approval-cloud-20260819-001` passed. Desktop and 390px views verified the distinct actors, exact-snapshot approval, payment/receipt/clearance continuation, and unchanged release refusal boundary without application console errors or horizontal overflow. Documentary prominence and report discoverability remain separate packets. Prior frozen evidence was not amended.
 
 ## Protected Baselines
 

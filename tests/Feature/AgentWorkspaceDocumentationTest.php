@@ -112,11 +112,11 @@ test('Nelson operational feedback remains additive and authority safe', function
         ->toContain('EXPOSES MISSING DOMAIN BEHAVIOR')
         ->toContain('Mayor = permit signatory')
         ->toContain('BPLO personnel = operational release actor')
-        ->toContain('New Evidence Cycle Authorized')
+        ->toContain('New Evidence Cycle Completed')
         ->and($approvalPacket)
         ->toContain('RESOLVED FOR IMPLEMENTATION')
         ->toContain('What exactly is approved?')
         ->toContain('How often is approval required?')
         ->and($parity)
-        ->toContain('| CAP-018 | Application approval/evaluation queue | IMPLEMENTED AND TESTED |');
+        ->toContain('| CAP-018 | Application approval/evaluation queue | BROWSER VERIFIED |');
 });

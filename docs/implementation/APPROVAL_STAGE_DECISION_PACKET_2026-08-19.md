@@ -36,6 +36,14 @@ The accepted consequence is permission to proceed to payment scheduling. Approva
 - The narrow permission `assessments.approve` separates server authorization from `permit_applications.assess`. Its presence in the synthetic Treasury UAT bundle is preview projection only; no production user or final municipal role assignment is made autonomously.
 - The gate applies to every operational assessment that uses the canonical payment-schedule action. Any application-type exception requires later municipal evidence; no exception is inferred.
 
+## Implementation And UAT Evidence
+
+- Canonical implementation: `045d33799269a7166d92f41181e060393088e6a1` on `main`.
+- Verification: 574 tests / 7,962 assertions passed; frontend lint, format, types, production build, focused PHPStan, Composer audit, and production NPM audit passed. Repository-wide PHPStan still reports the established 617-error baseline outside the focused approval core.
+- Non-production deployment: Laravel Cloud `uat`, deployment `depl-a289dc3d-85c6-4840-a7fa-e6df5da293af`, succeeded 2026-08-19. Production was not touched.
+- Deterministic evidence: `stakeholder-preview-approval-cloud-20260819-001` passed with synthetic data, no external calls, and no irreversible actions.
+- Live browser evidence: BPLO could see the awaiting state but not approval/return actions; Treasury could see the narrow actions; the accepted run displayed distinct preparer and Treasurer identities, snapshot hash/amount, paid schedule, OTC receipt, clearances, citizen timeline, and blocked release on desktop and 390px mobile with zero application console errors or horizontal overflow.
+
 ## Remaining Narrow Questions — Non-blocking For This Implementation
 
 - Whether correction reasons become mandatory, and whether a formal appeal/escalation path exists.
