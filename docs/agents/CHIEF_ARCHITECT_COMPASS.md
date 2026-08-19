@@ -1,8 +1,8 @@
 # Chief Architect Compass
 
-Status: **STAKEHOLDER PREVIEW READY — Board internal operation**
+Status: **STAKEHOLDER PREVIEW / UAT FROZEN — Nelson operational evidence under municipal reconciliation**
 
-Stakeholder preview implementation baseline: `f7aab2e`
+Stakeholder preview / UAT canonical baseline: `956a6f38750593874d4ee21fdd29ab2d16a5ed24`
 
 Latest migration evidence baseline: `eefc5d1`
 
@@ -10,7 +10,7 @@ As of: 2026-08-19
 
 ## Direction
 
-Operate the verified local stakeholder preview internally, preserve all frozen evidence, and route feedback without crossing the independent migration or municipal-authority boundaries. External municipal presentation and any persistent deployment remain Board decisions. Do not start the Nelson-driven UI Cycle 2 until Nelson feedback is received, classified, checked against canonical evidence, and routed to the correct engineering, municipal-confirmation, or Board path.
+Preserve the verified Stakeholder Preview / UAT and all frozen evidence while routing Nelson's 2026-08-19 operational feedback without crossing the independent migration or municipal-authority boundaries. Do not start a Nelson-driven semantic or UI cycle until the approval-stage, release/signatory, documentary-applicability, and report-authority questions are accepted or a separately bounded presentation-only packet is authorized by the evidence rules.
 
 ## Stakeholder Preview Status
 
@@ -19,11 +19,11 @@ Operate the verified local stakeholder preview internally, preserve all frozen e
 | Cycles 1 and 2 | Proven and frozen |
 | Cycle 3 | Reports, Administration & Visible Boundaries proven; 53 browser checks and 46 screenshots |
 | Cycle 4 | Deterministic cross-role preview proven; 55 browser checks and 46 screenshots |
-| Environment | Verified local target `http://bpls-runtime.test`; no persistent public/staging deployment exists |
+| Environment | Sole non-production Laravel Cloud `uat` environment plus verified local target; UAT behavior is frozen during Nelson reconciliation |
 | Accounts | Synthetic Citizen, BPLO, Treasury, and Municipal Management accounts; runtime-delivered credential only |
 | Authority | Numbering, fiscal policy, official reports, issuance, release, and legal effect remain explicit non-executable boundaries |
 | Migration | Synthetic preview is separate; 407-member production campaign remains unexecuted and Board-controlled |
-| Verdict | **STAKEHOLDER PREVIEW READY** for Board internal operation; external presentation not authorized here |
+| Verdict | **STAKEHOLDER UAT READY AND FROZEN**; new Nelson evidence is additive and does not patch the deployed flow |
 
 Operating package: `docs/implementation/STAKEHOLDER_PREVIEW_READY_PACKAGE.md`.
 
@@ -31,8 +31,8 @@ Operating package: `docs/implementation/STAKEHOLDER_PREVIEW_READY_PACKAGE.md`.
 
 | Area | Current position | Next bounded move | Stop boundary |
 | --- | --- | --- | --- |
-| Operational capability | Citizen-originated new permit journey is browser verified through authority review; multiple operational TOR reports are implemented; no remaining high-value packet is safely autonomous under the current evidence | Park implementation while continuing evidence work | Invented municipal procedure or a substantial integration decision |
-| UI/UX parity | Cycle 1 and the Nelson-facing derivative are the frozen elicitation baseline | Receive and classify Nelson feedback; organize legacy/Laravel visual evidence | Any UI Cycle 2 redesign, speculative terminology, navigation, workflow, clearance, status, or report change |
+| Operational capability | Citizen-originated new permit journey is browser verified through authority review; Nelson now makes a pre-payment approval stage explicit, but current Laravel has no accepted operational approval fact | Obtain the municipal approval-stage decision; keep application behavior parked | Invented approval, rejection, payment-gate, issuance, or release procedure |
+| UI/UX parity | Cycle 1, the Nelson-facing derivative, and Stakeholder UAT remain frozen elicitation baselines; feedback is classified in `NELSON_FEEDBACK_INTAKE.md` | Prepare future presentation-only packets for documentary prominence and report discoverability without patching frozen UAT | Any speculative approval wording, workflow/status change, documentary rule, or report-authority change |
 | Historical migration | V8 preserves every v4-v7 fingerprint and proves a disjoint 1,223-application campaign census. The exact 407-member first-campaign candidate is checksum-bound; 736 identity, 72 registry-policy, and eight residual cases remain outside it, while 15 structural exceptions remain outside V1 | Bind the canonical source-to-target and restoration audits to the exact 407 membership, then submit a controlled production-campaign authorization decision without executing it; keep both municipal packets unchanged | Mapping acceptance for another class, new rehearsal authorization, production execution, or cutover without explicit authority |
 | Financial reconciliation | Historical arithmetic and evidence classes are bounded; future policy remains non-executable without accepted authority | Preserve exact facts and advance evidence packets independently | Taxpayer-liability contradiction or fiscal/Treasury policy assumption |
 | Authority / policy dependencies | Numbering, signatory, issuance, release, legal effect, and several official-report meanings remain unresolved | Keep refusal boundaries explicit and route evidence to the authorized reviewer | Any present authority claim without accepted evidence |
@@ -40,7 +40,10 @@ Operating package: `docs/implementation/STAKEHOLDER_PREVIEW_READY_PACKAGE.md`.
 
 ## Current Control Decisions
 
-- Nelson feedback has not yet been received in the program intake.
+- Nelson operational feedback received 2026-08-19 is preserved additively as NFI-2026-001 through NFI-2026-007 and reconciled in `docs/implementation/NELSON_OPERATIONAL_FEEDBACK_RECONCILIATION_2026-08-19.md`.
+- The newly explicit approval-before-payment stage is a genuine semantic/domain boundary. `docs/implementation/APPROVAL_STAGE_DECISION_PACKET_2026-08-19.md` must be accepted before any approval status/action/queue/route or payment gate is implemented.
+- Mayor signatory and BPLO operational release actor are separate Nelson evidence facts; neither activates signatory, issuance, release, validity, or legal effect.
+- Barangay Business Clearance, DTI, SEC, and CDA are high-priority evidence for staff visibility, not an exhaustive universal checklist or sufficiency rule. “ALL REPORTS” is priority evidence, not authority to expose, export, print, generate, or certify official output.
 - Cycle 1 application screens and stakeholder artifacts remain unchanged.
 - Feedback is evidence, not automatic legal, fiscal, Treasury, signatory, issuance, release, or legal-effect authority.
 - The acceleration principle remains: quarantine ambiguity at the smallest semantic boundary and advance deterministic facts around it.
@@ -131,5 +134,5 @@ For the 75 compound registration-collision applications, a municipal business-re
 1. Engineering/Product: remain parked until accepted evidence creates an obvious bounded packet.
 2. First production campaign: bind the canonical source-to-target and restoration audits to exact membership SHA-256 `76e9c985a2c5a3fb961924d4ed6e829956b2503c56dbe959db367cebeafdf0dd`, then obtain an explicit decision naming campaign authority, execution window, rollback/abort thresholds, and mandatory post-run audit. Do not execute before that decision.
 3. Migration/Reconciliation: preserve and submit `docs/implementation/MUNICIPAL_IDENTITY_AND_REGISTRY_REVIEW_PACKET.md` for the 450-case contact-point rule and separate 120-case Group policy. Submit `docs/implementation/MUNICIPAL_PRIORITY_IDENTITY_AND_REGISTRY_COLLISION_REVIEW_PACKET.md` for the second queue: self-contained non-contact and registration groups first, coupled groups with full global membership next, and soft-deleted/cross-authority exceptions on their separate routes. Keep all mappings unaccepted and do not revisit the frozen 450/120 questions without new evidence.
-4. Nelson/UI: intake and evidence organization only; UI Cycle 2 remains parked.
+4. Nelson/UI: approval-stage municipal decision first; documentary visibility and report discoverability may advance only as separately bounded presentation packets. Frozen/cloud UAT remains unchanged until semantic reconciliation is accepted.
 5. Integration: verify every specialist diff and return before any new acceptance, authority, identity-policy, liability, production, cutover, or substantial integration boundary.

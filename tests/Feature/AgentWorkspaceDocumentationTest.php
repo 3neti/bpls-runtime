@@ -91,3 +91,26 @@ test('every canonical role reference resolves to a repository file', function ()
         expect(base_path($reference))->toBeFile();
     }
 });
+
+test('Nelson operational feedback remains additive and authority safe', function () {
+    $intake = file_get_contents(base_path('docs/agents/NELSON_FEEDBACK_INTAKE.md'));
+    $reconciliation = file_get_contents(base_path('docs/implementation/NELSON_OPERATIONAL_FEEDBACK_RECONCILIATION_2026-08-19.md'));
+    $approvalPacket = file_get_contents(base_path('docs/implementation/APPROVAL_STAGE_DECISION_PACKET_2026-08-19.md'));
+    $parity = file_get_contents(base_path('docs/implementation/PARITY_LEDGER.md'));
+
+    expect($intake)
+        ->toContain('NFI-2026-001')
+        ->toContain('NFI-2026-007')
+        ->toContain('as blanket authority to change semantics')
+        ->and($reconciliation)
+        ->toContain('EXPOSES MISSING DOMAIN BEHAVIOR')
+        ->toContain('Mayor = permit signatory')
+        ->toContain('BPLO personnel = operational release actor')
+        ->toContain('The frozen/cloud UAT is not changed')
+        ->and($approvalPacket)
+        ->toContain('MUNICIPAL DECISION REQUIRED — DO NOT IMPLEMENT')
+        ->toContain('What exactly is approved?')
+        ->toContain('How often is approval required?')
+        ->and($parity)
+        ->toContain('| CAP-018 | Application approval/evaluation queue | BLOCKED |');
+});
