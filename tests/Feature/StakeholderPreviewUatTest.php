@@ -30,6 +30,7 @@ test('safe preview configuration registers an intentional launcher without crede
     $response = $this->get('/');
 
     $response->assertSuccessful()
+        ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive')
         ->assertInertia(fn (Assert $page) => $page
             ->component('stakeholder-preview/Launcher')
             ->has('personas', 4)
@@ -198,6 +199,7 @@ test('a false preview flag refuses the launcher in a non production environment'
     expect(app(StakeholderPreviewSafety::class)->isEnabled())->toBeFalse();
 
     $this->post('/stakeholder-preview/enter/citizen')->assertNotFound();
+    $this->get('/')->assertHeaderMissing('X-Robots-Tag');
 });
 
 /** @return array<string, User> */
