@@ -1,6 +1,6 @@
 # Nelson Operational Feedback Reconciliation
 
-Status: **EVIDENCE PRESERVED — SEMANTIC DECISIONS PENDING**
+Status: **EVIDENCE PRESERVED — APPROVAL STAGE RESOLVED FOR IMPLEMENTATION; OTHER AUTHORITY QUESTIONS PENDING**
 
 Date received: 2026-08-19
 
@@ -24,7 +24,9 @@ The category labels are intentionally cumulative.
 
 The enum contains `approval`, and migration projection preserves historical `approvedAt`/`approvedBy`, but current operational actions move from a computed assessment directly to preparation of a pending payment schedule. That is historical/parity shape, not an implemented or accepted approval act.
 
-No approval status, action, queue, route, permission, rejection, return-for-correction, or renewed-approval behavior may be created until the dedicated decision packet is answered and accepted.
+Nelson's follow-up answers now resolve the bounded operational act: the Assessment Officer prepares/computes the assessment, the Municipal Treasurer approves the exact assessment/amount or returns it for correction, and approval permits payment to proceed. His answers are preserved verbatim in NFI-2026-008 and the decision packet.
+
+The accepted engineering representation is one assessment workflow with two independently auditable facts. A Treasurer decision is immutable and fingerprint-bound to one persisted assessment snapshot. Payment scheduling fails closed without matching approval. Return applies to the assessment, not the application; an existing recomputation creates a new sequence that requires a fresh decision. This recurrence rule is an audit-safety inference and does not define a broader reassessment, rejection, appeal, or documentary-deficiency procedure.
 
 ## Permit Signing and Release Are Separate Facts
 
@@ -63,23 +65,23 @@ The current catalog remains correctly split between working evidence projections
 | BSP Non-Bank Entities | Permit issuance/release and number/date; BSP registration identity; regulated non-bank classification; adverse permit-status meaning; production reconciliation |
 | ANNEX C — DNFBP | Permit issuance/release and number/date; accepted DNFBP classification; reporting-semester scope; production reconciliation and municipal acceptance |
 
-## UAT Impact Assessment — No Immediate Change
+## UAT Impact Assessment — New Evidence Cycle Authorized
 
-The frozen/cloud UAT is not changed by this reconciliation.
+The prior frozen/cloud UAT evidence remains unchanged. The accepted approval decision authorizes a new deterministic evidence cycle and non-production UAT update after domain verification.
 
-- The walkthrough omits an explicit approval act between assessment and payment. Under Nelson's evidence this is a material omission, but the missing act is not characterized well enough to patch safely.
+- The updated walkthrough must show Assessment Officer preparation, Municipal Treasurer approval of the exact amount, then payment availability. Synthetic preview personas remain simulated permission perspectives rather than final municipal role mapping.
 - `Ready for Authority Review` is still a truthful refusal boundary for post-payment, post-clearance release/issuance authority. It could nevertheless be misunderstood as the earlier application/assessment approval Nelson described. Any future UAT wording must distinguish **pre-payment approval** from **post-clearance issuance/release authority review**.
 - Supporting documents are visible, but the deterministic UAT contains one generic **Business registration evidence** artifact rather than separately identified Barangay Business Clearance, DTI, SEC, and CDA evidence. The four high-priority types are not first-class or immediately summarized.
 - The report catalog is discoverable and grouped, but Nelson's answer supports a later presentation review for completeness and day-to-day access.
 
-Recommended next step after municipal acceptance: one change packet covering approval-stage presentation/domain work, then separate presentation-only packets for documentary prominence and report discoverability. Do not amend frozen evidence; create new evidence cycles.
+The approval-stage packet may proceed through domain, presentation, deterministic UAT, and a new browser/audit evidence run. Documentary prominence and report discoverability remain separate packets. Do not amend prior frozen evidence.
 
 ## Protected Baselines
 
 No change from this reconciliation may alter or reinterpret:
 
 - Nelson Cycle 1 or Stakeholder Preview frozen evidence;
-- current cloud UAT behavior;
+- prior frozen cloud UAT evidence (the environment may advance only through a new verified evidence cycle);
 - migration evidence or mappings;
 - the 407-member production campaign;
 - fiscal, numbering, receipt, signatory, issuance, release, validity, legal-effect, or official-report authority.

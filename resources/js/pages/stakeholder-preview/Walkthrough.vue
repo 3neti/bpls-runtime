@@ -19,11 +19,13 @@ const steps: Record<StakeholderPreviewPersona['key'], string[]> = {
     ],
     bplo: [
         'Open All Applications and the assessment work queue.',
-        'Inspect application evidence, assessment, and clearances.',
+        'Inspect the Assessment Officer-prepared amount, application evidence, and clearances.',
         'Confirm issuance and release remain visibly authority-bound.',
     ],
     treasury: [
-        'Open Payment Schedules and inspect the prepared paid schedule.',
+        'Open Assessment Work and inspect the exact amount approved by the Municipal Treasurer.',
+        'Confirm the prepared and approved actors remain separate audit facts.',
+        'Open Payment Schedules and inspect the paid schedule made available after approval.',
         'Review its collection and receipt evidence.',
         'Open Daily Collections and Revenue Sources.',
     ],

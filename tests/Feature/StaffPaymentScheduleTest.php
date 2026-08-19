@@ -1,5 +1,7 @@
 <?php
 
+use App\Actions\RecordAssessmentDecision;
+use App\Enums\AssessmentDecisionAction;
 use App\Enums\AssessmentStatus;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
@@ -12,6 +14,7 @@ use App\Models\Business;
 use App\Models\BusinessOwner;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
+use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('staff users with prepare permission can prepare a payment schedule from an assessment', function () {
@@ -48,6 +51,9 @@ test('staff users with prepare permission can prepare a payment schedule from an
         'amount_cents' => 15_000,
     ]);
 
+    $approver = User::factory()->create();
+    app(RecordAssessmentDecision::class)->handle($assessment, $approver, AssessmentDecisionAction::Approved);
+
     $response = $this->actingAs($user)
         ->post(route('staff.assessments.payment-schedule.store', $assessment));
 
@@ -63,12 +69,15 @@ test('staff users with prepare permission can prepare a payment schedule from an
         ->and($schedule->total_amount_cents)->toBe(45_000)
         ->and($schedule->paid_amount_cents)->toBe(0)
         ->and($schedule->source_snapshot['policy']['due_on'])->toBeNull()
+        ->and($schedule->source_snapshot['treasurer_approval']['approved_by_id'])->toBe($approver->id)
         ->and($schedule->lines()->count())->toBe(2)
         ->and($schedule->lines()->where('code', 'BUSINESS-TAX')->sole()->amount_cents)->toBe(30_000)
         ->and($schedule->lines()->where('code', 'MAYORS-PERMIT')->sole()->amount_cents)->toBe(15_000)
         ->and($application->status)->toBe(PermitApplicationStatus::PendingPayment)
         ->and($application->metadata['status_history'][0]['from'])->toBe(PermitApplicationStatus::Assessment->value)
-        ->and($application->metadata['status_history'][0]['to'])->toBe(PermitApplicationStatus::PendingPayment->value);
+        ->and($application->metadata['status_history'][0]['to'])->toBe(PermitApplicationStatus::Approval->value)
+        ->and($application->metadata['status_history'][1]['from'])->toBe(PermitApplicationStatus::Approval->value)
+        ->and($application->metadata['status_history'][1]['to'])->toBe(PermitApplicationStatus::PendingPayment->value);
 });
 
 test('preparing a payment schedule is idempotent for an assessment', function () {
@@ -77,7 +86,10 @@ test('preparing a payment schedule is idempotent for an assessment', function ()
         UserPermission::PreparePaymentSchedules,
     ]);
 
-    $assessment = Assessment::factory()->create([
+    $application = PermitApplication::factory()->create([
+        'status' => PermitApplicationStatus::Assessment,
+    ]);
+    $assessment = Assessment::factory()->for($application)->create([
         'status' => AssessmentStatus::Computed,
         'total_amount_cents' => 10_000,
     ]);
@@ -85,6 +97,12 @@ test('preparing a payment schedule is idempotent for an assessment', function ()
     AssessmentLine::factory()->for($assessment)->create([
         'amount_cents' => 10_000,
     ]);
+
+    app(RecordAssessmentDecision::class)->handle(
+        $assessment,
+        User::factory()->create(),
+        AssessmentDecisionAction::Approved,
+    );
 
     $this->actingAs($user)
         ->post(route('staff.assessments.payment-schedule.store', $assessment))
@@ -96,7 +114,7 @@ test('preparing a payment schedule is idempotent for an assessment', function ()
 
     expect(PaymentSchedule::query()->count())->toBe(1)
         ->and(PaymentSchedule::query()->sole()->lines()->count())->toBe(1)
-        ->and($assessment->permitApplication->refresh()->metadata['status_history'])->toHaveCount(1);
+        ->and($assessment->permitApplication->refresh()->metadata['status_history'])->toHaveCount(2);
 });
 
 test('staff users without prepare permission cannot prepare a payment schedule', function () {

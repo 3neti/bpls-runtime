@@ -1,19 +1,4 @@
 <script setup lang="ts">
-import InputError from '@/components/InputError.vue';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import AppLayout from '@/layouts/AppLayout.vue';
-import {
-    create,
-    edit,
-    exportPdf,
-    exportVideo,
-    index,
-    store,
-    update,
-} from '@/actions/App/Http/Controllers/Staff/StoryboardController';
-import type { BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
     ArrowDown,
@@ -28,6 +13,21 @@ import {
     Trash2,
 } from '@lucide/vue';
 import { computed } from 'vue';
+import {
+    create,
+    edit,
+    exportPdf,
+    exportVideo,
+    index,
+    store,
+    update,
+} from '@/actions/App/Http/Controllers/Staff/StoryboardController';
+import InputError from '@/components/InputError.vue';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import AppLayout from '@/layouts/AppLayout.vue';
+import type { BreadcrumbItem } from '@/types';
 
 type StoryboardFrame = {
     id: number | null;
@@ -73,19 +73,18 @@ const isEditing = computed(() => props.storyboard !== null);
 const form = useForm({
     title: props.storyboard?.title ?? '',
     summary: props.storyboard?.summary ?? '',
-    frames:
-        props.storyboard?.frames.map((frame) => ({
-            id: frame.id,
-            position: frame.position,
-            title: frame.title,
-            image_path: frame.image_path,
-            existing_image_path: frame.image_path,
-            image_url: frame.image_url,
-            image: null,
-            description: frame.description ?? '',
-            dialogue: frame.dialogue ?? '',
-            duration_seconds: frame.duration_seconds,
-        })) ?? [emptyFrame()],
+    frames: props.storyboard?.frames.map((frame) => ({
+        id: frame.id,
+        position: frame.position,
+        title: frame.title,
+        image_path: frame.image_path,
+        existing_image_path: frame.image_path,
+        image_url: frame.image_url,
+        image: null,
+        description: frame.description ?? '',
+        dialogue: frame.dialogue ?? '',
+        duration_seconds: frame.duration_seconds,
+    })) ?? [emptyFrame()],
 });
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -95,7 +94,10 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
     {
         title: isEditing.value ? 'Edit Storyboard' : 'New Storyboard',
-        href: isEditing.value && props.storyboard ? edit(props.storyboard.id) : create(),
+        href:
+            isEditing.value && props.storyboard
+                ? edit(props.storyboard.id)
+                : create(),
     },
 ];
 
@@ -266,7 +268,7 @@ function requestVideoExport(): void {
                                 id="summary"
                                 v-model="form.summary"
                                 rows="3"
-                                class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-20 w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                                class="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                             />
                             <InputError :message="form.errors.summary" />
                         </div>
@@ -317,7 +319,8 @@ function requestVideoExport(): void {
                                         size="sm"
                                         variant="outline"
                                         :disabled="
-                                            frameIndex === form.frames.length - 1
+                                            frameIndex ===
+                                            form.frames.length - 1
                                         "
                                         @click="moveFrame(frameIndex, 1)"
                                     >
@@ -431,7 +434,7 @@ function requestVideoExport(): void {
                                         :id="`frame-description-${frameIndex}`"
                                         v-model="frame.description"
                                         rows="4"
-                                        class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-28 w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                                        class="flex min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                                     />
                                     <InputError
                                         :message="
@@ -442,14 +445,16 @@ function requestVideoExport(): void {
                                     />
                                 </div>
                                 <div class="grid gap-2">
-                                    <Label :for="`frame-dialogue-${frameIndex}`">
+                                    <Label
+                                        :for="`frame-dialogue-${frameIndex}`"
+                                    >
                                         Dialogue / voiceover
                                     </Label>
                                     <textarea
                                         :id="`frame-dialogue-${frameIndex}`"
                                         v-model="frame.dialogue"
                                         rows="4"
-                                        class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-28 w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                                        class="flex min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                                     />
                                     <InputError
                                         :message="

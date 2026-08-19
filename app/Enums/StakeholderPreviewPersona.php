@@ -49,7 +49,7 @@ enum StakeholderPreviewPersona: string
         return match ($this) {
             self::Citizen => 'Apply, submit, track processing, and inspect payment and clearance progress.',
             self::Bplo => 'Review applications, assessments, clearances, and authority readiness.',
-            self::Treasury => 'Inspect payment schedules, collections, receipts, and Treasury reports.',
+            self::Treasury => 'Approve assessment amounts, then inspect payment schedules, collections, receipts, and Treasury reports.',
             self::Management => 'Inspect reports, users, roles, municipality settings, fees, and visible policy boundaries.',
         };
     }
@@ -82,6 +82,7 @@ enum StakeholderPreviewPersona: string
             self::Treasury => [
                 UserPermission::AccessStaff,
                 UserPermission::ViewPermitApplications,
+                UserPermission::ApproveAssessments,
                 UserPermission::ViewPaymentSchedules,
                 UserPermission::ViewCollections,
                 UserPermission::RecordCollections,

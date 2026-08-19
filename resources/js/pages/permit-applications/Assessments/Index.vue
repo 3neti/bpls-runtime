@@ -17,6 +17,10 @@ type LatestAssessment = {
     status: string;
     total_amount_cents: number;
     assessed_at: string | null;
+    decision: {
+        action: 'approved' | 'returned_for_correction';
+        decided_at: string;
+    } | null;
 };
 
 type PermitApplicationRow = {
@@ -219,6 +223,21 @@ function statusLabel(value: string): string {
                                             .sequence
                                     }}
                                 </dd>
+                                <dd
+                                    v-if="permitApplication.latest_assessment"
+                                    class="text-xs font-medium capitalize"
+                                >
+                                    {{
+                                        permitApplication.latest_assessment
+                                            .decision
+                                            ? statusLabel(
+                                                  permitApplication
+                                                      .latest_assessment
+                                                      .decision.action,
+                                              )
+                                            : 'Awaiting Treasurer approval'
+                                    }}
+                                </dd>
                                 <dd v-else class="text-muted-foreground">
                                     Not assessed
                                 </dd>
@@ -366,6 +385,20 @@ function statusLabel(value: string): string {
                                             {{
                                                 permitApplication
                                                     .latest_assessment.sequence
+                                            }}
+                                        </div>
+                                        <div
+                                            class="text-xs font-medium capitalize"
+                                        >
+                                            {{
+                                                permitApplication
+                                                    .latest_assessment.decision
+                                                    ? statusLabel(
+                                                          permitApplication
+                                                              .latest_assessment
+                                                              .decision.action,
+                                                      )
+                                                    : 'Awaiting Treasurer approval'
                                             }}
                                         </div>
                                     </div>

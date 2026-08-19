@@ -10,6 +10,8 @@ use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\CreatePermitApplication;
 use App\Actions\DescribePaymentPolicyBoundary;
+use App\Actions\RecordAssessmentDecision;
+use App\Enums\AssessmentDecisionAction;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
@@ -33,6 +35,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
     public function __construct(
         private readonly CreatePermitApplication $createPermitApplication,
         private readonly CreateAssessmentForPermitApplication $createAssessment,
+        private readonly RecordAssessmentDecision $recordAssessmentDecision,
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
         private readonly BuildAssessmentSummaryReport $buildAssessmentSummaryReport,
         private readonly BuildBreakdownOfCollectiblesReport $buildBreakdownOfCollectiblesReport,
@@ -84,6 +87,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
 
         $assessment = $this->createAssessment->handle($permitApplication, $operator);
         $rangeAssessmentLine = $this->rangeAssessmentLine($assessment);
+        $this->recordAssessmentDecision->handle($assessment, $operator, AssessmentDecisionAction::Approved);
         $paymentSchedule = $this->createPaymentSchedule->handle($assessment, $operator);
         $paymentPolicyBoundary = $this->describePaymentPolicyBoundary->handle($paymentSchedule);
         $permitApplication = PermitApplication::query()

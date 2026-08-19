@@ -23,6 +23,7 @@ class BuildPermitApplicationTimeline
             'submittedBy',
             'documents.uploadedBy',
             'assessments.assessedBy',
+            'assessments.decision.decidedBy',
             'paymentSchedules.preparedBy',
             'treasuryCollections.receivedBy',
             'treasuryCollections.receipt.issuedBy',
@@ -89,6 +90,28 @@ class BuildPermitApplicationTimeline
                 sourceType: 'assessment',
                 sourceId: $assessment->id,
             ));
+
+            if ($assessment->decision !== null) {
+                $decision = $assessment->decision;
+                $decidedBy = $decision->decidedBy;
+                $events->push($this->event(
+                    key: "assessment-decision:{$decision->id}",
+                    category: 'assessment',
+                    title: $decision->action->value === 'approved'
+                        ? 'Assessment amount approved by Municipal Treasurer'
+                        : 'Assessment returned for correction',
+                    description: $decision->reason ?? sprintf(
+                        'Decision recorded against assessment #%d snapshot %s.',
+                        $assessment->sequence,
+                        str($decision->assessment_snapshot_hash)->take(16),
+                    ),
+                    status: $decision->action->value,
+                    actor: $this->actor($decidedBy instanceof User ? $decidedBy : null),
+                    occurredAt: $decision->decided_at,
+                    sourceType: 'assessment_decision',
+                    sourceId: $decision->id,
+                ));
+            }
         }
 
         foreach ($permitApplication->documents as $document) {
@@ -282,6 +305,7 @@ class BuildPermitApplicationTimeline
             'municipal_receipt' => 12,
             'permit_application_document' => 15,
             'assessment' => 20,
+            'assessment_decision' => 25,
             'payment_schedule' => 30,
             'permit_application_status_history' => 40,
             'treasury_collection' => 50,

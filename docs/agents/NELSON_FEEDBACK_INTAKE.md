@@ -1,6 +1,6 @@
 # Nelson Feedback Intake
 
-Status: **Operational feedback received — semantic reconciliation in progress**
+Status: **Operational feedback active — approval-stage follow-up resolved for implementation**
 
 Baseline: **Nelson Visual Walkthrough / UI/UX Cycle 1 frozen; 2026-08-19 operational feedback additive**
 
@@ -202,6 +202,29 @@ Decision or implementation reference:
 - **Related observations or decision packets:** NFI-2026-001; `docs/implementation/APPROVAL_STAGE_DECISION_PACKET_2026-08-19.md`; CAL-2026-001 acceptance path.
 - **Disposition state:** MUNICIPAL CONFIRMATION REQUIRED
 - **Decision or implementation reference:** None; current UAT behavior remains unchanged.
+
+### NFI-2026-008 — Municipal Treasurer approval of assessment/amount before payment
+
+- **Date received:** 2026-08-19
+- **Source and review context:** Nelson follow-up answers to the Approval Stage Municipal Decision Packet.
+- **Frozen Cycle 1 scene or screen:** Assessment workspace and cross-role pre-payment journey; prior frozen evidence remains unchanged and a new evidence cycle is required.
+- **Primary classification:** Treasury procedure
+- **What Nelson said (verbatim):**
+  1. Who approves before payment? `Municipal Treasurer`
+  2. What is approved? `Assessment/amount`
+  3. Assessment and approval one step or separate? `Yes one step, but it needs to be approved by the Municipal Treasurer. Assessment Officer is different from the Treasurer.`
+  4. If something is wrong/incomplete? `Returned for correction`
+  5. Does approval clear the applicant to proceed to payment? `Yes`
+- **Current Laravel behavior at intake:** A computed assessment could immediately produce a payment schedule; no approval/return fact or narrow permission existed.
+- **Known legacy behavior:** Legacy preserves `Approval`, `approvedAt`, and `approvedBy`, but their equivalence to this accepted current act is not assumed and no historical record is activated.
+- **Applicable TOR / Revenue Code / production evidence:** TOR/Discovery sequence Assessment -> Evaluation -> Approval -> Payment; Nelson now resolves current operational actor, approved object, return outcome, and payment consequence.
+- **Proposed disposition:** Represent one assessment workflow with distinct immutable prepared/computed and Treasurer-decision facts. Bind approval to the exact persisted amount/snapshot. Return targets the assessment for correction; it does not reject the application. Require a fresh decision for a corrected/recomputed snapshot.
+- **Engineering may act autonomously:** YES
+- **Reason:** The answers are sufficient for a fail-closed exact-snapshot approval/return gate under the existing action, permission, immutable-snapshot, and audit architecture. Permission naming and synthetic UAT bundling are engineering decisions, not production role policy.
+- **Municipal confirmation required:** NO for the bounded implementation. YES later for mandatory correction reasons/appeal, application-type exceptions, historical mapping, and actual production user/role assignments.
+- **Related observations or decision packets:** NFI-2026-001; NFI-2026-007; `docs/implementation/APPROVAL_STAGE_DECISION_PACKET_2026-08-19.md`
+- **Disposition state:** READY FOR ENGINEERING
+- **Decision or implementation reference:** Approval-stage implementation packet beginning from canonical `main@d08d747c521c203c60c3f91dd41c3453484acde7`; no production mutation or historical approval backfill.
 
 ## Discovered-Gap Disposition Flow
 

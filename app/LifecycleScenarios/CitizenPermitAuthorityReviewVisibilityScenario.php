@@ -13,7 +13,9 @@ use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Actions\DescribePermitArtifact;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\IssueManualCollectionReceipt;
+use App\Actions\RecordAssessmentDecision;
 use App\Actions\RecordPaymentScheduleCollection;
+use App\Enums\AssessmentDecisionAction;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
@@ -40,6 +42,7 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
     public function __construct(
         private readonly CreatePermitApplication $createPermitApplication,
         private readonly CreateAssessmentForPermitApplication $createAssessment,
+        private readonly RecordAssessmentDecision $recordAssessmentDecision,
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
         private readonly RecordPaymentScheduleCollection $recordCollection,
         private readonly IssueManualCollectionReceipt $issueReceipt,
@@ -100,6 +103,7 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
             ]],
         ], $applicant);
         $assessment = $this->createAssessment->handle($permitApplication, $operator);
+        $this->recordAssessmentDecision->handle($assessment, $operator, AssessmentDecisionAction::Approved);
         $paymentSchedule = $this->createPaymentSchedule->handle($assessment, $operator);
         $collection = $this->recordCollection->handle($paymentSchedule, [
             'amount_cents' => $paymentSchedule->total_amount_cents,

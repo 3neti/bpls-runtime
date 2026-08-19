@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -26,6 +27,7 @@ use Illuminate\Support\Collection;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Collection<int, AssessmentLine> $lines
+ * @property-read AssessmentDecision|null $decision
  */
 #[Fillable(['permit_application_id', 'assessed_by_id', 'sequence', 'status', 'assessed_at', 'superseded_at', 'total_amount_cents', 'source_snapshot', 'legacy_source_id'])]
 class Assessment extends Model
@@ -60,6 +62,12 @@ class Assessment extends Model
     public function paymentSchedules(): HasMany
     {
         return $this->hasMany(PaymentSchedule::class);
+    }
+
+    /** @return HasOne<AssessmentDecision, $this> */
+    public function decision(): HasOne
+    {
+        return $this->hasOne(AssessmentDecision::class);
     }
 
     /**

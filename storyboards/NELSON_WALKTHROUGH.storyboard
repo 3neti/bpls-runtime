@@ -16,15 +16,16 @@ This storyboard describes the business journey. The executable scenario invokes 
 2. The citizen records business activities and establishment facts.
 3. The citizen attaches supporting evidence.
 4. The citizen formally submits the application and receives a tracking reference.
-5. BPLO receives the same record and computes its assessment through the accepted scenario fee rules.
-6. The Municipality prepares a payment schedule.
-7. Treasury records a full over-the-counter collection.
-8. Treasury issues a manual receipt under the explicit numbering boundary.
-9. Municipal staff complete the clearance checklist.
-10. The system generates a permit artifact and marks the record Ready for Authority Review.
-11. Staff and the public verification page inspect artifact identity.
-12. The system deliberately refuses to call the permit released or legally effective.
-13. The presenter shows payload-safe production, calibration, rehearsal, and identity-reconciliation evidence.
+5. BPLO receives the same record and an Assessment Officer computes its assessment through the accepted scenario fee rules.
+6. The Municipal Treasurer approves that exact persisted assessment amount; the preparer and approver remain separate audit facts.
+7. The Municipality prepares a payment schedule only after approval.
+8. Treasury records a full over-the-counter collection.
+9. Treasury issues a manual receipt under the explicit numbering boundary.
+10. Municipal staff complete the clearance checklist.
+11. The system generates a permit artifact and marks the record Ready for Authority Review.
+12. Staff and the public verification page inspect artifact identity.
+13. The system deliberately refuses to call the permit released or legally effective.
+14. The presenter shows payload-safe production, calibration, rehearsal, and identity-reconciliation evidence.
 
 ## Authority Boundary
 

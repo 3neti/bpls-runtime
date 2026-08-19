@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
 import { Film, Plus } from '@lucide/vue';
+import {
+    create,
+    edit,
+    index,
+} from '@/actions/App/Http/Controllers/Staff/StoryboardController';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { create, edit, index } from '@/actions/App/Http/Controllers/Staff/StoryboardController';
 import type { BreadcrumbItem } from '@/types';
 
 type StoryboardRow = {

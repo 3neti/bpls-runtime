@@ -1,6 +1,17 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, CreditCard, FileText, ReceiptText } from '@lucide/vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
+import {
+    ArrowLeft,
+    CheckCircle2,
+    CreditCard,
+    FileText,
+    ReceiptText,
+    RotateCcw,
+} from '@lucide/vue';
+import {
+    approve as approveAssessment,
+    returnForCorrection,
+} from '@/actions/App/Http/Controllers/Staff/AssessmentDecisionController';
 import {
     show as paymentScheduleShow,
     store as paymentScheduleStore,
@@ -36,6 +47,17 @@ type Assessment = {
     assessed_at: string | null;
     assessed_by: string | null;
     total_amount_cents: number;
+    payment_schedule_available: boolean;
+    decision: {
+        id: number;
+        action: 'approved' | 'returned_for_correction';
+        decided_at: string;
+        decided_by: string | null;
+        decided_by_role: string | null;
+        reason: string | null;
+        assessment_snapshot_hash: string;
+        total_amount_cents: number;
+    } | null;
     permit_application: {
         id: number;
         application_number: string | null;
@@ -61,11 +83,20 @@ const props = defineProps<{
     assessment: Assessment;
     can: {
         prepare_payment_schedule: boolean;
+        approve_assessment: boolean;
         view_payment_schedules: boolean;
         view_assessment_documents: boolean;
     };
     assessmentDocumentGaps: string[];
 }>();
+
+const returnForm = useForm({ reason: '' });
+
+function submitReturnForCorrection(): void {
+    returnForm.post(returnForCorrection(props.assessment.id).url, {
+        preserveScroll: true,
+    });
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -131,7 +162,7 @@ function money(amountCents: number): string {
                         ),
                     },
                     {
-                        label: 'Assessed by',
+                        label: 'Prepared by Assessment Officer',
                         value: assessment.assessed_by ?? 'System',
                         detail: assessment.assessed_at ?? 'No timestamp',
                     },
@@ -139,9 +170,16 @@ function money(amountCents: number): string {
                         label: 'Current task',
                         value: assessment.latest_payment_schedule
                             ? 'Review payment schedule'
-                            : can.prepare_payment_schedule
-                              ? 'Prepare payment schedule'
-                              : 'Review assessment evidence',
+                            : assessment.decision?.action ===
+                                'returned_for_correction'
+                              ? 'Prepare corrected assessment'
+                              : !assessment.decision
+                                ? 'Municipal Treasurer approval'
+                                : !assessment.payment_schedule_available
+                                  ? 'Approval no longer matches snapshot'
+                                  : can.prepare_payment_schedule
+                                    ? 'Prepare payment schedule'
+                                    : 'Review assessment evidence',
                     },
                 ]"
             >
@@ -182,7 +220,10 @@ function money(amountCents: number): string {
                             </Link>
                         </Button>
                         <Link
-                            v-else-if="can.prepare_payment_schedule"
+                            v-else-if="
+                                can.prepare_payment_schedule &&
+                                assessment.payment_schedule_available
+                            "
                             :href="paymentScheduleStore(assessment.id)"
                             method="post"
                             as="button"
@@ -194,6 +235,118 @@ function money(amountCents: number): string {
                     </div>
                 </template>
             </WorkflowStageSummary>
+
+            <section
+                v-if="assessment.decision"
+                class="rounded-lg border p-4"
+                :class="
+                    assessment.decision.action === 'approved'
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100'
+                        : 'border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100'
+                "
+                data-testid="assessment-decision"
+                :data-decision-action="assessment.decision.action"
+                :data-assessment-snapshot-hash="
+                    assessment.decision.assessment_snapshot_hash
+                "
+            >
+                <div class="flex items-start gap-3">
+                    <CheckCircle2
+                        v-if="assessment.decision.action === 'approved'"
+                        class="mt-0.5 size-5 shrink-0"
+                    />
+                    <RotateCcw v-else class="mt-0.5 size-5 shrink-0" />
+                    <div class="grid gap-1">
+                        <h2 class="font-semibold">
+                            {{
+                                assessment.decision.action === 'approved'
+                                    ? 'Approved by Municipal Treasurer'
+                                    : 'Returned for correction'
+                            }}
+                        </h2>
+                        <p class="text-sm">
+                            {{
+                                assessment.decision.decided_by ??
+                                'Recorded actor'
+                            }}
+                            · {{ assessment.decision.decided_at }}
+                        </p>
+                        <p v-if="assessment.decision.reason" class="text-sm">
+                            {{ assessment.decision.reason }}
+                        </p>
+                        <p class="font-mono text-xs opacity-80">
+                            Snapshot
+                            {{
+                                assessment.decision.assessment_snapshot_hash.slice(
+                                    0,
+                                    16,
+                                )
+                            }}… ·
+                            {{ money(assessment.decision.total_amount_cents) }}
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <section
+                v-else
+                class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+                data-testid="assessment-awaiting-approval"
+            >
+                <WorkflowSectionHeader
+                    eyebrow="Pre-payment authority"
+                    title="Awaiting Municipal Treasurer approval"
+                    description="The Assessment Officer prepared this persisted amount. Payment remains unavailable until the Municipal Treasurer approves this exact snapshot."
+                />
+
+                <div v-if="can.approve_assessment" class="mt-4 grid gap-3">
+                    <div class="flex flex-wrap gap-2">
+                        <Link
+                            :href="approveAssessment(assessment.id)"
+                            method="post"
+                            as="button"
+                            :class="buttonVariants({ size: 'sm' })"
+                        >
+                            <CheckCircle2 />
+                            Approve amount for payment
+                        </Link>
+                    </div>
+
+                    <form
+                        class="grid max-w-xl gap-2"
+                        @submit.prevent="submitReturnForCorrection"
+                    >
+                        <label for="return-reason" class="text-sm font-medium">
+                            Correction note (optional)
+                        </label>
+                        <textarea
+                            id="return-reason"
+                            v-model="returnForm.reason"
+                            name="reason"
+                            rows="3"
+                            maxlength="1000"
+                            class="rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                            placeholder="Describe what the Assessment Officer should correct."
+                        />
+                        <p
+                            v-if="returnForm.errors.reason"
+                            class="text-sm text-destructive"
+                        >
+                            {{ returnForm.errors.reason }}
+                        </p>
+                        <Button
+                            type="submit"
+                            variant="outline"
+                            size="sm"
+                            class="w-fit"
+                            :disabled="returnForm.processing"
+                        >
+                            <RotateCcw />
+                            Return for correction
+                        </Button>
+                    </form>
+                </div>
+            </section>
 
             <section class="grid gap-3 md:grid-cols-3">
                 <div

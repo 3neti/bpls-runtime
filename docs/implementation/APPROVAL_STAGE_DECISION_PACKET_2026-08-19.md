@@ -1,10 +1,47 @@
 # Approval Stage Municipal Decision Packet
 
-Status: **MUNICIPAL DECISION REQUIRED — DO NOT IMPLEMENT**
+Status: **RESOLVED FOR IMPLEMENTATION — Nelson municipal evidence accepted 2026-08-19**
 
 Raised by: Nelson operational feedback received 2026-08-19
 
 Related evidence: `docs/implementation/NELSON_OPERATIONAL_FEEDBACK_RECONCILIATION_2026-08-19.md`; `NFI-2026-001`
+
+## Follow-up Source Evidence — Preserved Verbatim
+
+1. Who approves before payment? `Municipal Treasurer`
+2. What is approved? `Assessment/amount`
+3. Assessment and approval one step or separate? `Yes one step, but it needs to be approved by the Municipal Treasurer. Assessment Officer is different from the Treasurer.`
+4. If something is wrong/incomplete? `Returned for correction`
+5. Does approval clear the applicant to proceed to payment? `Yes`
+
+These answers are Nelson's source evidence. The domain interpretation below is an engineering disposition and does not rewrite his wording.
+
+## Resolution
+
+The evidence is sufficient to implement the missing pre-payment approval behavior without a Board return. Operationally, assessment and approval are experienced as one municipal workflow step, but Nelson identifies two actors and two authoritative facts:
+
+1. the Assessment Officer prepares/computes the persisted assessment snapshot;
+2. the Municipal Treasurer approves that exact assessment/amount before payment becomes available, or returns that assessment for correction.
+
+The accepted consequence is permission to proceed to payment scheduling. Approval does not collect payment, issue a receipt, approve permit issuance or release, establish documentary sufficiency, or create legal effect.
+
+## Accepted Domain And Audit Contract
+
+- One immutable `assessment_decision` belongs to one exact assessment snapshot and records `approved` or `returned_for_correction`.
+- The decision preserves assessment ID/sequence, amount, a SHA-256 fingerprint of the persisted assessment and line snapshots, decision actor, actor-role snapshot, timestamp, optional correction reason, before/after application state, and whether the decision authorizes payment scheduling.
+- The Assessment Officer remains `assessed_by`; the Treasurer decision never overwrites the preparer.
+- Payment schedule creation requires an `approved` decision whose amount and fingerprint still match the persisted assessment.
+- A returned assessment remains in assessment processing and cannot produce a payment schedule. The existing assessment action may prepare a corrected assessment as a new sequence; that new snapshot has no inherited decision.
+- Normal municipal operation is one approval per payable assessment snapshot. A material correction or recomputation creates a fresh snapshot and therefore requires fresh approval. This is a fail-closed audit-integrity inference, not an invented reassessment procedure.
+- The narrow permission `assessments.approve` separates server authorization from `permit_applications.assess`. Its presence in the synthetic Treasury UAT bundle is preview projection only; no production user or final municipal role assignment is made autonomously.
+- The gate applies to every operational assessment that uses the canonical payment-schedule action. Any application-type exception requires later municipal evidence; no exception is inferred.
+
+## Remaining Narrow Questions — Non-blocking For This Implementation
+
+- Whether correction reasons become mandatory, and whether a formal appeal/escalation path exists.
+- Whether any application type has an approved exception to the canonical pre-payment Treasurer decision.
+- How historical `Approval`, `approvedAt`, and `approvedBy` map to the new decision fact; no historical approval is fabricated or backfilled.
+- Which actual production roles/users receive `assessments.approve`; the current implementation defines capability, not municipal staffing policy.
 
 ## Decision Boundary
 
@@ -53,6 +90,6 @@ Acceptance of an approval stage would not by itself decide:
 - BPLO issuance/release authority, lawful release prerequisites, validity, or legal effect;
 - official report inclusion, generation, export, printing, or certification.
 
-## Engineering Hold
+## Engineering Disposition
 
-Until an accepted decision record exists, do not create approval statuses beyond preserved parity shape, actions, queues, routes, permissions, notifications, payment gates, rejection paths, or UAT walkthrough steps. The existing direct assessment-to-payment-schedule behavior remains visible as a known semantic gap; it is not silently declared correct.
+The former engineering hold is lifted only for: prepared assessment -> Treasurer approve/return -> exact-snapshot payment gate, its audit trail, the existing assessment workspace presentation, and deterministic synthetic UAT projection. A broad approval queue, applicant rejection, documentary-deficiency workflow, permit signing/issuance/release, production role assignment, historical backfill, and production migration remain outside this decision.

@@ -39,8 +39,10 @@
         // "rootDirs": [],                                   /* Allow multiple folders to be treated as one when resolving modules. */
         // "typeRoots": [],                                  /* Specify multiple folders that act like './node_modules/@types'. */
         "types": [
-            "vite/client"
+            "vite/client",
+            "node"
         ] /* Specify type package names to be included without being referenced in a source file. */,
+        "allowImportingTsExtensions": true,
         // "allowUmdGlobalAccess": true,                     /* Allow accessing UMD globals from modules. */
         // "moduleSuffixes": [],                             /* List of file name suffixes to search when resolving a module. */
         // "allowImportingTsExtensions": true,               /* Allow imports to include TypeScript file extensions. Requires '--moduleResolution bundler' and either '--noEmit' or '--emitDeclarationOnly' to be set. */
@@ -120,6 +122,7 @@
         "resources/js/**/*.ts",
         "resources/js/**/*.d.ts",
         "resources/js/**/*.tsx", 
-        "resources/js/**/*.vue"
+        "resources/js/**/*.vue",
+        "tests/Frontend/**/*.ts"
     ]
 }

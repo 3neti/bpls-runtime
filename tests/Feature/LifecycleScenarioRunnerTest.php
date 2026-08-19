@@ -31,6 +31,7 @@ use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\LifecycleScenarios\StoryboardTerminalStateVisibilityScenario;
 use App\LifecycleScenarios\UserDirectoryVisibilityScenario;
 use App\Models\Assessment;
+use App\Models\AssessmentDecision;
 use App\Models\BillingGroup;
 use App\Models\BillingGroupReconciliation;
 use App\Models\BillingGroupRecord;
@@ -1003,12 +1004,14 @@ test('citizen permit processing scenario audits browser financial state against 
         ->and($audit['canonical']['application_status'])->toBe(PermitApplicationStatus::PendingPayment->value)
         ->and($audit['canonical']['assessment_total_amount_cents'])->toBeGreaterThan(0)
         ->and($audit['canonical']['payment_balance_amount_cents'])->toBe($audit['canonical']['assessment_total_amount_cents'])
-        ->and($manifest['resources']['citizen_timeline_event_count'])->toBe(4)
+        ->and($manifest['resources']['citizen_timeline_event_count'])->toBe(6)
         ->and($manifest['resources']['citizen_timeline_event_keys'])->toBe([
             "application-recorded:{$manifest['resources']['record_id']}",
             "assessment-computed:{$manifest['resources']['assessment_id']}",
+            'assessment-decision:'.AssessmentDecision::query()->sole()->id,
             "payment-schedule-prepared:{$manifest['resources']['payment_schedule_id']}",
             'status-transition:0',
+            'status-transition:1',
         ])
         ->and(collect($manifest['steps'])->firstWhere('key', 'citizen-owned-application-prepared')['actor'])->toBe('applicant')
         ->and(collect($manifest['steps'])->firstWhere('key', 'citizen-owned-application-prepared')['actual']['submitted_by_id'])->toBe($citizen->id)
@@ -1033,8 +1036,10 @@ test('citizen permit authority review scenario composes domain actions idempoten
     $expectedTimelineKeys = [
         "application-recorded:{$firstManifest['resources']['record_id']}",
         "assessment-computed:{$firstManifest['resources']['assessment_id']}",
+        'assessment-decision:'.AssessmentDecision::query()->sole()->id,
         "payment-schedule-prepared:{$firstManifest['resources']['payment_schedule_id']}",
         'status-transition:0',
+        'status-transition:1',
         "collection-recorded:{$firstManifest['resources']['collection_id']}",
         "receipt-issued:{$firstManifest['resources']['receipt_id']}",
         ...PermitApplication::query()
@@ -1124,7 +1129,7 @@ test('citizen permit authority review scenario composes domain actions idempoten
         ->and($firstManifest['resources']['payment_policy_status'])->toBe('policy_boundary')
         ->and($firstManifest['resources']['can_split_installments'])->toBeFalse()
         ->and($firstManifest['resources']['can_reconcile_online'])->toBeFalse()
-        ->and($firstManifest['resources']['citizen_timeline_event_count'])->toBe(10)
+        ->and($firstManifest['resources']['citizen_timeline_event_count'])->toBe(12)
         ->and($firstManifest['resources']['citizen_timeline_event_keys'])->toBe($expectedTimelineKeys)
         ->and(PermitApplication::query()->count())->toBe(1)
         ->and(TreasuryCollection::query()->count())->toBe(1)
@@ -1164,8 +1169,10 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         "application-recorded:{$permitApplication->id}",
         "document-recorded:{$firstManifest['resources']['supporting_document_id']}",
         "assessment-computed:{$firstManifest['resources']['assessment_id']}",
+        "assessment-decision:{$firstManifest['resources']['assessment_decision_id']}",
         "payment-schedule-prepared:{$firstManifest['resources']['payment_schedule_id']}",
         'status-transition:0',
+        'status-transition:1',
         "collection-recorded:{$firstManifest['resources']['collection_id']}",
         "receipt-issued:{$receipt->id}",
         ...$permitApplication->clearances()->orderBy('id')->pluck('id')->map(fn (int $clearanceId): string => "clearance-completed:{$clearanceId}"),
@@ -1233,7 +1240,7 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($firstManifest['resources']['permit_verification_url'])->toContain($firstManifest['resources']['permit_verification_reference'])
         ->and($firstManifest['resources']['permit_verification_view_url'])->toBe($firstManifest['resources']['permit_verification_url'].'/view')
         ->and($firstManifest['resources']['receipt_void_boundary_reference'])->toStartWith('RVB-'.$firstManifest['resources']['record_id'].'-')
-        ->and($firstManifest['resources']['permit_timeline_event_count'])->toBe(11)
+        ->and($firstManifest['resources']['permit_timeline_event_count'])->toBe(13)
         ->and($firstManifest['resources']['permit_timeline_event_keys'])->toBe($expectedTimelineKeys)
         ->and(Receipt::query()->count())->toBe(1)
         ->and(TreasuryCollection::query()->count())->toBe(1)
@@ -1341,7 +1348,7 @@ test('citizen-originated permit milestone composes the exact submitted record to
         ->and($execution['notifications'])->toBeTrue()
         ->and($execution['in_app_notification_count'])->toBe(1)
         ->and($execution['external_notifications'])->toBeFalse()
-        ->and($firstManifest['resources']['permit_timeline_event_count'])->toBe(14)
+        ->and($firstManifest['resources']['permit_timeline_event_count'])->toBe(16)
         ->and($firstManifest['resources']['citizen_timeline_event_keys'])->toBe($firstManifest['resources']['permit_timeline_event_keys'])
         ->and($storyboard['title'])->toBe('Citizen-originated new permit lifecycle to authority boundary')
         ->and($artifactStore->exists('terminal/prepare.json'))->toBeTrue()

@@ -613,6 +613,48 @@ async function inspectStakeholderPreviewComposition(
     await inspectPreviewPage(
         targetPage,
         targetBaseUrl,
+        'treasury-assessment-approval',
+        manifest.resources.assessment_url,
+        'h1',
+        null,
+        false,
+    );
+    const assessmentDecision = targetPage.getByTestId('assessment-decision');
+    const assessmentApprovalEvidence = {
+        action: await assessmentDecision.getAttribute('data-decision-action'),
+        snapshot_hash: await assessmentDecision.getAttribute(
+            'data-assessment-snapshot-hash',
+        ),
+        municipal_treasurer_label_visible: await targetPage
+            .getByText('Approved by Municipal Treasurer', { exact: true })
+            .isVisible()
+            .catch(() => false),
+        prepared_by_visible: await targetPage
+            .getByText('Prepared by Assessment Officer', { exact: true })
+            .isVisible()
+            .catch(() => false),
+        approve_action_visible: await targetPage
+            .getByRole('button', { name: 'Approve amount for payment' })
+            .isVisible()
+            .catch(() => false),
+    };
+    checks.push(
+        check(
+            'preview-treasurer-assessment-approval-evidence',
+            'Treasury sees the exact approved assessment snapshot and the distinct preparation fact',
+            {
+                action: 'approved',
+                snapshot_hash: manifest.resources.assessment_snapshot_hash,
+                municipal_treasurer_label_visible: true,
+                prepared_by_visible: true,
+                approve_action_visible: false,
+            },
+            assessmentApprovalEvidence,
+        ),
+    );
+    await inspectPreviewPage(
+        targetPage,
+        targetBaseUrl,
         'treasury-schedule',
         manifest.resources.payment_schedule_url,
         'h1',
@@ -667,6 +709,15 @@ async function inspectStakeholderPreviewComposition(
     await inspectPreviewPage(
         targetPage,
         targetBaseUrl,
+        'treasury-assessment-approval-mobile',
+        manifest.resources.assessment_url,
+        'h1',
+        null,
+        false,
+    );
+    await inspectPreviewPage(
+        targetPage,
+        targetBaseUrl,
         'treasury-receipt-mobile',
         manifest.resources.receipt_url,
         'h1',
@@ -683,6 +734,7 @@ async function inspectStakeholderPreviewComposition(
         authority_pending_catalog_count: reportCatalogAuthorityCount,
         bplo_navigation: bploNavigation,
         treasury_navigation: treasuryNavigation,
+        assessment_approval: assessmentApprovalEvidence,
         prepared_catalog_family_count_before_navigation: catalogFamilies,
         prepared_authority_catalog_count_before_navigation:
             authorityCatalogEntries,

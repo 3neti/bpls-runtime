@@ -8,6 +8,9 @@ return [
         'primary_operator' => [
             'email' => env('LIFECYCLE_OPERATOR_EMAIL', 'test@example.com'),
         ],
+        'assessment_approver' => [
+            'email' => env('LIFECYCLE_ASSESSMENT_APPROVER_EMAIL', 'test@example.com'),
+        ],
         'sample_recipient' => [
             'email' => env('LIFECYCLE_RECIPIENT_EMAIL', 'test@example.com'),
         ],

@@ -2,6 +2,8 @@
 
 namespace App\Actions;
 
+use App\Assessment\AssessmentSnapshotFingerprint;
+use App\Enums\AssessmentDecisionAction;
 use App\Enums\AssessmentStatus;
 use App\Enums\PaymentScheduleLineStatus;
 use App\Enums\PaymentScheduleStatus;
@@ -16,10 +18,16 @@ use LogicException;
 
 class CreatePaymentScheduleForAssessment
 {
+    public function __construct(private readonly AssessmentSnapshotFingerprint $fingerprint) {}
+
     public function handle(Assessment $assessment, ?User $preparedBy = null): PaymentSchedule
     {
         return DB::transaction(function () use ($assessment, $preparedBy): PaymentSchedule {
-            $assessment->loadMissing(['permitApplication.business.owner', 'lines.lineOfBusiness']);
+            $assessment = Assessment::query()
+                ->whereKey($assessment->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $assessment->load(['decision', 'permitApplication.business.owner', 'lines.lineOfBusiness']);
 
             if ($assessment->permitApplication->isHistoricalEvidenceOnly()) {
                 throw new LogicException("Historical evidence application [{$assessment->permit_application_id}] cannot receive an operational payment schedule.");
@@ -33,6 +41,15 @@ class CreatePaymentScheduleForAssessment
                 throw new LogicException("Payment schedule cannot be prepared for superseded assessment [{$assessment->id}].");
             }
 
+            if ($assessment->decision?->action !== AssessmentDecisionAction::Approved) {
+                throw new LogicException("Payment schedule cannot be prepared until assessment [{$assessment->id}] is approved by the Municipal Treasurer.");
+            }
+
+            if ($assessment->decision->total_amount_cents !== $assessment->total_amount_cents
+                || ! hash_equals($assessment->decision->assessment_snapshot_hash, $this->fingerprint->hash($assessment))) {
+                throw new LogicException("Payment schedule cannot be prepared because assessment [{$assessment->id}] no longer matches its Treasurer approval.");
+            }
+
             $existingSchedule = PaymentSchedule::query()
                 ->whereBelongsTo($assessment)
                 ->with(['lines.lineOfBusiness', 'preparedBy', 'assessment.permitApplication.business.owner'])
@@ -42,6 +59,10 @@ class CreatePaymentScheduleForAssessment
                 $this->markPermitApplicationPendingPayment($assessment->permitApplication, $preparedBy);
 
                 return $existingSchedule;
+            }
+
+            if ($assessment->permitApplication->status !== PermitApplicationStatus::Approval) {
+                throw new LogicException("Payment schedule cannot be prepared because application [{$assessment->permit_application_id}] is not in the approved pre-payment state.");
             }
 
             $schedule = PaymentSchedule::query()->create([
@@ -98,7 +119,7 @@ class CreatePaymentScheduleForAssessment
                 'from' => $permitApplication->status->value,
                 'to' => PermitApplicationStatus::PendingPayment->value,
                 'actor_id' => $preparedBy?->id,
-                'reason' => 'Payment schedule prepared from computed assessment.',
+                'reason' => 'Payment schedule prepared from the exact Treasurer-approved assessment snapshot.',
                 'occurred_at' => now()->toIso8601String(),
             ],
         ];
@@ -120,6 +141,13 @@ class CreatePaymentScheduleForAssessment
             'assessment_status' => $assessment->status->value,
             'assessed_at' => $assessment->assessed_at?->toIso8601String(),
             'total_amount_cents' => $assessment->total_amount_cents,
+            'treasurer_approval' => [
+                'assessment_decision_id' => $assessment->decision?->id,
+                'approved_by_id' => $assessment->decision?->decided_by_id,
+                'approved_at' => $assessment->decision?->decided_at->toIso8601String(),
+                'assessment_snapshot_hash' => $assessment->decision?->assessment_snapshot_hash,
+                'approved_total_amount_cents' => $assessment->decision?->total_amount_cents,
+            ],
             'permit_application' => [
                 'id' => $assessment->permitApplication->id,
                 'application_number' => $assessment->permitApplication->application_number,

@@ -30,12 +30,14 @@ use App\Actions\DescribePldsReportBoundary;
 use App\Actions\DescribeReceiptVoidBoundary;
 use App\Actions\EnsurePermitApplicationClearances;
 use App\Actions\IssueManualCollectionReceipt;
+use App\Actions\RecordAssessmentDecision;
 use App\Actions\RecordPaymentScheduleCollection;
 use App\Actions\SimplePdfDocument;
 use App\Actions\StoreCitizenPermitApplicationDocument;
 use App\Actions\StorePermitApplicationDocument;
 use App\Actions\SubmitCitizenPermitApplication;
 use App\Actions\VoidReceipt;
+use App\Enums\AssessmentDecisionAction;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
@@ -73,6 +75,7 @@ final class ManualCollectionReceiptVisibilityScenario
         private readonly StorePermitApplicationDocument $storePermitApplicationDocument,
         private readonly StoreCitizenPermitApplicationDocument $storeCitizenPermitApplicationDocument,
         private readonly CreateAssessmentForPermitApplication $createAssessment,
+        private readonly RecordAssessmentDecision $recordAssessmentDecision,
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
         private readonly RecordPaymentScheduleCollection $recordCollection,
         private readonly IssueManualCollectionReceipt $issueReceipt,
@@ -117,6 +120,8 @@ final class ManualCollectionReceiptVisibilityScenario
         }
 
         $operator = $actors['operator'] ?? throw new RuntimeException('Scenario operator actor was not resolved.');
+        $assessmentApprover = $actors['approver'] ?? $operator;
+        $assessmentDecisionActor = isset($actors['approver']) ? 'approver' : 'operator';
         $isCitizenOriginated = $this->isCitizenOriginated($scenario->key);
         $isNelsonWalkthrough = $this->isStakeholderWalkthrough($scenario->key);
         $applicant = $isCitizenOriginated
@@ -182,6 +187,11 @@ final class ManualCollectionReceiptVisibilityScenario
         }
 
         $assessment = $this->createAssessment->handle($permitApplication, $operator);
+        $assessmentDecision = $this->recordAssessmentDecision->handle(
+            $assessment,
+            $assessmentApprover,
+            AssessmentDecisionAction::Approved,
+        );
         $paymentSchedule = $this->createPaymentSchedule->handle($assessment, $operator);
         $collection = $this->recordCollection->handle($paymentSchedule, [
             'amount_cents' => $paymentSchedule->total_amount_cents,
@@ -314,6 +324,7 @@ final class ManualCollectionReceiptVisibilityScenario
                 $this->step('citizen-receipt-notice-recorded', 'Record one factual in-app receipt notice through the submission action', ['notice_count' => 1, 'kind' => 'permit_application_received', 'tracking_reference' => $permitApplication->tracking_reference, 'external_delivery' => false], ['notice_count' => $receiptNotices->count(), 'kind' => data_get($receiptNotice?->data, 'kind'), 'tracking_reference' => data_get($receiptNotice?->data, 'tracking_reference'), 'external_delivery' => false], 'applicant'),
             ] : []),
             $this->step('assessment-computed', 'Compute assessment through assessment action', ['assessment_status' => 'computed'], ['assessment_status' => $assessment->status->value, 'assessment_id' => $assessment->id]),
+            $this->step('assessment-approved', 'Record Municipal Treasurer approval of the exact persisted assessment amount', ['action' => AssessmentDecisionAction::Approved->value, 'assessment_id' => $assessment->id, 'preparer_id' => $assessment->assessed_by_id, 'approver_id' => $assessmentApprover->id], ['action' => $assessmentDecision->action->value, 'assessment_id' => $assessmentDecision->assessment_id, 'preparer_id' => $assessment->assessed_by_id, 'approver_id' => $assessmentDecision->decided_by_id], $assessmentDecisionActor),
             $this->step('payment-schedule-prepared', 'Prepare payment schedule through payment schedule action', ['application_status' => PermitApplicationStatus::PendingPayment->value], ['application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id]),
             $this->step('collection-recorded', 'Record full over-the-counter collection through Treasury action', ['payment_schedule_status' => PaymentScheduleStatus::Paid->value, 'collection_status' => TreasuryCollectionStatus::PendingReceipt->value], ['payment_schedule_status' => $paymentSchedule->status->value, 'collection_status' => $collectionStatusBeforeReceipt->value, 'collection_id' => $collection->id]),
             $this->step('online-payment-boundary-recorded', 'Describe online payment and reconciliation boundary without calling a gateway', ['online_payment_status' => 'blocked', 'can_pay_online' => false, 'can_reconcile_online' => false], ['online_payment_status' => $onlinePaymentBoundary['status'], 'can_pay_online' => $onlinePaymentBoundary['can_pay_online'], 'can_reconcile_online' => $onlinePaymentBoundary['can_reconcile_online']]),
@@ -331,7 +342,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('release-ready-for-authority-review', 'Describe release readiness without issuing permit', ['ready_for_authority_review' => true, 'can_release' => false], ['ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'], 'can_release' => $releaseReadiness['can_release']]),
             $this->step('permit-artifact-available-for-authority-review', 'Describe generated permit artifact without issuing permit', ['status' => 'generated_artifact_available', 'ready_for_authority_review' => true, 'can_issue' => false, 'can_release' => false], ['status' => $permitArtifact['status'], 'ready_for_authority_review' => $permitArtifact['ready_for_authority_review'], 'can_issue' => $permitArtifact['can_issue'], 'can_release' => $permitArtifact['can_release']]),
             $this->step('permit-release-blocked', 'Attempt permit release through release boundary action', ['release_blocked' => true, 'application_status' => PermitApplicationStatus::PendingPayment->value], ['release_blocked' => $releaseBlocked, 'application_status' => $permitApplication->status->value]),
-            $this->step('application-timeline-projected', 'Project authoritative lifecycle records into chronological review evidence', ['event_count' => $isCitizenOriginated ? 14 : 11, 'release_boundary_visible' => true], ['event_count' => count($timelineKeys), 'release_boundary_visible' => in_array("release-blocked:{$permitApplication->id}", $timelineKeys, true)]),
+            $this->step('application-timeline-projected', 'Project authoritative lifecycle records into chronological review evidence', ['event_count' => $isCitizenOriginated ? 16 : 13, 'release_boundary_visible' => true], ['event_count' => count($timelineKeys), 'release_boundary_visible' => in_array("release-blocked:{$permitApplication->id}", $timelineKeys, true)]),
         ];
 
         foreach ($steps as $step) {
@@ -377,6 +388,14 @@ final class ManualCollectionReceiptVisibilityScenario
             'assessment_id' => $assessment->id,
             'assessment_status' => $assessment->status->value,
             'assessment_total_amount_cents' => $assessment->total_amount_cents,
+            'assessment_prepared_by_id' => $assessment->assessed_by_id,
+            'assessment_decision_id' => $assessmentDecision->id,
+            'assessment_decision_action' => $assessmentDecision->action->value,
+            'assessment_approved_by_id' => $assessmentDecision->decided_by_id,
+            'assessment_approved_at' => $assessmentDecision->decided_at->toIso8601String(),
+            'assessment_snapshot_hash' => $assessmentDecision->assessment_snapshot_hash,
+            'assessment_approver_distinct_from_preparer' => $assessmentDecision->decided_by_id !== $assessment->assessed_by_id,
+            'assessment_url' => route('staff.permit-applications.assessments.show', $assessment, false),
             'assessment_pdf_url' => route('staff.permit-applications.assessments.pdf', $assessment, false),
             'payment_schedule_id' => $paymentSchedule->id,
             'payment_schedule_status' => $paymentSchedule->status->value,
@@ -580,6 +599,9 @@ final class ManualCollectionReceiptVisibilityScenario
                 'storage_disk' => $supportingDocument->storage_disk,
             ],
             'assessment_id' => $assessment->id,
+            'assessment_decision_id' => $assessmentDecision->id,
+            'assessment_decision_action' => $assessmentDecision->action->value,
+            'assessment_snapshot_hash' => $assessmentDecision->assessment_snapshot_hash,
             'payment_schedule_id' => $paymentSchedule->id,
             'payment_schedule_status' => $paymentSchedule->status->value,
             'online_payment_boundary' => $onlinePaymentBoundary,
@@ -732,7 +754,7 @@ final class ManualCollectionReceiptVisibilityScenario
     public function audit(array $manifest, ScenarioArtifactStore $artifactStore): array
     {
         $paymentSchedule = PaymentSchedule::query()->findOrFail($manifest['resources']['payment_schedule_id']);
-        $assessment = Assessment::query()->findOrFail($manifest['resources']['assessment_id']);
+        $assessment = Assessment::query()->with('decision')->findOrFail($manifest['resources']['assessment_id']);
         $collection = TreasuryCollection::query()->with('receipt')->findOrFail($manifest['resources']['collection_id']);
         $receipt = Receipt::query()->findOrFail($manifest['resources']['record_id']);
         $supportingDocument = PermitApplicationDocument::query()->findOrFail($manifest['resources']['supporting_document_id']);
@@ -814,6 +836,7 @@ final class ManualCollectionReceiptVisibilityScenario
                 $this->step('audit-citizen-receipt-notice', 'Canonical submission produced exactly one factual in-app receipt notice and no external delivery', ['notice_count' => 1, 'kind' => 'permit_application_received', 'tracking_reference' => $permitApplication->tracking_reference, 'external_delivery' => false], ['notice_count' => $receiptNotices->count(), 'kind' => data_get($receiptNotice?->data, 'kind'), 'tracking_reference' => data_get($receiptNotice?->data, 'tracking_reference'), 'external_delivery' => false]),
                 $this->step('audit-browser-citizen-milestone', 'Citizen browser evidence agrees with the exact final canonical record', ['application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id, 'receipt_id' => $receipt->id, 'ready_for_authority_review' => true, 'can_release' => false], ['application_status' => data_get($browserReport, 'citizen_processing.application_status'), 'payment_schedule_id' => data_get($browserReport, 'citizen_processing.payment_schedule_id'), 'receipt_id' => data_get($browserReport, 'citizen_authority_review.receipt_id'), 'ready_for_authority_review' => data_get($browserReport, 'citizen_authority_review.ready_for_authority_review'), 'can_release' => data_get($browserReport, 'citizen_authority_review.can_release')]),
             ] : []),
+            $this->step('audit-assessment-treasurer-decision', 'Payment is bound to the exact immutable Treasurer-approved assessment snapshot', ['decision_id' => $manifest['resources']['assessment_decision_id'], 'action' => AssessmentDecisionAction::Approved->value, 'assessment_id' => $assessment->id, 'total_amount_cents' => $assessment->total_amount_cents, 'snapshot_hash' => $manifest['resources']['assessment_snapshot_hash']], ['decision_id' => $assessment->decision?->id, 'action' => $assessment->decision?->action->value, 'assessment_id' => $assessment->decision?->assessment_id, 'total_amount_cents' => $assessment->decision?->total_amount_cents, 'snapshot_hash' => $assessment->decision?->assessment_snapshot_hash]),
             $this->step('audit-payment-schedule-paid', 'Payment schedule is paid', ['status' => PaymentScheduleStatus::Paid->value], ['status' => $paymentSchedule->status->value]),
             $this->step('audit-business-activities', 'Canonical permit application retains every prepared business activity', ['activities' => $manifest['resources']['business_activities']], ['activities' => $permitApplication->lines->map(fn ($line): array => ['id' => $line->id, 'code' => $line->lineOfBusiness?->code, 'name' => $line->lineOfBusiness?->name, 'declared_gross_sales_cents' => $line->declared_gross_sales_cents, 'capital_investment_cents' => $line->capital_investment_cents, 'quantity' => $line->quantity, 'started_on' => $line->started_on?->toDateString()])->values()->all()]),
             $this->step('audit-browser-business-activities', 'Browser intake controls and detail rows agree with canonical business activities', ['intake_add_remove_verified' => true, 'intake_mobile_visible' => true, 'activities' => $manifest['resources']['business_activities']], ['intake_add_remove_verified' => data_get($browserReport, 'business_activities.intake_add_remove_verified'), 'intake_mobile_visible' => data_get($browserReport, 'business_activities.intake_mobile_visible'), 'activities' => data_get($browserReport, 'business_activities.activities')]),
@@ -885,6 +908,16 @@ final class ManualCollectionReceiptVisibilityScenario
                 'rehearsal_passed' => true,
                 'identity_reconciliation_count' => 736,
             ], data_get($browserReport, 'nelson_walkthrough.migration', []));
+        }
+
+        if (($manifest['scenario']['key'] ?? null) === 'stakeholder_preview_cycle_1') {
+            $checks[] = $this->step('audit-browser-assessment-treasurer-decision', 'Treasury browser evidence distinguishes Assessment Officer preparation from Municipal Treasurer approval', [
+                'action' => AssessmentDecisionAction::Approved->value,
+                'snapshot_hash' => $assessment->decision?->assessment_snapshot_hash,
+                'municipal_treasurer_label_visible' => true,
+                'prepared_by_visible' => true,
+                'approve_action_visible' => false,
+            ], data_get($browserReport, 'stakeholder_preview.assessment_approval', []));
         }
 
         $passed = collect($checks)->every(fn (array $check): bool => $check['passed']);

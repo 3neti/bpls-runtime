@@ -52,6 +52,16 @@ All authenticated Inertia pages show `STAKEHOLDER PREVIEW / UAT — SYNTHETIC DA
 
 The Overview shows three to five server-selected, permission-checked links for the active persona. A UAT-only walkthrough page presents the approved role sequence as guidance over existing routes. The private Board storyboard and frozen evidence are not copied into the deployment.
 
+The approval-stage update projects a narrow accepted workflow through the real domain and authorization path:
+
+```text
+Assessment Officer prepares/computes persisted assessment
+    -> Municipal Treasurer approves exact assessment/amount or returns it for correction
+    -> matching approval makes payment scheduling available
+```
+
+The synthetic Treasury persona receives `assessments.approve`; the BPLO and Citizen personas do not. This is a preview permission bundle, not final municipal role policy. Deterministic data must record an explicit approval fact rather than backfilling or inferring one. Approval does not collect payment, issue a receipt, establish documentary sufficiency, or authorize permit signing, issuance, release, validity, or legal effect.
+
 ## Recovery
 
 No tester-facing reset route is permitted. The current scenario graph has no proven selective deletion contract, and a general database or migration reset is forbidden.

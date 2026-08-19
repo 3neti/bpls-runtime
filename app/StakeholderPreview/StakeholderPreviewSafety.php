@@ -113,6 +113,7 @@ class StakeholderPreviewSafety
                 ['label' => 'Inspect Taxes & Fees', 'route' => 'staff.fee-rules.index', 'permission' => 'fee_rules.view'],
             ],
             StakeholderPreviewPersona::Treasury => [
+                ['label' => 'Approve Assessment Amounts', 'route' => 'staff.permit-applications.assessments.index', 'permission' => 'assessments.approve'],
                 ['label' => 'Open Payment Schedules', 'route' => 'staff.payment-schedules.index', 'permission' => 'payment_schedules.view'],
                 ['label' => 'Inspect Receipts', 'route' => 'staff.receipts.index', 'permission' => 'receipts.view'],
                 ['label' => 'Open Daily Collections', 'route' => 'staff.reports.daily-collections.index', 'permission' => 'reports.view'],

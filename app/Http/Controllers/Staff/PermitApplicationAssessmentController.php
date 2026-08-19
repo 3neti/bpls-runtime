@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Staff;
 
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\RenderAssessmentPdf;
+use App\Assessment\AssessmentSnapshotFingerprint;
+use App\Enums\AssessmentDecisionAction;
 use App\Enums\UserPermission;
 use App\Exceptions\UnsupportedAssessmentPolicy;
 use App\Http\Controllers\Controller;
@@ -22,7 +24,11 @@ class PermitApplicationAssessmentController extends Controller
         Gate::authorize(UserPermission::ViewPermitApplications->value);
 
         $permitApplications = PermitApplication::query()
-            ->with(['business.owner', 'lines.lineOfBusiness', 'assessments' => fn ($query) => $query->latest()])
+            ->with([
+                'business.owner',
+                'lines.lineOfBusiness',
+                'assessments' => fn ($query) => $query->with('decision')->latest(),
+            ])
             ->latest()
             ->paginate(15)
             ->through(fn (PermitApplication $permitApplication): array => [
@@ -70,12 +76,13 @@ class PermitApplicationAssessmentController extends Controller
         return to_route('staff.permit-applications.assessments.show', $assessment);
     }
 
-    public function show(Assessment $assessment): Response
+    public function show(Assessment $assessment, AssessmentSnapshotFingerprint $fingerprint): Response
     {
         Gate::authorize(UserPermission::ViewPermitApplications->value);
 
         $assessment->load([
             'assessedBy',
+            'decision.decidedBy.role',
             'permitApplication.business.owner',
             'permitApplication.lines.lineOfBusiness',
             'lines.lineOfBusiness',
@@ -83,6 +90,9 @@ class PermitApplicationAssessmentController extends Controller
         ]);
 
         $latestPaymentSchedule = $assessment->paymentSchedules->first();
+        $paymentScheduleAvailable = $assessment->decision?->action === AssessmentDecisionAction::Approved
+            && $assessment->decision->total_amount_cents === $assessment->total_amount_cents
+            && hash_equals($assessment->decision->assessment_snapshot_hash, $fingerprint->hash($assessment));
 
         return Inertia::render('permit-applications/Assessments/Show', [
             'assessment' => [
@@ -93,6 +103,17 @@ class PermitApplicationAssessmentController extends Controller
                 'assessed_by' => $assessment->assessedBy?->name,
                 'total_amount_cents' => $assessment->total_amount_cents,
                 'source_snapshot' => $assessment->source_snapshot,
+                'payment_schedule_available' => $paymentScheduleAvailable,
+                'decision' => $assessment->decision === null ? null : [
+                    'id' => $assessment->decision->id,
+                    'action' => $assessment->decision->action->value,
+                    'decided_at' => $assessment->decision->decided_at->toIso8601String(),
+                    'decided_by' => $assessment->decision->decidedBy?->name,
+                    'decided_by_role' => $assessment->decision->decidedBy?->role?->name,
+                    'reason' => $assessment->decision->reason,
+                    'assessment_snapshot_hash' => $assessment->decision->assessment_snapshot_hash,
+                    'total_amount_cents' => $assessment->decision->total_amount_cents,
+                ],
                 'permit_application' => [
                     'id' => $assessment->permitApplication->id,
                     'application_number' => $assessment->permitApplication->application_number,
@@ -130,6 +151,7 @@ class PermitApplicationAssessmentController extends Controller
             ],
             'can' => [
                 'prepare_payment_schedule' => auth()->user()?->can(UserPermission::PreparePaymentSchedules->value) ?? false,
+                'approve_assessment' => auth()->user()?->can(UserPermission::ApproveAssessments->value) ?? false,
                 'view_payment_schedules' => auth()->user()?->can(UserPermission::ViewPaymentSchedules->value) ?? false,
                 'view_assessment_documents' => auth()->user()?->can(UserPermission::ViewPermitApplications->value) ?? false,
             ],
@@ -162,12 +184,18 @@ class PermitApplicationAssessmentController extends Controller
             return null;
         }
 
+        $assessment->loadMissing('decision');
+
         return [
             'id' => $assessment->id,
             'sequence' => $assessment->sequence,
             'status' => $assessment->status->value,
             'total_amount_cents' => $assessment->total_amount_cents,
             'assessed_at' => $assessment->assessed_at?->toIso8601String(),
+            'decision' => $assessment->decision === null ? null : [
+                'action' => $assessment->decision->action->value,
+                'decided_at' => $assessment->decision->decided_at->toIso8601String(),
+            ],
         ];
     }
 

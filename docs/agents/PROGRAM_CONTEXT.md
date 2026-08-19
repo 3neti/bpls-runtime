@@ -24,7 +24,7 @@ Production reconciliation lane
 
 Production migration execution and cutover are not authorized.
 
-The Nelson Visual Walkthrough and UI/UX Cycle 1 are the frozen stakeholder baseline while municipal operational feedback is pending. Do not begin UI Cycle 2 or make speculative navigation, workflow, terminology, status, clearance, or report changes. Use `docs/agents/NELSON_FEEDBACK_INTAKE.md` to preserve and classify feedback when it arrives, and `docs/agents/LEGACY_VISUAL_PARITY_COMPARISON.md` to compare separately proven legacy and Laravel visual evidence.
+The Nelson Visual Walkthrough and UI/UX Cycle 1 remain frozen evidence baselines. Nelson's 2026-08-19 follow-up resolves only the pre-payment assessment approval stage: Assessment Officer preparation and Municipal Treasurer approval/return are distinct authoritative facts, and matching approval permits payment scheduling. A new approval-stage UAT evidence cycle is authorized without rewriting prior evidence. Do not infer release/signatory, documentary-applicability, report-authority, or one-time-payment policy from that decision. Use `docs/agents/NELSON_FEEDBACK_INTAKE.md` for additive feedback and `docs/agents/LEGACY_VISUAL_PARITY_COMPARISON.md` to compare separately proven legacy and Laravel visual evidence.
 
 ## Canonical Evidence
 

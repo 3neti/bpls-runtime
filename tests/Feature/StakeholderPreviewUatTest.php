@@ -149,7 +149,7 @@ test('preview context exposes only authorized real guidance and a persistent ban
 })->with([
     'citizen' => [StakeholderPreviewPersona::Citizen, 3],
     'bplo' => [StakeholderPreviewPersona::Bplo, 3],
-    'treasury' => [StakeholderPreviewPersona::Treasury, 4],
+    'treasury' => [StakeholderPreviewPersona::Treasury, 5],
     'management' => [StakeholderPreviewPersona::Management, 5],
 ]);
 

@@ -8,6 +8,7 @@ use App\Http\Controllers\PublicPermitVerificationController;
 use App\Http\Controllers\PublicPermitVerificationPageController;
 use App\Http\Controllers\Staff\AllAbstractReportController;
 use App\Http\Controllers\Staff\AnnexCDnfbpReportController;
+use App\Http\Controllers\Staff\AssessmentDecisionController;
 use App\Http\Controllers\Staff\AssessmentPaymentScheduleController;
 use App\Http\Controllers\Staff\AssessmentSummaryReportController;
 use App\Http\Controllers\Staff\BillingGroupAbstractReportController;
@@ -128,6 +129,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.assessments.show');
         Route::get('assessments/{assessment}/pdf', [PermitApplicationAssessmentController::class, 'pdf'])
             ->name('permit-applications.assessments.pdf');
+        Route::post('assessments/{assessment}/approve', [AssessmentDecisionController::class, 'approve'])
+            ->name('assessments.approve');
+        Route::post('assessments/{assessment}/return-for-correction', [AssessmentDecisionController::class, 'returnForCorrection'])
+            ->name('assessments.return-for-correction');
         Route::post('assessments/{assessment}/payment-schedule', [AssessmentPaymentScheduleController::class, 'store'])
             ->name('assessments.payment-schedule.store');
         Route::get('payment-schedules', [AssessmentPaymentScheduleController::class, 'index'])

@@ -20,6 +20,7 @@ final class LifecycleScenarioRegistry
                 actors: [
                     'applicant' => 'citizen_applicant',
                     'operator' => 'primary_operator',
+                    'approver' => 'assessment_approver',
                     'recipient' => 'sample_recipient',
                 ],
                 safety: [
@@ -35,6 +36,8 @@ final class LifecycleScenarioRegistry
                     'municipality_received' => true,
                     'official_application_number' => null,
                     'tracking_reference_assigned' => true,
+                    'assessment_approval_status' => 'approved',
+                    'assessment_approver_distinct_from_preparer' => true,
                     'payment_schedule_status' => 'paid',
                     'collection_status' => 'receipted',
                     'receipt_status' => 'issued',

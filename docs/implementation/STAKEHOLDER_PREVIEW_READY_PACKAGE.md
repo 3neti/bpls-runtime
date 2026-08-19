@@ -1,6 +1,6 @@
 # Stakeholder Preview Ready Package
 
-Status: **STAKEHOLDER PREVIEW READY — Board internal operation**
+Status: **APPROVAL-STAGE UAT UPDATE IN VERIFICATION — prior evidence preserved**
 
 As of: 2026-08-19
 
@@ -21,8 +21,8 @@ Run the deterministic preparation command with `STAKEHOLDER_PREVIEW_PASSWORD` su
 | View | Username | Effective access | Credential delivery |
 | --- | --- | --- | --- |
 | Citizen | `stakeholder.preview.citizen@example.test` | Existing citizen permissions | Runtime secret channel |
-| BPLO operator | `stakeholder.preview.bplo@example.test` | Existing permit intake, assessment, and clearance permissions selected for preview | Runtime secret channel |
-| Treasury operator | `stakeholder.preview.treasury@example.test` | Existing schedule, collection, receipt, and report permissions selected for preview | Runtime secret channel |
+| BPLO operator | `stakeholder.preview.bplo@example.test` | Existing permit intake, Assessment Officer preparation, payment-schedule preparation, and clearance permissions selected for preview | Runtime secret channel |
+| Treasury operator | `stakeholder.preview.treasury@example.test` | Narrow assessment-approval plus existing schedule, collection, receipt, and report permissions selected for preview | Runtime secret channel |
 | Municipal management | `stakeholder.preview.management@example.test` | Existing reporting, directory, role, municipality, fee-rule, and billing-group view permissions selected for preview | Runtime secret channel |
 
 The `preview_*` role labels are synthetic permission bundles for this local composition. They are not proposed municipal job classifications and do not change the application's authorization model.
@@ -30,8 +30,8 @@ The `preview_*` role labels are synthetic permission bundles for this local comp
 ## Recommended Walkthrough
 
 1. Sign in as Citizen. Open **My Permit Applications**, inspect the submitted synthetic application, current processing state, payment evidence, and the explicit online-payment and permit-authority boundaries.
-2. Sign in as the BPLO operator. Open **All Applications**, inspect the same application, assessment, supporting evidence, completed clearances, authority-review readiness, permit artifact, and unavailable release action.
-3. Sign in as the Treasury operator. Open **Payment Schedules**, then the paid schedule, collection, issued manual receipt, Daily Collections, and Revenue Sources. Inspect the unresolved numbering, installment, surcharge, interest, deficiency-tax, online-payment, and reversal boundaries.
+2. Sign in as the BPLO operator. Open **All Applications** and **Assessment Work**. Inspect the same application, the Assessment Officer-prepared snapshot, supporting evidence, completed clearances, authority-review readiness, permit artifact, and unavailable release action.
+3. Sign in as the Treasury operator. Open **Assessment Work** and inspect the immutable Municipal Treasurer approval of the exact amount, distinct from the preparer. Then open **Payment Schedules**, the paid schedule, collection, issued manual receipt, Daily Collections, and Revenue Sources. Inspect the unresolved numbering, installment, surcharge, interest, deficiency-tax, online-payment, and reversal boundaries.
 4. Sign in as Municipal Management. Open **Report Catalog** and move through operational, management, and authority-pending report families. Then inspect Users, Roles & Permissions, Municipality & Officials, Taxes & Fees, and Billing Groups.
 5. Open the public permit-verification link from the manifest. Confirm that it verifies the generated artifact reference while explicitly refusing release and legal-effect claims.
 
@@ -42,8 +42,8 @@ The real shell and real application pages are the walkthrough. Scenario tooling 
 | Area | Working in the preview | Deliberate boundary |
 | --- | --- | --- |
 | Citizen services | Synthetic account, application list/detail, submission evidence, payment evidence, timeline | No online payment, documentary-sufficiency decision, issuance, release, or legal effect |
-| BPLO processing | Intake, supporting evidence, assessment, payment-schedule association, clearance evidence, authority-review readiness, generated artifact | No official numbering or authority-bearing release/issuance action |
-| Treasury | Paid schedule, over-the-counter collection evidence, issued manual receipt, receipt PDF/print, working collection reports | No automatic official numbering, void/reversal, online reconciliation, statutory schedule, surcharge, interest, PIL, or deficiency-tax policy |
+| BPLO processing | Intake, supporting evidence, Assessment Officer preparation, approved payment-schedule association, clearance evidence, authority-review readiness, generated artifact | No Treasurer-approval capability in the BPLO preview bundle; no official numbering or authority-bearing release/issuance action |
+| Treasury | Exact-snapshot assessment approval/return, paid schedule, over-the-counter collection evidence, issued manual receipt, receipt PDF/print, working collection reports | Preview permission is not final municipal role policy; no automatic official numbering, void/reversal, online reconciliation, statutory schedule, surcharge, interest, PIL, or deficiency-tax policy |
 | Clearances | Three deterministic completion records and timeline evidence | Completion does not grant permit authority or legal effect |
 | Reports | Five operational and five management reports are discoverable and retain their implemented filters, calculations, and exports | Six authority-pending families expose contract scope but return no official rows or exports pending accepted authority |
 | Users and roles | Read-only account, identity-link, role, and permission evidence | No provisioning, mutation, password reset, activation, or municipal role-policy decision |
@@ -110,6 +110,7 @@ The real shell and real application pages are the walkthrough. Scenario tooling 
 - The 407-member production migration campaign remains unexecuted and Board-controlled.
 - No historical identity was inferred, merged, split, or accepted.
 - No municipal procedure, official numbering, fiscal meaning, liability, signatory, issuance, release, legal effect, authority-bearing report, role policy, or billing execution was invented or activated.
+- No historical or existing UAT approval was fabricated. New deterministic synthetic runs create explicit approval evidence through the domain action.
 - Nelson Cycle 1 and Nelson-driven UI Cycle 2 remain frozen feedback lanes; their baselines were not overwritten.
 
 ## Verdict
