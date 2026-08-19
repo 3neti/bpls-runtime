@@ -25,7 +25,7 @@ test('stakeholder preview is a local synthetic composition of existing lifecycle
 test('preview preparation creates synthetic role accounts and policy-bound evidence without storing credentials', function () {
     Storage::fake('local');
     $password = 'Stakeholder-Preview-Only-2026';
-    putenv('STAKEHOLDER_PREVIEW_PASSWORD='.$password);
+    configureSafeStakeholderPreview($password);
 
     try {
         $this->artisan('lifecycle:prepare-stakeholder-preview', [
@@ -34,7 +34,6 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
         ])->assertSuccessful();
     } finally {
         foreach ([
-            'STAKEHOLDER_PREVIEW_PASSWORD',
             'LIFECYCLE_BROWSER_EMAIL',
             'LIFECYCLE_BROWSER_PASSWORD',
             'LIFECYCLE_BROWSER_OPERATOR_EMAIL',
@@ -67,7 +66,7 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
     expect($accounts)->toHaveCount(4)
         ->and($accounts)->each(fn ($user) => $user->password->not->toBe($password))
         ->and(Hash::check($password, $accounts['stakeholder.preview.citizen@example.test']->password))->toBeTrue()
-        ->and($accounts['stakeholder.preview.citizen@example.test']->role?->code)->toBe('citizen')
+        ->and($accounts['stakeholder.preview.citizen@example.test']->role?->code)->toBe('preview_citizen')
         ->and($accounts['stakeholder.preview.bplo@example.test']->role?->code)->toBe('preview_bplo')
         ->and($accounts['stakeholder.preview.treasury@example.test']->role?->code)->toBe('preview_treasury')
         ->and($accounts['stakeholder.preview.management@example.test']->role?->code)->toBe('preview_management')
@@ -78,7 +77,7 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
         ->and($accounts['stakeholder.preview.management@example.test']->can(UserPermission::ViewReports->value))->toBeTrue()
         ->and($accounts['stakeholder.preview.management@example.test']->can(UserPermission::ViewMunicipalityConfiguration->value))->toBeTrue()
         ->and($manifest['scenario']['key'])->toBe('stakeholder_preview_cycle_1')
-        ->and($manifest['preview']['data_classification'])->toBe('synthetic_local_demo_only')
+        ->and($manifest['preview']['data_classification'])->toBe('synthetic_uat_only')
         ->and($manifest['preview']['production_migration_executed'])->toBeFalse()
         ->and($manifest['preview']['credential_delivery']['password_embedded_in_git'])->toBeFalse()
         ->and($encodedManifest)->not->toContain($password)
@@ -121,9 +120,23 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
 });
 
 test('preview preparation refuses a missing runtime credential', function () {
-    putenv('STAKEHOLDER_PREVIEW_PASSWORD');
+    configureSafeStakeholderPreview();
+    config()->set('stakeholder_preview.password');
 
     $this->artisan('lifecycle:prepare-stakeholder-preview', [
         '--phase' => 'prepare',
     ])->assertFailed();
 });
+
+function configureSafeStakeholderPreview(?string $password = null): void
+{
+    config()->set([
+        'stakeholder_preview.mode' => true,
+        'stakeholder_preview.profile' => 'stakeholder_preview_cycle_4',
+        'stakeholder_preview.data_classification' => 'synthetic_only',
+        'stakeholder_preview.pii_mode' => 'synthetic_only',
+        'stakeholder_preview.production_migration_enabled' => false,
+        'stakeholder_preview.production_integrations' => 'disabled',
+        'stakeholder_preview.password' => $password,
+    ]);
+}

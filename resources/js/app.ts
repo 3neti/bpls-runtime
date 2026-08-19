@@ -13,6 +13,8 @@ createInertiaApp({
         switch (true) {
             case name === 'Welcome':
                 return null;
+            case name.startsWith('stakeholder-preview/'):
+                return null;
             case name.startsWith('public/'):
                 return null;
             case name.startsWith('auth/'):

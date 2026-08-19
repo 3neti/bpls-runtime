@@ -149,6 +149,9 @@ const noActionsMessage = computed(() =>
         ? 'No staff work areas are currently available to this account.'
         : 'This account does not currently have access to a BPLS work area.',
 );
+const previewGuidance = computed(
+    () => page.props.stakeholder_preview?.what_to_try ?? [],
+);
 </script>
 
 <template>
@@ -210,6 +213,38 @@ const noActionsMessage = computed(() =>
                 class="rounded-xl border bg-card p-5 text-sm text-muted-foreground"
             >
                 {{ noActionsMessage }}
+            </p>
+        </section>
+
+        <section
+            v-if="page.props.stakeholder_preview?.current_persona"
+            aria-labelledby="preview-guidance-heading"
+            class="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-5 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-50"
+        >
+            <div>
+                <p class="text-xs font-semibold tracking-wide uppercase">
+                    {{ page.props.stakeholder_preview.current_label }} preview
+                </p>
+                <h2
+                    id="preview-guidance-heading"
+                    class="mt-1 text-lg font-semibold"
+                >
+                    What to try
+                </h2>
+            </div>
+            <ul class="grid gap-2 sm:grid-cols-2">
+                <li v-for="item in previewGuidance" :key="item.href">
+                    <Link
+                        :href="item.href"
+                        class="flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-white/70 px-3 py-2.5 text-sm font-semibold outline-none hover:bg-white focus-visible:ring-2 focus-visible:ring-amber-700 dark:border-amber-800 dark:bg-amber-950/70 dark:hover:bg-amber-950"
+                    >
+                        {{ item.label }}
+                        <ChevronRight class="size-4" aria-hidden="true" />
+                    </Link>
+                </li>
+            </ul>
+            <p class="text-xs text-amber-800 dark:text-amber-200">
+                {{ page.props.stakeholder_preview.recovery_message }}
             </p>
         </section>
 

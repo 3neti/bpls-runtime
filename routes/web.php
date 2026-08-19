@@ -38,9 +38,27 @@ use App\Http\Controllers\Staff\TopEstablishmentTaxDueReportController;
 use App\Http\Controllers\Staff\TotalCapitalGrossSummaryReportController;
 use App\Http\Controllers\Staff\UnpaidEstablishmentReportController;
 use App\Http\Controllers\Staff\UserDirectoryController;
+use App\Http\Controllers\StakeholderPreviewController;
+use App\Http\Middleware\EnsureStakeholderPreviewIsSafe;
+use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Support\Facades\Route;
 
-Route::inertia('/', 'Welcome')->name('home');
+$stakeholderPreviewSafety = app(StakeholderPreviewSafety::class);
+
+if ($stakeholderPreviewSafety->isEnabled()) {
+    Route::middleware([EnsureStakeholderPreviewIsSafe::class, 'throttle:stakeholder-preview'])->group(function () {
+        Route::get('/', [StakeholderPreviewController::class, 'index'])->name('home');
+        Route::get('stakeholder-preview/walkthrough', [StakeholderPreviewController::class, 'walkthrough'])
+            ->name('stakeholder-preview.walkthrough');
+        Route::post('stakeholder-preview/enter/{persona}', [StakeholderPreviewController::class, 'enter'])
+            ->name('stakeholder-preview.enter');
+        Route::post('stakeholder-preview/switch/{persona}', [StakeholderPreviewController::class, 'switch'])
+            ->middleware(['auth', 'verified'])
+            ->name('stakeholder-preview.switch');
+    });
+} else {
+    Route::inertia('/', 'Welcome')->name('home');
+}
 
 Route::get('permits/verify/{permitApplication}/{verificationCode}/view', PublicPermitVerificationPageController::class)
     ->name('public.permits.verify.view');

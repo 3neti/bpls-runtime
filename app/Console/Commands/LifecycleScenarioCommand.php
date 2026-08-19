@@ -19,6 +19,7 @@ use App\LifecycleScenarios\ScenarioActorResolver;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\LifecycleScenarios\StoryboardTerminalStateVisibilityScenario;
 use App\LifecycleScenarios\UserDirectoryVisibilityScenario;
+use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Process;
 use RuntimeException;
@@ -53,6 +54,7 @@ class LifecycleScenarioCommand extends Command
         RolePermissionMatrixVisibilityScenario $rolePermissionMatrixVisibilityScenario,
         StoryboardTerminalStateVisibilityScenario $storyboardScenario,
         UserDirectoryVisibilityScenario $userDirectoryVisibilityScenario,
+        StakeholderPreviewSafety $stakeholderPreviewSafety,
     ): int {
         $scenario = $registry->get((string) $this->argument('scenario'));
         $runId = (string) ($this->option('run-id') ?: $scenario->key.'-'.now()->format('Ymd-His'));
@@ -60,7 +62,7 @@ class LifecycleScenarioCommand extends Command
         $artifactStore = new ScenarioArtifactStore($scenario->key, $runId);
 
         try {
-            $this->assertSafeEnvironment($scenario->safety);
+            $this->assertSafeEnvironment($scenario->key, $scenario->safety, $stakeholderPreviewSafety);
 
             $manifest = $artifactStore->readJson('manifest.json');
 
@@ -148,8 +150,15 @@ class LifecycleScenarioCommand extends Command
     /**
      * @param  array<string, mixed>  $safety
      */
-    private function assertSafeEnvironment(array $safety): void
-    {
+    private function assertSafeEnvironment(
+        string $scenarioKey,
+        array $safety,
+        StakeholderPreviewSafety $stakeholderPreviewSafety,
+    ): void {
+        if ($scenarioKey === 'stakeholder_preview_cycle_1' && $stakeholderPreviewSafety->isEnabled()) {
+            return;
+        }
+
         if (! in_array(app()->environment(), $safety['environments'] ?? [], true)) {
             throw new RuntimeException('Lifecycle scenario refused to run in environment ['.app()->environment().'].');
         }

@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\User;
+use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -39,6 +40,9 @@ class HandleInertiaRequests extends Middleware
         $authenticatedUser = $request->user();
         $user = $authenticatedUser instanceof User ? $authenticatedUser : null;
 
+        $previewSafety = app(StakeholderPreviewSafety::class);
+        $previewPersona = $previewSafety->personaFor($user);
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
@@ -57,6 +61,14 @@ class HandleInertiaRequests extends Middleware
                 'can_view_roles' => $user?->can('roles.view') ?? false,
                 'can_view_municipality_configuration' => $user?->can('municipality_configuration.view') ?? false,
             ],
+            'stakeholder_preview' => $previewSafety->isEnabled() ? [
+                'enabled' => true,
+                'current_persona' => $previewPersona?->value,
+                'current_label' => $previewPersona?->label(),
+                'personas' => $previewSafety->personas(),
+                'what_to_try' => $previewSafety->guidanceFor($user),
+                'recovery_message' => 'Preview data can be restored by the preview administrator.',
+            ] : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

@@ -5,9 +5,9 @@ namespace App\Console\Commands;
 use App\Actions\CreateBillingGroup;
 use App\Actions\CreateBillingGroupDraftRecord;
 use App\Actions\CreateBillingGroupReconciliationEvidence;
-use App\Actions\EnsureCitizenRole;
 use App\Enums\BillingGroupEvidenceType;
 use App\Enums\BillingGroupFieldType;
+use App\Enums\StakeholderPreviewPersona;
 use App\Enums\UserPermission;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\Models\BillingGroup;
@@ -16,6 +16,7 @@ use App\Models\BillingGroupRecord;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -27,70 +28,20 @@ use Throwable;
     {--run-id= : Stable preview run reference}
     {--phase=all : prepare, browser, audit, or all}
     {--base-url=http://bpls-runtime.test : Browser base URL}')]
-#[Description('Prepare a local deterministic stakeholder preview across the real citizen and staff application surfaces.')]
+#[Description('Prepare a deterministic synthetic stakeholder preview across the real citizen and staff application surfaces.')]
 class PrepareStakeholderPreviewCommand extends Command
 {
-    /** @var list<UserPermission> */
-    private const array BploPermissions = [
-        UserPermission::AccessStaff,
-        UserPermission::ViewPermitApplications,
-        UserPermission::CreatePermitApplications,
-        UserPermission::AssessPermitApplications,
-        UserPermission::UpdatePermitApplicationStatus,
-        UserPermission::CompletePermitClearances,
-        UserPermission::ViewFeeRules,
-        UserPermission::ViewPaymentSchedules,
-        UserPermission::PreparePaymentSchedules,
-    ];
-
-    /** @var list<UserPermission> */
-    private const array TreasuryPermissions = [
-        UserPermission::AccessStaff,
-        UserPermission::ViewPermitApplications,
-        UserPermission::ViewPaymentSchedules,
-        UserPermission::ViewCollections,
-        UserPermission::RecordCollections,
-        UserPermission::ViewReceipts,
-        UserPermission::IssueReceipts,
-        UserPermission::ViewReports,
-    ];
-
-    /** @var list<UserPermission> */
-    private const array ManagementPermissions = [
-        UserPermission::AccessStaff,
-        UserPermission::ViewPermitApplications,
-        UserPermission::CreatePermitApplications,
-        UserPermission::AssessPermitApplications,
-        UserPermission::UpdatePermitApplicationStatus,
-        UserPermission::CompletePermitClearances,
-        UserPermission::ViewPaymentSchedules,
-        UserPermission::PreparePaymentSchedules,
-        UserPermission::ViewCollections,
-        UserPermission::RecordCollections,
-        UserPermission::ViewReceipts,
-        UserPermission::IssueReceipts,
-        UserPermission::VoidReceipts,
-        UserPermission::ViewReports,
-        UserPermission::ViewUsers,
-        UserPermission::ViewRoles,
-        UserPermission::ViewMunicipalityConfiguration,
-        UserPermission::ViewFeeRules,
-        UserPermission::ViewBillingGroups,
-        UserPermission::ViewBillingGroupRecords,
-        UserPermission::ManageStoryboards,
-    ];
-
     public function handle(
-        EnsureCitizenRole $ensureCitizenRole,
+        StakeholderPreviewSafety $previewSafety,
         CreateBillingGroup $createBillingGroup,
         CreateBillingGroupDraftRecord $createDraftRecord,
         CreateBillingGroupReconciliationEvidence $createReconciliationEvidence,
     ): int {
         try {
-            $this->assertSafeEnvironment();
+            $this->assertSafeEnvironment($previewSafety);
             $password = $this->runtimePassword();
             $runId = $this->runId();
-            $accounts = $this->prepareAccounts($password, $ensureCitizenRole);
+            $accounts = $this->prepareAccounts($password);
             $this->configureScenario($accounts, $password);
             $phase = (string) $this->option('phase');
 
@@ -128,16 +79,16 @@ class PrepareStakeholderPreviewCommand extends Command
         }
     }
 
-    private function assertSafeEnvironment(): void
+    private function assertSafeEnvironment(StakeholderPreviewSafety $previewSafety): void
     {
-        if (! app()->environment(['local', 'testing'])) {
-            throw new RuntimeException('Stakeholder preview preparation is allowed only in local or testing.');
+        if (! $previewSafety->isEnabled()) {
+            throw new RuntimeException('Stakeholder preview preparation refused because the canonical UAT safety gate is closed.');
         }
     }
 
     private function runtimePassword(): string
     {
-        $password = getenv('STAKEHOLDER_PREVIEW_PASSWORD');
+        $password = config('stakeholder_preview.password');
 
         if (! is_string($password) || mb_strlen($password) < 16) {
             throw new RuntimeException('STAKEHOLDER_PREVIEW_PASSWORD must be supplied at runtime and contain at least 16 characters.');
@@ -147,47 +98,36 @@ class PrepareStakeholderPreviewCommand extends Command
     }
 
     /** @return array{citizen: User, bplo: User, treasury: User, management: User} */
-    private function prepareAccounts(string $password, EnsureCitizenRole $ensureCitizenRole): array
+    private function prepareAccounts(string $password): array
     {
         return [
-            'citizen' => $this->prepareUser(
-                $this->runtimeEmail('STAKEHOLDER_PREVIEW_CITIZEN_EMAIL', 'stakeholder.preview.citizen@example.test'),
-                'Preview Citizen',
-                $password,
-                $ensureCitizenRole->handle(),
-            ),
-            'bplo' => $this->prepareUser(
-                $this->runtimeEmail('STAKEHOLDER_PREVIEW_BPLO_EMAIL', 'stakeholder.preview.bplo@example.test'),
-                'Preview BPLO Operator',
-                $password,
-                $this->previewRole('preview_bplo', 'Preview BPLO', self::BploPermissions),
-            ),
-            'treasury' => $this->prepareUser(
-                $this->runtimeEmail('STAKEHOLDER_PREVIEW_TREASURY_EMAIL', 'stakeholder.preview.treasury@example.test'),
-                'Preview Treasury Operator',
-                $password,
-                $this->previewRole('preview_treasury', 'Preview Treasury', self::TreasuryPermissions),
-            ),
-            'management' => $this->prepareUser(
-                $this->runtimeEmail('STAKEHOLDER_PREVIEW_MANAGEMENT_EMAIL', 'stakeholder.preview.management@example.test'),
-                'Preview Municipal Management',
-                $password,
-                $this->previewRole('preview_management', 'Preview Municipal Management', self::ManagementPermissions),
-            ),
+            'citizen' => $this->preparePersona(StakeholderPreviewPersona::Citizen, $password),
+            'bplo' => $this->preparePersona(StakeholderPreviewPersona::Bplo, $password),
+            'treasury' => $this->preparePersona(StakeholderPreviewPersona::Treasury, $password),
+            'management' => $this->preparePersona(StakeholderPreviewPersona::Management, $password),
         ];
     }
 
-    /** @param list<UserPermission> $permissions */
-    private function previewRole(string $code, string $name, array $permissions): Role
+    private function preparePersona(StakeholderPreviewPersona $persona, string $password): User
+    {
+        return $this->prepareUser(
+            $persona->approvedEmail(),
+            $persona->accountName(),
+            $password,
+            $this->previewRole($persona),
+        );
+    }
+
+    private function previewRole(StakeholderPreviewPersona $persona): Role
     {
         $role = Role::query()->firstOrCreate(
-            ['code' => $code],
+            ['code' => $persona->roleCode()],
             [
-                'name' => $name,
+                'name' => 'Preview '.$persona->label(),
                 'description' => 'Synthetic preview-only effective-permission mapping; not accepted municipal job-role policy.',
             ],
         );
-        $permissionIds = collect($permissions)->map(function (UserPermission $permission): int {
+        $permissionIds = collect($persona->permissions())->map(function (UserPermission $permission): int {
             return Permission::query()->firstOrCreate(
                 ['code' => $permission->value],
                 [
@@ -310,7 +250,7 @@ class PrepareStakeholderPreviewCommand extends Command
         $store = new ScenarioArtifactStore('stakeholder_preview_cycle_1', $runId);
         $manifest = $store->readJson('manifest.json') ?? throw new RuntimeException('Stakeholder preview manifest is missing after preparation.');
         $manifest['preview'] = [
-            'data_classification' => 'synthetic_local_demo_only',
+            'data_classification' => 'synthetic_uat_only',
             'production_migration_executed' => false,
             'role_mapping_status' => 'preview_effective_permissions_not_municipal_policy',
             'credential_delivery' => [
@@ -343,18 +283,6 @@ class PrepareStakeholderPreviewCommand extends Command
             ],
         ];
         $store->putJson('manifest.json', $manifest);
-    }
-
-    private function runtimeEmail(string $key, string $default): string
-    {
-        $value = getenv($key);
-        $email = is_string($value) && $value !== '' ? $value : $default;
-
-        if (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
-            throw new RuntimeException("{$key} must be a valid email address.");
-        }
-
-        return $email;
     }
 
     private function runId(): string

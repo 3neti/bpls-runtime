@@ -129,7 +129,7 @@ class FinalizeStakeholderPreviewEvidenceCommand extends Command
             $this->check('billing-group-policy', BillingGroupAcceptanceStatus::Provisional->value, $billingGroup->acceptance_status->value),
             $this->check('billing-record-state', BillingGroupRecordStatus::Draft->value, $billingRecord->status->value),
             $this->check('billing-record-financial-effect', 'none', data_get($billingRecord->source_snapshot, 'financial_effect')),
-            $this->check('synthetic-data-classification', 'synthetic_local_demo_only', data_get($manifest, 'preview.data_classification')),
+            $this->check('synthetic-data-classification', 'synthetic_uat_only', data_get($manifest, 'preview.data_classification')),
             $this->check('production-migration-boundary', false, data_get($manifest, 'preview.production_migration_executed')),
             $this->check('application-console-errors', 0, data_get($browser, 'result.application_console_error_or_warning_count')),
             $this->check('failed-internal-requests', 0, data_get($browser, 'result.failed_internal_request_count')),
@@ -154,7 +154,7 @@ class FinalizeStakeholderPreviewEvidenceCommand extends Command
     {
         return '# Stakeholder Preview Evidence'.PHP_EOL.PHP_EOL
             .'- Run: `'.data_get($manifest, 'run_id').'`'.PHP_EOL
-            .'- Data: synthetic local demo only'.PHP_EOL
+            .'- Data: synthetic stakeholder preview / UAT only'.PHP_EOL
             .'- Terminal preparation: passed'.PHP_EOL
             .'- Managed browser acceptance: passed'.PHP_EOL
             .'- Browser checks: '.data_get($manifest, 'preview.managed_acceptance.check_count').PHP_EOL
