@@ -169,6 +169,7 @@ test('scenario registry discovers the citizen-originated permit milestone', func
         ->and($scenario->actors)->toBe([
             'applicant' => 'citizen_applicant',
             'operator' => 'primary_operator',
+            'approver' => 'assessment_approver',
             'recipient' => 'sample_recipient',
         ])
         ->and($scenario->expectations['official_application_number'])->toBeNull()
@@ -1372,7 +1373,7 @@ test('role permission matrix scenario preserves read-only canonical and browser 
     $execution = $artifactStore->readJson('terminal/execution.json');
 
     expect($firstManifest['resources'])->toBe($secondManifest['resources'])
-        ->and($firstManifest['resources']['role_count'])->toBe(1)
+        ->and($firstManifest['resources']['role_count'])->toBe(2)
         ->and($firstManifest['resources']['permission_count'])->toBe(count(UserPermission::cases()))
         ->and($firstManifest['resources']['admin_override_role_count'])->toBe(0)
         ->and($firstManifest['resources']['catalog_in_sync'])->toBeFalse()
@@ -1431,10 +1432,13 @@ test('user directory scenario preserves aggregate-only canonical and browser evi
     $execution = $artifactStore->readJson('terminal/execution.json');
 
     expect($firstManifest['resources'])->toBe($secondManifest['resources'])
-        ->and($firstManifest['resources']['user_count'])->toBe(1)
-        ->and($firstManifest['resources']['verified_user_count'])->toBe(1)
+        ->and($firstManifest['resources']['user_count'])->toBe(2)
+        ->and($firstManifest['resources']['verified_user_count'])->toBe(2)
         ->and($firstManifest['resources']['linked_owner_count'])->toBe(0)
-        ->and($firstManifest['resources']['role_distribution'])->toBe([$operator->role->code => 1])
+        ->and($firstManifest['resources']['role_distribution'])->toMatchArray([
+            $operator->role->code => 1,
+            'scenario_treasury' => 1,
+        ])
         ->and($prepare)->not->toHaveKey('users')
         ->and($execution['read_only'])->toBeTrue()
         ->and($execution['external_calls'])->toBe(0);
@@ -3076,9 +3080,40 @@ function configuredScenarioUser(string $email): User
     $role = Role::factory()->create();
     $role->permissions()->sync($permissions->all());
 
+    $user = User::factory()->create([
+        'role_id' => $role->id,
+        'email' => $email,
+    ]);
+
+    configuredAssessmentApprover();
+
+    return $user;
+}
+
+function configuredAssessmentApprover(): User
+{
+    $email = 'assessment-approver@example.test';
+    $existing = User::query()->where('email', $email)->first();
+
+    if ($existing instanceof User) {
+        return $existing;
+    }
+
+    $permissionIds = collect([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+        UserPermission::ApproveAssessments,
+    ])->map(fn (UserPermission $permission): int => Permission::query()->firstOrCreate(
+        ['code' => $permission->value],
+        ['name' => str($permission->value)->headline()->toString()],
+    )->id);
+    $role = Role::factory()->create(['code' => 'scenario_treasury']);
+    $role->permissions()->sync($permissionIds->all());
+
     return User::factory()->create([
         'role_id' => $role->id,
         'email' => $email,
+        'name' => 'Scenario Municipal Treasurer',
     ]);
 }
 

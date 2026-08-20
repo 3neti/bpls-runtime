@@ -20,6 +20,7 @@ final class LifecycleScenarioRegistry
                 actors: [
                     'applicant' => 'citizen_applicant',
                     'operator' => 'primary_operator',
+                    'assessment_officer' => 'assessment_preparer',
                     'approver' => 'assessment_approver',
                     'recipient' => 'sample_recipient',
                 ],
@@ -64,6 +65,7 @@ final class LifecycleScenarioRegistry
                 actors: [
                     'applicant' => 'citizen_applicant',
                     'operator' => 'primary_operator',
+                    'approver' => 'assessment_approver',
                     'recipient' => 'sample_recipient',
                 ],
                 safety: [
@@ -111,6 +113,7 @@ final class LifecycleScenarioRegistry
                 actors: [
                     'applicant' => 'citizen_applicant',
                     'operator' => 'primary_operator',
+                    'approver' => 'assessment_approver',
                     'recipient' => 'sample_recipient',
                 ],
                 safety: [
@@ -195,6 +198,7 @@ final class LifecycleScenarioRegistry
                 actors: [
                     'applicant' => 'citizen_applicant',
                     'operator' => 'primary_operator',
+                    'approver' => 'assessment_approver',
                 ],
                 safety: [
                     'environments' => ['local', 'testing'],
@@ -238,6 +242,7 @@ final class LifecycleScenarioRegistry
                 actors: [
                     'applicant' => 'citizen_applicant',
                     'operator' => 'primary_operator',
+                    'approver' => 'assessment_approver',
                 ],
                 safety: [
                     'environments' => ['local', 'testing'],
@@ -412,6 +417,7 @@ final class LifecycleScenarioRegistry
                 risk: 'local transactional',
                 actors: [
                     'operator' => 'primary_operator',
+                    'approver' => 'assessment_approver',
                     'recipient' => 'sample_recipient',
                 ],
                 safety: [
@@ -451,6 +457,7 @@ final class LifecycleScenarioRegistry
                 risk: 'local transactional',
                 actors: [
                     'operator' => 'primary_operator',
+                    'approver' => 'assessment_approver',
                     'recipient' => 'sample_recipient',
                 ],
                 safety: [
@@ -486,6 +493,7 @@ final class LifecycleScenarioRegistry
                 risk: 'local transactional',
                 actors: [
                     'operator' => 'primary_operator',
+                    'approver' => 'assessment_approver',
                     'recipient' => 'sample_recipient',
                 ],
                 safety: [
@@ -519,6 +527,7 @@ final class LifecycleScenarioRegistry
                 risk: 'local transactional',
                 actors: [
                     'operator' => 'primary_operator',
+                    'approver' => 'assessment_approver',
                     'recipient' => 'sample_recipient',
                 ],
                 safety: [
@@ -554,6 +563,7 @@ final class LifecycleScenarioRegistry
                 risk: 'local transactional',
                 actors: [
                     'operator' => 'primary_operator',
+                    'approver' => 'assessment_approver',
                     'recipient' => 'sample_recipient',
                 ],
                 safety: [
@@ -589,6 +599,7 @@ final class LifecycleScenarioRegistry
                 risk: 'local transactional',
                 actors: [
                     'operator' => 'primary_operator',
+                    'approver' => 'assessment_approver',
                     'recipient' => 'sample_recipient',
                 ],
                 safety: [
@@ -624,6 +635,7 @@ final class LifecycleScenarioRegistry
                 risk: 'local transactional',
                 actors: [
                     'operator' => 'primary_operator',
+                    'approver' => 'assessment_approver',
                     'recipient' => 'sample_recipient',
                 ],
                 safety: [

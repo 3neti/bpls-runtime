@@ -17,6 +17,7 @@ test('nelson walkthrough is a local transactional profile of the proven citizen 
         ->and($scenario->actors)->toBe([
             'applicant' => 'citizen_applicant',
             'operator' => 'primary_operator',
+            'approver' => 'assessment_approver',
             'recipient' => 'sample_recipient',
         ])
         ->and($scenario->expectations['ready_for_authority_review'])->toBeTrue()
@@ -66,10 +67,12 @@ test('local preparation creates runtime-only demo credentials and a resumable wa
         putenv('LIFECYCLE_BROWSER_PASSWORD');
         putenv('LIFECYCLE_BROWSER_OPERATOR_EMAIL');
         putenv('LIFECYCLE_BROWSER_OPERATOR_PASSWORD');
+        putenv('LIFECYCLE_ASSESSMENT_APPROVER_EMAIL');
     }
 
     $citizen = User::query()->where('email', 'nelson.walkthrough.citizen@example.test')->firstOrFail();
     $operator = User::query()->where('email', 'nelson.walkthrough.operator@example.test')->firstOrFail();
+    $approver = User::query()->where('email', 'nelson.walkthrough.treasurer@example.test')->firstOrFail();
     $artifactStore = new ScenarioArtifactStore('nelson_walkthrough', 'nelson-walkthrough-test-001');
     $manifest = $artifactStore->readJson('manifest.json');
     $presenterScript = Storage::disk('local')->get($artifactStore->rootRelativePath().'/walkthrough/presenter-script.md');
@@ -78,6 +81,9 @@ test('local preparation creates runtime-only demo credentials and a resumable wa
         ->and(Hash::check($password, $operator->password))->toBeTrue()
         ->and($citizen->role?->code)->toBe('citizen')
         ->and($operator->role?->code)->toBe('admin')
+        ->and($approver->id)->not->toBe($operator->id)
+        ->and($manifest['resources']['assessment_approved_by_id'])->toBe($approver->id)
+        ->and($manifest['resources']['assessment_prepared_by_id'])->toBe($operator->id)
         ->and($manifest['scenario']['key'])->toBe('nelson_walkthrough')
         ->and($manifest['result']['terminal'])->toBe('passed')
         ->and($manifest['resources']['application_number'])->toBeNull()

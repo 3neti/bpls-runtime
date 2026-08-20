@@ -120,8 +120,12 @@ final class ManualCollectionReceiptVisibilityScenario
         }
 
         $operator = $actors['operator'] ?? throw new RuntimeException('Scenario operator actor was not resolved.');
-        $assessmentApprover = $actors['approver'] ?? $operator;
-        $assessmentDecisionActor = isset($actors['approver']) ? 'approver' : 'operator';
+        $assessmentPreparer = $actors['assessment_officer'] ?? $operator;
+        $assessmentPreparationActor = isset($actors['assessment_officer']) ? 'assessment_officer' : 'operator';
+        $assessmentApprover = $actors['approver'] ?? User::query()
+            ->where('email', config('lifecycle_scenarios.actors.assessment_approver.email'))
+            ->firstOrFail();
+        $assessmentDecisionActor = 'approver';
         $isCitizenOriginated = $this->isCitizenOriginated($scenario->key);
         $isNelsonWalkthrough = $this->isStakeholderWalkthrough($scenario->key);
         $applicant = $isCitizenOriginated
@@ -186,7 +190,7 @@ final class ManualCollectionReceiptVisibilityScenario
             $supportingDocument = $this->storeScenarioDocument($permitApplication, $operator, $runId);
         }
 
-        $assessment = $this->createAssessment->handle($permitApplication, $operator);
+        $assessment = $this->createAssessment->handle($permitApplication, $assessmentPreparer);
         $assessmentDecision = $this->recordAssessmentDecision->handle(
             $assessment,
             $assessmentApprover,
@@ -323,7 +327,7 @@ final class ManualCollectionReceiptVisibilityScenario
                 $this->step('citizen-application-submitted', 'Submit citizen draft through the formal submission action', ['status' => PermitApplicationStatus::Assessment->value, 'citizen_submitted' => true, 'municipality_received' => true, 'official_application_number' => null], ['status' => PermitApplicationStatus::Assessment->value, 'citizen_submitted' => data_get($permitApplication->metadata, 'citizen_submission.submitted_at') !== null, 'municipality_received' => data_get($permitApplication->metadata, 'municipal_receipt.received_at') !== null, 'official_application_number' => $permitApplication->application_number], 'applicant'),
                 $this->step('citizen-receipt-notice-recorded', 'Record one factual in-app receipt notice through the submission action', ['notice_count' => 1, 'kind' => 'permit_application_received', 'tracking_reference' => $permitApplication->tracking_reference, 'external_delivery' => false], ['notice_count' => $receiptNotices->count(), 'kind' => data_get($receiptNotice?->data, 'kind'), 'tracking_reference' => data_get($receiptNotice?->data, 'tracking_reference'), 'external_delivery' => false], 'applicant'),
             ] : []),
-            $this->step('assessment-computed', 'Compute assessment through assessment action', ['assessment_status' => 'computed'], ['assessment_status' => $assessment->status->value, 'assessment_id' => $assessment->id]),
+            $this->step('assessment-computed', 'Compute assessment through assessment action', ['assessment_status' => 'computed'], ['assessment_status' => $assessment->status->value, 'assessment_id' => $assessment->id], $assessmentPreparationActor),
             $this->step('assessment-approved', 'Record Municipal Treasurer approval of the exact persisted assessment amount', ['action' => AssessmentDecisionAction::Approved->value, 'assessment_id' => $assessment->id, 'preparer_id' => $assessment->assessed_by_id, 'approver_id' => $assessmentApprover->id], ['action' => $assessmentDecision->action->value, 'assessment_id' => $assessmentDecision->assessment_id, 'preparer_id' => $assessment->assessed_by_id, 'approver_id' => $assessmentDecision->decided_by_id], $assessmentDecisionActor),
             $this->step('payment-schedule-prepared', 'Prepare payment schedule through payment schedule action', ['application_status' => PermitApplicationStatus::PendingPayment->value], ['application_status' => $permitApplication->status->value, 'payment_schedule_id' => $paymentSchedule->id]),
             $this->step('collection-recorded', 'Record full over-the-counter collection through Treasury action', ['payment_schedule_status' => PaymentScheduleStatus::Paid->value, 'collection_status' => TreasuryCollectionStatus::PendingReceipt->value], ['payment_schedule_status' => $paymentSchedule->status->value, 'collection_status' => $collectionStatusBeforeReceipt->value, 'collection_id' => $collection->id]),

@@ -79,6 +79,22 @@ test('BPLO and citizen users cannot invoke the Treasurer approval route', functi
     expect(AssessmentDecision::query()->count())->toBe(0);
 });
 
+test('the Assessment Officer cannot approve the assessment they prepared', function () {
+    [$assessmentOfficer, $assessment] = preparedAssessmentFixture();
+
+    expect(fn () => app(RecordAssessmentDecision::class)->handle(
+        $assessment,
+        $assessmentOfficer,
+        AssessmentDecisionAction::Approved,
+    ))->toThrow(
+        DomainException::class,
+        'The Assessment Officer who prepared the assessment cannot record the Municipal Treasurer decision.',
+    );
+
+    expect(AssessmentDecision::query()->count())->toBe(0)
+        ->and($assessment->permitApplication->refresh()->status)->toBe(PermitApplicationStatus::Assessment);
+});
+
 test('an unapproved or returned assessment cannot create a payment schedule', function () {
     [, $unapprovedAssessment] = preparedAssessmentFixture();
 

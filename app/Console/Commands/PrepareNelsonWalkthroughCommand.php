@@ -28,10 +28,17 @@ class PrepareNelsonWalkthroughCommand extends Command
             $this->assertSafeEnvironment();
             $password = $this->runtimePassword();
             $operatorEmail = $this->runtimeEmail('NELSON_WALKTHROUGH_OPERATOR_EMAIL', 'nelson.walkthrough.operator@example.test');
+            $approverEmail = $this->runtimeEmail('NELSON_WALKTHROUGH_APPROVER_EMAIL', 'nelson.walkthrough.treasurer@example.test');
             $citizenEmail = $this->runtimeEmail('NELSON_WALKTHROUGH_CITIZEN_EMAIL', 'nelson.walkthrough.citizen@example.test');
             $operator = $this->prepareOperator($operatorEmail, $password);
+            $approver = $this->prepareUser(
+                $approverEmail,
+                'Nelson Walkthrough Municipal Treasurer',
+                $password,
+                Role::query()->findOrFail($operator->role_id),
+            );
             $citizen = $this->prepareCitizen($citizenEmail, $password, $ensureCitizenRole);
-            $this->configureScenario($operator, $citizen, $password);
+            $this->configureScenario($operator, $approver, $citizen, $password);
             $runId = $this->runId();
 
             $exitCode = $this->call('lifecycle:scenario', [
@@ -49,6 +56,7 @@ class PrepareNelsonWalkthroughCommand extends Command
             $this->line('Walkthrough users prepared from runtime credentials.');
             $this->line('Citizen: '.$citizen->email);
             $this->line('Operator: '.$operator->email);
+            $this->line('Municipal Treasurer: '.$approver->email);
             $this->line('Password: supplied by NELSON_WALKTHROUGH_PASSWORD (not displayed)');
 
             return self::SUCCESS;
@@ -132,16 +140,18 @@ class PrepareNelsonWalkthroughCommand extends Command
         return $user->refresh();
     }
 
-    private function configureScenario(User $operator, User $citizen, string $password): void
+    private function configureScenario(User $operator, User $approver, User $citizen, string $password): void
     {
         config()->set('lifecycle_scenarios.actors.citizen_applicant.email', $citizen->email);
         config()->set('lifecycle_scenarios.actors.primary_operator.email', $operator->email);
+        config()->set('lifecycle_scenarios.actors.assessment_approver.email', $approver->email);
         config()->set('lifecycle_scenarios.actors.sample_recipient.email', $operator->email);
 
         $this->setProcessEnvironment('LIFECYCLE_BROWSER_EMAIL', $citizen->email);
         $this->setProcessEnvironment('LIFECYCLE_BROWSER_PASSWORD', $password);
         $this->setProcessEnvironment('LIFECYCLE_BROWSER_OPERATOR_EMAIL', $operator->email);
         $this->setProcessEnvironment('LIFECYCLE_BROWSER_OPERATOR_PASSWORD', $password);
+        $this->setProcessEnvironment('LIFECYCLE_ASSESSMENT_APPROVER_EMAIL', $approver->email);
     }
 
     private function setProcessEnvironment(string $key, string $value): void

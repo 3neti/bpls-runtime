@@ -162,6 +162,7 @@ class PrepareStakeholderPreviewCommand extends Command
     {
         config()->set('lifecycle_scenarios.actors.citizen_applicant.email', $accounts['citizen']->email);
         config()->set('lifecycle_scenarios.actors.primary_operator.email', $accounts['management']->email);
+        config()->set('lifecycle_scenarios.actors.assessment_preparer.email', $accounts['bplo']->email);
         config()->set('lifecycle_scenarios.actors.assessment_approver.email', $accounts['treasury']->email);
         config()->set('lifecycle_scenarios.actors.sample_recipient.email', $accounts['management']->email);
 
@@ -174,6 +175,7 @@ class PrepareStakeholderPreviewCommand extends Command
             'LIFECYCLE_BROWSER_BPLO_PASSWORD' => $password,
             'LIFECYCLE_BROWSER_TREASURY_EMAIL' => $accounts['treasury']->email,
             'LIFECYCLE_BROWSER_TREASURY_PASSWORD' => $password,
+            'LIFECYCLE_ASSESSMENT_PREPARER_EMAIL' => $accounts['bplo']->email,
             'LIFECYCLE_ASSESSMENT_APPROVER_EMAIL' => $accounts['treasury']->email,
         ];
 

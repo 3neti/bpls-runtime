@@ -71,6 +71,9 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
 
         $applicant = $actors['applicant'] ?? throw new RuntimeException('Scenario citizen applicant actor was not resolved.');
         $operator = $actors['operator'] ?? throw new RuntimeException('Scenario operator actor was not resolved.');
+        $approver = $actors['approver'] ?? User::query()
+            ->where('email', config('lifecycle_scenarios.actors.assessment_approver.email'))
+            ->firstOrFail();
         $manifest = $this->scenarioManifest->initial($scenario, $runId, $actors);
         $lineOfBusiness = $this->lineOfBusiness();
         $this->feeRule($lineOfBusiness);
@@ -103,7 +106,7 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
             ]],
         ], $applicant);
         $assessment = $this->createAssessment->handle($permitApplication, $operator);
-        $this->recordAssessmentDecision->handle($assessment, $operator, AssessmentDecisionAction::Approved);
+        $this->recordAssessmentDecision->handle($assessment, $approver, AssessmentDecisionAction::Approved);
         $paymentSchedule = $this->createPaymentSchedule->handle($assessment, $operator);
         $collection = $this->recordCollection->handle($paymentSchedule, [
             'amount_cents' => $paymentSchedule->total_amount_cents,

@@ -77,6 +77,11 @@ final class ScenarioActorResolver
                 UserPermission::ViewFeeRules,
                 UserPermission::ManageStoryboards,
             ],
+            'assessment_preparer' => [
+                UserPermission::AccessStaff,
+                UserPermission::ViewPermitApplications,
+                UserPermission::AssessPermitApplications,
+            ],
             'assessment_approver' => [
                 UserPermission::AccessStaff,
                 UserPermission::ViewPermitApplications,

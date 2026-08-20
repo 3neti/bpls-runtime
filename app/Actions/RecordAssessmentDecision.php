@@ -37,7 +37,7 @@ class RecordAssessmentDecision
             $lockedAssessment->load(['decision', 'lines' => fn ($query) => $query->orderBy('id')]);
             $decidedBy->loadMissing('role');
 
-            $this->assertDecisionMayBeRecorded($lockedAssessment, $permitApplication);
+            $this->assertDecisionMayBeRecorded($lockedAssessment, $permitApplication, $decidedBy);
 
             $snapshot = $this->fingerprint->snapshot($lockedAssessment);
             $snapshotHash = $this->fingerprint->hash($lockedAssessment);
@@ -81,14 +81,21 @@ class RecordAssessmentDecision
         });
     }
 
-    private function assertDecisionMayBeRecorded(Assessment $assessment, PermitApplication $permitApplication): void
-    {
+    private function assertDecisionMayBeRecorded(
+        Assessment $assessment,
+        PermitApplication $permitApplication,
+        User $decidedBy,
+    ): void {
         if ($permitApplication->isHistoricalEvidenceOnly()) {
             throw new DomainException('Historical application evidence cannot receive an operational assessment decision.');
         }
 
         if ($assessment->status !== AssessmentStatus::Computed || $assessment->superseded_at !== null) {
             throw new DomainException('Only the current computed assessment snapshot may be approved or returned for correction.');
+        }
+
+        if ($assessment->assessed_by_id !== null && $assessment->assessed_by_id === $decidedBy->id) {
+            throw new DomainException('The Assessment Officer who prepared the assessment cannot record the Municipal Treasurer decision.');
         }
 
         if ($assessment->decision instanceof AssessmentDecision) {

@@ -58,6 +58,9 @@ final class PermitApplicationPendingPaymentVisibilityScenario
         }
 
         $operator = $actors['operator'] ?? throw new RuntimeException('Scenario operator actor was not resolved.');
+        $approver = $actors['approver'] ?? User::query()
+            ->where('email', config('lifecycle_scenarios.actors.assessment_approver.email'))
+            ->firstOrFail();
         $manifest = $this->scenarioManifest->initial($scenario, $runId, $actors);
         $lineOfBusiness = $this->lineOfBusiness();
         $this->feeRules($lineOfBusiness);
@@ -87,7 +90,7 @@ final class PermitApplicationPendingPaymentVisibilityScenario
 
         $assessment = $this->createAssessment->handle($permitApplication, $operator);
         $rangeAssessmentLine = $this->rangeAssessmentLine($assessment);
-        $this->recordAssessmentDecision->handle($assessment, $operator, AssessmentDecisionAction::Approved);
+        $this->recordAssessmentDecision->handle($assessment, $approver, AssessmentDecisionAction::Approved);
         $paymentSchedule = $this->createPaymentSchedule->handle($assessment, $operator);
         $paymentPolicyBoundary = $this->describePaymentPolicyBoundary->handle($paymentSchedule);
         $permitApplication = PermitApplication::query()

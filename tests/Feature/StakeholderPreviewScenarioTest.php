@@ -42,6 +42,8 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
             'LIFECYCLE_BROWSER_BPLO_PASSWORD',
             'LIFECYCLE_BROWSER_TREASURY_EMAIL',
             'LIFECYCLE_BROWSER_TREASURY_PASSWORD',
+            'LIFECYCLE_ASSESSMENT_PREPARER_EMAIL',
+            'LIFECYCLE_ASSESSMENT_APPROVER_EMAIL',
         ] as $key) {
             putenv($key);
         }
@@ -85,7 +87,10 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
         ->and($record->status->value)->toBe('draft')
         ->and($manifest['preview']['billing_group']['financial_effect'])->toBe('none')
         ->and($manifest['resources']['ready_for_authority_review'])->toBeTrue()
-        ->and($manifest['resources']['can_release'])->toBeFalse();
+        ->and($manifest['resources']['can_release'])->toBeFalse()
+        ->and($manifest['resources']['assessment_prepared_by_id'])->toBe($accounts['stakeholder.preview.bplo@example.test']->id)
+        ->and($manifest['resources']['assessment_approved_by_id'])->toBe($accounts['stakeholder.preview.treasury@example.test']->id)
+        ->and($manifest['resources']['assessment_approver_distinct_from_preparer'])->toBeTrue();
 
     $screenshotPath = $store->rootRelativePath().'/browser/screenshots/preview.png';
     Storage::disk('local')->put($screenshotPath, 'synthetic screenshot evidence');
