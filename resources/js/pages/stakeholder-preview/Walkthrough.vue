@@ -34,6 +34,41 @@ const steps: Record<StakeholderPreviewPersona['key'], string[]> = {
         'Inspect Users, Roles & Permissions, and Municipality & Officials.',
         'Review Taxes & Fees and Billing Groups as evidence and policy-bound surfaces.',
     ],
+    engineering: [
+        'Open the Engineering queue.',
+        'Inspect the application evidence.',
+        'Confirm or enter only the Engineering charge.',
+    ],
+    mpdo: [
+        'Open the MPDO queue.',
+        'Inspect the application evidence.',
+        'Confirm or enter only the MPDO charge.',
+    ],
+    assessor: [
+        'Open the Assessor queue.',
+        'Inspect the application evidence.',
+        'Confirm or enter only the Assessor charge.',
+    ],
+    health: [
+        'Open the Health queue.',
+        'Inspect the application evidence.',
+        'Confirm or enter only the Health charge.',
+    ],
+    menro: [
+        'Open the MENRO queue.',
+        'Inspect the application evidence.',
+        'Confirm or enter only the MENRO charge.',
+    ],
+    mayor_office: [
+        'Open Final Permit Review.',
+        'Inspect payment and clearance readiness.',
+        'Try the provisional go/no-go interaction.',
+    ],
+    releasing: [
+        'Open the Permit Release Queue.',
+        'Confirm the preview go decision.',
+        'Release the sample permit in the preview lifecycle.',
+    ],
 };
 </script>
 
@@ -44,7 +79,7 @@ const steps: Record<StakeholderPreviewPersona['key'], string[]> = {
         <div
             class="border-b border-amber-800 bg-amber-300 px-5 py-3 text-center text-sm font-extrabold tracking-wide text-amber-950"
         >
-            STAKEHOLDER PREVIEW / UAT — SYNTHETIC DATA — NOT PRODUCTION
+            Preview Environment · Sample Data
         </div>
 
         <div
@@ -68,12 +103,12 @@ const steps: Record<StakeholderPreviewPersona['key'], string[]> = {
                     <h1
                         class="text-3xl font-semibold tracking-tight sm:text-4xl"
                     >
-                        Board / Stakeholder Walkthrough
+                        Quick Start
                     </h1>
                     <p
                         class="max-w-3xl text-base leading-7 text-muted-foreground"
                     >
-                        Follow the four perspectives in order, or enter any role
+                        Follow the perspectives in order, or enter any role
                         directly. This is concise guidance over the real
                         BPLS—not a separate demo application.
                     </p>

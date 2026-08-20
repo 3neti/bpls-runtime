@@ -28,6 +28,13 @@ const personaIcons = {
     bplo: ClipboardCheck,
     treasury: WalletCards,
     management: UsersRound,
+    engineering: Building2,
+    mpdo: Building2,
+    assessor: Building2,
+    health: Building2,
+    menro: Building2,
+    mayor_office: Landmark,
+    releasing: ClipboardCheck,
 };
 
 function enterAs(persona: StakeholderPreviewPersona): void {
@@ -51,7 +58,7 @@ function enterAs(persona: StakeholderPreviewPersona): void {
         <div
             class="border-b border-amber-400/50 bg-amber-300 px-5 py-3 text-center text-sm font-extrabold tracking-wide text-amber-950"
         >
-            STAKEHOLDER PREVIEW / UAT — SYNTHETIC DATA — NOT PRODUCTION
+            Preview Environment · Sample Data
         </div>
 
         <div
@@ -91,7 +98,7 @@ function enterAs(persona: StakeholderPreviewPersona): void {
             </header>
 
             <section
-                class="grid gap-4 sm:grid-cols-2"
+                class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
                 aria-label="Preview personas"
             >
                 <article

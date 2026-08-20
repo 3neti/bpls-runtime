@@ -11,6 +11,7 @@ use App\Actions\DescribeAmendmentPolicyBoundary;
 use App\Actions\DescribePermitArtifact;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
+use App\Actions\DescribeProvisionalUatPermitCompletion;
 use App\Actions\DescribeRenewalPolicyBoundary;
 use App\Actions\DescribeRetirementPolicyBoundary;
 use App\Actions\DescribeTransferPolicyBoundary;
@@ -45,6 +46,7 @@ class PermitApplicationController extends Controller
         private readonly DescribeTransferPolicyBoundary $describeTransferPolicyBoundary,
         private readonly DescribeRetirementPolicyBoundary $describeRetirementPolicyBoundary,
         private readonly BuildPermitApplicationTimeline $buildPermitApplicationTimeline,
+        private readonly DescribeProvisionalUatPermitCompletion $describeProvisionalUatPermitCompletion,
     ) {}
 
     public function index(): Response
@@ -146,6 +148,8 @@ class PermitApplicationController extends Controller
             'paymentSchedules' => fn ($query) => $query->with('preparedBy')->latest(),
             'treasuryCollections' => fn ($query) => $query->with(['receivedBy', 'receipt.issuedBy'])->oldest(),
             'clearances' => fn ($query) => $query->with('completedBy')->orderBy('id'),
+            'officeChargeContributions' => fn ($query) => $query->with('submittedBy')->orderBy('office_code'),
+            'provisionalUatPermitCompletion',
         ]);
 
         return Inertia::render('permit-applications/Show', [
@@ -273,6 +277,18 @@ class PermitApplicationController extends Controller
             'permit_artifact' => $this->describePermitArtifact->handle($permitApplication),
             'release_readiness' => $this->describeReleaseReadiness->handle($permitApplication),
             'verification_boundary' => $this->describeVerificationBoundary->handle($permitApplication),
+            ...($includeTimeline ? ['provisional_uat_completion' => $this->describeProvisionalUatPermitCompletion->handle($permitApplication)] : []),
+            ...($includeTimeline ? ['office_charge_contributions' => $permitApplication->officeChargeContributions
+                ->map(fn ($contribution): array => [
+                    'office_label' => $contribution->office_label,
+                    'is_applicable' => $contribution->is_applicable,
+                    'status' => $contribution->status,
+                    'amount_cents' => $contribution->amount_cents,
+                    'submitted_by' => $contribution->submittedBy?->name,
+                    'submitted_at' => $contribution->submitted_at?->toIso8601String(),
+                    'semantic_classification' => $contribution->semantic_classification,
+                ])
+                ->values()] : []),
             ...($includeTimeline ? ['timeline' => $this->buildPermitApplicationTimeline->handle($permitApplication)] : []),
             ...($includeTimeline ? ['documents' => $permitApplication->documents
                 ->values()

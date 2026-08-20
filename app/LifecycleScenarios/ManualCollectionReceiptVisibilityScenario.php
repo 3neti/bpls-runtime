@@ -31,7 +31,9 @@ use App\Actions\DescribeReceiptVoidBoundary;
 use App\Actions\EnsurePermitApplicationClearances;
 use App\Actions\IssueManualCollectionReceipt;
 use App\Actions\RecordAssessmentDecision;
+use App\Actions\RecordOfficeChargeContribution;
 use App\Actions\RecordPaymentScheduleCollection;
+use App\Actions\RecordProvisionalUatPermitDecision;
 use App\Actions\SimplePdfDocument;
 use App\Actions\StoreCitizenPermitApplicationDocument;
 use App\Actions\StorePermitApplicationDocument;
@@ -76,6 +78,8 @@ final class ManualCollectionReceiptVisibilityScenario
         private readonly StoreCitizenPermitApplicationDocument $storeCitizenPermitApplicationDocument,
         private readonly CreateAssessmentForPermitApplication $createAssessment,
         private readonly RecordAssessmentDecision $recordAssessmentDecision,
+        private readonly RecordOfficeChargeContribution $recordOfficeChargeContribution,
+        private readonly RecordProvisionalUatPermitDecision $recordProvisionalUatPermitDecision,
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
         private readonly RecordPaymentScheduleCollection $recordCollection,
         private readonly IssueManualCollectionReceipt $issueReceipt,
@@ -128,6 +132,7 @@ final class ManualCollectionReceiptVisibilityScenario
         $assessmentDecisionActor = 'approver';
         $isCitizenOriginated = $this->isCitizenOriginated($scenario->key);
         $isNelsonWalkthrough = $this->isStakeholderWalkthrough($scenario->key);
+        $isWeekendPreview = $scenario->key === 'stakeholder_preview_cycle_1';
         $applicant = $isCitizenOriginated
             ? ($actors['applicant'] ?? throw new RuntimeException('Scenario applicant actor was not resolved.'))
             : null;
@@ -179,7 +184,10 @@ final class ManualCollectionReceiptVisibilityScenario
 
         if ($isCitizenOriginated) {
             $permitApplication = $this->createCitizenPermitApplicationDraft->handle($applicationData, $applicant);
-            $supportingDocument = $this->storeScenarioDocument($permitApplication, $applicant, $runId, citizen: true);
+            $supportingDocument = $this->storeScenarioDocument($permitApplication, $applicant, $runId, citizen: true, label: 'Proof of Registration · DTI');
+            if ($isWeekendPreview) {
+                $this->storeWeekendScenarioDocuments($permitApplication, $applicant, $runId, citizen: true);
+            }
             $permitApplication = $this->submitCitizenPermitApplication->handle($permitApplication, $applicant);
         } else {
             $permitApplication = $this->createPermitApplication->handle([
@@ -187,7 +195,23 @@ final class ManualCollectionReceiptVisibilityScenario
                 'application_number' => 'APP-SCENARIO-'.$this->boundedRunReference($runId, 40),
                 'type' => PermitApplicationType::New->value,
             ], $operator);
-            $supportingDocument = $this->storeScenarioDocument($permitApplication, $operator, $runId);
+            $supportingDocument = $this->storeScenarioDocument($permitApplication, $operator, $runId, label: 'Proof of Registration · DTI');
+            if ($isWeekendPreview) {
+                $this->storeWeekendScenarioDocuments($permitApplication, $operator, $runId);
+            }
+        }
+
+        $officeChargeContributions = collect();
+        if ($isWeekendPreview) {
+            foreach (config('stakeholder_preview.weekend_hypothesis.office_charges', []) as $officeCode => $office) {
+                $officeActor = $actors[$officeCode] ?? throw new RuntimeException("Scenario office actor [{$officeCode}] was not resolved.");
+                $officeChargeContributions->push($this->recordOfficeChargeContribution->handle(
+                    $permitApplication,
+                    $officeActor,
+                    true,
+                    (int) $office['scenario_amount_cents'],
+                ));
+            }
         }
 
         $assessment = $this->createAssessment->handle($permitApplication, $assessmentPreparer);
@@ -226,6 +250,21 @@ final class ManualCollectionReceiptVisibilityScenario
         foreach ($permitApplication->clearances as $clearance) {
             $this->completeClearance->handle($clearance, $operator, 'Lifecycle scenario clearance evidence.');
             $completedClearances++;
+        }
+
+        $provisionalPermitCompletion = null;
+        if ($isWeekendPreview) {
+            $provisionalPermitCompletion = $this->recordProvisionalUatPermitDecision->handle(
+                $permitApplication,
+                $actors['mayor_office'] ?? throw new RuntimeException('Scenario Mayor Office actor was not resolved.'),
+                'go',
+                'Deterministic weekend UAT go decision for stakeholder validation only.',
+            );
+            $provisionalPermitCompletion = $this->recordProvisionalUatPermitDecision->handle(
+                $permitApplication,
+                $actors['releasing'] ?? throw new RuntimeException('Scenario Releasing actor was not resolved.'),
+                'release',
+            );
         }
 
         $permitApplication->load([
@@ -346,8 +385,23 @@ final class ManualCollectionReceiptVisibilityScenario
             $this->step('release-ready-for-authority-review', 'Describe release readiness without issuing permit', ['ready_for_authority_review' => true, 'can_release' => false], ['ready_for_authority_review' => $releaseReadiness['ready_for_authority_review'], 'can_release' => $releaseReadiness['can_release']]),
             $this->step('permit-artifact-available-for-authority-review', 'Describe generated permit artifact without issuing permit', ['status' => 'generated_artifact_available', 'ready_for_authority_review' => true, 'can_issue' => false, 'can_release' => false], ['status' => $permitArtifact['status'], 'ready_for_authority_review' => $permitArtifact['ready_for_authority_review'], 'can_issue' => $permitArtifact['can_issue'], 'can_release' => $permitArtifact['can_release']]),
             $this->step('permit-release-blocked', 'Attempt permit release through release boundary action', ['release_blocked' => true, 'application_status' => PermitApplicationStatus::PendingPayment->value], ['release_blocked' => $releaseBlocked, 'application_status' => $permitApplication->status->value]),
-            $this->step('application-timeline-projected', 'Project authoritative lifecycle records into chronological review evidence', ['event_count' => $isCitizenOriginated ? 16 : 13, 'release_boundary_visible' => true], ['event_count' => count($timelineKeys), 'release_boundary_visible' => in_array("release-blocked:{$permitApplication->id}", $timelineKeys, true)]),
+            $this->step('application-timeline-projected', 'Project authoritative lifecycle records into chronological review evidence', ['event_count' => $isWeekendPreview ? 20 : ($isCitizenOriginated ? 16 : 13), 'release_boundary_visible' => true], ['event_count' => count($timelineKeys), 'release_boundary_visible' => in_array("release-blocked:{$permitApplication->id}", $timelineKeys, true)]),
         ];
+
+        if ($isWeekendPreview) {
+            $steps[] = $this->step(
+                'concerned-office-charges-consolidated',
+                'Consolidate five staff-entered preview office charges into the real assessment snapshot',
+                ['count' => 5, 'classification' => 'provisional_uat'],
+                ['count' => $officeChargeContributions->count(), 'classification' => $officeChargeContributions->first()?->semantic_classification],
+            );
+            $steps[] = $this->step(
+                'provisional-uat-permit-released',
+                'Complete the synthetic numbering, signature, and release hypothesis without changing production permit authority',
+                ['status' => 'released_in_preview', 'classification' => 'provisional_uat'],
+                ['status' => $provisionalPermitCompletion?->status, 'classification' => $provisionalPermitCompletion?->semantic_classification],
+            );
+        }
 
         foreach ($steps as $step) {
             $artifactStore->appendJsonLine('terminal/action-log.jsonl', $step);
@@ -392,6 +446,8 @@ final class ManualCollectionReceiptVisibilityScenario
             'assessment_id' => $assessment->id,
             'assessment_status' => $assessment->status->value,
             'assessment_total_amount_cents' => $assessment->total_amount_cents,
+            'office_charge_contribution_count' => $officeChargeContributions->count(),
+            'office_charge_total_amount_cents' => $officeChargeContributions->sum('amount_cents'),
             'assessment_prepared_by_id' => $assessment->assessed_by_id,
             'assessment_decision_id' => $assessmentDecision->id,
             'assessment_decision_action' => $assessmentDecision->action->value,
@@ -539,6 +595,10 @@ final class ManualCollectionReceiptVisibilityScenario
             ], false),
             'permit_timeline_event_count' => count($timelineKeys),
             'permit_timeline_event_keys' => $timelineKeys,
+            'provisional_uat_permit_status' => $provisionalPermitCompletion?->status,
+            'provisional_uat_permit_number' => $provisionalPermitCompletion?->permit_number,
+            'provisional_uat_signature_reference' => $provisionalPermitCompletion?->synthetic_signature_reference,
+            'provisional_uat_released_at' => $provisionalPermitCompletion?->released_at?->toIso8601String(),
             ...($isCitizenOriginated ? [
                 'public_reference' => $citizenApplicationDisplayReference,
                 'clearances_completed' => $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count(),
@@ -1109,7 +1169,7 @@ final class ManualCollectionReceiptVisibilityScenario
         return $manifest;
     }
 
-    private function storeScenarioDocument(PermitApplication $permitApplication, User $actor, string $runId, bool $citizen = false): PermitApplicationDocument
+    private function storeScenarioDocument(PermitApplication $permitApplication, User $actor, string $runId, bool $citizen = false, string $label = 'Business registration evidence'): PermitApplicationDocument
     {
         $document = new SimplePdfDocument(
             title: 'Scenario Supporting Evidence',
@@ -1129,7 +1189,7 @@ final class ManualCollectionReceiptVisibilityScenario
 
         try {
             $data = [
-                'label' => 'Business registration evidence',
+                'label' => $label,
                 'file' => new UploadedFile(
                     $temporaryPath,
                     'scenario-business-registration.pdf',
@@ -1149,6 +1209,18 @@ final class ManualCollectionReceiptVisibilityScenario
             if (is_file($temporaryPath)) {
                 unlink($temporaryPath);
             }
+        }
+    }
+
+    private function storeWeekendScenarioDocuments(PermitApplication $permitApplication, User $actor, string $runId, bool $citizen): void
+    {
+        foreach ([
+            'Barangay Business Clearance',
+            'Income Tax Return (ITR)',
+            'Community Tax Certificate (CTC)',
+            'Sworn Statement',
+        ] as $label) {
+            $this->storeScenarioDocument($permitApplication, $actor, $runId, $citizen, $label);
         }
     }
 

@@ -35,7 +35,7 @@ function switchPersona(persona: string): void {
             <div class="flex min-w-0 items-center gap-2">
                 <ShieldAlert class="size-5 shrink-0" aria-hidden="true" />
                 <p class="text-xs font-extrabold tracking-wide sm:text-sm">
-                    STAKEHOLDER PREVIEW / UAT — SYNTHETIC DATA — NOT PRODUCTION
+                    Preview Environment · Sample Data
                 </p>
             </div>
 

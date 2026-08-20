@@ -1,11 +1,13 @@
 <?php
 
+use App\Enums\StakeholderPreviewPersona;
 use App\Enums\UserPermission;
 use App\LifecycleScenarios\LifecycleScenarioRegistry;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\Models\BillingGroup;
 use App\Models\BillingGroupRecord;
 use App\Models\User;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 
@@ -28,10 +30,18 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
     configureSafeStakeholderPreview($password);
 
     try {
-        $this->artisan('lifecycle:prepare-stakeholder-preview', [
+        $exitCode = Artisan::call('lifecycle:prepare-stakeholder-preview', [
             '--run-id' => 'stakeholder-preview-test-001',
             '--phase' => 'prepare',
-        ])->assertSuccessful();
+        ]);
+        if ($exitCode !== 0) {
+            $debugStore = new ScenarioArtifactStore('stakeholder_preview_cycle_1', 'stakeholder-preview-test-001');
+            $failure = $debugStore->readJson('failure.json');
+            $debugManifest = $debugStore->readJson('manifest.json');
+            $failedSteps = collect(data_get($debugManifest, 'steps', []))->where('passed', false)->values()->all();
+            throw new RuntimeException((string) data_get($failure, 'message', json_encode($failedSteps, JSON_THROW_ON_ERROR)));
+        }
+        $this->assertSame(0, $exitCode, Artisan::output());
     } finally {
         foreach ([
             'LIFECYCLE_BROWSER_EMAIL',
@@ -44,18 +54,20 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
             'LIFECYCLE_BROWSER_TREASURY_PASSWORD',
             'LIFECYCLE_ASSESSMENT_PREPARER_EMAIL',
             'LIFECYCLE_ASSESSMENT_APPROVER_EMAIL',
+            'LIFECYCLE_PREVIEW_ENGINEERING_EMAIL',
+            'LIFECYCLE_PREVIEW_MPDO_EMAIL',
+            'LIFECYCLE_PREVIEW_ASSESSOR_EMAIL',
+            'LIFECYCLE_PREVIEW_HEALTH_EMAIL',
+            'LIFECYCLE_PREVIEW_MENRO_EMAIL',
+            'LIFECYCLE_PREVIEW_MAYOR_OFFICE_EMAIL',
+            'LIFECYCLE_PREVIEW_RELEASING_EMAIL',
         ] as $key) {
             putenv($key);
         }
     }
 
     $accounts = User::query()
-        ->whereIn('email', [
-            'stakeholder.preview.citizen@example.test',
-            'stakeholder.preview.bplo@example.test',
-            'stakeholder.preview.treasury@example.test',
-            'stakeholder.preview.management@example.test',
-        ])
+        ->whereIn('email', collect(StakeholderPreviewPersona::cases())->map->approvedEmail())
         ->with('role.permissions')
         ->get()
         ->keyBy('email');
@@ -65,7 +77,7 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
     $billingGroup = BillingGroup::query()->where('metadata->scenario_run_id', 'stakeholder-preview-test-001')->sole();
     $record = BillingGroupRecord::query()->where('source_snapshot->scenario_run_id', 'stakeholder-preview-test-001')->sole();
 
-    expect($accounts)->toHaveCount(4)
+    expect($accounts)->toHaveCount(11)
         ->and($accounts)->each(fn ($user) => $user->password->not->toBe($password))
         ->and(Hash::check($password, $accounts['stakeholder.preview.citizen@example.test']->password))->toBeTrue()
         ->and($accounts['stakeholder.preview.citizen@example.test']->role?->code)->toBe('preview_citizen')
@@ -90,7 +102,9 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
         ->and($manifest['resources']['can_release'])->toBeFalse()
         ->and($manifest['resources']['assessment_prepared_by_id'])->toBe($accounts['stakeholder.preview.bplo@example.test']->id)
         ->and($manifest['resources']['assessment_approved_by_id'])->toBe($accounts['stakeholder.preview.treasury@example.test']->id)
-        ->and($manifest['resources']['assessment_approver_distinct_from_preparer'])->toBeTrue();
+        ->and($manifest['resources']['assessment_approver_distinct_from_preparer'])->toBeTrue()
+        ->and($manifest['resources']['office_charge_contribution_count'])->toBe(5)
+        ->and($manifest['resources']['provisional_uat_permit_status'])->toBe('released_in_preview');
 
     $screenshotPath = $store->rootRelativePath().'/browser/screenshots/preview.png';
     Storage::disk('local')->put($screenshotPath, 'synthetic screenshot evidence');
@@ -137,7 +151,7 @@ function configureSafeStakeholderPreview(?string $password = null): void
 {
     config()->set([
         'stakeholder_preview.mode' => true,
-        'stakeholder_preview.profile' => 'stakeholder_preview_cycle_4',
+        'stakeholder_preview.profile' => 'stakeholder_preview_weekend_v1',
         'stakeholder_preview.data_classification' => 'synthetic_only',
         'stakeholder_preview.pii_mode' => 'synthetic_only',
         'stakeholder_preview.production_migration_enabled' => false,

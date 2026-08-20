@@ -33,9 +33,9 @@ test('safe preview configuration registers an intentional launcher without crede
         ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive')
         ->assertInertia(fn (Assert $page) => $page
             ->component('stakeholder-preview/Launcher')
-            ->has('personas', 4)
+            ->has('personas', 11)
             ->where('personas.0.key', 'citizen')
-            ->where('personas.3.key', 'management'));
+            ->where('personas.10.key', 'releasing'));
 
     expect($response->getContent())
         ->not->toContain((string) config('stakeholder_preview.password'))
@@ -77,7 +77,7 @@ test('role switching works in every ordered direction and retains normal authori
         }
     }
 
-    expect($transitions)->toHaveCount(12);
+    expect($transitions)->toHaveCount(110);
 
     foreach ($transitions as [$source, $target]) {
         $this->actingAs($accounts[$source->value]);
@@ -151,6 +151,13 @@ test('preview context exposes only authorized real guidance and a persistent ban
     'bplo' => [StakeholderPreviewPersona::Bplo, 3],
     'treasury' => [StakeholderPreviewPersona::Treasury, 5],
     'management' => [StakeholderPreviewPersona::Management, 5],
+    'engineering' => [StakeholderPreviewPersona::Engineering, 1],
+    'mpdo' => [StakeholderPreviewPersona::Mpdo, 1],
+    'assessor' => [StakeholderPreviewPersona::Assessor, 1],
+    'health' => [StakeholderPreviewPersona::Health, 1],
+    'menro' => [StakeholderPreviewPersona::Menro, 1],
+    'mayor office' => [StakeholderPreviewPersona::MayorOffice, 1],
+    'releasing' => [StakeholderPreviewPersona::Releasing, 1],
 ]);
 
 test('logout ends the preview session and returns to the launcher', function () {
@@ -179,7 +186,7 @@ test('preview routes are not registered by a fresh production bootstrap even whe
         ->env([
             'APP_ENV' => 'production',
             'STAKEHOLDER_PREVIEW_MODE' => 'true',
-            'STAKEHOLDER_PREVIEW_PROFILE' => 'stakeholder_preview_cycle_4',
+            'STAKEHOLDER_PREVIEW_PROFILE' => 'stakeholder_preview_weekend_v1',
             'STAKEHOLDER_PREVIEW_DATA_CLASSIFICATION' => 'synthetic_only',
             'STAKEHOLDER_PREVIEW_PII_MODE' => 'synthetic_only',
             'STAKEHOLDER_PREVIEW_PRODUCTION_MIGRATION_ENABLED' => 'false',
@@ -237,7 +244,7 @@ function configureStakeholderPreviewSafety(): void
 {
     config()->set([
         'stakeholder_preview.mode' => true,
-        'stakeholder_preview.profile' => 'stakeholder_preview_cycle_4',
+        'stakeholder_preview.profile' => 'stakeholder_preview_weekend_v1',
         'stakeholder_preview.data_classification' => 'synthetic_only',
         'stakeholder_preview.pii_mode' => 'synthetic_only',
         'stakeholder_preview.production_migration_enabled' => false,

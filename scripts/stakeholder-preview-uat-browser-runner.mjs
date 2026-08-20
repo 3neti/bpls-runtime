@@ -10,7 +10,20 @@ if (!baseUrl || !evidenceDirectory) {
     );
 }
 
-const personas = ['Citizen', 'BPLO', 'Treasury', 'Management'];
+const personas = [
+    'Citizen',
+    'BPLO',
+    'Treasury',
+    'Management',
+    'Engineering',
+    'MPDO / MPDC',
+    'Assessor',
+    'Health',
+    'MENRO',
+    "Mayor's Office",
+    'Releasing Officer',
+];
+const workflowPersonas = new Set(personas.slice(4));
 const viewports = [
     { name: 'desktop', width: 1440, height: 900 },
     { name: 'mobile', width: 390, height: 844 },
@@ -35,7 +48,10 @@ function check(key, passed, detail = null) {
 }
 
 function slug(value) {
-    return value.toLowerCase().replaceAll(' ', '-');
+    return value
+        .toLowerCase()
+        .replaceAll(/[^a-z0-9]+/g, '-')
+        .replaceAll(/(^-|-$)/g, '');
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -110,11 +126,25 @@ try {
             await page.waitForURL('**/dashboard');
             await page
                 .getByText(
-                    'STAKEHOLDER PREVIEW / UAT — SYNTHETIC DATA — NOT PRODUCTION',
+                    'Preview Environment · Sample Data',
                     { exact: true },
                 )
                 .waitFor();
             await page.getByRole('heading', { name: 'What to try' }).waitFor();
+
+            if (workflowPersonas.has(persona)) {
+                await page.goto(`${baseUrl.replace(/\/$/, '')}/stakeholder-preview/workflow`, {
+                    waitUntil: 'networkidle',
+                });
+                await page
+                    .getByRole('heading', { name: `${persona} Workspace` })
+                    .waitFor();
+                check(
+                    `${viewport.name}-${slug(persona)}-workspace-visible`,
+                    true,
+                );
+            }
+
             check(
                 `${viewport.name}-${slug(persona)}-no-overflow`,
                 await page.evaluate(
@@ -213,20 +243,31 @@ try {
             passed: checks.every((item) => item.passed),
             check_count: checks.length,
             screenshot_count: fs.readdirSync(screenshotsDirectory).length,
-            console_error_or_warning_count: consoleMessages.length,
-            failed_request_count: failedRequests.length,
+            application_console_error_or_warning_count: consoleMessages.length,
+            failed_internal_request_count: failedRequests.length,
             unexpected_response_count: unexpectedResponses.length,
-            external_request_count: externalRequests.length,
+            unexpected_external_resource_count: externalRequests.length,
+            horizontal_overflow_count: checks.filter(
+                (item) => item.key.endsWith('-no-overflow') && !item.passed,
+            ).length,
         },
         checks,
         console_messages: consoleMessages,
         failed_requests: failedRequests,
         unexpected_responses: unexpectedResponses,
         external_requests: externalRequests,
+        artifacts: {
+            screenshots: Object.fromEntries(
+                fs.readdirSync(screenshotsDirectory).map((filename) => [
+                    filename.replace(/\.png$/, ''),
+                    `browser/screenshots/${filename}`,
+                ]),
+            ),
+        },
     };
 
     fs.writeFileSync(
-        path.join(evidenceDirectory, 'report.json'),
+        path.join(evidenceDirectory, 'managed-report.json'),
         `${JSON.stringify(report, null, 2)}\n`,
     );
     process.stdout.write(`${JSON.stringify(report.result)}\n`);

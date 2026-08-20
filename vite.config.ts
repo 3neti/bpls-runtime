@@ -30,7 +30,7 @@ export default defineConfig({
         wayfinder({
             formVariants: true,
             command:
-                'APP_ENV=local STAKEHOLDER_PREVIEW_MODE=true STAKEHOLDER_PREVIEW_PROFILE=stakeholder_preview_cycle_4 STAKEHOLDER_PREVIEW_DATA_CLASSIFICATION=synthetic_only STAKEHOLDER_PREVIEW_PII_MODE=synthetic_only STAKEHOLDER_PREVIEW_PRODUCTION_MIGRATION_ENABLED=false STAKEHOLDER_PREVIEW_PRODUCTION_INTEGRATIONS=disabled php artisan wayfinder:generate',
+                'APP_ENV=local STAKEHOLDER_PREVIEW_MODE=true STAKEHOLDER_PREVIEW_PROFILE=stakeholder_preview_weekend_v1 STAKEHOLDER_PREVIEW_DATA_CLASSIFICATION=synthetic_only STAKEHOLDER_PREVIEW_PII_MODE=synthetic_only STAKEHOLDER_PREVIEW_PRODUCTION_MIGRATION_ENABLED=false STAKEHOLDER_PREVIEW_PRODUCTION_INTEGRATIONS=disabled php artisan wayfinder:generate',
         }),
     ],
 });

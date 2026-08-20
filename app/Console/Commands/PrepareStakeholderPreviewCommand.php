@@ -97,7 +97,7 @@ class PrepareStakeholderPreviewCommand extends Command
         return $password;
     }
 
-    /** @return array{citizen: User, bplo: User, treasury: User, management: User} */
+    /** @return array<string, User> */
     private function prepareAccounts(string $password): array
     {
         return [
@@ -105,6 +105,13 @@ class PrepareStakeholderPreviewCommand extends Command
             'bplo' => $this->preparePersona(StakeholderPreviewPersona::Bplo, $password),
             'treasury' => $this->preparePersona(StakeholderPreviewPersona::Treasury, $password),
             'management' => $this->preparePersona(StakeholderPreviewPersona::Management, $password),
+            'engineering' => $this->preparePersona(StakeholderPreviewPersona::Engineering, $password),
+            'mpdo' => $this->preparePersona(StakeholderPreviewPersona::Mpdo, $password),
+            'assessor' => $this->preparePersona(StakeholderPreviewPersona::Assessor, $password),
+            'health' => $this->preparePersona(StakeholderPreviewPersona::Health, $password),
+            'menro' => $this->preparePersona(StakeholderPreviewPersona::Menro, $password),
+            'mayor_office' => $this->preparePersona(StakeholderPreviewPersona::MayorOffice, $password),
+            'releasing' => $this->preparePersona(StakeholderPreviewPersona::Releasing, $password),
         ];
     }
 
@@ -157,7 +164,7 @@ class PrepareStakeholderPreviewCommand extends Command
         return $user->refresh();
     }
 
-    /** @param array{citizen: User, bplo: User, treasury: User, management: User} $accounts */
+    /** @param array<string, User> $accounts */
     private function configureScenario(array $accounts, string $password): void
     {
         config()->set('lifecycle_scenarios.actors.citizen_applicant.email', $accounts['citizen']->email);
@@ -165,6 +172,13 @@ class PrepareStakeholderPreviewCommand extends Command
         config()->set('lifecycle_scenarios.actors.assessment_preparer.email', $accounts['bplo']->email);
         config()->set('lifecycle_scenarios.actors.assessment_approver.email', $accounts['treasury']->email);
         config()->set('lifecycle_scenarios.actors.sample_recipient.email', $accounts['management']->email);
+        config()->set('lifecycle_scenarios.actors.preview_engineering.email', $accounts['engineering']->email);
+        config()->set('lifecycle_scenarios.actors.preview_mpdo.email', $accounts['mpdo']->email);
+        config()->set('lifecycle_scenarios.actors.preview_assessor.email', $accounts['assessor']->email);
+        config()->set('lifecycle_scenarios.actors.preview_health.email', $accounts['health']->email);
+        config()->set('lifecycle_scenarios.actors.preview_menro.email', $accounts['menro']->email);
+        config()->set('lifecycle_scenarios.actors.preview_mayor_office.email', $accounts['mayor_office']->email);
+        config()->set('lifecycle_scenarios.actors.preview_releasing.email', $accounts['releasing']->email);
 
         $environment = [
             'LIFECYCLE_BROWSER_EMAIL' => $accounts['citizen']->email,
@@ -177,6 +191,13 @@ class PrepareStakeholderPreviewCommand extends Command
             'LIFECYCLE_BROWSER_TREASURY_PASSWORD' => $password,
             'LIFECYCLE_ASSESSMENT_PREPARER_EMAIL' => $accounts['bplo']->email,
             'LIFECYCLE_ASSESSMENT_APPROVER_EMAIL' => $accounts['treasury']->email,
+            'LIFECYCLE_PREVIEW_ENGINEERING_EMAIL' => $accounts['engineering']->email,
+            'LIFECYCLE_PREVIEW_MPDO_EMAIL' => $accounts['mpdo']->email,
+            'LIFECYCLE_PREVIEW_ASSESSOR_EMAIL' => $accounts['assessor']->email,
+            'LIFECYCLE_PREVIEW_HEALTH_EMAIL' => $accounts['health']->email,
+            'LIFECYCLE_PREVIEW_MENRO_EMAIL' => $accounts['menro']->email,
+            'LIFECYCLE_PREVIEW_MAYOR_OFFICE_EMAIL' => $accounts['mayor_office']->email,
+            'LIFECYCLE_PREVIEW_RELEASING_EMAIL' => $accounts['releasing']->email,
         ];
 
         foreach ($environment as $key => $value) {
@@ -201,7 +222,7 @@ class PrepareStakeholderPreviewCommand extends Command
     }
 
     /**
-     * @param  array{citizen: User, bplo: User, treasury: User, management: User}  $accounts
+     * @param  array<string, User>  $accounts
      */
     private function augmentComposition(
         string $runId,
@@ -276,6 +297,17 @@ class PrepareStakeholderPreviewCommand extends Command
                 'billing_group_detail' => route('staff.billing-groups.show', $billingGroup, false),
                 'billing_group_abstract' => route('staff.reports.billing-groups.abstract.index', $billingGroup, false),
             ],
+            'provisional_semantics' => [
+                'classification' => 'provisional_uat',
+                'concerned_office_charges' => true,
+                'full_consolidated_payment_is_scenario_choice' => true,
+                'partial_payment_capability_disabled' => false,
+                'mayor_go_no_go' => true,
+                'synthetic_signature_only' => true,
+                'preview_permit_number_only' => true,
+                'preview_release_only' => true,
+                'production_authority' => false,
+            ],
             'billing_group' => [
                 'id' => $billingGroup->id,
                 'record_id' => $record->id,
@@ -294,7 +326,7 @@ class PrepareStakeholderPreviewCommand extends Command
         $value = $this->option('run-id');
         $runId = is_string($value) && $value !== ''
             ? $value
-            : 'stakeholder-preview-cycle4-'.now()->format('Ymd-His');
+            : 'stakeholder-preview-weekend-'.now()->format('Ymd-His');
 
         if (preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{2,99}$/', $runId) !== 1) {
             throw new RuntimeException('The stakeholder preview run ID must be a stable filesystem-safe reference.');

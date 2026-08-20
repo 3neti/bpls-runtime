@@ -1,5 +1,16 @@
 export type StakeholderPreviewPersona = {
-    key: 'citizen' | 'bplo' | 'treasury' | 'management';
+    key:
+        | 'citizen'
+        | 'bplo'
+        | 'treasury'
+        | 'management'
+        | 'engineering'
+        | 'mpdo'
+        | 'assessor'
+        | 'health'
+        | 'menro'
+        | 'mayor_office'
+        | 'releasing';
     label: string;
     description: string;
 };

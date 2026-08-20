@@ -38,10 +38,20 @@ type ReleaseReadiness = {
     reason: string;
 };
 
+type PreviewCompletion = {
+    semantic_classification: 'provisional_uat';
+    status: string;
+    permit_number: string | null;
+    signature_applied: boolean;
+    released_in_preview: boolean;
+    production_authority: false;
+};
+
 defineProps<{
     verification: VerificationBoundary;
     permit: PermitSummary;
     releaseReadiness: ReleaseReadiness;
+    previewCompletion: PreviewCompletion | null;
 }>();
 
 function label(value: string): string {
@@ -226,6 +236,63 @@ function label(value: string): string {
                     ]"
                     :note="releaseReadiness.reason"
                 />
+            </section>
+
+            <section
+                v-if="previewCompletion"
+                class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-950 dark:border-blue-900/70 dark:bg-blue-950 dark:text-blue-100"
+                data-test="preview-permit-completion"
+            >
+                <div class="mb-3 flex items-center gap-2">
+                    <BadgeCheck class="size-4" />
+                    <h2 class="text-base font-semibold">
+                        Preview permit lifecycle
+                    </h2>
+                </div>
+                <dl class="grid gap-3 text-sm sm:grid-cols-4">
+                    <div>
+                        <dt class="text-xs opacity-70">Preview status</dt>
+                        <dd class="capitalize">
+                            {{ label(previewCompletion.status) }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs opacity-70">
+                            Preview permit number
+                        </dt>
+                        <dd>
+                            {{
+                                previewCompletion.permit_number ??
+                                'Not assigned'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs opacity-70">Sample e-signature</dt>
+                        <dd>
+                            {{
+                                previewCompletion.signature_applied
+                                    ? 'Applied'
+                                    : 'Not applied'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs opacity-70">Released in preview</dt>
+                        <dd>
+                            {{
+                                previewCompletion.released_in_preview
+                                    ? 'Yes'
+                                    : 'No'
+                            }}
+                        </dd>
+                    </div>
+                </dl>
+                <p class="mt-3 text-xs leading-5 opacity-80">
+                    This is a stakeholder-test result using sample data. It is
+                    not an official permit, numbering decision, Mayor
+                    credential, municipal release, or legal effect.
+                </p>
             </section>
 
             <section

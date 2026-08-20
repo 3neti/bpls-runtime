@@ -4,8 +4,11 @@ namespace App\Actions;
 
 use App\Assessment\AssessmentCalculator;
 use App\Enums\AssessmentStatus;
+use App\Enums\FeeRuleCalculationType;
+use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
 use App\Enums\PermitApplicationStatus;
+use App\Exceptions\UnsupportedAssessmentPolicy;
 use App\Models\Assessment;
 use App\Models\FeeRule;
 use App\Models\PermitApplication;
@@ -23,6 +26,8 @@ class CreateAssessmentForPermitApplication
     {
         return DB::transaction(function () use ($permitApplication, $assessedBy): Assessment {
             $permitApplication->loadMissing(['business', 'lines.lineOfBusiness']);
+
+            $this->assertProvisionalOfficeChargesReady($permitApplication);
 
             if ($permitApplication->isHistoricalEvidenceOnly()) {
                 throw new LogicException("Historical evidence application [{$permitApplication->id}] cannot enter operational assessment.");
@@ -44,6 +49,7 @@ class CreateAssessmentForPermitApplication
 
             $this->createApplicationScopedLines($assessment, $feeRules);
             $this->createLineOfBusinessScopedLines($assessment, $permitApplication, $feeRules);
+            $this->createOfficeChargeContributionLines($assessment, $permitApplication);
 
             $assessment->update([
                 'total_amount_cents' => $assessment->lines()->sum('amount_cents'),
@@ -71,6 +77,11 @@ class CreateAssessmentForPermitApplication
             'business_id' => $permitApplication->business_id,
             'business_name' => $permitApplication->business->name,
             'line_ids' => $permitApplication->lines->pluck('id')->values()->all(),
+            'office_charge_contribution_ids' => $permitApplication->officeChargeContributions()
+                ->where('status', 'approved')
+                ->orderBy('office_code')
+                ->pluck('id')
+                ->all(),
         ];
     }
 
@@ -165,5 +176,56 @@ class CreateAssessmentForPermitApplication
             'legal_basis' => $feeRule->legal_basis,
             'rule_snapshot' => $calculation['rule_snapshot'],
         ]);
+    }
+
+    private function assertProvisionalOfficeChargesReady(PermitApplication $permitApplication): void
+    {
+        $workflow = data_get($permitApplication->metadata, 'provisional_uat_workflow');
+
+        if (! is_array($workflow) || data_get($workflow, 'semantic_classification') !== 'provisional_uat') {
+            return;
+        }
+
+        $configuredOfficeCodes = $workflow['applicable_office_codes'] ?? [];
+        $requiredOfficeCodes = collect(is_array($configuredOfficeCodes) ? $configuredOfficeCodes : [])->filter()->values();
+        $approvedOfficeCodes = $permitApplication->officeChargeContributions()
+            ->where('status', 'approved')
+            ->pluck('office_code');
+        $missingOfficeCodes = $requiredOfficeCodes->diff($approvedOfficeCodes)->values();
+
+        if ($missingOfficeCodes->isNotEmpty()) {
+            throw new UnsupportedAssessmentPolicy('Assessment consolidation is waiting for these scenario office reviews: '.$missingOfficeCodes->implode(', ').'.');
+        }
+    }
+
+    private function createOfficeChargeContributionLines(Assessment $assessment, PermitApplication $permitApplication): void
+    {
+        $permitApplication->officeChargeContributions()
+            ->where('status', 'approved')
+            ->where('is_applicable', true)
+            ->orderBy('office_code')
+            ->get()
+            ->each(function ($contribution) use ($assessment): void {
+                $assessment->lines()->create([
+                    'code' => 'UAT-OFFICE-'.str($contribution->office_code)->upper()->toString(),
+                    'name' => $contribution->office_label,
+                    'category' => FeeRuleCategory::Fee,
+                    'calculation_type' => FeeRuleCalculationType::Fixed,
+                    'basis' => 'manual_office_assessment',
+                    'basis_amount_cents' => $contribution->amount_cents ?? 0,
+                    'amount_cents' => $contribution->amount_cents ?? 0,
+                    'legal_basis' => null,
+                    'rule_snapshot' => [
+                        'semantic_classification' => 'provisional_uat',
+                        'source' => 'concerned_office_charge_contribution',
+                        'office_charge_contribution_id' => $contribution->id,
+                        'office_code' => $contribution->office_code,
+                        'submitted_by_id' => $contribution->submitted_by_id,
+                        'submitted_at' => $contribution->submitted_at?->toIso8601String(),
+                        'generalizes_municipal_policy' => false,
+                        'real_taxpayer_liability' => false,
+                    ],
+                ]);
+            });
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
+use App\Actions\DescribeProvisionalUatPermitCompletion;
 use App\Models\PermitApplication;
 use Illuminate\Http\JsonResponse;
 
@@ -12,6 +13,7 @@ class PublicPermitVerificationController extends Controller
     public function __invoke(
         DescribePermitVerificationBoundary $describeVerificationBoundary,
         DescribePermitReleaseReadiness $describePermitReleaseReadiness,
+        DescribeProvisionalUatPermitCompletion $describeProvisionalCompletion,
         PermitApplication $permitApplication,
         string $verificationCode,
     ): JsonResponse {
@@ -38,6 +40,7 @@ class PublicPermitVerificationController extends Controller
                 'authority_boundary' => $readiness['authority_boundary'],
                 'reason' => $readiness['reason'],
             ],
+            'preview_completion' => $describeProvisionalCompletion->handle($permitApplication),
         ]);
     }
 }

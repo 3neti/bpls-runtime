@@ -27,6 +27,7 @@ import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/Rece
 import { index as reportCatalogIndex } from '@/actions/App/Http/Controllers/Staff/ReportCatalogController';
 import { index as rolePermissionIndex } from '@/actions/App/Http/Controllers/Staff/RolePermissionController';
 import { index as userDirectoryIndex } from '@/actions/App/Http/Controllers/Staff/UserDirectoryController';
+import { index as previewWorkflowIndex } from '@/actions/App/Http/Controllers/StakeholderPreviewWorkflowController';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -71,6 +72,32 @@ const staffSections = computed<NavSection[]>(() => {
     const sections: NavSection[] = [
         { title: 'Overview', items: [overviewItem] },
     ];
+
+    if (
+        page.props.stakeholder_preview?.current_persona &&
+        [
+            'engineering',
+            'mpdo',
+            'assessor',
+            'health',
+            'menro',
+            'mayor_office',
+            'releasing',
+        ].includes(page.props.stakeholder_preview.current_persona)
+    ) {
+        sections.push({
+            title: 'My Work',
+            items: [
+                {
+                    title:
+                        page.props.stakeholder_preview.current_label ??
+                        'Office Workspace',
+                    href: previewWorkflowIndex(),
+                    icon: Building2,
+                },
+            ],
+        });
+    }
 
     if (page.props.auth.can_view_permit_applications) {
         sections.push({

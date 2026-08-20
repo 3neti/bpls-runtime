@@ -9,7 +9,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class StakeholderPreviewSafety
 {
-    public const string Profile = 'stakeholder_preview_cycle_4';
+    public const string Profile = 'stakeholder_preview_weekend_v1';
 
     public function isEnabled(): bool
     {
@@ -125,6 +125,19 @@ class StakeholderPreviewSafety
                 ['label' => 'Inspect Roles & Permissions', 'route' => 'staff.roles.index', 'permission' => 'roles.view'],
                 ['label' => 'Review Municipality & Officials', 'route' => 'staff.municipality-configuration.index', 'permission' => 'municipality_configuration.view'],
                 ['label' => 'Inspect Billing Groups', 'route' => 'staff.billing-groups.index', 'permission' => 'billing_groups.view'],
+            ],
+            StakeholderPreviewPersona::Engineering,
+            StakeholderPreviewPersona::Mpdo,
+            StakeholderPreviewPersona::Assessor,
+            StakeholderPreviewPersona::Health,
+            StakeholderPreviewPersona::Menro => [
+                ['label' => 'Open My Office Queue', 'route' => 'stakeholder-preview.workflow', 'permission' => 'permit_applications.view'],
+            ],
+            StakeholderPreviewPersona::MayorOffice => [
+                ['label' => 'Open Final Permit Review', 'route' => 'stakeholder-preview.workflow', 'permission' => 'permit_applications.view'],
+            ],
+            StakeholderPreviewPersona::Releasing => [
+                ['label' => 'Open Permit Release Queue', 'route' => 'stakeholder-preview.workflow', 'permission' => 'permit_applications.view'],
             ],
         };
 

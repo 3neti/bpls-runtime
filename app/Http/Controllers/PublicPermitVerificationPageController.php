@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
+use App\Actions\DescribeProvisionalUatPermitCompletion;
 use App\Models\PermitApplication;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -13,6 +14,7 @@ class PublicPermitVerificationPageController extends Controller
     public function __invoke(
         DescribePermitVerificationBoundary $describeVerificationBoundary,
         DescribePermitReleaseReadiness $describePermitReleaseReadiness,
+        DescribeProvisionalUatPermitCompletion $describeProvisionalCompletion,
         PermitApplication $permitApplication,
         string $verificationCode,
     ): Response {
@@ -38,6 +40,7 @@ class PublicPermitVerificationPageController extends Controller
                 'authority_boundary' => $readiness['authority_boundary'],
                 'reason' => $readiness['reason'],
             ],
+            'previewCompletion' => $describeProvisionalCompletion->handle($permitApplication),
         ]);
     }
 }

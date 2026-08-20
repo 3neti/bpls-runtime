@@ -11,8 +11,10 @@ use App\Enums\TreasuryCollectionStatus;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\Models\BillingGroup;
 use App\Models\BillingGroupRecord;
+use App\Models\OfficeChargeContribution;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
+use App\Models\ProvisionalUatPermitCompletion;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
 use Illuminate\Console\Attributes\Description;
@@ -131,6 +133,11 @@ class FinalizeStakeholderPreviewEvidenceCommand extends Command
             $this->check('billing-record-financial-effect', 'none', data_get($billingRecord->source_snapshot, 'financial_effect')),
             $this->check('synthetic-data-classification', 'synthetic_uat_only', data_get($manifest, 'preview.data_classification')),
             $this->check('production-migration-boundary', false, data_get($manifest, 'preview.production_migration_executed')),
+            $this->check('office-charge-count', 5, OfficeChargeContribution::query()->whereBelongsTo($application)->count()),
+            $this->check('office-charge-classification', 0, OfficeChargeContribution::query()->whereBelongsTo($application)->where('semantic_classification', '!=', 'provisional_uat')->count()),
+            $this->check('preview-permit-status', 'released_in_preview', ProvisionalUatPermitCompletion::query()->whereBelongsTo($application)->value('status')),
+            $this->check('preview-permit-classification', 'provisional_uat', ProvisionalUatPermitCompletion::query()->whereBelongsTo($application)->value('semantic_classification')),
+            $this->check('production-permit-authority', false, (bool) data_get($manifest, 'preview.provisional_semantics.production_authority')),
             $this->check('application-console-errors', 0, data_get($browser, 'result.application_console_error_or_warning_count')),
             $this->check('failed-internal-requests', 0, data_get($browser, 'result.failed_internal_request_count')),
             $this->check('unexpected-external-resources', 0, data_get($browser, 'result.unexpected_external_resource_count')),
@@ -163,7 +170,8 @@ class FinalizeStakeholderPreviewEvidenceCommand extends Command
             .'- Failed internal requests: 0'.PHP_EOL
             .'- Unexpected application resources: 0'.PHP_EOL
             .'- Page-level horizontal overflow: 0'.PHP_EOL
-            .'- Permit issuance, release, and legal effect: unavailable'.PHP_EOL
+            .'- Preview permit lifecycle: completed under `provisional_uat` only'.PHP_EOL
+            .'- Production permit issuance, release, and legal effect: unavailable'.PHP_EOL
             .'- Billing-group financial execution: blocked pending municipal policy'.PHP_EOL
             .'- Production migration: unexecuted'.PHP_EOL;
     }

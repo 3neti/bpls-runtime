@@ -18,7 +18,7 @@ It does not create a second workflow, change accepted municipal semantics, grant
 
 1. the application environment is not `production`;
 2. `STAKEHOLDER_PREVIEW_MODE=true`;
-3. the configured profile is exactly `stakeholder_preview_cycle_4`;
+3. the configured profile is exactly `stakeholder_preview_weekend_v1`;
 4. the data classification is exactly `synthetic_only`;
 5. the PII mode is exactly `synthetic_only`;
 6. production migration execution is disabled;

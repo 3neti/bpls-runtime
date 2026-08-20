@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -32,6 +33,8 @@ use Illuminate\Support\Collection;
  * @property-read Collection<int, PermitApplicationLine> $lines
  * @property-read Collection<int, PaymentSchedule> $paymentSchedules
  * @property-read Collection<int, TreasuryCollection> $treasuryCollections
+ * @property-read Collection<int, OfficeChargeContribution> $officeChargeContributions
+ * @property-read ProvisionalUatPermitCompletion|null $provisionalUatPermitCompletion
  */
 #[Fillable(['business_id', 'submitted_by_id', 'application_number', 'tracking_reference', 'type', 'status', 'application_year', 'submitted_at', 'assessed_at', 'legacy_source_id', 'metadata'])]
 class PermitApplication extends Model
@@ -89,6 +92,18 @@ class PermitApplication extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(PermitApplicationDocument::class);
+    }
+
+    /** @return HasMany<OfficeChargeContribution, $this> */
+    public function officeChargeContributions(): HasMany
+    {
+        return $this->hasMany(OfficeChargeContribution::class);
+    }
+
+    /** @return HasOne<ProvisionalUatPermitCompletion, $this> */
+    public function provisionalUatPermitCompletion(): HasOne
+    {
+        return $this->hasOne(ProvisionalUatPermitCompletion::class);
     }
 
     public function canContinue(): bool

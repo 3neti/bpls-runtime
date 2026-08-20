@@ -40,6 +40,7 @@ use App\Http\Controllers\Staff\TotalCapitalGrossSummaryReportController;
 use App\Http\Controllers\Staff\UnpaidEstablishmentReportController;
 use App\Http\Controllers\Staff\UserDirectoryController;
 use App\Http\Controllers\StakeholderPreviewController;
+use App\Http\Controllers\StakeholderPreviewWorkflowController;
 use App\Http\Middleware\EnsureStakeholderPreviewIsSafe;
 use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Support\Facades\Route;
@@ -56,6 +57,14 @@ if ($stakeholderPreviewSafety->isEnabled()) {
         Route::post('stakeholder-preview/switch/{persona}', [StakeholderPreviewController::class, 'switch'])
             ->middleware(['auth', 'verified'])
             ->name('stakeholder-preview.switch');
+        Route::middleware(['auth', 'verified'])->group(function () {
+            Route::get('stakeholder-preview/workflow', [StakeholderPreviewWorkflowController::class, 'index'])
+                ->name('stakeholder-preview.workflow');
+            Route::post('stakeholder-preview/applications/{permitApplication}/office-charge', [StakeholderPreviewWorkflowController::class, 'storeOfficeCharge'])
+                ->name('stakeholder-preview.office-charge.store');
+            Route::post('stakeholder-preview/applications/{permitApplication}/permit-decision', [StakeholderPreviewWorkflowController::class, 'recordPermitDecision'])
+                ->name('stakeholder-preview.permit-decision.store');
+        });
     });
 } else {
     Route::inertia('/', 'Welcome')->name('home');
