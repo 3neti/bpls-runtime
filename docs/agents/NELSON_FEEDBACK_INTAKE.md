@@ -1,10 +1,10 @@
 # Nelson Feedback Intake
 
-Status: **Operational feedback active — approval-stage follow-up resolved for implementation**
+Status: **Operational feedback active — approval stage resolved; 2026-08-20 workflow artifact introduces fiscal and authority holds**
 
-Baseline: **Nelson Visual Walkthrough / UI/UX Cycle 1 frozen; 2026-08-19 operational feedback additive**
+Baseline: **Nelson Visual Walkthrough / UI/UX Cycle 1 frozen; 2026-08-19 direct feedback and 2026-08-20 registered workflow artifact additive**
 
-As of: 2026-08-19
+As of: 2026-08-20
 
 ## Purpose
 
@@ -225,6 +225,109 @@ Decision or implementation reference:
 - **Related observations or decision packets:** NFI-2026-001; NFI-2026-007; `docs/implementation/APPROVAL_STAGE_DECISION_PACKET_2026-08-19.md`
 - **Disposition state:** READY FOR ENGINEERING
 - **Decision or implementation reference:** Approval-stage implementation packet beginning from canonical `main@d08d747c521c203c60c3f91dd41c3453484acde7`; no production mutation or historical approval backfill.
+
+### NFI-2026-009 — Registered business-permit workflow process table
+
+- **Date received:** 2026-08-20
+- **Source and review context:** Municipality-supplied Nelson operational workflow table, registered as `OPERATIONAL-NELSON-001`.
+- **Frozen Cycle 1 scene or screen:** Cross-role journey; no prior evidence is modified.
+- **Primary classification:** Workflow/parity correction
+- **What Nelson supplied:** The exact four-row Step / Process-Stage / Requirements-Activities / Responsible Office-Person / System Action-Output table preserved in `docs/sources/operational/NELSON_BUSINESS_PERMIT_WORKFLOW_2026-08-19_TRANSCRIPTION.md`.
+- **Current Laravel behavior:** Implements the bounded Treasurer approval, one full-payment preview scenario, post-full-payment rescue clearances, authority review, and release refusal; it lacks pre-assessment payment orders, applicability-aware document/clearance catalogs, post-clearance approval, and a defined Business Permit Portal transition.
+- **Known legacy behavior:** Contains configurable workflow, departmental fees, ownership-shaped document evidence, and named clearances, but no proven canonical Paperless Payment Order object. Legacy `Released` timing conflicts with the table's post-clearance ordering.
+- **Applicable TOR / Revenue Code / production evidence:** TOR supports configurable review/assessment/approval/payment/releasing and separate roles. Revenue Code payment provisions prevent universal one-transaction inference.
+- **Proposed disposition:** Use the dedicated 2026-08-20 reconciliation and decision packets; keep Warp review paused.
+- **Engineering may act autonomously:** YES for evidence registration and exact-fact presentation; NO for new semantic, fiscal, portal, authority, issuance, or release behavior.
+- **Municipal confirmation required:** YES
+- **Required authority or evidence:** The four decision packets linked from the reconciliation.
+- **Related observations or decision packets:** NFI-2026-001 through NFI-2026-008; `NELSON_OPERATIONAL_WORKFLOW_ARTIFACT_RECONCILIATION_2026-08-20.md`
+- **Disposition state:** MUNICIPAL CONFIRMATION REQUIRED
+- **Decision or implementation reference:** Source SHA-256 `8ccc1209d54cbec32b5d07f492837bc45d2a19ab19bec67cbd7caa734f4c9566`.
+
+### NFI-2026-010 — Step 1 Paperless Payment Orders
+
+- **Date received:** 2026-08-20
+- **Source and review context:** `OPERATIONAL-NELSON-001`, Step 1.
+- **Frozen Cycle 1 scene or screen:** Citizen submission and municipal intake.
+- **Primary classification:** Missing capability
+- **What Nelson supplied:** Paperless Payment Orders from MPDO, Engineering Office, and Municipal Assessor’s Office precede automatic forwarding to Step 2.
+- **Current Laravel behavior:** No pre-assessment payment-order object, applicability rule, completion fact, or automatic-forwarding gate exists.
+- **Known legacy behavior:** Departmental fees exist, but no source-proven equivalent lifecycle was found.
+- **Applicable TOR / Revenue Code / production evidence:** TOR permits configurable workflow but does not define this object; fiscal meaning cannot be inferred.
+- **Proposed disposition:** Resolve object identity, lifecycle, applicability, amount relationship, authority, and automation before implementation.
+- **Engineering may act autonomously:** NO
+- **Municipal confirmation required:** YES
+- **Required authority or evidence:** `PRE_ASSESSMENT_PAYMENT_ORDER_DECISION_PACKET_2026-08-20.md`
+- **Disposition state:** MUNICIPAL CONFIRMATION REQUIRED
+- **Decision or implementation reference:** None.
+
+### NFI-2026-011 — Step-specific documents and post-payment office clearances
+
+- **Date received:** 2026-08-20
+- **Source and review context:** `OPERATIONAL-NELSON-001`, all rows.
+- **Frozen Cycle 1 scene or screen:** Citizen intake, assessment work, and clearance progress.
+- **Primary classification:** Workflow/parity correction
+- **What Nelson supplied:** Step 1 names Barangay Clearance and Proof of Registration; Step 2 names ITR, CTC, and Sworn Statement; after payment the table names MPDC, Engineering, MENRO, Health, and FSIC clearances.
+- **Current Laravel behavior:** Generic documents can preserve exact labels. Rescue clearances are created only after full payment but use three abstract checklist items rather than the named offices.
+- **Known legacy behavior:** Ownership-specific document shapes and Sanitary, Fire, MPDC, MENRO/Environmental, and Engineering clearance configurations exist; active legacy document validation is optional.
+- **Applicable TOR / Revenue Code / production evidence:** TOR supports document upload/checklists and electronic clearances but not universal applicability.
+- **Proposed disposition:** Improve exact-fact prominence only; decide applicability, aliases, sufficiency, timing, and approving authority first.
+- **Engineering may act autonomously:** YES for exact recorded presentation; NO for mandatory or sufficiency behavior.
+- **Municipal confirmation required:** YES
+- **Required authority or evidence:** `DOCUMENTARY_AND_CLEARANCE_APPLICABILITY_DECISION_PACKET_2026-08-20.md`
+- **Disposition state:** MUNICIPAL CONFIRMATION REQUIRED
+- **Decision or implementation reference:** None.
+
+### NFI-2026-012 — One transaction for all assessed fees
+
+- **Date received:** 2026-08-20
+- **Source and review context:** `OPERATIONAL-NELSON-001`, unnumbered payment row.
+- **Frozen Cycle 1 scene or screen:** Treasury payment schedule and collection.
+- **Primary classification:** Board Trigger
+- **What Nelson supplied:** All assessed business taxes, regulatory fees, and other applicable charges are paid in one transaction.
+- **Current Laravel behavior:** Preview demonstrates one full OTC payment; domain retains partial collection evidence and unresolved installment seams.
+- **Known legacy behavior:** Annual, semiannual, and quarterly schedule sections exist.
+- **Applicable TOR / Revenue Code / production evidence:** Revenue Code Section 2E.03 expressly permits once-or-quarterly payment for covered taxes; other sections contain distinct installment/recomputation rules.
+- **Proposed disposition:** Treat the phrase as strong operational evidence, not universal fiscal authority. Reconcile scope and exceptions through accepted fiscal/Treasury authority.
+- **Engineering may act autonomously:** NO
+- **Municipal confirmation required:** YES
+- **Required authority or evidence:** `ONE_TIME_PAYMENT_FISCAL_RECONCILIATION_2026-08-20.md`
+- **Disposition state:** BOARD REVIEW REQUIRED
+- **Decision or implementation reference:** Payment policy unchanged.
+
+### NFI-2026-013 — Post-clearance approval and Business Permit Portal push
+
+- **Date received:** 2026-08-20
+- **Source and review context:** `OPERATIONAL-NELSON-001`, unnumbered payment row.
+- **Frozen Cycle 1 scene or screen:** Authority-review boundary.
+- **Primary classification:** Permit/signatory/authority evidence
+- **What Nelson supplied:** After respective offices approve all required clearances, the application is approved and pushed to the Business Permit Portal for release.
+- **Current Laravel behavior:** Stops at `ready_for_authority_review`; no post-clearance approval fact, accepted portal destination, or push/integration event exists.
+- **Known legacy behavior:** Staff and citizen portals plus a releasing queue exist, but no evidence identifies one as this named destination.
+- **Applicable TOR / Revenue Code / production evidence:** TOR separates approval, releasing, roles, audit, and configurable workflow; it does not resolve this actor or portal identity.
+- **Proposed disposition:** Model nothing until actor, approved object, consequence, audit, portal identity, and automation semantics are accepted.
+- **Engineering may act autonomously:** NO
+- **Municipal confirmation required:** YES
+- **Required authority or evidence:** `POST_CLEARANCE_APPROVAL_RELEASE_DECISION_PACKET_2026-08-20.md`
+- **Disposition state:** MUNICIPAL CONFIRMATION REQUIRED
+- **Decision or implementation reference:** Release remains fail-closed.
+
+### NFI-2026-014 — BPLO/Releasing Officer and released/issued wording
+
+- **Date received:** 2026-08-20
+- **Source and review context:** `OPERATIONAL-NELSON-001`, Step 3, reconciled with Nelson's direct Mayor/BPLO answers.
+- **Frozen Cycle 1 scene or screen:** Permit artifact, authority review, and public verification.
+- **Primary classification:** Permit/signatory/authority evidence
+- **What Nelson supplied:** Applicant retrieves the approved permit from BPLO / Releasing Officer; the permit is released/issued to the applicant.
+- **Current Laravel behavior:** Separates artifact, authority review, issuance, release, and legal effect; all authority-bearing transitions remain false.
+- **Known legacy behavior:** `Released` and permit issuance were not the same proven gate.
+- **Applicable TOR / Revenue Code / production evidence:** TOR gives a Releasing Officer release/print/verification access but does not establish local designation, Mayor signature sequence, or legal effect.
+- **Proposed disposition:** Record BPLO operational release actor as corroborated. Do not collapse issuance and release or infer signatory/issuance authority.
+- **Engineering may act autonomously:** NO
+- **Municipal confirmation required:** YES
+- **Required authority or evidence:** `POST_CLEARANCE_APPROVAL_RELEASE_DECISION_PACKET_2026-08-20.md`
+- **Disposition state:** MUNICIPAL CONFIRMATION REQUIRED
+- **Decision or implementation reference:** `can_issue=false`; `can_release=false`; legal effect false.
 
 ## Discovered-Gap Disposition Flow
 

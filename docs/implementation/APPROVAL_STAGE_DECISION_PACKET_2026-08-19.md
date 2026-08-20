@@ -4,7 +4,7 @@ Status: **RESOLVED FOR IMPLEMENTATION — Nelson municipal evidence accepted 202
 
 Raised by: Nelson operational feedback received 2026-08-19
 
-Related evidence: `docs/implementation/NELSON_OPERATIONAL_FEEDBACK_RECONCILIATION_2026-08-19.md`; `NFI-2026-001`
+Related evidence: `docs/implementation/NELSON_OPERATIONAL_FEEDBACK_RECONCILIATION_2026-08-19.md`; `docs/implementation/NELSON_OPERATIONAL_WORKFLOW_ARTIFACT_RECONCILIATION_2026-08-20.md`; `NFI-2026-001`; `NFI-2026-008`; `OPERATIONAL-NELSON-001`
 
 ## Follow-up Source Evidence — Preserved Verbatim
 
@@ -15,6 +15,12 @@ Related evidence: `docs/implementation/NELSON_OPERATIONAL_FEEDBACK_RECONCILIATIO
 5. Does approval clear the applicant to proceed to payment? `Yes`
 
 These answers are Nelson's source evidence. The domain interpretation below is an engineering disposition and does not rewrite his wording.
+
+## 2026-08-20 Artifact Cross-Check
+
+The registered process table `OPERATIONAL-NELSON-001` names `Assessment Officer / Approving Officer`, says the assessment is completed and approved before One-Time Payment, and does not identify a different approving office. Nelson's earlier direct answer supplies the source-specific identity of that generic Approving Officer: Municipal Treasurer. It also explicitly distinguishes the Treasurer from the Assessment Officer.
+
+The sources are therefore consistent. The artifact strengthens stage ordering without changing the accepted exact-snapshot approval/return contract. Its separate post-clearance wording—`the application is approved and pushed to the Business Permit Portal for release`—is a different unresolved approval boundary and must not be collapsed into this pre-payment Treasurer decision.
 
 ## Resolution
 

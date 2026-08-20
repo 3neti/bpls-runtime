@@ -4,6 +4,8 @@ Status: **Frozen for implementation**
 
 Baseline: `main@3bd8eab8a1be1dba0a58922508636aaccec819e7`
 
+Current review hold: `OPERATIONAL-NELSON-001` introduces unresolved pre-assessment payment-order, one-transaction fiscal, named-clearance, post-clearance approval, portal, issuance, and release semantics. This historical contract remains preserved, but the deployed preview must not be frozen as the semantic baseline for Warp Product/UI Critic review until `NELSON_OPERATIONAL_WORKFLOW_ARTIFACT_RECONCILIATION_2026-08-20.md` is resolved and a new evidence cycle is verified.
+
 ## Purpose
 
 The Stakeholder Preview is a non-production delivery surface over the real BPLS application. It gives a tester one URL, four synthetic stakeholder perspectives, normal Laravel authentication and authorization after entry, persistent preview labeling, and a deterministic administrative recovery path.

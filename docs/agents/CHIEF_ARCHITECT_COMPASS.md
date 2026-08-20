@@ -1,16 +1,16 @@
 # Chief Architect Compass
 
-Status: **APPROVAL STAGE IMPLEMENTED, DEPLOYED, AND LIVE-VERIFIED IN NON-PRODUCTION UAT**
+Status: **APPROVAL STAGE VERIFIED; NEW MUNICIPAL WORKFLOW ARTIFACT RECONCILED; UAT SEMANTIC FREEZE AND WARP REVIEW PAUSED**
 
 Stakeholder preview / UAT canonical baseline: `045d33799269a7166d92f41181e060393088e6a1`
 
 Latest migration evidence baseline: `eefc5d1`
 
-As of: 2026-08-19
+As of: 2026-08-20
 
 ## Direction
 
-Preserve all prior Stakeholder Preview / UAT evidence while implementing Nelson's now-resolved pre-payment assessment approval stage as one workflow with separate Assessment Officer preparation and Municipal Treasurer decision facts. New UAT evidence may be created after domain verification. Release/signatory, documentary-applicability, report-authority, and one-time-payment policy remain independent boundaries.
+Preserve all prior Stakeholder Preview / UAT evidence and the resolved pre-payment Assessment Officer / Municipal Treasurer facts. Reconcile `OPERATIONAL-NELSON-001` before any final product review. Do not implement pre-assessment payment orders, universal document/clearance rules, one-transaction-only payment policy, post-clearance approval, portal push, signing, issuance, or release until their decision packets are accepted. Warp review remains paused.
 
 ## Stakeholder Preview Status
 
@@ -19,11 +19,11 @@ Preserve all prior Stakeholder Preview / UAT evidence while implementing Nelson'
 | Cycles 1 and 2 | Proven and frozen |
 | Cycle 3 | Reports, Administration & Visible Boundaries proven; 53 browser checks and 46 screenshots |
 | Cycle 4 | Deterministic cross-role preview proven; 55 browser checks and 46 screenshots |
-| Environment | Sole non-production Laravel Cloud `uat` environment at `https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud`; deployment `depl-a289dc3d-85c6-4840-a7fa-e6df5da293af` and synthetic run `stakeholder-preview-approval-cloud-20260819-001` passed |
+| Environment | Sole non-production Laravel Cloud `uat` environment at `https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud`; deployment `depl-a289dc3d-85c6-4840-a7fa-e6df5da293af` and synthetic run `stakeholder-preview-approval-cloud-20260819-001` remain valid historical approval-stage evidence, not the current semantic freeze |
 | Accounts | Synthetic Citizen, BPLO, Treasury, and Municipal Management accounts; runtime-delivered credential only |
 | Authority | Numbering, fiscal policy, official reports, issuance, release, and legal effect remain explicit non-executable boundaries |
 | Migration | Synthetic preview is separate; 407-member production campaign remains unexecuted and Board-controlled |
-| Verdict | **APPROVAL-STAGE UPDATE LIVE-VERIFIED**; desktop and 390px mobile evidence distinguish preparer from Treasurer approval and preserve the release refusal boundary |
+| Verdict | **SEMANTIC FREEZE PAUSED**; approval-stage evidence remains valid, but new payment-order, fiscal, clearance, post-clearance approval, portal, issuance, and release decisions block Warp review |
 
 Operating package: `docs/implementation/STAKEHOLDER_PREVIEW_READY_PACKAGE.md`.
 
@@ -31,8 +31,8 @@ Operating package: `docs/implementation/STAKEHOLDER_PREVIEW_READY_PACKAGE.md`.
 
 | Area | Current position | Next bounded move | Stop boundary |
 | --- | --- | --- | --- |
-| Operational capability | Nelson resolves Municipal Treasurer approval/return of the Assessment Officer-prepared amount before payment | Implement exact-snapshot approval/return and payment gate; preserve release boundary | Applicant rejection, documentary deficiency, appeal, release, or production role policy beyond evidence |
-| UI/UX parity | Cycle 1, the Nelson-facing derivative, and Stakeholder UAT remain frozen elicitation baselines; feedback is classified in `NELSON_FEEDBACK_INTAKE.md` | Prepare future presentation-only packets for documentary prominence and report discoverability without patching frozen UAT | Any speculative approval wording, workflow/status change, documentary rule, or report-authority change |
+| Operational capability | Exact-snapshot Treasurer approval/return is implemented; `OPERATIONAL-NELSON-001` exposes additional unmodeled workflow boundaries | Obtain municipal/fiscal answers to the four 2026-08-20 decision packets, then integrate only accepted behavior | Invented payment-order meaning, universal checklist, fiscal policy, portal, post-clearance authority, signing, issuance, or release |
+| UI/UX parity | Prior cycles remain immutable evidence, but the deployed Stakeholder UAT is semantically stale for final-product review | Keep Warp review paused; prepare a new evidence cycle only after semantic correction | Product critique or polish against the superseded workflow |
 | Historical migration | V8 preserves every v4-v7 fingerprint and proves a disjoint 1,223-application campaign census. The exact 407-member first-campaign candidate is checksum-bound; 736 identity, 72 registry-policy, and eight residual cases remain outside it, while 15 structural exceptions remain outside V1 | Bind the canonical source-to-target and restoration audits to the exact 407 membership, then submit a controlled production-campaign authorization decision without executing it; keep both municipal packets unchanged | Mapping acceptance for another class, new rehearsal authorization, production execution, or cutover without explicit authority |
 | Financial reconciliation | Historical arithmetic and evidence classes are bounded; future policy remains non-executable without accepted authority | Preserve exact facts and advance evidence packets independently | Taxpayer-liability contradiction or fiscal/Treasury policy assumption |
 | Authority / policy dependencies | Numbering, signatory, issuance, release, legal effect, and several official-report meanings remain unresolved | Keep refusal boundaries explicit and route evidence to the authorized reviewer | Any present authority claim without accepted evidence |
@@ -42,6 +42,11 @@ Operating package: `docs/implementation/STAKEHOLDER_PREVIEW_READY_PACKAGE.md`.
 
 - Nelson operational feedback received 2026-08-19 is preserved additively as NFI-2026-001 through NFI-2026-007 and reconciled in `docs/implementation/NELSON_OPERATIONAL_FEEDBACK_RECONCILIATION_2026-08-19.md`.
 - NFI-2026-008 preserves Nelson's follow-up answers verbatim. `docs/implementation/APPROVAL_STAGE_DECISION_PACKET_2026-08-19.md` is **RESOLVED FOR IMPLEMENTATION** for exact-snapshot Treasurer approval/return and the payment gate.
+- `OPERATIONAL-NELSON-001` is preserved unchanged at SHA-256 `8ccc1209d54cbec32b5d07f492837bc45d2a19ab19bec67cbd7caa734f4c9566`; NFI-2026-009 through NFI-2026-014 and `NELSON_OPERATIONAL_WORKFLOW_ARTIFACT_RECONCILIATION_2026-08-20.md` record its additive disposition.
+- The table's generic `Approving Officer` is consistent with Nelson's direct identification of the Municipal Treasurer. Its post-clearance `application is approved` wording is a separate unresolved fact.
+- Paperless Payment Orders, document/clearance applicability, one-transaction fiscal scope, post-clearance approval, Business Permit Portal, Mayor signature sequence, issuance, and release are held in four dated decision packets.
+- The Revenue Code once-or-quarterly provision creates a fiscal Board Trigger against any universal one-transaction implementation.
+- The deployed UAT remains historical approval-stage evidence but is not semantically frozen. Warp Product/UI Critic review has not begun and must remain paused.
 - The architectural interpretation is one assessment workflow with two authoritative facts: Assessment Officer prepared/computed, then Municipal Treasurer approved/returned. Recomputed snapshots require fresh approval as a fail-closed audit rule.
 - `assessments.approve` is a capability boundary. Synthetic Treasury receives it for UAT projection; no actual production role/user assignment is accepted by that preview mapping.
 - Mayor signatory and BPLO operational release actor are separate Nelson evidence facts; neither activates signatory, issuance, release, validity, or legal effect.
@@ -136,5 +141,5 @@ For the 75 compound registration-collision applications, a municipal business-re
 1. Engineering/Product: remain parked until accepted evidence creates an obvious bounded packet.
 2. First production campaign: bind the canonical source-to-target and restoration audits to exact membership SHA-256 `76e9c985a2c5a3fb961924d4ed6e829956b2503c56dbe959db367cebeafdf0dd`, then obtain an explicit decision naming campaign authority, execution window, rollback/abort thresholds, and mandatory post-run audit. Do not execute before that decision.
 3. Migration/Reconciliation: preserve and submit `docs/implementation/MUNICIPAL_IDENTITY_AND_REGISTRY_REVIEW_PACKET.md` for the 450-case contact-point rule and separate 120-case Group policy. Submit `docs/implementation/MUNICIPAL_PRIORITY_IDENTITY_AND_REGISTRY_COLLISION_REVIEW_PACKET.md` for the second queue: self-contained non-contact and registration groups first, coupled groups with full global membership next, and soft-deleted/cross-authority exceptions on their separate routes. Keep all mappings unaccepted and do not revisit the frozen 450/120 questions without new evidence.
-4. Nelson/UI: approval-stage domain/UAT cycle is complete and live-verified. Documentary visibility and report discoverability remain separate presentation packets; prior frozen evidence remains immutable.
+4. Nelson/UI: preserve the verified approval-stage cycle as historical evidence. Resolve the four 2026-08-20 workflow packets, integrate safe corrections, redeploy, and freeze a new semantic evidence run before Warp Product/UI Critic review. Documentary and report presentation work remains separate.
 5. Integration: verify every specialist diff and return before any new acceptance, authority, identity-policy, liability, production, cutover, or substantial integration boundary.

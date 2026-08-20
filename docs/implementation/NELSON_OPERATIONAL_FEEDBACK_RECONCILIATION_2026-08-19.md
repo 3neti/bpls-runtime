@@ -8,6 +8,12 @@ Source: Nelson operational feedback supplied for reconciliation against the cano
 
 This is an additive operational-evidence record. It does not overwrite Nelson Cycle 1 evidence, Stakeholder Preview evidence, migration evidence, the 407-application campaign, the TOR, the Revenue Code, production evidence, or any earlier parity finding. It authorizes no application status, route, action, queue, report row, export, permit issuance, release, validity, or legal effect.
 
+## Additive 2026-08-20 Source
+
+Nelson's registered workflow process table is preserved as `OPERATIONAL-NELSON-001` under `docs/sources/operational/`. Its checksum-bound verbatim transcription and full semantic disposition are in `docs/implementation/NELSON_OPERATIONAL_WORKFLOW_ARTIFACT_RECONCILIATION_2026-08-20.md`.
+
+That artifact leaves the bounded Municipal Treasurer assessment approval resolved and consistent, while exposing previously unmodeled pre-assessment Paperless Payment Orders, Step 2 documents, named post-payment clearances, a second post-clearance approval, and a Business Permit Portal push. Its one-transaction payment statement conflicts with Revenue Code installment evidence if interpreted universally. The deployed cloud UAT is therefore retained as historical approval-stage evidence but is not the semantic baseline for Warp product review.
+
 ## Reconciliation Matrix
 
 The category labels are intentionally cumulative.

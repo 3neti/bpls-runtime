@@ -120,3 +120,39 @@ test('Nelson operational feedback remains additive and authority safe', function
         ->and($parity)
         ->toContain('| CAP-018 | Application approval/evaluation queue | BROWSER VERIFIED |');
 });
+
+test('Nelson workflow source artifact is immutable registered and authority safe', function () {
+    $artifactPath = base_path('docs/sources/operational/NELSON-BUSINESS-PERMIT-WORKFLOW-2026-08-19.JPEG');
+    $transcription = file_get_contents(base_path('docs/sources/operational/NELSON_BUSINESS_PERMIT_WORKFLOW_2026-08-19_TRANSCRIPTION.md'));
+    $sourceRegister = file_get_contents(base_path('docs/sources/SOURCE_REGISTER.md'));
+    $checksums = file_get_contents(base_path('docs/sources/CHECKSUMS.sha256'));
+    $reconciliation = file_get_contents(base_path('docs/implementation/NELSON_OPERATIONAL_WORKFLOW_ARTIFACT_RECONCILIATION_2026-08-20.md'));
+    $previewPackage = file_get_contents(base_path('docs/implementation/STAKEHOLDER_PREVIEW_READY_PACKAGE.md'));
+
+    expect($artifactPath)
+        ->toBeFile()
+        ->and(filesize($artifactPath))->toBe(137775)
+        ->and(hash_file('sha256', $artifactPath))->toBe('8ccc1209d54cbec32b5d07f492837bc45d2a19ab19bec67cbd7caa734f4c9566')
+        ->and(getimagesize($artifactPath))->toMatchArray([1650, 1275])
+        ->and($sourceRegister)->toContain('OPERATIONAL-NELSON-001', '8ccc1209d54cbec32b5d07f492837bc45d2a19ab19bec67cbd7caa734f4c9566')
+        ->and($checksums)->toContain('8ccc1209d54cbec32b5d07f492837bc45d2a19ab19bec67cbd7caa734f4c9566  docs/sources/operational/NELSON-BUSINESS-PERMIT-WORKFLOW-2026-08-19.JPEG')
+        ->and($transcription)
+        ->toContain('Paperless Payment Orders from the MPDO, Engineering Office, and Municipal Assessor’s Office.')
+        ->toContain('|  | ONE-TIME PAYMENT OF ALL ASSESSED FEES |')
+        ->toContain('approved and pushed to the Business Permit Portal for release')
+        ->and($reconciliation)
+        ->toContain('These sources are consistent, not contradictory.')
+        ->toContain('Revenue Code Section 2E.03')
+        ->toContain('Warp Product/UI Critic review remains paused')
+        ->and($previewPackage)
+        ->toContain('STAKEHOLDER PREVIEW SEMANTIC FREEZE PAUSED');
+
+    foreach ([
+        'docs/implementation/PRE_ASSESSMENT_PAYMENT_ORDER_DECISION_PACKET_2026-08-20.md',
+        'docs/implementation/DOCUMENTARY_AND_CLEARANCE_APPLICABILITY_DECISION_PACKET_2026-08-20.md',
+        'docs/implementation/ONE_TIME_PAYMENT_FISCAL_RECONCILIATION_2026-08-20.md',
+        'docs/implementation/POST_CLEARANCE_APPROVAL_RELEASE_DECISION_PACKET_2026-08-20.md',
+    ] as $decisionPacket) {
+        expect(base_path($decisionPacket))->toBeFile();
+    }
+});

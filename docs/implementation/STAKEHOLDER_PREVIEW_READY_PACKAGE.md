@@ -1,10 +1,12 @@
 # Stakeholder Preview Ready Package
 
-Status: **APPROVAL-STAGE UAT UPDATE DEPLOYED AND LIVE-VERIFIED — prior evidence preserved**
+Status: **HISTORICAL APPROVAL-STAGE EVIDENCE PRESERVED — SEMANTIC FREEZE AND WARP REVIEW PAUSED**
 
 As of: 2026-08-19
 
 This package hands the existing BPLS application to the Board for internal operation. It does not authorize an external municipal presentation, production deployment, production migration, or any unresolved municipal, fiscal, numbering, issuance, release, or legal-effect decision.
+
+`OPERATIONAL-NELSON-001`, registered on 2026-08-20, exposes workflow semantics not represented in this deployment: Paperless Payment Orders before assessment, additional step-specific documents, named post-payment office clearances, a second post-clearance approval, and a Business Permit Portal push. Its one-transaction statement also requires fiscal reconciliation with Revenue Code installment provisions. The URL remains available as historical approval-stage evidence, but this package no longer declares it semantically frozen or ready for independent product review.
 
 ## Open The Preview
 
@@ -118,6 +120,6 @@ The real shell and real application pages are the walkthrough. Scenario tooling 
 
 ## Verdict
 
-The existing non-production Laravel Cloud UAT is ready for Board internal operation and structured stakeholder feedback. External municipal presentation remains a Board decision.
+The existing non-production Laravel Cloud UAT remains available for historical approval-stage inspection. It is not the semantic baseline for final product review. Warp review remains paused until the 2026-08-20 decision packets are answered, safe corrections are integrated, the cloud UAT is redeployed, and a new evidence run is frozen.
 
-**STAKEHOLDER PREVIEW READY**
+**STAKEHOLDER PREVIEW SEMANTIC FREEZE PAUSED**

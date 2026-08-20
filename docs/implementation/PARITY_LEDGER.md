@@ -6,6 +6,20 @@ Nelson's additive operational evidence is reconciled in `docs/implementation/NEL
 
 Nelson's follow-up answers preserved in NFI-2026-008 authorize only the bounded CAP-018 implementation: Assessment Officer preparation, Municipal Treasurer approval/return of the exact assessment snapshot, and the pre-payment gate. They do not authorize universal one-time payment policy, documentary sufficiency/applicability, official report output, signatory authority, issuance, release, validity, or legal effect. Prior frozen Stakeholder Preview / UAT and migration evidence remain unchanged; the new approval evidence is additive.
 
+## Nelson Registered Workflow Artifact — 2026-08-20
+
+`OPERATIONAL-NELSON-001` is checksum-bound at SHA-256 `8ccc1209d54cbec32b5d07f492837bc45d2a19ab19bec67cbd7caa734f4c9566`. It is consistent with CAP-018's distinct Assessment Officer / Municipal Treasurer facts and exposes additional parity gaps without authorizing them:
+
+| Affected capability | Additive disposition |
+| --- | --- |
+| CAP-010 / CAP-024 | Step 1 Barangay Clearance, Proof of Registration, and pre-assessment Paperless Payment Orders plus Step 2 ITR, CTC, and Sworn Statement are not represented through an accepted applicability/completion model. Generic documents preserve evidence only. |
+| CAP-017 / CAP-018 | `Assessment Officer / Approving Officer` is reconciled through Nelson's direct identification of the Municipal Treasurer. CAP-018 remains browser-verified for the bounded exact-snapshot gate. |
+| CAP-019 | The one-full-payment preview scenario remains evidence, not universal policy. Revenue Code installment provisions block a one-transaction-only parity claim. |
+| CAP-020 / CAP-061 / CAP-115 | Named MPDC, Engineering, MENRO, Health, and FSIC clearances and a second post-clearance approval/portal push are not modeled. The current rescue checklist and `ready_for_authority_review` abstraction are semantically incomplete for the newly described process. Release remains blocked. |
+| CAP-063 / CAP-072 | BPLO/Releasing Officer is corroborated as operational release actor and Mayor remains the reported signatory. Issuance, signature sequence, release authority, and legal effect remain unresolved. |
+
+The deployed approval-stage UAT is not frozen for Warp review. A new semantic evidence cycle requires answers to the four 2026-08-20 decision packets, safe integration, cloud redeployment, and evidence freeze.
+
 ## Nelson Walkthrough Cross-Capability Evidence
 
 Scenario `nelson-walkthrough-20260818-002` browser and audit verified the current citizen-to-authority-review journey through one exact local application. It composes existing CAP-010, CAP-016, CAP-017, CAP-019, CAP-026, CAP-039, CAP-040, CAP-041, CAP-060, CAP-061, CAP-063, CAP-064, CAP-065, CAP-066, CAP-070, and CAP-072 behavior without changing their individual parity status or unresolved conditions. The evidence package is at `storage/app/private/lifecycle-scenarios/nelson_walkthrough/nelson-walkthrough-20260818-002`.
