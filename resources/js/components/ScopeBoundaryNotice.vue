@@ -23,10 +23,10 @@ withDefaults(
                     {{ title }}
                 </h2>
                 <p class="text-sm leading-6">
-                    The implemented journey reaches
-                    <strong>Ready for Authority Review</strong>. Permit
-                    issuance, release, validity, and legal effect remain
-                    unavailable.
+                    The sample journey includes a provisional final permit
+                    decision and release step for stakeholder testing. It does
+                    not create official numbering, real signing authority,
+                    municipal release, permit validity, or legal effect.
                 </p>
             </div>
         </div>

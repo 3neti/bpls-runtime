@@ -2,6 +2,7 @@
 
 use App\Enums\StakeholderPreviewPersona;
 use App\Models\Permission;
+use App\Models\PermitApplication;
 use App\Models\Role;
 use App\Models\User;
 use App\StakeholderPreview\StakeholderPreviewSafety;
@@ -64,6 +65,30 @@ test('one click entry authenticates each exact synthetic account through the web
         ->toBeNull()
         ->and(session()->getId())->not->toBe($oldSessionId);
 })->with(StakeholderPreviewPersona::cases());
+
+test('office workspace presents only the latest provisional weekend sample', function () {
+    $accounts = createStakeholderPreviewAccounts();
+    PermitApplication::factory()->create([
+        'submitted_at' => now()->subMinute(),
+        'metadata' => [],
+    ]);
+    $currentSample = PermitApplication::factory()->create([
+        'submitted_at' => now(),
+        'metadata' => [
+            'provisional_uat_workflow' => [
+                'semantic_classification' => 'provisional_uat',
+            ],
+        ],
+    ]);
+
+    $this->actingAs($accounts[StakeholderPreviewPersona::Engineering->value])
+        ->get(route('stakeholder-preview.workflow'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('stakeholder-preview/Workflow')
+            ->has('applications', 1)
+            ->where('applications.0.id', $currentSample->id));
+});
 
 test('role switching works in every ordered direction and retains normal authorization', function () {
     $accounts = createStakeholderPreviewAccounts();

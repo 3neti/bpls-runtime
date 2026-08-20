@@ -41,8 +41,9 @@ class StakeholderPreviewWorkflowController extends Controller
                 'provisionalUatPermitCompletion',
             ])
             ->whereNotNull('submitted_at')
+            ->where('metadata->provisional_uat_workflow->semantic_classification', 'provisional_uat')
             ->latest()
-            ->limit(20)
+            ->limit(1)
             ->get()
             ->map(function (PermitApplication $application) use ($persona, $describeCompletion): array {
                 $officeCode = $persona->officeCode();

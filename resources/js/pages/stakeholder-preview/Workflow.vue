@@ -173,7 +173,20 @@ function money(cents: number | null): string {
                         </div>
                         <span
                             class="w-fit rounded-full bg-muted px-3 py-1 text-xs font-semibold capitalize"
-                            >{{ application.status.replaceAll('_', ' ') }}</span
+                            >{{
+                                application.completion?.status ===
+                                'released_in_preview'
+                                    ? 'released in preview'
+                                    : application.completion?.status ===
+                                        'approved_for_preview_release'
+                                      ? 'ready for preview release'
+                                      : application.payment_confirmed
+                                        ? 'payment confirmed'
+                                        : application.status.replaceAll(
+                                              '_',
+                                              ' ',
+                                          )
+                            }}</span
                         >
                     </div>
 
