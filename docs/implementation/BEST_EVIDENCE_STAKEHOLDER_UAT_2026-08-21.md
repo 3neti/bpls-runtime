@@ -1,6 +1,6 @@
 # Best-Evidence Stakeholder UAT Decision Record
 
-Status: **IMPLEMENTED LOCALLY; CLOUD FREEZE PENDING**
+Status: **FROZEN FOR INDEPENDENT MAC WARP/OZ PRODUCT REVIEW**
 
 Date: 2026-08-21
 
@@ -66,10 +66,19 @@ No production environment or data was changed. The 407-member production migrati
 
 ## Freeze record
 
-To be completed only after canonical publication and actual HTTPS UAT verification:
-
-- canonical SHA: pending
-- Laravel Cloud deployment: pending
+- verified runtime SHA: `92eca94bda9b24eb9d4c6142aa7150772c2965a6`
+- verified Laravel Cloud deployment: `depl-a28cfd56-c48e-4efa-bdd5-9ef2b311a266`
 - UAT URL: `https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud/`
-- immutable evidence run: pending
-- desktop/mobile screenshots and check counts: pending
+- immutable cloud evidence run: `stakeholder-preview-weekend-cloud-20260821-002`
+- cloud application record: `SUB-01M0GM71GZ0PD1M4QPH8CA8J8G`
+- public artifact verification: `/permits/verify/14/PVA-14-f8b7b6d1fe6ad7ac/view`
+- local full suite: 593 tests, 8,883 assertions, two non-failing warnings
+- frontend gates: formatting, lint, TypeScript, and production build passed
+- static analysis: seven new/changed core workflow classes passed targeted PHPStan with zero errors; the full repository retains its pre-existing PHPStan baseline
+- browser: all 11 preview personas switched successfully with the persistent sample marker and no observed server-error page
+- desktop/mobile: launcher, office workspace, release workspace, public verification, and Report Catalog checked at 1440x900 and/or 390x844; no visual overflow was observed
+- response controls: HTTPS root returned `X-Robots-Tag: noindex, nofollow, noarchive`; no production environment, production integration, or migration was used
+
+The freeze-record documentation commit is a direct documentation-only successor of the verified runtime SHA. The serving deployment must be checked against that final canonical successor before the independent review begins.
+
+Independent Mac Warp/Oz product review has **not** run.

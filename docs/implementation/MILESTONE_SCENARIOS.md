@@ -14,12 +14,15 @@ Cycle 3 run: `stakeholder-preview-cycle3-reports-administration-20260819-001`
 
 Cycle 4 run: `stakeholder-preview-cycle4-integrated-20260819-001`
 
+Weekend best-evidence cloud run: `stakeholder-preview-weekend-cloud-20260821-002`
+
 Artifact roots:
 
 - `storage/app/private/lifecycle-scenarios/stakeholder_preview_cycle_1/stakeholder-preview-cycle3-reports-administration-20260819-001`
 - `storage/app/private/lifecycle-scenarios/stakeholder_preview_cycle_1/stakeholder-preview-cycle4-integrated-20260819-001`
+- Laravel Cloud private evidence: `storage/app/private/lifecycle-scenarios/stakeholder_preview_cycle_1/stakeholder-preview-weekend-cloud-20260821-002`
 
-Purpose: compose existing domain actions into a safe, synthetic, cross-role local preview that stakeholders operate through the real application shell. It covers Citizen, BPLO, Assessment, Treasury, Receipts, Clearances, Reports, Administration, Municipality/configuration, and the deliberate authority boundaries without creating a second workflow or activating unresolved policy.
+Purpose: compose existing domain actions into a safe, synthetic, cross-role preview that stakeholders operate through the real application shell. The weekend profile adds scenario-scoped concerned-office assessment contributions and a separate `provisional_uat` final permit lifecycle while keeping production release, numbering, signing authority, fiscal policy, identity, and legal effect fail-closed.
 
 ### Verification Matrix
 
@@ -28,6 +31,8 @@ Purpose: compose existing domain actions into a safe, synthetic, cross-role loca
 | Deterministic terminal preparation | PASS |
 | Cycle 3 managed browser acceptance | 53 checks; 46 screenshots; PASS |
 | Cycle 4 cross-role managed browser acceptance | 55 checks; 46 screenshots; PASS |
+| Weekend profile full application suite | 593 tests; 8,883 assertions; PASS |
+| Weekend cloud role switching | 11 personas; PASS |
 | Desktop 1440x900 and mobile 390x844 | PASS |
 | Application console warnings/errors | 0 |
 | Failed internal requests | 0 |

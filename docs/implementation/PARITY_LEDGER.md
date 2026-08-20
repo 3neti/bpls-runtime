@@ -10,6 +10,8 @@ Nelson's follow-up answers preserved in NFI-2026-008 authorize only the bounded 
 
 `OPERATIONAL-NELSON-001` is checksum-bound at SHA-256 `8ccc1209d54cbec32b5d07f492837bc45d2a19ab19bec67cbd7caa734f4c9566`. It is consistent with CAP-018's distinct Assessment Officer / Municipal Treasurer facts and exposes additional parity gaps without authorizing them:
 
+The Board-authorized `stakeholder_preview_weekend_v1` profile now exercises those gaps as reversible test hypotheses. Concerned-office contributions and the final preview permit lifecycle are mechanically classified `provisional_uat`; CAP-020 remains blocked for production authority, official issuance/release, numbering, signing credentials, validity, and legal effect. Cloud run `stakeholder-preview-weekend-cloud-20260821-002` is additive UAT evidence, not parity acceptance.
+
 | Affected capability | Additive disposition |
 | --- | --- |
 | CAP-010 / CAP-024 | Step 1 Barangay Clearance, Proof of Registration, and pre-assessment Paperless Payment Orders plus Step 2 ITR, CTC, and Sworn Statement are not represented through an accepted applicability/completion model. Generic documents preserve evidence only. |
