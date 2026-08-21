@@ -1197,7 +1197,7 @@ final class ManualCollectionReceiptVisibilityScenario
                     null,
                     true,
                 ),
-                'remarks' => 'Lifecycle scenario intake evidence.',
+                'remarks' => 'Sample document prepared for this preview.',
             ];
 
             if ($citizen) {

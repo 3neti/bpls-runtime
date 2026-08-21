@@ -229,7 +229,7 @@ const previewGuidance = computed(
                     id="preview-guidance-heading"
                     class="mt-1 text-lg font-semibold"
                 >
-                    What to try
+                    Common tasks
                 </h2>
             </div>
             <ul class="grid gap-2 sm:grid-cols-2">

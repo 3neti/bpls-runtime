@@ -358,7 +358,7 @@ function fileSize(sizeBytes: number): string {
             <WorkflowStageSummary
                 eyebrow="Current application record"
                 :title="label(permitApplication.status)"
-                description="Use only the actions currently authorized for this record. Financial, clearance, artifact, and authority facts remain separate evidence below."
+                description="Use only the actions currently available for this record. Financial, clearance, permit document, and approval details are shown separately below."
                 :items="[
                     {
                         label: 'Application type',

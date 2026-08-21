@@ -93,8 +93,8 @@ function statusLabel(value: string): string {
                             Permit Assessments
                         </h1>
                         <p class="text-sm text-muted-foreground">
-                            Review permit applications and compute assessment
-                            snapshots.
+                            Review permit applications and prepare assessment
+                            amounts.
                         </p>
                     </div>
                 </div>
@@ -107,7 +107,7 @@ function statusLabel(value: string): string {
                 <div class="flex items-start gap-3">
                     <AlertTriangle class="mt-0.5 size-4 shrink-0" />
                     <div>
-                        <p class="font-medium">Assessment policy boundary</p>
+                        <p class="font-medium">Assessment needs confirmation</p>
                         <p class="mt-1">
                             {{ errors.assessment_policy }}
                         </p>
@@ -166,7 +166,7 @@ function statusLabel(value: string): string {
                             class="min-w-0 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
                         >
                             <p class="font-medium">
-                                Assessment policy boundary
+                                Assessment needs confirmation
                             </p>
                             <p class="mt-1 break-words">
                                 {{
@@ -326,7 +326,7 @@ function statusLabel(value: string): string {
                                         class="mt-2 max-w-[260px] rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
                                     >
                                         <div class="font-medium">
-                                            Assessment policy boundary
+                                            Assessment needs confirmation
                                         </div>
                                         <div class="mt-1 break-words">
                                             {{
