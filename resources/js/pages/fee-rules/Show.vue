@@ -72,7 +72,7 @@ const props = defineProps<{
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Taxes and Fees',
+        title: 'Fee and Rule Catalog',
         href: index(),
     },
     {
@@ -90,6 +90,12 @@ function money(amountCents: number): string {
 
 function label(value: string | null): string {
     return value ? value.replaceAll('_', ' ') : '-';
+}
+
+function availabilityLabel(status: string): string {
+    return status === 'executable'
+        ? 'Available for assessment'
+        : 'Not yet confirmed';
 }
 
 function applicability(applicationTypes: string[] | null): string {
@@ -141,7 +147,7 @@ function basisRange(range: FeeRuleRange): string {
                             data-testid="fee-rule-execution-status"
                         >
                             {{
-                                label(
+                                availabilityLabel(
                                     feeRule.current_reconciliation
                                         .execution_status,
                                 )
@@ -164,17 +170,19 @@ function basisRange(range: FeeRuleRange): string {
             </section>
 
             <AdministrationScopePanel
-                available="Inspect this persisted rule, its legal provenance, calculation inputs, effective dates, and current reconciliation evidence."
-                evidence="The source rule, municipal decision evidence, and execution status are separate facts and remain visible independently."
-                unavailable="Editing the rule, accepting fiscal policy, or executing a reconciliation-required candidate from this page."
+                available="Review this recorded rule, its source and legal basis, calculation inputs, effective dates, and current assessment availability."
+                evidence="The source text, municipal decision, and whether the rule may be used are recorded separately."
+                unavailable="Editing the rule, accepting financial policy, or activating a candidate that still needs municipal confirmation."
             />
 
             <section
                 class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
             >
-                <p class="font-medium">Read-only policy boundary</p>
+                <p class="font-medium">Municipal confirmation required</p>
                 <p class="mt-1">
-                    {{ scopeNote }}
+                    This page is read-only. A recorded Revenue Code rule can be
+                    used for assessment only after the Municipality confirms the
+                    rule and its interpretation.
                 </p>
             </section>
 
@@ -186,11 +194,11 @@ function basisRange(range: FeeRuleRange): string {
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 class="text-sm font-semibold text-foreground">
-                            Financial Reconciliation
+                            Municipal rule review
                         </h2>
                         <p class="mt-1 text-sm text-muted-foreground">
-                            Legal evidence and the accepted operational decision
-                            are preserved separately from the executable rule.
+                            Source text and the municipal decision are recorded
+                            separately from whether this rule may be used.
                         </p>
                     </div>
                     <Badge
@@ -203,7 +211,7 @@ function basisRange(range: FeeRuleRange): string {
                         "
                     >
                         {{
-                            label(
+                            availabilityLabel(
                                 feeRule.current_reconciliation.execution_status,
                             )
                         }}
@@ -231,7 +239,7 @@ function basisRange(range: FeeRuleRange): string {
                             <h3
                                 class="text-xs font-medium text-muted-foreground uppercase"
                             >
-                                Normalized Interpretation
+                                Recorded Interpretation
                             </h3>
                             <p class="mt-1 text-sm break-words">
                                 {{
@@ -245,7 +253,7 @@ function basisRange(range: FeeRuleRange): string {
                             <h3
                                 class="text-xs font-medium text-muted-foreground uppercase"
                             >
-                                Execution Reason
+                                Availability Note
                             </h3>
                             <p
                                 class="mt-1 text-sm break-words"
@@ -273,7 +281,7 @@ function basisRange(range: FeeRuleRange): string {
                         </div>
                         <div>
                             <dt class="text-xs text-muted-foreground uppercase">
-                                Evidence Reference
+                                Source Reference
                             </dt>
                             <dd class="mt-1 break-words">
                                 {{
@@ -328,8 +336,8 @@ function basisRange(range: FeeRuleRange): string {
                     class="mt-4 text-sm font-medium text-destructive"
                     data-testid="fee-rule-reconciliation-missing"
                 >
-                    Execution is unavailable because no financial reconciliation
-                    is recorded.
+                    This rule is not available because no municipal review
+                    decision is recorded.
                 </p>
             </section>
 
@@ -450,7 +458,7 @@ function basisRange(range: FeeRuleRange): string {
                         </div>
                         <div>
                             <dt class="text-xs text-muted-foreground uppercase">
-                                Legacy Source
+                                Technical Source Reference
                             </dt>
                             <dd class="mt-1 break-words">
                                 {{ feeRule.legacy_source_id ?? '-' }}
@@ -467,7 +475,7 @@ function basisRange(range: FeeRuleRange): string {
                 class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
             >
                 <h2 class="text-sm font-semibold text-foreground">
-                    Policy Boundaries
+                    Items Requiring Confirmation
                 </h2>
                 <p
                     v-if="feeRule.policy_note"
@@ -497,9 +505,8 @@ function basisRange(range: FeeRuleRange): string {
                         Ranges
                     </h2>
                     <p class="mt-1 text-sm text-muted-foreground">
-                        Persisted range brackets for this rule. These brackets
-                        are evidence for assessment behavior; unresolved formula
-                        semantics remain explicit policy boundaries.
+                        Recorded amount ranges for this rule. Unresolved formula
+                        meaning remains unavailable until confirmed.
                     </p>
                 </div>
                 <div class="overflow-x-auto">
@@ -529,7 +536,7 @@ function basisRange(range: FeeRuleRange): string {
                                     colspan="3"
                                     class="px-3 py-8 text-center text-muted-foreground"
                                 >
-                                    This rule has no persisted range brackets.
+                                    This rule has no recorded range brackets.
                                 </td>
                             </tr>
                             <tr

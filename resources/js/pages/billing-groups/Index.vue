@@ -42,7 +42,7 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Billing Groups', href: index() },
+    { title: 'Other Collections Setup', href: index() },
 ];
 
 const form = useForm<{
@@ -87,29 +87,32 @@ function submit(): void {
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbs">
-        <Head title="Billing Groups" />
+        <Head title="Other Collections Setup" />
 
         <main class="flex h-full flex-1 flex-col gap-4 p-4">
             <section>
                 <h1 class="text-xl font-semibold text-foreground">
-                    Billing Groups
+                    Other Collections Setup
                 </h1>
                 <p class="text-sm text-muted-foreground">
-                    Configure provisional non-permit record schemas.
+                    Prepare provisional record forms for municipal collections
+                    outside the business-permit workflow.
                 </p>
             </section>
 
             <AdministrationScopePanel
-                available="Inspect provisional billing-group definitions; authorized staff may record structure-only definitions for later reconciliation."
-                evidence="A definition records draft structure and fields only. It does not accept a Treasury module or establish taxpayer liability."
-                unavailable="Liability calculation, collection, receipt or official numbering, and financial-policy execution."
+                available="Review provisional collection types and, where authorized, prepare the fields each type may need."
+                evidence="These definitions are draft setup only. They do not establish an amount due or authorize Treasury collection."
+                unavailable="Calculating liability, collecting payment, issuing receipts or official numbers, and activating unconfirmed financial policy."
             />
 
             <section
                 class="border-l-4 border-amber-500 bg-amber-50 p-4 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
                 data-testid="billing-group-policy-boundary"
             >
-                {{ policyNote }}
+                This setup is provisional. It can prepare sample record forms,
+                but it cannot calculate an amount due, collect payment, issue a
+                receipt, or create an official transaction number.
             </section>
 
             <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
@@ -122,7 +125,7 @@ function submit(): void {
                     >
                         <WalletCards class="size-10 text-muted-foreground" />
                         <p class="text-sm text-muted-foreground">
-                            No billing-group definitions recorded.
+                            No provisional collection types have been prepared.
                         </p>
                     </div>
                     <div v-else class="divide-y divide-sidebar-border/70">
@@ -152,7 +155,7 @@ function submit(): void {
                             </p>
                             <p class="text-xs text-muted-foreground">
                                 {{ billingGroup.fields_count }} fields ·
-                                {{ billingGroup.records_count }} draft records
+                                {{ billingGroup.records_count }} sample records
                             </p>
                         </Link>
                     </div>
@@ -166,11 +169,11 @@ function submit(): void {
                 >
                     <div>
                         <h2 class="font-semibold text-foreground">
-                            New provisional definition
+                            Add provisional collection type
                         </h2>
                         <p class="text-xs text-muted-foreground">
-                            This records structure only. It does not authorize
-                            financial use.
+                            Set up the fields for review. This does not enable
+                            billing or collection.
                         </p>
                     </div>
 
@@ -245,7 +248,7 @@ function submit(): void {
                             />
                             <Input
                                 v-model="field.key"
-                                placeholder="stable_field_key"
+                                placeholder="Internal field key"
                                 required
                             />
                             <select
@@ -285,14 +288,14 @@ function submit(): void {
                                         v-model="field.is_required"
                                         type="checkbox"
                                     />
-                                    Required at future readiness boundary
+                                    Required if this setup is approved
                                 </label>
                                 <label class="flex items-center gap-2">
                                     <input
                                         v-model="field.is_unique"
                                         type="checkbox"
                                     />
-                                    Unique at future readiness boundary
+                                    Unique if this setup is approved
                                 </label>
                             </div>
                         </div>
@@ -305,7 +308,11 @@ function submit(): void {
                     </div>
 
                     <Button type="submit" :disabled="form.processing">
-                        {{ form.processing ? 'Saving…' : 'Save definition' }}
+                        {{
+                            form.processing
+                                ? 'Saving…'
+                                : 'Save provisional type'
+                        }}
                     </Button>
                 </form>
             </div>

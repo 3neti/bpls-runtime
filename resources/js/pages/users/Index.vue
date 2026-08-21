@@ -64,7 +64,7 @@ const role = ref(props.filters.role ?? '');
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Users',
+        title: 'User Directory',
         href: index(),
     },
 ];
@@ -100,14 +100,17 @@ function paginationLabel(label: string): string {
 
 <template>
     <div class="contents">
-        <Head title="Users" />
+        <Head title="User Directory" />
 
         <main class="flex h-full min-w-0 flex-1 flex-col gap-5 p-4">
             <section class="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h1 class="text-xl font-semibold text-foreground">Users</h1>
+                    <h1 class="text-xl font-semibold text-foreground">
+                        User Directory
+                    </h1>
                     <p class="text-sm text-muted-foreground">
-                        Application accounts and their current identity links.
+                        Find municipal and citizen accounts and review their
+                        current access and owner links.
                     </p>
                 </div>
                 <Badge variant="outline">
@@ -120,9 +123,9 @@ function paginationLabel(label: string): string {
             </section>
 
             <AdministrationScopePanel
-                available="Search and inspect application accounts, verification state, current role labels, and recorded legal-owner links."
-                evidence="An account, a legal BusinessOwner identity, and an application submission actor are separate facts. This directory shows only links recorded by the canonical model."
-                unavailable="Account provisioning, role assignment, activation or deactivation, password reset, and account mutation."
+                available="Search accounts and review email status, current role, and recorded business-owner links."
+                evidence="An account, a legal business-owner identity, and the person who submitted an application are separate records. This directory shows only links already recorded in the system."
+                unavailable="Creating accounts, changing roles, activating or deactivating access, and resetting passwords."
             />
 
             <section

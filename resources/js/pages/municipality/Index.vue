@@ -103,10 +103,18 @@ function label(value: string): string {
 
 function effectiveTerm(official: Official): string {
     if (official.effective_term.status === 'not_evidenced') {
-        return 'No effective term evidenced';
+        return 'Term dates not yet configured';
     }
 
     return `${official.effective_term.effective_from ?? 'Open'} to ${official.effective_term.effective_until ?? 'Open'}`;
+}
+
+function officialName(official: Official): string {
+    if (official.configuration_status === 'placeholder') {
+        return 'Name not yet configured';
+    }
+
+    return official.name;
 }
 </script>
 
@@ -121,8 +129,8 @@ function effectiveTerm(official: Official): string {
                         Municipality Configuration
                     </h1>
                     <p class="text-sm text-muted-foreground">
-                        Officials, document associations, and authority
-                        evidence.
+                        Municipal identity, officials, and permit document
+                        settings.
                     </p>
                 </div>
                 <Badge variant="outline">
@@ -132,9 +140,9 @@ function effectiveTerm(official: Official): string {
             </section>
 
             <AdministrationScopePanel
-                available="Inspect configured municipal identity, official-role values, source status, effective-term evidence, and document associations."
-                evidence="Configured identity and document association are presentation evidence; neither establishes an authorized signatory."
-                unavailable="Governed configuration changes, signature authority, permit issuance or release, and any claim of legal effect."
+                available="Review the configured municipality name, official roles, term dates, and permit document assignments."
+                evidence="A name or document assignment in this screen does not by itself grant signing or permit-release authority."
+                unavailable="Changing governed settings or granting signature, permit issuance, release, or legal-effect authority."
             />
 
             <section
@@ -213,22 +221,30 @@ function effectiveTerm(official: Official): string {
                             <p
                                 class="text-xs font-medium text-muted-foreground uppercase"
                             >
-                                Evidence source
+                                Configuration status
                             </p>
                             <p class="mt-1 text-sm font-medium text-foreground">
-                                Runtime configuration
+                                Recorded system settings
                             </p>
                             <p class="mt-2 text-xs text-muted-foreground">
-                                Legacy source:
-                                {{ label(source.legacy_source_status) }}
+                                Official names and titles require municipal
+                                confirmation before governed use.
                             </p>
-                            <p class="text-xs text-muted-foreground">
-                                Production snapshot:
-                                {{ label(source.production_snapshot_status) }}
-                            </p>
-                            <p class="mt-2 text-xs text-muted-foreground">
-                                {{ source.policy_note }}
-                            </p>
+                            <details class="mt-3 text-xs text-muted-foreground">
+                                <summary class="cursor-pointer font-medium">
+                                    Technical source details
+                                </summary>
+                                <p class="mt-2">
+                                    Previous-system setting:
+                                    {{ label(source.legacy_source_status) }}
+                                </p>
+                                <p>
+                                    Current environment check:
+                                    {{
+                                        label(source.production_snapshot_status)
+                                    }}
+                                </p>
+                            </details>
                         </div>
                     </div>
                 </div>
@@ -242,7 +258,7 @@ function effectiveTerm(official: Official): string {
                     <ShieldAlert class="mt-0.5 size-5 shrink-0" />
                     <div>
                         <h2 class="text-sm font-semibold">
-                            Document configuration is not municipal authority
+                            Authority still requires municipal confirmation
                         </h2>
                         <p class="mt-1 text-sm">
                             {{ authority.policy_note }}
@@ -254,11 +270,11 @@ function effectiveTerm(official: Official): string {
             <section class="min-w-0">
                 <div class="mb-3">
                     <h2 class="text-base font-semibold text-foreground">
-                        Authority chain
+                        Configuration and authority status
                     </h2>
                     <p class="text-sm text-muted-foreground">
-                        Each stage remains independent and must carry its own
-                        evidence.
+                        Each step is separate. Completing a setting does not
+                        automatically grant the next authority.
                     </p>
                 </div>
                 <div
@@ -297,8 +313,7 @@ function effectiveTerm(official: Official): string {
                             Configured officials
                         </h2>
                         <p class="text-sm text-muted-foreground">
-                            Runtime values with source and term evidence shown
-                            separately.
+                            Names and terms currently recorded for each role.
                         </p>
                     </div>
                     <Badge variant="secondary">
@@ -337,27 +352,34 @@ function effectiveTerm(official: Official): string {
                                 <p
                                     class="font-medium break-words text-foreground"
                                 >
-                                    {{ official.name }}
+                                    {{ officialName(official) }}
                                 </p>
                                 <p class="text-sm text-muted-foreground">
                                     {{ official.title }} · {{ official.role }}
                                 </p>
-                                <p class="mt-2 text-xs text-muted-foreground">
-                                    Legacy setting:
-                                    {{
-                                        label(
-                                            official.provenance
-                                                .legacy_source_status,
-                                        )
-                                    }}
-                                    · Production:
-                                    {{
-                                        label(
-                                            official.provenance
-                                                .production_snapshot_status,
-                                        )
-                                    }}
-                                </p>
+                                <details
+                                    class="mt-2 text-xs text-muted-foreground"
+                                >
+                                    <summary class="cursor-pointer">
+                                        Source details
+                                    </summary>
+                                    <p class="mt-1">
+                                        Previous-system setting:
+                                        {{
+                                            label(
+                                                official.provenance
+                                                    .legacy_source_status,
+                                            )
+                                        }}
+                                        · Current environment:
+                                        {{
+                                            label(
+                                                official.provenance
+                                                    .production_snapshot_status,
+                                            )
+                                        }}
+                                    </p>
+                                </details>
                             </div>
                         </div>
                         <div class="flex min-w-0 items-start gap-3">
@@ -401,8 +423,8 @@ function effectiveTerm(official: Official): string {
                         Document associations
                     </h2>
                     <p class="text-sm text-muted-foreground">
-                        Template use is evidence of presentation behavior, not
-                        signing authority.
+                        Shows which official role is displayed on a generated
+                        permit document. This does not grant signing authority.
                     </p>
                 </div>
                 <div
@@ -421,9 +443,8 @@ function effectiveTerm(official: Official): string {
                                 <th class="px-4 py-3 font-medium">
                                     Relationship
                                 </th>
-                                <th class="px-4 py-3 font-medium">Legacy</th>
                                 <th class="px-4 py-3 font-medium">
-                                    Production layout
+                                    Current use
                                 </th>
                                 <th class="px-4 py-3 font-medium">Authority</th>
                             </tr>
@@ -463,16 +484,9 @@ function effectiveTerm(official: Official): string {
                                 </td>
                                 <td class="px-4 py-3 text-muted-foreground">
                                     {{
-                                        label(
-                                            association.legacy_renderer_status,
-                                        )
-                                    }}
-                                </td>
-                                <td class="px-4 py-3 text-muted-foreground">
-                                    {{
-                                        label(
-                                            association.production_layout_status,
-                                        )
+                                        association.current_runtime_use
+                                            ? 'Used by generated document'
+                                            : 'Not currently used'
                                     }}
                                 </td>
                                 <td class="px-4 py-3">

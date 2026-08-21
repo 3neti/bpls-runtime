@@ -19,55 +19,55 @@ const steps: Record<StakeholderPreviewPersona['key'], string[]> = {
     ],
     bplo: [
         'Open All Applications and the assessment work queue.',
-        'Inspect the Assessment Officer-prepared amount, application evidence, and clearances.',
-        'Confirm issuance and release remain visibly authority-bound.',
+        'Inspect the amount prepared by the Assessment Officer, supporting documents, and clearances.',
+        'Confirm that municipal release is still shown as not confirmed.',
     ],
     treasury: [
         'Open Assessment Work and inspect the exact amount approved by the Municipal Treasurer.',
-        'Confirm the prepared and approved actors remain separate audit facts.',
+        'Confirm the preparer and approving Treasurer are recorded separately.',
         'Open Payment Schedules and inspect the paid schedule made available after approval.',
-        'Review its collection and receipt evidence.',
+        'Review its collection and receipt details.',
         'Open Daily Collections and Revenue Sources.',
     ],
     management: [
         'Open the Report Catalog and representative management reports.',
-        'Inspect Users, Roles & Permissions, and Municipality & Officials.',
-        'Review Taxes & Fees and Billing Groups as evidence and policy-bound surfaces.',
+        'Inspect the User Directory, Municipal Access Administration, and Municipal Configuration.',
+        'Review the Fee and Rule Catalog and the provisional Other Collections setup.',
     ],
     engineering: [
         'Open the Engineering queue.',
-        'Inspect the application evidence.',
+        'Inspect the application documents and recorded establishment details.',
         'Confirm or enter only the Engineering charge.',
     ],
     mpdo: [
         'Open the MPDO queue.',
-        'Inspect the application evidence.',
+        'Inspect the application documents and recorded establishment details.',
         'Confirm or enter only the MPDO charge.',
     ],
     assessor: [
         'Open the Assessor queue.',
-        'Inspect the application evidence.',
+        'Inspect the application documents and recorded establishment details.',
         'Confirm or enter only the Assessor charge.',
     ],
     health: [
         'Open the Health queue.',
-        'Inspect the application evidence.',
+        'Inspect the application documents and recorded establishment details.',
         'Confirm or enter only the Health charge.',
     ],
     menro: [
         'Open the MENRO queue.',
-        'Inspect the application evidence.',
+        'Inspect the application documents and recorded establishment details.',
         'Confirm or enter only the MENRO charge.',
     ],
     mayor_office: [
         'Open Final Permit Review.',
-        'Inspect payment and clearance readiness.',
-        'Try the provisional go/no-go interaction.',
+        'Inspect payment and clearance status.',
+        'Try the preview permit decision.',
     ],
     releasing: [
         'Open the Permit Release Queue.',
         'Confirm the preview go decision.',
-        'Release the sample permit in the preview lifecycle.',
+        'Complete the sample permit workflow in the preview.',
     ],
 };
 </script>
@@ -77,7 +77,7 @@ const steps: Record<StakeholderPreviewPersona['key'], string[]> = {
 
     <main class="min-h-svh bg-background text-foreground">
         <div
-            class="border-b border-amber-800 bg-amber-300 px-5 py-3 text-center text-sm font-extrabold tracking-wide text-amber-950"
+            class="border-b border-amber-800 bg-amber-300 px-5 py-2 text-center text-xs font-semibold tracking-wide text-amber-950"
         >
             Preview Environment · Sample Data
         </div>
@@ -108,9 +108,9 @@ const steps: Record<StakeholderPreviewPersona['key'], string[]> = {
                     <p
                         class="max-w-3xl text-base leading-7 text-muted-foreground"
                     >
-                        Follow the perspectives in order, or enter any role
-                        directly. This is concise guidance over the real
-                        BPLS—not a separate demo application.
+                        Follow the perspectives in order, or open any role
+                        directly to explore its common tasks in the Business
+                        Permit and Licensing System.
                     </p>
                 </div>
             </header>
@@ -163,9 +163,9 @@ const steps: Record<StakeholderPreviewPersona['key'], string[]> = {
             <p
                 class="rounded-xl border bg-muted/40 p-4 text-sm leading-6 text-muted-foreground"
             >
-                Preview roles are evaluation bundles only. Final municipal role
-                mapping, fiscal policy, numbering, issuance, release, and legal
-                effect remain separate acceptance and authority exercises.
+                Preview roles are for evaluation only. Final municipal access,
+                payment policy, permit numbering, release, and legal effect
+                still require separate municipal confirmation.
             </p>
         </div>
     </main>

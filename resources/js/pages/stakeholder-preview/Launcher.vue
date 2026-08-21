@@ -52,11 +52,11 @@ function enterAs(persona: StakeholderPreviewPersona): void {
 </script>
 
 <template>
-    <Head title="BPLS Stakeholder Preview" />
+    <Head title="Business Permit and Licensing System" />
 
     <main class="min-h-svh bg-zinc-950 text-white">
         <div
-            class="border-b border-amber-400/50 bg-amber-300 px-5 py-3 text-center text-sm font-extrabold tracking-wide text-amber-950"
+            class="border-b border-amber-400/50 bg-amber-300 px-5 py-2 text-center text-xs font-semibold tracking-wide text-amber-950"
         >
             Preview Environment · Sample Data
         </div>
@@ -72,18 +72,19 @@ function enterAs(persona: StakeholderPreviewPersona): void {
                     </div>
                     <div class="space-y-3">
                         <p class="text-sm font-semibold text-amber-300">
-                            BPLS Stakeholder Preview
+                            Business Permit and Licensing System
                         </p>
                         <h1
                             class="max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl"
                         >
-                            Choose how you would like to review the system.
+                            Choose a perspective
                         </h1>
                         <p
                             class="max-w-3xl text-base leading-7 text-zinc-300 sm:text-lg"
                         >
-                            Open a simulated stakeholder perspective with one
-                            click. No username or password is needed.
+                            Select a role to explore its common tasks using
+                            prepared sample records. No username or password is
+                            needed.
                         </p>
                     </div>
                 </div>
@@ -93,7 +94,7 @@ function enterAs(persona: StakeholderPreviewPersona): void {
                     class="inline-flex w-fit items-center gap-2 rounded-lg border border-zinc-700 px-4 py-3 text-sm font-semibold outline-none hover:bg-zinc-900 focus-visible:ring-2 focus-visible:ring-amber-300"
                 >
                     <Building2 class="size-4" aria-hidden="true" />
-                    Open Board / Stakeholder Walkthrough
+                    Open Quick Start
                 </Link>
             </header>
 
@@ -144,18 +145,16 @@ function enterAs(persona: StakeholderPreviewPersona): void {
             >
                 <ShieldAlert class="size-6 text-amber-300" aria-hidden="true" />
                 <div class="space-y-2">
-                    <p class="font-semibold text-white">
-                        About these preview roles
+                    <p class="font-semibold text-white">About the preview</p>
+                    <p>
+                        These roles are provided for evaluation and do not set
+                        final municipal access policy. Some functions remain
+                        unavailable until the Municipality confirms the
+                        responsible office or authority.
                     </p>
                     <p>
-                        These personas are simulated stakeholder perspectives
-                        for evaluation, not final municipal role or permission
-                        policy. Some functions remain intentionally unavailable
-                        pending municipal policy or authority.
-                    </p>
-                    <p>
-                        Preview data can be restored by the preview
-                        administrator.
+                        All records shown here are sample data and can be
+                        restored by the preview administrator.
                     </p>
                 </div>
             </aside>

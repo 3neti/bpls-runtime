@@ -55,7 +55,7 @@ defineProps<{
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Roles & Permissions',
+        title: 'Municipal Access Administration',
         href: index(),
     },
 ];
@@ -75,7 +75,7 @@ function permissionState(role: Role, code: string): PermissionState {
 
 function accessLabel(source: PermissionState['source']): string {
     if (source === 'admin_override') {
-        return 'Granted by Admin override';
+        return 'Full administrator access';
     }
 
     if (source === 'assigned') {
@@ -88,16 +88,16 @@ function accessLabel(source: PermissionState['source']): string {
 
 <template>
     <div class="contents">
-        <Head title="Roles & Permissions" />
+        <Head title="Municipal Access Administration" />
 
         <main class="flex h-full min-w-0 flex-1 flex-col gap-5 p-4">
             <section class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold text-foreground">
-                        Roles & Permissions
+                        Municipal Access Administration
                     </h1>
                     <p class="text-sm text-muted-foreground">
-                        Current effective access by role.
+                        Review which system areas are available to each role.
                     </p>
                 </div>
                 <Badge
@@ -109,16 +109,16 @@ function accessLabel(source: PermissionState['source']): string {
                     <TriangleAlert v-else />
                     {{
                         summary.catalog_in_sync
-                            ? 'Catalog in sync'
-                            : 'Catalog drift detected'
+                            ? 'Access records ready'
+                            : 'Access records need review'
                     }}
                 </Badge>
             </section>
 
             <AdministrationScopePanel
-                available="Inspect current roles, stored permission assignments, effective access, user counts, and permission-catalog differences."
-                evidence="Stored assignments and effective runtime access remain distinct; the Admin override is shown as its own access source."
-                unavailable="Role creation or editing, permission assignment, user-role assignment, and catalog reconciliation."
+                available="Review current roles, the number of assigned users, and access to each system area."
+                evidence="Directly assigned access and full system-administrator access are shown separately."
+                unavailable="Creating or editing roles, changing access, assigning users to roles, and resolving access-record differences."
             />
 
             <section
@@ -145,7 +145,7 @@ function accessLabel(source: PermissionState['source']): string {
                 </div>
                 <div class="border-t p-4 lg:border-t-0 lg:border-l">
                     <p class="text-xs font-medium text-muted-foreground">
-                        Runtime permissions
+                        System areas
                     </p>
                     <p class="mt-1 text-xl font-semibold text-foreground">
                         {{ summary.canonical_permission_count }}
@@ -153,7 +153,7 @@ function accessLabel(source: PermissionState['source']): string {
                 </div>
                 <div class="border-t p-4 sm:border-l lg:border-t-0">
                     <p class="text-xs font-medium text-muted-foreground">
-                        Catalog differences
+                        Items to review
                     </p>
                     <p class="mt-1 text-xl font-semibold text-foreground">
                         {{
@@ -189,11 +189,6 @@ function accessLabel(source: PermissionState['source']): string {
                             <h2 class="font-medium text-foreground">
                                 {{ role.name }}
                             </h2>
-                            <p
-                                class="mt-1 font-mono text-xs break-all text-muted-foreground"
-                            >
-                                {{ role.code }}
-                            </p>
                         </div>
                         <Badge v-if="role.is_system" variant="outline">
                             System
@@ -223,7 +218,7 @@ function accessLabel(source: PermissionState['source']): string {
                         v-if="role.access_mode === 'admin_override'"
                         class="mt-3 text-xs text-muted-foreground"
                     >
-                        Admin access is granted by the runtime role override.
+                        This system administrator role has full access.
                     </p>
                 </article>
             </section>
@@ -271,13 +266,14 @@ function accessLabel(source: PermissionState['source']): string {
                                             "
                                             variant="secondary"
                                         >
-                                            Missing row
+                                            Needs review
                                         </Badge>
                                     </div>
                                     <p
-                                        class="mt-1 font-mono text-xs text-muted-foreground"
+                                        v-if="permission.description"
+                                        class="mt-1 text-xs text-muted-foreground"
                                     >
-                                        {{ permission.code }}
+                                        {{ permission.description }}
                                     </p>
                                 </th>
                                 <td
@@ -342,17 +338,23 @@ function accessLabel(source: PermissionState['source']): string {
                 </div>
             </section>
 
-            <section
+            <details
                 v-if="!summary.catalog_in_sync"
                 class="border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
                 data-testid="permission-catalog-drift"
             >
-                <h2 class="font-medium">Permission catalog differences</h2>
+                <summary class="cursor-pointer font-medium">
+                    Technical access details
+                </summary>
+                <p class="mt-2">
+                    These internal access records need administrator review.
+                    User access remains read-only on this page.
+                </p>
                 <p
                     v-if="catalog_drift.missing_permission_codes.length"
                     class="mt-2"
                 >
-                    Missing stored rows:
+                    Expected access keys not recorded:
                     <span class="font-mono break-all">
                         {{ catalog_drift.missing_permission_codes.join(', ') }}
                     </span>
@@ -361,12 +363,12 @@ function accessLabel(source: PermissionState['source']): string {
                     v-if="catalog_drift.unknown_permission_codes.length"
                     class="mt-2"
                 >
-                    Unknown stored rows:
+                    Unrecognized stored access keys:
                     <span class="font-mono break-all">
                         {{ catalog_drift.unknown_permission_codes.join(', ') }}
                     </span>
                 </p>
-            </section>
+            </details>
         </main>
     </div>
 </template>

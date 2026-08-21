@@ -190,7 +190,7 @@ const activeScheduleMatrix = computed(
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Taxes and Fees',
+        title: 'Fee and Rule Catalog',
         href: index(),
     },
 ];
@@ -288,6 +288,18 @@ function label(value: string | null): string {
     return value ? value.replaceAll('_', ' ') : '-';
 }
 
+function availabilityLabel(status: string | null): string {
+    if (status === 'executable') {
+        return 'Available for assessment';
+    }
+
+    if (status === 'blocked') {
+        return 'Not yet confirmed';
+    }
+
+    return status ? label(status) : 'Availability not recorded';
+}
+
 function applicability(applicationTypes: string[] | null): string {
     if (!applicationTypes || applicationTypes.length === 0) {
         return 'All application types';
@@ -307,25 +319,25 @@ function decodePaginationLabel(value: string): string {
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbs">
-        <Head title="Taxes and Fees" />
+        <Head title="Fee and Rule Catalog" />
 
         <main class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
             <section class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold text-foreground">
-                        Taxes and Fees
+                        Fee and Rule Catalog
                     </h1>
                     <p class="text-sm text-muted-foreground">
-                        Read-only Revenue Code fee-rule catalog with legal
-                        provenance and unresolved policy boundaries.
+                        Review the fees and calculation rules currently recorded
+                        for business-permit assessment.
                     </p>
                 </div>
             </section>
 
             <AdministrationScopePanel
-                available="Inspect accepted executable fee-rule evidence separately from Revenue Code provisions and reconciliation-required candidates."
-                evidence="Source extraction, catalog coverage, and candidate values support review; only accepted executable policy can affect an assessment."
-                unavailable="Activating candidate policy, editing rates, inventing formula behavior, or executing any unresolved fiscal rule."
+                available="Search recorded fee rules, review how each amount is calculated, and see whether it is available for assessment."
+                evidence="The source and legal basis remain visible. Only a municipally confirmed rule can affect an assessment."
+                unavailable="Editing rates, activating an unconfirmed rule, or choosing an interpretation for unresolved Revenue Code provisions."
             />
 
             <form
@@ -488,7 +500,7 @@ function decodePaginationLabel(value: string): string {
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
                     <div class="text-xs text-muted-foreground uppercase">
-                        Blocked Rules
+                        Awaiting confirmation
                     </div>
                     <div class="mt-2 text-2xl font-semibold">
                         {{ summary.blocked_policy_count }}
@@ -498,7 +510,7 @@ function decodePaginationLabel(value: string): string {
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
                     <div class="text-xs text-muted-foreground uppercase">
-                        Executable Rules
+                        Available for assessment
                     </div>
                     <div class="mt-2 text-2xl font-semibold">
                         {{ summary.executable_rule_count }}
@@ -506,524 +518,623 @@ function decodePaginationLabel(value: string): string {
                 </div>
             </section>
 
-            <section
-                class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
-                aria-labelledby="revenue-code-coverage-heading"
-                data-testid="revenue-code-provision-register"
+            <details
+                class="rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
             >
-                <div
-                    class="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3"
+                <summary
+                    class="cursor-pointer px-4 py-3 font-semibold text-foreground"
                 >
-                    <div>
-                        <h2
-                            id="revenue-code-coverage-heading"
-                            class="font-semibold"
-                        >
-                            Revenue Code provision coverage
-                        </h2>
-                        <p class="mt-1 text-sm text-muted-foreground">
-                            Legal provisions are recorded independently from
-                            executable fee rules. Coverage does not authorize a
-                            calculation.
-                        </p>
-                    </div>
-                    <div class="flex flex-wrap gap-2 text-xs">
-                        <Badge variant="outline">
-                            {{ summary.provisions_recorded }} recorded
-                        </Badge>
-                        <Badge variant="destructive">
-                            {{ summary.provisions_requiring_reconciliation }}
-                            require reconciliation
-                        </Badge>
-                        <Badge variant="outline">
-                            {{ summary.provisions_linked_to_rules }} linked to
-                            rules
-                        </Badge>
-                    </div>
-                </div>
-
-                <div class="overflow-x-auto">
-                    <table class="w-full min-w-[960px] table-fixed text-sm">
-                        <thead
-                            class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
-                        >
-                            <tr>
-                                <th class="w-[16%] px-3 py-3 font-medium">
-                                    Provision
-                                </th>
-                                <th class="w-[20%] px-3 py-3 font-medium">
-                                    Subject
-                                </th>
-                                <th class="w-[29%] px-3 py-3 font-medium">
-                                    Evidence coverage
-                                </th>
-                                <th class="w-[22%] px-3 py-3 font-medium">
-                                    Reconciliation
-                                </th>
-                                <th class="w-[13%] px-3 py-3 font-medium">
-                                    Executable rule
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr
-                                v-for="provision in revenueCodeProvisions"
-                                :key="provision.id"
-                                class="border-b last:border-0"
-                                :data-provision-code="provision.code"
-                            >
-                                <td class="px-3 py-3 align-top">
-                                    <div class="font-medium">
-                                        {{ provision.section_reference }}
-                                    </div>
-                                    <div
-                                        class="mt-1 text-xs break-words text-muted-foreground"
-                                    >
-                                        {{ provision.code }}
-                                    </div>
-                                    <Badge class="mt-2" variant="outline">
-                                        {{ label(provision.provision_type) }}
-                                    </Badge>
-                                </td>
-                                <td class="px-3 py-3 align-top">
-                                    {{ provision.title }}
-                                    <div
-                                        v-if="
-                                            provision.known_ambiguities.length >
-                                            0
-                                        "
-                                        class="mt-2 flex flex-wrap gap-1"
-                                    >
-                                        <span
-                                            v-for="ambiguity in provision.known_ambiguities"
-                                            :key="ambiguity"
-                                            class="rounded-md border border-sidebar-border/70 px-2 py-0.5 text-xs leading-snug break-words text-muted-foreground dark:border-sidebar-border"
-                                        >
-                                            {{ label(ambiguity) }}
-                                        </span>
-                                    </div>
-                                </td>
-                                <td class="px-3 py-3 align-top text-xs">
-                                    {{ provision.evidence_summary }}
-                                </td>
-                                <td class="px-3 py-3 align-top">
-                                    <Badge
-                                        :variant="
-                                            provision.reconciliation_status ===
-                                            'reconciled'
-                                                ? 'default'
-                                                : 'destructive'
-                                        "
-                                    >
-                                        {{
-                                            label(
-                                                provision.reconciliation_status,
-                                            )
-                                        }}
-                                    </Badge>
-                                    <p
-                                        v-if="provision.reconciliation_notes"
-                                        class="mt-2 text-xs text-muted-foreground"
-                                    >
-                                        {{ provision.reconciliation_notes }}
-                                    </p>
-                                </td>
-                                <td class="px-3 py-3 align-top">
-                                    <template v-if="provision.fee_rule">
-                                        <Link
-                                            :href="
-                                                show(provision.fee_rule.id).url
-                                            "
-                                            class="font-medium text-primary underline-offset-4 hover:underline"
-                                        >
-                                            {{ provision.fee_rule.code }}
-                                        </Link>
-                                        <Badge
-                                            v-if="
-                                                provision.fee_rule
-                                                    .execution_status
-                                            "
-                                            class="mt-2"
-                                            :variant="
-                                                provision.fee_rule
-                                                    .execution_status ===
-                                                'executable'
-                                                    ? 'default'
-                                                    : 'destructive'
-                                            "
-                                        >
-                                            {{
-                                                label(
-                                                    provision.fee_rule
-                                                        .execution_status,
-                                                )
-                                            }}
-                                        </Badge>
-                                    </template>
-                                    <span
-                                        v-else
-                                        class="text-xs text-muted-foreground"
-                                    >
-                                        No executable rule
-                                    </span>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <section
-                class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
-                aria-labelledby="revenue-code-policy-boundaries-heading"
-                data-testid="revenue-code-policy-boundary-register"
-            >
-                <div
-                    class="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3"
-                >
-                    <div>
-                        <h2
-                            id="revenue-code-policy-boundaries-heading"
-                            class="font-semibold"
-                        >
-                            Non-schedule policy boundaries
-                        </h2>
-                        <p class="mt-1 text-sm text-muted-foreground">
-                            Exact clauses and candidate facts are preserved for
-                            municipal reconciliation. They cannot execute an
-                            assessment.
-                        </p>
-                    </div>
-                    <div class="flex flex-wrap gap-2 text-xs">
-                        <Badge variant="outline">
-                            {{ summary.policy_boundary_clauses }} clauses
-                        </Badge>
-                        <Badge variant="destructive">
-                            {{
-                                summary.policy_boundary_clauses_requiring_reconciliation
-                            }}
-                            non-executable
-                        </Badge>
-                    </div>
-                </div>
-
-                <div class="divide-y">
-                    <div
-                        v-for="boundary in revenueCodePolicyBoundaries"
-                        :key="boundary.provision.code"
-                        class="px-4 py-4"
-                        :data-policy-provision-code="boundary.provision.code"
+                    Technical Revenue Code review details
+                </summary>
+                <div class="grid gap-4 border-t p-4">
+                    <section
+                        class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
+                        aria-labelledby="revenue-code-coverage-heading"
+                        data-testid="revenue-code-provision-register"
                     >
                         <div
-                            class="mb-3 flex flex-wrap items-center justify-between gap-2"
+                            class="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3"
                         >
                             <div>
-                                <h3 class="text-sm font-semibold">
-                                    {{ boundary.provision.section_reference }}
-                                    · {{ boundary.provision.title }}
-                                </h3>
-                                <p class="mt-1 text-xs text-muted-foreground">
-                                    {{ boundary.provision.code }}
+                                <h2
+                                    id="revenue-code-coverage-heading"
+                                    class="font-semibold"
+                                >
+                                    Revenue Code provision coverage
+                                </h2>
+                                <p class="mt-1 text-sm text-muted-foreground">
+                                    Legal provisions are recorded independently
+                                    from executable fee rules. Coverage does not
+                                    authorize a calculation.
                                 </p>
                             </div>
-                            <Badge variant="destructive">
-                                {{
-                                    label(
-                                        boundary.provision
-                                            .reconciliation_status,
-                                    )
-                                }}
-                            </Badge>
+                            <div class="flex flex-wrap gap-2 text-xs">
+                                <Badge variant="outline">
+                                    {{ summary.provisions_recorded }} recorded
+                                </Badge>
+                                <Badge variant="destructive">
+                                    {{
+                                        summary.provisions_requiring_reconciliation
+                                    }}
+                                    require reconciliation
+                                </Badge>
+                                <Badge variant="outline">
+                                    {{
+                                        summary.provisions_linked_to_rules
+                                    }}
+                                    linked to rules
+                                </Badge>
+                            </div>
                         </div>
 
                         <div class="overflow-x-auto">
                             <table
-                                class="w-full min-w-[980px] table-fixed text-sm"
+                                class="w-full min-w-[960px] table-fixed text-sm"
                             >
                                 <thead
-                                    class="border-y bg-muted/30 text-left text-xs text-muted-foreground uppercase"
+                                    class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
                                 >
                                     <tr>
                                         <th
-                                            class="w-[16%] px-3 py-2 font-medium"
+                                            class="w-[16%] px-3 py-3 font-medium"
                                         >
-                                            Boundary
+                                            Provision
                                         </th>
                                         <th
-                                            class="w-[29%] px-3 py-2 font-medium"
+                                            class="w-[20%] px-3 py-3 font-medium"
                                         >
-                                            Ordinance evidence
+                                            Subject
                                         </th>
                                         <th
-                                            class="w-[27%] px-3 py-2 font-medium"
+                                            class="w-[29%] px-3 py-3 font-medium"
                                         >
-                                            Candidate fact
+                                            Evidence coverage
                                         </th>
                                         <th
-                                            class="w-[28%] px-3 py-2 font-medium"
+                                            class="w-[22%] px-3 py-3 font-medium"
                                         >
-                                            Execution refusal
+                                            Reconciliation
+                                        </th>
+                                        <th
+                                            class="w-[13%] px-3 py-3 font-medium"
+                                        >
+                                            Executable rule
                                         </th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr
-                                        v-for="clause in boundary.clauses"
-                                        :key="clause.id"
+                                        v-for="provision in revenueCodeProvisions"
+                                        :key="provision.id"
                                         class="border-b last:border-0"
-                                        :data-policy-clause-code="clause.code"
+                                        :data-provision-code="provision.code"
                                     >
                                         <td class="px-3 py-3 align-top">
-                                            <Badge variant="outline">
-                                                {{ label(clause.clause_type) }}
-                                            </Badge>
-                                            <div
-                                                class="mt-2 text-xs break-words text-muted-foreground"
-                                            >
-                                                {{ clause.code }}
+                                            <div class="font-medium">
+                                                {{
+                                                    provision.section_reference
+                                                }}
                                             </div>
-                                        </td>
-                                        <td
-                                            class="px-3 py-3 align-top text-xs leading-relaxed"
-                                        >
-                                            {{ clause.source_text }}
-                                        </td>
-                                        <td class="px-3 py-3 align-top">
+                                            <div
+                                                class="mt-1 text-xs break-words text-muted-foreground"
+                                            >
+                                                {{ provision.code }}
+                                            </div>
                                             <Badge
-                                                v-if="
-                                                    clauseCandidateValue(clause)
-                                                "
-                                                class="mb-2"
+                                                class="mt-2"
                                                 variant="outline"
                                             >
                                                 {{
-                                                    clauseCandidateValue(clause)
+                                                    label(
+                                                        provision.provision_type,
+                                                    )
                                                 }}
                                             </Badge>
-                                            <p class="text-xs leading-relaxed">
+                                        </td>
+                                        <td class="px-3 py-3 align-top">
+                                            {{ provision.title }}
+                                            <div
+                                                v-if="
+                                                    provision.known_ambiguities
+                                                        .length > 0
+                                                "
+                                                class="mt-2 flex flex-wrap gap-1"
+                                            >
+                                                <span
+                                                    v-for="ambiguity in provision.known_ambiguities"
+                                                    :key="ambiguity"
+                                                    class="rounded-md border border-sidebar-border/70 px-2 py-0.5 text-xs leading-snug break-words text-muted-foreground dark:border-sidebar-border"
+                                                >
+                                                    {{ label(ambiguity) }}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td class="px-3 py-3 align-top text-xs">
+                                            {{ provision.evidence_summary }}
+                                        </td>
+                                        <td class="px-3 py-3 align-top">
+                                            <Badge
+                                                :variant="
+                                                    provision.reconciliation_status ===
+                                                    'reconciled'
+                                                        ? 'default'
+                                                        : 'destructive'
+                                                "
+                                            >
                                                 {{
-                                                    clause.candidate_interpretation
+                                                    label(
+                                                        provision.reconciliation_status,
+                                                    )
                                                 }}
-                                            </p>
+                                            </Badge>
                                             <p
                                                 v-if="
-                                                    clause.candidate_values_are_non_executable
+                                                    provision.reconciliation_notes
                                                 "
-                                                class="mt-2 text-xs font-medium text-destructive"
+                                                class="mt-2 text-xs text-muted-foreground"
                                             >
-                                                Candidate values are
-                                                non-executable.
+                                                {{
+                                                    provision.reconciliation_notes
+                                                }}
                                             </p>
                                         </td>
-                                        <td
-                                            class="px-3 py-3 align-top text-xs leading-relaxed text-muted-foreground"
-                                        >
-                                            {{ clause.execution_blocker }}
+                                        <td class="px-3 py-3 align-top">
+                                            <template v-if="provision.fee_rule">
+                                                <Link
+                                                    :href="
+                                                        show(
+                                                            provision.fee_rule
+                                                                .id,
+                                                        ).url
+                                                    "
+                                                    class="font-medium text-primary underline-offset-4 hover:underline"
+                                                >
+                                                    {{
+                                                        provision.fee_rule.code
+                                                    }}
+                                                </Link>
+                                                <Badge
+                                                    v-if="
+                                                        provision.fee_rule
+                                                            .execution_status
+                                                    "
+                                                    class="mt-2"
+                                                    :variant="
+                                                        provision.fee_rule
+                                                            .execution_status ===
+                                                        'executable'
+                                                            ? 'default'
+                                                            : 'destructive'
+                                                    "
+                                                >
+                                                    {{
+                                                        label(
+                                                            provision.fee_rule
+                                                                .execution_status,
+                                                        )
+                                                    }}
+                                                </Badge>
+                                            </template>
+                                            <span
+                                                v-else
+                                                class="text-xs text-muted-foreground"
+                                            >
+                                                No executable rule
+                                            </span>
                                         </td>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-                </div>
-            </section>
+                    </section>
 
-            <section
-                v-if="activeScheduleMatrix"
-                class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
-                aria-labelledby="revenue-code-matrix-heading"
-                data-testid="revenue-code-schedule-matrix"
-            >
-                <div
-                    class="flex gap-1 overflow-x-auto border-b bg-muted/20 p-2"
-                    aria-label="Revenue Code schedule"
-                >
-                    <Button
-                        v-for="matrix in revenueCodeScheduleMatrices"
-                        :key="matrix.provision.code"
-                        type="button"
-                        size="sm"
-                        :variant="
-                            matrix.provision.code === activeScheduleCode
-                                ? 'default'
-                                : 'ghost'
-                        "
-                        class="shrink-0"
-                        :aria-pressed="
-                            matrix.provision.code === activeScheduleCode
-                        "
-                        :data-schedule-provision-code="matrix.provision.code"
-                        @click="activeScheduleCode = matrix.provision.code"
+                    <section
+                        class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
+                        aria-labelledby="revenue-code-policy-boundaries-heading"
+                        data-testid="revenue-code-policy-boundary-register"
                     >
-                        {{ matrix.provision.section_reference }}
-                    </Button>
-                </div>
-
-                <div
-                    class="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3"
-                >
-                    <div>
-                        <h2
-                            id="revenue-code-matrix-heading"
-                            class="font-semibold"
+                        <div
+                            class="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3"
                         >
-                            {{
-                                activeScheduleMatrix.provision.section_reference
-                            }}
-                            reconciliation matrix
-                        </h2>
-                        <p class="mt-1 text-sm text-muted-foreground">
-                            Source rows and non-executable candidate values for
-                            {{ activeScheduleMatrix.provision.title }}.
-                        </p>
-                    </div>
-                    <div class="flex flex-wrap gap-2 text-xs">
-                        <Badge variant="outline">
-                            {{ activeScheduleMatrix.summary.row_count }}
-                            source rows
-                        </Badge>
-                        <Badge variant="destructive">
-                            {{ activeScheduleMatrix.summary.overlap_count }}
-                            overlap
-                        </Badge>
-                        <Badge variant="destructive">
-                            {{
-                                activeScheduleMatrix.summary
-                                    .reconciliation_required_count
-                            }}
-                            require normalization
-                        </Badge>
-                        <Badge variant="outline">
-                            {{ activeScheduleMatrix.summary.gap_count }}
-                            gaps
-                        </Badge>
-                    </div>
-                </div>
+                            <div>
+                                <h2
+                                    id="revenue-code-policy-boundaries-heading"
+                                    class="font-semibold"
+                                >
+                                    Non-schedule policy boundaries
+                                </h2>
+                                <p class="mt-1 text-sm text-muted-foreground">
+                                    Exact clauses and candidate facts are
+                                    preserved for municipal reconciliation. They
+                                    cannot execute an assessment.
+                                </p>
+                            </div>
+                            <div class="flex flex-wrap gap-2 text-xs">
+                                <Badge variant="outline">
+                                    {{
+                                        summary.policy_boundary_clauses
+                                    }}
+                                    clauses
+                                </Badge>
+                                <Badge variant="destructive">
+                                    {{
+                                        summary.policy_boundary_clauses_requiring_reconciliation
+                                    }}
+                                    non-executable
+                                </Badge>
+                            </div>
+                        </div>
 
-                <div
-                    class="border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
-                >
-                    <span class="font-medium">Execution refused.</span>
-                    Candidate bounds and values support reconciliation review;
-                    they are not accepted municipal policy and are not used by
-                    assessment calculation.
-                </div>
-
-                <div class="overflow-x-auto">
-                    <table class="w-full min-w-[1080px] table-fixed text-sm">
-                        <thead
-                            class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
-                        >
-                            <tr>
-                                <th class="w-[7%] px-3 py-3 font-medium">
-                                    Row
-                                </th>
-                                <th class="w-[25%] px-3 py-3 font-medium">
-                                    Ordinance basis text
-                                </th>
-                                <th class="w-[18%] px-3 py-3 font-medium">
-                                    Ordinance value text
-                                </th>
-                                <th class="w-[18%] px-3 py-3 font-medium">
-                                    Candidate basis
-                                </th>
-                                <th class="w-[12%] px-3 py-3 font-medium">
-                                    Candidate value
-                                </th>
-                                <th class="w-[20%] px-3 py-3 font-medium">
-                                    Reconciliation finding
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr
-                                v-for="row in activeScheduleMatrix.rows"
-                                :key="row.id"
-                                class="border-b last:border-0"
-                                :class="
-                                    row.issues.length > 0
-                                        ? 'bg-red-50/60 dark:bg-red-950/10'
-                                        : ''
+                        <div class="divide-y">
+                            <div
+                                v-for="boundary in revenueCodePolicyBoundaries"
+                                :key="boundary.provision.code"
+                                class="px-4 py-4"
+                                :data-policy-provision-code="
+                                    boundary.provision.code
                                 "
-                                :data-schedule-row-code="row.code"
                             >
-                                <td class="px-3 py-3 align-top">
-                                    <div class="font-medium">
-                                        {{ row.sequence }}
+                                <div
+                                    class="mb-3 flex flex-wrap items-center justify-between gap-2"
+                                >
+                                    <div>
+                                        <h3 class="text-sm font-semibold">
+                                            {{
+                                                boundary.provision
+                                                    .section_reference
+                                            }}
+                                            · {{ boundary.provision.title }}
+                                        </h3>
+                                        <p
+                                            class="mt-1 text-xs text-muted-foreground"
+                                        >
+                                            {{ boundary.provision.code }}
+                                        </p>
                                     </div>
-                                    <div
-                                        class="mt-1 text-xs text-muted-foreground"
-                                    >
-                                        {{ row.code }}
-                                    </div>
-                                </td>
-                                <td class="px-3 py-3 align-top">
-                                    {{ row.source_basis_text }}
-                                </td>
-                                <td class="px-3 py-3 align-top">
-                                    {{ row.source_value_text }}
-                                </td>
-                                <td class="px-3 py-3 align-top">
-                                    {{ candidateBasis(row) }}
-                                </td>
-                                <td class="px-3 py-3 align-top font-medium">
-                                    {{ candidateValue(row) }}
-                                </td>
-                                <td class="px-3 py-3 align-top">
-                                    <Badge
-                                        :variant="
-                                            row.issues.length === 0
-                                                ? 'outline'
-                                                : 'destructive'
-                                        "
-                                    >
+                                    <Badge variant="destructive">
                                         {{
-                                            row.issues.length === 0
-                                                ? 'No mechanical issue'
-                                                : label(
-                                                      row.normalization_status,
-                                                  )
+                                            label(
+                                                boundary.provision
+                                                    .reconciliation_status,
+                                            )
                                         }}
                                     </Badge>
-                                    <div
-                                        v-if="row.issues.length > 0"
-                                        class="mt-2 flex flex-wrap gap-1"
+                                </div>
+
+                                <div class="overflow-x-auto">
+                                    <table
+                                        class="w-full min-w-[980px] table-fixed text-sm"
                                     >
-                                        <span
-                                            v-for="issue in row.issues"
-                                            :key="`${row.code}-${issue.type}`"
-                                            class="rounded-md border border-red-300 px-2 py-0.5 text-xs text-red-800 dark:border-red-700 dark:text-red-200"
+                                        <thead
+                                            class="border-y bg-muted/30 text-left text-xs text-muted-foreground uppercase"
                                         >
-                                            {{ label(issue.type) }}
-                                            <template
-                                                v-if="issue.related_row_code"
+                                            <tr>
+                                                <th
+                                                    class="w-[16%] px-3 py-2 font-medium"
+                                                >
+                                                    Boundary
+                                                </th>
+                                                <th
+                                                    class="w-[29%] px-3 py-2 font-medium"
+                                                >
+                                                    Ordinance evidence
+                                                </th>
+                                                <th
+                                                    class="w-[27%] px-3 py-2 font-medium"
+                                                >
+                                                    Candidate fact
+                                                </th>
+                                                <th
+                                                    class="w-[28%] px-3 py-2 font-medium"
+                                                >
+                                                    Execution refusal
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr
+                                                v-for="clause in boundary.clauses"
+                                                :key="clause.id"
+                                                class="border-b last:border-0"
+                                                :data-policy-clause-code="
+                                                    clause.code
+                                                "
                                             >
-                                                with
-                                                {{ issue.related_row_code }}
-                                            </template>
-                                        </span>
-                                    </div>
-                                    <p
-                                        v-if="row.normalization_notes"
-                                        class="mt-2 text-xs text-muted-foreground"
+                                                <td class="px-3 py-3 align-top">
+                                                    <Badge variant="outline">
+                                                        {{
+                                                            label(
+                                                                clause.clause_type,
+                                                            )
+                                                        }}
+                                                    </Badge>
+                                                    <div
+                                                        class="mt-2 text-xs break-words text-muted-foreground"
+                                                    >
+                                                        {{ clause.code }}
+                                                    </div>
+                                                </td>
+                                                <td
+                                                    class="px-3 py-3 align-top text-xs leading-relaxed"
+                                                >
+                                                    {{ clause.source_text }}
+                                                </td>
+                                                <td class="px-3 py-3 align-top">
+                                                    <Badge
+                                                        v-if="
+                                                            clauseCandidateValue(
+                                                                clause,
+                                                            )
+                                                        "
+                                                        class="mb-2"
+                                                        variant="outline"
+                                                    >
+                                                        {{
+                                                            clauseCandidateValue(
+                                                                clause,
+                                                            )
+                                                        }}
+                                                    </Badge>
+                                                    <p
+                                                        class="text-xs leading-relaxed"
+                                                    >
+                                                        {{
+                                                            clause.candidate_interpretation
+                                                        }}
+                                                    </p>
+                                                    <p
+                                                        v-if="
+                                                            clause.candidate_values_are_non_executable
+                                                        "
+                                                        class="mt-2 text-xs font-medium text-destructive"
+                                                    >
+                                                        Candidate values are
+                                                        non-executable.
+                                                    </p>
+                                                </td>
+                                                <td
+                                                    class="px-3 py-3 align-top text-xs leading-relaxed text-muted-foreground"
+                                                >
+                                                    {{
+                                                        clause.execution_blocker
+                                                    }}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section
+                        v-if="activeScheduleMatrix"
+                        class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
+                        aria-labelledby="revenue-code-matrix-heading"
+                        data-testid="revenue-code-schedule-matrix"
+                    >
+                        <div
+                            class="flex gap-1 overflow-x-auto border-b bg-muted/20 p-2"
+                            aria-label="Revenue Code schedule"
+                        >
+                            <Button
+                                v-for="matrix in revenueCodeScheduleMatrices"
+                                :key="matrix.provision.code"
+                                type="button"
+                                size="sm"
+                                :variant="
+                                    matrix.provision.code === activeScheduleCode
+                                        ? 'default'
+                                        : 'ghost'
+                                "
+                                class="shrink-0"
+                                :aria-pressed="
+                                    matrix.provision.code === activeScheduleCode
+                                "
+                                :data-schedule-provision-code="
+                                    matrix.provision.code
+                                "
+                                @click="
+                                    activeScheduleCode = matrix.provision.code
+                                "
+                            >
+                                {{ matrix.provision.section_reference }}
+                            </Button>
+                        </div>
+
+                        <div
+                            class="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3"
+                        >
+                            <div>
+                                <h2
+                                    id="revenue-code-matrix-heading"
+                                    class="font-semibold"
+                                >
+                                    {{
+                                        activeScheduleMatrix.provision
+                                            .section_reference
+                                    }}
+                                    reconciliation matrix
+                                </h2>
+                                <p class="mt-1 text-sm text-muted-foreground">
+                                    Source rows and non-executable candidate
+                                    values for
+                                    {{ activeScheduleMatrix.provision.title }}.
+                                </p>
+                            </div>
+                            <div class="flex flex-wrap gap-2 text-xs">
+                                <Badge variant="outline">
+                                    {{ activeScheduleMatrix.summary.row_count }}
+                                    source rows
+                                </Badge>
+                                <Badge variant="destructive">
+                                    {{
+                                        activeScheduleMatrix.summary
+                                            .overlap_count
+                                    }}
+                                    overlap
+                                </Badge>
+                                <Badge variant="destructive">
+                                    {{
+                                        activeScheduleMatrix.summary
+                                            .reconciliation_required_count
+                                    }}
+                                    require normalization
+                                </Badge>
+                                <Badge variant="outline">
+                                    {{ activeScheduleMatrix.summary.gap_count }}
+                                    gaps
+                                </Badge>
+                            </div>
+                        </div>
+
+                        <div
+                            class="border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+                        >
+                            <span class="font-medium">Execution refused.</span>
+                            Candidate bounds and values support reconciliation
+                            review; they are not accepted municipal policy and
+                            are not used by assessment calculation.
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table
+                                class="w-full min-w-[1080px] table-fixed text-sm"
+                            >
+                                <thead
+                                    class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
+                                >
+                                    <tr>
+                                        <th
+                                            class="w-[7%] px-3 py-3 font-medium"
+                                        >
+                                            Row
+                                        </th>
+                                        <th
+                                            class="w-[25%] px-3 py-3 font-medium"
+                                        >
+                                            Ordinance basis text
+                                        </th>
+                                        <th
+                                            class="w-[18%] px-3 py-3 font-medium"
+                                        >
+                                            Ordinance value text
+                                        </th>
+                                        <th
+                                            class="w-[18%] px-3 py-3 font-medium"
+                                        >
+                                            Candidate basis
+                                        </th>
+                                        <th
+                                            class="w-[12%] px-3 py-3 font-medium"
+                                        >
+                                            Candidate value
+                                        </th>
+                                        <th
+                                            class="w-[20%] px-3 py-3 font-medium"
+                                        >
+                                            Reconciliation finding
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr
+                                        v-for="row in activeScheduleMatrix.rows"
+                                        :key="row.id"
+                                        class="border-b last:border-0"
+                                        :class="
+                                            row.issues.length > 0
+                                                ? 'bg-red-50/60 dark:bg-red-950/10'
+                                                : ''
+                                        "
+                                        :data-schedule-row-code="row.code"
                                     >
-                                        {{ row.normalization_notes }}
-                                    </p>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                                        <td class="px-3 py-3 align-top">
+                                            <div class="font-medium">
+                                                {{ row.sequence }}
+                                            </div>
+                                            <div
+                                                class="mt-1 text-xs text-muted-foreground"
+                                            >
+                                                {{ row.code }}
+                                            </div>
+                                        </td>
+                                        <td class="px-3 py-3 align-top">
+                                            {{ row.source_basis_text }}
+                                        </td>
+                                        <td class="px-3 py-3 align-top">
+                                            {{ row.source_value_text }}
+                                        </td>
+                                        <td class="px-3 py-3 align-top">
+                                            {{ candidateBasis(row) }}
+                                        </td>
+                                        <td
+                                            class="px-3 py-3 align-top font-medium"
+                                        >
+                                            {{ candidateValue(row) }}
+                                        </td>
+                                        <td class="px-3 py-3 align-top">
+                                            <Badge
+                                                :variant="
+                                                    row.issues.length === 0
+                                                        ? 'outline'
+                                                        : 'destructive'
+                                                "
+                                            >
+                                                {{
+                                                    row.issues.length === 0
+                                                        ? 'No mechanical issue'
+                                                        : label(
+                                                              row.normalization_status,
+                                                          )
+                                                }}
+                                            </Badge>
+                                            <div
+                                                v-if="row.issues.length > 0"
+                                                class="mt-2 flex flex-wrap gap-1"
+                                            >
+                                                <span
+                                                    v-for="issue in row.issues"
+                                                    :key="`${row.code}-${issue.type}`"
+                                                    class="rounded-md border border-red-300 px-2 py-0.5 text-xs text-red-800 dark:border-red-700 dark:text-red-200"
+                                                >
+                                                    {{ label(issue.type) }}
+                                                    <template
+                                                        v-if="
+                                                            issue.related_row_code
+                                                        "
+                                                    >
+                                                        with
+                                                        {{
+                                                            issue.related_row_code
+                                                        }}
+                                                    </template>
+                                                </span>
+                                            </div>
+                                            <p
+                                                v-if="row.normalization_notes"
+                                                class="mt-2 text-xs text-muted-foreground"
+                                            >
+                                                {{ row.normalization_notes }}
+                                            </p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
                 </div>
-            </section>
+            </details>
 
             <section
                 class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
             >
-                <p class="font-medium">Catalog scope</p>
+                <p class="font-medium">Municipal confirmation required</p>
                 <p class="mt-1">
-                    This page exposes persisted fee rules for review. It does
-                    not grant authority to edit rates, invent formula behavior,
-                    resolve PIL, or declare the Revenue Code catalog complete.
+                    This page shows recorded fee rules for review. It does not
+                    authorize rate changes, choose unresolved formula meaning,
+                    settle PIL terminology, or declare the Revenue Code list
+                    complete.
                 </p>
             </section>
 
@@ -1054,7 +1165,7 @@ function decodePaginationLabel(value: string): string {
                                     Amount
                                 </th>
                                 <th class="w-[20%] px-3 py-3 font-medium">
-                                    Evidence
+                                    Source and legal basis
                                 </th>
                                 <th
                                     class="w-[5%] px-3 py-3 text-right font-medium"
@@ -1117,7 +1228,7 @@ function decodePaginationLabel(value: string): string {
                                             "
                                         >
                                             {{
-                                                label(
+                                                availabilityLabel(
                                                     rule.current_reconciliation
                                                         .execution_status,
                                                 )
@@ -1191,17 +1302,22 @@ function decodePaginationLabel(value: string): string {
                                         {{ rule.legal_basis ?? '-' }}
                                     </div>
                                     <div
-                                        v-if="rule.legacy_source_id"
-                                        class="mt-1 text-xs break-words text-muted-foreground"
-                                    >
-                                        {{ rule.legacy_source_id }}
-                                    </div>
-                                    <div
                                         v-if="rule.policy_note"
                                         class="mt-2 text-xs text-amber-700 dark:text-amber-200"
                                     >
                                         {{ rule.policy_note }}
                                     </div>
+                                    <details
+                                        v-if="rule.legacy_source_id"
+                                        class="mt-2 text-xs text-muted-foreground"
+                                    >
+                                        <summary class="cursor-pointer">
+                                            Technical source reference
+                                        </summary>
+                                        <p class="mt-1 break-words">
+                                            {{ rule.legacy_source_id }}
+                                        </p>
+                                    </details>
                                     <div
                                         v-if="rule.policy_boundaries.length > 0"
                                         class="mt-2 flex flex-wrap gap-1"

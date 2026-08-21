@@ -96,7 +96,7 @@ const props = defineProps<{
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Billing Groups', href: index() },
+    { title: 'Other Collections Setup', href: index() },
     { title: props.billingGroup.name, href: show(props.billingGroup.id) },
 ];
 
@@ -126,6 +126,14 @@ function submit(): void {
 
 function fieldLabel(value: string): string {
     return value.replaceAll('_', ' ');
+}
+
+function availabilityLabel(status: string): string {
+    if (status === 'blocked') {
+        return 'Not available';
+    }
+
+    return fieldLabel(status);
 }
 
 const reconciliationForm = useForm<{
@@ -196,23 +204,24 @@ function submitReconciliationEvidence(): void {
                     </Button>
                     <Button as-child variant="outline">
                         <Link :href="index()"
-                            ><ArrowLeft /> Back to billing groups</Link
+                            ><ArrowLeft /> Back to other collections</Link
                         >
                     </Button>
                 </div>
             </section>
 
             <AdministrationScopePanel
-                available="Inspect the provisional definition and draft records; where authorized, prepare drafts and append reconciliation evidence."
-                evidence="Draft preparation and append-only evidence have no financial effect and do not change policy acceptance or execution readiness."
-                unavailable="Liability, collection, receipt or official numbering, and any unresolved municipal or fiscal-policy execution."
+                available="Review this provisional collection type and its sample records; authorized users may prepare records and add municipal review notes."
+                evidence="Preparing a sample record or adding a review note has no financial effect and does not approve this collection type."
+                unavailable="Calculating liability, collecting payment, issuing receipts or official numbers, and activating unconfirmed municipal or financial policy."
             />
 
             <section
                 class="border-l-4 border-amber-500 bg-amber-50 p-4 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
                 data-testid="billing-record-policy-boundary"
             >
-                {{ policyNote }}
+                These are incomplete sample records. They create no amount due,
+                collection, receipt, or official transaction number.
             </section>
 
             <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_28rem]">
@@ -220,7 +229,7 @@ function submitReconciliationEvidence(): void {
                     class="overflow-hidden border border-sidebar-border/70 bg-background dark:border-sidebar-border"
                 >
                     <div class="border-b border-sidebar-border/70 p-4">
-                        <h2 class="font-semibold">Draft records</h2>
+                        <h2 class="font-semibold">Sample records</h2>
                     </div>
                     <div
                         v-if="billingGroup.records.length === 0"
@@ -228,7 +237,7 @@ function submitReconciliationEvidence(): void {
                     >
                         <FilePlus2 class="size-9 text-muted-foreground" />
                         <p class="text-sm text-muted-foreground">
-                            No draft records prepared.
+                            No sample records prepared.
                         </p>
                     </div>
                     <div v-else class="divide-y divide-sidebar-border/70">
@@ -295,41 +304,59 @@ function submitReconciliationEvidence(): void {
                                 <div
                                     class="flex flex-wrap items-center justify-between gap-2"
                                 >
-                                    <strong>Financial readiness</strong>
+                                    <strong>Collection availability</strong>
                                     <span
                                         class="border border-amber-500/50 px-2 py-0.5 text-xs uppercase"
                                     >
-                                        {{ record.financial_readiness.status }}
+                                        {{
+                                            availabilityLabel(
+                                                record.financial_readiness
+                                                    .status,
+                                            )
+                                        }}
                                     </span>
                                 </div>
-                                <p>{{ record.financial_readiness.reason }}</p>
-                                <div class="grid gap-2 sm:grid-cols-2">
-                                    <div
-                                        v-for="requirement in record
-                                            .financial_readiness.requirements"
-                                        :key="requirement.key"
-                                        class="border border-amber-500/30 bg-background/60 p-2"
-                                        :data-requirement="requirement.key"
-                                        :data-status="requirement.status"
+                                <p>
+                                    Collection and receipting are not available
+                                    for this provisional setup.
+                                </p>
+                                <details>
+                                    <summary
+                                        class="cursor-pointer text-xs font-medium"
                                     >
+                                        Review requirements
+                                    </summary>
+                                    <div class="mt-2 grid gap-2 sm:grid-cols-2">
                                         <div
-                                            class="flex items-start justify-between gap-2"
+                                            v-for="requirement in record
+                                                .financial_readiness
+                                                .requirements"
+                                            :key="requirement.key"
+                                            class="border border-amber-500/30 bg-background/60 p-2"
+                                            :data-requirement="requirement.key"
+                                            :data-status="requirement.status"
                                         >
-                                            <span class="font-medium">{{
-                                                requirement.label
-                                            }}</span>
-                                            <span
-                                                class="text-xs text-muted-foreground uppercase"
-                                                >{{ requirement.status }}</span
+                                            <div
+                                                class="flex items-start justify-between gap-2"
                                             >
+                                                <span class="font-medium">{{
+                                                    requirement.label
+                                                }}</span>
+                                                <span
+                                                    class="text-xs text-muted-foreground uppercase"
+                                                    >{{
+                                                        requirement.status
+                                                    }}</span
+                                                >
+                                            </div>
+                                            <p
+                                                class="mt-1 text-xs text-muted-foreground"
+                                            >
+                                                {{ requirement.reason }}
+                                            </p>
                                         </div>
-                                        <p
-                                            class="mt-1 text-xs text-muted-foreground"
-                                        >
-                                            {{ requirement.reason }}
-                                        </p>
                                     </div>
-                                </div>
+                                </details>
                                 <p class="text-xs font-medium">
                                     Liability, collection, and receipt actions
                                     are unavailable.
@@ -346,10 +373,10 @@ function submitReconciliationEvidence(): void {
                     @submit.prevent="submit"
                 >
                     <div>
-                        <h2 class="font-semibold">Prepare draft record</h2>
+                        <h2 class="font-semibold">Prepare sample record</h2>
                         <p class="text-xs text-muted-foreground">
-                            Incomplete values are allowed. This action has no
-                            financial effect.
+                            Incomplete values are allowed for review. This
+                            action has no financial effect.
                         </p>
                     </div>
 
@@ -447,7 +474,7 @@ function submitReconciliationEvidence(): void {
                         {{ form.errors.field_values }}
                     </p>
                     <Button type="submit" :disabled="form.processing">
-                        {{ form.processing ? 'Preparing…' : 'Prepare draft' }}
+                        {{ form.processing ? 'Preparing…' : 'Prepare sample' }}
                     </Button>
                 </form>
             </div>
@@ -457,12 +484,10 @@ function submitReconciliationEvidence(): void {
                     class="overflow-hidden border border-sidebar-border/70 bg-background dark:border-sidebar-border"
                 >
                     <div class="border-b border-sidebar-border/70 p-4">
-                        <h2 class="font-semibold">
-                            Reconciliation evidence history
-                        </h2>
+                        <h2 class="font-semibold">Municipal review history</h2>
                         <p class="text-xs text-muted-foreground">
-                            Immutable evidence versions support a later
-                            municipal decision. They do not authorize execution.
+                            Recorded source notes support a later municipal
+                            decision. They do not activate collection.
                         </p>
                     </div>
                     <div
@@ -470,7 +495,7 @@ function submitReconciliationEvidence(): void {
                         class="p-6 text-sm text-muted-foreground"
                         data-testid="billing-group-no-reconciliation-evidence"
                     >
-                        No reconciliation evidence recorded.
+                        No municipal review notes recorded.
                     </div>
                     <div v-else class="divide-y divide-sidebar-border/70">
                         <article
@@ -485,7 +510,7 @@ function submitReconciliationEvidence(): void {
                             >
                                 <div>
                                     <strong class="text-sm"
-                                        >Evidence version
+                                        >Review note
                                         {{ reconciliation.version }}</strong
                                     >
                                     <p class="text-xs text-muted-foreground">
@@ -519,7 +544,7 @@ function submitReconciliationEvidence(): void {
                                 </p>
                                 <p v-if="reconciliation.source_excerpt">
                                     <span class="text-muted-foreground"
-                                        >Source evidence:</span
+                                        >Source note:</span
                                     >
                                     {{ reconciliation.source_excerpt }}
                                 </p>
@@ -529,7 +554,7 @@ function submitReconciliationEvidence(): void {
                                     "
                                 >
                                     <span class="text-muted-foreground"
-                                        >Candidate interpretation:</span
+                                        >Possible municipal use:</span
                                     >
                                     {{
                                         reconciliation.operational_interpretation
@@ -551,11 +576,16 @@ function submitReconciliationEvidence(): void {
                                     </li>
                                 </ul>
                             </div>
-                            <p
-                                class="border-l-2 border-amber-500 pl-3 text-xs text-muted-foreground"
-                            >
-                                {{ reconciliation.execution_reason }}
-                            </p>
+                            <details class="text-xs text-muted-foreground">
+                                <summary class="cursor-pointer font-medium">
+                                    Technical availability note
+                                </summary>
+                                <p
+                                    class="mt-1 border-l-2 border-amber-500 pl-3"
+                                >
+                                    {{ reconciliation.execution_reason }}
+                                </p>
+                            </details>
                             <p class="text-xs text-muted-foreground">
                                 Recorded by {{ reconciliation.recorded_by }}
                             </p>
@@ -570,16 +600,14 @@ function submitReconciliationEvidence(): void {
                     @submit.prevent="submitReconciliationEvidence"
                 >
                     <div>
-                        <h2 class="font-semibold">
-                            Record reconciliation evidence
-                        </h2>
+                        <h2 class="font-semibold">Add municipal review note</h2>
                         <p class="text-xs text-muted-foreground">
-                            This preserves evidence only. It cannot accept the
-                            definition or enable financial execution.
+                            This records a source note only. It cannot approve
+                            this collection type or enable collection.
                         </p>
                     </div>
                     <div class="grid gap-2">
-                        <Label for="evidence_type">Evidence type</Label>
+                        <Label for="evidence_type">Source type</Label>
                         <select
                             id="evidence_type"
                             v-model="reconciliationForm.evidence_type"
@@ -595,9 +623,7 @@ function submitReconciliationEvidence(): void {
                         </select>
                     </div>
                     <div class="grid gap-2">
-                        <Label for="evidence_reference"
-                            >Evidence reference</Label
-                        >
+                        <Label for="evidence_reference">Source reference</Label>
                         <Input
                             id="evidence_reference"
                             v-model="reconciliationForm.evidence_reference"
@@ -611,7 +637,7 @@ function submitReconciliationEvidence(): void {
                         </p>
                     </div>
                     <div class="grid gap-2">
-                        <Label for="source_excerpt">Source evidence</Label>
+                        <Label for="source_excerpt">Source note</Label>
                         <textarea
                             id="source_excerpt"
                             v-model="reconciliationForm.source_excerpt"
@@ -621,7 +647,7 @@ function submitReconciliationEvidence(): void {
                     </div>
                     <div class="grid gap-2">
                         <Label for="operational_interpretation"
-                            >Candidate operational interpretation</Label
+                            >Possible municipal use</Label
                         >
                         <textarea
                             id="operational_interpretation"
@@ -691,7 +717,7 @@ function submitReconciliationEvidence(): void {
                         {{
                             reconciliationForm.processing
                                 ? 'Recording…'
-                                : 'Record evidence version'
+                                : 'Add review note'
                         }}
                     </Button>
                 </form>
