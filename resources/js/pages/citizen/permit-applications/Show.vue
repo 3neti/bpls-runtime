@@ -103,6 +103,7 @@ type PermitApplication = {
     processing: {
         has_entered_municipal_processing: boolean;
         application_status: string;
+        current_stage: string;
         statement: string;
         assessment: {
             id: number;
@@ -306,6 +307,9 @@ function statusLabel(status: string): string {
         generated_artifact_available: 'Generated document available',
         needs_municipal_confirmation: 'Needs municipal confirmation',
         policy_boundary: 'Needs municipal confirmation',
+        municipal_review_in_progress: 'Municipal review in progress',
+        pending_payment: 'Awaiting payment',
+        ready_for_authority_review: 'Ready for authority review',
     };
 
     return labels[status] ?? status.replaceAll('_', ' ');
@@ -335,7 +339,11 @@ function blockerLabel(blocker: string): string {
                             {{ permitApplication.display_reference }}
                         </h1>
                         <Badge variant="secondary" class="capitalize">
-                            {{ permitApplication.status.replace('_', ' ') }}
+                            {{
+                                statusLabel(
+                                    permitApplication.processing.current_stage,
+                                )
+                            }}
                         </Badge>
                     </div>
                     <p class="text-xs text-muted-foreground">
@@ -351,10 +359,13 @@ function blockerLabel(blocker: string): string {
             <WorkflowStageSummary
                 eyebrow="Applicant journey"
                 :title="
-                    permitApplication.processing
-                        .has_entered_municipal_processing
-                        ? 'Municipal processing is underway'
-                        : 'Application draft and submission'
+                    permitApplication.processing.current_stage ===
+                    'ready_for_authority_review'
+                        ? 'Ready for authority review'
+                        : permitApplication.processing
+                                .has_entered_municipal_processing
+                          ? 'Municipal processing is underway'
+                          : 'Application draft and submission'
                 "
                 :description="
                     permitApplication.processing
@@ -365,7 +376,9 @@ function blockerLabel(blocker: string): string {
                 :items="[
                     {
                         label: 'Current state',
-                        value: permitApplication.status.replace('_', ' '),
+                        value: statusLabel(
+                            permitApplication.processing.current_stage,
+                        ),
                         detail: permitApplication.draft_boundary.statement,
                     },
                     {
@@ -521,9 +534,8 @@ function blockerLabel(blocker: string): string {
                     </div>
                     <Badge variant="secondary" class="capitalize">
                         {{
-                            permitApplication.processing.application_status.replace(
-                                '_',
-                                ' ',
+                            statusLabel(
+                                permitApplication.processing.current_stage,
                             )
                         }}
                     </Badge>

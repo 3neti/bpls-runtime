@@ -1181,6 +1181,7 @@ test('public permit verification confirms artifact identity but not release', fu
                 'application_number' => 'APP-2026-00013',
                 'application_year' => 2026,
                 'application_status' => PermitApplicationStatus::Draft->value,
+                'current_stage' => PermitApplicationStatus::Draft->value,
                 'business_name' => 'Permit Artifact Store',
                 'trade_name' => 'Artifact Store',
             ],

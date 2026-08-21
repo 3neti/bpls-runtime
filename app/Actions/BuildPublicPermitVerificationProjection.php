@@ -19,6 +19,9 @@ class BuildPublicPermitVerificationProjection
         $verification = $this->describeVerificationBoundary->handle($permitApplication);
         $readiness = $this->describePermitReleaseReadiness->handle($permitApplication);
         $previewCompletion = $this->describeProvisionalCompletion->handle($permitApplication);
+        $currentStage = $readiness['ready_for_authority_review']
+            ? 'ready_for_authority_review'
+            : $permitApplication->status->value;
 
         return [
             'verification' => [
@@ -30,6 +33,7 @@ class BuildPublicPermitVerificationProjection
                 'application_number' => $permitApplication->application_number,
                 'application_year' => $permitApplication->application_year,
                 'application_status' => $permitApplication->status->value,
+                'current_stage' => $currentStage,
                 'business_name' => $permitApplication->business->name,
                 'trade_name' => $permitApplication->business->trade_name,
             ],

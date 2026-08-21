@@ -20,6 +20,7 @@ type PermitSummary = {
     application_number: string | null;
     application_year: number;
     application_status: string;
+    current_stage: string;
     business_name: string;
     trade_name: string | null;
 };
@@ -225,10 +226,10 @@ function label(value: string): string {
                                 <dt
                                     class="text-xs text-zinc-500 dark:text-zinc-400"
                                 >
-                                    Application status
+                                    Current stage
                                 </dt>
                                 <dd class="capitalize">
-                                    {{ label(permit.application_status) }}
+                                    {{ label(permit.current_stage) }}
                                 </dd>
                             </div>
                         </div>

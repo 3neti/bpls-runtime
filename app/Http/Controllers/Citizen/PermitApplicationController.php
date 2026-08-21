@@ -173,6 +173,12 @@ class PermitApplicationController extends Controller
         $permitArtifact = ($authorityReview['ready_for_authority_review'] ?? false)
             ? $this->describePermitArtifact->handle($application)
             : null;
+        $currentProcessingStage = match (true) {
+            (bool) ($authorityReview['ready_for_authority_review'] ?? false) => 'ready_for_authority_review',
+            $latestReceipt?->status->value === 'issued' => 'municipal_review_in_progress',
+            $latestPaymentSchedule?->status->value === 'paid' => 'municipal_review_in_progress',
+            default => $application->status->value,
+        };
 
         return Inertia::render('citizen/permit-applications/Show', [
             'permitApplication' => [
@@ -243,6 +249,7 @@ class PermitApplicationController extends Controller
                         || $application->application_number !== null
                         || $assessmentStarted,
                     'application_status' => $application->status->value,
+                    'current_stage' => $currentProcessingStage,
                     'statement' => 'This view reports the current municipal processing record. Submission does not authorize online payment or determine documentary sufficiency.',
                     'assessment' => $latestAssessment === null ? null : [
                         'id' => $latestAssessment->id,
