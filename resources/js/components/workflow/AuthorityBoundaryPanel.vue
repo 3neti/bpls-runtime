@@ -25,7 +25,11 @@ function displayStatus(status: string): string {
         return 'Not available in this preview';
     }
 
-    if (status === 'unresolved' || status === 'policy_unresolved') {
+    if (
+        status === 'unresolved' ||
+        status === 'policy_unresolved' ||
+        status === 'policy_boundary'
+    ) {
         return 'Not yet confirmed';
     }
 
