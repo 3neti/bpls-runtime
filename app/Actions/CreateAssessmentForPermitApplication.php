@@ -87,9 +87,12 @@ class CreateAssessmentForPermitApplication
             return;
         }
 
-        if ($currentAssessment->decision?->action !== AssessmentDecisionAction::ReturnedForCorrection) {
-            throw new LogicException('The current assessment must be returned for correction before a new snapshot is computed.');
+        if ($currentAssessment->decision === null
+            || $currentAssessment->decision->action === AssessmentDecisionAction::ReturnedForCorrection) {
+            return;
         }
+
+        throw new LogicException('An assessment with an immutable Treasurer approval cannot be recomputed.');
     }
 
     /**

@@ -53,7 +53,7 @@ defineProps<{
                 />
                 <div class="min-w-0">
                     <h3 class="text-sm font-medium text-foreground">
-                        Evidence boundary
+                        What this means
                     </h3>
                     <p class="mt-1 text-sm text-muted-foreground">
                         {{ evidence }}

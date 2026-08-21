@@ -559,9 +559,7 @@ function decodePaginationLabel(value: string): string {
                                     require reconciliation
                                 </Badge>
                                 <Badge variant="outline">
-                                    {{
-                                        summary.provisions_linked_to_rules
-                                    }}
+                                    {{ summary.provisions_linked_to_rules }}
                                     linked to rules
                                 </Badge>
                             </div>
@@ -751,9 +749,7 @@ function decodePaginationLabel(value: string): string {
                             </div>
                             <div class="flex flex-wrap gap-2 text-xs">
                                 <Badge variant="outline">
-                                    {{
-                                        summary.policy_boundary_clauses
-                                    }}
+                                    {{ summary.policy_boundary_clauses }}
                                     clauses
                                 </Badge>
                                 <Badge variant="destructive">

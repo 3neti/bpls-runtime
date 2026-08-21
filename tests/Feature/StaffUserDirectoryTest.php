@@ -86,10 +86,10 @@ test('user directory presents its read-only identity boundary', function () {
 
     expect($page)
         ->toContain('AdministrationScopePanel')
-        ->toContain('An account, a legal BusinessOwner identity, and an application submission actor are separate facts.')
-        ->toContain('Account provisioning, role assignment, activation or deactivation, password reset, and account mutation.')
+        ->toContain('An account, a legal business-owner identity, and the person who submitted an application are separate records')
+        ->toContain('Creating accounts, changing roles, activating or deactivating access, and resetting passwords')
         ->and($scopePanel)
         ->toContain('Available now')
-        ->toContain('Evidence boundary')
+        ->toContain('What this means')
         ->toContain('Unavailable here');
 });

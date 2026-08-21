@@ -156,14 +156,20 @@ class StakeholderPreviewWorkflowController extends Controller
             default => [],
         };
 
-        return collect($facts)
-            ->filter(fn (array $fact): bool => filled($fact['value']))
-            ->map(fn (array $fact): array => [
+        $visibleFacts = [];
+
+        foreach ($facts as $fact) {
+            if (! filled($fact['value'])) {
+                continue;
+            }
+
+            $visibleFacts[] = [
                 'label' => $fact['label'],
                 'value' => (string) $fact['value'],
-            ])
-            ->values()
-            ->all();
+            ];
+        }
+
+        return $visibleFacts;
     }
 
     public function storeOfficeCharge(

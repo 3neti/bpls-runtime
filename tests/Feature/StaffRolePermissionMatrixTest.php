@@ -79,6 +79,6 @@ test('role matrix presents stored and effective access as read-only evidence', f
 
     expect($page)
         ->toContain('AdministrationScopePanel')
-        ->toContain('Stored assignments and effective runtime access remain distinct')
-        ->toContain('Role creation or editing, permission assignment, user-role assignment, and catalog reconciliation.');
+        ->toContain('Directly assigned access and full system-administrator access are shown separately')
+        ->toContain('Creating or editing roles, changing access, assigning users to roles');
 });

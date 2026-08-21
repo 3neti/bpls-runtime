@@ -213,7 +213,7 @@ test('staff users with view permission can review a computed assessment', functi
             ->where('assessment.lines.0.code', 'APPLICATION-FEE')
             ->where('assessment.lines.0.name', 'Application Fee')
             ->where('can.view_assessment_documents', true)
-            ->where('assessmentDocumentGaps.0', 'Generated assessment artifact renders persisted line snapshots only; it does not recalculate fees or taxes.')
+            ->where('assessmentDocumentGaps.0', 'The generated assessment document shows the recorded assessment lines only; it does not recalculate fees or taxes.')
         );
 });
 

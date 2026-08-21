@@ -153,6 +153,6 @@ test('municipality workspace separates configuration evidence from legal authori
 
     expect($page)
         ->toContain('AdministrationScopePanel')
-        ->toContain('Configured identity and document association are presentation evidence; neither establishes an authorized signatory.')
-        ->toContain('Governed configuration changes, signature authority, permit issuance or release, and any claim of legal effect.');
+        ->toContain('A name or document assignment in this screen does not by itself grant signing or permit-release authority')
+        ->toContain('Changing governed settings or granting signature, permit issuance, release, or legal-effect authority');
 });

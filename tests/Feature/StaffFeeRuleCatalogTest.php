@@ -456,10 +456,10 @@ it('presents accepted fee evidence separately from reconciliation-required polic
 
     expect($indexPage)
         ->toContain('AdministrationScopePanel')
-        ->toContain('only accepted executable policy can affect an assessment')
-        ->toContain('executing any unresolved fiscal rule')
+        ->toContain('Only a municipally confirmed rule can affect an assessment')
+        ->toContain('activating an unconfirmed rule')
         ->and($detailPage)
         ->toContain('AdministrationScopePanel')
-        ->toContain('source rule, municipal decision evidence, and execution status are separate facts')
-        ->toContain('executing a reconciliation-required candidate from this page');
+        ->toContain('The source text, municipal decision, and whether the rule may be used are recorded separately')
+        ->toContain('activating a candidate that still needs municipal confirmation');
 });

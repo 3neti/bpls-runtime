@@ -390,11 +390,11 @@ test('billing group workspace distinguishes evidence preparation from financial 
 
     expect($indexPage)
         ->toContain('AdministrationScopePanel')
-        ->toContain('authorized staff may record structure-only definitions for later reconciliation')
-        ->toContain('does not accept a Treasury module or establish taxpayer liability')
+        ->toContain('Review provisional collection types')
+        ->toContain('They do not establish an amount due or authorize Treasury collection')
         ->and($detailPage)
         ->toContain('AdministrationScopePanel')
-        ->toContain('prepare drafts and append reconciliation evidence')
-        ->toContain('have no financial effect and do not change policy acceptance or execution readiness')
-        ->toContain('Liability, collection, receipt or official numbering');
+        ->toContain('prepare records and add municipal review notes')
+        ->toContain('has no financial effect and does not approve this collection type')
+        ->toContain('Calculating liability, collecting payment, issuing receipts or official numbers');
 });
