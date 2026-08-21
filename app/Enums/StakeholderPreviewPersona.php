@@ -78,14 +78,14 @@ enum StakeholderPreviewPersona: string
             self::Citizen => 'Apply, submit, track processing, and inspect payment and clearance progress.',
             self::Bplo => 'Review applications, assessments, clearances, and authority readiness.',
             self::Treasury => 'Approve assessment amounts, then inspect payment schedules, collections, receipts, and Treasury reports.',
-            self::Management => 'Inspect reports, users, roles, municipality settings, fees, and visible policy boundaries.',
+            self::Management => 'Review reports, user access, municipality settings, and fees.',
             self::Engineering => 'Review applications routed to Engineering and submit the office charge for consolidation.',
             self::Mpdo => 'Review applications routed to MPDO and submit the office charge for consolidation.',
             self::Assessor => 'Review applications routed to the Assessor and submit the office charge for consolidation.',
             self::Health => 'Review applications routed to Health and submit the office charge for consolidation.',
             self::Menro => 'Review applications routed to MENRO and submit the office charge for consolidation.',
-            self::MayorOffice => 'Review paid, cleared applications and record the provisional UAT go/no-go decision.',
-            self::Releasing => 'Release a provisionally approved sample permit through the UAT-only completion path.',
+            self::MayorOffice => 'Review paid, cleared applications and decide whether the sample permit may proceed.',
+            self::Releasing => 'Complete the sample permit preview after approval.',
         };
     }
 
