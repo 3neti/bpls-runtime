@@ -299,6 +299,28 @@ function referenceLabel(application: {
         ? 'Reference'
         : 'Tracking reference';
 }
+
+function statusLabel(status: string): string {
+    const labels: Record<string, string> = {
+        artifact_only: 'Preview document only',
+        generated_artifact_available: 'Generated document available',
+        needs_municipal_confirmation: 'Needs municipal confirmation',
+        policy_boundary: 'Needs municipal confirmation',
+    };
+
+    return labels[status] ?? status.replaceAll('_', ' ');
+}
+
+function blockerLabel(blocker: string): string {
+    const labels: Record<string, string> = {
+        issuance_authority: 'Responsible issuing authority',
+        official_signatories: 'Official signatories',
+        qr_verification_target: 'Public verification method',
+        legacy_released_status_semantics: 'Existing release records',
+    };
+
+    return labels[blocker] ?? blocker.replaceAll('_', ' ');
+}
 </script>
 
 <template>
@@ -1027,9 +1049,9 @@ function referenceLabel(application: {
                             </dt>
                             <dd class="font-medium capitalize">
                                 {{
-                                    permitApplication.permit_artifact.status.replaceAll(
-                                        '_',
-                                        ' ',
+                                    statusLabel(
+                                        permitApplication.permit_artifact
+                                            .status,
                                     )
                                 }}
                             </dd>
@@ -1040,9 +1062,9 @@ function referenceLabel(application: {
                             </dt>
                             <dd class="font-medium capitalize">
                                 {{
-                                    permitApplication.permit_artifact.verification_status.replaceAll(
-                                        '_',
-                                        ' ',
+                                    statusLabel(
+                                        permitApplication.permit_artifact
+                                            .verification_status,
                                     )
                                 }}
                             </dd>
@@ -1095,7 +1117,7 @@ function referenceLabel(application: {
                             variant="outline"
                             class="capitalize"
                         >
-                            {{ blocker.replaceAll('_', ' ') }}
+                            {{ blockerLabel(blocker) }}
                         </Badge>
                     </div>
                 </div>
@@ -1148,7 +1170,7 @@ function referenceLabel(application: {
                                 </p>
                             </div>
                             <Badge variant="secondary" class="capitalize">
-                                {{ event.status.replace('_', ' ') }}
+                                {{ statusLabel(event.status) }}
                             </Badge>
                         </div>
                         <p class="mt-1 text-xs text-muted-foreground">

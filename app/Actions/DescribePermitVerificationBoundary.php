@@ -34,7 +34,7 @@ final class DescribePermitVerificationBoundary
             'status' => 'artifact_only',
             'can_verify_release' => false,
             'released' => false,
-            'policy_note' => 'This verification reference identifies a generated permit artifact only; public release verification remains blocked until QR target, issuance authority, and legacy Released status semantics are resolved.',
+            'policy_note' => 'This reference identifies a generated preview document only. It does not confirm municipal release or legal validity.',
         ];
     }
 

@@ -53,7 +53,7 @@ class DescribePermitReleaseReadiness
                 'legacy_released_status_semantics',
             ],
             'authority_boundary' => [
-                'label' => 'Authority Boundary',
+                'label' => 'Municipal Review',
                 'status' => $readyForAuthorityReview ? 'ready_for_authority_review' : 'awaiting_prerequisites',
                 'software_knows' => [
                     'payment_completed' => $prerequisites['payment_schedule_paid'],
@@ -74,9 +74,9 @@ class DescribePermitReleaseReadiness
                     'effective_period',
                     'qr_verification_status',
                 ],
-                'artifact_statement' => 'Generated permit artifacts support authority review but do not issue, release, or make a permit legally effective.',
+                'artifact_statement' => 'The generated permit document supports municipal review but does not issue or release a permit and has no legal effect.',
             ],
-            'reason' => 'Payment, receipt, clearance, and permit artifact evidence may be ready for authority review, but actual release remains blocked until issuance authority, official signatories, QR verification target, and legacy Released status semantics are resolved.',
+            'reason' => 'Payment, receipt, clearance, and the generated permit document are ready for review. Municipal release remains unavailable until the responsible authority, official signatories, public verification, and existing release records are confirmed.',
         ];
     }
 }

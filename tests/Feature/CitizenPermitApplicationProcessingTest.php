@@ -225,7 +225,7 @@ test('citizens can view collection receipt clearance and authority review eviden
             ->where('permitApplication.processing.authority_review.ready_for_authority_review', true)
             ->where('permitApplication.processing.authority_review.can_release', false)
             ->where('permitApplication.processing.authority_review.status', 'ready_for_authority_review')
-            ->where('permitApplication.permit_artifact.label', "Mayor's Permit Artifact")
+            ->where('permitApplication.permit_artifact.label', "Mayor's Permit Preview")
             ->where('permitApplication.permit_artifact.status', 'generated_artifact_available')
             ->where('permitApplication.permit_artifact.ready_for_authority_review', true)
             ->where('permitApplication.permit_artifact.can_issue', false)

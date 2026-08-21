@@ -37,7 +37,7 @@ final class DescribePermitArtifact
         $verification = $this->verificationBoundary->handle($permitApplication);
 
         return [
-            'label' => "Mayor's Permit Artifact",
+            'label' => "Mayor's Permit Preview",
             'status' => 'generated_artifact_available',
             'available' => true,
             'ready_for_authority_review' => $readiness['ready_for_authority_review'],
@@ -51,7 +51,7 @@ final class DescribePermitArtifact
             'verification_view_url' => $verification['view_url'],
             'authority_boundary_status' => $readiness['authority_boundary']['status'],
             'artifact_statement' => $readiness['authority_boundary']['artifact_statement'],
-            'policy_note' => 'Generated permit artifacts support authority review only; they do not issue, release, or make a permit legally effective.',
+            'policy_note' => 'This generated permit document supports municipal review only. It does not issue or release a permit and has no legal effect.',
             'blocked_by' => $readiness['blocked_by'],
         ];
     }

@@ -52,7 +52,7 @@ final class AttemptPermitApplicationRelease
             'actor_id' => $releasedBy?->id,
             'blocked_transition' => PermitApplicationStatus::Released->value,
             'readiness' => $this->describeReadiness->handle($permitApplication),
-            'reason' => 'Clearance completion, permit issuance authority, signatories, QR verification, and legacy Released status semantics remain unresolved.',
+            'reason' => 'Clearance completion is recorded, but permit issuance authority, signatories, public verification, and the meaning of existing release records still require municipal confirmation.',
             'occurred_at' => now()->toIso8601String(),
         ];
     }

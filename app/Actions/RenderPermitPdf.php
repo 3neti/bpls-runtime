@@ -28,10 +28,10 @@ final class RenderPermitPdf
         ]);
 
         $document = new SimplePdfDocument(
-            "Mayor's Permit Artifact",
+            "Mayor's Permit Preview",
             $this->documentCode($permitApplication),
             $documentConfiguration['municipality']['system_name'],
-            'Permit release, QR verification, signatories, and clearance policy remain unresolved.',
+            'Preview document · not an issued or released permit.',
         );
         $page = $document->addPage(Str::limit($this->applicationLabel($permitApplication), 46));
         $y = SimplePdfDocument::ContentTop;
@@ -62,46 +62,28 @@ final class RenderPermitPdf
             'Latest assessment' => $latestAssessment === null
                 ? 'No assessment recorded'
                 : 'Assessment #'.$latestAssessment->sequence.' ('.$this->label($latestAssessment->status->value).') - '.$this->money($latestAssessment->total_amount_cents),
-            'Document status' => 'Generated permit artifact; this route does not release or issue a permit.',
+            'Document status' => 'Generated preview document; this does not issue or release a permit.',
         ]);
 
         $y = $this->lines($document, $page, $y, $permitApplication);
         $y = $this->clearances($document, $page, $y, $permitApplication);
         $y = $this->signatories($document, $page, $y, $documentConfiguration);
-        $y = $this->authorityBoundary($document, $page, $y, $releaseReadiness);
+        $y = $this->previewStatus($document, $page, $y, $releaseReadiness);
         $y = $this->verification($document, $page, $y, $verificationBoundary);
-
-        $this->section($document, $page, $y, 'Policy Gaps', [
-            'Release' => 'Permit issuance and release gating remain unresolved because source Released status precedes clearance completion.',
-            'Clearances' => 'Clearance checklist evidence is represented for review only and does not release or issue a permit.',
-            'Verification' => 'Public verification currently confirms artifact identity only; QR release verification remains unresolved.',
-            'Signatories' => 'Signatory names and titles may be configured for rendering, but official authority and final municipal layout remain unresolved.',
-        ]);
 
         return $document->render();
     }
 
-    /**
-     * @param  array{
-     *     authority_boundary: array{
-     *         status: string,
-     *         software_knows: array<string, bool>,
-     *         human_authority_decides: list<string>,
-     *         software_records: list<string>,
-     *         artifact_statement: string
-     *     }
-     * }  $releaseReadiness
-     */
-    private function authorityBoundary(SimplePdfDocument $document, int &$page, float $y, array $releaseReadiness): float
+    /** @param array<string, mixed> $releaseReadiness */
+    private function previewStatus(SimplePdfDocument $document, int &$page, float $y, array $releaseReadiness): float
     {
         $boundary = $releaseReadiness['authority_boundary'];
 
-        return $this->section($document, $page, $y, 'Authority Boundary', [
-            'Boundary status' => $this->label($boundary['status']),
-            'Software knows' => $this->booleanList($boundary['software_knows']),
-            'Human authority decides' => $this->labelList($boundary['human_authority_decides']),
-            'Software records after decision' => $this->labelList($boundary['software_records']),
-            'Artifact statement' => $boundary['artifact_statement'],
+        return $this->section($document, $page, $y, 'Preview Status', [
+            'Current availability' => $this->label($boundary['status']),
+            'Municipal release' => 'Not confirmed',
+            'Legal effect' => 'Not legally effective',
+            'Note' => $releaseReadiness['reason'],
         ]);
     }
 
@@ -191,7 +173,7 @@ final class RenderPermitPdf
             $y -= 24;
         }
 
-        $document->wrappedText($page, 'Clearance completion evidence is informational in this artifact. Actual permit release remains blocked until issuance authority, signatories, QR verification, and legacy Released status semantics are resolved.', 54, $y, 470, 8, 10);
+        $document->wrappedText($page, 'Clearance completion is shown for review. This preview document does not confirm permit issuance or municipal release; the responsible authority, signatories, public verification, and existing release records still require confirmation.', 54, $y, 470, 8, 10);
 
         return $y - 36;
     }
@@ -218,7 +200,7 @@ final class RenderPermitPdf
             ? 'All configured permit signatories are marked verified in application configuration.'
             : $documentConfiguration['policy_note'];
 
-        return $this->section($document, $page, $y, 'Document Signatory Configuration', $rows);
+        return $this->section($document, $page, $y, 'Signatory Details', $rows);
     }
 
     /**
@@ -234,12 +216,13 @@ final class RenderPermitPdf
      */
     private function verification(SimplePdfDocument $document, int &$page, float $y, array $verificationBoundary): float
     {
-        return $this->section($document, $page, $y, 'Verification Boundary', [
+        return $this->section($document, $page, $y, 'Document Reference', [
             'Reference' => $verificationBoundary['reference'],
-            'Public page' => $verificationBoundary['view_url'],
-            'Verification API' => $verificationBoundary['url'],
-            'Status' => $this->label($verificationBoundary['status']),
-            'Policy note' => $verificationBoundary['policy_note'],
+            'Public check page' => $verificationBoundary['view_url'],
+            'Status' => $verificationBoundary['status'] === 'artifact_only'
+                ? 'Preview document only'
+                : $this->label($verificationBoundary['status']),
+            'Note' => $verificationBoundary['policy_note'],
         ]);
     }
 
@@ -265,26 +248,6 @@ final class RenderPermitPdf
     private function money(int $amountCents): string
     {
         return 'PHP '.number_format($amountCents / 100, 2);
-    }
-
-    /**
-     * @param  array<string, bool>  $values
-     */
-    private function booleanList(array $values): string
-    {
-        return collect($values)
-            ->map(fn (bool $value, string $key): string => $this->label($key).': '.($value ? 'Yes' : 'No'))
-            ->implode('; ');
-    }
-
-    /**
-     * @param  list<string>  $values
-     */
-    private function labelList(array $values): string
-    {
-        return collect($values)
-            ->map(fn (string $value): string => $this->label($value))
-            ->implode('; ');
     }
 
     private function label(string $value): string

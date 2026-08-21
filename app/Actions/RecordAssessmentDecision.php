@@ -134,7 +134,7 @@ class RecordAssessmentDecision
                 'from' => $permitApplication->status->value,
                 'to' => PermitApplicationStatus::Approval->value,
                 'actor_id' => $decidedBy->id,
-                'reason' => 'Municipal Treasurer approved the exact persisted assessment amount for payment.',
+                'reason' => 'Municipal Treasurer approved the exact recorded assessment amount for payment.',
                 'assessment_id' => $assessment->id,
                 'assessment_snapshot_hash' => $snapshotHash,
                 'occurred_at' => now()->toIso8601String(),

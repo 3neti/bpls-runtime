@@ -228,7 +228,7 @@ class PermitApplicationController extends Controller
                     'official_application_number_assigned' => $application->application_number !== null,
                     'statement' => $isDraft && ! $assessmentStarted
                         ? 'This record is a saved citizen draft. It has not been submitted for assessment or accepted as an official permit application.'
-                        : 'This application has entered municipal processing. Its displayed status reflects the current authoritative application record.',
+                        : 'This application has entered municipal processing. Its displayed status reflects the municipality’s current recorded stage.',
                 ],
                 'submission_boundary' => [
                     'citizen_submitted_at' => data_get($application->metadata, 'citizen_submission.submitted_at'),
