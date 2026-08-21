@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\StakeholderPreviewPersona;
+use App\Models\OfficeChargeContribution;
 use App\Models\Permission;
 use App\Models\PermitApplication;
 use App\Models\Role;
@@ -66,19 +67,55 @@ test('one click entry authenticates each exact synthetic account through the web
         ->and(session()->getId())->not->toBe($oldSessionId);
 })->with(StakeholderPreviewPersona::cases());
 
-test('office workspace presents only the latest provisional weekend sample', function () {
+test('office workspace presents a bounded queue routed to that office with relevant recorded facts', function () {
     $accounts = createStakeholderPreviewAccounts();
     PermitApplication::factory()->create([
         'submitted_at' => now()->subMinute(),
         'metadata' => [],
     ]);
-    $currentSample = PermitApplication::factory()->create([
-        'submitted_at' => now(),
+    $olderSample = PermitApplication::factory()->create([
+        'submitted_at' => now()->subMinute(),
+        'created_at' => now()->subMinute(),
         'metadata' => [
             'provisional_uat_workflow' => [
                 'semantic_classification' => 'provisional_uat',
             ],
         ],
+    ]);
+    $currentSample = PermitApplication::factory()->create([
+        'submitted_at' => now(),
+        'created_at' => now(),
+        'metadata' => [
+            'provisional_uat_workflow' => [
+                'semantic_classification' => 'provisional_uat',
+            ],
+        ],
+    ]);
+    $currentSample->business->update([
+        'business_area_square_meters' => '84.50',
+        'occupancy' => 'rented',
+        'building_name' => 'Scenario Commerce Building',
+    ]);
+    $otherOfficeSample = PermitApplication::factory()->create([
+        'submitted_at' => now()->addSecond(),
+        'created_at' => now()->addSecond(),
+        'metadata' => [
+            'provisional_uat_workflow' => [
+                'semantic_classification' => 'provisional_uat',
+            ],
+        ],
+    ]);
+    OfficeChargeContribution::factory()->create([
+        'permit_application_id' => $olderSample->id,
+        'office_code' => 'engineering',
+    ]);
+    OfficeChargeContribution::factory()->create([
+        'permit_application_id' => $currentSample->id,
+        'office_code' => 'engineering',
+    ]);
+    OfficeChargeContribution::factory()->create([
+        'permit_application_id' => $otherOfficeSample->id,
+        'office_code' => 'health',
     ]);
 
     $this->actingAs($accounts[StakeholderPreviewPersona::Engineering->value])
@@ -86,8 +123,13 @@ test('office workspace presents only the latest provisional weekend sample', fun
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->component('stakeholder-preview/Workflow')
-            ->has('applications', 1)
-            ->where('applications.0.id', $currentSample->id));
+            ->has('applications', 2)
+            ->where('applications.0.id', $currentSample->id)
+            ->where('applications.0.office_facts.0', [
+                'label' => 'Business area',
+                'value' => '84.50 m²',
+            ])
+            ->where('applications.1.id', $olderSample->id));
 });
 
 test('role switching works in every ordered direction and retains normal authorization', function () {

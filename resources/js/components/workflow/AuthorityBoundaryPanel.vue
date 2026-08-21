@@ -19,6 +19,18 @@ function displayValue(value: string | number | boolean): string | number {
 
     return value;
 }
+
+function displayStatus(status: string): string {
+    if (status === 'blocked') {
+        return 'Not available in this preview';
+    }
+
+    if (status === 'unresolved' || status === 'policy_unresolved') {
+        return 'Not yet confirmed';
+    }
+
+    return status.replaceAll('_', ' ');
+}
 </script>
 
 <template>
@@ -32,7 +44,7 @@ function displayValue(value: string | number | boolean): string | number {
                 <p
                     class="text-xs font-medium tracking-wide text-amber-800 uppercase dark:text-amber-200"
                 >
-                    Authority boundary
+                    Current availability
                 </p>
                 <h2 class="text-base font-semibold">{{ title }}</h2>
                 <p class="max-w-3xl text-sm leading-6">{{ statement }}</p>
@@ -40,7 +52,7 @@ function displayValue(value: string | number | boolean): string | number {
             <span
                 class="w-fit rounded-full border border-amber-400/80 bg-white/70 px-3 py-1 text-xs font-medium capitalize dark:border-amber-700 dark:bg-amber-950/50"
             >
-                {{ status.replaceAll('_', ' ') }}
+                {{ displayStatus(status) }}
             </span>
         </div>
 

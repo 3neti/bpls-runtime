@@ -17,6 +17,7 @@ use App\Actions\DescribeRetirementPolicyBoundary;
 use App\Actions\DescribeTransferPolicyBoundary;
 use App\Actions\RenderApplicationFormPdf;
 use App\Actions\RenderPermitPdf;
+use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
 use App\Enums\PermitClearanceStatus;
 use App\Enums\UserPermission;
@@ -30,8 +31,10 @@ use App\Models\PermitApplication;
 use App\Models\PermitClearance;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -49,18 +52,51 @@ class PermitApplicationController extends Controller
         private readonly DescribeProvisionalUatPermitCompletion $describeProvisionalUatPermitCompletion,
     ) {}
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
         Gate::authorize(UserPermission::ViewPermitApplications->value);
 
+        $filters = $request->validate([
+            'q' => ['nullable', 'string', 'max:120'],
+            'status' => ['nullable', Rule::enum(PermitApplicationStatus::class)],
+        ]);
+        $search = str($filters['q'] ?? '')->trim()->toString();
+        $status = $filters['status'] ?? null;
+
         $permitApplications = PermitApplication::query()
             ->with(['business.owner', 'lines.lineOfBusiness', 'assessments' => fn ($query) => $query->latest(), 'paymentSchedules' => fn ($query) => $query->latest()])
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where(function ($query) use ($search): void {
+                    $query
+                        ->where('application_number', 'like', '%'.$search.'%')
+                        ->orWhere('tracking_reference', 'like', '%'.$search.'%')
+                        ->orWhereHas('business', function ($query) use ($search): void {
+                            $query
+                                ->where('name', 'like', '%'.$search.'%')
+                                ->orWhere('trade_name', 'like', '%'.$search.'%')
+                                ->orWhere('registration_number', 'like', '%'.$search.'%');
+                        })
+                        ->orWhereHas('business.owner', fn ($query) => $query->where('name', 'like', '%'.$search.'%'));
+                });
+            })
+            ->when($status !== null, fn ($query) => $query->where('status', $status))
             ->latest()
             ->paginate(15)
+            ->withQueryString()
             ->through(fn (PermitApplication $permitApplication): array => $this->permitApplicationPayload($permitApplication));
 
         return Inertia::render('permit-applications/Index', [
             'permitApplications' => $permitApplications,
+            'filters' => [
+                'q' => $search,
+                'status' => $status,
+            ],
+            'statuses' => collect(PermitApplicationStatus::cases())
+                ->map(fn (PermitApplicationStatus $status): array => [
+                    'label' => str($status->value)->replace('_', ' ')->title()->toString(),
+                    'value' => $status->value,
+                ])
+                ->values(),
             'can' => [
                 'create_permit_applications' => auth()->user()?->can(UserPermission::CreatePermitApplications->value) ?? false,
                 'assess_permit_applications' => auth()->user()?->can(UserPermission::AssessPermitApplications->value) ?? false,
@@ -164,9 +200,9 @@ class PermitApplicationController extends Controller
                     && (auth()->user()?->can(UserPermission::CreatePermitApplications->value) ?? false),
             ],
             'permitDocumentGaps' => [
-                'Generated application form artifact captures current rescue intake facts only.',
-                'Generated permit artifact does not release or issue a permit.',
-                'Clearance completion, QR release verification, signatories, and final municipal layout remain unresolved.',
+                'The generated application form shows the intake information currently recorded.',
+                'The generated permit document does not release or issue a permit.',
+                'Clearance completion, public verification, signatories, and the final municipal layout are not yet confirmed.',
             ],
         ]);
     }

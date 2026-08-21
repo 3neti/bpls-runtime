@@ -157,10 +157,10 @@ const intakeSummaryItems = computed(() => [
             : isCitizenIntake.value
               ? 'Save draft'
               : 'Save application',
-        detail: 'Existing validation and submission endpoint are unchanged.',
+        detail: 'The application is checked before it is saved.',
     },
     {
-        label: 'Boundary',
+        label: 'What happens next',
         value: isCitizenIntake.value
             ? 'Not submitted or officially numbered'
             : 'No authority decision is made here',
@@ -275,7 +275,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             : 'Prepare an unsubmitted permit draft'
                         : 'Record the application intake facts'
                 "
-                description="Complete the existing sections in order. Saving preserves the current action boundary and does not create later lifecycle decisions."
+                description="Complete each section in order. Saving records the intake information only; assessment, payment, and permit decisions happen later."
                 :items="intakeSummaryItems"
             />
 
@@ -829,7 +829,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             class="w-full"
                             eyebrow="Step 4"
                             title="Business activities"
-                            description="Add the lines of business and their existing declared financial facts."
+                            description="Add the configured business activities and the declared financial information for each one."
                         >
                             <template #actions>
                                 <Button
@@ -880,6 +880,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 :id="`lines_${index}_line_of_business_id`"
                                 :name="`lines[${index}][line_of_business_id]`"
                                 required
+                                :disabled="lineOfBusinesses.length === 0"
                                 class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 <option
@@ -887,7 +888,11 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                     disabled
                                     :selected="!activity.line_of_business_id"
                                 >
-                                    Select a line of business
+                                    {{
+                                        lineOfBusinesses.length === 0
+                                            ? 'No business activities are configured for this preview'
+                                            : 'Select a business activity'
+                                    }}
                                 </option>
                                 <option
                                     v-for="lineOfBusiness in lineOfBusinesses"
@@ -901,6 +906,14 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                     {{ lineOfBusiness.name }}
                                 </option>
                             </select>
+                            <p
+                                v-if="lineOfBusinesses.length === 0"
+                                class="text-xs leading-5 text-amber-700 dark:text-amber-300"
+                            >
+                                The municipal business-activity list is not yet
+                                configured. This application cannot be saved
+                                until an activity is available.
+                            </p>
                             <InputError
                                 :message="
                                     errors[`lines.${index}.line_of_business_id`]

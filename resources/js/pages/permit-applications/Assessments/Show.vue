@@ -152,9 +152,9 @@ function money(amountCents: number): string {
             </div>
 
             <WorkflowStageSummary
-                eyebrow="Assessment snapshot"
+                eyebrow="Recorded assessment"
                 :title="money(assessment.total_amount_cents)"
-                description="This total and every line below come from the persisted assessment snapshot; this page does not recalculate liability."
+                description="This total and every line below are the recorded assessment reviewed for payment. This page does not recalculate liability."
                 :items="[
                     {
                         label: 'Assessment status',
@@ -280,14 +280,8 @@ function money(amountCents: number): string {
                         <p v-if="assessment.decision.reason" class="text-sm">
                             {{ assessment.decision.reason }}
                         </p>
-                        <p class="font-mono text-xs opacity-80">
-                            Snapshot
-                            {{
-                                assessment.decision.assessment_snapshot_hash.slice(
-                                    0,
-                                    16,
-                                )
-                            }}… ·
+                        <p class="text-xs opacity-80">
+                            Approved amount ·
                             {{ money(assessment.decision.total_amount_cents) }}
                         </p>
                     </div>
@@ -300,9 +294,9 @@ function money(amountCents: number): string {
                 data-testid="assessment-awaiting-approval"
             >
                 <WorkflowSectionHeader
-                    eyebrow="Pre-payment authority"
+                    eyebrow="Treasurer review"
                     title="Awaiting Municipal Treasurer approval"
-                    description="The Assessment Officer prepared this persisted amount. Payment remains unavailable until the Municipal Treasurer approves this exact snapshot."
+                    description="The Assessment Officer prepared this recorded amount. Payment remains unavailable until the Municipal Treasurer approves this exact version."
                 />
 
                 <div v-if="can.approve_assessment" class="mt-4 grid gap-3">
@@ -425,8 +419,8 @@ function money(amountCents: number): string {
                 >
                     <WorkflowSectionHeader
                         eyebrow="Supporting evidence"
-                        title="Persisted assessment lines"
-                        description="Amounts, bases, and classifications are displayed exactly as stored in this assessment snapshot."
+                        title="Assessment lines"
+                        description="Amounts, bases, and classifications are displayed exactly as recorded for this assessment."
                     />
                 </div>
                 <div class="overflow-x-auto">
@@ -500,9 +494,9 @@ function money(amountCents: number): string {
                 class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
             >
                 <WorkflowSectionHeader
-                    eyebrow="Reference boundary"
-                    title="Assessment document gaps"
-                    description="These unresolved document and policy facts remain outside the persisted snapshot."
+                    eyebrow="Still to confirm"
+                    title="Assessment document questions"
+                    description="These document and policy details have not yet been confirmed for this assessment."
                 />
                 <ul
                     class="list-disc space-y-1 pl-5 text-sm text-muted-foreground"

@@ -422,8 +422,8 @@ function referenceLabel(application: {
                     {{
                         permitApplication.processing
                             .has_entered_municipal_processing
-                            ? 'Municipal record boundary'
-                            : 'Citizen draft boundary'
+                            ? 'Municipal processing record'
+                            : 'Saved citizen draft'
                     }}
                 </p>
                 <p class="mt-1">
@@ -686,12 +686,13 @@ function referenceLabel(application: {
                         "
                         class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
                     >
-                        <p class="font-medium">Online payment boundary</p>
+                        <p class="font-medium">
+                            Online payment is not available in this preview
+                        </p>
                         <p class="mt-1">
-                            {{
-                                permitApplication.processing.payment_schedule
-                                    .online_payment_boundary.artifact_statement
-                            }}
+                            This sample uses the recorded in-person payment
+                            path. Future online-payment policy has not been
+                            decided here.
                         </p>
                     </div>
                 </div>
@@ -924,13 +925,11 @@ function referenceLabel(application: {
                         permitApplication.processing.authority_review
                             .can_release
                     "
-                    title="Ready for Authority Review is not permit release"
+                    title="Ready for municipal review — not released"
                     :status="
                         permitApplication.processing.authority_review.status
                     "
-                    :statement="
-                        permitApplication.processing.authority_review.statement
-                    "
+                    :statement="'Payment, receipt, and checklist completion can prepare this application for municipal review. They do not release a permit.'"
                     :facts="[
                         {
                             label: 'Payment schedule paid',
@@ -948,12 +947,12 @@ function referenceLabel(application: {
                                 .prerequisites.clearances_completed,
                         },
                         {
-                            label: 'Permit artifact available',
+                            label: 'Generated permit document available',
                             value: permitApplication.processing.authority_review
                                 .prerequisites.permit_artifact_available,
                         },
                         {
-                            label: 'Can release',
+                            label: 'Municipal release confirmed',
                             value: permitApplication.processing.authority_review
                                 .can_release,
                         },
@@ -996,7 +995,7 @@ function referenceLabel(application: {
                                 <h3
                                     class="text-sm font-semibold text-foreground"
                                 >
-                                    Permit artifact identity
+                                    Generated permit document
                                 </h3>
                                 <p class="text-xs text-muted-foreground">
                                     {{
@@ -1016,7 +1015,7 @@ function referenceLabel(application: {
                                 rel="noopener noreferrer"
                             >
                                 <ExternalLink />
-                                Verify artifact
+                                Check document reference
                             </a>
                         </Button>
                     </div>
@@ -1425,7 +1424,7 @@ function referenceLabel(application: {
                     "
                     class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
                 >
-                    <p class="font-medium">Documentary readiness boundary</p>
+                    <p class="font-medium">Documents for submission</p>
                     <p class="mt-1">
                         {{ permitApplication.documentary_readiness.statement }}
                     </p>

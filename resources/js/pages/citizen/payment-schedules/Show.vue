@@ -421,25 +421,23 @@ function dateTime(value: string | null): string {
                     paymentSchedule.payment_policy_boundary
                         .can_split_installments
                 "
-                title="Payment policy boundary"
+                title="Other payment arrangements"
                 :status="paymentSchedule.payment_policy_boundary.status"
-                :statement="
-                    paymentSchedule.payment_policy_boundary.artifact_statement
-                "
+                :statement="'This preview shows the payment arrangement currently recorded. Installment rules and statutory dates are not yet confirmed.'"
                 :facts="[
                     {
-                        label: 'Can split installments',
+                        label: 'Installments in this preview',
                         value: paymentSchedule.payment_policy_boundary
                             .can_split_installments
-                            ? 'Yes'
-                            : 'No',
+                            ? 'Available'
+                            : 'Not available',
                     },
                     {
-                        label: 'Can assign statutory due dates',
+                        label: 'Statutory dates',
                         value: paymentSchedule.payment_policy_boundary
                             .can_assign_statutory_due_dates
-                            ? 'Yes'
-                            : 'No',
+                            ? 'Available'
+                            : 'Not yet confirmed',
                     },
                 ]"
             >
@@ -467,25 +465,23 @@ function dateTime(value: string | null): string {
                 :data-can-reconcile-online="
                     paymentSchedule.online_payment_boundary.can_reconcile_online
                 "
-                title="Online payment boundary"
+                title="Online payment availability"
                 :status="paymentSchedule.online_payment_boundary.status"
-                :statement="
-                    paymentSchedule.online_payment_boundary.artifact_statement
-                "
+                :statement="'Online payment is not active in this preview. This does not decide future municipal payment policy.'"
                 :facts="[
                     {
-                        label: 'Can pay online',
+                        label: 'Online payment in this preview',
                         value: paymentSchedule.online_payment_boundary
                             .can_pay_online
-                            ? 'Yes'
-                            : 'No',
+                            ? 'Available'
+                            : 'Not available',
                     },
                     {
-                        label: 'Can reconcile online',
+                        label: 'Online payment matching',
                         value: paymentSchedule.online_payment_boundary
                             .can_reconcile_online
-                            ? 'Yes'
-                            : 'No',
+                            ? 'Available'
+                            : 'Not available',
                     },
                 ]"
             >

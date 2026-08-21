@@ -209,7 +209,7 @@ function label(value: string): string {
             <WorkflowStageSummary
                 eyebrow="Current Treasury record"
                 :title="`Balance ${money(balanceDueCents)}`"
-                description="The schedule, collection, and receipt remain separate persisted records."
+                description="The payment schedule, collection, and receipt are recorded separately."
                 :items="[
                     {
                         label: 'Schedule status',
@@ -330,12 +330,12 @@ function label(value: string): string {
                     <Banknote class="size-4 text-muted-foreground" />
                     <div>
                         <h2 class="text-sm font-semibold text-foreground">
-                            Payment policy boundary
+                            Payment options
                         </h2>
                         <p class="text-xs text-muted-foreground">
                             Installments, statutory due dates, surcharge,
                             interest, PIL, and deficiency-tax behavior remain
-                            unresolved policy.
+                            subject to municipal confirmation.
                         </p>
                     </div>
                 </div>
@@ -347,7 +347,12 @@ function label(value: string): string {
                                 paymentSchedule.payment_policy_boundary.status.replace(
                                     '_',
                                     ' ',
-                                )
+                                ) === 'blocked'
+                                    ? 'Not available in this preview'
+                                    : paymentSchedule.payment_policy_boundary.status.replace(
+                                          '_',
+                                          ' ',
+                                      )
                             }}
                         </dd>
                     </div>
@@ -360,7 +365,7 @@ function label(value: string): string {
                                 paymentSchedule.payment_policy_boundary
                                     .can_split_installments
                                     ? 'Configured'
-                                    : 'Policy boundary'
+                                    : 'Not available in this preview'
                             }}
                         </dd>
                     </div>
@@ -373,7 +378,7 @@ function label(value: string): string {
                                 paymentSchedule.payment_policy_boundary
                                     .can_assign_statutory_due_dates
                                     ? 'Configured'
-                                    : 'Policy boundary'
+                                    : 'Not yet confirmed'
                             }}
                         </dd>
                     </div>
@@ -384,7 +389,7 @@ function label(value: string): string {
                                 paymentSchedule.payment_policy_boundary
                                     .can_calculate_surcharge
                                     ? 'Calculated'
-                                    : 'Policy boundary'
+                                    : 'Not yet confirmed'
                             }}
                         </dd>
                     </div>
@@ -395,7 +400,7 @@ function label(value: string): string {
                                 paymentSchedule.payment_policy_boundary
                                     .can_calculate_interest
                                     ? 'Calculated'
-                                    : 'Policy boundary'
+                                    : 'Not yet confirmed'
                             }}
                         </dd>
                     </div>
@@ -408,7 +413,7 @@ function label(value: string): string {
                                 paymentSchedule.payment_policy_boundary
                                     .can_validate_pil
                                     ? 'Active'
-                                    : 'Policy boundary'
+                                    : 'Not yet confirmed'
                             }}
                         </dd>
                     </div>
@@ -421,7 +426,7 @@ function label(value: string): string {
                                 paymentSchedule.payment_policy_boundary
                                     .can_calculate_deficiency_tax
                                     ? 'Active'
-                                    : 'Policy boundary'
+                                    : 'Not yet confirmed'
                             }}
                         </dd>
                     </div>
@@ -444,7 +449,7 @@ function label(value: string): string {
                     </div>
                     <div class="md:col-span-2">
                         <dt class="text-xs text-muted-foreground">
-                            Blocked calculations
+                            Calculations not active
                         </dt>
                         <dd class="mt-2 flex flex-wrap gap-2">
                             <Badge
@@ -461,7 +466,7 @@ function label(value: string): string {
                     </div>
                     <div class="md:col-span-2">
                         <dt class="text-xs text-muted-foreground">
-                            Unresolved payment policy
+                            Needs municipal confirmation
                         </dt>
                         <dd class="mt-2">
                             <ul class="grid gap-1">
@@ -478,10 +483,9 @@ function label(value: string): string {
                     </div>
                 </dl>
                 <p class="mt-3 text-sm text-muted-foreground">
-                    {{
-                        paymentSchedule.payment_policy_boundary
-                            .artifact_statement
-                    }}
+                    This preview uses the payment arrangement recorded for this
+                    sample. Other payment arrangements remain unavailable until
+                    the municipality confirms how they should work.
                 </p>
             </section>
 
@@ -492,11 +496,10 @@ function label(value: string): string {
                     <Banknote class="size-4 text-muted-foreground" />
                     <div>
                         <h2 class="text-sm font-semibold text-foreground">
-                            Online payment boundary
+                            Online payment availability
                         </h2>
                         <p class="text-xs text-muted-foreground">
-                            Electronic payment and reconciliation are not active
-                            in this rescue path.
+                            Electronic payment is not active in this preview.
                         </p>
                     </div>
                 </div>
@@ -505,48 +508,51 @@ function label(value: string): string {
                         <dt class="text-xs text-muted-foreground">Status</dt>
                         <dd class="capitalize">
                             {{
-                                paymentSchedule.online_payment_boundary.status.replace(
-                                    '_',
-                                    ' ',
-                                )
+                                paymentSchedule.online_payment_boundary
+                                    .status === 'blocked'
+                                    ? 'Not available in this preview'
+                                    : paymentSchedule.online_payment_boundary.status.replace(
+                                          '_',
+                                          ' ',
+                                      )
                             }}
                         </dd>
                     </div>
                     <div>
                         <dt class="text-xs text-muted-foreground">
-                            Can pay online
+                            Online payment in this preview
                         </dt>
                         <dd>
                             {{
                                 paymentSchedule.online_payment_boundary
                                     .can_pay_online
-                                    ? 'Yes'
-                                    : 'No'
+                                    ? 'Available'
+                                    : 'Not available'
                             }}
                         </dd>
                     </div>
                     <div>
                         <dt class="text-xs text-muted-foreground">
-                            Can reconcile online
+                            Online payment matching
                         </dt>
                         <dd>
                             {{
                                 paymentSchedule.online_payment_boundary
                                     .can_reconcile_online
-                                    ? 'Yes'
-                                    : 'No'
+                                    ? 'Available'
+                                    : 'Not available'
                             }}
                         </dd>
                     </div>
                     <div>
                         <dt class="text-xs text-muted-foreground">
-                            Gateway adapter
+                            Payment service
                         </dt>
                         <dd>Not configured</dd>
                     </div>
                     <div class="md:col-span-2">
                         <dt class="text-xs text-muted-foreground">
-                            Blocked transitions
+                            Actions not active
                         </dt>
                         <dd class="mt-2 flex flex-wrap gap-2">
                             <Badge
@@ -563,7 +569,7 @@ function label(value: string): string {
                     </div>
                     <div class="md:col-span-2">
                         <dt class="text-xs text-muted-foreground">
-                            Unresolved reconciliation policy
+                            Needs municipal confirmation
                         </dt>
                         <dd class="mt-2">
                             <ul class="grid gap-1">
@@ -580,10 +586,7 @@ function label(value: string): string {
                     </div>
                 </dl>
                 <p class="mt-3 text-sm text-muted-foreground">
-                    {{
-                        paymentSchedule.online_payment_boundary
-                            .artifact_statement
-                    }}
+                    No online payment is accepted or recorded by this preview.
                 </p>
             </section>
 

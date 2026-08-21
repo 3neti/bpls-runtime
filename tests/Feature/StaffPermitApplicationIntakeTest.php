@@ -68,6 +68,42 @@ test('staff users with view permission can list permit applications', function (
         );
 });
 
+test('staff can search and filter the permit application queue using recorded fields', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+    ]);
+    $matching = PermitApplication::factory()->create([
+        'application_number' => 'APP-2026-IPIL-SEARCH',
+        'tracking_reference' => 'TRACK-IPIL-SEARCH',
+        'status' => PermitApplicationStatus::Assessment,
+    ]);
+    $matching->business->update(['name' => 'Ipil Search Hardware']);
+    $other = PermitApplication::factory()->create([
+        'application_number' => 'APP-2026-OTHER',
+        'status' => PermitApplicationStatus::Assessment,
+    ]);
+    $other->business->update(['name' => 'Different Establishment']);
+    PermitApplication::factory()->create([
+        'application_number' => 'APP-2026-IPIL-RELEASED',
+        'status' => PermitApplicationStatus::Released,
+    ])->business->update(['name' => 'Ipil Search Released']);
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.index', [
+            'q' => 'Ipil Search',
+            'status' => PermitApplicationStatus::Assessment->value,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Index')
+            ->has('permitApplications.data', 1)
+            ->where('permitApplications.data.0.id', $matching->id)
+            ->where('filters.q', 'Ipil Search')
+            ->where('filters.status', PermitApplicationStatus::Assessment->value)
+            ->has('statuses'));
+});
+
 test('staff users with create permission can view the intake form', function () {
     $user = userWithPermissions([
         UserPermission::AccessStaff,
@@ -555,7 +591,7 @@ test('staff users with view permission can review a permit application', functio
             ->where('can.assess_permit_applications', false)
             ->where('can.update_permit_application_status', false)
             ->where('can.view_permit_documents', true)
-            ->where('permitDocumentGaps.0', 'Generated application form artifact captures current rescue intake facts only.')
+            ->where('permitDocumentGaps.0', 'The generated application form shows the intake information currently recorded.')
             ->where('permitApplication.permit_artifact.label', "Mayor's Permit Artifact")
             ->where('permitApplication.permit_artifact.status', 'generated_artifact_available')
             ->where('permitApplication.permit_artifact.available', true)

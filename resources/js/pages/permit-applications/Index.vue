@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
-import { Calculator, Eye, Plus, WalletCards } from '@lucide/vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { Calculator, Eye, Plus, Search, WalletCards, X } from '@lucide/vue';
+import { ref } from 'vue';
 import { show as showPaymentSchedule } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { store as assess } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import {
@@ -10,6 +11,7 @@ import {
 } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
@@ -57,7 +59,12 @@ type PaginationLink = {
     active: boolean;
 };
 
-defineProps<{
+type Option = {
+    label: string;
+    value: string;
+};
+
+const props = defineProps<{
     permitApplications: {
         data: PermitApplicationRow[];
         links: PaginationLink[];
@@ -65,12 +72,20 @@ defineProps<{
         to: number | null;
         total: number;
     };
+    filters: {
+        q: string;
+        status: string | null;
+    };
+    statuses: Option[];
     can: {
         create_permit_applications: boolean;
         assess_permit_applications: boolean;
         update_permit_application_status: boolean;
     };
 }>();
+
+const search = ref(props.filters.q ?? '');
+const status = ref(props.filters.status ?? '');
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -88,6 +103,25 @@ function money(amountCents: number): string {
 
 function statusLabel(value: string): string {
     return value.replaceAll('_', ' ');
+}
+
+function applyFilters(): void {
+    router.get(
+        index.url({
+            query: {
+                q: search.value || undefined,
+                status: status.value || undefined,
+            },
+        }),
+        {},
+        { preserveState: true, replace: true },
+    );
+}
+
+function clearFilters(): void {
+    search.value = '';
+    status.value = '';
+    router.get(index.url(), {}, { preserveState: true, replace: true });
 }
 </script>
 
@@ -114,6 +148,64 @@ function statusLabel(value: string): string {
                 </Button>
             </section>
 
+            <form
+                class="flex flex-col gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 md:flex-row md:items-end dark:border-sidebar-border"
+                @submit.prevent="applyFilters"
+            >
+                <div class="grid flex-1 gap-2">
+                    <label
+                        for="permit_application_q"
+                        class="text-xs font-medium text-muted-foreground uppercase"
+                    >
+                        Search applications
+                    </label>
+                    <Input
+                        id="permit_application_q"
+                        v-model="search"
+                        name="q"
+                        placeholder="Application, tracking reference, business, or owner"
+                    />
+                </div>
+                <div class="grid gap-2 md:w-56">
+                    <label
+                        for="permit_application_status"
+                        class="text-xs font-medium text-muted-foreground uppercase"
+                    >
+                        Status
+                    </label>
+                    <select
+                        id="permit_application_status"
+                        v-model="status"
+                        name="status"
+                        class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    >
+                        <option value="">All statuses</option>
+                        <option
+                            v-for="option in statuses"
+                            :key="option.value"
+                            :value="option.value"
+                        >
+                            {{ option.label }}
+                        </option>
+                    </select>
+                </div>
+                <div class="flex gap-2">
+                    <Button type="submit" class="flex-1 sm:flex-none">
+                        <Search />
+                        Search
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        class="flex-1 sm:flex-none"
+                        @click="clearFilters"
+                    >
+                        <X />
+                        Clear
+                    </Button>
+                </div>
+            </form>
+
             <section
                 class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
                 aria-label="All applications records"
@@ -122,7 +214,7 @@ function statusLabel(value: string): string {
                     v-if="permitApplications.data.length === 0"
                     class="px-4 py-10 text-center text-sm text-muted-foreground"
                 >
-                    No permit applications have been recorded.
+                    No permit applications match the current search and status.
                 </div>
 
                 <ul

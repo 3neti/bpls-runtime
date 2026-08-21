@@ -30,10 +30,12 @@ class StakeholderPreviewWorkflowController extends Controller
         abort_unless($persona instanceof StakeholderPreviewPersona && ($persona->isConcernedOffice()
             || in_array($persona, [StakeholderPreviewPersona::MayorOffice, StakeholderPreviewPersona::Releasing], true)), 403);
 
-        $applications = PermitApplication::query()
+        $officeCode = $persona->officeCode();
+        $applicationQuery = PermitApplication::query()
             ->with([
                 'business.owner',
                 'documents' => fn ($query) => $query->latest('uploaded_at'),
+                'lines.lineOfBusiness',
                 'officeChargeContributions.submittedBy',
                 'assessments.decision',
                 'paymentSchedules',
@@ -41,9 +43,18 @@ class StakeholderPreviewWorkflowController extends Controller
                 'provisionalUatPermitCompletion',
             ])
             ->whereNotNull('submitted_at')
-            ->where('metadata->provisional_uat_workflow->semantic_classification', 'provisional_uat')
+            ->where('metadata->provisional_uat_workflow->semantic_classification', 'provisional_uat');
+
+        if ($officeCode !== null) {
+            $applicationQuery->whereHas(
+                'officeChargeContributions',
+                fn ($query) => $query->where('office_code', $officeCode),
+            );
+        }
+
+        $applications = $applicationQuery
             ->latest()
-            ->limit(1)
+            ->limit(25)
             ->get()
             ->map(function (PermitApplication $application) use ($persona, $describeCompletion): array {
                 $officeCode = $persona->officeCode();
@@ -60,6 +71,7 @@ class StakeholderPreviewWorkflowController extends Controller
                     'business_name' => $application->business->name,
                     'owner_name' => $application->business->owner->name,
                     'ownership_type' => $application->business->ownership_type,
+                    'office_facts' => $this->officeFacts($persona, $application),
                     'documents' => $application->documents->map(fn ($document): array => [
                         'label' => $document->label,
                         'remarks' => $document->remarks,
@@ -99,6 +111,59 @@ class StakeholderPreviewWorkflowController extends Controller
                 : config('stakeholder_preview.weekend_hypothesis.office_charges.'.$persona->officeCode()),
             'applications' => $applications,
         ]);
+    }
+
+    /** @return list<array{label: string, value: string}> */
+    private function officeFacts(StakeholderPreviewPersona $persona, PermitApplication $application): array
+    {
+        $business = $application->business;
+        $activityNames = $application->lines
+            ->pluck('lineOfBusiness.name')
+            ->filter()
+            ->unique()
+            ->implode(', ');
+        $employeeCount = $business->male_employee_count === null && $business->female_employee_count === null
+            ? null
+            : (string) (($business->male_employee_count ?? 0) + ($business->female_employee_count ?? 0));
+
+        $facts = match ($persona) {
+            StakeholderPreviewPersona::Engineering => [
+                ['label' => 'Business area', 'value' => $business->business_area_square_meters === null ? null : $business->business_area_square_meters.' m²'],
+                ['label' => 'Occupancy', 'value' => $business->occupancy],
+                ['label' => 'Building', 'value' => $business->building_name],
+            ],
+            StakeholderPreviewPersona::Mpdo => [
+                ['label' => 'Business address', 'value' => $business->address],
+                ['label' => 'Barangay', 'value' => $business->barangay],
+                ['label' => 'Property index number', 'value' => $business->property_index_number],
+                ['label' => 'Declared activities', 'value' => $activityNames],
+            ],
+            StakeholderPreviewPersona::Assessor => [
+                ['label' => 'Ownership type', 'value' => $business->ownership_type],
+                ['label' => 'Registration number', 'value' => $business->registration_number],
+                ['label' => 'Property index number', 'value' => $business->property_index_number],
+            ],
+            StakeholderPreviewPersona::Health => [
+                ['label' => 'Employees', 'value' => $employeeCount],
+                ['label' => 'Business area', 'value' => $business->business_area_square_meters === null ? null : $business->business_area_square_meters.' m²'],
+                ['label' => 'Declared activities', 'value' => $activityNames],
+            ],
+            StakeholderPreviewPersona::Menro => [
+                ['label' => 'Declared activities', 'value' => $activityNames],
+                ['label' => 'Business area', 'value' => $business->business_area_square_meters === null ? null : $business->business_area_square_meters.' m²'],
+                ['label' => 'Occupancy', 'value' => $business->occupancy],
+            ],
+            default => [],
+        };
+
+        return collect($facts)
+            ->filter(fn (array $fact): bool => filled($fact['value']))
+            ->map(fn (array $fact): array => [
+                'label' => $fact['label'],
+                'value' => (string) $fact['value'],
+            ])
+            ->values()
+            ->all();
     }
 
     public function storeOfficeCharge(

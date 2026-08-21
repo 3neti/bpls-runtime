@@ -583,7 +583,7 @@ function fileSize(sizeBytes: number): string {
                             id="permit-artifact-heading"
                             class="text-sm font-semibold text-foreground"
                         >
-                            Permit artifact
+                            Generated permit document
                         </h2>
                     </div>
                     <Button
@@ -601,14 +601,14 @@ function fileSize(sizeBytes: number): string {
                             target="_blank"
                         >
                             <FileText />
-                            Open artifact
+                            Open document
                         </a>
                     </Button>
                 </div>
 
                 <dl class="grid gap-3 text-sm md:grid-cols-4">
                     <div>
-                        <dt class="text-xs text-muted-foreground">Artifact</dt>
+                        <dt class="text-xs text-muted-foreground">Document</dt>
                         <dd>{{ permitApplication.permit_artifact.label }}</dd>
                     </div>
                     <div>
@@ -1099,8 +1099,8 @@ function fileSize(sizeBytes: number): string {
                             Application timeline
                         </h2>
                         <p class="text-xs text-muted-foreground">
-                            Chronological evidence from application, assessment,
-                            Treasury, clearance, and authority-boundary records.
+                            Chronological activity from application, assessment,
+                            Treasury, clearance, and final-review records.
                         </p>
                     </div>
                 </div>
@@ -1150,7 +1150,7 @@ function fileSize(sizeBytes: number): string {
                 class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
             >
                 <h2 class="mb-3 text-sm font-semibold text-foreground">
-                    Renewal policy boundary
+                    Renewal processing not yet confirmed
                 </h2>
                 <dl class="grid gap-3 text-sm md:grid-cols-3">
                     <div>
@@ -1185,7 +1185,7 @@ function fileSize(sizeBytes: number): string {
                     </div>
                     <div class="md:col-span-3">
                         <dt class="text-xs text-muted-foreground">
-                            Software knows
+                            Recorded application facts
                         </dt>
                         <dd class="mt-2 flex flex-wrap gap-2">
                             <Badge
@@ -1233,7 +1233,7 @@ function fileSize(sizeBytes: number): string {
                 class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
             >
                 <h2 class="mb-3 text-sm font-semibold text-foreground">
-                    Amendment policy boundary
+                    Amendment processing not yet confirmed
                 </h2>
                 <dl class="grid gap-3 text-sm md:grid-cols-3">
                     <div>
@@ -1268,7 +1268,7 @@ function fileSize(sizeBytes: number): string {
                     </div>
                     <div class="md:col-span-3">
                         <dt class="text-xs text-muted-foreground">
-                            Software knows
+                            Recorded application facts
                         </dt>
                         <dd class="mt-2 flex flex-wrap gap-2">
                             <Badge
@@ -1316,7 +1316,7 @@ function fileSize(sizeBytes: number): string {
                 class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
             >
                 <h2 class="mb-3 text-sm font-semibold text-foreground">
-                    Transfer policy boundary
+                    Transfer processing not yet confirmed
                 </h2>
                 <dl class="grid gap-3 text-sm md:grid-cols-3">
                     <div>
@@ -1351,7 +1351,7 @@ function fileSize(sizeBytes: number): string {
                     </div>
                     <div class="md:col-span-3">
                         <dt class="text-xs text-muted-foreground">
-                            Software knows
+                            Recorded application facts
                         </dt>
                         <dd class="mt-2 flex flex-wrap gap-2">
                             <Badge
@@ -1440,7 +1440,7 @@ function fileSize(sizeBytes: number): string {
                 class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
             >
                 <h2 class="mb-3 text-sm font-semibold text-foreground">
-                    Retirement policy boundary
+                    Retirement processing not yet confirmed
                 </h2>
                 <dl class="grid gap-3 text-sm md:grid-cols-3">
                     <div>
@@ -1475,7 +1475,7 @@ function fileSize(sizeBytes: number): string {
                     </div>
                     <div class="md:col-span-3">
                         <dt class="text-xs text-muted-foreground">
-                            Software knows
+                            Recorded application facts
                         </dt>
                         <dd class="mt-2 flex flex-wrap gap-2">
                             <Badge
@@ -1606,7 +1606,7 @@ function fileSize(sizeBytes: number): string {
                     <div class="flex items-center gap-2">
                         <LinkIcon class="size-4 text-muted-foreground" />
                         <h2 class="text-sm font-semibold text-foreground">
-                            Verification boundary
+                            Public permit reference
                         </h2>
                     </div>
                     <Button as-child variant="outline">
@@ -1645,26 +1645,22 @@ function fileSize(sizeBytes: number): string {
                     </div>
                     <div>
                         <dt class="text-xs text-muted-foreground">
-                            Can verify release
+                            Municipal release
                         </dt>
                         <dd>
                             {{
                                 permitApplication.verification_boundary
                                     .can_verify_release
-                                    ? 'Yes'
-                                    : 'No'
+                                    ? 'Confirmed'
+                                    : 'Not confirmed'
                             }}
                         </dd>
                     </div>
                     <div>
-                        <dt class="text-xs text-muted-foreground">Released</dt>
-                        <dd>
-                            {{
-                                permitApplication.verification_boundary.released
-                                    ? 'Yes'
-                                    : 'No'
-                            }}
-                        </dd>
+                        <dt class="text-xs text-muted-foreground">
+                            Legal effect
+                        </dt>
+                        <dd>Not confirmed</dd>
                     </div>
                     <div class="md:col-span-4">
                         <dt class="text-xs text-muted-foreground">
@@ -1674,14 +1670,6 @@ function fileSize(sizeBytes: number): string {
                             {{
                                 permitApplication.verification_boundary.view_url
                             }}
-                        </dd>
-                    </div>
-                    <div class="md:col-span-4">
-                        <dt class="text-xs text-muted-foreground">
-                            Verification API
-                        </dt>
-                        <dd class="font-mono text-xs break-all">
-                            {{ permitApplication.verification_boundary.url }}
                         </dd>
                     </div>
                 </dl>
@@ -1711,9 +1699,7 @@ function fileSize(sizeBytes: number): string {
                         class="capitalize"
                     >
                         {{ permitApplication.clearance_summary.completed }} of
-                        {{
-                            permitApplication.clearance_summary.total
-                        }}
+                        {{ permitApplication.clearance_summary.total }}
                         checklist items complete
                     </Badge>
                 </div>
@@ -1783,15 +1769,12 @@ function fileSize(sizeBytes: number): string {
             </section>
 
             <AuthorityBoundaryPanel
-                title="Ready for Authority Review is not permit release"
+                title="Ready for municipal review — not released"
                 :status="
                     permitApplication.release_readiness.authority_boundary
                         .status
                 "
-                :statement="
-                    permitApplication.release_readiness.authority_boundary
-                        .artifact_statement
-                "
+                :statement="'Payment, receipt, and checklist completion can prepare an application for review. Municipal release and legal effect are not confirmed by this preview.'"
                 :facts="[
                     {
                         label: 'Ready for authority review',
@@ -1815,140 +1798,14 @@ function fileSize(sizeBytes: number): string {
                             : 'No',
                     },
                     {
-                        label: 'Can release',
+                        label: 'Municipal release confirmed',
                         value: permitApplication.release_readiness.can_release
                             ? 'Yes'
                             : 'No',
                     },
                 ]"
                 :note="permitApplication.release_readiness.reason"
-            >
-                <div class="space-y-3">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <h3 class="text-sm font-semibold text-foreground">
-                            Authority boundary
-                        </h3>
-                        <Badge variant="secondary" class="capitalize">
-                            {{
-                                label(
-                                    permitApplication.release_readiness
-                                        .authority_boundary.status,
-                                )
-                            }}
-                        </Badge>
-                    </div>
-                    <p class="text-sm text-muted-foreground">
-                        {{
-                            permitApplication.release_readiness
-                                .authority_boundary.artifact_statement
-                        }}
-                    </p>
-                    <div class="grid gap-4 text-sm md:grid-cols-3">
-                        <div>
-                            <h4 class="text-xs font-medium text-foreground">
-                                Software knows
-                            </h4>
-                            <ul class="mt-2 space-y-1 text-muted-foreground">
-                                <li
-                                    v-for="entry in booleanEntries(
-                                        permitApplication.release_readiness
-                                            .authority_boundary.software_knows,
-                                    )"
-                                    :key="entry.key"
-                                    class="flex items-center justify-between gap-3"
-                                >
-                                    <span class="capitalize">
-                                        {{ label(entry.key) }}
-                                    </span>
-                                    <span class="font-medium text-foreground">
-                                        {{ entry.value ? 'Yes' : 'No' }}
-                                    </span>
-                                </li>
-                            </ul>
-                        </div>
-                        <div>
-                            <h4 class="text-xs font-medium text-foreground">
-                                Human authority decides
-                            </h4>
-                            <ul class="mt-2 space-y-1 text-muted-foreground">
-                                <li
-                                    v-for="item in permitApplication
-                                        .release_readiness.authority_boundary
-                                        .human_authority_decides"
-                                    :key="item"
-                                    class="capitalize"
-                                >
-                                    {{ label(item) }}
-                                </li>
-                            </ul>
-                        </div>
-                        <div>
-                            <h4 class="text-xs font-medium text-foreground">
-                                Software records
-                            </h4>
-                            <ul class="mt-2 space-y-1 text-muted-foreground">
-                                <li
-                                    v-for="item in permitApplication
-                                        .release_readiness.authority_boundary
-                                        .software_records"
-                                    :key="item"
-                                    class="capitalize"
-                                >
-                                    {{ label(item) }}
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-                <dl
-                    v-if="permitApplication.release_policy_boundary"
-                    class="mt-4 grid gap-2 text-sm md:grid-cols-3"
-                >
-                    <div>
-                        <dt class="text-xs text-muted-foreground">
-                            Attempted transition
-                        </dt>
-                        <dd class="capitalize">
-                            {{
-                                permitApplication.release_policy_boundary.blocked_transition.replace(
-                                    '_',
-                                    ' ',
-                                )
-                            }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">
-                            Paid schedule
-                        </dt>
-                        <dd>
-                            {{
-                                permitApplication.release_policy_boundary
-                                    .is_paid
-                                    ? 'Yes'
-                                    : 'No'
-                            }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">Receipts</dt>
-                        <dd>
-                            {{
-                                permitApplication.release_policy_boundary
-                                    .receipt_count
-                            }}
-                        </dd>
-                    </div>
-                    <div class="md:col-span-3">
-                        <dt class="text-xs text-muted-foreground">Reason</dt>
-                        <dd>
-                            {{
-                                permitApplication.release_policy_boundary.reason
-                            }}
-                        </dd>
-                    </div>
-                </dl>
-            </AuthorityBoundaryPanel>
+            />
 
             <section
                 class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"

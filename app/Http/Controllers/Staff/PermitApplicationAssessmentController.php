@@ -168,7 +168,7 @@ class PermitApplicationAssessmentController extends Controller
                 'view_assessment_documents' => auth()->user()?->can(UserPermission::ViewPermitApplications->value) ?? false,
             ],
             'assessmentDocumentGaps' => [
-                'Generated assessment artifact renders persisted line snapshots only; it does not recalculate fees or taxes.',
+                'The generated assessment document shows the recorded assessment lines only; it does not recalculate fees or taxes.',
                 'Full Revenue Code catalog, formula semantics, rounding, PIL, surcharge, and final assessment-sheet layout remain unresolved where not already characterized.',
             ],
         ]);
