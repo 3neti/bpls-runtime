@@ -78,7 +78,15 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 function displayLabel(value: string): string {
-    return value.replaceAll('_', ' ');
+    const labels: Record<string, string> = {
+        accepted: 'Confirmed',
+        recorded: 'Recorded',
+        proposed: 'Provisional',
+        not_recorded: 'Not recorded',
+        blocked: 'Awaiting confirmation',
+    };
+
+    return labels[value] ?? value.replaceAll('_', ' ');
 }
 
 function statusClass(status: string): string {
@@ -101,7 +109,8 @@ function statusClass(status: string): string {
                         {{ report.title }}
                     </h1>
                     <p class="text-sm text-muted-foreground">
-                        {{ report.scope }}
+                        Official collection summary for the selected provisional
+                        billing group.
                     </p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
@@ -110,7 +119,7 @@ function statusClass(status: string): string {
                         class="border-amber-400 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
                         data-testid="billing-group-abstract-status"
                     >
-                        <ShieldAlert /> Blocked pending Treasury acceptance
+                        <ShieldAlert /> Awaiting municipal confirmation
                     </Badge>
                     <Button as-child variant="outline">
                         <Link :href="billingGroupShow(billing_group.id)">
@@ -149,7 +158,7 @@ function statusClass(status: string): string {
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
                     <div class="text-xs text-muted-foreground uppercase">
-                        Draft evidence
+                        Draft records
                     </div>
                     <div
                         class="mt-2 text-xl font-semibold"
@@ -173,8 +182,8 @@ function statusClass(status: string): string {
                     <div class="mt-1 text-xs text-muted-foreground">
                         {{
                             current_reconciliation
-                                ? `Evidence v${current_reconciliation.version}`
-                                : 'No reconciliation evidence'
+                                ? 'Review information recorded'
+                                : 'No review information recorded'
                         }}
                     </div>
                 </div>
@@ -188,7 +197,7 @@ function statusClass(status: string): string {
                         <FileLock2 class="size-5" /> Unavailable
                     </div>
                     <div class="mt-1 text-xs text-muted-foreground">
-                        No misleading financial output
+                        Official export not yet available
                     </div>
                 </div>
             </section>
@@ -201,10 +210,18 @@ function statusClass(status: string): string {
                     <ShieldAlert class="mt-0.5 size-5 shrink-0" />
                     <div>
                         <h2 class="font-semibold">
-                            Financial reporting boundary
+                            Why this report is unavailable
                         </h2>
-                        <p class="mt-1">{{ scope_note }}</p>
-                        <p class="mt-2">{{ policy_note }}</p>
+                        <p class="mt-1">
+                            Draft billing-group records are visible for review,
+                            but they do not establish a collection, receipt, or
+                            financial effect.
+                        </p>
+                        <p class="mt-2">
+                            Official rows and exports remain unavailable until
+                            Treasury confirms the group definition, fee fields,
+                            collection rules, and receipt rules.
+                        </p>
                     </div>
                 </div>
             </section>
@@ -214,7 +231,7 @@ function statusClass(status: string): string {
                     <div class="mb-3 flex items-center gap-2">
                         <ReceiptText class="size-4" />
                         <h2 class="text-sm font-semibold">
-                            Execution readiness
+                            Requirements for availability
                         </h2>
                     </div>
                     <div
@@ -235,11 +252,12 @@ function statusClass(status: string): string {
                                     class="rounded border px-2 py-1 text-[10px] uppercase"
                                     :class="statusClass(requirement.status)"
                                 >
-                                    {{ requirement.status }}
+                                    {{ displayLabel(requirement.status) }}
                                 </span>
                             </div>
                             <p class="mt-2 text-xs text-muted-foreground">
-                                {{ requirement.reason }}
+                                This information has not yet been confirmed for
+                                official reporting.
                             </p>
                         </article>
                     </div>
@@ -280,7 +298,9 @@ function statusClass(status: string): string {
                         </dl>
                     </section>
                     <section class="border-l-2 border-sidebar-border pl-4">
-                        <h2 class="text-sm font-semibold">Blocking facts</h2>
+                        <h2 class="text-sm font-semibold">
+                            Pending municipal decisions
+                        </h2>
                         <ul
                             class="mt-2 space-y-2 text-sm text-muted-foreground"
                         >
@@ -297,7 +317,7 @@ function statusClass(status: string): string {
                     <div class="mb-3 flex items-center gap-2">
                         <TableProperties class="size-4" />
                         <h2 class="text-sm font-semibold">
-                            Legacy report contract
+                            Required report fields
                         </h2>
                     </div>
                     <div
@@ -342,18 +362,18 @@ function statusClass(status: string): string {
                 </div>
 
                 <aside class="border-l-2 border-sidebar-border pl-4">
-                    <h2 class="text-sm font-semibold">Legacy evidence</h2>
+                    <h2 class="text-sm font-semibold">Source-data notes</h2>
                     <p class="mt-2 text-sm text-muted-foreground">
-                        {{ legacy_evidence.source }}
+                        Earlier source fields are retained for internal review.
                     </p>
                     <p class="mt-2 text-sm text-muted-foreground">
-                        {{ legacy_evidence.field_inference }}
+                        Required report fields need municipal confirmation.
                     </p>
                     <p class="mt-2 text-sm text-muted-foreground">
-                        {{ legacy_evidence.amount_handling }}
+                        Amount and total handling need Treasury confirmation.
                     </p>
                     <p class="mt-2 text-sm text-muted-foreground">
-                        {{ legacy_evidence.date_handling }}
+                        Collection-date rules need Treasury confirmation.
                     </p>
                 </aside>
             </section>

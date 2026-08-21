@@ -64,7 +64,14 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 function displayLabel(value: string): string {
-    return value.replaceAll('_', ' ');
+    const labels: Record<string, string> = {
+        available: 'Available',
+        not_implemented: 'Not available',
+        not_collected: 'Not recorded',
+        authority_blocked: 'Awaiting confirmation',
+    };
+
+    return labels[value] ?? value.replaceAll('_', ' ');
 }
 
 function statusClass(status: string): string {
@@ -95,7 +102,7 @@ function statusClass(status: string): string {
                         All Abstract of Collection
                     </h1>
                     <p class="text-sm text-muted-foreground">
-                        Consolidated Treasury reporting completeness contract.
+                        Consolidated Treasury collection report.
                     </p>
                 </div>
                 <Badge
@@ -104,7 +111,7 @@ function statusClass(status: string): string {
                     data-testid="all-abstract-boundary-status"
                 >
                     <ShieldAlert />
-                    Blocked pending complete Treasury coverage
+                    Awaiting municipal confirmation
                 </Badge>
             </section>
 
@@ -130,7 +137,7 @@ function statusClass(status: string): string {
                         {{ row_count }}
                     </div>
                     <div class="mt-1 text-xs text-muted-foreground">
-                        Partial output refused
+                        Official rows unavailable
                     </div>
                 </div>
                 <div
@@ -153,7 +160,7 @@ function statusClass(status: string): string {
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
                     <div class="text-xs text-muted-foreground uppercase">
-                        TOR controls
+                        Reporting decisions
                     </div>
                     <div
                         class="mt-2 flex items-center gap-2 text-xl font-semibold"
@@ -163,7 +170,7 @@ function statusClass(status: string): string {
                         {{ reconciliation_controls.length }}
                     </div>
                     <div class="mt-1 text-xs text-muted-foreground">
-                        Complete reconciliation required
+                        Municipal confirmation required
                     </div>
                 </div>
                 <div
@@ -177,7 +184,7 @@ function statusClass(status: string): string {
                         Unavailable
                     </div>
                     <div class="mt-1 text-xs text-muted-foreground">
-                        No misleading All export route
+                        Official export not yet available
                     </div>
                 </div>
             </section>
@@ -190,11 +197,18 @@ function statusClass(status: string): string {
                     <ShieldAlert class="mt-0.5 size-5 shrink-0" />
                     <div>
                         <h2 class="font-semibold">
-                            Treasury completeness boundary
+                            Why this report is unavailable
                         </h2>
-                        <p class="mt-1">{{ completeness_boundary.reason }}</p>
-                        <p class="mt-2">{{ scope_note }}</p>
-                        <p class="mt-1">{{ policy_note }}</p>
+                        <p class="mt-1">
+                            The municipality has not yet confirmed complete
+                            Treasury coverage and the rules for combining every
+                            revenue source into one official report.
+                        </p>
+                        <p class="mt-2">
+                            Existing permit collection reports remain available.
+                            This report will not show partial rows or offer an
+                            official export in the meantime.
+                        </p>
                     </div>
                 </div>
             </section>
@@ -235,7 +249,7 @@ function statusClass(status: string): string {
                     <div class="mb-3 flex items-center gap-2">
                         <Landmark class="size-4" />
                         <h2 class="text-sm font-semibold">
-                            TOR reconciliation controls
+                            Required reporting decisions
                         </h2>
                     </div>
                     <div
@@ -268,7 +282,7 @@ function statusClass(status: string): string {
                     <div class="mb-3 flex items-center gap-2">
                         <TableProperties class="size-4" />
                         <h2 class="text-sm font-semibold">
-                            Legacy report shape
+                            Required report fields
                         </h2>
                     </div>
                     <div
@@ -353,27 +367,19 @@ function statusClass(status: string): string {
 
                 <aside class="space-y-4">
                     <section class="border-l-2 border-sidebar-border pl-4">
-                        <h2 class="text-sm font-semibold">
-                            Legacy limitations
-                        </h2>
+                        <h2 class="text-sm font-semibold">Source-data notes</h2>
                         <p class="mt-2 text-sm text-muted-foreground">
-                            {{ legacy_evidence.combined_sources }}
-                        </p>
-                        <p class="mt-2 text-sm text-muted-foreground">
-                            {{ legacy_evidence.custom_field_inference }}
-                        </p>
-                        <p class="mt-2 text-sm text-muted-foreground">
-                            {{ legacy_evidence.mixed_date_basis }}
-                        </p>
-                        <p class="mt-2 text-sm text-muted-foreground">
-                            {{ legacy_evidence.cancelled_rows }}
-                        </p>
-                        <p class="mt-2 text-sm text-muted-foreground">
-                            {{ legacy_evidence.classification }}
+                            The earlier system combined permit and other
+                            collection sources using different dates and fields.
+                            Those differences require municipal confirmation
+                            before an official consolidated report can be
+                            issued.
                         </p>
                     </section>
                     <section class="border-l-2 border-sidebar-border pl-4">
-                        <h2 class="text-sm font-semibold">Blocking facts</h2>
+                        <h2 class="text-sm font-semibold">
+                            Pending municipal decisions
+                        </h2>
                         <ul
                             class="mt-2 space-y-2 text-sm text-muted-foreground"
                         >

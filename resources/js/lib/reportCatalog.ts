@@ -37,17 +37,17 @@ export const reportFamilyDetails: Record<
     operational: {
         title: 'Operational reports',
         description:
-            'Day-to-day permit, collection, receipt, and outstanding-balance evidence within the implemented scope.',
+            'Day-to-day permit, collection, receipt, and outstanding-balance records available in this preview.',
     },
     management: {
         title: 'Management reports',
         description:
-            'Persisted assessment, payment, declaration, and tax evidence organized for review and monitoring.',
+            'Recorded assessment, payment, declaration, and tax information organized for review and monitoring.',
     },
     authority_pending: {
-        title: 'Authority-pending reports',
+        title: 'Reports awaiting confirmation',
         description:
-            'Visible report contracts that refuse official rows or exports until the required municipal, Treasury, classification, or permit authority is accepted.',
+            'Official reports that remain unavailable until the municipality confirms the required authority, classifications, and reporting rules.',
     },
 };
 
@@ -57,7 +57,7 @@ export const reportCatalog: ReportCatalogItem[] = [
         title: 'Daily Collections',
         navigationTitle: 'Daily Collections',
         description:
-            'Receipted permit collections by collection date, payer, cashier, payment method, and persisted receipt evidence.',
+            'Receipted permit collections by collection date, payer, cashier, payment method, and recorded receipt.',
         family: 'operational',
         availability: 'working',
         href: dailyCollectionReportIndex(),
@@ -68,7 +68,7 @@ export const reportCatalog: ReportCatalogItem[] = [
         title: 'Revenue Sources',
         navigationTitle: 'Revenue Sources',
         description:
-            'Receipted permit allocations grouped by persisted fee, tax, or revenue-source line.',
+            'Receipted permit allocations grouped by recorded fee, tax, or revenue-source line.',
         family: 'operational',
         availability: 'working',
         href: revenueSourceReportIndex(),
@@ -79,7 +79,7 @@ export const reportCatalog: ReportCatalogItem[] = [
         title: 'Breakdown of Collectibles',
         navigationTitle: 'Breakdown of Collectibles',
         description:
-            'Outstanding permit schedules grouped by persisted due-date quarters, with unscheduled balances kept visible.',
+            'Outstanding permit schedules grouped by recorded due-date quarters, with unscheduled balances kept visible.',
         family: 'operational',
         availability: 'working',
         href: collectiblesReportIndex(),
@@ -145,7 +145,7 @@ export const reportCatalog: ReportCatalogItem[] = [
         title: 'Total Capital and Gross Summary',
         navigationTitle: 'Total Capital and Gross Summary',
         description:
-            'Persisted declaration totals, lifetime receipted payments, balances, and latest receipt evidence.',
+            'Recorded declaration totals, receipted payments, balances, and latest receipt information.',
         family: 'management',
         availability: 'working',
         href: totalCapitalGrossSummaryReportIndex(),
@@ -156,7 +156,7 @@ export const reportCatalog: ReportCatalogItem[] = [
         title: 'Top Establishments by Tax Due',
         navigationTitle: 'Top Establishments by Tax Due',
         description:
-            'Persisted assessment tax-line totals, not legal delinquency, penalties, or a final taxpayer ranking.',
+            'Recorded assessment tax-line totals for management review; this does not determine delinquency, penalties, or a final taxpayer ranking.',
         family: 'management',
         availability: 'working',
         href: topEstablishmentTaxDueReportIndex(),
@@ -167,7 +167,7 @@ export const reportCatalog: ReportCatalogItem[] = [
         title: 'All Abstract of Collection',
         navigationTitle: 'All Abstract',
         description:
-            'Refuses partial output until complete Treasury domains, mappings, controls, and reconciliation are accepted.',
+            'Unavailable until Treasury confirms complete collection coverage and reporting rules.',
         family: 'authority_pending',
         availability: 'policy_bound',
         href: allAbstractReportIndex(),
@@ -178,7 +178,7 @@ export const reportCatalog: ReportCatalogItem[] = [
         title: 'Billing Group Abstract',
         navigationTitle: 'Billing Group Abstract',
         description:
-            'Choose a provisional billing group to inspect its group-specific official-report refusal boundary.',
+            'Choose a provisional billing group to review its reporting availability and pending municipal decisions.',
         family: 'authority_pending',
         availability: 'policy_bound',
         href: billingGroupIndex(),
@@ -189,7 +189,7 @@ export const reportCatalog: ReportCatalogItem[] = [
         title: 'CMCI LDCS Annex B',
         navigationTitle: 'CMCI LDCS Annex B',
         description:
-            'Refuses official rows until permit issuance, numbering, signatory, classification, and LGU metadata authority exist.',
+            'Unavailable until permit issuance, numbering, signatory, classification, and municipal information are confirmed.',
         family: 'authority_pending',
         availability: 'policy_bound',
         href: cmciLdcsReportIndex(),
@@ -200,7 +200,7 @@ export const reportCatalog: ReportCatalogItem[] = [
         title: 'PLDS',
         navigationTitle: 'PLDS',
         description:
-            'Refuses partial official rows while permit authority, issue date, classifications, and missing fields remain unresolved.',
+            'Unavailable while permit authority, issue date, classifications, and required fields remain unconfirmed.',
         family: 'authority_pending',
         availability: 'policy_bound',
         href: pldsReportIndex(),
@@ -211,7 +211,7 @@ export const reportCatalog: ReportCatalogItem[] = [
         title: 'BSP Non-Bank Entities',
         navigationTitle: 'BSP Non-Bank Entities',
         description:
-            'Refuses rows that would assert unsupported permit authority or regulated non-bank classification.',
+            'Unavailable until permit authority and regulated non-bank classifications are confirmed.',
         family: 'authority_pending',
         availability: 'policy_bound',
         href: bspReportIndex(),
@@ -222,7 +222,7 @@ export const reportCatalog: ReportCatalogItem[] = [
         title: 'ANNEX C – DNFBP',
         navigationTitle: 'ANNEX C – DNFBP',
         description:
-            'Refuses official output until permit authority, DNFBP classification, reporting scope, and municipal acceptance exist.',
+            'Unavailable until permit authority, DNFBP classification, reporting scope, and municipal approval are confirmed.',
         family: 'authority_pending',
         availability: 'policy_bound',
         href: annexCDnfbpReportIndex(),

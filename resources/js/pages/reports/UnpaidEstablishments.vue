@@ -273,6 +273,11 @@ function label(value: string | null): string {
                     <div class="mt-2 text-2xl font-semibold">
                         {{ money(summary.outstanding_amount_cents) }}
                     </div>
+                    <div
+                        class="mt-1 text-[0.65rem] font-medium text-amber-700 uppercase dark:text-amber-300"
+                    >
+                        Preview · Sample Data
+                    </div>
                 </div>
                 <div
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
@@ -291,9 +296,12 @@ function label(value: string | null): string {
             >
                 <p class="font-medium">Report scope</p>
                 <p class="mt-1">{{ summary.scope }}</p>
-                <p class="mt-1">{{ summary.policy_note }}</p>
+                <p class="mt-1">
+                    This report does not determine legal delinquency, penalties,
+                    interest, enforcement, or the final official masterlist.
+                </p>
                 <p class="mt-1 text-xs uppercase">
-                    Date basis: {{ label(summary.date_basis) }}
+                    Records dated by: {{ label(summary.date_basis) }}
                 </p>
             </section>
 
@@ -337,8 +345,7 @@ function label(value: string | null): string {
                                     colspan="7"
                                     class="px-3 py-8 text-center text-muted-foreground"
                                 >
-                                    No unpaid establishments found for these
-                                    filters.
+                                    No matching sample data for these filters.
                                 </td>
                             </tr>
                             <tr

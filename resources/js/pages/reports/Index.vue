@@ -30,8 +30,7 @@ setLayoutProps({ breadcrumbs });
                     </h1>
                     <p class="text-sm leading-6 text-muted-foreground">
                         Open the implemented operational and management reports,
-                        or inspect an authority-pending contract to understand
-                        exactly why official output is refused.
+                        or review why an official report is not yet available.
                     </p>
                 </div>
                 <Badge variant="outline">
@@ -68,16 +67,22 @@ setLayoutProps({ breadcrumbs });
                                 <h3 class="font-semibold text-foreground">
                                     {{ report.title }}
                                 </h3>
-                                <CircleCheck
+                                <Badge
                                     v-if="report.availability === 'working'"
-                                    class="size-5 shrink-0 text-emerald-600 dark:text-emerald-400"
-                                    aria-label="Working within current scope"
-                                />
-                                <ShieldAlert
+                                    variant="outline"
+                                    class="shrink-0 border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200"
+                                >
+                                    <CircleCheck aria-hidden="true" />
+                                    Available
+                                </Badge>
+                                <Badge
                                     v-else
-                                    class="size-5 shrink-0 text-amber-600 dark:text-amber-400"
-                                    aria-label="Policy or authority pending"
-                                />
+                                    variant="outline"
+                                    class="shrink-0 border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+                                >
+                                    <ShieldAlert aria-hidden="true" />
+                                    Awaiting confirmation
+                                </Badge>
                             </div>
                             <p class="text-sm leading-6 text-muted-foreground">
                                 {{ report.description }}
@@ -104,11 +109,11 @@ setLayoutProps({ breadcrumbs });
             <section
                 class="rounded-lg border border-amber-500/40 bg-amber-50 p-4 text-sm leading-6 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
             >
-                <strong>Catalog boundary.</strong>
-                This page organizes routes already implemented in the current
-                system. It is not a claim that every TOR report, official
-                format, municipal classification, Treasury domain, or policy
-                decision is complete.
+                <strong>Report availability.</strong>
+                Reports marked available use the records included in this
+                preview. Reports marked awaiting municipal confirmation do not
+                generate official rows or exports until their required format,
+                classification, Treasury coverage, and authority are confirmed.
             </section>
         </main>
     </div>

@@ -231,6 +231,11 @@ function label(value: string): string {
                     >
                         {{ money(summary.total_amount_cents) }}
                     </div>
+                    <div
+                        class="mt-1 text-[0.65rem] font-medium text-amber-700 uppercase dark:text-amber-300"
+                    >
+                        Preview · Sample Data
+                    </div>
                 </div>
             </section>
 
@@ -239,10 +244,15 @@ function label(value: string): string {
             >
                 <p class="font-medium">Report scope</p>
                 <p class="mt-1">{{ summary.scope }}</p>
-                <p class="mt-1">{{ summary.policy_note }}</p>
+                <p class="mt-1">
+                    Amounts come from receipted Tax allocations only. Fees,
+                    penalties, uncollected assessments, pending receipts, and
+                    voided records are excluded; this report does not
+                    recalculate tax.
+                </p>
                 <p class="mt-1">{{ summary.classification_note }}</p>
                 <p class="mt-1 text-xs uppercase">
-                    Date basis: {{ label(summary.date_basis) }} ·
+                    Records dated by: {{ label(summary.date_basis) }} ·
                     Classification: {{ label(summary.classification_basis) }}
                 </p>
             </section>

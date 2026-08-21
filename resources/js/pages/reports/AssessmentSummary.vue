@@ -228,6 +228,11 @@ function label(value: string): string {
                     <div class="mt-2 text-2xl font-semibold">
                         {{ money(summary.total_amount_cents) }}
                     </div>
+                    <div
+                        class="mt-1 text-[0.65rem] font-medium text-amber-700 uppercase dark:text-amber-300"
+                    >
+                        Preview · Sample Data
+                    </div>
                 </div>
                 <div
                     class="border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
@@ -237,6 +242,11 @@ function label(value: string): string {
                     </div>
                     <div class="mt-2 text-2xl font-semibold">
                         {{ money(summary.tax_amount_cents) }}
+                    </div>
+                    <div
+                        class="mt-1 text-[0.65rem] font-medium text-amber-700 uppercase dark:text-amber-300"
+                    >
+                        Preview · Sample Data
                     </div>
                 </div>
                 <div
@@ -253,6 +263,11 @@ function label(value: string): string {
                                     summary.other_amount_cents,
                             )
                         }}
+                    </div>
+                    <div
+                        class="mt-1 text-[0.65rem] font-medium text-amber-700 uppercase dark:text-amber-300"
+                    >
+                        Preview · Sample Data
                     </div>
                 </div>
                 <div
@@ -274,7 +289,12 @@ function label(value: string): string {
                 class="grid gap-2 border border-sidebar-border/70 bg-muted/20 p-4 text-sm dark:border-sidebar-border"
             >
                 <p>{{ summary.scope }}</p>
-                <p class="text-muted-foreground">{{ summary.policy_note }}</p>
+                <p class="text-muted-foreground">
+                    This report uses recorded assessment amounts. It does not
+                    recalculate taxpayer liability or decide unresolved
+                    surcharge, interest, penalty, deficiency-tax, or rounding
+                    rules.
+                </p>
             </section>
 
             <section
@@ -372,8 +392,7 @@ function label(value: string): string {
                                     colspan="7"
                                     class="px-4 py-10 text-center text-muted-foreground"
                                 >
-                                    No current computed assessments match these
-                                    filters.
+                                    No matching sample data for these filters.
                                 </td>
                             </tr>
                         </tbody>

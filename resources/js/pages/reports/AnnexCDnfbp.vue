@@ -62,7 +62,13 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 function displayLabel(value: string): string {
-    return value.replaceAll('_', ' ');
+    const labels: Record<string, string> = {
+        authority_blocked: 'Awaiting confirmation',
+        not_available: 'Not available',
+        source_available: 'Available',
+    };
+
+    return labels[value] ?? value.replaceAll('_', ' ');
 }
 
 function sourceClass(status: string): string {
@@ -89,7 +95,7 @@ function sourceClass(status: string): string {
                         ANNEX C - DNFBP
                     </h1>
                     <p class="text-sm text-muted-foreground">
-                        Semestral regulatory return contract.
+                        Semestral DNFBP regulatory return.
                     </p>
                 </div>
                 <Badge
@@ -98,7 +104,7 @@ function sourceClass(status: string): string {
                     data-testid="dnfbp-boundary-status"
                 >
                     <ShieldAlert />
-                    Blocked pending authority and classification
+                    Awaiting municipal confirmation
                 </Badge>
             </section>
 
@@ -131,7 +137,7 @@ function sourceClass(status: string): string {
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
                     <div class="text-xs text-muted-foreground uppercase">
-                        Contract fields
+                        Required fields
                     </div>
                     <div
                         class="mt-2 text-xl font-semibold"
@@ -140,7 +146,7 @@ function sourceClass(status: string): string {
                         {{ columns.length }}
                     </div>
                     <div class="mt-1 text-xs text-muted-foreground">
-                        Legacy export order preserved
+                        Existing field order shown
                     </div>
                 </div>
                 <div
@@ -154,7 +160,7 @@ function sourceClass(status: string): string {
                         Semester unresolved
                     </div>
                     <div class="mt-1 text-xs text-muted-foreground">
-                        Legacy report had no period filter
+                        Reporting period needs confirmation
                     </div>
                 </div>
                 <div
@@ -181,12 +187,18 @@ function sourceClass(status: string): string {
                     <ShieldAlert class="mt-0.5 size-5 shrink-0" />
                     <div>
                         <h2 class="font-semibold">
-                            Regulatory return authority boundary
+                            Why this report is unavailable
                         </h2>
-                        <p class="mt-1">{{ authority_boundary.reason }}</p>
-                        <p class="mt-2">{{ projection_boundary.reason }}</p>
-                        <p class="mt-2">{{ scope_note }}</p>
-                        <p class="mt-1">{{ policy_note }}</p>
+                        <p class="mt-1">
+                            This return requires confirmed permit authority,
+                            DNFBP classification, and reporting-period rules. A
+                            generated permit document or workflow status does
+                            not confirm those facts.
+                        </p>
+                        <p class="mt-2">
+                            Official rows and exports remain unavailable until
+                            the municipality confirms the required information.
+                        </p>
                     </div>
                 </div>
             </section>
@@ -196,7 +208,7 @@ function sourceClass(status: string): string {
                     <div class="mb-3 flex items-center gap-2">
                         <TableProperties class="size-4" />
                         <h2 class="text-sm font-semibold">
-                            ANNEX C field contract
+                            ANNEX C required fields
                         </h2>
                     </div>
 
@@ -280,20 +292,18 @@ function sourceClass(status: string): string {
 
                 <aside class="space-y-4">
                     <section class="border-l-2 border-sidebar-border pl-4">
-                        <h2 class="text-sm font-semibold">
-                            Legacy limitations
-                        </h2>
+                        <h2 class="text-sm font-semibold">Source-data notes</h2>
                         <p class="mt-2 text-sm text-muted-foreground">
-                            {{ legacy_evidence.selection_driven_eligibility }}
+                            DNFBP eligibility rules need municipal confirmation.
                         </p>
                         <p class="mt-2 text-sm text-muted-foreground">
-                            {{ legacy_evidence.unissued_business_inclusion }}
+                            Permit-issuance requirements need confirmation.
                         </p>
                         <p class="mt-2 text-sm text-muted-foreground">
-                            {{ legacy_evidence.latest_permit_selection }}
+                            Permit-selection rules need confirmation.
                         </p>
                         <p class="mt-2 text-sm text-muted-foreground">
-                            {{ legacy_evidence.period_filter }}
+                            Reporting-period rules need confirmation.
                         </p>
                     </section>
                     <section class="border-l-2 border-sidebar-border pl-4">

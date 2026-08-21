@@ -129,7 +129,7 @@ function label(value: string | null): string {
                         Top Tax Due
                     </h1>
                     <p class="text-sm text-muted-foreground">
-                        Establishment ranking from persisted permit assessment
+                        Establishment ranking from recorded permit assessment
                         tax lines.
                     </p>
                 </div>
@@ -266,6 +266,11 @@ function label(value: string | null): string {
                     <div class="mt-2 text-2xl font-semibold">
                         {{ money(summary.tax_due_cents) }}
                     </div>
+                    <div
+                        class="mt-1 text-[0.65rem] font-medium text-amber-700 uppercase dark:text-amber-300"
+                    >
+                        Preview · Sample Data
+                    </div>
                 </div>
                 <div
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
@@ -276,6 +281,11 @@ function label(value: string | null): string {
                     <div class="mt-2 text-2xl font-semibold">
                         {{ money(summary.largest_tax_due_cents) }}
                     </div>
+                    <div
+                        class="mt-1 text-[0.65rem] font-medium text-amber-700 uppercase dark:text-amber-300"
+                    >
+                        Preview · Sample Data
+                    </div>
                 </div>
             </section>
 
@@ -284,9 +294,13 @@ function label(value: string | null): string {
             >
                 <p class="font-medium">Report scope</p>
                 <p class="mt-1">{{ summary.scope }}</p>
-                <p class="mt-1">{{ summary.policy_note }}</p>
+                <p class="mt-1">
+                    This ranking uses recorded assessment tax lines only. It
+                    does not determine delinquency, penalties, enforcement, or
+                    an official top-taxpayer list.
+                </p>
                 <p class="mt-1 text-xs uppercase">
-                    Date basis: {{ label(summary.date_basis) }}
+                    Records dated by: {{ label(summary.date_basis) }}
                 </p>
             </section>
 
@@ -335,8 +349,7 @@ function label(value: string | null): string {
                                     colspan="8"
                                     class="px-3 py-8 text-center text-muted-foreground"
                                 >
-                                    No establishments with assessed tax lines
-                                    found for these filters.
+                                    No matching sample data for these filters.
                                 </td>
                             </tr>
                             <tr

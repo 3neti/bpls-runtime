@@ -251,12 +251,16 @@ function label(value: string): string {
             >
                 <p class="font-medium">Report scope</p>
                 <p class="mt-1">{{ summary.scope }}</p>
-                <p class="mt-1">{{ summary.legacy_note }}</p>
-                <p class="mt-1">{{ summary.policy_note }}</p>
+                <p class="mt-1">
+                    Capital and gross sales come from recorded application
+                    declarations. Payments and balances use receipted
+                    collections and recorded schedules; this report does not
+                    recalculate assessments or decide unresolved adjustments.
+                </p>
                 <p class="mt-1 text-xs uppercase">
                     Qualification:
                     {{ label(summary.qualification_date_basis) }} · Financial
-                    scope: {{ label(summary.financial_scope) }} · Grain:
+                    scope: {{ label(summary.financial_scope) }} · One row per:
                     {{ label(summary.grain) }}
                 </p>
             </section>
@@ -462,8 +466,7 @@ function label(value: string): string {
                 v-if="rows.length === 0"
                 class="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground"
             >
-                No establishments have issued, receipted collections in the
-                selected period.
+                No matching sample data for the selected period.
             </p>
         </main>
     </AppLayout>

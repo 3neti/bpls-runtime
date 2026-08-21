@@ -51,7 +51,13 @@ defineProps<{
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'PLDS', href: index() }];
 
 function displayLabel(value: string): string {
-    return value.replaceAll('_', ' ');
+    const labels: Record<string, string> = {
+        authority_blocked: 'Awaiting confirmation',
+        not_available: 'Not available',
+        source_available: 'Available',
+    };
+
+    return labels[value] ?? value.replaceAll('_', ' ');
 }
 
 function sourceClass(status: string): string {
@@ -76,8 +82,7 @@ function sourceClass(status: string): string {
                 <div class="min-w-0">
                     <h1 class="text-xl font-semibold text-foreground">PLDS</h1>
                     <p class="text-sm text-muted-foreground">
-                        Philippine Local Development Survey field and authority
-                        contract.
+                        Philippine Local Development Survey information.
                     </p>
                 </div>
                 <Badge
@@ -86,7 +91,7 @@ function sourceClass(status: string): string {
                     data-testid="plds-boundary-status"
                 >
                     <ShieldAlert />
-                    Blocked pending authority and mappings
+                    Awaiting municipal confirmation
                 </Badge>
             </section>
 
@@ -119,7 +124,7 @@ function sourceClass(status: string): string {
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
                     <div class="text-xs text-muted-foreground uppercase">
-                        Contract fields
+                        Required fields
                     </div>
                     <div
                         class="mt-2 text-xl font-semibold"
@@ -128,14 +133,14 @@ function sourceClass(status: string): string {
                         {{ columns.length }}
                     </div>
                     <div class="mt-1 text-xs text-muted-foreground">
-                        Legacy order preserved
+                        Existing field order shown
                     </div>
                 </div>
                 <div
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
                     <div class="text-xs text-muted-foreground uppercase">
-                        Date basis
+                        Records dated by
                     </div>
                     <div class="mt-2 font-semibold">Permit issue date</div>
                     <div class="mt-1 text-xs text-muted-foreground">
@@ -166,12 +171,18 @@ function sourceClass(status: string): string {
                     <ShieldAlert class="mt-0.5 size-5 shrink-0" />
                     <div>
                         <h2 class="font-semibold">
-                            Authority and projection boundary
+                            Why this report is unavailable
                         </h2>
-                        <p class="mt-1">{{ authority_boundary.reason }}</p>
-                        <p class="mt-2">{{ projection_boundary.reason }}</p>
-                        <p class="mt-2">{{ scope_note }}</p>
-                        <p class="mt-1">{{ policy_note }}</p>
+                        <p class="mt-1">
+                            This report requires confirmed permit release, issue
+                            date, and PLDS classifications. A generated permit
+                            document or workflow status does not confirm those
+                            facts.
+                        </p>
+                        <p class="mt-2">
+                            Official rows and exports remain unavailable until
+                            the municipality confirms the missing information.
+                        </p>
                     </div>
                 </div>
             </section>
@@ -181,7 +192,7 @@ function sourceClass(status: string): string {
                     <div class="mb-3 flex items-center gap-2">
                         <TableProperties class="size-4" />
                         <h2 class="text-sm font-semibold">
-                            PLDS field contract
+                            PLDS required fields
                         </h2>
                     </div>
 
@@ -262,14 +273,13 @@ function sourceClass(status: string): string {
 
                 <aside class="space-y-4">
                     <section class="border-l-2 border-sidebar-border pl-4">
-                        <h2 class="text-sm font-semibold">
-                            Legacy reconciliation
-                        </h2>
+                        <h2 class="text-sm font-semibold">Source-data notes</h2>
                         <p class="mt-2 text-sm text-muted-foreground">
-                            {{ legacy_evidence.category_columns }}
+                            Required category fields need municipal
+                            confirmation.
                         </p>
                         <p class="mt-2 text-sm text-muted-foreground">
-                            {{ legacy_evidence.assets }}
+                            Asset reporting fields need municipal confirmation.
                         </p>
                     </section>
                     <section class="border-l-2 border-sidebar-border pl-4">
