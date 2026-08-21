@@ -2,9 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\DescribePermitReleaseReadiness;
+use App\Actions\BuildPublicPermitVerificationProjection;
 use App\Actions\DescribePermitVerificationBoundary;
-use App\Actions\DescribeProvisionalUatPermitCompletion;
 use App\Models\PermitApplication;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -13,34 +12,20 @@ class PublicPermitVerificationPageController extends Controller
 {
     public function __invoke(
         DescribePermitVerificationBoundary $describeVerificationBoundary,
-        DescribePermitReleaseReadiness $describePermitReleaseReadiness,
-        DescribeProvisionalUatPermitCompletion $describeProvisionalCompletion,
+        BuildPublicPermitVerificationProjection $buildProjection,
         PermitApplication $permitApplication,
         string $verificationCode,
     ): Response {
         abort_unless($describeVerificationBoundary->matches($permitApplication, $verificationCode), 404);
 
-        $permitApplication->loadMissing('business');
-        $verification = $describeVerificationBoundary->handle($permitApplication);
-        $readiness = $describePermitReleaseReadiness->handle($permitApplication);
+        $projection = $buildProjection->handle($permitApplication);
 
         return Inertia::render('public/PermitVerification', [
-            'verification' => $verification,
-            'permit' => [
-                'application_number' => $permitApplication->application_number,
-                'application_year' => $permitApplication->application_year,
-                'application_status' => $permitApplication->status->value,
-                'business_name' => $permitApplication->business->name,
-                'trade_name' => $permitApplication->business->trade_name,
-            ],
-            'releaseReadiness' => [
-                'ready_for_authority_review' => $readiness['ready_for_authority_review'],
-                'can_release' => $readiness['can_release'],
-                'blocked_by' => $readiness['blocked_by'],
-                'authority_boundary' => $readiness['authority_boundary'],
-                'reason' => $readiness['reason'],
-            ],
-            'previewCompletion' => $describeProvisionalCompletion->handle($permitApplication),
+            'verification' => $projection['verification'],
+            'permit' => $projection['permit'],
+            'releaseReadiness' => $projection['release_readiness'],
+            'previewCompletion' => $projection['preview_completion'],
+            'releaseStatus' => $projection['release_status'],
         ]);
     }
 }

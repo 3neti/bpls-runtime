@@ -168,6 +168,11 @@ function label(value: string): string {
                 <div
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
+                    <div
+                        class="text-[0.65rem] font-medium text-amber-700 uppercase dark:text-amber-300"
+                    >
+                        Preview · Sample Data
+                    </div>
                     <div class="text-xs text-muted-foreground uppercase">
                         Capital
                     </div>
@@ -184,6 +189,11 @@ function label(value: string): string {
                 <div
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
+                    <div
+                        class="text-[0.65rem] font-medium text-amber-700 uppercase dark:text-amber-300"
+                    >
+                        Preview · Sample Data
+                    </div>
                     <div class="text-xs text-muted-foreground uppercase">
                         Gross sales
                     </div>
@@ -197,6 +207,11 @@ function label(value: string): string {
                 <div
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
+                    <div
+                        class="text-[0.65rem] font-medium text-amber-700 uppercase dark:text-amber-300"
+                    >
+                        Preview · Sample Data
+                    </div>
                     <div class="text-xs text-muted-foreground uppercase">
                         Lifetime payments
                     </div>
@@ -210,6 +225,11 @@ function label(value: string): string {
                 <div
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
+                    <div
+                        class="text-[0.65rem] font-medium text-amber-700 uppercase dark:text-amber-300"
+                    >
+                        Preview · Sample Data
+                    </div>
                     <div class="text-xs text-muted-foreground uppercase">
                         Remaining balance
                     </div>

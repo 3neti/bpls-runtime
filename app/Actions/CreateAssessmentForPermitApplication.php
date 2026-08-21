@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Assessment\AssessmentCalculator;
+use App\Enums\AssessmentDecisionAction;
 use App\Enums\AssessmentStatus;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
@@ -33,6 +34,8 @@ class CreateAssessmentForPermitApplication
                 throw new LogicException("Historical evidence application [{$permitApplication->id}] cannot enter operational assessment.");
             }
 
+            $this->assertAssessmentMayBeComputed($permitApplication);
+
             $permitApplication->assessments()
                 ->whereNull('superseded_at')
                 ->update(['superseded_at' => now()]);
@@ -62,6 +65,31 @@ class CreateAssessmentForPermitApplication
 
             return $assessment->load('lines');
         });
+    }
+
+    private function assertAssessmentMayBeComputed(PermitApplication $permitApplication): void
+    {
+        if ($permitApplication->paymentSchedules()->exists()) {
+            throw new LogicException('An assessment cannot be recomputed after payment scheduling has begun.');
+        }
+
+        if ($permitApplication->provisionalUatPermitCompletion()->whereNotNull('released_at')->exists()) {
+            throw new LogicException('A preview-completed permit cannot return to assessment without restoring the sample journey.');
+        }
+
+        $currentAssessment = $permitApplication->assessments()
+            ->whereNull('superseded_at')
+            ->with('decision')
+            ->latest('sequence')
+            ->first();
+
+        if (! $currentAssessment instanceof Assessment) {
+            return;
+        }
+
+        if ($currentAssessment->decision?->action !== AssessmentDecisionAction::ReturnedForCorrection) {
+            throw new LogicException('The current assessment must be returned for correction before a new snapshot is computed.');
+        }
     }
 
     /**

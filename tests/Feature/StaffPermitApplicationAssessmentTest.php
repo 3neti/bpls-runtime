@@ -1,6 +1,8 @@
 <?php
 
+use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\RenderAssessmentPdf;
+use App\Enums\AssessmentStatus;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
@@ -11,9 +13,12 @@ use App\Models\Business;
 use App\Models\BusinessOwner;
 use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
+use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
+use App\Models\ProvisionalUatPermitCompletion;
 use Inertia\Testing\AssertableInertia as Assert;
+use LogicException;
 
 test('guests are redirected away from staff permit assessments', function () {
     $this->get(route('staff.permit-applications.assessments.index'))
@@ -79,6 +84,41 @@ test('staff users with assess permission can compute an assessment from the staf
     $response->assertRedirect(route('staff.permit-applications.assessments.show', $assessment));
 
     expect($assessment->total_amount_cents)->toBe(25_000);
+});
+
+test('assessment recomputation is refused after payment scheduling or preview release', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+        UserPermission::AssessPermitApplications,
+    ]);
+    $application = PermitApplication::factory()->create(['application_year' => 2026]);
+    $assessment = Assessment::factory()->for($application)->create([
+        'status' => AssessmentStatus::Computed,
+        'superseded_at' => null,
+    ]);
+    PaymentSchedule::factory()->create([
+        'permit_application_id' => $application->id,
+        'assessment_id' => $assessment->id,
+    ]);
+
+    $this->from(route('staff.permit-applications.show', $application))
+        ->actingAs($user)
+        ->post(route('staff.permit-applications.assessments.store', $application))
+        ->assertRedirect(route('staff.permit-applications.show', $application))
+        ->assertSessionHasErrors(['assessment_policy']);
+
+    expect($application->assessments()->count())->toBe(1)
+        ->and($assessment->fresh()->superseded_at)->toBeNull();
+
+    $previewApplication = PermitApplication::factory()->create(['application_year' => 2026]);
+    ProvisionalUatPermitCompletion::factory()->for($previewApplication)->create([
+        'status' => 'released_in_preview',
+        'released_at' => now(),
+    ]);
+
+    expect(fn () => app(CreateAssessmentForPermitApplication::class)->handle($previewApplication, $user))
+        ->toThrow(LogicException::class, 'preview-completed permit');
 });
 
 test('staff assessment surface records unsupported formula policy boundary without creating an assessment', function () {

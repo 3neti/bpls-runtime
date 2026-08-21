@@ -3,6 +3,7 @@
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\RecordAssessmentDecision;
+use App\Assessment\AssessmentSnapshotFingerprint;
 use App\Enums\AssessmentDecisionAction;
 use App\Enums\AssessmentStatus;
 use App\Enums\FeeRuleCalculationType;
@@ -32,7 +33,9 @@ test('an authorized Treasurer records immutable approval of the exact prepared a
     ], UserRole::Treasury);
 
     $this->actingAs($treasurer)
-        ->post(route('staff.assessments.approve', $assessment))
+        ->post(route('staff.assessments.approve', $assessment), [
+            'assessment_snapshot_hash' => assessmentSnapshotHash($assessment),
+        ])
         ->assertRedirect(route('staff.permit-applications.assessments.show', $assessment));
 
     $decision = AssessmentDecision::query()->sole();
@@ -109,6 +112,7 @@ test('an unapproved or returned assessment cannot create a payment schedule', fu
 
     $this->actingAs($treasurer)
         ->post(route('staff.assessments.return-for-correction', $returnedAssessment), [
+            'assessment_snapshot_hash' => assessmentSnapshotHash($returnedAssessment),
             'reason' => 'Correct the declared basis before recomputing the amount.',
         ])
         ->assertRedirect(route('staff.permit-applications.assessments.show', $returnedAssessment));
@@ -143,6 +147,7 @@ test('a corrected assessment is a new snapshot and does not inherit the prior re
         $assessment,
         User::factory()->create(),
         AssessmentDecisionAction::ReturnedForCorrection,
+        null,
         'Recompute the assessment.',
     );
 
@@ -214,6 +219,48 @@ test('an assessment snapshot accepts only one immutable Treasurer decision', fun
     ))->toThrow(DomainException::class, 'already has an immutable Treasurer decision');
 });
 
+test('Treasurer decisions fail safely when the page snapshot is stale or the decision was already recorded', function () {
+    [, $assessment] = preparedAssessmentFixture();
+    $treasurer = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+        UserPermission::ApproveAssessments,
+    ], UserRole::Treasury);
+    $snapshotHash = assessmentSnapshotHash($assessment);
+
+    $assessment->lines()->firstOrFail()->update(['amount_cents' => 46_000]);
+    $assessment->update(['total_amount_cents' => 46_000]);
+
+    $this->from(route('staff.permit-applications.assessments.show', $assessment))
+        ->actingAs($treasurer)
+        ->post(route('staff.assessments.approve', $assessment), [
+            'assessment_snapshot_hash' => $snapshotHash,
+        ])
+        ->assertRedirect(route('staff.permit-applications.assessments.show', $assessment))
+        ->assertSessionHasErrors(['assessment_decision']);
+
+    expect(AssessmentDecision::query()->count())->toBe(0);
+
+    $currentHash = assessmentSnapshotHash($assessment->fresh());
+
+    $this->actingAs($treasurer)
+        ->post(route('staff.assessments.approve', $assessment), [
+            'assessment_snapshot_hash' => $currentHash,
+        ])
+        ->assertRedirect(route('staff.permit-applications.assessments.show', $assessment));
+
+    $this->from(route('staff.permit-applications.assessments.show', $assessment))
+        ->actingAs($treasurer)
+        ->post(route('staff.assessments.return-for-correction', $assessment), [
+            'assessment_snapshot_hash' => $currentHash,
+            'reason' => 'A stale second decision must not replace approval.',
+        ])
+        ->assertRedirect(route('staff.permit-applications.assessments.show', $assessment))
+        ->assertSessionHasErrors(['assessment_decision']);
+
+    expect(AssessmentDecision::query()->sole()->action)->toBe(AssessmentDecisionAction::Approved);
+});
+
 /** @return array{User, Assessment} */
 function preparedAssessmentFixture(string $applicationNumber = 'APP-ASSESSMENT-DECISION'): array
 {
@@ -238,4 +285,9 @@ function preparedAssessmentFixture(string $applicationNumber = 'APP-ASSESSMENT-D
     ]);
 
     return [$assessmentOfficer, $assessment];
+}
+
+function assessmentSnapshotHash(Assessment $assessment): string
+{
+    return app(AssessmentSnapshotFingerprint::class)->hash($assessment);
 }

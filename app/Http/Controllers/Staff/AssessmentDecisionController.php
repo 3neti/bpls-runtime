@@ -4,24 +4,30 @@ namespace App\Http\Controllers\Staff;
 
 use App\Actions\RecordAssessmentDecision;
 use App\Enums\AssessmentDecisionAction;
-use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Staff\ApproveAssessmentRequest;
 use App\Http\Requests\Staff\ReturnAssessmentForCorrectionRequest;
 use App\Models\Assessment;
+use DomainException;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Gate;
 
 class AssessmentDecisionController extends Controller
 {
-    public function approve(Assessment $assessment, RecordAssessmentDecision $recordDecision): RedirectResponse
-    {
-        Gate::authorize(UserPermission::ApproveAssessments->value);
-
-        $recordDecision->handle(
-            $assessment,
-            auth()->user(),
-            AssessmentDecisionAction::Approved,
-        );
+    public function approve(
+        ApproveAssessmentRequest $request,
+        Assessment $assessment,
+        RecordAssessmentDecision $recordDecision,
+    ): RedirectResponse {
+        try {
+            $recordDecision->handle(
+                $assessment,
+                $request->user(),
+                AssessmentDecisionAction::Approved,
+                $request->validated('assessment_snapshot_hash'),
+            );
+        } catch (DomainException $exception) {
+            return back()->withErrors(['assessment_decision' => $exception->getMessage()]);
+        }
 
         return to_route('staff.permit-applications.assessments.show', $assessment)
             ->with('status', 'Assessment amount approved for payment by the Municipal Treasurer.');
@@ -32,12 +38,17 @@ class AssessmentDecisionController extends Controller
         Assessment $assessment,
         RecordAssessmentDecision $recordDecision,
     ): RedirectResponse {
-        $recordDecision->handle(
-            $assessment,
-            $request->user(),
-            AssessmentDecisionAction::ReturnedForCorrection,
-            $request->validated('reason'),
-        );
+        try {
+            $recordDecision->handle(
+                $assessment,
+                $request->user(),
+                AssessmentDecisionAction::ReturnedForCorrection,
+                $request->validated('assessment_snapshot_hash'),
+                $request->validated('reason'),
+            );
+        } catch (DomainException $exception) {
+            return back()->withErrors(['assessment_decision' => $exception->getMessage()]);
+        }
 
         return to_route('staff.permit-applications.assessments.show', $assessment)
             ->with('status', 'Assessment returned for correction. Payment remains unavailable.');

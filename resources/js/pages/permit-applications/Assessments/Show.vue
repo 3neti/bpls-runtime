@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import {
     ArrowLeft,
     CheckCircle2,
@@ -47,6 +47,7 @@ type Assessment = {
     assessed_at: string | null;
     assessed_by: string | null;
     total_amount_cents: number;
+    snapshot_hash: string;
     payment_schedule_available: boolean;
     decision: {
         id: number;
@@ -90,7 +91,12 @@ const props = defineProps<{
     assessmentDocumentGaps: string[];
 }>();
 
-const returnForm = useForm({ reason: '' });
+const page = usePage();
+
+const returnForm = useForm({
+    assessment_snapshot_hash: props.assessment.snapshot_hash,
+    reason: '',
+});
 
 function submitReturnForCorrection(): void {
     returnForm.post(returnForCorrection(props.assessment.id).url, {
@@ -305,6 +311,10 @@ function money(amountCents: number): string {
                             :href="approveAssessment(assessment.id)"
                             method="post"
                             as="button"
+                            :data="{
+                                assessment_snapshot_hash:
+                                    assessment.snapshot_hash,
+                            }"
                             :class="buttonVariants({ size: 'sm' })"
                         >
                             <CheckCircle2 />
@@ -345,6 +355,12 @@ function money(amountCents: number): string {
                             Return for correction
                         </Button>
                     </form>
+                    <p
+                        v-if="page.props.errors.assessment_decision"
+                        class="text-sm text-destructive"
+                    >
+                        {{ page.props.errors.assessment_decision }}
+                    </p>
                 </div>
             </section>
 

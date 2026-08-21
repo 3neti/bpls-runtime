@@ -1131,12 +1131,14 @@ test('public permit verification confirms artifact identity but not release', fu
     $this->get($verification['url'])
         ->assertSuccessful()
         ->assertJson([
-            'schema_version' => 'bpls.permit-verification-boundary.v1',
+            'schema_version' => 'bpls.permit-verification-boundary.v2',
             'verification' => [
                 'reference' => $verification['reference'],
                 'status' => 'artifact_only',
                 'can_verify_release' => false,
                 'released' => false,
+                'legal_release_confirmed' => false,
+                'legal_effect_confirmed' => false,
             ],
             'permit' => [
                 'application_number' => 'APP-2026-00013',
@@ -1155,7 +1157,36 @@ test('public permit verification confirms artifact identity but not release', fu
                     'artifact_statement' => 'Generated permit artifacts support authority review but do not issue, release, or make a permit legally effective.',
                 ],
             ],
+            'release_status' => [
+                'preview_sample' => [
+                    'available' => false,
+                    'completed' => false,
+                    'status' => 'not_available',
+                ],
+                'municipal_legal_release' => [
+                    'confirmed' => false,
+                    'status' => 'not_confirmed',
+                ],
+                'legal_effect' => [
+                    'confirmed' => false,
+                    'status' => 'not_confirmed',
+                ],
+            ],
         ]);
+});
+
+test('public permit verification is deterministic across repeated unchanged requests', function () {
+    $application = permitDocumentFixture();
+    $verification = app(DescribePermitVerificationBoundary::class)->handle($application);
+    $updatedAt = $application->updated_at;
+
+    $first = $this->getJson($verification['url'])->assertSuccessful()->json();
+    $second = $this->getJson($verification['url'])->assertSuccessful()->json();
+
+    expect($second)->toBe($first)
+        ->and($application->fresh()->updated_at?->equalTo($updatedAt))->toBeTrue()
+        ->and(data_get($second, 'release_status.preview_sample.completed'))->toBeFalse()
+        ->and(data_get($second, 'release_status.municipal_legal_release.confirmed'))->toBeFalse();
 });
 
 test('public permit verification page renders the artifact authority boundary', function () {
@@ -1170,9 +1201,13 @@ test('public permit verification page renders the artifact authority boundary', 
             ->where('verification.status', 'artifact_only')
             ->where('verification.can_verify_release', false)
             ->where('verification.released', false)
+            ->where('verification.legal_release_confirmed', false)
+            ->where('verification.legal_effect_confirmed', false)
             ->where('permit.application_number', 'APP-2026-00013')
             ->where('permit.business_name', 'Permit Artifact Store')
             ->where('releaseReadiness.can_release', false)
+            ->where('releaseStatus.preview_sample.completed', false)
+            ->where('releaseStatus.municipal_legal_release.confirmed', false)
             ->where('releaseReadiness.authority_boundary.artifact_statement', 'Generated permit artifacts support authority review but do not issue, release, or make a permit legally effective.')
         );
 });

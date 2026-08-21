@@ -6,6 +6,8 @@ use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\RenderAssessmentPdf;
 use App\Assessment\AssessmentSnapshotFingerprint;
 use App\Enums\AssessmentDecisionAction;
+use App\Enums\AssessmentStatus;
+use App\Enums\PermitApplicationStatus;
 use App\Enums\UserPermission;
 use App\Exceptions\UnsupportedAssessmentPolicy;
 use App\Http\Controllers\Controller;
@@ -16,6 +18,7 @@ use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
+use LogicException;
 
 class PermitApplicationAssessmentController extends Controller
 {
@@ -58,7 +61,7 @@ class PermitApplicationAssessmentController extends Controller
 
         try {
             $assessment = $createAssessment->handle($permitApplication, auth()->user());
-        } catch (UnsupportedAssessmentPolicy $exception) {
+        } catch (UnsupportedAssessmentPolicy|LogicException $exception) {
             $metadata = $permitApplication->metadata ?? [];
             $metadata['assessment_policy_boundary'] = [
                 'status' => 'blocked',
@@ -90,9 +93,16 @@ class PermitApplicationAssessmentController extends Controller
         ]);
 
         $latestPaymentSchedule = $assessment->paymentSchedules->first();
+        $snapshotHash = $fingerprint->hash($assessment);
         $paymentScheduleAvailable = $assessment->decision?->action === AssessmentDecisionAction::Approved
             && $assessment->decision->total_amount_cents === $assessment->total_amount_cents
-            && hash_equals($assessment->decision->assessment_snapshot_hash, $fingerprint->hash($assessment));
+            && hash_equals($assessment->decision->assessment_snapshot_hash, $snapshotHash);
+        $decisionAvailable = $assessment->decision === null
+            && $assessment->status === AssessmentStatus::Computed
+            && $assessment->superseded_at === null
+            && $assessment->paymentSchedules->isEmpty()
+            && $assessment->permitApplication->status === PermitApplicationStatus::Assessment
+            && $assessment->assessed_by_id !== auth()->id();
 
         return Inertia::render('permit-applications/Assessments/Show', [
             'assessment' => [
@@ -102,6 +112,7 @@ class PermitApplicationAssessmentController extends Controller
                 'assessed_at' => $assessment->assessed_at?->toIso8601String(),
                 'assessed_by' => $assessment->assessedBy?->name,
                 'total_amount_cents' => $assessment->total_amount_cents,
+                'snapshot_hash' => $snapshotHash,
                 'source_snapshot' => $assessment->source_snapshot,
                 'payment_schedule_available' => $paymentScheduleAvailable,
                 'decision' => $assessment->decision === null ? null : [
@@ -151,7 +162,8 @@ class PermitApplicationAssessmentController extends Controller
             ],
             'can' => [
                 'prepare_payment_schedule' => auth()->user()?->can(UserPermission::PreparePaymentSchedules->value) ?? false,
-                'approve_assessment' => auth()->user()?->can(UserPermission::ApproveAssessments->value) ?? false,
+                'approve_assessment' => $decisionAvailable
+                    && (auth()->user()?->can(UserPermission::ApproveAssessments->value) ?? false),
                 'view_payment_schedules' => auth()->user()?->can(UserPermission::ViewPaymentSchedules->value) ?? false,
                 'view_assessment_documents' => auth()->user()?->can(UserPermission::ViewPermitApplications->value) ?? false,
             ],

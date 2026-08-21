@@ -6,26 +6,20 @@ use App\Enums\UserPermission;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class ReturnAssessmentForCorrectionRequest extends FormRequest
+class ApproveAssessmentRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
         return $this->user()?->can(UserPermission::ApproveAssessments->value) ?? false;
     }
 
     /**
-     * Get the validation rules that apply to the request.
-     *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         return [
             'assessment_snapshot_hash' => ['required', 'string', 'regex:/\A[a-f0-9]{64}\z/i'],
-            'reason' => ['nullable', 'string', 'max:1000'],
         ];
     }
 }

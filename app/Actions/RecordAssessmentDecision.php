@@ -22,9 +22,10 @@ class RecordAssessmentDecision
         Assessment $assessment,
         User $decidedBy,
         AssessmentDecisionAction $action,
+        ?string $expectedSnapshotHash = null,
         ?string $reason = null,
     ): AssessmentDecision {
-        return DB::transaction(function () use ($assessment, $decidedBy, $action, $reason): AssessmentDecision {
+        return DB::transaction(function () use ($assessment, $decidedBy, $action, $expectedSnapshotHash, $reason): AssessmentDecision {
             $lockedAssessment = Assessment::query()
                 ->whereKey($assessment->id)
                 ->lockForUpdate()
@@ -41,6 +42,11 @@ class RecordAssessmentDecision
 
             $snapshot = $this->fingerprint->snapshot($lockedAssessment);
             $snapshotHash = $this->fingerprint->hash($lockedAssessment);
+
+            if ($expectedSnapshotHash !== null && ! hash_equals($snapshotHash, $expectedSnapshotHash)) {
+                throw new DomainException('The assessment changed after this page was opened. Review the current amount before recording a decision.');
+            }
+
             $normalizedReason = filled($reason) ? Str::squish($reason) : null;
             $decidedAt = now();
             $applicationStatusAfterDecision = $action === AssessmentDecisionAction::Approved

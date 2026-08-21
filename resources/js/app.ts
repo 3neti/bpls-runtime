@@ -21,8 +21,16 @@ createInertiaApp({
                 return AuthLayout;
             case name.startsWith('settings/'):
                 return [AppLayout, SettingsLayout];
-            default:
+            case name === 'Dashboard':
+            case name.startsWith('citizen/'):
+            case name === 'municipality/Index':
+            case name === 'permit-applications/Create':
+            case name === 'reports/Index':
+            case name === 'roles/Index':
+            case name === 'users/Index':
                 return AppLayout;
+            default:
+                return null;
         }
     },
     progress: {

@@ -12,6 +12,8 @@ type VerificationBoundary = {
     status: string;
     can_verify_release: boolean;
     released: boolean;
+    legal_release_confirmed: boolean;
+    legal_effect_confirmed: boolean;
     policy_note: string;
 };
 
@@ -47,11 +49,28 @@ type PreviewCompletion = {
     production_authority: false;
 };
 
+type ReleaseStatus = {
+    preview_sample: {
+        available: boolean;
+        completed: boolean;
+        status: string;
+    };
+    municipal_legal_release: {
+        confirmed: false;
+        status: 'not_confirmed';
+    };
+    legal_effect: {
+        confirmed: false;
+        status: 'not_confirmed';
+    };
+};
+
 defineProps<{
     verification: VerificationBoundary;
     permit: PermitSummary;
     releaseReadiness: ReleaseReadiness;
     previewCompletion: PreviewCompletion | null;
+    releaseStatus: ReleaseStatus;
 }>();
 
 function label(value: string): string {
@@ -80,21 +99,21 @@ function label(value: string): string {
                         <span>Municipality of Ipil BPLS</span>
                     </div>
                     <h1 class="text-2xl font-semibold tracking-normal">
-                        Permit verification
+                        Permit reference check
                     </h1>
                     <p
                         class="max-w-2xl text-sm text-zinc-600 dark:text-zinc-300"
                     >
-                        This public page confirms the generated permit artifact
-                        reference. It does not confirm permit release or legal
-                        effect.
+                        This page confirms a generated permit document
+                        reference. It does not confirm municipal release,
+                        validity, or legal effect.
                     </p>
                 </div>
                 <Badge
                     variant="secondary"
                     class="w-fit border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/70 dark:bg-amber-950 dark:text-amber-100"
                 >
-                    Artifact only
+                    Document reference only
                 </Badge>
             </header>
 
@@ -106,7 +125,7 @@ function label(value: string): string {
                         class="size-4 text-emerald-700 dark:text-emerald-300"
                     />
                     <h2 class="text-base font-semibold">
-                        Verified artifact reference
+                        Document reference found
                     </h2>
                 </div>
                 <dl class="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -120,7 +139,7 @@ function label(value: string): string {
                     </div>
                     <div>
                         <dt class="text-xs text-zinc-500 dark:text-zinc-400">
-                            Verification status
+                            Reference status
                         </dt>
                         <dd class="capitalize">
                             {{ label(verification.status) }}
@@ -128,17 +147,15 @@ function label(value: string): string {
                     </div>
                     <div>
                         <dt class="text-xs text-zinc-500 dark:text-zinc-400">
-                            Can verify release
+                            Municipal release
                         </dt>
-                        <dd>
-                            {{ verification.can_verify_release ? 'Yes' : 'No' }}
-                        </dd>
+                        <dd>Not confirmed</dd>
                     </div>
                     <div>
                         <dt class="text-xs text-zinc-500 dark:text-zinc-400">
-                            Released
+                            Legal effect
                         </dt>
-                        <dd>{{ verification.released ? 'Yes' : 'No' }}</dd>
+                        <dd>Not confirmed</dd>
                     </div>
                 </dl>
             </section>
@@ -148,10 +165,18 @@ function label(value: string): string {
             >
                 <div
                     class="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+                    data-testid="public-permit-data-card"
                 >
+                    <p
+                        class="mb-3 text-[0.65rem] font-semibold tracking-wide text-amber-700 uppercase dark:text-amber-300"
+                    >
+                        Preview · Sample Data
+                    </p>
                     <div class="mb-4 flex items-center gap-2">
                         <FileText class="size-4 text-zinc-500" />
-                        <h2 class="text-base font-semibold">Permit artifact</h2>
+                        <h2 class="text-base font-semibold">
+                            Generated permit document
+                        </h2>
                     </div>
                     <dl class="space-y-3 text-sm">
                         <div>
@@ -207,7 +232,7 @@ function label(value: string): string {
                 </div>
 
                 <AuthorityBoundaryPanel
-                    title="Release is not verified"
+                    title="Municipal release is not confirmed"
                     :status="releaseReadiness.authority_boundary.status"
                     :statement="
                         releaseReadiness.authority_boundary.artifact_statement
@@ -220,18 +245,17 @@ function label(value: string): string {
                                 : 'No',
                         },
                         {
-                            label: 'Can release',
-                            value: releaseReadiness.can_release ? 'Yes' : 'No',
-                        },
-                        {
-                            label: 'Can verify release',
-                            value: verification.can_verify_release
+                            label: 'Municipal release confirmed',
+                            value: releaseStatus.municipal_legal_release
+                                .confirmed
                                 ? 'Yes'
                                 : 'No',
                         },
                         {
-                            label: 'Released',
-                            value: verification.released ? 'Yes' : 'No',
+                            label: 'Legal effect confirmed',
+                            value: releaseStatus.legal_effect.confirmed
+                                ? 'Yes'
+                                : 'No',
                         },
                     ]"
                     :note="releaseReadiness.reason"
@@ -246,12 +270,14 @@ function label(value: string): string {
                 <div class="mb-3 flex items-center gap-2">
                     <BadgeCheck class="size-4" />
                     <h2 class="text-base font-semibold">
-                        Preview permit lifecycle
+                        Sample workflow result
                     </h2>
                 </div>
                 <dl class="grid gap-3 text-sm sm:grid-cols-4">
                     <div>
-                        <dt class="text-xs opacity-70">Preview status</dt>
+                        <dt class="text-xs opacity-70">
+                            Sample workflow stage
+                        </dt>
                         <dd class="capitalize">
                             {{ label(previewCompletion.status) }}
                         </dd>
@@ -278,10 +304,12 @@ function label(value: string): string {
                         </dd>
                     </div>
                     <div>
-                        <dt class="text-xs opacity-70">Released in preview</dt>
+                        <dt class="text-xs opacity-70">
+                            Sample workflow completed
+                        </dt>
                         <dd>
                             {{
-                                previewCompletion.released_in_preview
+                                releaseStatus.preview_sample.completed
                                     ? 'Yes'
                                     : 'No'
                             }}

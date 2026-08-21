@@ -1710,9 +1710,11 @@ function fileSize(sizeBytes: number): string {
                         "
                         class="capitalize"
                     >
-                        {{ permitApplication.clearance_summary.completed }} /
-                        {{ permitApplication.clearance_summary.total }}
-                        complete
+                        {{ permitApplication.clearance_summary.completed }} of
+                        {{
+                            permitApplication.clearance_summary.total
+                        }}
+                        checklist items complete
                     </Badge>
                 </div>
                 <p class="mb-4 text-sm text-muted-foreground">
