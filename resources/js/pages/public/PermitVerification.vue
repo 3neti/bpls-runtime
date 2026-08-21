@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
 import { BadgeCheck, FileText, Landmark, LockKeyhole } from '@lucide/vue';
-import StakeholderPreviewBanner from '@/components/StakeholderPreviewBanner.vue';
 import { Badge } from '@/components/ui/badge';
 import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
 
@@ -74,7 +73,13 @@ defineProps<{
 }>();
 
 function label(value: string): string {
-    return value.replaceAll('_', ' ');
+    const labels: Record<string, string> = {
+        artifact_only: 'Preview document only',
+        ready_for_authority_review: 'Ready for municipal review',
+        released_in_preview: 'Completed in preview',
+    };
+
+    return labels[value] ?? value.replaceAll('_', ' ');
 }
 </script>
 
@@ -84,7 +89,6 @@ function label(value: string): string {
     <main
         class="min-h-screen bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50"
     >
-        <StakeholderPreviewBanner />
         <div
             class="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8"
         >
