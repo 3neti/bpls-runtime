@@ -7,7 +7,7 @@ import {
     Landmark,
     LockKeyhole,
 } from '@lucide/vue';
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import {
     recordPermitDecision,
     storeOfficeCharge,
@@ -30,6 +30,7 @@ type Application = {
     business_name: string;
     owner_name: string;
     ownership_type: string | null;
+    office_facts?: { label: string; value: string }[];
     documents: { label: string; remarks: string | null }[];
     office_contribution: {
         is_applicable: boolean;
@@ -60,6 +61,50 @@ const forms = reactive<
     Record<number, { is_applicable: boolean; amount: string }>
 >({});
 const working = ref<number | null>(null);
+
+const officeGuidance = computed(() => {
+    const guidance = {
+        engineering: {
+            heading: 'Engineering application review',
+            description:
+                'Review the establishment details and submitted documents available for this application.',
+            question:
+                'Confirm which establishment and occupancy details this office needs in the final system.',
+        },
+        mpdo: {
+            heading: 'Planning application review',
+            description:
+                'Review the business and location details supplied with this application.',
+            question:
+                'Confirm which planning and zoning details this office needs in the final system.',
+        },
+        assessor: {
+            heading: 'Assessor application review',
+            description:
+                'Review the recorded business, ownership, and property-related details available for this application.',
+            question:
+                'Confirm which property and assessment details this office needs in the final system.',
+        },
+        health: {
+            heading: 'Health application review',
+            description:
+                'Review the establishment details and submitted documents available for health review.',
+            question:
+                'Confirm which establishment and health details this office needs in the final system.',
+        },
+        menro: {
+            heading: 'Environmental application review',
+            description:
+                'Review the establishment details and submitted documents available for environmental review.',
+            question:
+                'Confirm which environmental details this office needs in the final system.',
+        },
+    } as const;
+
+    return props.office
+        ? guidance[props.persona.key as keyof typeof guidance]
+        : null;
+});
 
 function formFor(application: Application): {
     is_applicable: boolean;
@@ -136,15 +181,28 @@ function money(cents: number | null): string {
                 >
                     <Building2 v-if="office" class="size-4" />
                     <Landmark v-else class="size-4" />
-                    <span>Office-specific preview workspace</span>
+                    <span>Preview · Sample Data</span>
                 </div>
                 <h1 class="text-2xl font-semibold tracking-tight">
                     {{ persona.label }} Workspace
                 </h1>
                 <p class="max-w-3xl text-sm leading-6 text-muted-foreground">
-                    Review the sample application and take only this office's
-                    step. This workspace is a reversible stakeholder-test
-                    interpretation, not final municipal role or policy mapping.
+                    <template v-if="officeGuidance">
+                        {{ officeGuidance.description }} Record only this
+                        office's preview contribution.
+                    </template>
+                    <template v-else>
+                        Review the sample application's payment, clearance, and
+                        preview permit status before taking this office's step.
+                    </template>
+                </p>
+                <p
+                    v-if="officeGuidance"
+                    class="max-w-3xl rounded-md border border-dashed px-3 py-2 text-xs leading-5 text-muted-foreground"
+                >
+                    For municipal validation: {{ officeGuidance.question }}
+                    The details shown below are the facts currently available,
+                    not a final list of office requirements.
                 </p>
             </header>
 
@@ -191,35 +249,76 @@ function money(cents: number | null): string {
                     </div>
 
                     <div class="mt-4 grid gap-5 lg:grid-cols-2">
-                        <section>
-                            <h3
-                                class="flex items-center gap-2 text-sm font-semibold"
-                            >
-                                <FileText class="size-4" /> Evidence to inspect
-                                now
-                            </h3>
-                            <ul class="mt-3 space-y-2 text-sm">
-                                <li
-                                    v-for="document in application.documents"
-                                    :key="document.label"
-                                    class="rounded-md border p-3"
+                        <section class="space-y-5">
+                            <div>
+                                <h3 class="text-sm font-semibold">
+                                    Application details for this review
+                                </h3>
+                                <dl
+                                    class="mt-3 grid gap-3 rounded-lg border p-4 sm:grid-cols-2"
                                 >
-                                    <span class="font-medium">{{
-                                        document.label
-                                    }}</span>
-                                    <span
-                                        v-if="document.remarks"
-                                        class="mt-1 block text-xs text-muted-foreground"
-                                        >{{ document.remarks }}</span
+                                    <div
+                                        v-for="fact in application.office_facts ??
+                                        []"
+                                        :key="fact.label"
+                                        class="min-w-0"
                                     >
-                                </li>
-                                <li
-                                    v-if="application.documents.length === 0"
-                                    class="text-muted-foreground"
+                                        <dt
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            {{ fact.label }}
+                                        </dt>
+                                        <dd
+                                            class="mt-0.5 text-sm font-medium break-words"
+                                        >
+                                            {{ fact.value }}
+                                        </dd>
+                                    </div>
+                                    <div
+                                        v-if="
+                                            (application.office_facts ?? [])
+                                                .length === 0
+                                        "
+                                        class="text-sm text-muted-foreground sm:col-span-2"
+                                    >
+                                        No additional application details are
+                                        available for this review.
+                                    </div>
+                                </dl>
+                            </div>
+
+                            <div>
+                                <h3
+                                    class="flex items-center gap-2 text-sm font-semibold"
                                 >
-                                    No supporting evidence is recorded yet.
-                                </li>
-                            </ul>
+                                    <FileText class="size-4" /> Documents
+                                </h3>
+                                <ul class="mt-3 space-y-2 text-sm">
+                                    <li
+                                        v-for="document in application.documents"
+                                        :key="document.label"
+                                        class="rounded-md border p-3"
+                                    >
+                                        <span class="font-medium">{{
+                                            document.label
+                                        }}</span>
+                                        <span
+                                            v-if="document.remarks"
+                                            class="mt-1 block text-xs text-muted-foreground"
+                                            >{{ document.remarks }}</span
+                                        >
+                                    </li>
+                                    <li
+                                        v-if="
+                                            application.documents.length === 0
+                                        "
+                                        class="text-muted-foreground"
+                                    >
+                                        No supporting documents are recorded
+                                        yet.
+                                    </li>
+                                </ul>
+                            </div>
                         </section>
 
                         <section
@@ -227,8 +326,14 @@ function money(cents: number | null): string {
                             class="rounded-lg border bg-muted/30 p-4"
                         >
                             <h3 class="text-sm font-semibold">
-                                {{ office.label }} review
+                                {{ officeGuidance?.heading ?? office.label }}
                             </h3>
+                            <p
+                                class="mt-1 text-xs leading-5 text-muted-foreground"
+                            >
+                                Applicability and amount are provisional for
+                                this sample workflow.
+                            </p>
                             <div class="mt-4 space-y-4">
                                 <label class="flex items-center gap-2 text-sm">
                                     <input
@@ -238,12 +343,19 @@ function money(cents: number | null): string {
                                         type="checkbox"
                                         :disabled="application.charge_locked"
                                     />
-                                    Applicable to this sample application
+                                    Include this office in the sample assessment
                                 </label>
                                 <label class="block text-sm">
-                                    <span class="font-medium"
-                                        >Office-assessed amount</span
+                                    <span
+                                        class="flex items-center justify-between gap-2 font-medium"
                                     >
+                                        Preview contribution amount
+                                        <span
+                                            class="rounded-full border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                                        >
+                                            Preview · Sample Data
+                                        </span>
+                                    </span>
                                     <input
                                         v-model="formFor(application).amount"
                                         type="number"
@@ -266,18 +378,27 @@ function money(cents: number | null): string {
                                     @click="submitOfficeCharge(application)"
                                 >
                                     {{
-                                        application.office_contribution
-                                            ? 'Update and resubmit office assessment'
-                                            : 'Submit office assessment'
+                                        working === application.id
+                                            ? 'Saving contribution…'
+                                            : application.office_contribution
+                                              ? 'Update preview contribution'
+                                              : 'Record preview contribution'
                                     }}
                                 </button>
+                                <p
+                                    v-if="!formFor(application).is_applicable"
+                                    class="text-xs text-muted-foreground"
+                                >
+                                    No amount will be recorded while this office
+                                    is not included in the sample assessment.
+                                </p>
                                 <p
                                     v-if="application.charge_locked"
                                     class="flex gap-2 text-xs text-muted-foreground"
                                 >
                                     <LockKeyhole class="size-4 shrink-0" />
-                                    Locked after Treasury approval or payment
-                                    processing.
+                                    This contribution cannot change after
+                                    Treasury approval or payment begins.
                                 </p>
                             </div>
                         </section>
@@ -304,19 +425,19 @@ function money(cents: number | null): string {
                                 </div>
                                 <div>
                                     <dt class="text-xs text-muted-foreground">
-                                        Clearances complete
+                                        Clearance checklist
                                     </dt>
                                     <dd>
                                         {{
                                             application.clearances_complete
-                                                ? 'Yes'
-                                                : 'No'
+                                                ? 'Complete'
+                                                : 'Not complete'
                                         }}
                                     </dd>
                                 </div>
                                 <div>
                                     <dt class="text-xs text-muted-foreground">
-                                        Consolidated amount
+                                        Approved amount for payment
                                     </dt>
                                     <dd>
                                         {{
@@ -328,7 +449,7 @@ function money(cents: number | null): string {
                                 </div>
                                 <div>
                                     <dt class="text-xs text-muted-foreground">
-                                        Preview number
+                                        Preview permit number
                                     </dt>
                                     <dd>
                                         {{
@@ -353,7 +474,7 @@ function money(cents: number | null): string {
                                     class="rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                                     @click="decide(application, 'go')"
                                 >
-                                    Go — apply sample e-signature
+                                    Approve preview permit
                                 </button>
                                 <button
                                     type="button"
@@ -365,11 +486,23 @@ function money(cents: number | null): string {
                                     class="rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-50"
                                     @click="decide(application, 'no_go')"
                                 >
-                                    No-Go
+                                    Return / Do not approve
                                 </button>
                             </div>
+                            <p
+                                v-if="
+                                    persona.key === 'mayor_office' &&
+                                    (!application.payment_confirmed ||
+                                        !application.clearances_complete)
+                                "
+                                class="mt-2 text-xs text-muted-foreground"
+                            >
+                                Preview permit review becomes available after
+                                payment is confirmed and the clearance checklist
+                                is complete.
+                            </p>
                             <button
-                                v-else
+                                v-if="persona.key === 'releasing'"
                                 type="button"
                                 :disabled="
                                     working !== null ||
@@ -379,8 +512,20 @@ function money(cents: number | null): string {
                                 class="mt-4 w-full rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
                                 @click="decide(application, 'release')"
                             >
-                                Release sample permit in preview
+                                Record preview release
                             </button>
+                            <p
+                                v-if="
+                                    persona.key === 'releasing' &&
+                                    application.completion?.status !==
+                                        'approved_for_preview_release' &&
+                                    !application.completion?.released_in_preview
+                                "
+                                class="mt-2 text-xs text-muted-foreground"
+                            >
+                                Preview release becomes available after the
+                                preview permit is approved.
+                            </p>
                             <p
                                 v-if="
                                     application.completion?.released_in_preview
@@ -388,14 +533,14 @@ function money(cents: number | null): string {
                                 class="mt-3 flex gap-2 text-sm text-emerald-700"
                             >
                                 <CheckCircle2 class="size-4 shrink-0" />
-                                Released in the preview lifecycle.
+                                Sample workflow release is complete.
                             </p>
                             <p
                                 class="mt-3 text-xs leading-5 text-muted-foreground"
                             >
-                                No official numbering, real Mayor credential,
-                                issuance authority, municipal release, or legal
-                                effect is created.
+                                Preview only. This does not create an official
+                                permit number, authorized signature, municipal
+                                release, or legal effect.
                             </p>
                         </section>
                     </div>

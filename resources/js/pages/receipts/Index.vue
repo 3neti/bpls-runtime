@@ -124,8 +124,8 @@ function statusLabel(value: string): string {
                         Receipts
                     </h1>
                     <p class="text-sm text-muted-foreground">
-                        Treasury receipt queue for issued and void-boundary
-                        receipt evidence.
+                        Review issued Treasury receipts and their current
+                        status.
                     </p>
                 </div>
                 <div class="text-sm text-muted-foreground">
@@ -357,7 +357,7 @@ function statusLabel(value: string): string {
                                 class="border-b last:border-b-0"
                             >
                                 <td class="px-4 py-3 align-top">
-                                    <div class="font-medium">
+                                    <div class="font-medium break-all">
                                         {{ receipt.receipt_number }}
                                     </div>
                                     <div
@@ -368,7 +368,7 @@ function statusLabel(value: string): string {
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 align-top">
-                                    <div class="font-medium">
+                                    <div class="font-medium break-words">
                                         {{
                                             receipt.collection.payer_name ??
                                             receipt.permit_application
@@ -387,7 +387,7 @@ function statusLabel(value: string): string {
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 align-top">
-                                    <div class="font-medium">
+                                    <div class="font-medium break-words">
                                         {{
                                             receipt.permit_application
                                                 .application_number ??

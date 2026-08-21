@@ -146,7 +146,10 @@ function label(value: string): string {
                         </Link>
                     </Button>
                     <h1 class="text-xl font-semibold text-foreground">
-                        Receipt {{ receipt.receipt_number }}
+                        Receipt
+                        <span class="break-all">{{
+                            receipt.receipt_number
+                        }}</span>
                     </h1>
                     <p class="text-sm text-muted-foreground">
                         {{ receipt.business.name }} ·
@@ -190,7 +193,7 @@ function label(value: string): string {
 
             <WorkflowStageSummary
                 class="print:hidden"
-                eyebrow="Current receipt evidence"
+                eyebrow="Receipt summary"
                 :title="money(receipt.amount_cents)"
                 description="This receipt records a collection separately from its source payment schedule and application."
                 :items="[
@@ -229,7 +232,7 @@ function label(value: string): string {
                             Municipality of Ipil
                         </div>
                         <h2
-                            class="mt-1 text-2xl font-semibold text-foreground print:text-black"
+                            class="mt-1 text-2xl font-semibold break-all text-foreground print:text-black"
                         >
                             Receipt {{ receipt.receipt_number }}
                         </h2>
@@ -383,77 +386,151 @@ function label(value: string): string {
                     </div>
                 </div>
 
-                <div
-                    class="overflow-x-auto border-t pt-6 print:overflow-visible print:border-black"
-                >
-                    <table class="w-full min-w-[680px] text-sm print:min-w-0">
-                        <thead
-                            class="border-b text-left text-xs text-muted-foreground uppercase print:border-black print:text-black"
+                <div class="border-t pt-6 print:border-black">
+                    <div
+                        v-if="receipt.allocations.length > 0"
+                        class="grid gap-3 md:hidden print:hidden"
+                        aria-label="Receipt items"
+                    >
+                        <article
+                            v-for="allocation in receipt.allocations"
+                            :key="allocation.id"
+                            class="rounded-lg border p-4"
                         >
-                            <tr>
-                                <th class="py-3 pr-4 font-medium">Code</th>
-                                <th class="px-4 py-3 font-medium">Item</th>
-                                <th class="px-4 py-3 font-medium">Category</th>
-                                <th class="px-4 py-3 font-medium">
-                                    Business line
-                                </th>
-                                <th class="py-3 pl-4 text-right font-medium">
-                                    Amount
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr
-                                v-for="allocation in receipt.allocations"
-                                :key="allocation.id"
-                                class="border-b last:border-b-0 print:border-black"
-                            >
-                                <td
-                                    class="py-3 pr-4 align-top font-mono text-xs"
-                                >
-                                    {{ allocation.code }}
-                                </td>
-                                <td class="px-4 py-3 align-top">
-                                    {{ allocation.name }}
-                                </td>
-                                <td class="px-4 py-3 align-top capitalize">
-                                    {{ allocation.category }}
-                                </td>
-                                <td class="px-4 py-3 align-top">
-                                    {{
-                                        allocation.line_of_business ??
-                                        'Application-wide'
-                                    }}
-                                </td>
-                                <td
-                                    class="py-3 pl-4 text-right align-top font-medium"
-                                >
+                            <div class="flex items-start justify-between gap-4">
+                                <div class="min-w-0">
+                                    <p class="font-medium break-words">
+                                        {{ allocation.name }}
+                                    </p>
+                                    <p
+                                        class="mt-1 font-mono text-xs break-all text-muted-foreground"
+                                    >
+                                        {{ allocation.code }}
+                                    </p>
+                                </div>
+                                <p class="shrink-0 font-semibold">
                                     {{ money(allocation.amount_cents) }}
-                                </td>
-                            </tr>
-                            <tr v-if="receipt.allocations.length === 0">
-                                <td
-                                    colspan="5"
-                                    class="py-10 text-center text-muted-foreground print:text-black"
+                                </p>
+                            </div>
+                            <dl
+                                class="mt-3 grid grid-cols-2 gap-3 border-t pt-3 text-sm"
+                            >
+                                <div>
+                                    <dt class="text-xs text-muted-foreground">
+                                        Category
+                                    </dt>
+                                    <dd class="capitalize">
+                                        {{ allocation.category }}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="text-xs text-muted-foreground">
+                                        Business line
+                                    </dt>
+                                    <dd class="break-words">
+                                        {{
+                                            allocation.line_of_business ??
+                                            'Application-wide'
+                                        }}
+                                    </dd>
+                                </div>
+                            </dl>
+                        </article>
+                        <div
+                            class="flex items-center justify-between gap-4 rounded-lg bg-muted/40 p-4 font-semibold"
+                        >
+                            <span>Total</span>
+                            <span>{{ money(receipt.amount_cents) }}</span>
+                        </div>
+                    </div>
+
+                    <div
+                        v-else
+                        class="py-10 text-center text-sm text-muted-foreground md:hidden print:hidden"
+                    >
+                        No receipt items were recorded.
+                    </div>
+
+                    <div
+                        class="hidden overflow-x-auto md:block print:block print:overflow-visible"
+                    >
+                        <table
+                            class="w-full min-w-[680px] text-sm print:min-w-0"
+                        >
+                            <thead
+                                class="border-b text-left text-xs text-muted-foreground uppercase print:border-black print:text-black"
+                            >
+                                <tr>
+                                    <th class="py-3 pr-4 font-medium">Code</th>
+                                    <th class="px-4 py-3 font-medium">Item</th>
+                                    <th class="px-4 py-3 font-medium">
+                                        Category
+                                    </th>
+                                    <th class="px-4 py-3 font-medium">
+                                        Business line
+                                    </th>
+                                    <th
+                                        class="py-3 pl-4 text-right font-medium"
+                                    >
+                                        Amount
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr
+                                    v-for="allocation in receipt.allocations"
+                                    :key="allocation.id"
+                                    class="border-b last:border-b-0 print:border-black"
                                 >
-                                    No receipt allocations were recorded.
-                                </td>
-                            </tr>
-                        </tbody>
-                        <tfoot>
-                            <tr class="border-t print:border-black">
-                                <td
-                                    colspan="4"
-                                    class="py-3 pr-4 text-right font-medium"
-                                >
-                                    Total
-                                </td>
-                                <td class="py-3 pl-4 text-right font-semibold">
-                                    {{ money(receipt.amount_cents) }}
-                                </td>
-                            </tr>
-                        </tfoot>
-                    </table>
+                                    <td
+                                        class="py-3 pr-4 align-top font-mono text-xs"
+                                    >
+                                        {{ allocation.code }}
+                                    </td>
+                                    <td class="px-4 py-3 align-top">
+                                        {{ allocation.name }}
+                                    </td>
+                                    <td class="px-4 py-3 align-top capitalize">
+                                        {{ allocation.category }}
+                                    </td>
+                                    <td class="px-4 py-3 align-top">
+                                        {{
+                                            allocation.line_of_business ??
+                                            'Application-wide'
+                                        }}
+                                    </td>
+                                    <td
+                                        class="py-3 pl-4 text-right align-top font-medium"
+                                    >
+                                        {{ money(allocation.amount_cents) }}
+                                    </td>
+                                </tr>
+                                <tr v-if="receipt.allocations.length === 0">
+                                    <td
+                                        colspan="5"
+                                        class="py-10 text-center text-muted-foreground print:text-black"
+                                    >
+                                        No receipt allocations were recorded.
+                                    </td>
+                                </tr>
+                            </tbody>
+                            <tfoot>
+                                <tr class="border-t print:border-black">
+                                    <td
+                                        colspan="4"
+                                        class="py-3 pr-4 text-right font-medium"
+                                    >
+                                        Total
+                                    </td>
+                                    <td
+                                        class="py-3 pl-4 text-right font-semibold"
+                                    >
+                                        {{ money(receipt.amount_cents) }}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
                 </div>
 
                 <div
@@ -475,7 +552,7 @@ function label(value: string): string {
                     :statement="receipt.void_boundary.policy_note"
                     :facts="[
                         {
-                            label: 'Boundary reference',
+                            label: 'Review reference',
                             value: receipt.void_boundary.reference,
                         },
                         {
@@ -501,7 +578,7 @@ function label(value: string): string {
                     <div
                         class="text-xs font-medium text-muted-foreground uppercase"
                     >
-                        Policy gaps
+                        Items awaiting municipal confirmation
                     </div>
                     <ul
                         class="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground"

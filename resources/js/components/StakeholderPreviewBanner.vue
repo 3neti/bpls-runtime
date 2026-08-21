@@ -20,6 +20,14 @@ function switchPersona(persona: string): void {
         },
     );
 }
+
+function handlePersonaChange(event: Event): void {
+    const persona = (event.target as HTMLSelectElement).value;
+
+    if (persona !== preview.value?.current_persona) {
+        switchPersona(persona);
+    }
+}
 </script>
 
 <template>
@@ -29,22 +37,57 @@ function switchPersona(persona: string): void {
         aria-label="Stakeholder preview status"
         data-test="stakeholder-preview-banner"
     >
-        <div
-            class="mx-auto flex w-full max-w-7xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-        >
-            <div class="flex min-w-0 items-center gap-2">
-                <ShieldAlert class="size-5 shrink-0" aria-hidden="true" />
-                <p class="text-xs font-extrabold tracking-wide sm:text-sm">
-                    Preview Environment · Sample Data
-                </p>
+        <div class="mx-auto flex w-full max-w-7xl flex-col gap-2">
+            <div
+                class="flex min-w-0 items-center justify-between gap-3 sm:items-start"
+            >
+                <div class="flex min-w-0 items-center gap-2">
+                    <ShieldAlert class="size-5 shrink-0" aria-hidden="true" />
+                    <div class="min-w-0">
+                        <p
+                            class="text-xs font-extrabold tracking-wide sm:text-sm"
+                        >
+                            Preview Environment · Sample Data
+                        </p>
+                        <p
+                            v-if="preview.current_label"
+                            class="text-xs leading-4 font-medium"
+                        >
+                            Exploring as {{ preview.current_label }}. This
+                            preview role does not grant municipal authority.
+                        </p>
+                    </div>
+                </div>
+
+                <label
+                    v-if="preview.current_persona"
+                    class="grid shrink-0 gap-1 text-xs font-semibold sm:hidden"
+                >
+                    <span class="sr-only">Switch preview role</span>
+                    <select
+                        :value="preview.current_persona"
+                        :disabled="switchingTo !== null"
+                        class="h-9 max-w-40 rounded-md border border-amber-900/40 bg-white px-2 text-xs font-semibold text-amber-950 shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-amber-950 disabled:opacity-70"
+                        aria-label="Switch preview role"
+                        @change="handlePersonaChange"
+                    >
+                        <option
+                            v-for="persona in preview.personas"
+                            :key="persona.key"
+                            :value="persona.key"
+                        >
+                            {{ persona.label }}
+                        </option>
+                    </select>
+                </label>
             </div>
 
             <div
                 v-if="preview.current_persona"
-                class="flex flex-wrap items-center gap-1.5"
+                class="hidden flex-wrap items-center gap-1.5 sm:flex"
             >
                 <span class="mr-1 text-xs font-semibold">
-                    Switch Preview Role:
+                    Switch preview role:
                 </span>
                 <button
                     v-for="persona in preview.personas"
