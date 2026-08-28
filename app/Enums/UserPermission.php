@@ -10,10 +10,16 @@ enum UserPermission: string
     case SubmitOwnPermitApplications = 'citizen.permit_applications.submit';
     case UploadOwnPermitApplicationDocuments = 'citizen.permit_application_documents.create';
     case ViewOwnPermitApplications = 'citizen.permit_applications.view';
+    case ViewOwnBusinessPermitEvaluations = 'citizen.business_permit_evaluations.view';
+    case CorrectOwnEvaluationDeclarations = 'citizen.business_permit_evaluations.correct_declarations';
     case ViewOwnPermitApplicationDocuments = 'citizen.permit_application_documents.view';
     case ViewOwnPermitApplicationFinancials = 'citizen.permit_application_financials.view';
     case AccessStaff = 'staff.access';
     case ViewPermitApplications = 'permit_applications.view';
+    case ViewBusinessPermitEvaluations = 'business_permit_evaluations.view';
+    case ContributeBusinessPermitEvaluations = 'business_permit_evaluations.contribute';
+    case CounterCheckBusinessPermitEvaluations = 'business_permit_evaluations.counter_check';
+    case CorrectEvaluationLinesOfBusiness = 'business_permit_evaluations.correct_lines_of_business';
     case CreatePermitApplications = 'permit_applications.create';
     case AssessPermitApplications = 'permit_applications.assess';
     case ApproveAssessments = 'assessments.approve';

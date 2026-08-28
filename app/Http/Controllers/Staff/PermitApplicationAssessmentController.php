@@ -90,6 +90,7 @@ class PermitApplicationAssessmentController extends Controller
             'permitApplication.lines.lineOfBusiness',
             'lines.lineOfBusiness',
             'paymentSchedules' => fn ($query) => $query->latest(),
+            'businessPermitEvaluationVersion.evaluation.items.revisions.version',
         ]);
 
         $latestPaymentSchedule = $assessment->paymentSchedules->first();
@@ -114,6 +115,17 @@ class PermitApplicationAssessmentController extends Controller
                 'total_amount_cents' => $assessment->total_amount_cents,
                 'snapshot_hash' => $snapshotHash,
                 'source_snapshot' => $assessment->source_snapshot,
+                'business_permit_evaluation' => $assessment->businessPermitEvaluationVersion === null ? null : [
+                    'evaluation_id' => $assessment->businessPermitEvaluationVersion->business_permit_evaluation_id,
+                    'version_id' => $assessment->businessPermitEvaluationVersion->id,
+                    'version_sequence' => $assessment->businessPermitEvaluationVersion->sequence,
+                    'fingerprint' => $assessment->business_permit_evaluation_fingerprint,
+                    'view_url' => route(
+                        'staff.permit-applications.evaluation.show',
+                        $assessment->permitApplication,
+                        false,
+                    ),
+                ],
                 'payment_schedule_available' => $paymentScheduleAvailable,
                 'decision' => $assessment->decision === null ? null : [
                     'id' => $assessment->decision->id,

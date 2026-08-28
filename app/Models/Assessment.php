@@ -16,6 +16,8 @@ use Illuminate\Support\Collection;
 /**
  * @property int $id
  * @property int $permit_application_id
+ * @property int|null $business_permit_evaluation_version_id
+ * @property string|null $business_permit_evaluation_fingerprint
  * @property int|null $assessed_by_id
  * @property int $sequence
  * @property AssessmentStatus $status
@@ -28,8 +30,9 @@ use Illuminate\Support\Collection;
  * @property Carbon|null $updated_at
  * @property-read Collection<int, AssessmentLine> $lines
  * @property-read AssessmentDecision|null $decision
+ * @property-read BusinessPermitEvaluationVersion|null $businessPermitEvaluationVersion
  */
-#[Fillable(['permit_application_id', 'assessed_by_id', 'sequence', 'status', 'assessed_at', 'superseded_at', 'total_amount_cents', 'source_snapshot', 'legacy_source_id'])]
+#[Fillable(['permit_application_id', 'business_permit_evaluation_version_id', 'business_permit_evaluation_fingerprint', 'assessed_by_id', 'sequence', 'status', 'assessed_at', 'superseded_at', 'total_amount_cents', 'source_snapshot', 'legacy_source_id'])]
 class Assessment extends Model
 {
     /** @use HasFactory<AssessmentFactory> */
@@ -44,6 +47,12 @@ class Assessment extends Model
     public function permitApplication(): BelongsTo
     {
         return $this->belongsTo(PermitApplication::class);
+    }
+
+    /** @return BelongsTo<BusinessPermitEvaluationVersion, $this> */
+    public function businessPermitEvaluationVersion(): BelongsTo
+    {
+        return $this->belongsTo(BusinessPermitEvaluationVersion::class);
     }
 
     /** @return BelongsTo<User, $this> */

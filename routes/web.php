@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Citizen\BusinessPermitEvaluationController as CitizenBusinessPermitEvaluationController;
 use App\Http\Controllers\Citizen\NotificationController as CitizenNotificationController;
 use App\Http\Controllers\Citizen\PaymentScheduleController as CitizenPaymentScheduleController;
 use App\Http\Controllers\Citizen\PermitApplicationController as CitizenPermitApplicationController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\Staff\BillingGroupController;
 use App\Http\Controllers\Staff\BillingGroupReconciliationController;
 use App\Http\Controllers\Staff\BillingGroupRecordController;
 use App\Http\Controllers\Staff\BspReportController;
+use App\Http\Controllers\Staff\BusinessPermitEvaluationController;
 use App\Http\Controllers\Staff\BusinessTaxByMajorTypeReportController;
 use App\Http\Controllers\Staff\CmciLdcsReportController;
 use App\Http\Controllers\Staff\CollectiblesReportController;
@@ -98,6 +100,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.documents.download');
         Route::get('payment-schedules/{paymentSchedule}', [CitizenPaymentScheduleController::class, 'show'])
             ->name('payment-schedules.show');
+        Route::get('permit-applications/{permitApplication}/evaluation', [CitizenBusinessPermitEvaluationController::class, 'show'])
+            ->name('permit-applications.evaluation.show');
+        Route::post('permit-applications/{permitApplication}/evaluation/lines-of-business', [CitizenBusinessPermitEvaluationController::class, 'correctLinesOfBusiness'])
+            ->name('permit-applications.evaluation.lines-of-business.correct');
         Route::post('payment-schedules/{paymentSchedule}/qr-ph', [CitizenQrPhPaymentController::class, 'initiate'])
             ->middleware('throttle:10,1')
             ->name('payment-schedules.qr-ph.initiate');
@@ -115,6 +121,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->only(['index', 'create', 'store', 'show']);
         Route::post('permit-applications/{permitApplication}/assessments', [PermitApplicationAssessmentController::class, 'store'])
             ->name('permit-applications.assessments.store');
+        Route::get('permit-applications/{permitApplication}/evaluation', [BusinessPermitEvaluationController::class, 'show'])
+            ->name('permit-applications.evaluation.show');
+        Route::post('permit-applications/{permitApplication}/evaluation', [BusinessPermitEvaluationController::class, 'initialize'])
+            ->name('permit-applications.evaluation.initialize');
+        Route::post('permit-applications/{permitApplication}/evaluation/refresh', [BusinessPermitEvaluationController::class, 'refresh'])
+            ->name('permit-applications.evaluation.refresh');
+        Route::post('permit-applications/{permitApplication}/evaluation/items/{item}/confirm', [BusinessPermitEvaluationController::class, 'confirmResponsibility'])
+            ->name('permit-applications.evaluation.items.confirm');
+        Route::post('permit-applications/{permitApplication}/evaluation/lines-of-business', [BusinessPermitEvaluationController::class, 'correctLinesOfBusiness'])
+            ->name('permit-applications.evaluation.lines-of-business.correct');
+        Route::post('permit-applications/{permitApplication}/evaluation/counter-check', [BusinessPermitEvaluationController::class, 'counterCheck'])
+            ->name('permit-applications.evaluation.counter-check');
         Route::get('permit-applications/{permitApplication}/application-form.pdf', [PermitApplicationController::class, 'applicationFormPdf'])
             ->name('permit-applications.application-form.pdf');
         Route::get('permit-applications/{permitApplication}/permit.pdf', [PermitApplicationController::class, 'permitPdf'])

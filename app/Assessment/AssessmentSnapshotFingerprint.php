@@ -32,6 +32,7 @@ class AssessmentSnapshotFingerprint
                     'id' => $line->id,
                     'permit_application_line_id' => $line->permit_application_line_id,
                     'fee_rule_id' => $line->fee_rule_id,
+                    'business_permit_evaluation_item_id' => $line->business_permit_evaluation_item_id,
                     'line_of_business_id' => $line->line_of_business_id,
                     'code' => $line->code,
                     'name' => $line->name,

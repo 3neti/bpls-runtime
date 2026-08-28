@@ -10,8 +10,10 @@ use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
 use App\Enums\PermitApplicationStatus;
+use App\Evaluation\BusinessPermitEvaluationReadiness;
 use App\Exceptions\UnsupportedAssessmentPolicy;
 use App\Models\Assessment;
+use App\Models\BusinessPermitEvaluation;
 use App\Models\FeeRule;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
@@ -25,6 +27,7 @@ class CreateAssessmentForPermitApplication
     public function __construct(
         private AssessmentCalculator $calculator,
         private ApplicableFeeRuleQuery $applicableFeeRuleQuery,
+        private BusinessPermitEvaluationReadiness $evaluationReadiness,
     ) {}
 
     public function handle(PermitApplication $permitApplication, ?User $assessedBy = null): Assessment
@@ -32,7 +35,18 @@ class CreateAssessmentForPermitApplication
         return DB::transaction(function () use ($permitApplication, $assessedBy): Assessment {
             $permitApplication->loadMissing(['business', 'lines.lineOfBusiness']);
 
-            $this->assertProvisionalOfficeChargesReady($permitApplication);
+            $evaluation = $permitApplication->businessPermitEvaluation()->with('currentVersion.counterCheck')->first();
+            $evaluationProjection = null;
+
+            if ($evaluation instanceof BusinessPermitEvaluation) {
+                $readiness = $this->evaluationReadiness->forAssessment($evaluation, 'commissioned');
+                if (! $readiness['ready']) {
+                    throw new UnsupportedAssessmentPolicy('Business Permit Evaluation is not Ready for Assessment: '.implode(' ', $readiness['issues']));
+                }
+                $evaluationProjection = $readiness['projection'];
+            } else {
+                $this->assertProvisionalOfficeChargesReady($permitApplication);
+            }
 
             if ($permitApplication->isHistoricalEvidenceOnly()) {
                 throw new LogicException("Historical evidence application [{$permitApplication->id}] cannot enter operational assessment.");
@@ -40,23 +54,41 @@ class CreateAssessmentForPermitApplication
 
             $this->assertAssessmentMayBeComputed($permitApplication);
 
+            if (is_array($evaluationProjection)) {
+                $existingEvaluationAssessment = $permitApplication->assessments()
+                    ->where('business_permit_evaluation_version_id', $evaluationProjection['version_id'])
+                    ->where('business_permit_evaluation_fingerprint', $evaluationProjection['current_fingerprint'])
+                    ->whereNull('superseded_at')
+                    ->with('lines')
+                    ->first();
+
+                if ($existingEvaluationAssessment instanceof Assessment) {
+                    return $existingEvaluationAssessment;
+                }
+            }
+
             $permitApplication->assessments()
                 ->whereNull('superseded_at')
                 ->update(['superseded_at' => now()]);
 
             $assessment = $permitApplication->assessments()->create([
+                'business_permit_evaluation_version_id' => $evaluationProjection['version_id'] ?? null,
+                'business_permit_evaluation_fingerprint' => $evaluationProjection['current_fingerprint'] ?? null,
                 'assessed_by_id' => $assessedBy?->id,
                 'sequence' => ($permitApplication->assessments()->max('sequence') ?? 0) + 1,
                 'status' => AssessmentStatus::Computed,
                 'assessed_at' => now(),
-                'source_snapshot' => $this->sourceSnapshot($permitApplication),
+                'source_snapshot' => $this->sourceSnapshot($permitApplication, $evaluationProjection),
             ]);
 
-            $feeRules = $this->applicableFeeRuleQuery->forPermitApplication($permitApplication);
-
-            $this->createApplicationScopedLines($assessment, $feeRules);
-            $this->createLineOfBusinessScopedLines($assessment, $permitApplication, $feeRules);
-            $this->createOfficeChargeContributionLines($assessment, $permitApplication);
+            if (is_array($evaluationProjection)) {
+                $this->createEvaluationLines($assessment, $evaluationProjection);
+            } else {
+                $feeRules = $this->applicableFeeRuleQuery->forPermitApplication($permitApplication);
+                $this->createApplicationScopedLines($assessment, $feeRules);
+                $this->createLineOfBusinessScopedLines($assessment, $permitApplication, $feeRules);
+                $this->createOfficeChargeContributionLines($assessment, $permitApplication);
+            }
 
             $assessment->update([
                 'total_amount_cents' => $assessment->lines()->sum('amount_cents'),
@@ -102,7 +134,7 @@ class CreateAssessmentForPermitApplication
     /**
      * @return array<string, mixed>
      */
-    private function sourceSnapshot(PermitApplication $permitApplication): array
+    private function sourceSnapshot(PermitApplication $permitApplication, ?array $evaluationProjection = null): array
     {
         return [
             'permit_application_id' => $permitApplication->id,
@@ -117,7 +149,78 @@ class CreateAssessmentForPermitApplication
                 ->orderBy('office_code')
                 ->pluck('id')
                 ->all(),
+            'business_permit_evaluation' => $evaluationProjection === null ? null : [
+                'evaluation_id' => $evaluationProjection['evaluation_id'],
+                'version_id' => $evaluationProjection['version_id'],
+                'version_sequence' => $evaluationProjection['version_sequence'],
+                'fingerprint' => $evaluationProjection['current_fingerprint'],
+                'resolved_line_of_business_ids' => $evaluationProjection['resolved_line_of_business_ids'],
+            ],
         ];
+    }
+
+    /** @param array<string, mixed> $projection */
+    private function createEvaluationLines(Assessment $assessment, array $projection): void
+    {
+        foreach ($projection['projected_charges'] as $expected) {
+            $feeRule = $expected['fee_rule'];
+            $applicationLine = $expected['application_line'];
+            $calculation = $this->calculator->calculate($feeRule, $applicationLine);
+
+            if ($calculation['amount_cents'] !== $expected['amount_cents']
+                || $calculation['basis_amount_cents'] !== $expected['basis_amount_cents']
+                || $calculation['rule_snapshot'] !== $expected['rule_snapshot']) {
+                throw new UnsupportedAssessmentPolicy("Evaluation and Assessment pricing parity failed for fee rule [{$feeRule->code}].");
+            }
+
+            $assessment->lines()->create([
+                'permit_application_line_id' => $expected['permit_application_line_id'],
+                'fee_rule_id' => $feeRule->id,
+                'line_of_business_id' => $expected['line_of_business_id'],
+                'code' => $expected['code'],
+                'name' => $expected['name'],
+                'category' => $expected['category'],
+                'calculation_type' => $expected['calculation_type'],
+                'basis' => $expected['basis'],
+                'basis_amount_cents' => $expected['basis_amount_cents'],
+                'amount_cents' => $expected['amount_cents'],
+                'legal_basis' => $expected['legal_basis'],
+                'rule_snapshot' => $expected['rule_snapshot'],
+            ]);
+        }
+
+        foreach ($projection['items'] as $item) {
+            if ($item['item_type'] !== 'charge'
+                || $item['applicability'] !== 'applicable'
+                || $item['resolution'] !== 'resolved') {
+                continue;
+            }
+
+            $assessment->lines()->create([
+                'business_permit_evaluation_item_id' => $item['id'],
+                'code' => (string) data_get($item, 'metadata.code', str($item['key'])->upper()->replace('.', '-')),
+                'name' => (string) data_get($item, 'metadata.label', $item['key']),
+                'category' => FeeRuleCategory::Fee,
+                'calculation_type' => FeeRuleCalculationType::Fixed,
+                'basis' => 'resolved_evaluation_contribution',
+                'basis_amount_cents' => (int) data_get($item, 'value.amount_cents'),
+                'amount_cents' => (int) data_get($item, 'value.amount_cents'),
+                'legal_basis' => data_get($item, 'metadata.legal_basis'),
+                'rule_snapshot' => [
+                    'source' => 'business_permit_evaluation',
+                    'evaluation_id' => $projection['evaluation_id'],
+                    'evaluation_version_id' => $projection['version_id'],
+                    'evaluation_fingerprint' => $projection['current_fingerprint'],
+                    'evaluation_item_id' => $item['id'],
+                    'evaluation_item_key' => $item['key'],
+                    'source_classification' => $item['source_classification'],
+                    'action' => $item['action'],
+                    'actor_id' => $item['actor_id'],
+                    'reason' => $item['reason'],
+                    'occurred_at' => $item['occurred_at'],
+                ],
+            ]);
+        }
     }
 
     /**

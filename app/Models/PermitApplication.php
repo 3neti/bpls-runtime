@@ -34,6 +34,7 @@ use Illuminate\Support\Collection;
  * @property-read Collection<int, PaymentSchedule> $paymentSchedules
  * @property-read Collection<int, TreasuryCollection> $treasuryCollections
  * @property-read Collection<int, OfficeChargeContribution> $officeChargeContributions
+ * @property-read BusinessPermitEvaluation|null $businessPermitEvaluation
  * @property-read ProvisionalUatPermitCompletion|null $provisionalUatPermitCompletion
  */
 #[Fillable(['business_id', 'submitted_by_id', 'application_number', 'tracking_reference', 'type', 'status', 'application_year', 'submitted_at', 'assessed_at', 'legacy_source_id', 'metadata'])]
@@ -98,6 +99,12 @@ class PermitApplication extends Model
     public function officeChargeContributions(): HasMany
     {
         return $this->hasMany(OfficeChargeContribution::class);
+    }
+
+    /** @return HasOne<BusinessPermitEvaluation, $this> */
+    public function businessPermitEvaluation(): HasOne
+    {
+        return $this->hasOne(BusinessPermitEvaluation::class);
     }
 
     /** @return HasOne<ProvisionalUatPermitCompletion, $this> */
