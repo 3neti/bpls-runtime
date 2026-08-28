@@ -9,7 +9,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * @property int $id
@@ -26,6 +28,11 @@ use Illuminate\Support\Carbon;
  * @property string|null $legacy_source_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read PermitApplication $permitApplication
+ * @property-read Assessment $assessment
+ * @property-read Collection<int, PaymentScheduleLine> $lines
+ * @property-read Collection<int, TreasuryCollection> $treasuryCollections
+ * @property-read XChangePayment|null $xChangePayment
  */
 #[Fillable(['permit_application_id', 'assessment_id', 'prepared_by_id', 'sequence', 'status', 'payment_mode', 'due_on', 'total_amount_cents', 'paid_amount_cents', 'source_snapshot', 'legacy_source_id'])]
 class PaymentSchedule extends Model
@@ -40,29 +47,40 @@ class PaymentSchedule extends Model
         'paid_amount_cents' => 0,
     ];
 
+    /** @return BelongsTo<PermitApplication, $this> */
     public function permitApplication(): BelongsTo
     {
         return $this->belongsTo(PermitApplication::class);
     }
 
+    /** @return BelongsTo<Assessment, $this> */
     public function assessment(): BelongsTo
     {
         return $this->belongsTo(Assessment::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function preparedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'prepared_by_id');
     }
 
+    /** @return HasMany<PaymentScheduleLine, $this> */
     public function lines(): HasMany
     {
         return $this->hasMany(PaymentScheduleLine::class);
     }
 
+    /** @return HasMany<TreasuryCollection, $this> */
     public function treasuryCollections(): HasMany
     {
         return $this->hasMany(TreasuryCollection::class);
+    }
+
+    /** @return HasOne<XChangePayment, $this> */
+    public function xChangePayment(): HasOne
+    {
+        return $this->hasOne(XChangePayment::class);
     }
 
     /**

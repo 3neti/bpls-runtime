@@ -20,7 +20,7 @@ test('staff users with issue receipt permission can issue a manual receipt for a
 
     $this->actingAs($user)
         ->post(route('staff.collections.receipt.store', $collection), [
-            'receipt_number' => 'OR-000001',
+            'receipt_number' => '0000001',
         ])
         ->assertRedirect(route('staff.payment-schedules.show', $collection->payment_schedule_id));
 
@@ -30,7 +30,7 @@ test('staff users with issue receipt permission can issue a manual receipt for a
         ->and($receipt->issued_by_id)->toBe($user->id)
         ->and($receipt->status)->toBe(ReceiptStatus::Issued)
         ->and($receipt->numbering_authority)->toBe('manual')
-        ->and($receipt->receipt_number)->toBe('OR-000001')
+        ->and($receipt->receipt_number)->toBe('0000001')
         ->and($receipt->amount_cents)->toBe(12_500)
         ->and($receipt->source_snapshot['policy']['numbering_mode'])->toBe('manual')
         ->and($receipt->source_snapshot['policy']['note'])->toContain('Automatic receipt numbering authority');
@@ -50,7 +50,7 @@ test('staff users without issue receipt permission cannot issue receipts', funct
 
     $this->actingAs($user)
         ->post(route('staff.collections.receipt.store', $collection), [
-            'receipt_number' => 'OR-000002',
+            'receipt_number' => '0000002',
         ])
         ->assertForbidden();
 
@@ -58,7 +58,7 @@ test('staff users without issue receipt permission cannot issue receipts', funct
         ->and($collection->refresh()->status)->toBe(TreasuryCollectionStatus::PendingReceipt);
 });
 
-test('manual receipt numbers are unique within the manual numbering authority', function () {
+test('manual receipt numbers are exactly seven digits and globally unique', function () {
     $user = userWithPermissions([
         UserPermission::AccessStaff,
         UserPermission::IssueReceipts,
@@ -66,7 +66,7 @@ test('manual receipt numbers are unique within the manual numbering authority', 
 
     Receipt::factory()->create([
         'numbering_authority' => 'manual',
-        'receipt_number' => 'OR-000003',
+        'receipt_number' => '0000003',
     ]);
 
     $collection = TreasuryCollection::factory()->create([
@@ -76,7 +76,7 @@ test('manual receipt numbers are unique within the manual numbering authority', 
     $this->actingAs($user)
         ->from(route('staff.payment-schedules.show', $collection->payment_schedule_id))
         ->post(route('staff.collections.receipt.store', $collection), [
-            'receipt_number' => 'OR-000003',
+            'receipt_number' => '0000003',
         ])
         ->assertRedirect(route('staff.payment-schedules.show', $collection->payment_schedule_id))
         ->assertSessionHasErrors('receipt_number');
@@ -100,17 +100,41 @@ test('receipts cannot be issued twice for the same collection', function () {
         ->for($collection->permitApplication)
         ->for($collection->assessment)
         ->create([
-            'receipt_number' => 'OR-000004',
+            'receipt_number' => '0000004',
         ]);
 
     $this->actingAs($user)
         ->post(route('staff.collections.receipt.store', $collection), [
-            'receipt_number' => 'OR-000005',
+            'receipt_number' => '0000005',
         ])
         ->assertRedirect(route('staff.payment-schedules.show', $collection->payment_schedule_id));
 
     expect(Receipt::query()->count())->toBe(1);
 });
+
+test('manual receipt validation rejects anything other than exactly seven digits', function (string $receiptNumber) {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::IssueReceipts,
+    ]);
+    $collection = TreasuryCollection::factory()->create([
+        'status' => TreasuryCollectionStatus::PendingReceipt,
+    ]);
+
+    $this->actingAs($user)
+        ->from(route('staff.payment-schedules.show', $collection->payment_schedule_id))
+        ->post(route('staff.collections.receipt.store', $collection), [
+            'receipt_number' => $receiptNumber,
+        ])
+        ->assertRedirect(route('staff.payment-schedules.show', $collection->payment_schedule_id))
+        ->assertSessionHasErrors('receipt_number');
+
+    expect(Receipt::query()->count())->toBe(0);
+})->with([
+    'too short' => '123456',
+    'too long' => '12345678',
+    'letters' => '12345AB',
+]);
 
 test('payment schedule review exposes receipt permissions and receipt history', function () {
     $user = userWithPermissions([

@@ -54,6 +54,7 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
             'LIFECYCLE_BROWSER_TREASURY_PASSWORD',
             'LIFECYCLE_ASSESSMENT_PREPARER_EMAIL',
             'LIFECYCLE_ASSESSMENT_APPROVER_EMAIL',
+            'LIFECYCLE_PREVIEW_CASHIER_EMAIL',
             'LIFECYCLE_PREVIEW_ENGINEERING_EMAIL',
             'LIFECYCLE_PREVIEW_MPDO_EMAIL',
             'LIFECYCLE_PREVIEW_ASSESSOR_EMAIL',
@@ -77,19 +78,26 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
     $billingGroup = BillingGroup::query()->where('metadata->scenario_run_id', 'stakeholder-preview-test-001')->sole();
     $record = BillingGroupRecord::query()->where('source_snapshot->scenario_run_id', 'stakeholder-preview-test-001')->sole();
 
-    expect($accounts)->toHaveCount(11)
+    expect($accounts)->toHaveCount(13)
         ->and($accounts)->each(fn ($user) => $user->password->not->toBe($password))
         ->and(Hash::check($password, $accounts['stakeholder.preview.citizen@example.test']->password))->toBeTrue()
         ->and($accounts['stakeholder.preview.citizen@example.test']->role?->code)->toBe('preview_citizen')
         ->and($accounts['stakeholder.preview.bplo@example.test']->role?->code)->toBe('preview_bplo')
+        ->and($accounts['stakeholder.preview.assessment-officer@example.test']->role?->code)->toBe('preview_assessment_officer')
         ->and($accounts['stakeholder.preview.treasury@example.test']->role?->code)->toBe('preview_treasury')
+        ->and($accounts['stakeholder.preview.cashier@example.test']->role?->code)->toBe('preview_cashier')
         ->and($accounts['stakeholder.preview.management@example.test']->role?->code)->toBe('preview_management')
-        ->and($accounts['stakeholder.preview.bplo@example.test']->can(UserPermission::AssessPermitApplications->value))->toBeTrue()
+        ->and($accounts['stakeholder.preview.bplo@example.test']->can(UserPermission::AssessPermitApplications->value))->toBeFalse()
         ->and($accounts['stakeholder.preview.bplo@example.test']->can(UserPermission::ViewUsers->value))->toBeFalse()
-        ->and($accounts['stakeholder.preview.treasury@example.test']->can(UserPermission::IssueReceipts->value))->toBeTrue()
+        ->and($accounts['stakeholder.preview.assessment-officer@example.test']->can(UserPermission::AssessPermitApplications->value))->toBeTrue()
+        ->and($accounts['stakeholder.preview.assessment-officer@example.test']->can(UserPermission::ApproveAssessments->value))->toBeFalse()
+        ->and($accounts['stakeholder.preview.treasury@example.test']->can(UserPermission::IssueReceipts->value))->toBeFalse()
         ->and($accounts['stakeholder.preview.treasury@example.test']->can(UserPermission::ViewUsers->value))->toBeFalse()
+        ->and($accounts['stakeholder.preview.cashier@example.test']->can(UserPermission::IssueReceipts->value))->toBeTrue()
+        ->and($accounts['stakeholder.preview.cashier@example.test']->can(UserPermission::ApproveAssessments->value))->toBeFalse()
         ->and($accounts['stakeholder.preview.management@example.test']->can(UserPermission::ViewReports->value))->toBeTrue()
         ->and($accounts['stakeholder.preview.management@example.test']->can(UserPermission::ViewMunicipalityConfiguration->value))->toBeTrue()
+        ->and($accounts['stakeholder.preview.management@example.test']->can(UserPermission::RecordCollections->value))->toBeFalse()
         ->and($manifest['scenario']['key'])->toBe('stakeholder_preview_cycle_1')
         ->and($manifest['preview']['data_classification'])->toBe('synthetic_uat_only')
         ->and($manifest['preview']['production_migration_executed'])->toBeFalse()
@@ -100,9 +108,11 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
         ->and($manifest['preview']['billing_group']['financial_effect'])->toBe('none')
         ->and($manifest['resources']['ready_for_authority_review'])->toBeTrue()
         ->and($manifest['resources']['can_release'])->toBeFalse()
-        ->and($manifest['resources']['assessment_prepared_by_id'])->toBe($accounts['stakeholder.preview.bplo@example.test']->id)
+        ->and($manifest['resources']['assessment_prepared_by_id'])->toBe($accounts['stakeholder.preview.assessment-officer@example.test']->id)
         ->and($manifest['resources']['assessment_approved_by_id'])->toBe($accounts['stakeholder.preview.treasury@example.test']->id)
         ->and($manifest['resources']['assessment_approver_distinct_from_preparer'])->toBeTrue()
+        ->and($manifest['resources']['collection_received_by_id'])->toBe($accounts['stakeholder.preview.cashier@example.test']->id)
+        ->and($manifest['resources']['receipt_issued_by_id'])->toBe($accounts['stakeholder.preview.cashier@example.test']->id)
         ->and($manifest['resources']['office_charge_contribution_count'])->toBe(5)
         ->and($manifest['resources']['provisional_uat_permit_status'])->toBe('released_in_preview');
 

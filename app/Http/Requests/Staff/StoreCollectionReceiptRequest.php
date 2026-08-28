@@ -23,8 +23,8 @@ class StoreCollectionReceiptRequest extends FormRequest
             'receipt_number' => [
                 'required',
                 'string',
-                'max:255',
-                Rule::unique('receipts', 'receipt_number')->where('numbering_authority', 'manual'),
+                'digits:7',
+                Rule::unique('receipts', 'receipt_number'),
             ],
             'remarks' => ['nullable', 'string', 'max:1000'],
         ];

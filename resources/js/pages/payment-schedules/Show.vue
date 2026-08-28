@@ -798,12 +798,17 @@ function label(value: string): string {
                                         <Label
                                             :for="`receipt_number_${collection.id}`"
                                         >
-                                            Manual receipt number
+                                            7-digit OR number
                                         </Label>
                                         <div class="flex gap-2">
                                             <Input
                                                 :id="`receipt_number_${collection.id}`"
                                                 name="receipt_number"
+                                                inputmode="numeric"
+                                                pattern="[0-9]{7}"
+                                                minlength="7"
+                                                maxlength="7"
+                                                placeholder="0000000"
                                                 required
                                             />
                                             <Button

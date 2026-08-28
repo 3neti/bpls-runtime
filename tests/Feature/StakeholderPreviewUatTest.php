@@ -35,9 +35,9 @@ test('safe preview configuration registers an intentional launcher without crede
         ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive')
         ->assertInertia(fn (Assert $page) => $page
             ->component('stakeholder-preview/Launcher')
-            ->has('personas', 11)
+            ->has('personas', 13)
             ->where('personas.0.key', 'citizen')
-            ->where('personas.10.key', 'releasing'));
+            ->where('personas.12.key', 'releasing'));
 
     expect($response->getContent())
         ->not->toContain((string) config('stakeholder_preview.password'))
@@ -144,7 +144,7 @@ test('role switching works in every ordered direction and retains normal authori
         }
     }
 
-    expect($transitions)->toHaveCount(110);
+    expect($transitions)->toHaveCount(156);
 
     foreach ($transitions as [$source, $target]) {
         $this->actingAs($accounts[$source->value]);
@@ -215,8 +215,10 @@ test('preview context exposes only authorized real guidance and a persistent ban
     }
 })->with([
     'citizen' => [StakeholderPreviewPersona::Citizen, 3],
-    'bplo' => [StakeholderPreviewPersona::Bplo, 3],
+    'bplo' => [StakeholderPreviewPersona::Bplo, 2],
+    'assessment officer' => [StakeholderPreviewPersona::AssessmentOfficer, 2],
     'treasury' => [StakeholderPreviewPersona::Treasury, 5],
+    'cashier' => [StakeholderPreviewPersona::Cashier, 2],
     'management' => [StakeholderPreviewPersona::Management, 5],
     'engineering' => [StakeholderPreviewPersona::Engineering, 1],
     'mpdo' => [StakeholderPreviewPersona::Mpdo, 1],

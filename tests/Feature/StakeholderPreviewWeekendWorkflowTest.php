@@ -49,7 +49,7 @@ test('each concerned office contributes only its own manually assessed charge to
         $expectedTotal += $amount;
     }
 
-    $assessmentOfficer = weekendPreviewPersona(StakeholderPreviewPersona::Bplo);
+    $assessmentOfficer = weekendPreviewPersona(StakeholderPreviewPersona::AssessmentOfficer);
     $assessment = app(CreateAssessmentForPermitApplication::class)->handle($application->fresh(), $assessmentOfficer);
 
     expect($application->officeChargeContributions()->count())->toBe(5)

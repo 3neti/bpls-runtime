@@ -99,7 +99,7 @@ final class DescribeCitizenPaymentSchedule
                 ]),
             'payment_policy_boundary' => $this->describePaymentPolicyBoundary->handle($paymentSchedule),
             'online_payment_boundary' => $this->describeOnlinePaymentBoundary->handle($paymentSchedule),
-            'artifact_statement' => 'This page reports persisted assessment, schedule, collection, allocation, and receipt evidence. It does not execute payment, reconciliation, reversal, or receipt issuance.',
+            'artifact_statement' => 'This page reports the authoritative BPLS assessment, schedule, collection, allocation, and receipt evidence. QR Ph confirmation enters the same municipal collection path; reversal and receipt issuance remain separate controlled actions.',
         ];
     }
 }

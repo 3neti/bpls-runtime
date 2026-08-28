@@ -6,7 +6,9 @@ enum StakeholderPreviewPersona: string
 {
     case Citizen = 'citizen';
     case Bplo = 'bplo';
+    case AssessmentOfficer = 'assessment_officer';
     case Treasury = 'treasury';
+    case Cashier = 'cashier';
     case Management = 'management';
     case Engineering = 'engineering';
     case Mpdo = 'mpdo';
@@ -21,7 +23,9 @@ enum StakeholderPreviewPersona: string
         return match ($this) {
             self::Citizen => 'Citizen',
             self::Bplo => 'BPLO',
+            self::AssessmentOfficer => 'Assessment Officer',
             self::Treasury => 'Treasury',
+            self::Cashier => 'Cashier',
             self::Management => 'Management',
             self::Engineering => 'Engineering',
             self::Mpdo => 'MPDO / MPDC',
@@ -38,7 +42,9 @@ enum StakeholderPreviewPersona: string
         return match ($this) {
             self::Citizen => 'Preview Citizen',
             self::Bplo => 'Preview BPLO Operator',
+            self::AssessmentOfficer => 'Preview Assessment Officer',
             self::Treasury => 'Preview Treasury Operator',
+            self::Cashier => 'Preview Cashier',
             self::Management => 'Preview Municipal Management',
             self::Engineering => 'Preview Engineering Officer',
             self::Mpdo => 'Preview MPDO Officer',
@@ -55,7 +61,9 @@ enum StakeholderPreviewPersona: string
         return match ($this) {
             self::Citizen => 'stakeholder.preview.citizen@example.test',
             self::Bplo => 'stakeholder.preview.bplo@example.test',
+            self::AssessmentOfficer => 'stakeholder.preview.assessment-officer@example.test',
             self::Treasury => 'stakeholder.preview.treasury@example.test',
+            self::Cashier => 'stakeholder.preview.cashier@example.test',
             self::Management => 'stakeholder.preview.management@example.test',
             self::Engineering => 'stakeholder.preview.engineering@example.test',
             self::Mpdo => 'stakeholder.preview.mpdo@example.test',
@@ -76,8 +84,10 @@ enum StakeholderPreviewPersona: string
     {
         return match ($this) {
             self::Citizen => 'Apply, submit, track processing, and inspect payment and clearance progress.',
-            self::Bplo => 'Review applications, assessments, clearances, and authority readiness.',
+            self::Bplo => 'Receive applications, coordinate clearances, and inspect fee rules without preparing assessments or collecting payment.',
+            self::AssessmentOfficer => 'Consolidate the exact assessment and prepare its payment schedule for Treasurer approval.',
             self::Treasury => 'Approve assessment amounts, then inspect payment schedules, collections, receipts, and Treasury reports.',
+            self::Cashier => 'Record authorized payments and issue official receipts without approving assessments.',
             self::Management => 'Review reports, user access, municipality settings, and fees.',
             self::Engineering => 'Review applications routed to Engineering and submit the office charge for consolidation.',
             self::Mpdo => 'Review applications routed to MPDO and submit the office charge for consolidation.',
@@ -107,10 +117,15 @@ enum StakeholderPreviewPersona: string
                 UserPermission::AccessStaff,
                 UserPermission::ViewPermitApplications,
                 UserPermission::CreatePermitApplications,
-                UserPermission::AssessPermitApplications,
                 UserPermission::UpdatePermitApplicationStatus,
                 UserPermission::CompletePermitClearances,
                 UserPermission::ViewFeeRules,
+                UserPermission::ViewPaymentSchedules,
+            ],
+            self::AssessmentOfficer => [
+                UserPermission::AccessStaff,
+                UserPermission::ViewPermitApplications,
+                UserPermission::AssessPermitApplications,
                 UserPermission::ViewPaymentSchedules,
                 UserPermission::PreparePaymentSchedules,
             ],
@@ -120,25 +135,23 @@ enum StakeholderPreviewPersona: string
                 UserPermission::ApproveAssessments,
                 UserPermission::ViewPaymentSchedules,
                 UserPermission::ViewCollections,
-                UserPermission::RecordCollections,
                 UserPermission::ViewReceipts,
-                UserPermission::IssueReceipts,
                 UserPermission::ViewReports,
             ],
-            self::Management => [
+            self::Cashier => [
                 UserPermission::AccessStaff,
-                UserPermission::ViewPermitApplications,
-                UserPermission::CreatePermitApplications,
-                UserPermission::AssessPermitApplications,
-                UserPermission::UpdatePermitApplicationStatus,
-                UserPermission::CompletePermitClearances,
                 UserPermission::ViewPaymentSchedules,
-                UserPermission::PreparePaymentSchedules,
                 UserPermission::ViewCollections,
                 UserPermission::RecordCollections,
                 UserPermission::ViewReceipts,
                 UserPermission::IssueReceipts,
-                UserPermission::VoidReceipts,
+            ],
+            self::Management => [
+                UserPermission::AccessStaff,
+                UserPermission::ViewPermitApplications,
+                UserPermission::ViewPaymentSchedules,
+                UserPermission::ViewCollections,
+                UserPermission::ViewReceipts,
                 UserPermission::ViewReports,
                 UserPermission::ViewUsers,
                 UserPermission::ViewRoles,

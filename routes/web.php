@@ -4,6 +4,7 @@ use App\Http\Controllers\Citizen\NotificationController as CitizenNotificationCo
 use App\Http\Controllers\Citizen\PaymentScheduleController as CitizenPaymentScheduleController;
 use App\Http\Controllers\Citizen\PermitApplicationController as CitizenPermitApplicationController;
 use App\Http\Controllers\Citizen\PermitApplicationDocumentController as CitizenPermitApplicationDocumentController;
+use App\Http\Controllers\Citizen\QrPhPaymentController as CitizenQrPhPaymentController;
 use App\Http\Controllers\PublicPermitVerificationController;
 use App\Http\Controllers\PublicPermitVerificationPageController;
 use App\Http\Controllers\Staff\AllAbstractReportController;
@@ -93,6 +94,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.documents.download');
         Route::get('payment-schedules/{paymentSchedule}', [CitizenPaymentScheduleController::class, 'show'])
             ->name('payment-schedules.show');
+        Route::post('payment-schedules/{paymentSchedule}/qr-ph', [CitizenQrPhPaymentController::class, 'initiate'])
+            ->middleware('throttle:10,1')
+            ->name('payment-schedules.qr-ph.initiate');
+        Route::get('payment-schedules/{paymentSchedule}/qr-ph/status', [CitizenQrPhPaymentController::class, 'status'])
+            ->middleware('throttle:30,1')
+            ->name('payment-schedules.qr-ph.status');
     });
 
     Route::prefix('staff')->name('staff.')->middleware('can:staff.access')->group(function () {

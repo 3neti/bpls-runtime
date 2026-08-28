@@ -109,8 +109,11 @@ class StakeholderPreviewSafety
             ],
             StakeholderPreviewPersona::Bplo => [
                 ['label' => 'Open All Applications', 'route' => 'staff.permit-applications.index', 'permission' => 'permit_applications.view'],
-                ['label' => 'Review Assessment Work', 'route' => 'staff.permit-applications.assessments.index', 'permission' => 'permit_applications.assess'],
                 ['label' => 'Inspect Taxes & Fees', 'route' => 'staff.fee-rules.index', 'permission' => 'fee_rules.view'],
+            ],
+            StakeholderPreviewPersona::AssessmentOfficer => [
+                ['label' => 'Review Assessment Work', 'route' => 'staff.permit-applications.assessments.index', 'permission' => 'permit_applications.assess'],
+                ['label' => 'Open Payment Schedules', 'route' => 'staff.payment-schedules.index', 'permission' => 'payment_schedules.view'],
             ],
             StakeholderPreviewPersona::Treasury => [
                 ['label' => 'Approve Assessment Amounts', 'route' => 'staff.permit-applications.assessments.index', 'permission' => 'assessments.approve'],
@@ -118,6 +121,10 @@ class StakeholderPreviewSafety
                 ['label' => 'Inspect Receipts', 'route' => 'staff.receipts.index', 'permission' => 'receipts.view'],
                 ['label' => 'Open Daily Collections', 'route' => 'staff.reports.daily-collections.index', 'permission' => 'reports.view'],
                 ['label' => 'Open Revenue Sources', 'route' => 'staff.reports.revenue-sources.index', 'permission' => 'reports.view'],
+            ],
+            StakeholderPreviewPersona::Cashier => [
+                ['label' => 'Open Payment Schedules', 'route' => 'staff.payment-schedules.index', 'permission' => 'payment_schedules.view'],
+                ['label' => 'Inspect Receipts', 'route' => 'staff.receipts.index', 'permission' => 'receipts.view'],
             ],
             StakeholderPreviewPersona::Management => [
                 ['label' => 'Open the Report Catalog', 'route' => 'staff.reports.index', 'permission' => 'reports.view'],

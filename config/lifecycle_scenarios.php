@@ -14,6 +14,9 @@ return [
         'assessment_approver' => [
             'email' => env('LIFECYCLE_ASSESSMENT_APPROVER_EMAIL', 'assessment-approver@example.test'),
         ],
+        'preview_cashier' => [
+            'email' => env('LIFECYCLE_PREVIEW_CASHIER_EMAIL'),
+        ],
         'sample_recipient' => [
             'email' => env('LIFECYCLE_RECIPIENT_EMAIL', 'test@example.com'),
         ],

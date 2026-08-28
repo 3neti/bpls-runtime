@@ -103,7 +103,9 @@ class PrepareStakeholderPreviewCommand extends Command
         return [
             'citizen' => $this->preparePersona(StakeholderPreviewPersona::Citizen, $password),
             'bplo' => $this->preparePersona(StakeholderPreviewPersona::Bplo, $password),
+            'assessment_officer' => $this->preparePersona(StakeholderPreviewPersona::AssessmentOfficer, $password),
             'treasury' => $this->preparePersona(StakeholderPreviewPersona::Treasury, $password),
+            'cashier' => $this->preparePersona(StakeholderPreviewPersona::Cashier, $password),
             'management' => $this->preparePersona(StakeholderPreviewPersona::Management, $password),
             'engineering' => $this->preparePersona(StakeholderPreviewPersona::Engineering, $password),
             'mpdo' => $this->preparePersona(StakeholderPreviewPersona::Mpdo, $password),
@@ -168,9 +170,10 @@ class PrepareStakeholderPreviewCommand extends Command
     private function configureScenario(array $accounts, string $password): void
     {
         config()->set('lifecycle_scenarios.actors.citizen_applicant.email', $accounts['citizen']->email);
-        config()->set('lifecycle_scenarios.actors.primary_operator.email', $accounts['management']->email);
-        config()->set('lifecycle_scenarios.actors.assessment_preparer.email', $accounts['bplo']->email);
+        config()->set('lifecycle_scenarios.actors.primary_operator.email', $accounts['bplo']->email);
+        config()->set('lifecycle_scenarios.actors.assessment_preparer.email', $accounts['assessment_officer']->email);
         config()->set('lifecycle_scenarios.actors.assessment_approver.email', $accounts['treasury']->email);
+        config()->set('lifecycle_scenarios.actors.preview_cashier.email', $accounts['cashier']->email);
         config()->set('lifecycle_scenarios.actors.sample_recipient.email', $accounts['management']->email);
         config()->set('lifecycle_scenarios.actors.preview_engineering.email', $accounts['engineering']->email);
         config()->set('lifecycle_scenarios.actors.preview_mpdo.email', $accounts['mpdo']->email);
@@ -183,14 +186,15 @@ class PrepareStakeholderPreviewCommand extends Command
         $environment = [
             'LIFECYCLE_BROWSER_EMAIL' => $accounts['citizen']->email,
             'LIFECYCLE_BROWSER_PASSWORD' => $password,
-            'LIFECYCLE_BROWSER_OPERATOR_EMAIL' => $accounts['management']->email,
+            'LIFECYCLE_BROWSER_OPERATOR_EMAIL' => $accounts['bplo']->email,
             'LIFECYCLE_BROWSER_OPERATOR_PASSWORD' => $password,
             'LIFECYCLE_BROWSER_BPLO_EMAIL' => $accounts['bplo']->email,
             'LIFECYCLE_BROWSER_BPLO_PASSWORD' => $password,
             'LIFECYCLE_BROWSER_TREASURY_EMAIL' => $accounts['treasury']->email,
             'LIFECYCLE_BROWSER_TREASURY_PASSWORD' => $password,
-            'LIFECYCLE_ASSESSMENT_PREPARER_EMAIL' => $accounts['bplo']->email,
+            'LIFECYCLE_ASSESSMENT_PREPARER_EMAIL' => $accounts['assessment_officer']->email,
             'LIFECYCLE_ASSESSMENT_APPROVER_EMAIL' => $accounts['treasury']->email,
+            'LIFECYCLE_PREVIEW_CASHIER_EMAIL' => $accounts['cashier']->email,
             'LIFECYCLE_PREVIEW_ENGINEERING_EMAIL' => $accounts['engineering']->email,
             'LIFECYCLE_PREVIEW_MPDO_EMAIL' => $accounts['mpdo']->email,
             'LIFECYCLE_PREVIEW_ASSESSOR_EMAIL' => $accounts['assessor']->email,

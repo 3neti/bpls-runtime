@@ -1,8 +1,13 @@
 <script setup lang="ts">
-import { Head, Link, setLayoutProps } from '@inertiajs/vue3';
-import { ArrowLeft } from '@lucide/vue';
+import { Head, Link, router, setLayoutProps, useHttp } from '@inertiajs/vue3';
+import { ArrowLeft, CheckCircle2, QrCode, RefreshCw } from '@lucide/vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Citizen/PaymentScheduleController';
 import { show as permitApplicationShow } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
+import {
+    initiate as initiateQrPh,
+    status as qrPhStatus,
+} from '@/actions/App/Http/Controllers/Citizen/QrPhPaymentController';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
@@ -68,8 +73,25 @@ type OnlinePaymentBoundary = {
     status: string;
     can_pay_online: boolean;
     can_reconcile_online: boolean;
+    payment_status: string | null;
+    attempt_status: string | null;
+    attempt_expires_at: string | null;
     blocked_transitions: string[];
     artifact_statement: string;
+};
+
+type QrPhAttempt = {
+    amount_cents: number;
+    status: string;
+    expires_at: string;
+    qr_data_url: string;
+};
+
+type QrPhStatus = {
+    paid: boolean;
+    status: string;
+    collection_id: number | null;
+    receipt_id: number | null;
 };
 
 type PaymentSchedule = {
@@ -109,6 +131,38 @@ const props = defineProps<{
     paymentSchedule: PaymentSchedule;
 }>();
 
+const initiateRequest = useHttp({});
+const statusRequest = useHttp({});
+const qrAttempt = ref<QrPhAttempt | null>(null);
+const paymentMessage = ref<string | null>(null);
+const currentTime = ref(Date.now());
+let countdownTimer: ReturnType<typeof setInterval> | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+const secondsRemaining = computed(() => {
+    if (qrAttempt.value === null) {
+        return 0;
+    }
+
+    return Math.max(
+        0,
+        Math.floor(
+            (new Date(qrAttempt.value.expires_at).getTime() -
+                currentTime.value) /
+                1000,
+        ),
+    );
+});
+
+const countdown = computed(() => {
+    const minutes = Math.floor(secondsRemaining.value / 60)
+        .toString()
+        .padStart(2, '0');
+    const seconds = (secondsRemaining.value % 60).toString().padStart(2, '0');
+
+    return `${minutes}:${seconds}`;
+});
+
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'My Permit Applications',
@@ -145,6 +199,87 @@ function dateTime(value: string | null): string {
         timeStyle: 'short',
     }).format(new Date(value));
 }
+
+function stopPaymentChecks(): void {
+    if (countdownTimer !== null) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+    }
+
+    if (pollTimer !== null) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+}
+
+async function checkPayment(): Promise<void> {
+    if (statusRequest.processing || qrAttempt.value === null) {
+        return;
+    }
+
+    try {
+        const result = (await statusRequest.submit(
+            qrPhStatus(props.paymentSchedule.id),
+        )) as QrPhStatus;
+
+        if (result.paid) {
+            stopPaymentChecks();
+            paymentMessage.value =
+                'Payment confirmed. Your municipal collection is now recorded.';
+            qrAttempt.value = null;
+            router.reload({ only: ['paymentSchedule'] });
+        } else if (result.status === 'expired') {
+            stopPaymentChecks();
+            paymentMessage.value =
+                'This QR has expired without payment. Generate a fresh QR to continue.';
+        }
+    } catch {
+        paymentMessage.value =
+            'We could not check the payment yet. We will keep trying while this page is open.';
+    }
+}
+
+function startPaymentChecks(): void {
+    stopPaymentChecks();
+    currentTime.value = Date.now();
+    countdownTimer = setInterval(() => {
+        currentTime.value = Date.now();
+
+        if (secondsRemaining.value === 0) {
+            stopPaymentChecks();
+            paymentMessage.value =
+                'This QR has expired without payment. Generate a fresh QR to continue.';
+        }
+    }, 1000);
+    pollTimer = setInterval(() => void checkPayment(), 4000);
+}
+
+async function generateQrPh(): Promise<void> {
+    paymentMessage.value = null;
+
+    try {
+        const result = (await initiateRequest.submit(
+            initiateQrPh(props.paymentSchedule.id),
+        )) as QrPhAttempt;
+
+        if (
+            result.amount_cents !== props.paymentSchedule.balance_amount_cents
+        ) {
+            paymentMessage.value =
+                'The returned payment amount did not match this obligation. Nothing was marked paid.';
+
+            return;
+        }
+
+        qrAttempt.value = result;
+        startPaymentChecks();
+    } catch {
+        paymentMessage.value =
+            'QR Ph is temporarily unavailable. Your obligation is unchanged; please try again.';
+    }
+}
+
+onBeforeUnmount(stopPaymentChecks);
 </script>
 
 <template>
@@ -412,7 +547,108 @@ function dateTime(value: string | null): string {
                 </article>
             </section>
 
+            <section
+                v-if="
+                    paymentSchedule.online_payment_boundary.can_pay_online ||
+                    paymentSchedule.online_payment_boundary.status === 'paid'
+                "
+                data-testid="citizen-qr-ph-payment"
+                :data-payment-status="
+                    paymentSchedule.online_payment_boundary.status
+                "
+                class="grid gap-5 rounded-xl border border-primary/25 bg-primary/5 p-4 sm:p-6"
+            >
+                <div class="flex items-start gap-3">
+                    <div class="rounded-full bg-primary/10 p-2 text-primary">
+                        <QrCode v-if="paymentSchedule.status !== 'paid'" />
+                        <CheckCircle2 v-else />
+                    </div>
+                    <div class="min-w-0">
+                        <p
+                            class="text-xs font-medium tracking-wide text-primary uppercase"
+                        >
+                            Secure municipal payment
+                        </p>
+                        <h2 class="text-xl font-semibold text-foreground">
+                            Pay with QR Ph
+                        </h2>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                            Scan using a participating bank or e-wallet. Payment
+                            is recorded only after confirmation.
+                        </p>
+                    </div>
+                </div>
+
+                <div
+                    class="grid gap-1 rounded-lg bg-background p-4 text-center"
+                >
+                    <span class="text-xs text-muted-foreground"
+                        >Amount due</span
+                    >
+                    <strong
+                        data-testid="qr-ph-amount"
+                        :data-amount-cents="
+                            paymentSchedule.balance_amount_cents
+                        "
+                        class="text-3xl text-foreground tabular-nums"
+                    >
+                        {{ money(paymentSchedule.balance_amount_cents) }}
+                    </strong>
+                </div>
+
+                <div v-if="qrAttempt" class="grid justify-items-center gap-3">
+                    <img
+                        data-testid="qr-ph-image"
+                        :src="qrAttempt.qr_data_url"
+                        alt="QR Ph payment code"
+                        class="aspect-square w-full max-w-80 bg-white object-contain p-3"
+                    />
+                    <p class="text-sm font-medium text-foreground">
+                        QR expires in
+                        <span
+                            data-testid="qr-ph-countdown"
+                            class="tabular-nums"
+                            >{{ countdown }}</span
+                        >
+                    </p>
+                    <p class="text-sm text-muted-foreground">
+                        Waiting for payment confirmation…
+                    </p>
+                </div>
+
+                <p
+                    v-if="paymentMessage"
+                    data-testid="qr-ph-message"
+                    class="rounded-md border border-border bg-background p-3 text-sm text-foreground"
+                >
+                    {{ paymentMessage }}
+                </p>
+
+                <Button
+                    v-if="
+                        paymentSchedule.status !== 'paid' &&
+                        (qrAttempt === null || secondsRemaining === 0)
+                    "
+                    type="button"
+                    class="w-full sm:w-auto sm:justify-self-center"
+                    :disabled="initiateRequest.processing"
+                    data-testid="qr-ph-generate"
+                    @click="generateQrPh"
+                >
+                    <RefreshCw v-if="qrAttempt" />
+                    <QrCode v-else />
+                    {{
+                        initiateRequest.processing
+                            ? 'Preparing QR…'
+                            : qrAttempt && secondsRemaining === 0
+                              ? 'Generate fresh QR'
+                              : 'Pay with QR Ph'
+                    }}
+                </Button>
+            </section>
+
             <AuthorityBoundaryPanel
+                v-if="!paymentSchedule.online_payment_boundary.can_pay_online"
                 data-testid="citizen-payment-policy-boundary"
                 :data-policy-status="
                     paymentSchedule.payment_policy_boundary.status
@@ -467,7 +703,9 @@ function dateTime(value: string | null): string {
                 "
                 title="Online payment availability"
                 :status="paymentSchedule.online_payment_boundary.status"
-                :statement="'Online payment is not active in this preview. This does not decide future municipal payment policy.'"
+                :statement="
+                    paymentSchedule.online_payment_boundary.artifact_statement
+                "
                 :facts="[
                     {
                         label: 'Online payment in this preview',

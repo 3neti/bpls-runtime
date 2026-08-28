@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    'x_change' => [
+        'base_url' => env('XCHANGE_BASE_URL'),
+        'client_id' => env('XCHANGE_CLIENT_ID'),
+        'client_secret' => env('XCHANGE_CLIENT_SECRET'),
+        'scope' => env('XCHANGE_SCOPE', 'capabilities:read pay-codes:issue pay-codes:pay pay-codes:read'),
+        'token_refresh_leeway_seconds' => (int) env('XCHANGE_TOKEN_REFRESH_LEEWAY_SECONDS', 60),
+        'timeout_seconds' => (int) env('XCHANGE_TIMEOUT_SECONDS', 15),
+    ],
+
 ];

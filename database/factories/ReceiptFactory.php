@@ -29,7 +29,7 @@ class ReceiptFactory extends Factory
             'assessment_id' => Assessment::factory(),
             'status' => ReceiptStatus::Issued,
             'numbering_authority' => 'manual',
-            'receipt_number' => fake()->unique()->bothify('OR-####'),
+            'receipt_number' => fake()->unique()->numerify('#######'),
             'amount_cents' => fake()->numberBetween(1_000, 100_000),
             'issued_at' => now(),
             'source_snapshot' => [],

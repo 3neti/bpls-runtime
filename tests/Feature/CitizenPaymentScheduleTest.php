@@ -129,7 +129,7 @@ test('citizens can inspect authoritative payment evidence for an owned applicati
             ->where('paymentSchedule.payment_policy_boundary.status', 'policy_boundary')
             ->where('paymentSchedule.online_payment_boundary.status', 'blocked')
             ->where('paymentSchedule.online_payment_boundary.can_pay_online', false)
-            ->where('paymentSchedule.artifact_statement', fn (string $statement): bool => str_contains($statement, 'does not execute payment'))
+            ->where('paymentSchedule.artifact_statement', fn (string $statement): bool => str_contains($statement, 'same municipal collection path'))
             ->missing('paymentSchedule.prepared_by')
             ->missing('paymentSchedule.collections.0.payer_name')
             ->missing('paymentSchedule.collections.0.reference_number')

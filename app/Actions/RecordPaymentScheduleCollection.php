@@ -19,7 +19,7 @@ class RecordPaymentScheduleCollection
     public function __construct(private readonly EnsurePermitApplicationClearances $ensureClearances) {}
 
     /**
-     * @param  array{amount_cents: int, method: string, payer_name?: string|null, reference_number?: string|null, remarks?: string|null}  $data
+     * @param  array{amount_cents: int, method: string, channel?: string, payer_name?: string|null, reference_number?: string|null, remarks?: string|null, integration_evidence?: array<string, mixed>}  $data
      */
     public function handle(PaymentSchedule $paymentSchedule, array $data, ?User $receivedBy = null): TreasuryCollection
     {
@@ -48,20 +48,22 @@ class RecordPaymentScheduleCollection
                 throw new LogicException("Collection amount cannot exceed payment schedule [{$paymentSchedule->id}] balance.");
             }
 
+            $channel = TreasuryCollectionChannel::from($data['channel'] ?? TreasuryCollectionChannel::OverTheCounter->value);
+
             $collection = TreasuryCollection::query()->create([
                 'payment_schedule_id' => $paymentSchedule->id,
                 'permit_application_id' => $paymentSchedule->permit_application_id,
                 'assessment_id' => $paymentSchedule->assessment_id,
                 'received_by_id' => $receivedBy?->id,
                 'status' => TreasuryCollectionStatus::PendingReceipt,
-                'channel' => TreasuryCollectionChannel::OverTheCounter,
+                'channel' => $channel,
                 'method' => TreasuryCollectionMethod::from($data['method']),
                 'amount_cents' => $data['amount_cents'],
                 'payer_name' => $data['payer_name'] ?? null,
                 'reference_number' => $data['reference_number'] ?? null,
                 'remarks' => $data['remarks'] ?? null,
                 'received_at' => now(),
-                'source_snapshot' => $this->sourceSnapshot($paymentSchedule, $data),
+                'source_snapshot' => $this->sourceSnapshot($paymentSchedule, $data, $channel),
             ]);
 
             $remainingCents = $data['amount_cents'];
@@ -118,10 +120,10 @@ class RecordPaymentScheduleCollection
     }
 
     /**
-     * @param  array{amount_cents: int, method: string, payer_name?: string|null, reference_number?: string|null, remarks?: string|null}  $data
+     * @param  array{amount_cents: int, method: string, channel?: string, payer_name?: string|null, reference_number?: string|null, remarks?: string|null, integration_evidence?: array<string, mixed>}  $data
      * @return array<string, mixed>
      */
-    private function sourceSnapshot(PaymentSchedule $paymentSchedule, array $data): array
+    private function sourceSnapshot(PaymentSchedule $paymentSchedule, array $data, TreasuryCollectionChannel $channel): array
     {
         return [
             'payment_schedule_id' => $paymentSchedule->id,
@@ -130,6 +132,8 @@ class RecordPaymentScheduleCollection
             'balance_before_cents' => $paymentSchedule->total_amount_cents - $paymentSchedule->paid_amount_cents,
             'amount_cents' => $data['amount_cents'],
             'method' => $data['method'],
+            'channel' => $channel->value,
+            'integration_evidence' => $data['integration_evidence'] ?? null,
             'permit_application' => [
                 'id' => $paymentSchedule->permitApplication->id,
                 'application_number' => $paymentSchedule->permitApplication->application_number,
@@ -137,9 +141,11 @@ class RecordPaymentScheduleCollection
                 'owner_name' => $paymentSchedule->permitApplication->business->owner->name,
             ],
             'policy' => [
-                'channel' => TreasuryCollectionChannel::OverTheCounter->value,
+                'channel' => $channel->value,
                 'status' => TreasuryCollectionStatus::PendingReceipt->value,
-                'note' => 'Collection was recorded as over-the-counter and pending receipt. Receipt numbering, receipt issuance, online payment, and reconciliation policy remain explicit later decisions.',
+                'note' => $channel === TreasuryCollectionChannel::Online
+                    ? 'Collection was recorded only after authoritative external full-collection confirmation and remains pending the ordinary municipal receipt workflow.'
+                    : 'Collection was recorded as over-the-counter and pending receipt. Receipt numbering, receipt issuance, online payment, and reconciliation policy remain explicit later decisions.',
             ],
         ];
     }

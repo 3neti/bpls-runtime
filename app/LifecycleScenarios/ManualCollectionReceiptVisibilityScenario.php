@@ -126,6 +126,7 @@ final class ManualCollectionReceiptVisibilityScenario
         $operator = $actors['operator'] ?? throw new RuntimeException('Scenario operator actor was not resolved.');
         $assessmentPreparer = $actors['assessment_officer'] ?? $operator;
         $assessmentPreparationActor = isset($actors['assessment_officer']) ? 'assessment_officer' : 'operator';
+        $cashier = $actors['cashier'] ?? $operator;
         $assessmentApprover = $actors['approver'] ?? User::query()
             ->where('email', config('lifecycle_scenarios.actors.assessment_approver.email'))
             ->firstOrFail();
@@ -220,24 +221,24 @@ final class ManualCollectionReceiptVisibilityScenario
             $assessmentApprover,
             AssessmentDecisionAction::Approved,
         );
-        $paymentSchedule = $this->createPaymentSchedule->handle($assessment, $operator);
+        $paymentSchedule = $this->createPaymentSchedule->handle($assessment, $assessmentPreparer);
         $collection = $this->recordCollection->handle($paymentSchedule, [
             'amount_cents' => $paymentSchedule->total_amount_cents,
             'method' => TreasuryCollectionMethod::Cash->value,
             'payer_name' => 'Scenario Payer '.$runId,
             'reference_number' => 'SCENARIO-CASH-'.$this->safeRunReference($runId),
             'remarks' => 'Lifecycle scenario full OTC collection.',
-        ], $operator);
+        ], $cashier);
         $collectionStatusBeforeReceipt = $collection->status;
         $receipt = $this->issueReceipt->handle($collection, [
             'numbering_authority' => 'manual',
             'receipt_number' => 'SCENARIO-OR-'.$this->safeRunReference($runId),
             'remarks' => 'Lifecycle scenario manual receipt.',
-        ], $operator);
+        ], $cashier);
         $receiptVoidBlocked = false;
 
         try {
-            $this->voidReceipt->handle($receipt, $operator);
+            $this->voidReceipt->handle($receipt, $cashier);
         } catch (UnresolvedReceiptPolicy) {
             $receiptVoidBlocked = true;
         }
@@ -466,9 +467,11 @@ final class ManualCollectionReceiptVisibilityScenario
             'collection_id' => $collection->id,
             'collection_status' => $collection->status->value,
             'collection_amount_cents' => $collection->amount_cents,
+            'collection_received_by_id' => $collection->received_by_id,
             'receipt_id' => $receipt->id,
             'receipt_number' => $receipt->receipt_number,
             'receipt_status' => $receipt->status->value,
+            'receipt_issued_by_id' => $receipt->issued_by_id,
             'permit_application_create_url' => route('staff.permit-applications.create', absolute: false),
             'permit_application_url' => route('staff.permit-applications.show', $permitApplication, false),
             'payment_schedule_queue_url' => route('staff.payment-schedules.index', [

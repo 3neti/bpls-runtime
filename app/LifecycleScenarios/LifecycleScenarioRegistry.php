@@ -22,6 +22,7 @@ final class LifecycleScenarioRegistry
                     'operator' => 'primary_operator',
                     'assessment_officer' => 'assessment_preparer',
                     'approver' => 'assessment_approver',
+                    'cashier' => 'preview_cashier',
                     'recipient' => 'sample_recipient',
                     'engineering' => 'preview_engineering',
                     'mpdo' => 'preview_mpdo',
