@@ -9,6 +9,7 @@ use App\Models\BillingGroupRecord;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
 test('stakeholder preview is a local synthetic composition of existing lifecycle behavior', function () {
@@ -28,6 +29,12 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
     Storage::fake('local');
     $password = 'Stakeholder-Preview-Only-2026';
     configureSafeStakeholderPreview($password);
+    config()->set('services.x_change', [
+        'base_url' => 'https://x-change.example.test',
+        'client_id' => 'synthetic-client',
+        'client_secret' => 'synthetic-secret',
+    ]);
+    Http::preventStrayRequests();
 
     try {
         $exitCode = Artisan::call('lifecycle:prepare-stakeholder-preview', [
@@ -111,10 +118,13 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
         ->and($manifest['resources']['assessment_prepared_by_id'])->toBe($accounts['stakeholder.preview.assessment-officer@example.test']->id)
         ->and($manifest['resources']['assessment_approved_by_id'])->toBe($accounts['stakeholder.preview.treasury@example.test']->id)
         ->and($manifest['resources']['assessment_approver_distinct_from_preparer'])->toBeTrue()
+        ->and($manifest['resources']['can_reconcile_online'])->toBeTrue()
         ->and($manifest['resources']['collection_received_by_id'])->toBe($accounts['stakeholder.preview.cashier@example.test']->id)
         ->and($manifest['resources']['receipt_issued_by_id'])->toBe($accounts['stakeholder.preview.cashier@example.test']->id)
         ->and($manifest['resources']['office_charge_contribution_count'])->toBe(5)
         ->and($manifest['resources']['provisional_uat_permit_status'])->toBe('released_in_preview');
+
+    Http::assertNothingSent();
 
     $screenshotPath = $store->rootRelativePath().'/browser/screenshots/preview.png';
     Storage::disk('local')->put($screenshotPath, 'synthetic screenshot evidence');
