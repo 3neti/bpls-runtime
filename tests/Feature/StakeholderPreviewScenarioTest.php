@@ -6,6 +6,10 @@ use App\LifecycleScenarios\LifecycleScenarioRegistry;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\Models\BillingGroup;
 use App\Models\BillingGroupRecord;
+use App\Models\PaymentSchedule;
+use App\Models\PermitApplication;
+use App\Models\Receipt;
+use App\Models\TreasuryCollection;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
@@ -19,6 +23,8 @@ test('stakeholder preview is a local synthetic composition of existing lifecycle
         ->key->toBe('stakeholder_preview_cycle_1')
         ->risk->toBe('local transactional')
         ->and($scenario->expectations['ready_for_authority_review'])->toBeTrue()
+        ->and($scenario->expectations['qr_golden_payment_schedule_status'])->toBe('pending')
+        ->and($scenario->expectations['qr_golden_positive_unpaid_count'])->toBe(1)
         ->and($scenario->expectations['can_release'])->toBeFalse()
         ->and($scenario->expectations['official_application_number'])->toBeNull()
         ->and($scenario->safety['external_integrations'])->toBeFalse()
@@ -84,6 +90,22 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
     $encodedManifest = json_encode($manifest, JSON_THROW_ON_ERROR);
     $billingGroup = BillingGroup::query()->where('metadata->scenario_run_id', 'stakeholder-preview-test-001')->sole();
     $record = BillingGroupRecord::query()->where('source_snapshot->scenario_run_id', 'stakeholder-preview-test-001')->sole();
+    $qrGoldenApplications = PermitApplication::query()
+        ->with(['assessments.decision', 'paymentSchedules.treasuryCollections.receipt'])
+        ->get()
+        ->filter(fn (PermitApplication $application): bool => data_get($application->metadata, 'stakeholder_preview_scenario.member') === 'qr_ph_golden')
+        ->values();
+    $qrGoldenApplication = $qrGoldenApplications->sole();
+    $qrGoldenAssessment = $qrGoldenApplication->assessments->sole();
+    $qrGoldenSchedule = $qrGoldenApplication->paymentSchedules->sole();
+    $paidSchedule = PaymentSchedule::query()->findOrFail($manifest['resources']['payment_schedule_id']);
+    $paidCollection = TreasuryCollection::query()->with('receipt')->findOrFail($manifest['resources']['collection_id']);
+    $countsBeforeRepeat = [
+        'applications' => PermitApplication::query()->count(),
+        'schedules' => PaymentSchedule::query()->count(),
+        'collections' => TreasuryCollection::query()->count(),
+        'receipts' => Receipt::query()->count(),
+    ];
 
     expect($accounts)->toHaveCount(13)
         ->and($accounts)->each(fn ($user) => $user->password->not->toBe($password))
@@ -119,10 +141,41 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
         ->and($manifest['resources']['assessment_approved_by_id'])->toBe($accounts['stakeholder.preview.treasury@example.test']->id)
         ->and($manifest['resources']['assessment_approver_distinct_from_preparer'])->toBeTrue()
         ->and($manifest['resources']['can_reconcile_online'])->toBeTrue()
+        ->and($qrGoldenApplications)->toHaveCount(1)
+        ->and(data_get($qrGoldenApplication->metadata, 'stakeholder_preview_scenario.collection_policy'))->toBe('leave_unpaid_for_live_qr_ph_walkthrough')
+        ->and(data_get($qrGoldenApplication->metadata, 'stakeholder_preview_scenario.generalizes_municipal_policy'))->toBeFalse()
+        ->and($qrGoldenAssessment->assessed_by_id)->toBe($accounts['stakeholder.preview.assessment-officer@example.test']->id)
+        ->and($qrGoldenAssessment->decision?->decided_by_id)->toBe($accounts['stakeholder.preview.treasury@example.test']->id)
+        ->and($qrGoldenAssessment->decision?->total_amount_cents)->toBe($qrGoldenAssessment->total_amount_cents)
+        ->and($qrGoldenSchedule->total_amount_cents)->toBeGreaterThan(0)
+        ->and($qrGoldenSchedule->paid_amount_cents)->toBe(0)
+        ->and($qrGoldenSchedule->status->value)->toBe('pending')
+        ->and($qrGoldenSchedule->treasuryCollections)->toHaveCount(0)
+        ->and($manifest['resources']['qr_golden_payment_schedule_id'])->toBe($qrGoldenSchedule->id)
+        ->and($manifest['resources']['qr_golden_pre_approval_payment_schedule_exists'])->toBeFalse()
+        ->and($manifest['resources']['qr_golden_can_pay_online'])->toBeTrue()
+        ->and($manifest['resources']['qr_golden_collection_count'])->toBe(0)
+        ->and($manifest['resources']['qr_golden_receipt_count'])->toBe(0)
+        ->and(PaymentSchedule::query()->where('status', 'pending')->where('total_amount_cents', '>', 0)->where('paid_amount_cents', 0)->count())->toBe(1)
+        ->and($paidSchedule->status->value)->toBe('paid')
+        ->and($paidCollection->status->value)->toBe('receipted')
+        ->and($paidCollection->receipt)->not->toBeNull()
         ->and($manifest['resources']['collection_received_by_id'])->toBe($accounts['stakeholder.preview.cashier@example.test']->id)
         ->and($manifest['resources']['receipt_issued_by_id'])->toBe($accounts['stakeholder.preview.cashier@example.test']->id)
         ->and($manifest['resources']['office_charge_contribution_count'])->toBe(5)
         ->and($manifest['resources']['provisional_uat_permit_status'])->toBe('released_in_preview');
+
+    $this->assertSame(0, Artisan::call('lifecycle:prepare-stakeholder-preview', [
+        '--run-id' => 'stakeholder-preview-test-001',
+        '--phase' => 'prepare',
+    ]), Artisan::output());
+
+    expect([
+        'applications' => PermitApplication::query()->count(),
+        'schedules' => PaymentSchedule::query()->count(),
+        'collections' => TreasuryCollection::query()->count(),
+        'receipts' => Receipt::query()->count(),
+    ])->toBe($countsBeforeRepeat);
 
     Http::assertNothingSent();
 

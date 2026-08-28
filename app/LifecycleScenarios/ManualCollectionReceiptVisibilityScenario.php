@@ -222,6 +222,16 @@ final class ManualCollectionReceiptVisibilityScenario
             AssessmentDecisionAction::Approved,
         );
         $paymentSchedule = $this->createPaymentSchedule->handle($assessment, $assessmentPreparer);
+        $qrGolden = $isWeekendPreview
+            ? $this->prepareQrGoldenObligation(
+                $applicationData,
+                $runId,
+                $actors,
+                $applicant ?? throw new RuntimeException('Preview QR golden applicant was not resolved.'),
+                $assessmentPreparer,
+                $assessmentApprover,
+            )
+            : null;
         $collection = $this->recordCollection->handle($paymentSchedule, [
             'amount_cents' => $paymentSchedule->total_amount_cents,
             'method' => TreasuryCollectionMethod::Cash->value,
@@ -403,6 +413,31 @@ final class ManualCollectionReceiptVisibilityScenario
                 ['status' => 'released_in_preview', 'classification' => 'provisional_uat'],
                 ['status' => $provisionalPermitCompletion?->status, 'classification' => $provisionalPermitCompletion?->semantic_classification],
             );
+            $steps[] = $this->step(
+                'qr-ph-golden-obligation-left-unpaid',
+                'Prepare one explicitly tagged QR Ph golden obligation and exclude only that scenario member from automatic cash collection',
+                [
+                    'scenario_member' => 'qr_ph_golden',
+                    'pre_approval_payment_schedule_exists' => false,
+                    'decision' => AssessmentDecisionAction::Approved->value,
+                    'positive_balance' => true,
+                    'payment_schedule_status' => PaymentScheduleStatus::Pending->value,
+                    'collection_count' => 0,
+                    'receipt_count' => 0,
+                    'can_pay_online' => $xChangeIsConfigured,
+                ],
+                [
+                    'scenario_member' => data_get($qrGolden, 'scenario_member'),
+                    'pre_approval_payment_schedule_exists' => data_get($qrGolden, 'pre_approval_payment_schedule_exists'),
+                    'decision' => $qrGolden['assessment_decision']->action->value,
+                    'positive_balance' => data_get($qrGolden, 'payment_schedule.total_amount_cents', 0) > 0,
+                    'payment_schedule_status' => $qrGolden['payment_schedule']->status->value,
+                    'collection_count' => data_get($qrGolden, 'payment_schedule_collection_count'),
+                    'receipt_count' => data_get($qrGolden, 'payment_schedule_receipt_count'),
+                    'can_pay_online' => data_get($qrGolden, 'online_payment_boundary.can_pay_online'),
+                ],
+                'applicant',
+            );
         }
 
         foreach ($steps as $step) {
@@ -465,6 +500,29 @@ final class ManualCollectionReceiptVisibilityScenario
             'payment_paid_amount_cents' => $paymentSchedule->paid_amount_cents,
             'payment_balance_amount_cents' => $paymentSchedule->total_amount_cents - $paymentSchedule->paid_amount_cents,
             'online_payment_boundary_status' => $onlinePaymentBoundary['status'],
+            ...($qrGolden === null ? [] : [
+                'qr_golden_scenario_member' => $qrGolden['scenario_member'],
+                'qr_golden_reason' => $qrGolden['reason'],
+                'qr_golden_reference' => $qrGolden['reference'],
+                'qr_golden_permit_application_id' => $qrGolden['permit_application']->id,
+                'qr_golden_tracking_reference' => $qrGolden['permit_application']->tracking_reference,
+                'qr_golden_assessment_id' => $qrGolden['assessment']->id,
+                'qr_golden_assessment_decision_id' => $qrGolden['assessment_decision']->id,
+                'qr_golden_assessment_snapshot_hash' => $qrGolden['assessment_decision']->assessment_snapshot_hash,
+                'qr_golden_payment_schedule_id' => $qrGolden['payment_schedule']->id,
+                'qr_golden_payment_schedule_status' => $qrGolden['payment_schedule']->status->value,
+                'qr_golden_total_amount_cents' => $qrGolden['payment_schedule']->total_amount_cents,
+                'qr_golden_paid_amount_cents' => $qrGolden['payment_schedule']->paid_amount_cents,
+                'qr_golden_balance_amount_cents' => $qrGolden['payment_schedule']->total_amount_cents - $qrGolden['payment_schedule']->paid_amount_cents,
+                'qr_golden_collection_count' => $qrGolden['payment_schedule_collection_count'],
+                'qr_golden_receipt_count' => $qrGolden['payment_schedule_receipt_count'],
+                'qr_golden_pre_approval_payment_schedule_exists' => $qrGolden['pre_approval_payment_schedule_exists'],
+                'qr_golden_can_pay_online' => $qrGolden['online_payment_boundary']['can_pay_online'],
+                'qr_golden_can_reconcile_online' => $qrGolden['online_payment_boundary']['can_reconcile_online'],
+                'qr_golden_citizen_application_url' => route('citizen.permit-applications.show', $qrGolden['permit_application'], false),
+                'qr_golden_citizen_payment_url' => route('citizen.payment-schedules.show', $qrGolden['payment_schedule'], false),
+                'qr_golden_staff_payment_url' => route('staff.payment-schedules.show', $qrGolden['payment_schedule'], false),
+            ]),
             'collection_id' => $collection->id,
             'collection_status' => $collection->status->value,
             'collection_amount_cents' => $collection->amount_cents,
@@ -673,6 +731,26 @@ final class ManualCollectionReceiptVisibilityScenario
             'payment_schedule_id' => $paymentSchedule->id,
             'payment_schedule_status' => $paymentSchedule->status->value,
             'online_payment_boundary' => $onlinePaymentBoundary,
+            ...($qrGolden === null ? [] : [
+                'qr_golden' => [
+                    'scenario_member' => $qrGolden['scenario_member'],
+                    'reason' => $qrGolden['reason'],
+                    'reference' => $qrGolden['reference'],
+                    'permit_application_id' => $qrGolden['permit_application']->id,
+                    'tracking_reference' => $qrGolden['permit_application']->tracking_reference,
+                    'assessment_id' => $qrGolden['assessment']->id,
+                    'assessment_decision_id' => $qrGolden['assessment_decision']->id,
+                    'assessment_snapshot_hash' => $qrGolden['assessment_decision']->assessment_snapshot_hash,
+                    'payment_schedule_id' => $qrGolden['payment_schedule']->id,
+                    'payment_schedule_status' => $qrGolden['payment_schedule']->status->value,
+                    'total_amount_cents' => $qrGolden['payment_schedule']->total_amount_cents,
+                    'paid_amount_cents' => $qrGolden['payment_schedule']->paid_amount_cents,
+                    'collection_count' => $qrGolden['payment_schedule_collection_count'],
+                    'receipt_count' => $qrGolden['payment_schedule_receipt_count'],
+                    'pre_approval_payment_schedule_exists' => $qrGolden['pre_approval_payment_schedule_exists'],
+                    'online_payment_boundary' => $qrGolden['online_payment_boundary'],
+                ],
+            ]),
             'collection_id' => $collection->id,
             'collection_status' => $collection->status->value,
             'receipt_id' => $receipt->id,
@@ -822,6 +900,11 @@ final class ManualCollectionReceiptVisibilityScenario
     public function audit(array $manifest, ScenarioArtifactStore $artifactStore): array
     {
         $paymentSchedule = PaymentSchedule::query()->findOrFail($manifest['resources']['payment_schedule_id']);
+        $qrGoldenSchedule = isset($manifest['resources']['qr_golden_payment_schedule_id'])
+            ? PaymentSchedule::query()
+                ->with(['assessment.decision', 'permitApplication', 'treasuryCollections.receipt'])
+                ->findOrFail($manifest['resources']['qr_golden_payment_schedule_id'])
+            : null;
         $assessment = Assessment::query()->with('decision')->findOrFail($manifest['resources']['assessment_id']);
         $collection = TreasuryCollection::query()->with('receipt')->findOrFail($manifest['resources']['collection_id']);
         $receipt = Receipt::query()->findOrFail($manifest['resources']['record_id']);
@@ -830,6 +913,9 @@ final class ManualCollectionReceiptVisibilityScenario
             ->with(['business', 'clearances', 'lines.lineOfBusiness'])
             ->findOrFail($manifest['resources']['permit_application_id']);
         $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
+        $qrGoldenOnlinePaymentBoundary = $qrGoldenSchedule instanceof PaymentSchedule
+            ? $this->describeOnlinePaymentBoundary->handle($qrGoldenSchedule)
+            : null;
         $xChangeIsConfigured = $this->xChangeIsConfigured();
         $dailyCollectionsReport = $this->buildDailyCollectionsReport->handle([
             'date_from' => $collection->received_at->toDateString(),
@@ -907,6 +993,15 @@ final class ManualCollectionReceiptVisibilityScenario
             ] : []),
             $this->step('audit-assessment-treasurer-decision', 'Payment is bound to the exact immutable Treasurer-approved assessment snapshot', ['decision_id' => $manifest['resources']['assessment_decision_id'], 'action' => AssessmentDecisionAction::Approved->value, 'assessment_id' => $assessment->id, 'total_amount_cents' => $assessment->total_amount_cents, 'snapshot_hash' => $manifest['resources']['assessment_snapshot_hash']], ['decision_id' => $assessment->decision?->id, 'action' => $assessment->decision?->action->value, 'assessment_id' => $assessment->decision?->assessment_id, 'total_amount_cents' => $assessment->decision?->total_amount_cents, 'snapshot_hash' => $assessment->decision?->assessment_snapshot_hash]),
             $this->step('audit-payment-schedule-paid', 'Payment schedule is paid', ['status' => PaymentScheduleStatus::Paid->value], ['status' => $paymentSchedule->status->value]),
+            ...($qrGoldenSchedule instanceof PaymentSchedule ? [
+                $this->step(
+                    'audit-qr-ph-golden-obligation-unpaid',
+                    'The explicitly tagged QR Ph golden obligation remains positive, exact-snapshot approved, unpaid, and unreceipted',
+                    ['scenario_member' => 'qr_ph_golden', 'decision' => AssessmentDecisionAction::Approved->value, 'positive_balance' => true, 'status' => PaymentScheduleStatus::Pending->value, 'paid_amount_cents' => 0, 'collection_count' => 0, 'receipt_count' => 0, 'can_pay_online' => $xChangeIsConfigured],
+                    ['scenario_member' => data_get($qrGoldenSchedule->permitApplication->metadata, 'stakeholder_preview_scenario.member'), 'decision' => $qrGoldenSchedule->assessment->decision?->action->value, 'positive_balance' => $qrGoldenSchedule->total_amount_cents > 0, 'status' => $qrGoldenSchedule->status->value, 'paid_amount_cents' => $qrGoldenSchedule->paid_amount_cents, 'collection_count' => $qrGoldenSchedule->treasuryCollections->count(), 'receipt_count' => $qrGoldenSchedule->treasuryCollections->whereNotNull('receipt')->count(), 'can_pay_online' => data_get($qrGoldenOnlinePaymentBoundary, 'can_pay_online')],
+                    'applicant',
+                ),
+            ] : []),
             $this->step('audit-business-activities', 'Canonical permit application retains every prepared business activity', ['activities' => $manifest['resources']['business_activities']], ['activities' => $permitApplication->lines->map(fn ($line): array => ['id' => $line->id, 'code' => $line->lineOfBusiness?->code, 'name' => $line->lineOfBusiness?->name, 'declared_gross_sales_cents' => $line->declared_gross_sales_cents, 'capital_investment_cents' => $line->capital_investment_cents, 'quantity' => $line->quantity, 'started_on' => $line->started_on?->toDateString()])->values()->all()]),
             $this->step('audit-browser-business-activities', 'Browser intake controls and detail rows agree with canonical business activities', ['intake_add_remove_verified' => true, 'intake_mobile_visible' => true, 'activities' => $manifest['resources']['business_activities']], ['intake_add_remove_verified' => data_get($browserReport, 'business_activities.intake_add_remove_verified'), 'intake_mobile_visible' => data_get($browserReport, 'business_activities.intake_mobile_visible'), 'activities' => data_get($browserReport, 'business_activities.activities')]),
             $this->step('audit-establishment-profile', 'Structured establishment profile remains attached to the exact business', ['ownership_type' => $manifest['resources']['establishment_ownership_type'], 'occupancy' => $manifest['resources']['establishment_occupancy'], 'business_area_square_meters' => $manifest['resources']['establishment_business_area_square_meters'], 'male_employee_count' => $manifest['resources']['establishment_male_employee_count'], 'female_employee_count' => $manifest['resources']['establishment_female_employee_count'], 'started_on' => $manifest['resources']['establishment_started_on']], ['ownership_type' => $permitApplication->business->ownership_type, 'occupancy' => $permitApplication->business->occupancy, 'business_area_square_meters' => $permitApplication->business->business_area_square_meters, 'male_employee_count' => $permitApplication->business->male_employee_count, 'female_employee_count' => $permitApplication->business->female_employee_count, 'started_on' => $permitApplication->business->started_on?->toDateString()]),
@@ -1227,6 +1322,76 @@ final class ManualCollectionReceiptVisibilityScenario
         ] as $label) {
             $this->storeScenarioDocument($permitApplication, $actor, $runId, $citizen, $label);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $baseApplicationData
+     * @param  array<string, User>  $actors
+     * @return array<string, mixed>
+     */
+    private function prepareQrGoldenObligation(
+        array $baseApplicationData,
+        string $runId,
+        array $actors,
+        User $applicant,
+        User $assessmentPreparer,
+        User $assessmentApprover,
+    ): array {
+        $reference = 'QR-PH-GOLDEN-'.$this->boundedRunReference($runId, 42);
+        $permitApplication = $this->createCitizenPermitApplicationDraft->handle([
+            ...$baseApplicationData,
+            'business_name' => 'QR Ph Golden Walkthrough '.$this->boundedRunReference($runId, 36),
+            'trade_name' => 'QR Ph Golden Walkthrough',
+            'registration_number' => $reference,
+            'business_email' => 'qr-golden@example.test',
+        ], $applicant);
+        $metadata = $permitApplication->metadata ?? [];
+        $metadata['stakeholder_preview_scenario'] = [
+            'member' => 'qr_ph_golden',
+            'run_id' => $runId,
+            'reference' => $reference,
+            'collection_policy' => 'leave_unpaid_for_live_qr_ph_walkthrough',
+            'reason' => 'This single synthetic preview obligation is intentionally left unpaid so the citizen can initiate the QR Ph golden walkthrough.',
+            'semantic_classification' => 'synthetic_uat_only',
+            'generalizes_municipal_policy' => false,
+        ];
+        $permitApplication->update(['metadata' => $metadata]);
+        $permitApplication = $this->submitCitizenPermitApplication->handle($permitApplication, $applicant);
+
+        foreach (config('stakeholder_preview.weekend_hypothesis.office_charges', []) as $officeCode => $office) {
+            $officeActor = $actors[$officeCode] ?? throw new RuntimeException("Scenario office actor [{$officeCode}] was not resolved.");
+            $this->recordOfficeChargeContribution->handle(
+                $permitApplication,
+                $officeActor,
+                true,
+                (int) $office['scenario_amount_cents'],
+            );
+        }
+
+        $assessment = $this->createAssessment->handle($permitApplication, $assessmentPreparer);
+        $preApprovalPaymentScheduleExists = $permitApplication->paymentSchedules()->exists();
+        $assessmentDecision = $this->recordAssessmentDecision->handle(
+            $assessment,
+            $assessmentApprover,
+            AssessmentDecisionAction::Approved,
+        );
+        $paymentSchedule = $this->createPaymentSchedule->handle($assessment, $assessmentPreparer);
+        $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
+        $paymentSchedule->load(['treasuryCollections.receipt']);
+
+        return [
+            'scenario_member' => 'qr_ph_golden',
+            'reason' => data_get($permitApplication->metadata, 'stakeholder_preview_scenario.reason'),
+            'reference' => $reference,
+            'permit_application' => $permitApplication,
+            'assessment' => $assessment,
+            'assessment_decision' => $assessmentDecision,
+            'payment_schedule' => $paymentSchedule,
+            'pre_approval_payment_schedule_exists' => $preApprovalPaymentScheduleExists,
+            'payment_schedule_collection_count' => $paymentSchedule->treasuryCollections->count(),
+            'payment_schedule_receipt_count' => $paymentSchedule->treasuryCollections->whereNotNull('receipt')->count(),
+            'online_payment_boundary' => $onlinePaymentBoundary,
+        ];
     }
 
     private function lineOfBusiness(): LineOfBusiness
