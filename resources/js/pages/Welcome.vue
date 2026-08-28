@@ -2,6 +2,7 @@
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowRight, Building2, CheckCircle2 } from '@lucide/vue';
 import { dashboard, login, register } from '@/routes';
+import { index as servicesAndFeesIndex } from '@/routes/services-and-fees';
 </script>
 
 <template>
@@ -24,6 +25,12 @@ import { dashboard, login, register } from '@/routes';
                     aria-label="Account"
                     class="flex shrink-0 items-center gap-2"
                 >
+                    <Link
+                        :href="servicesAndFeesIndex()"
+                        class="hidden rounded-md px-3 py-2 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex"
+                    >
+                        Services & Fees
+                    </Link>
                     <Link
                         v-if="$page.props.auth.user"
                         :href="dashboard()"
@@ -72,6 +79,12 @@ import { dashboard, login, register } from '@/routes';
                     </p>
                 </div>
                 <div class="flex flex-wrap gap-3">
+                    <Link
+                        :href="servicesAndFeesIndex()"
+                        class="inline-flex items-center gap-2 rounded-md border px-5 py-3 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                        View Services & Fees
+                    </Link>
                     <Link
                         v-if="$page.props.auth.user"
                         :href="dashboard()"

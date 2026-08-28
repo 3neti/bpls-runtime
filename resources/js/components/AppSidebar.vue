@@ -2,6 +2,7 @@
 import { Link, usePage } from '@inertiajs/vue3';
 import {
     Bell,
+    BookOpenText,
     Building2,
     Calculator,
     ChartColumn,
@@ -42,6 +43,8 @@ import {
 } from '@/components/ui/sidebar';
 import { reportCatalog } from '@/lib/reportCatalog';
 import { dashboard } from '@/routes';
+import { index as publicServiceCatalogIndex } from '@/routes/services-and-fees';
+import { index as staffServiceCatalogIndex } from '@/routes/staff/services-and-fees';
 import type { NavItem, NavSection } from '@/types';
 
 const page = usePage();
@@ -50,6 +53,18 @@ const overviewItem: NavItem = {
     title: 'Overview',
     href: dashboard(),
     icon: LayoutDashboard,
+};
+
+const publicServicesAndFeesItem: NavItem = {
+    title: 'Services & Fees',
+    href: publicServiceCatalogIndex(),
+    icon: BookOpenText,
+};
+
+const staffServicesAndFeesItem: NavItem = {
+    title: 'Services & Fees',
+    href: staffServiceCatalogIndex(),
+    icon: BookOpenText,
 };
 
 const reportItems = Object.fromEntries(
@@ -70,7 +85,10 @@ const reportItems = Object.fromEntries(
 
 const staffSections = computed<NavSection[]>(() => {
     const sections: NavSection[] = [
-        { title: 'Overview', items: [overviewItem] },
+        {
+            title: 'Overview',
+            items: [overviewItem, staffServicesAndFeesItem],
+        },
     ];
 
     if (
@@ -248,7 +266,10 @@ const staffSections = computed<NavSection[]>(() => {
 });
 
 const citizenSections: NavSection[] = [
-    { title: 'Overview', items: [overviewItem] },
+    {
+        title: 'Overview',
+        items: [overviewItem, publicServicesAndFeesItem],
+    },
     {
         title: 'Permit Services',
         items: [
@@ -267,7 +288,10 @@ const citizenSections: NavSection[] = [
 ];
 
 const authenticatedSections: NavSection[] = [
-    { title: 'Overview', items: [overviewItem] },
+    {
+        title: 'Overview',
+        items: [overviewItem, publicServicesAndFeesItem],
+    },
 ];
 
 const mainNavSections = computed(() => {

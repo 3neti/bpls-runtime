@@ -5,6 +5,7 @@ use App\Http\Controllers\Citizen\PaymentScheduleController as CitizenPaymentSche
 use App\Http\Controllers\Citizen\PermitApplicationController as CitizenPermitApplicationController;
 use App\Http\Controllers\Citizen\PermitApplicationDocumentController as CitizenPermitApplicationDocumentController;
 use App\Http\Controllers\Citizen\QrPhPaymentController as CitizenQrPhPaymentController;
+use App\Http\Controllers\PublicMunicipalServiceCatalogController;
 use App\Http\Controllers\PublicPermitVerificationController;
 use App\Http\Controllers\PublicPermitVerificationPageController;
 use App\Http\Controllers\Staff\AllAbstractReportController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\Staff\CollectionReceiptController;
 use App\Http\Controllers\Staff\DailyCollectionReportController;
 use App\Http\Controllers\Staff\FeeRuleController;
 use App\Http\Controllers\Staff\MunicipalityConfigurationController;
+use App\Http\Controllers\Staff\MunicipalServiceCatalogController;
 use App\Http\Controllers\Staff\PaidEstablishmentReportController;
 use App\Http\Controllers\Staff\PaymentScheduleCollectionController;
 use App\Http\Controllers\Staff\PaymentSummaryReportController;
@@ -75,6 +77,8 @@ Route::get('permits/verify/{permitApplication}/{verificationCode}/view', PublicP
     ->name('public.permits.verify.view');
 Route::get('permits/verify/{permitApplication}/{verificationCode}', PublicPermitVerificationController::class)
     ->name('public.permits.verify');
+Route::get('services-and-fees', PublicMunicipalServiceCatalogController::class)
+    ->name('services-and-fees.index');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
@@ -103,6 +107,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     Route::prefix('staff')->name('staff.')->middleware('can:staff.access')->group(function () {
+        Route::get('services-and-fees', [MunicipalServiceCatalogController::class, 'index'])
+            ->name('services-and-fees.index');
         Route::get('permit-applications/assessments', [PermitApplicationAssessmentController::class, 'index'])
             ->name('permit-applications.assessments.index');
         Route::resource('permit-applications', PermitApplicationController::class)

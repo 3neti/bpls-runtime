@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Assessment\ApplicableFeeRuleQuery;
 use App\Assessment\AssessmentCalculator;
 use App\Enums\AssessmentDecisionAction;
 use App\Enums\AssessmentStatus;
@@ -21,7 +22,10 @@ use LogicException;
 
 class CreateAssessmentForPermitApplication
 {
-    public function __construct(private AssessmentCalculator $calculator) {}
+    public function __construct(
+        private AssessmentCalculator $calculator,
+        private ApplicableFeeRuleQuery $applicableFeeRuleQuery,
+    ) {}
 
     public function handle(PermitApplication $permitApplication, ?User $assessedBy = null): Assessment
     {
@@ -48,7 +52,7 @@ class CreateAssessmentForPermitApplication
                 'source_snapshot' => $this->sourceSnapshot($permitApplication),
             ]);
 
-            $feeRules = $this->feeRulesFor($permitApplication);
+            $feeRules = $this->applicableFeeRuleQuery->forPermitApplication($permitApplication);
 
             $this->createApplicationScopedLines($assessment, $feeRules);
             $this->createLineOfBusinessScopedLines($assessment, $permitApplication, $feeRules);
@@ -114,53 +118,6 @@ class CreateAssessmentForPermitApplication
                 ->pluck('id')
                 ->all(),
         ];
-    }
-
-    /**
-     * @return Collection<int, FeeRule>
-     */
-    private function feeRulesFor(PermitApplication $permitApplication): Collection
-    {
-        $asOfDate = "{$permitApplication->application_year}-01-01";
-        $lineOfBusinessIds = $permitApplication->lines
-            ->pluck('line_of_business_id')
-            ->filter()
-            ->unique()
-            ->values();
-
-        return FeeRule::query()
-            ->with(['ranges', 'currentReconciliation'])
-            ->where('is_active', true)
-            ->whereDate('effective_from', '<=', $asOfDate)
-            ->where(function ($query) use ($asOfDate): void {
-                $query
-                    ->whereNull('effective_until')
-                    ->orWhereDate('effective_until', '>=', $asOfDate);
-            })
-            ->where(function ($query) use ($lineOfBusinessIds): void {
-                $query
-                    ->where('scope', FeeRuleScope::Application->value)
-                    ->orWhereIn('line_of_business_id', $lineOfBusinessIds);
-            })
-            ->orderBy('code')
-            ->get()
-            ->filter(fn (FeeRule $feeRule): bool => $this->appliesToPermitApplicationType($feeRule, $permitApplication))
-            ->values();
-    }
-
-    private function appliesToPermitApplicationType(FeeRule $feeRule, PermitApplication $permitApplication): bool
-    {
-        $applicationTypes = $feeRule->metadata['application_types'] ?? null;
-
-        if ($applicationTypes === null) {
-            return true;
-        }
-
-        if (! is_array($applicationTypes)) {
-            return false;
-        }
-
-        return in_array($permitApplication->type->value, $applicationTypes, true);
     }
 
     /**

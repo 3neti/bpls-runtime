@@ -58,6 +58,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 'application_types' => ['new'],
                 'enterprise_scale' => 'micro_industry',
                 'catalog_status' => 'recorded_non_executable',
+                'price_list_source_classification' => 'municipal_confirmation_required',
                 'reconciliation_required' => true,
             ],
         );
@@ -78,6 +79,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 'source_id' => 'LEGAL-MRC-001',
                 'source_section' => 'Section 3A.04',
                 'catalog_status' => 'executable_reconciled',
+                'price_list_source_classification' => 'accepted_municipal_authority',
                 'reconciliation_required' => true,
             ],
         );
@@ -101,6 +103,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                 'source_section' => 'Section 3A.05',
                 'application_types' => ['new'],
                 'catalog_status' => 'recorded_non_executable',
+                'price_list_source_classification' => 'municipal_confirmation_required',
                 'reconciliation_required' => true,
                 'policy_note' => 'Ordinance states not to exceed PHP 300.00; production configuration must confirm the exact charged amount.',
             ],
@@ -134,6 +137,7 @@ class RevenueCodeFeeCatalogSeeder extends Seeder
                     'source_section' => 'Section 2A.02(b)',
                     'application_types' => ['renewal'],
                     'catalog_status' => 'recorded_non_executable',
+                    'price_list_source_classification' => 'municipal_confirmation_required',
                     'reconciliation_required' => true,
                     'extraction_scope' => 'The fixed-amount schedule remains recorded but non-executable pending municipal resolution of malformed and overlapping ordinance rows.',
                     'policy_boundaries' => [

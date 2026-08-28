@@ -2,6 +2,7 @@
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import {
     Bell,
+    BookOpenText,
     Calculator,
     ChevronRight,
     ClipboardList,
@@ -25,6 +26,8 @@ import { index as userDirectoryIndex } from '@/actions/App/Http/Controllers/Staf
 import PageHeader from '@/components/PageHeader.vue';
 import ScopeBoundaryNotice from '@/components/ScopeBoundaryNotice.vue';
 import { dashboard } from '@/routes';
+import { index as publicServiceCatalogIndex } from '@/routes/services-and-fees';
+import { index as staffServiceCatalogIndex } from '@/routes/staff/services-and-fees';
 import type { NavItem } from '@/types';
 
 defineOptions({
@@ -45,7 +48,15 @@ type DashboardAction = NavItem & {
 };
 
 const staffActions = computed<DashboardAction[]>(() => {
-    const actions: DashboardAction[] = [];
+    const actions: DashboardAction[] = [
+        {
+            title: 'Services & Fees',
+            description:
+                'Review what the Municipality publishes and what assessment actually selects.',
+            href: staffServiceCatalogIndex(),
+            icon: BookOpenText,
+        },
+    ];
 
     if (page.props.auth.can_view_permit_applications) {
         actions.push(
@@ -118,6 +129,13 @@ const staffActions = computed<DashboardAction[]>(() => {
 });
 
 const citizenActions: DashboardAction[] = [
+    {
+        title: 'Services & Fees',
+        description:
+            'See available business-permit services and currently confirmed charges.',
+        href: publicServiceCatalogIndex(),
+        icon: BookOpenText,
+    },
     {
         title: 'Start/Continue Application',
         description: 'Begin a new draft or return to your permit applications.',
