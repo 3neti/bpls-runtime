@@ -13,15 +13,6 @@ import {
     Upload,
     WalletCards,
 } from '@lucide/vue';
-import InputError from '@/components/InputError.vue';
-import { Badge } from '@/components/ui/badge';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
-import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue';
-import AppLayout from '@/layouts/AppLayout.vue';
-import type { BreadcrumbItem } from '@/types';
 import { show as showPaymentSchedule } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import {
     show as showAssessment,
@@ -37,6 +28,15 @@ import {
     show,
 } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import { store as storeSupportingDocument } from '@/actions/App/Http/Controllers/Staff/PermitApplicationDocumentController';
+import InputError from '@/components/InputError.vue';
+import { Badge } from '@/components/ui/badge';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
+import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue';
+import AppLayout from '@/layouts/AppLayout.vue';
+import type { BreadcrumbItem } from '@/types';
 
 type PermitApplication = {
     id: number;
