@@ -592,6 +592,7 @@ it('normalizes legacy preview pricing across three persistent runs without chang
     $prepare = app(PrepareBusinessPermitEvaluatorUatDataset::class);
     $actors = businessPermitEvaluatorPreviewActors();
     $preparedAssessments = collect();
+    $goldenWorkingPaperTotals = collect();
 
     foreach (['normalized-run-one', 'normalized-run-two', 'normalized-run-three'] as $runId) {
         $inventory = $prepare->handle($runId, $actors);
@@ -600,6 +601,11 @@ it('normalizes legacy preview pricing across three persistent runs without chang
             ->sole();
         $assessment = $application->assessments()->whereNull('superseded_at')->with('lines')->sole();
         $preparedAssessments->push($assessment);
+        $goldenApplication = PermitApplication::query()
+            ->whereKey($inventory['cases']['financial-working-paper']['permit_application_id'])
+            ->sole();
+        $goldenProjection = app(BusinessPermitEvaluationResolver::class)->resolve($goldenApplication->businessPermitEvaluation);
+        $goldenWorkingPaperTotals->push($goldenProjection['total_amount_cents']);
 
         expect($assessment->total_amount_cents)->toBe(10_000)
             ->and($assessment->lines)->toHaveCount(1)
@@ -609,6 +615,10 @@ it('normalizes legacy preview pricing across three persistent runs without chang
                 'active_rule_count' => 1,
                 'inactive_legacy_rule_count' => 2,
             ])
+            ->and($goldenApplication->businessPermitEvaluation->items()->where('item_type', 'charge')->count())->toBe(9)
+            ->and($goldenProjection['projected_charges'])->toHaveCount(1)
+            ->and($goldenProjection['total_amount_cents'])->toBe(10_000)
+            ->and(data_get($goldenProjection, 'financial_working_paper.grand_total_available'))->toBeFalse()
             ->and(FeeRule::query()->where('code', 'EVAL-UAT-BASE')->where('is_active', true)->count())->toBe(1);
     }
 
@@ -625,6 +635,7 @@ it('normalizes legacy preview pricing across three persistent runs without chang
         ->and($historicalLine->rule_snapshot)->toBe($historicalSnapshot)
         ->and($preparedAssessments->first()->fresh()->total_amount_cents)->toBe(10_000)
         ->and($preparedAssessments->first()->lines()->sole()->rule_snapshot['code'])->toBe('EVAL-UAT-BASE')
+        ->and($goldenWorkingPaperTotals->all())->toBe([10_000, 10_000, 10_000])
         ->and($municipalRule->fresh()->getAttributes())->toBe($municipalState);
 });
 
