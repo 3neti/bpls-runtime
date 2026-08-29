@@ -15,6 +15,7 @@ use App\Models\BusinessPermitEvaluationItem;
 use App\Models\BusinessPermitEvaluationItemRevision;
 use App\Models\BusinessPermitEvaluationVersion;
 use App\Models\FeeRule;
+use App\Models\LineOfBusiness;
 use App\Models\PermitApplicationLine;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -40,6 +41,7 @@ class BusinessPermitEvaluationResolver
      *   resolved_line_of_business_ids: list<int>,
      *   items: list<array<string, mixed>>,
      *   projected_charges: list<array<string, mixed>>,
+     *   financial_working_paper: array<string, mixed>,
      *   pricing_issues: list<string>,
      *   total_amount_cents: int
      * }
@@ -72,6 +74,13 @@ class BusinessPermitEvaluationResolver
                 ->where('applicability', BusinessPermitEvaluationApplicability::Applicable->value)
                 ->where('resolution', 'resolved')
                 ->sum(fn (array $item): int => (int) data_get($item, 'value.amount_cents', 0));
+        $financialWorkingPaper = $this->financialWorkingPaper(
+            $evaluation,
+            $lineOfBusinessIds,
+            $items,
+            $projectedCharges,
+            $totalAmountCents,
+        );
         $fingerprintPayload = $this->normalize([
             'evaluation_id' => $evaluation->id,
             'application' => $application,
@@ -95,8 +104,101 @@ class BusinessPermitEvaluationResolver
             'resolved_line_of_business_ids' => $lineOfBusinessIds,
             'items' => array_values($items->all()),
             'projected_charges' => array_values($projectedCharges->all()),
+            'financial_working_paper' => $financialWorkingPaper,
             'pricing_issues' => $pricingIssues,
             'total_amount_cents' => $totalAmountCents,
+        ];
+    }
+
+    /**
+     * @param  list<int>  $lineOfBusinessIds
+     * @param  Collection<int, array<string, mixed>>  $items
+     * @param  Collection<int, array<string, mixed>>  $projectedCharges
+     * @return array<string, mixed>
+     */
+    private function financialWorkingPaper(
+        BusinessPermitEvaluation $evaluation,
+        array $lineOfBusinessIds,
+        Collection $items,
+        Collection $projectedCharges,
+        int $totalAmountCents,
+    ): array {
+        $lineNames = LineOfBusiness::query()->whereIn('id', $lineOfBusinessIds)->pluck('name', 'id');
+        $applicationLines = $evaluation->permitApplication->lines->keyBy('line_of_business_id');
+        $charges = $projectedCharges->map(fn (array $charge): array => [
+            'identity' => $charge['key'],
+            'source_type' => 'fee_rule',
+            'evaluation_item_id' => null,
+            'fee_rule_id' => $charge['fee_rule_id'],
+            'scope' => $charge['line_of_business_id'] === null ? 'application' : 'line_of_business',
+            'permit_application_line_id' => $charge['permit_application_line_id'],
+            'line_of_business_id' => $charge['line_of_business_id'],
+            'code' => $charge['code'],
+            'label' => $charge['name'],
+            'responsible_party' => $charge['responsible_party'],
+            'proposal_amount_cents' => $charge['amount_cents'],
+            'resolved_amount_cents' => $charge['amount_cents'],
+            'applicability' => $charge['applicability'],
+            'resolution' => $charge['resolution'],
+            'source_classification' => $charge['source_classification'],
+            'action' => 'governed_rule_projection',
+            'reason' => null,
+            'included_in_subtotal' => true,
+            'included_in_grand_total' => true,
+        ])->concat($items
+            ->where('item_type', BusinessPermitEvaluationItemType::Charge->value)
+            ->map(fn (array $item): array => [
+                'identity' => $item['key'],
+                'source_type' => 'evaluation_item',
+                'evaluation_item_id' => $item['id'],
+                'fee_rule_id' => null,
+                'scope' => data_get($item, 'metadata.charge_scope', 'application'),
+                'permit_application_line_id' => data_get($item, 'metadata.permit_application_line_id'),
+                'line_of_business_id' => data_get($item, 'metadata.line_of_business_id'),
+                'code' => data_get($item, 'metadata.code', str($item['key'])->upper()->replace('.', '-')->toString()),
+                'label' => data_get($item, 'metadata.label', str($item['key'])->headline()->toString()),
+                'responsible_party' => $item['responsible_party'],
+                'proposal_amount_cents' => data_get($item, 'default_value.amount_cents'),
+                'resolved_amount_cents' => $item['resolution'] === 'resolved'
+                    && $item['applicability'] === BusinessPermitEvaluationApplicability::Applicable->value
+                        ? data_get($item, 'value.amount_cents')
+                        : null,
+                'applicability' => $item['applicability'],
+                'resolution' => $item['resolution'],
+                'source_classification' => $item['source_classification'],
+                'action' => $item['action'],
+                'reason' => $item['reason'],
+                'included_in_subtotal' => $item['resolution'] === 'resolved'
+                    && $item['applicability'] === BusinessPermitEvaluationApplicability::Applicable->value,
+                'included_in_grand_total' => $item['resolution'] === 'resolved'
+                    && $item['applicability'] === BusinessPermitEvaluationApplicability::Applicable->value,
+            ]))
+            ->values();
+        $requiredUnresolved = $items->filter(fn (array $item): bool => $item['item_type'] === BusinessPermitEvaluationItemType::Charge->value
+            && $item['is_required']
+            && $item['applicability'] !== BusinessPermitEvaluationApplicability::NotApplicable->value
+            && $item['resolution'] !== 'resolved')->count();
+
+        $sections = collect($lineOfBusinessIds)->map(function (int $lineOfBusinessId) use ($charges, $lineNames, $applicationLines): array {
+            $sectionCharges = $charges->where('scope', 'line_of_business')->where('line_of_business_id', $lineOfBusinessId)->values();
+
+            return [
+                'line_of_business_id' => $lineOfBusinessId,
+                'permit_application_line_id' => $applicationLines->get($lineOfBusinessId)?->id,
+                'line_of_business_name' => $lineNames->get($lineOfBusinessId),
+                'charges' => $sectionCharges->all(),
+                'subtotal_amount_cents' => $sectionCharges->where('included_in_subtotal', true)->sum('resolved_amount_cents'),
+            ];
+        })->all();
+        $applicationCharges = $charges->where('scope', 'application')->values();
+
+        return [
+            'line_sections' => $sections,
+            'application_charges' => $applicationCharges->all(),
+            'application_subtotal_amount_cents' => $applicationCharges->where('included_in_subtotal', true)->sum('resolved_amount_cents'),
+            'required_unresolved_charge_count' => $requiredUnresolved,
+            'grand_total_available' => $requiredUnresolved === 0,
+            'grand_total_amount_cents' => $requiredUnresolved === 0 ? $totalAmountCents : null,
         ];
     }
 

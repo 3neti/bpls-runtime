@@ -181,6 +181,7 @@ function evaluationContractKeys(): array
             'municipal_resolved_lines',
             'items',
             'projected_charges',
+            'financial_working_paper',
             'current_evaluated_amount_cents',
             'pricing_issues',
             'readiness',
@@ -217,6 +218,36 @@ function evaluationContractKeys(): array
         ],
         'history' => ['version_sequence', 'action', 'applicability', 'value', 'source_classification', 'actor_name', 'reason', 'occurred_at'],
         'projected_charges' => ['key', 'fee_rule_id', 'code', 'name', 'amount_cents', 'basis', 'basis_amount_cents', 'legal_basis', 'source_classification'],
+        'financial_working_paper' => [
+            'line_sections',
+            'application_charges',
+            'application_subtotal_amount_cents',
+            'required_unresolved_charge_count',
+            'grand_total_available',
+            'grand_total_amount_cents',
+        ],
+        'working_paper_line' => ['line_of_business_id', 'permit_application_line_id', 'line_of_business_name', 'charges', 'subtotal_amount_cents'],
+        'working_paper_charge' => [
+            'identity',
+            'source_type',
+            'evaluation_item_id',
+            'fee_rule_id',
+            'scope',
+            'permit_application_line_id',
+            'line_of_business_id',
+            'code',
+            'label',
+            'responsible_party',
+            'proposal_amount_cents',
+            'resolved_amount_cents',
+            'applicability',
+            'resolution',
+            'source_classification',
+            'action',
+            'reason',
+            'included_in_subtotal',
+            'included_in_grand_total',
+        ],
         'readiness' => ['commissioned', 'provisional_uat'],
         'readiness_outcome' => ['ready', 'issues'],
         'latest_assessment' => [
@@ -323,6 +354,11 @@ it('serializes the complete typed contract, including every nested Data object k
         ->and($data['items'])->not->toBeEmpty()
         ->and($data['projected_charges'])->not->toBeEmpty()
         ->and(array_keys($data['projected_charges'][0]))->toBe($keys['projected_charges'])
+        ->and(array_keys($data['financial_working_paper']))->toBe($keys['financial_working_paper'])
+        ->and($data['financial_working_paper']['application_charges'])->not->toBeEmpty()
+        ->and(array_keys($data['financial_working_paper']['application_charges'][0]))->toBe($keys['working_paper_charge'])
+        ->and($data['financial_working_paper']['line_sections'])->not->toBeEmpty()
+        ->and(array_keys($data['financial_working_paper']['line_sections'][0]))->toBe($keys['working_paper_line'])
         ->and(array_keys($data['readiness']))->toBe($keys['readiness'])
         ->and(array_keys($data['readiness']['commissioned']))->toBe($keys['readiness_outcome'])
         ->and(array_keys($data['readiness']['provisional_uat']))->toBe($keys['readiness_outcome'])

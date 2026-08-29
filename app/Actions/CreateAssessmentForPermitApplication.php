@@ -203,6 +203,8 @@ class CreateAssessmentForPermitApplication
 
             $assessment->lines()->create([
                 'business_permit_evaluation_item_id' => $item['id'],
+                'permit_application_line_id' => data_get($item, 'metadata.permit_application_line_id'),
+                'line_of_business_id' => data_get($item, 'metadata.line_of_business_id'),
                 'code' => (string) data_get($item, 'metadata.code', str($item['key'])->upper()->replace('.', '-')),
                 'name' => (string) data_get($item, 'metadata.label', $item['key']),
                 'category' => FeeRuleCategory::Fee,

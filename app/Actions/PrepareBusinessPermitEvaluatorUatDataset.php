@@ -58,12 +58,13 @@ class PrepareBusinessPermitEvaluatorUatDataset
             }
 
             $retail = $this->lineOfBusiness('EVAL-UAT-RETAIL', 'Retail — Evaluator UAT');
+            $repair = $this->lineOfBusiness('EVAL-UAT-REPAIR', 'Repair Services — Evaluator UAT');
             $restaurant = $this->lineOfBusiness('EVAL-UAT-RESTAURANT', 'Restaurant — Evaluator UAT');
 
             $cases = [];
             $cases['just_created'] = $this->case($runId, 'just-created', $actors['citizen'], $retail, $actors['assessment_officer']);
 
-            $cases['financial_working_paper'] = $this->financialWorkingPaperCase($runId, $actors, $retail, $restaurant);
+            $cases['financial_working_paper'] = $this->financialWorkingPaperCase($runId, $actors, $retail, $repair, $restaurant);
 
             $cases['awaiting_engineering'] = $this->case($runId, 'awaiting-engineering', $actors['citizen'], $retail, $actors['assessment_officer']);
             $this->officeItem($cases['awaiting_engineering'], 'engineering', $actors['engineering'], 12_500, true);
@@ -207,7 +208,8 @@ class PrepareBusinessPermitEvaluatorUatDataset
         ]);
     }
 
-    private function case(string $runId, string $key, User $citizen, LineOfBusiness $lineOfBusiness, User $creator): BusinessPermitEvaluation
+    /** @param LineOfBusiness|array<int, LineOfBusiness> $linesOfBusiness */
+    private function case(string $runId, string $key, User $citizen, LineOfBusiness|array $linesOfBusiness, User $creator): BusinessPermitEvaluation
     {
         $owner = BusinessOwner::query()->create(['name' => 'Synthetic Evaluator Owner '.str($key)->headline(), 'metadata' => ['uat_run_id' => $runId]]);
         $business = Business::query()->create(['business_owner_id' => $owner->id, 'name' => 'Synthetic '.str($key)->headline().' Business', 'metadata' => ['uat_run_id' => $runId]]);
@@ -222,13 +224,15 @@ class PrepareBusinessPermitEvaluatorUatDataset
             'submitted_at' => now(),
             'metadata' => ['business_permit_evaluation' => ['semantic_classification' => 'provisional_uat', 'uat_run_id' => $runId, 'case' => $key, 'production_liability' => false]],
         ]);
-        $application->lines()->create([
-            'line_of_business_id' => $lineOfBusiness->id,
-            'declared_gross_sales_cents' => 1_000_000,
-            'capital_investment_cents' => 500_000,
-            'quantity' => 1,
-            'metadata' => ['semantic_classification' => 'provisional_uat'],
-        ]);
+        collect(is_array($linesOfBusiness) ? $linesOfBusiness : [$linesOfBusiness])
+            ->values()
+            ->each(fn (LineOfBusiness $lineOfBusiness, int $index) => $application->lines()->create([
+                'line_of_business_id' => $lineOfBusiness->id,
+                'declared_gross_sales_cents' => 1_000_000 + ($index * 250_000),
+                'capital_investment_cents' => 500_000 + ($index * 175_000),
+                'quantity' => 1,
+                'metadata' => ['semantic_classification' => 'provisional_uat'],
+            ]));
 
         return $this->initialize->handle($application, $creator);
     }
@@ -243,33 +247,73 @@ class PrepareBusinessPermitEvaluatorUatDataset
     }
 
     /** @param array<string, User> $actors */
-    private function financialWorkingPaperCase(string $runId, array $actors, LineOfBusiness $retail, LineOfBusiness $restaurant): BusinessPermitEvaluation
-    {
-        $evaluation = $this->case($runId, 'financial-working-paper', $actors['citizen'], $retail, $actors['assessment_officer']);
+    private function financialWorkingPaperCase(
+        string $runId,
+        array $actors,
+        LineOfBusiness $retail,
+        LineOfBusiness $repair,
+        LineOfBusiness $restaurant,
+    ): BusinessPermitEvaluation {
+        $evaluation = $this->case($runId, 'financial-working-paper', $actors['citizen'], [$retail, $repair], $actors['assessment_officer']);
+        $applicationLines = $evaluation->permitApplication->lines->keyBy('line_of_business_id');
+        $retailScope = $this->lineChargeMetadata($retail, $applicationLines->get($retail->id)?->id);
+        $repairScope = $this->lineChargeMetadata($repair, $applicationLines->get($repair->id)?->id);
 
-        $this->officeItem($evaluation, 'engineering', $actors['engineering'], 12_500, true);
-        $this->officeItem($evaluation, 'mpdo', $actors['mpdo'], 8_000, false);
-        $this->officeItem($evaluation, 'assessor', $actors['assessor'], 6_000, false);
-        $this->officeItem($evaluation, 'health', $actors['health'], 9_500, true);
-        $this->officeItem($evaluation, 'menro', $actors['menro'], 4_000, false);
+        $this->officeItem($evaluation, 'retail.business-tax', $actors['assessor'], 14_300, false, metadata: [...$retailScope, 'code' => 'UAT-RETAIL-BUSINESS-TAX', 'label' => 'Business Tax'], responsibleParty: 'assessor');
+        $this->officeItem($evaluation, 'retail.mayors-permit', $actors['engineering'], 7_600, true, metadata: [...$retailScope, 'code' => 'UAT-RETAIL-MAYORS-PERMIT', 'label' => "Mayor's Permit Fee"], responsibleParty: 'engineering');
+        $this->officeItem($evaluation, 'retail.weight-measure', $actors['assessor'], 3_400, false, metadata: [...$retailScope, 'code' => 'UAT-RETAIL-WEIGHT-MEASURE', 'label' => 'Weight & Measure'], responsibleParty: 'assessor');
+        $this->officeItem($evaluation, 'repair.business-tax', $actors['assessor'], 16_800, false, metadata: [...$repairScope, 'code' => 'UAT-REPAIR-BUSINESS-TAX', 'label' => 'Business Tax'], responsibleParty: 'assessor');
+        $this->officeItem($evaluation, 'repair.occupation-fee', $actors['engineering'], 6_900, true, metadata: [...$repairScope, 'code' => 'UAT-REPAIR-OCCUPATION', 'label' => 'Occupation Fee'], responsibleParty: 'engineering');
+        $this->officeItem($evaluation, 'repair.solid-waste', $actors['menro'], 5_200, false, metadata: [...$repairScope, 'code' => 'UAT-REPAIR-SOLID-WASTE', 'label' => 'Solid Waste Management'], responsibleParty: 'menro');
+        $this->officeItem($evaluation, 'repair.sanitary-permit', $actors['health'], 4_600, true, metadata: [...$repairScope, 'code' => 'UAT-REPAIR-SANITARY', 'label' => 'Sanitary Permit Fee'], responsibleParty: 'health');
         $this->officeItem(
             $evaluation,
-            'health.restaurant',
+            'restaurant.health-certificate',
             $actors['health'],
-            11_000,
+            8_700,
             true,
             BusinessPermitEvaluationApplicability::NotApplicable,
             [
+                ...$this->lineChargeMetadata($restaurant),
                 'fixture_dependency' => [
                     'semantic_classification' => 'provisional_uat',
                     'line_of_business_id' => $restaurant->id,
                 ],
-                'label' => 'Restaurant health review charge',
+                'code' => 'UAT-RESTAURANT-HEALTH-CERT',
+                'label' => 'Health Certificate',
+            ],
+            'health',
+        );
+        $this->officeItem(
+            $evaluation,
+            'restaurant.sanitary-permit',
+            $actors['health'],
+            6_100,
+            true,
+            BusinessPermitEvaluationApplicability::NotApplicable,
+            [
+                ...$this->lineChargeMetadata($restaurant),
+                'fixture_dependency' => [
+                    'semantic_classification' => 'provisional_uat',
+                    'line_of_business_id' => $restaurant->id,
+                ],
+                'code' => 'UAT-RESTAURANT-SANITARY',
+                'label' => 'Sanitary Permit Fee',
             ],
             'health',
         );
 
         return $evaluation->fresh();
+    }
+
+    /** @return array<string, mixed> */
+    private function lineChargeMetadata(LineOfBusiness $lineOfBusiness, ?int $permitApplicationLineId = null): array
+    {
+        return [
+            'charge_scope' => 'line_of_business',
+            'line_of_business_id' => $lineOfBusiness->id,
+            'permit_application_line_id' => $permitApplicationLineId,
+        ];
     }
 
     /** @param array<string, User> $actors */

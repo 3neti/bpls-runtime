@@ -40,6 +40,7 @@ class BusinessPermitEvaluationData extends Data
         public readonly array $municipal_resolved_lines,
         public readonly array $items,
         public readonly array $projected_charges,
+        public readonly array $financial_working_paper,
         public readonly int $current_evaluated_amount_cents,
         public readonly array $pricing_issues,
         public readonly EvaluationReadinessData $readiness,

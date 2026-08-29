@@ -117,6 +117,45 @@ export type EvaluationProjectedCharge = {
     source_classification: string;
 };
 
+export type EvaluationWorkingPaperCharge = {
+    identity: string;
+    source_type: 'fee_rule' | 'evaluation_item';
+    evaluation_item_id: number | null;
+    fee_rule_id: number | null;
+    scope: 'application' | 'line_of_business';
+    permit_application_line_id: number | null;
+    line_of_business_id: number | null;
+    code: string;
+    label: string;
+    responsible_party: string;
+    proposal_amount_cents: number | null;
+    resolved_amount_cents: number | null;
+    applicability: EvaluationApplicability;
+    resolution: string;
+    source_classification: string | null;
+    action: string | null;
+    reason: string | null;
+    included_in_subtotal: boolean;
+    included_in_grand_total: boolean;
+};
+
+export type EvaluationWorkingPaperLine = {
+    line_of_business_id: number;
+    permit_application_line_id: number | null;
+    line_of_business_name: string | null;
+    charges: EvaluationWorkingPaperCharge[];
+    subtotal_amount_cents: number;
+};
+
+export type EvaluationFinancialWorkingPaper = {
+    line_sections: EvaluationWorkingPaperLine[];
+    application_charges: EvaluationWorkingPaperCharge[];
+    application_subtotal_amount_cents: number;
+    required_unresolved_charge_count: number;
+    grand_total_available: boolean;
+    grand_total_amount_cents: number | null;
+};
+
 export type EvaluationReadinessOutcome = {
     ready: boolean;
     issues: string[];
@@ -149,6 +188,7 @@ export type BusinessPermitEvaluationData = {
     municipal_resolved_lines: EvaluationResolvedLine[];
     items: EvaluationItem[];
     projected_charges: EvaluationProjectedCharge[];
+    financial_working_paper: EvaluationFinancialWorkingPaper;
     current_evaluated_amount_cents: number;
     pricing_issues: string[];
     readiness: EvaluationReadiness;

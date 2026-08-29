@@ -107,6 +107,7 @@ class DescribeBusinessPermitEvaluation
                 legal_basis: $charge['legal_basis'],
                 source_classification: $charge['source_classification'],
             ))->all(),
+            financial_working_paper: $projection['financial_working_paper'],
             current_evaluated_amount_cents: $projection['total_amount_cents'],
             pricing_issues: $projection['pricing_issues'],
             readiness: new EvaluationReadinessData(
