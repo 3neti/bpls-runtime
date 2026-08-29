@@ -12,6 +12,7 @@ use App\Enums\BusinessPermitEvaluationApplicability;
 use App\Enums\BusinessPermitEvaluationItemType;
 use App\Enums\BusinessPermitEvaluationSource;
 use App\Enums\FeeRuleCalculationType;
+use App\Enums\FeeRulePublicationSource;
 use App\Enums\FeeRuleScope;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\StakeholderPreviewPersona;
@@ -19,6 +20,7 @@ use App\Enums\UserPermission;
 use App\Evaluation\BusinessPermitEvaluationReadiness;
 use App\Evaluation\BusinessPermitEvaluationResolver;
 use App\Models\Assessment;
+use App\Models\AssessmentLine;
 use App\Models\Business;
 use App\Models\BusinessPermitEvaluationItemRevision;
 use App\Models\FeeRule;
@@ -318,14 +320,8 @@ it('keeps Treasury counter-check authority separate from Municipal Treasurer exa
 });
 
 it('prepares an idempotent substantial provisional UAT Evaluator inventory with distinct responsibilities', function () {
-    $actors = [
-        'citizen' => User::factory()->create(),
-        'assessment_officer' => User::factory()->create(),
-        'treasury' => User::factory()->create(),
-        'municipal_treasurer' => User::factory()->create(),
-        'engineering' => User::factory()->create(),
-        'health' => User::factory()->create(),
-    ];
+    configureBusinessPermitEvaluatorPreviewSafety();
+    $actors = businessPermitEvaluatorPreviewActors();
     $prepare = app(PrepareBusinessPermitEvaluatorUatDataset::class);
 
     $first = $prepare->handle('evaluator-test-run', $actors);
@@ -358,3 +354,152 @@ it('prepares an idempotent substantial provisional UAT Evaluator inventory with 
         ->and($reopened->assessments()->whereNotNull('superseded_at')->count())->toBe(1)
         ->and($reopened->businessPermitEvaluation->items()->where('responsible_party', 'health')->exists())->toBeTrue();
 });
+
+it('normalizes legacy preview pricing across three persistent runs without changing historical snapshots or municipal rules', function () {
+    configureBusinessPermitEvaluatorPreviewSafety();
+
+    $legacyRules = collect(['first-run', 'second-run'])->map(fn (string $runId): FeeRule => FeeRule::factory()->create([
+        'code' => 'EVAL-UAT-BASE-'.$runId,
+        'name' => 'Evaluator UAT base proposal',
+        'scope' => FeeRuleScope::Application,
+        'calculation_type' => FeeRuleCalculationType::Fixed,
+        'basis' => 'none',
+        'amount_cents' => 10_000,
+        'effective_from' => '2099-01-01',
+        'effective_until' => '2099-12-31',
+        'is_active' => true,
+        'metadata' => [
+            'semantic_classification' => 'provisional_uat',
+            'uat_run_id' => $runId,
+            'production_liability' => false,
+        ],
+    ]));
+    $historicalAssessment = Assessment::factory()->create(['total_amount_cents' => 10_000]);
+    $historicalLine = AssessmentLine::factory()->for($historicalAssessment)->create([
+        'fee_rule_id' => $legacyRules->first()->id,
+        'code' => $legacyRules->first()->code,
+        'name' => $legacyRules->first()->name,
+        'amount_cents' => 10_000,
+        'rule_snapshot' => [
+            'code' => $legacyRules->first()->code,
+            'amount_cents' => 10_000,
+            'semantic_classification' => 'provisional_uat',
+            'uat_run_id' => 'first-run',
+        ],
+    ]);
+    $historicalSnapshot = $historicalLine->rule_snapshot;
+    $municipalRule = FeeRule::factory()->create([
+        'code' => 'MUNICIPAL-ACCEPTED-UNCHANGED',
+        'effective_from' => '2026-01-01',
+        'effective_until' => '2026-12-31',
+        'metadata' => [
+            'semantic_classification' => 'accepted_municipal_authority',
+            'price_list_source_classification' => 'accepted_municipal_authority',
+        ],
+    ]);
+    $municipalState = $municipalRule->refresh()->getAttributes();
+    $prepare = app(PrepareBusinessPermitEvaluatorUatDataset::class);
+    $actors = businessPermitEvaluatorPreviewActors();
+    $preparedAssessments = collect();
+
+    foreach (['normalized-run-one', 'normalized-run-two', 'normalized-run-three'] as $runId) {
+        $inventory = $prepare->handle($runId, $actors);
+        $application = PermitApplication::query()
+            ->whereKey($inventory['cases']['assessment-prepared']['permit_application_id'])
+            ->sole();
+        $assessment = $application->assessments()->whereNull('superseded_at')->with('lines')->sole();
+        $preparedAssessments->push($assessment);
+
+        expect($assessment->total_amount_cents)->toBe(10_000)
+            ->and($assessment->lines)->toHaveCount(1)
+            ->and($assessment->lines->sole()->code)->toBe('EVAL-UAT-BASE')
+            ->and($inventory['pricing_fixture'])->toBe([
+                'stable_code' => 'EVAL-UAT-BASE',
+                'active_rule_count' => 1,
+                'inactive_legacy_rule_count' => 2,
+            ])
+            ->and(FeeRule::query()->where('code', 'EVAL-UAT-BASE')->where('is_active', true)->count())->toBe(1);
+    }
+
+    $stableRule = FeeRule::query()->where('code', 'EVAL-UAT-BASE')->sole();
+
+    expect($legacyRules->map->refresh()->pluck('is_active')->all())->toBe([false, false])
+        ->and(FeeRule::query()->where('code', 'like', 'EVAL-UAT-BASE%')->where('is_active', true)->count())->toBe(1)
+        ->and(data_get($stableRule->metadata, 'fixture_family'))->toBe('evaluator_uat_base')
+        ->and(data_get($stableRule->metadata, 'latest_uat_run_id'))->toBe('normalized-run-three')
+        ->and(FeeRulePublicationSource::forRule($stableRule))->toBe(FeeRulePublicationSource::ProvisionalUat)
+        ->and(FeeRulePublicationSource::forRule($stableRule)->mayPublishExactAmount())->toBeFalse()
+        ->and($historicalAssessment->fresh()->total_amount_cents)->toBe(10_000)
+        ->and($historicalLine->fresh()->fee_rule_id)->toBe($legacyRules->first()->id)
+        ->and($historicalLine->rule_snapshot)->toBe($historicalSnapshot)
+        ->and($preparedAssessments->first()->fresh()->total_amount_cents)->toBe(10_000)
+        ->and($preparedAssessments->first()->lines()->sole()->rule_snapshot['code'])->toBe('EVAL-UAT-BASE')
+        ->and($municipalRule->fresh()->getAttributes())->toBe($municipalState);
+});
+
+it('refuses evaluator fixture mutation outside preview mode', function () {
+    config()->set('stakeholder_preview.mode', false);
+    $feeRuleCount = FeeRule::query()->count();
+    $applicationCount = PermitApplication::query()->count();
+
+    expect(fn () => app(PrepareBusinessPermitEvaluatorUatDataset::class)->handle(
+        'non-preview-run',
+        businessPermitEvaluatorPreviewActors(),
+    ))->toThrow(RuntimeException::class, 'outside the canonical stakeholder preview')
+        ->and(FeeRule::query()->count())->toBe($feeRuleCount)
+        ->and(PermitApplication::query()->count())->toBe($applicationCount);
+});
+
+it('fails closed without changing an accepted rule that occupies the stable preview identity', function () {
+    configureBusinessPermitEvaluatorPreviewSafety();
+    $acceptedRule = FeeRule::factory()->create([
+        'code' => 'EVAL-UAT-BASE',
+        'effective_from' => '2099-01-01',
+        'metadata' => [
+            'semantic_classification' => 'accepted_municipal_authority',
+            'price_list_source_classification' => 'accepted_municipal_authority',
+        ],
+    ]);
+    $acceptedState = $acceptedRule->refresh()->getAttributes();
+
+    expect(fn () => app(PrepareBusinessPermitEvaluatorUatDataset::class)->handle(
+        'identity-collision-run',
+        businessPermitEvaluatorPreviewActors(),
+    ))->toThrow(RuntimeException::class, 'occupied by a non-preview rule')
+        ->and($acceptedRule->fresh()->getAttributes())->toBe($acceptedState)
+        ->and(PermitApplication::query()->where('metadata->business_permit_evaluation->uat_run_id', 'identity-collision-run')->exists())->toBeFalse();
+});
+
+/**
+ * @return array{
+ *     citizen: User,
+ *     assessment_officer: User,
+ *     treasury: User,
+ *     municipal_treasurer: User,
+ *     engineering: User,
+ *     health: User
+ * }
+ */
+function businessPermitEvaluatorPreviewActors(): array
+{
+    return [
+        'citizen' => User::factory()->create(),
+        'assessment_officer' => User::factory()->create(),
+        'treasury' => User::factory()->create(),
+        'municipal_treasurer' => User::factory()->create(),
+        'engineering' => User::factory()->create(),
+        'health' => User::factory()->create(),
+    ];
+}
+
+function configureBusinessPermitEvaluatorPreviewSafety(): void
+{
+    config()->set([
+        'stakeholder_preview.mode' => true,
+        'stakeholder_preview.profile' => 'stakeholder_preview_weekend_v1',
+        'stakeholder_preview.data_classification' => 'synthetic_only',
+        'stakeholder_preview.pii_mode' => 'synthetic_only',
+        'stakeholder_preview.production_migration_enabled' => false,
+        'stakeholder_preview.production_integrations' => 'disabled',
+    ]);
+}

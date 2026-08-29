@@ -20,6 +20,7 @@ use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\User;
+use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -35,6 +36,7 @@ class PrepareBusinessPermitEvaluatorUatDataset
         private readonly RecordAssessmentDecision $recordAssessmentDecision,
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
         private readonly AssessmentSnapshotFingerprint $assessmentFingerprint,
+        private readonly StakeholderPreviewSafety $previewSafety,
     ) {}
 
     /**
@@ -43,19 +45,20 @@ class PrepareBusinessPermitEvaluatorUatDataset
      */
     public function handle(string $runId, array $actors): array
     {
-        if (app()->isProduction()) {
-            throw new RuntimeException('Business Permit Evaluator UAT data is refused in production.');
-        }
-
-        $existing = PermitApplication::query()->where('metadata->business_permit_evaluation->uat_run_id', $runId)->get();
-        if ($existing->isNotEmpty()) {
-            return $this->inventory($runId, $existing);
+        if (! $this->previewSafety->isEnabled()) {
+            throw new RuntimeException('Business Permit Evaluator UAT data is refused outside the canonical stakeholder preview.');
         }
 
         return DB::transaction(function () use ($runId, $actors): array {
+            $this->scenarioFeeRule($runId);
+
+            $existing = PermitApplication::query()->where('metadata->business_permit_evaluation->uat_run_id', $runId)->get();
+            if ($existing->isNotEmpty()) {
+                return $this->inventory($runId, $existing);
+            }
+
             $retail = $this->lineOfBusiness('EVAL-UAT-RETAIL', 'Retail — Evaluator UAT');
             $restaurant = $this->lineOfBusiness('EVAL-UAT-RESTAURANT', 'Restaurant — Evaluator UAT');
-            $this->scenarioFeeRule($runId);
 
             $cases = [];
             $cases['just_created'] = $this->case($runId, 'just-created', $actors['citizen'], $retail, $actors['assessment_officer']);
@@ -140,22 +143,66 @@ class PrepareBusinessPermitEvaluatorUatDataset
 
     private function scenarioFeeRule(string $runId): FeeRule
     {
-        return FeeRule::query()->firstOrCreate(
-            ['code' => 'EVAL-UAT-BASE-'.$runId],
-            [
-                'name' => 'Evaluator UAT base proposal',
-                'category' => FeeRuleCategory::Fee,
-                'scope' => FeeRuleScope::Application,
-                'calculation_type' => FeeRuleCalculationType::Fixed,
-                'basis' => 'none',
-                'amount_cents' => 10_000,
-                'effective_from' => '2099-01-01',
-                'effective_until' => '2099-12-31',
-                'is_active' => true,
-                'legal_basis' => null,
-                'metadata' => ['semantic_classification' => 'provisional_uat', 'uat_run_id' => $runId, 'production_liability' => false],
+        FeeRule::query()
+            ->where('code', 'like', 'EVAL-UAT-BASE-%')
+            ->where('name', 'Evaluator UAT base proposal')
+            ->where('scope', FeeRuleScope::Application->value)
+            ->where('calculation_type', FeeRuleCalculationType::Fixed->value)
+            ->where('basis', 'none')
+            ->where('amount_cents', 10_000)
+            ->whereDate('effective_from', '2099-01-01')
+            ->whereDate('effective_until', '2099-12-31')
+            ->where('metadata->semantic_classification', 'provisional_uat')
+            ->where('metadata->production_liability', false)
+            ->lockForUpdate()
+            ->get()
+            ->each(function (FeeRule $feeRule): void {
+                if ($feeRule->is_active) {
+                    $feeRule->update(['is_active' => false]);
+                }
+            });
+
+        $feeRule = FeeRule::query()
+            ->where('code', 'EVAL-UAT-BASE')
+            ->whereDate('effective_from', '2099-01-01')
+            ->lockForUpdate()
+            ->first();
+
+        if ($feeRule instanceof FeeRule
+            && (data_get($feeRule->metadata, 'semantic_classification') !== 'provisional_uat'
+                || data_get($feeRule->metadata, 'fixture_family') !== 'evaluator_uat_base')) {
+            throw new RuntimeException('The stable Evaluator UAT FeeRule identity is occupied by a non-preview rule.');
+        }
+
+        $attributes = [
+            'name' => 'Evaluator UAT base proposal',
+            'category' => FeeRuleCategory::Fee,
+            'scope' => FeeRuleScope::Application,
+            'calculation_type' => FeeRuleCalculationType::Fixed,
+            'basis' => 'none',
+            'amount_cents' => 10_000,
+            'effective_until' => '2099-12-31',
+            'is_active' => true,
+            'legal_basis' => null,
+            'metadata' => [
+                'semantic_classification' => 'provisional_uat',
+                'fixture_family' => 'evaluator_uat_base',
+                'latest_uat_run_id' => $runId,
+                'production_liability' => false,
             ],
-        );
+        ];
+
+        if ($feeRule instanceof FeeRule) {
+            $feeRule->update($attributes);
+
+            return $feeRule;
+        }
+
+        return FeeRule::query()->create([
+            'code' => 'EVAL-UAT-BASE',
+            'effective_from' => '2099-01-01',
+            ...$attributes,
+        ]);
     }
 
     private function case(string $runId, string $key, User $citizen, LineOfBusiness $lineOfBusiness, User $creator): BusinessPermitEvaluation
@@ -286,10 +333,23 @@ class PrepareBusinessPermitEvaluatorUatDataset
      */
     private function inventory(string $runId, iterable $applications): array
     {
+        $previewBaseRules = FeeRule::query()
+            ->where('code', 'like', 'EVAL-UAT-BASE%')
+            ->where('metadata->semantic_classification', 'provisional_uat')
+            ->get();
+
         return [
             'run_id' => $runId,
             'semantic_classification' => 'provisional_uat',
             'production_liability' => false,
+            'pricing_fixture' => [
+                'stable_code' => 'EVAL-UAT-BASE',
+                'active_rule_count' => $previewBaseRules->where('is_active', true)->count(),
+                'inactive_legacy_rule_count' => $previewBaseRules
+                    ->where('is_active', false)
+                    ->filter(fn (FeeRule $feeRule): bool => str_starts_with($feeRule->code, 'EVAL-UAT-BASE-'))
+                    ->count(),
+            ],
             'cases' => collect($applications)->mapWithKeys(fn (PermitApplication $application): array => [
                 data_get($application->metadata, 'business_permit_evaluation.case') => [
                     'permit_application_id' => $application->id,
