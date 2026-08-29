@@ -3,11 +3,15 @@
 use App\Actions\CompleteBusinessPermitEvaluationResponsibility;
 use App\Actions\CorrectEvaluationLinesOfBusiness;
 use App\Actions\CreateAssessmentForPermitApplication;
+use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\DefineBusinessPermitEvaluationItem;
 use App\Actions\InitializeBusinessPermitEvaluation;
 use App\Actions\PrepareBusinessPermitEvaluatorUatDataset;
+use App\Actions\RecordAssessmentDecision;
 use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
 use App\Actions\RefreshBusinessPermitEvaluation;
+use App\Assessment\AssessmentSnapshotFingerprint;
+use App\Enums\AssessmentDecisionAction;
 use App\Enums\BusinessPermitEvaluationApplicability;
 use App\Enums\BusinessPermitEvaluationItemType;
 use App\Enums\BusinessPermitEvaluationSource;
@@ -329,8 +333,9 @@ it('prepares an idempotent substantial provisional UAT Evaluator inventory with 
 
     expect($first['semantic_classification'])->toBe('provisional_uat')
         ->and($first['production_liability'])->toBeFalse()
-        ->and($first['cases'])->toHaveCount(13)
+        ->and($first['cases'])->toHaveCount(14)
         ->and(array_keys($first['cases']))->toContain(
+            'financial-working-paper',
             'awaiting-engineering',
             'awaiting-health',
             'office-confirms-default',
@@ -348,11 +353,185 @@ it('prepares an idempotent substantial provisional UAT Evaluator inventory with 
 
     $locked = PermitApplication::query()->findOrFail($first['cases']['payment-locked']['permit_application_id']);
     $reopened = PermitApplication::query()->findOrFail($first['cases']['treasury-lob-reopens']['permit_application_id']);
+    $workingPaper = PermitApplication::query()->findOrFail($first['cases']['financial-working-paper']['permit_application_id']);
 
     expect($locked->paymentSchedules()->count())->toBe(1)
         ->and($locked->status)->toBe(PermitApplicationStatus::PendingPayment)
         ->and($reopened->assessments()->whereNotNull('superseded_at')->count())->toBe(1)
-        ->and($reopened->businessPermitEvaluation->items()->where('responsible_party', 'health')->exists())->toBeTrue();
+        ->and($reopened->businessPermitEvaluation->items()->where('responsible_party', 'health')->exists())->toBeTrue()
+        ->and($workingPaper->businessPermitEvaluation->items()->count())->toBe(7)
+        ->and($workingPaper->businessPermitEvaluation->items()->where('item_type', 'charge')->count())->toBe(6);
+});
+
+it('operates one multi-office financial working paper through reassessment approval and payment lock', function () {
+    configureBusinessPermitEvaluatorPreviewSafety();
+    $actors = businessPermitEvaluatorPreviewActors();
+    $inventory = app(PrepareBusinessPermitEvaluatorUatDataset::class)->handle('working-paper-run', $actors);
+    $application = PermitApplication::query()->findOrFail($inventory['cases']['financial-working-paper']['permit_application_id']);
+    $evaluation = $application->businessPermitEvaluation;
+    $resolver = app(BusinessPermitEvaluationResolver::class);
+    $complete = app(CompleteBusinessPermitEvaluationResponsibility::class);
+
+    $initial = $resolver->resolve($evaluation->fresh());
+    $officeCharges = collect($initial['items'])->where('item_type', 'charge');
+    $applicableOfficeCharges = $officeCharges->where('applicability', 'applicable');
+
+    expect($initial['projected_charges'])->toHaveCount(1)
+        ->and($initial['projected_charges'][0]['amount_cents'])->toBe(10_000)
+        ->and($officeCharges)->toHaveCount(6)
+        ->and($applicableOfficeCharges)->toHaveCount(5)
+        ->and($applicableOfficeCharges->pluck('responsible_party')->sort()->values()->all())->toBe([
+            'assessor',
+            'engineering',
+            'health',
+            'menro',
+            'mpdo',
+        ])
+        ->and($applicableOfficeCharges->every(
+            fn (array $item): bool => is_int(data_get($item, 'default_value.amount_cents'))
+                && data_get($item, 'default_value.amount_cents') >= 0
+                && $item['resolution'] === 'awaiting_responsible_confirmation'
+                && $item['default_source_classification'] === 'provisional_uat',
+        ))->toBeTrue()
+        ->and($initial['total_amount_cents'])->toBe(10_000);
+
+    $record = function (
+        string $key,
+        User $actor,
+        BusinessPermitEvaluationApplicability $applicability,
+        int $amount,
+        ?string $reason,
+        bool $inspectionCompleted,
+    ) use ($evaluation, $complete): void {
+        $item = $evaluation->items()->where('key', $key)->sole();
+        $version = $evaluation->fresh()->currentVersion;
+
+        $complete->handle(
+            $item,
+            $actor,
+            $applicability,
+            [
+                'amount_cents' => $amount,
+                'inspection' => [
+                    'required' => (bool) data_get($item->metadata, 'inspection_required'),
+                    'mode' => 'document_review',
+                    'completed' => $inspectionCompleted,
+                    'findings' => $reason,
+                ],
+            ],
+            BusinessPermitEvaluationSource::ProvisionalUat,
+            $reason,
+            $version->sequence,
+            $version->fingerprint,
+            'working-paper-'.$key.'-'.$applicability->value,
+        );
+    };
+
+    $record('engineering.charge', $actors['engineering'], BusinessPermitEvaluationApplicability::Applicable, 12_500, 'Engineering confirmed the preview proposal after physical inspection.', true);
+    expect($resolver->resolve($evaluation->fresh())['total_amount_cents'])->toBe(22_500);
+
+    $record('mpdo.charge', $actors['mpdo'], BusinessPermitEvaluationApplicability::Applicable, 9_500, 'MPDO adjusted the preview proposal for the documented floor-area review.', true);
+    $mpdo = collect($resolver->resolve($evaluation->fresh())['items'])->firstWhere('key', 'mpdo.charge');
+    expect(data_get($mpdo, 'default_value.amount_cents'))->toBe(8_000)
+        ->and(data_get($mpdo, 'value.amount_cents'))->toBe(9_500)
+        ->and($mpdo['action'])->toBe('correction')
+        ->and($mpdo['reason'])->toBe('MPDO adjusted the preview proposal for the documented floor-area review.')
+        ->and($resolver->resolve($evaluation->fresh())['total_amount_cents'])->toBe(32_000);
+
+    $record('assessor.charge', $actors['assessor'], BusinessPermitEvaluationApplicability::Applicable, 6_000, 'Assessor confirmed the preview proposal.', true);
+    $record('health.charge', $actors['health'], BusinessPermitEvaluationApplicability::Applicable, 9_500, 'Health confirmed the preview proposal after inspection.', true);
+    $record('menro.charge', $actors['menro'], BusinessPermitEvaluationApplicability::NotApplicable, 4_000, 'MENRO determined this Retail fixture is not applicable.', true);
+
+    $afterOffices = $resolver->resolve($evaluation->fresh());
+    $menro = collect($afterOffices['items'])->firstWhere('key', 'menro.charge');
+    expect($afterOffices['total_amount_cents'])->toBe(47_500)
+        ->and($menro['applicability'])->toBe('not_applicable')
+        ->and($menro['resolution'])->toBe('resolved');
+
+    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($evaluation->fresh(), $actors['treasury']);
+    expect(app(BusinessPermitEvaluationReadiness::class)->forAssessment($evaluation->fresh(), 'provisional_uat')['ready'])->toBeTrue();
+
+    $firstAssessment = app(CreateAssessmentForPermitApplication::class)->handle($application->fresh(), $actors['assessment_officer']);
+    expect($firstAssessment->total_amount_cents)->toBe(47_500)
+        ->and($firstAssessment->lines)->toHaveCount(5)
+        ->and($firstAssessment->lines->sum('amount_cents'))->toBe(47_500)
+        ->and($firstAssessment->lines->pluck('business_permit_evaluation_item_id')->filter()->unique())->toHaveCount(4);
+
+    $retailId = $application->lines()->sole()->line_of_business_id;
+    $restaurantId = LineOfBusiness::query()->where('code', 'EVAL-UAT-RESTAURANT')->sole()->id;
+    $beforeCorrection = $evaluation->fresh()->currentVersion;
+    app(CorrectEvaluationLinesOfBusiness::class)->handle(
+        $evaluation,
+        [$retailId, $restaurantId],
+        $actors['treasury'],
+        'Treasury identified Restaurant in addition to the preserved Retail declaration.',
+        $beforeCorrection->sequence,
+        $beforeCorrection->fingerprint,
+        'working-paper-lob-correction',
+    );
+
+    $versionCountAfterCorrection = $evaluation->versions()->count();
+    app(CorrectEvaluationLinesOfBusiness::class)->handle(
+        $evaluation,
+        [$retailId, $restaurantId],
+        $actors['treasury'],
+        'Treasury identified Restaurant in addition to the preserved Retail declaration.',
+        $beforeCorrection->sequence,
+        $beforeCorrection->fingerprint,
+        'working-paper-lob-correction',
+    );
+
+    $reopened = $resolver->resolve($evaluation->fresh());
+    $restaurantHealth = collect($reopened['items'])->firstWhere('key', 'health.restaurant.charge');
+    expect(data_get($reopened, 'application.declared_lines.0.line_of_business_id'))->toBe($retailId)
+        ->and($reopened['resolved_line_of_business_ids'])->toBe([$retailId, $restaurantId])
+        ->and($evaluation->fresh()->currentVersion->sequence)->toBe($beforeCorrection->sequence + 2)
+        ->and($evaluation->versions()->count())->toBe($versionCountAfterCorrection)
+        ->and($firstAssessment->fresh()->superseded_at)->not->toBeNull()
+        ->and($restaurantHealth['applicability'])->toBe('applicable')
+        ->and($restaurantHealth['resolution'])->toBe('awaiting_responsible_confirmation')
+        ->and(data_get($restaurantHealth, 'default_value.amount_cents'))->toBe(11_000)
+        ->and($reopened['total_amount_cents'])->toBe(47_500);
+
+    $record('health.restaurant.charge', $actors['health'], BusinessPermitEvaluationApplicability::Applicable, 11_000, 'Health completed the Restaurant dependency review.', true);
+    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($evaluation->fresh(), $actors['treasury']);
+    $resolved = $resolver->resolve($evaluation->fresh());
+    $freshAssessment = app(CreateAssessmentForPermitApplication::class)->handle($application->fresh(), $actors['assessment_officer']);
+
+    expect($resolved['total_amount_cents'])->toBe(58_500)
+        ->and($freshAssessment->total_amount_cents)->toBe(58_500)
+        ->and($freshAssessment->lines->sum('amount_cents'))->toBe(58_500)
+        ->and($freshAssessment->lines)->toHaveCount(6)
+        ->and($freshAssessment->lines->pluck('business_permit_evaluation_item_id')->filter()->unique())->toHaveCount(5)
+        ->and($freshAssessment->business_permit_evaluation_version_id)->toBe($evaluation->fresh()->currentVersion->id)
+        ->and($freshAssessment->business_permit_evaluation_fingerprint)->toBe($evaluation->fresh()->currentVersion->fingerprint);
+
+    $decision = app(RecordAssessmentDecision::class)->handle(
+        $freshAssessment,
+        $actors['municipal_treasurer'],
+        AssessmentDecisionAction::Approved,
+        app(AssessmentSnapshotFingerprint::class)->hash($freshAssessment),
+    );
+    $schedule = app(CreatePaymentScheduleForAssessment::class)->handle($freshAssessment, $actors['assessment_officer']);
+
+    expect($decision->action)->toBe(AssessmentDecisionAction::Approved)
+        ->and($decision->assessment_snapshot_hash)->toBe(app(AssessmentSnapshotFingerprint::class)->hash($freshAssessment->fresh()))
+        ->and($schedule->total_amount_cents)->toBe(58_500)
+        ->and($application->fresh()->status)->toBe(PermitApplicationStatus::PendingPayment);
+
+    $engineering = $evaluation->items()->where('key', 'engineering.charge')->sole();
+    $lockedVersion = $evaluation->fresh()->currentVersion;
+    expect(fn () => $complete->handle(
+        $engineering,
+        $actors['engineering'],
+        BusinessPermitEvaluationApplicability::Applicable,
+        ['amount_cents' => 12_500, 'inspection' => ['required' => true, 'completed' => true]],
+        BusinessPermitEvaluationSource::ProvisionalUat,
+        'Attempted mutation after scheduling.',
+        $lockedVersion->sequence,
+        $lockedVersion->fingerprint,
+        'working-paper-payment-lock',
+    ))->toThrow(LogicException::class, 'cannot change after a Payment Schedule exists');
 });
 
 it('normalizes legacy preview pricing across three persistent runs without changing historical snapshots or municipal rules', function () {
@@ -477,7 +656,10 @@ it('fails closed without changing an accepted rule that occupies the stable prev
  *     treasury: User,
  *     municipal_treasurer: User,
  *     engineering: User,
- *     health: User
+ *     mpdo: User,
+ *     assessor: User,
+ *     health: User,
+ *     menro: User
  * }
  */
 function businessPermitEvaluatorPreviewActors(): array
@@ -488,7 +670,10 @@ function businessPermitEvaluatorPreviewActors(): array
         'treasury' => User::factory()->create(),
         'municipal_treasurer' => User::factory()->create(),
         'engineering' => User::factory()->create(),
+        'mpdo' => User::factory()->create(),
+        'assessor' => User::factory()->create(),
         'health' => User::factory()->create(),
+        'menro' => User::factory()->create(),
     ];
 }
 

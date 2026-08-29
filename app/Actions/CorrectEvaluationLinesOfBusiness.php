@@ -16,7 +16,10 @@ use LogicException;
 
 class CorrectEvaluationLinesOfBusiness
 {
-    public function __construct(private readonly ReviseBusinessPermitEvaluationItem $reviseItem) {}
+    public function __construct(
+        private readonly ReviseBusinessPermitEvaluationItem $reviseItem,
+        private readonly RefreshBusinessPermitEvaluation $refreshEvaluation,
+    ) {}
 
     /** @param list<int> $lineOfBusinessIds */
     public function handle(
@@ -55,7 +58,7 @@ class CorrectEvaluationLinesOfBusiness
                 throw new LogicException('The Evaluation has no preserved applicant Line of Business declaration.');
             }
 
-            return $this->reviseItem->handle(
+            $revision = $this->reviseItem->handle(
                 $item,
                 BusinessPermitEvaluationRevisionAction::AuthorizedDetermination,
                 BusinessPermitEvaluationApplicability::Applicable,
@@ -67,6 +70,15 @@ class CorrectEvaluationLinesOfBusiness
                 $expectedFingerprint,
                 $idempotencyKey,
             );
+
+            $revisionIsCurrent = $evaluation->versions()->latest('sequence')->value('id') === $revision->business_permit_evaluation_version_id;
+            if ($revisionIsCurrent && $evaluation->items()->get()->contains(
+                fn (BusinessPermitEvaluationItem $candidate): bool => data_get($candidate->metadata, 'fixture_dependency.semantic_classification') === 'provisional_uat',
+            )) {
+                $this->refreshEvaluation->handle($evaluation, $treasuryActor);
+            }
+
+            return $revision;
         });
     }
 }

@@ -40,7 +40,7 @@ class PrepareBusinessPermitEvaluatorUatDataset
     ) {}
 
     /**
-     * @param  array{citizen: User, assessment_officer: User, treasury: User, municipal_treasurer: User, engineering: User, health: User}  $actors
+     * @param  array{citizen: User, assessment_officer: User, treasury: User, municipal_treasurer: User, engineering: User, mpdo: User, assessor: User, health: User, menro: User}  $actors
      * @return array<string, mixed>
      */
     public function handle(string $runId, array $actors): array
@@ -62,6 +62,8 @@ class PrepareBusinessPermitEvaluatorUatDataset
 
             $cases = [];
             $cases['just_created'] = $this->case($runId, 'just-created', $actors['citizen'], $retail, $actors['assessment_officer']);
+
+            $cases['financial_working_paper'] = $this->financialWorkingPaperCase($runId, $actors, $retail, $restaurant);
 
             $cases['awaiting_engineering'] = $this->case($runId, 'awaiting-engineering', $actors['citizen'], $retail, $actors['assessment_officer']);
             $this->officeItem($cases['awaiting_engineering'], 'engineering', $actors['engineering'], 12_500, true);
@@ -241,6 +243,36 @@ class PrepareBusinessPermitEvaluatorUatDataset
     }
 
     /** @param array<string, User> $actors */
+    private function financialWorkingPaperCase(string $runId, array $actors, LineOfBusiness $retail, LineOfBusiness $restaurant): BusinessPermitEvaluation
+    {
+        $evaluation = $this->case($runId, 'financial-working-paper', $actors['citizen'], $retail, $actors['assessment_officer']);
+
+        $this->officeItem($evaluation, 'engineering', $actors['engineering'], 12_500, true);
+        $this->officeItem($evaluation, 'mpdo', $actors['mpdo'], 8_000, false);
+        $this->officeItem($evaluation, 'assessor', $actors['assessor'], 6_000, false);
+        $this->officeItem($evaluation, 'health', $actors['health'], 9_500, true);
+        $this->officeItem($evaluation, 'menro', $actors['menro'], 4_000, false);
+        $this->officeItem(
+            $evaluation,
+            'health.restaurant',
+            $actors['health'],
+            11_000,
+            true,
+            BusinessPermitEvaluationApplicability::NotApplicable,
+            [
+                'fixture_dependency' => [
+                    'semantic_classification' => 'provisional_uat',
+                    'line_of_business_id' => $restaurant->id,
+                ],
+                'label' => 'Restaurant health review charge',
+            ],
+            'health',
+        );
+
+        return $evaluation->fresh();
+    }
+
+    /** @param array<string, User> $actors */
     private function reassessedCase(string $runId, string $key, array $actors, LineOfBusiness $retail, LineOfBusiness $restaurant): BusinessPermitEvaluation
     {
         $evaluation = $this->readyCase($runId, $key, $actors, $retail);
@@ -259,21 +291,36 @@ class PrepareBusinessPermitEvaluatorUatDataset
         return $evaluation->fresh();
     }
 
-    private function officeItem(BusinessPermitEvaluation $evaluation, string $office, User $actor, int $amount, bool $inspectionRequired): BusinessPermitEvaluationItem
-    {
+    /** @param array<string, mixed> $metadata */
+    private function officeItem(
+        BusinessPermitEvaluation $evaluation,
+        string $office,
+        User $actor,
+        int $amount,
+        bool $inspectionRequired,
+        BusinessPermitEvaluationApplicability $applicability = BusinessPermitEvaluationApplicability::Applicable,
+        array $metadata = [],
+        ?string $responsibleParty = null,
+    ): BusinessPermitEvaluationItem {
         return $this->defineItem->handle(
             $evaluation,
             "{$office}.charge",
             BusinessPermitEvaluationItemType::Charge,
-            $office,
+            $responsibleParty ?? $office,
             true,
             true,
-            BusinessPermitEvaluationApplicability::Applicable,
+            $applicability,
             ['amount_cents' => $amount, 'inspection' => ['required' => $inspectionRequired, 'completed' => false]],
             BusinessPermitEvaluationSource::ProvisionalUat,
             $actor,
             'Synthetic UAT system/default proposal for product operation only.',
-            ['label' => str($office)->headline().' evaluation charge', 'authorized_actor_id' => $actor->id, 'inspection_required' => $inspectionRequired],
+            [
+                'label' => str($office)->headline().' evaluation charge',
+                'authorized_actor_id' => $actor->id,
+                'inspection_required' => $inspectionRequired,
+                'semantic_classification' => 'provisional_uat',
+                ...$metadata,
+            ],
         );
     }
 

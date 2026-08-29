@@ -287,7 +287,10 @@ class PrepareStakeholderPreviewCommand extends Command
             'treasury' => $accounts['treasury'],
             'municipal_treasurer' => $accounts['municipal_treasurer'],
             'engineering' => $accounts['engineering'],
+            'mpdo' => $accounts['mpdo'],
+            'assessor' => $accounts['assessor'],
             'health' => $accounts['health'],
+            'menro' => $accounts['menro'],
         ]);
 
         $store = new ScenarioArtifactStore('stakeholder_preview_cycle_1', $runId);
@@ -314,7 +317,7 @@ class PrepareStakeholderPreviewCommand extends Command
                 'billing_groups' => route('staff.billing-groups.index', absolute: false),
                 'billing_group_detail' => route('staff.billing-groups.show', $billingGroup, false),
                 'billing_group_abstract' => route('staff.reports.billing-groups.abstract.index', $billingGroup, false),
-                'business_permit_evaluator' => data_get($evaluatorUat, 'cases.awaiting-engineering.url'),
+                'business_permit_evaluator' => data_get($evaluatorUat, 'cases.financial-working-paper.url'),
             ],
             'provisional_semantics' => [
                 'classification' => 'provisional_uat',
