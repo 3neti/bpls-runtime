@@ -28,6 +28,7 @@ class BusinessPermitEvaluationData extends Data
      * @param  array<int, EvaluationResolvedLineData>  $municipal_resolved_lines
      * @param  array<int, EvaluationItemData>  $items
      * @param  array<int, EvaluationProjectedChargeData>  $projected_charges
+     * @param  array<string, mixed>  $financial_working_paper
      * @param  array<int, string>  $pricing_issues
      * @param  array<int, int>  $my_item_ids
      */
