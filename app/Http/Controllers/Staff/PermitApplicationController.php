@@ -64,7 +64,7 @@ class PermitApplicationController extends Controller
         $status = $filters['status'] ?? null;
 
         $permitApplications = PermitApplication::query()
-            ->with(['business.owner', 'lines.lineOfBusiness', 'assessments' => fn ($query) => $query->latest(), 'paymentSchedules' => fn ($query) => $query->latest()])
+            ->with(['business.owner', 'businessPermitEvaluation', 'lines.lineOfBusiness', 'assessments' => fn ($query) => $query->latest(), 'paymentSchedules' => fn ($query) => $query->latest()])
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($query) use ($search): void {
                     $query
@@ -186,6 +186,7 @@ class PermitApplicationController extends Controller
             'clearances' => fn ($query) => $query->with('completedBy')->orderBy('id'),
             'officeChargeContributions' => fn ($query) => $query->with('submittedBy')->orderBy('office_code'),
             'provisionalUatPermitCompletion',
+            'businessPermitEvaluation',
         ]);
 
         return Inertia::render('permit-applications/Show', [
@@ -198,6 +199,7 @@ class PermitApplicationController extends Controller
                 'complete_clearances' => auth()->user()?->can(UserPermission::CompletePermitClearances->value) ?? false,
                 'upload_documents' => $permitApplication->canContinue()
                     && (auth()->user()?->can(UserPermission::CreatePermitApplications->value) ?? false),
+                'view_business_permit_evaluation' => auth()->user()?->can(UserPermission::ViewBusinessPermitEvaluations->value) ?? false,
             ],
             'permitDocumentGaps' => [
                 'The generated application form shows the intake information currently recorded.',
@@ -243,6 +245,8 @@ class PermitApplicationController extends Controller
             'type' => $permitApplication->type->value,
             'status' => $permitApplication->status->value,
             'application_year' => $permitApplication->application_year,
+            'business_permit_evaluation_url' => route('staff.permit-applications.evaluation.show', $permitApplication, absolute: false),
+            'has_business_permit_evaluation' => $permitApplication->businessPermitEvaluation !== null,
             'submitted_at' => $permitApplication->submitted_at?->toIso8601String(),
             'business' => [
                 'id' => $permitApplication->business->id,

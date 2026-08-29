@@ -197,6 +197,10 @@ class PermitApplicationController extends Controller
                     'address' => $application->business->address,
                     'barangay' => $application->business->barangay,
                 ],
+                'business_permit_evaluation_url' => $application->businessPermitEvaluation !== null
+                    && $request->user()->can(UserPermission::ViewOwnBusinessPermitEvaluations->value)
+                        ? route('citizen.permit-applications.evaluation.show', $application, absolute: false)
+                        : null,
                 'lines' => $application->lines->map(fn ($line): array => [
                     'id' => $line->id,
                     'line_of_business' => [
@@ -351,6 +355,7 @@ class PermitApplicationController extends Controller
                 'paymentSchedules.treasuryCollections' => fn ($query) => $query->oldest('id'),
                 'paymentSchedules.treasuryCollections.receipt',
                 'clearances' => fn ($query) => $query->oldest('id'),
+                'businessPermitEvaluation',
             ])
             ->withExists('assessments')
             ->firstOrFail();

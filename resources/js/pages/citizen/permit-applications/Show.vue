@@ -45,6 +45,7 @@ type PermitApplication = {
     type: string;
     status: string;
     application_year: number;
+    business_permit_evaluation_url: string | null;
     business_name: string;
     activity_count: number;
     saved_at: string | null;
@@ -412,6 +413,20 @@ function blockerLabel(blocker: string): string {
             >
                 <template #actions>
                     <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                        <Button
+                            v-if="permitApplication.business_permit_evaluation_url"
+                            as-child
+                            variant="outline"
+                        >
+                            <Link
+                                :href="
+                                    permitApplication.business_permit_evaluation_url
+                                "
+                            >
+                                <ClipboardCheck />
+                                Review Evaluation
+                            </Link>
+                        </Button>
                         <Button
                             v-if="permitApplication.can_submit"
                             type="button"

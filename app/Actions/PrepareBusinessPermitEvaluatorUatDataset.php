@@ -280,7 +280,10 @@ class PrepareBusinessPermitEvaluatorUatDataset
         );
     }
 
-    /** @param iterable<int, PermitApplication> $applications @return array<string, mixed> */
+    /**
+     * @param  iterable<int, PermitApplication>  $applications
+     * @return array<string, mixed>
+     */
     private function inventory(string $runId, iterable $applications): array
     {
         return [

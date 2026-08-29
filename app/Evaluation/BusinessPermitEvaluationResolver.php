@@ -75,7 +75,7 @@ class BusinessPermitEvaluationResolver
         $fingerprintPayload = $this->normalize([
             'evaluation_id' => $evaluation->id,
             'application' => $application,
-            'items' => $items->map(fn (array $item): array => Arr::except($item, ['revision_id', 'actor_name']))->all(),
+            'items' => $items->map(fn (array $item): array => $this->fingerprintItem($item))->all(),
             'projected_charges' => $projectedCharges->map(fn (array $charge): array => Arr::except($charge, ['fee_rule', 'application_line']))->all(),
             'pricing_issues' => $pricingIssues,
         ]);
@@ -93,8 +93,8 @@ class BusinessPermitEvaluationResolver
             'fingerprint_current' => hash_equals($version->fingerprint, $currentFingerprint),
             'application' => $application,
             'resolved_line_of_business_ids' => $lineOfBusinessIds,
-            'items' => $items->all(),
-            'projected_charges' => $projectedCharges->all(),
+            'items' => array_values($items->all()),
+            'projected_charges' => array_values($projectedCharges->all()),
             'pricing_issues' => $pricingIssues,
             'total_amount_cents' => $totalAmountCents,
         ];
@@ -162,6 +162,29 @@ class BusinessPermitEvaluationResolver
     }
 
     /**
+     * Keep human-readable names out of financial identity. Actor IDs remain bound while
+     * later profile-name corrections cannot make an otherwise unchanged version stale.
+     *
+     * @param  array<string, mixed>  $item
+     * @return array<string, mixed>
+     */
+    private function fingerprintItem(array $item): array
+    {
+        $history = $item['revision_history'] ?? [];
+
+        $item['revision_history'] = is_array($history)
+            ? array_map(
+                fn (mixed $revision): mixed => is_array($revision)
+                    ? Arr::except($revision, ['actor_name'])
+                    : $revision,
+                $history,
+            )
+            : [];
+
+        return Arr::except($item, ['revision_id', 'actor_name']);
+    }
+
+    /**
      * @param  Collection<int, array<string, mixed>>  $items
      * @return list<int>
      */
@@ -171,23 +194,21 @@ class BusinessPermitEvaluationResolver
         $ids = is_array($lineItem) ? data_get($lineItem, 'value.line_of_business_ids') : null;
 
         if (! is_array($ids)) {
-            return $evaluation->permitApplication->lines
+            return array_values($evaluation->permitApplication->lines
                 ->pluck('line_of_business_id')
                 ->filter()
                 ->map(fn (mixed $id): int => (int) $id)
                 ->unique()
                 ->sort()
-                ->values()
-                ->all();
+                ->values()->all());
         }
 
-        return collect($ids)
+        return array_values(collect($ids)
             ->filter(fn (mixed $id): bool => is_int($id) || ctype_digit((string) $id))
             ->map(fn (mixed $id): int => (int) $id)
             ->unique()
             ->sort()
-            ->values()
-            ->all();
+            ->values()->all());
     }
 
     /**
@@ -254,7 +275,7 @@ class BusinessPermitEvaluationResolver
             : BusinessPermitEvaluationSource::GovernedRule;
 
         $charges->push([
-            'key' => 'rule.'.$feeRule->id.'.line.'.($applicationLine?->id ?? 'none'),
+            'key' => 'rule.'.$feeRule->id.'.line.'.($applicationLine instanceof PermitApplicationLine ? $applicationLine->id : 'none'),
             'item_type' => BusinessPermitEvaluationItemType::Charge->value,
             'responsible_party' => 'system',
             'applicability' => BusinessPermitEvaluationApplicability::Applicable->value,
@@ -279,7 +300,10 @@ class BusinessPermitEvaluationResolver
         ]);
     }
 
-    /** @param list<int> $resolvedLineOfBusinessIds */
+    /**
+     * @param  list<int>  $resolvedLineOfBusinessIds
+     * @return array<string, mixed>
+     */
     private function applicationProjection(BusinessPermitEvaluation $evaluation, array $resolvedLineOfBusinessIds): array
     {
         $permitApplication = $evaluation->permitApplication;
@@ -305,7 +329,10 @@ class BusinessPermitEvaluationResolver
         ];
     }
 
-    /** @param array<mixed> $value @return array<mixed> */
+    /**
+     * @param  array<mixed>  $value
+     * @return array<mixed>
+     */
     private function normalize(array $value): array
     {
         if (Arr::isAssoc($value)) {

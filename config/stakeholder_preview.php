@@ -13,6 +13,7 @@ return [
         'bplo' => env('STAKEHOLDER_PREVIEW_BPLO_EMAIL', 'stakeholder.preview.bplo@example.test'),
         'assessment_officer' => env('STAKEHOLDER_PREVIEW_ASSESSMENT_OFFICER_EMAIL', 'stakeholder.preview.assessment-officer@example.test'),
         'treasury' => env('STAKEHOLDER_PREVIEW_TREASURY_EMAIL', 'stakeholder.preview.treasury@example.test'),
+        'municipal_treasurer' => env('STAKEHOLDER_PREVIEW_MUNICIPAL_TREASURER_EMAIL', 'stakeholder.preview.municipal-treasurer@example.test'),
         'cashier' => env('STAKEHOLDER_PREVIEW_CASHIER_EMAIL', 'stakeholder.preview.cashier@example.test'),
         'management' => env('STAKEHOLDER_PREVIEW_MANAGEMENT_EMAIL', 'stakeholder.preview.management@example.test'),
         'engineering' => env('STAKEHOLDER_PREVIEW_ENGINEERING_EMAIL', 'stakeholder.preview.engineering@example.test'),

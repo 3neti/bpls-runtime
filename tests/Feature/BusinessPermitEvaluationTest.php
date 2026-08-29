@@ -14,6 +14,8 @@ use App\Enums\BusinessPermitEvaluationSource;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleScope;
 use App\Enums\PermitApplicationStatus;
+use App\Enums\StakeholderPreviewPersona;
+use App\Enums\UserPermission;
 use App\Evaluation\BusinessPermitEvaluationReadiness;
 use App\Evaluation\BusinessPermitEvaluationResolver;
 use App\Models\Assessment;
@@ -152,6 +154,7 @@ it('records Treasury LOB determination as a new version and leaves the original 
     $restaurant = LineOfBusiness::factory()->create(['code' => 'RESTAURANT', 'name' => 'Restaurant']);
     $beforeBusiness = $fixture['business']->getAttributes();
     $current = $fixture['evaluation']->fresh()->currentVersion;
+    $beforeProjection = app(BusinessPermitEvaluationResolver::class)->resolve($fixture['evaluation']->fresh());
 
     app(CorrectEvaluationLinesOfBusiness::class)->handle(
         $fixture['evaluation'],
@@ -167,6 +170,8 @@ it('records Treasury LOB determination as a new version and leaves the original 
     $lineItem = collect($projection['items'])->firstWhere('key', BusinessPermitEvaluationResolver::APPLICANT_LINES_ITEM_KEY);
 
     expect($fixture['evaluation']->versions()->count())->toBe(2)
+        ->and($projection['current_fingerprint'])->not->toBe($beforeProjection['current_fingerprint'])
+        ->and($projection['total_amount_cents'])->toBe($beforeProjection['total_amount_cents'])
         ->and($projection['resolved_line_of_business_ids'])->toBe([$fixture['retail']->id, $restaurant->id])
         ->and($lineItem['revision_history'][0]['action'])->toBe('declaration')
         ->and($lineItem['revision_history'][0]['value']['line_of_business_ids'])->toBe([$fixture['retail']->id])
@@ -202,6 +207,58 @@ it('binds one exact ready evaluation version to an idempotent assessment with ca
         ->and($first->lines->first()->business_permit_evaluation_item_id)->toBeNull()
         ->and($first->total_amount_cents)->toBe(25_000)
         ->and(Assessment::query()->count())->toBe(1);
+});
+
+it('maps each governed and human-resolved charge exactly once without duplicate pricing paths', function () {
+    $fixture = evaluationFixture();
+    $feeRule = FeeRule::factory()->create([
+        'code' => 'CANONICAL-RULE',
+        'name' => 'Canonical rule charge',
+        'scope' => FeeRuleScope::Application,
+        'calculation_type' => FeeRuleCalculationType::Fixed,
+        'basis' => 'none',
+        'amount_cents' => 20_000,
+        'effective_from' => '2026-01-01',
+    ]);
+    app(RefreshBusinessPermitEvaluation::class)->handle($fixture['evaluation'], $fixture['actor']);
+
+    $item = app(DefineBusinessPermitEvaluationItem::class)->handle(
+        $fixture['evaluation']->fresh(),
+        'engineering.resolved-charge',
+        BusinessPermitEvaluationItemType::Charge,
+        'engineering',
+        true,
+        false,
+        BusinessPermitEvaluationApplicability::Applicable,
+        ['amount_cents' => 7_500],
+        BusinessPermitEvaluationSource::GovernedOfficeProcedure,
+        $fixture['actor'],
+        metadata: ['label' => 'Resolved Engineering charge'],
+    );
+    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($fixture['evaluation']->fresh(), $fixture['actor']);
+
+    $assessment = app(CreateAssessmentForPermitApplication::class)->handle($fixture['application']->fresh(), $fixture['actor']);
+
+    expect($assessment->lines)->toHaveCount(2)
+        ->and($assessment->lines->where('fee_rule_id', $feeRule->id))->toHaveCount(1)
+        ->and($assessment->lines->where('business_permit_evaluation_item_id', $item->id))->toHaveCount(1)
+        ->and($assessment->lines->whereNotNull('fee_rule_id')->first()->business_permit_evaluation_item_id)->toBeNull()
+        ->and($assessment->lines->whereNotNull('business_permit_evaluation_item_id')->first()->fee_rule_id)->toBeNull()
+        ->and($assessment->total_amount_cents)->toBe(27_500);
+
+    expect(fn () => app(DefineBusinessPermitEvaluationItem::class)->handle(
+        $fixture['evaluation']->fresh(),
+        'duplicate.rule-path',
+        BusinessPermitEvaluationItemType::Charge,
+        'engineering',
+        true,
+        false,
+        BusinessPermitEvaluationApplicability::Applicable,
+        ['amount_cents' => 20_000],
+        BusinessPermitEvaluationSource::GovernedOfficeProcedure,
+        $fixture['actor'],
+        metadata: ['fee_rule_id' => $feeRule->id],
+    ))->toThrow(LogicException::class, 'cannot also be defined as a human Evaluation charge');
 });
 
 it('detects rule drift, refreshes dynamic dependencies, and supersedes an unscheduled Assessment without mutating it', function () {
@@ -249,6 +306,15 @@ it('keeps pre-Evaluator historical and operational applications compatible witho
         ->and($assessment->business_permit_evaluation_version_id)->toBeNull()
         ->and($assessment->business_permit_evaluation_fingerprint)->toBeNull()
         ->and($assessment->total_amount_cents)->toBe(5_000);
+});
+
+it('keeps Treasury counter-check authority separate from Municipal Treasurer exact-snapshot approval', function () {
+    expect(StakeholderPreviewPersona::Treasury->permissions())
+        ->toContain(UserPermission::CounterCheckBusinessPermitEvaluations, UserPermission::CorrectEvaluationLinesOfBusiness)
+        ->not->toContain(UserPermission::ApproveAssessments)
+        ->and(StakeholderPreviewPersona::MunicipalTreasurer->permissions())
+        ->toContain(UserPermission::ApproveAssessments)
+        ->not->toContain(UserPermission::CounterCheckBusinessPermitEvaluations, UserPermission::CorrectEvaluationLinesOfBusiness);
 });
 
 it('prepares an idempotent substantial provisional UAT Evaluator inventory with distinct responsibilities', function () {

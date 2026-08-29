@@ -18,7 +18,10 @@ class DefineBusinessPermitEvaluationItem
 {
     public function __construct(private readonly BusinessPermitEvaluationVersioner $versioner) {}
 
-    /** @param array<string, mixed>|null $value @param array<string, mixed>|null $metadata */
+    /**
+     * @param  array<string, mixed>|null  $value
+     * @param  array<string, mixed>|null  $metadata
+     */
     public function handle(
         BusinessPermitEvaluation $evaluation,
         string $key,

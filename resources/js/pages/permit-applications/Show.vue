@@ -44,6 +44,8 @@ type PermitApplication = {
     type: string;
     status: string;
     application_year: number;
+    business_permit_evaluation_url: string;
+    has_business_permit_evaluation: boolean;
     submitted_at: string | null;
     business: {
         name: string;
@@ -263,6 +265,7 @@ const props = defineProps<{
         attempt_release: boolean;
         complete_clearances: boolean;
         upload_documents: boolean;
+        view_business_permit_evaluation: boolean;
     };
     permitDocumentGaps: string[];
 }>();
@@ -396,6 +399,28 @@ function fileSize(sizeBytes: number): string {
             >
                 <template #actions>
                     <div class="flex flex-wrap gap-2 sm:justify-end">
+                        <Button
+                            v-if="can.view_business_permit_evaluation"
+                            as-child
+                            :variant="
+                                permitApplication.has_business_permit_evaluation
+                                    ? 'default'
+                                    : 'outline'
+                            "
+                        >
+                            <Link
+                                :href="
+                                    permitApplication.business_permit_evaluation_url
+                                "
+                            >
+                                <ListChecks />
+                                {{
+                                    permitApplication.has_business_permit_evaluation
+                                        ? 'Open Evaluation'
+                                        : 'Start Evaluation'
+                                }}
+                            </Link>
+                        </Button>
                         <Button
                             v-if="can.view_permit_documents"
                             as-child

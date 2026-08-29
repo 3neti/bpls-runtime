@@ -30,9 +30,13 @@ class DescribeBusinessPermitEvaluation
         $projection = $this->resolver->resolve($evaluation);
         $commissionedReadiness = $this->readiness->forAssessment($evaluation, 'commissioned');
         $uatReadiness = $this->readiness->forAssessment($evaluation, 'provisional_uat');
+        $declaredLines = data_get($projection, 'application.declared_lines', []);
+        $declaredLineOfBusinessIds = is_array($declaredLines)
+            ? collect($declaredLines)->pluck('line_of_business_id')->filter()->map(fn (mixed $id): int => (int) $id)->all()
+            : [];
         $lineNames = LineOfBusiness::query()
             ->whereIn('id', collect($projection['resolved_line_of_business_ids'])
-                ->merge(data_get($projection, 'application.declared_lines.*.line_of_business_id'))
+                ->merge($declaredLineOfBusinessIds)
                 ->filter()->unique())
             ->get()
             ->keyBy('id');
@@ -69,7 +73,7 @@ class DescribeBusinessPermitEvaluation
                 'type' => $evaluation->permitApplication->type->value,
                 'year' => $evaluation->permitApplication->application_year,
             ],
-            'applicant_declaration' => collect(data_get($projection, 'application.declared_lines', []))->map(fn (array $line): array => [
+            'applicant_declaration' => collect(is_array($declaredLines) ? $declaredLines : [])->map(fn (array $line): array => [
                 ...$line,
                 'line_of_business_name' => $lineNames->get($line['line_of_business_id'])?->name,
             ])->all(),
@@ -112,10 +116,14 @@ class DescribeBusinessPermitEvaluation
         ];
     }
 
-    /** @param array<string, mixed> $item @return array<string, mixed> */
+    /**
+     * @param  array<string, mixed>  $item
+     * @return array<string, mixed>
+     */
     private function itemPayload(array $item, string $lens, bool $isMine): array
     {
-        $history = collect($item['revision_history'])->map(fn (array $revision): array => [
+        $revisionHistory = $item['revision_history'] ?? [];
+        $history = collect(is_array($revisionHistory) ? $revisionHistory : [])->map(fn (array $revision): array => [
             'version_sequence' => $revision['version_sequence'],
             'action' => $revision['action'],
             'applicability' => $revision['applicability'],
@@ -149,7 +157,10 @@ class DescribeBusinessPermitEvaluation
         ];
     }
 
-    /** @param array<string, mixed> $projection @param array<string, mixed> $uatReadiness */
+    /**
+     * @param  array<string, mixed>  $projection
+     * @param  array<string, mixed>  $uatReadiness
+     */
     private function statusLabel(
         BusinessPermitEvaluation $evaluation,
         array $projection,
@@ -166,7 +177,9 @@ class DescribeBusinessPermitEvaluation
 
             return $activeAssessment->decision === null ? 'Awaiting Treasurer Approval' : 'Assessment Prepared';
         }
-        $awaiting = collect($projection['items'])->first(fn (array $item): bool => $item['is_required'] && $item['resolution'] !== 'resolved');
+        $projectedItems = $projection['items'] ?? [];
+        $awaiting = collect(is_array($projectedItems) ? $projectedItems : [])
+            ->first(fn (array $item): bool => $item['is_required'] && $item['resolution'] !== 'resolved');
         if (is_array($awaiting)) {
             return 'Awaiting '.str($awaiting['responsible_party'])->headline()->toString();
         }

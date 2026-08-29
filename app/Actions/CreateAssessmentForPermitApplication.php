@@ -133,6 +133,7 @@ class CreateAssessmentForPermitApplication
     }
 
     /**
+     * @param  array<string, mixed>|null  $evaluationProjection
      * @return array<string, mixed>
      */
     private function sourceSnapshot(PermitApplication $permitApplication, ?array $evaluationProjection = null): array

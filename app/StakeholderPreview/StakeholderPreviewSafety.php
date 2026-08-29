@@ -116,11 +116,15 @@ class StakeholderPreviewSafety
                 ['label' => 'Open Payment Schedules', 'route' => 'staff.payment-schedules.index', 'permission' => 'payment_schedules.view'],
             ],
             StakeholderPreviewPersona::Treasury => [
-                ['label' => 'Approve Assessment Amounts', 'route' => 'staff.permit-applications.assessments.index', 'permission' => 'assessments.approve'],
+                ['label' => 'Open Applications for Treasury Review', 'route' => 'staff.permit-applications.index', 'permission' => 'business_permit_evaluations.counter_check'],
                 ['label' => 'Open Payment Schedules', 'route' => 'staff.payment-schedules.index', 'permission' => 'payment_schedules.view'],
                 ['label' => 'Inspect Receipts', 'route' => 'staff.receipts.index', 'permission' => 'receipts.view'],
                 ['label' => 'Open Daily Collections', 'route' => 'staff.reports.daily-collections.index', 'permission' => 'reports.view'],
                 ['label' => 'Open Revenue Sources', 'route' => 'staff.reports.revenue-sources.index', 'permission' => 'reports.view'],
+            ],
+            StakeholderPreviewPersona::MunicipalTreasurer => [
+                ['label' => 'Review Immutable Assessments', 'route' => 'staff.permit-applications.assessments.index', 'permission' => 'assessments.approve'],
+                ['label' => 'Open Payment Schedules', 'route' => 'staff.payment-schedules.index', 'permission' => 'payment_schedules.view'],
             ],
             StakeholderPreviewPersona::Cashier => [
                 ['label' => 'Open Payment Schedules', 'route' => 'staff.payment-schedules.index', 'permission' => 'payment_schedules.view'],
