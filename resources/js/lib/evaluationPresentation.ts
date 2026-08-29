@@ -24,7 +24,23 @@
  *   lifecycle state is introduced.
  */
 
+import type { EvaluationApplicability } from '@/types';
+
 const NOT_RECORDED = 'Not recorded';
+
+/**
+ * The municipal work an authorized office records against one responsibility:
+ * whether it applies, the amount it resolves, and why it differs from the
+ * proposal. Shared so every caller of the responsibility form agrees on shape.
+ */
+export type ResponsibilityDraft = {
+    applicability: EvaluationApplicability;
+    amount: string;
+    reason: string;
+    inspectionMode: '' | 'physical' | 'virtual' | 'document_review';
+    inspectionCompleted: boolean;
+    findings: string;
+};
 
 /** The minimal item shape this module needs from the typed contract. */
 export type PresentableEvaluationItem = {
@@ -450,4 +466,367 @@ export function readinessBlockers(
     charges: readonly PresentableProjectedCharge[] = [],
 ): string[] {
     return issues.map((issue) => readinessBlocker(issue, items, charges));
+}
+
+/* -------------------------------------------------------------------------
+ * Financial working paper
+ *
+ * The Evaluator has two kinds of money, both supplied by the typed contract:
+ * governed charges projected from the municipal pricing path, and charges an
+ * office resolves on this application. A municipal working paper has to show
+ * them as one build-up, so these helpers normalize both into a single row
+ * model and then explain the canonical total rather than recomputing it.
+ * ---------------------------------------------------------------------- */
+
+export type ComponentStatusKey =
+    'in_total' | 'awaiting_office' | 'not_applicable' | 'superseded';
+
+export type ComponentStatusTone = 'green' | 'amber' | 'blue' | 'slate';
+
+export type ComponentStatus = {
+    key: ComponentStatusKey;
+    label: string;
+    tone: ComponentStatusTone;
+};
+
+/** Where a component's money comes from. */
+export type ComponentOrigin = 'governed' | 'office';
+
+/** One revision as supplied by `EvaluationItemData.history`. */
+export type WorkingPaperRevision = {
+    version_sequence: number;
+    action: string | null;
+    applicability: string;
+    value: unknown;
+    source_classification: string | null;
+    actor_name: string | null;
+    reason: string | null;
+    occurred_at: string | null;
+};
+
+export type WorkingPaperItem = PresentableEvaluationItem & {
+    id: number;
+    item_type: string;
+    is_required: boolean;
+    is_mine: boolean;
+    applicability: string;
+    resolution: string;
+    default_value: unknown;
+    default_source_classification: string | null;
+    resolved_value: unknown;
+    source_classification: string | null;
+    reason: string | null;
+    occurred_at: string | null;
+    inspection_required: boolean;
+    history: readonly WorkingPaperRevision[];
+};
+
+export type WorkingPaperCharge = PresentableProjectedCharge & {
+    key: string;
+    fee_rule_id: number;
+    amount_cents: number;
+    legal_basis: string | null;
+    source_classification: string;
+};
+
+export type WorkingPaperEvaluation = {
+    current_evaluated_amount_cents: number;
+    projected_charges: readonly WorkingPaperCharge[];
+    items: readonly WorkingPaperItem[];
+};
+
+/** A recorded correction: what the amount was, what it became, and why. */
+export type ComponentChange = {
+    fromCents: number | null;
+    toCents: number | null;
+    reason: string | null;
+    actorName: string | null;
+    occurredAt: string | null;
+};
+
+export type FinancialComponent = {
+    /** Stable list key; never rendered. */
+    key: string;
+    origin: ComponentOrigin;
+    label: string;
+    /** Municipal fee code for governed charges. */
+    reference: string | null;
+    /** Who owns this component's amount. */
+    owner: string;
+    whyItApplies: string;
+    /** The system or office default proposal, when one exists. */
+    proposalCents: number | null;
+    /** The amount the Municipality currently resolves. */
+    resolvedCents: number | null;
+    includedInTotal: boolean;
+    status: ComponentStatus;
+    sourceLabel: string;
+    legalBasis: string | null;
+    feeRuleId: number | null;
+    itemId: number | null;
+    isMine: boolean;
+    inspectionRequired: boolean;
+    change: ComponentChange | null;
+    history: readonly WorkingPaperRevision[];
+};
+
+export type ComponentReconciliation = {
+    components: FinancialComponent[];
+    included: FinancialComponent[];
+    pending: FinancialComponent[];
+    includedTotalCents: number;
+    canonicalTotalCents: number;
+    /**
+     * True when the components shown add up to the canonical total. The
+     * canonical total is always the displayed authority; when this is false the
+     * UI says the build-up cannot be reconciled instead of inventing a figure.
+     */
+    reconciled: boolean;
+};
+
+const COMPONENT_STATUSES: Record<ComponentStatusKey, ComponentStatus> = {
+    in_total: {
+        key: 'in_total',
+        label: 'In the evaluated total',
+        tone: 'green',
+    },
+    awaiting_office: {
+        key: 'awaiting_office',
+        label: 'Awaiting municipal evaluation',
+        tone: 'amber',
+    },
+    not_applicable: {
+        key: 'not_applicable',
+        label: 'Not applicable — no charge',
+        tone: 'slate',
+    },
+    superseded: {
+        key: 'superseded',
+        label: 'Superseded — must be recorded again',
+        tone: 'blue',
+    },
+};
+
+export function componentStatus(key: ComponentStatusKey): ComponentStatus {
+    return COMPONENT_STATUSES[key];
+}
+
+export function componentToneClasses(tone: ComponentStatusTone): string {
+    switch (tone) {
+        case 'green':
+            return 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100';
+        case 'amber':
+            return 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100';
+        case 'blue':
+            return 'border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100';
+        case 'slate':
+        default:
+            return 'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300';
+    }
+}
+
+/** Peso formatting for one amount in minor units. */
+export function money(amountCents: number): string {
+    return new Intl.NumberFormat('en-PH', {
+        style: 'currency',
+        currency: 'PHP',
+        minimumFractionDigits: 2,
+    }).format(amountCents / 100);
+}
+
+/** Municipal date and time, or a plain absence marker. */
+export function dateTime(value: string | null | undefined): string {
+    if (!value) {
+        return 'Not recorded';
+    }
+
+    return new Intl.DateTimeFormat('en-PH', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+    }).format(new Date(value));
+}
+
+/**
+ * Read a minor-unit amount out of a domain-shaped item value. Item values are
+ * deliberately open (`{ amount_cents }`, `{ inspection: {...} }`, …), so a
+ * missing amount is absent rather than zero.
+ */
+export function amountFromValue(value: unknown): number | null {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+        return null;
+    }
+
+    const amount = (value as { amount_cents?: unknown }).amount_cents;
+
+    return typeof amount === 'number' ? amount : null;
+}
+
+/**
+ * A charge item contributes to the canonical total only when the Municipality
+ * has actually resolved it as applicable. This mirrors the resolver, so the
+ * build-up can say which components are inside the total and which are still
+ * proposals.
+ */
+function contributesToTotal(item: WorkingPaperItem): boolean {
+    return (
+        item.item_type === 'charge' &&
+        item.applicability === 'applicable' &&
+        item.resolution === 'resolved'
+    );
+}
+
+function officeComponentStatus(item: WorkingPaperItem): ComponentStatus {
+    if (item.applicability === 'not_applicable') {
+        return COMPONENT_STATUSES.not_applicable;
+    }
+
+    if (item.resolution === 'superseded') {
+        return COMPONENT_STATUSES.superseded;
+    }
+
+    if (contributesToTotal(item)) {
+        return COMPONENT_STATUSES.in_total;
+    }
+
+    return {
+        ...COMPONENT_STATUSES.awaiting_office,
+        label: `Awaiting ${officeLabel(item.responsible_party)}`,
+    };
+}
+
+/**
+ * The most recent recorded change to a charge item's amount, taken from the
+ * supplied provenance. Returns `null` when the office simply confirmed the
+ * proposal, because nothing changed.
+ */
+export function latestChange(item: WorkingPaperItem): ComponentChange | null {
+    const amounts = item.history.filter(
+        (revision) => amountFromValue(revision.value) !== null,
+    );
+
+    if (amounts.length < 2) {
+        return null;
+    }
+
+    const current = amounts[amounts.length - 1];
+    const previous = amounts[amounts.length - 2];
+    const toCents = amountFromValue(current.value);
+    const fromCents = amountFromValue(previous.value);
+
+    if (toCents === fromCents) {
+        return null;
+    }
+
+    return {
+        fromCents,
+        toCents,
+        reason: current.reason,
+        actorName: current.actor_name,
+        occurredAt: current.occurred_at,
+    };
+}
+
+function governedComponent(charge: WorkingPaperCharge): FinancialComponent {
+    const basis = pricingBasisSummary(charge);
+
+    return {
+        key: `governed-${charge.key}`,
+        origin: 'governed',
+        label: charge.name,
+        reference: charge.code,
+        owner: officeLabel('system'),
+        whyItApplies:
+            basis.amountCents === null
+                ? basis.label
+                : `${basis.label} · ${money(basis.amountCents)}`,
+        proposalCents: charge.amount_cents,
+        resolvedCents: charge.amount_cents,
+        includedInTotal: true,
+        status: COMPONENT_STATUSES.in_total,
+        sourceLabel: sourceLabel(charge.source_classification),
+        legalBasis: charge.legal_basis,
+        feeRuleId: charge.fee_rule_id,
+        itemId: null,
+        isMine: false,
+        inspectionRequired: false,
+        change: null,
+        history: [],
+    };
+}
+
+function officeComponent(item: WorkingPaperItem): FinancialComponent {
+    return {
+        key: `office-${item.id}`,
+        origin: 'office',
+        label: item.label,
+        reference: null,
+        owner: officeLabel(item.responsible_party),
+        whyItApplies: item.is_required
+            ? 'Required municipal evaluation for this application'
+            : 'Supporting municipal evaluation for this application',
+        proposalCents: amountFromValue(item.default_value),
+        resolvedCents:
+            item.applicability === 'not_applicable'
+                ? null
+                : amountFromValue(item.resolved_value),
+        includedInTotal: contributesToTotal(item),
+        status: officeComponentStatus(item),
+        sourceLabel: sourceLabel(
+            item.source_classification ?? item.default_source_classification,
+        ),
+        legalBasis: null,
+        feeRuleId: null,
+        itemId: item.id,
+        isMine: item.is_mine,
+        inspectionRequired: item.inspection_required,
+        change: latestChange(item),
+        history: item.history,
+    };
+}
+
+/**
+ * Every monetary component of one Evaluation, governed charges first, then the
+ * charges offices resolve on this application.
+ */
+export function financialComponents(
+    evaluation: WorkingPaperEvaluation,
+): FinancialComponent[] {
+    return [
+        ...evaluation.projected_charges.map(governedComponent),
+        ...evaluation.items
+            .filter((item) => item.item_type === 'charge')
+            .map(officeComponent),
+    ];
+}
+
+/**
+ * Explain the canonical evaluated total: which components are inside it, which
+ * remain proposals, and whether the two agree.
+ */
+export function componentReconciliation(
+    evaluation: WorkingPaperEvaluation,
+): ComponentReconciliation {
+    const components = financialComponents(evaluation);
+    const included = components.filter(
+        (component) => component.includedInTotal,
+    );
+    const pending = components.filter(
+        (component) =>
+            !component.includedInTotal &&
+            component.status.key !== 'not_applicable',
+    );
+    const includedTotalCents = included.reduce(
+        (total, component) => total + (component.resolvedCents ?? 0),
+        0,
+    );
+
+    return {
+        components,
+        included,
+        pending,
+        includedTotalCents,
+        canonicalTotalCents: evaluation.current_evaluated_amount_cents,
+        reconciled:
+            includedTotalCents === evaluation.current_evaluated_amount_cents,
+    };
 }

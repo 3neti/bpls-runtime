@@ -1,173 +1,62 @@
 <script setup lang="ts">
-import { ChevronRight, ClipboardCheck, History } from '@lucide/vue';
-import { computed, reactive } from 'vue';
+import { ChevronRight, History } from '@lucide/vue';
+import { computed } from 'vue';
+import EvaluationResponsibilityForm from '@/components/evaluations/EvaluationResponsibilityForm.vue';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
     applicabilityLabel,
-    inspectionModeLabels,
+    dateTime,
     itemTypeLabel,
     officeLabel,
     revisionActionLabel,
     sourceLabel,
 } from '@/lib/evaluationPresentation';
-import type {
-    EvaluationApplicability as Applicability,
-    EvaluationItem,
-    EvaluationValue,
-} from '@/types';
-
-type Draft = {
-    applicability: Applicability;
-    amount: string;
-    reason: string;
-    inspectionMode: '' | 'physical' | 'virtual' | 'document_review';
-    inspectionCompleted: boolean;
-    findings: string;
-};
+import type { ResponsibilityDraft } from '@/lib/evaluationPresentation';
+import type { EvaluationItem, EvaluationValue } from '@/types';
 
 const props = defineProps<{
     item: EvaluationItem;
+    /** Backend-supplied: may this viewer record work on this item? */
     editable: boolean;
     submitting: boolean;
 }>();
-const emit = defineEmits<{ submit: [item: EvaluationItem, draft: Draft] }>();
+const emit = defineEmits<{
+    submit: [item: EvaluationItem, draft: ResponsibilityDraft];
+}>();
 
-const draft = reactive<Draft>({
-    applicability: props.item.applicability,
-    amount:
-        amountFromValue(props.item.resolved_value) ??
-        amountFromValue(props.item.default_value) ??
-        '',
-    reason: '',
-    inspectionMode: inspectionMode(),
-    inspectionCompleted: Boolean(inspectionValue('completed')),
-    findings: String(inspectionValue('findings') ?? ''),
-});
-
-const reasonRequired = computed(() => {
-    const defaultAmount = amountFromValue(props.item.default_value);
-
-    return (
-        draft.applicability === 'not_applicable' ||
-        (props.item.item_type === 'charge' &&
-            defaultAmount !== null &&
-            draft.amount !== defaultAmount)
-    );
-});
-
-function money(amountCents: number): string {
-    return new Intl.NumberFormat('en-PH', {
-        style: 'currency',
-        currency: 'PHP',
-    }).format(amountCents / 100);
-}
-
-function dateTime(value: string | null): string {
-    if (!value) {
-        return 'Not recorded';
+/**
+ * A non-monetary responsibility is municipal work, not an amount: what the
+ * office determined, and whether the review behind it is complete.
+ */
+const determination = computed<string>(() => {
+    if (props.item.applicability === 'not_applicable') {
+        return 'Not applicable to this application';
     }
 
-    return new Intl.DateTimeFormat('en-PH', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-    }).format(new Date(value));
-}
+    const value = props.item.resolved_value;
 
-function amountFromValue(value: EvaluationValue): string | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
-        return null;
+        return props.item.resolution === 'resolved'
+            ? 'Recorded'
+            : `Awaiting ${officeLabel(props.item.responsible_party)}`;
     }
 
-    return typeof value.amount_cents === 'number'
-        ? (value.amount_cents / 100).toFixed(2)
-        : null;
-}
-
-function inspectionValue(key: string): unknown {
-    if (
-        !props.item.resolved_value ||
-        typeof props.item.resolved_value !== 'object' ||
-        Array.isArray(props.item.resolved_value)
-    ) {
-        return null;
-    }
-
-    const inspection = props.item.resolved_value.inspection;
+    const inspection = (value as Record<string, EvaluationValue>).inspection;
 
     if (
-        !inspection ||
-        typeof inspection !== 'object' ||
-        Array.isArray(inspection)
+        inspection &&
+        typeof inspection === 'object' &&
+        !Array.isArray(inspection)
     ) {
-        return null;
+        return (inspection as Record<string, unknown>).completed === true
+            ? 'Review complete'
+            : 'Review not yet complete';
     }
 
-    return (inspection as Record<string, unknown>)[key];
-}
+    return props.item.resolution === 'resolved' ? 'Recorded' : 'In progress';
+});
 
-function inspectionMode(): Draft['inspectionMode'] {
-    const value = inspectionValue('mode');
-
-    return value === 'physical' ||
-        value === 'virtual' ||
-        value === 'document_review'
-        ? value
-        : '';
-}
-
-function displayValue(value: EvaluationValue): string {
-    if (value === null || value === undefined) {
-        return 'Not recorded';
-    }
-
-    if (typeof value === 'string' || typeof value === 'number') {
-        return String(value);
-    }
-
-    if (typeof value === 'boolean') {
-        return value ? 'Yes' : 'No';
-    }
-
-    if (Array.isArray(value)) {
-        return value.map(String).join(', ');
-    }
-
-    if (typeof value === 'object') {
-        if (typeof value.amount_cents === 'number') {
-            return money(value.amount_cents);
-        }
-
-        if (typeof value.label === 'string') {
-            return value.label;
-        }
-
-        if (
-            typeof value.value === 'string' ||
-            typeof value.value === 'number'
-        ) {
-            return String(value.value);
-        }
-
-        const inspection = value.inspection;
-
-        if (
-            inspection &&
-            typeof inspection === 'object' &&
-            !Array.isArray(inspection)
-        ) {
-            return `Inspection ${(inspection as Record<string, unknown>).completed ? 'completed' : 'not completed'}`;
-        }
-    }
-
-    return props.item.item_type === 'charge'
-        ? 'Amount not recorded'
-        : 'Recorded determination';
-}
-
-function itemStatus(): string {
+const stateLabel = computed<string>(() => {
     if (props.item.resolution === 'resolved') {
         return props.item.applicability === 'not_applicable'
             ? 'Not applicable'
@@ -179,25 +68,32 @@ function itemStatus(): string {
     }
 
     return `Awaiting ${officeLabel(props.item.responsible_party)}`;
-}
+});
 </script>
 
 <template>
     <article
         class="rounded-xl border bg-card p-4 shadow-xs sm:p-5"
+        :class="item.is_mine ? 'border-primary/50 bg-primary/5' : ''"
         :data-testid="`evaluation-item-${item.id}`"
     >
         <div
             class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
         >
-            <div class="min-w-0">
+            <div class="min-w-0 space-y-1">
                 <div class="flex flex-wrap items-center gap-2">
                     <h3 class="font-semibold break-words">{{ item.label }}</h3>
-                    <Badge variant="outline">{{
-                        itemTypeLabel(item.item_type)
-                    }}</Badge>
+                    <Badge variant="outline">
+                        {{ itemTypeLabel(item.item_type) }}
+                    </Badge>
+                    <Badge
+                        v-if="item.is_mine"
+                        class="bg-primary text-primary-foreground"
+                    >
+                        Your responsibility
+                    </Badge>
                 </div>
-                <p class="mt-1 text-sm text-muted-foreground">
+                <p class="text-sm text-muted-foreground">
                     {{ officeLabel(item.responsible_party) }} ·
                     {{ item.is_required ? 'Required' : 'Supporting' }}
                 </p>
@@ -207,38 +103,27 @@ function itemStatus(): string {
                     item.resolution === 'resolved' ? 'secondary' : 'outline'
                 "
             >
-                {{ itemStatus() }}
+                {{ stateLabel }}
             </Badge>
         </div>
 
-        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+        <dl class="mt-4 grid gap-3 sm:grid-cols-2">
             <div class="rounded-lg bg-muted/40 p-3">
-                <p class="text-xs text-muted-foreground">
-                    System / default proposal
-                </p>
-                <p class="mt-1 font-medium">
-                    {{ displayValue(item.default_value) }}
-                </p>
-                <p class="mt-1 text-xs text-muted-foreground">
-                    {{ sourceLabel(item.default_source_classification) }}
-                </p>
+                <dt class="text-xs text-muted-foreground">
+                    Municipal determination
+                </dt>
+                <dd class="mt-1 font-medium">{{ determination }}</dd>
             </div>
             <div class="rounded-lg bg-primary/5 p-3">
-                <p class="text-xs text-muted-foreground">
-                    Resolved municipal value
-                </p>
-                <p class="mt-1 font-medium">
-                    {{
-                        item.applicability === 'not_applicable'
-                            ? 'Not applicable'
-                            : displayValue(item.resolved_value)
-                    }}
-                </p>
-                <p class="mt-1 text-xs text-muted-foreground">
+                <dt class="text-xs text-muted-foreground">Applicability</dt>
+                <dd class="mt-1 font-medium">
+                    {{ applicabilityLabel(item.applicability) }}
+                </dd>
+                <dd class="mt-1 text-xs text-muted-foreground">
                     {{ sourceLabel(item.source_classification) }}
-                </p>
+                </dd>
             </div>
-        </div>
+        </dl>
 
         <p
             v-if="item.reason"
@@ -247,124 +132,18 @@ function itemStatus(): string {
             {{ item.reason }}
         </p>
 
-        <form
+        <div
             v-if="editable"
-            class="mt-4 border-t pt-4"
-            @submit.prevent="emit('submit', item, draft)"
+            class="mt-4 rounded-lg border-2 border-dashed border-primary/40 p-3 sm:p-4"
         >
-            <fieldset class="grid gap-4">
-                <legend class="font-semibold">
-                    Record
-                    {{ officeLabel(item.responsible_party) }} determination
-                </legend>
+            <EvaluationResponsibilityForm
+                :item="item"
+                :submitting="submitting"
+                @submit="(payload, draft) => emit('submit', payload, draft)"
+            />
+        </div>
 
-                <div class="grid gap-2">
-                    <Label :for="`applicability-${item.id}`"
-                        >Applicability</Label
-                    >
-                    <select
-                        :id="`applicability-${item.id}`"
-                        v-model="draft.applicability"
-                        class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                    >
-                        <option value="applicable">Applicable</option>
-                        <option value="not_applicable">Not applicable</option>
-                        <option value="undetermined">Not yet determined</option>
-                    </select>
-                </div>
-
-                <div
-                    v-if="
-                        item.item_type === 'charge' &&
-                        draft.applicability === 'applicable'
-                    "
-                    class="grid gap-2"
-                >
-                    <Label :for="`amount-${item.id}`"
-                        >Resolved amount (PHP)
-                        <span aria-hidden="true">*</span></Label
-                    >
-                    <Input
-                        :id="`amount-${item.id}`"
-                        v-model="draft.amount"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        inputmode="decimal"
-                        required
-                    />
-                </div>
-
-                <div
-                    v-if="item.inspection_required"
-                    class="grid gap-3 rounded-lg bg-muted/30 p-3"
-                >
-                    <p class="font-medium">Inspection / review</p>
-                    <div class="grid gap-2">
-                        <Label :for="`inspection-mode-${item.id}`">Mode</Label>
-                        <select
-                            :id="`inspection-mode-${item.id}`"
-                            v-model="draft.inspectionMode"
-                            required
-                            class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                        >
-                            <option value="" disabled>Select mode</option>
-                            <option
-                                v-for="(label, mode) in inspectionModeLabels"
-                                :key="mode"
-                                :value="mode"
-                            >
-                                {{ label }}
-                            </option>
-                        </select>
-                    </div>
-                    <label class="flex items-center gap-2 text-sm font-medium">
-                        <input
-                            v-model="draft.inspectionCompleted"
-                            type="checkbox"
-                            class="size-4"
-                        />
-                        Inspection / review completed
-                    </label>
-                    <div class="grid gap-2">
-                        <Label :for="`findings-${item.id}`"
-                            >Findings / remarks</Label
-                        >
-                        <textarea
-                            :id="`findings-${item.id}`"
-                            v-model="draft.findings"
-                            rows="3"
-                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                        />
-                    </div>
-                </div>
-
-                <div class="grid gap-2">
-                    <Label :for="`reason-${item.id}`">
-                        Reason
-                        <span v-if="reasonRequired" aria-hidden="true">*</span>
-                    </Label>
-                    <textarea
-                        :id="`reason-${item.id}`"
-                        v-model="draft.reason"
-                        :required="reasonRequired"
-                        rows="3"
-                        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                    />
-                </div>
-
-                <Button
-                    type="submit"
-                    class="w-full sm:w-auto"
-                    :disabled="submitting"
-                >
-                    <ClipboardCheck aria-hidden="true" />
-                    {{ submitting ? 'Recording…' : 'Record determination' }}
-                </Button>
-            </fieldset>
-        </form>
-
-        <details v-if="item.history.length" class="group mt-4 border-t pt-4">
+        <details v-if="item.history.length" class="group mt-4 border-t pt-3">
             <summary
                 class="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
@@ -377,17 +156,16 @@ function itemStatus(): string {
                     aria-hidden="true"
                 />
             </summary>
-            <ol class="mt-3 grid gap-3 border-l pl-4">
+            <ol class="mt-3 grid gap-3 border-l pl-4 text-sm">
                 <li
                     v-for="revision in item.history"
                     :key="`${revision.version_sequence}-${revision.occurred_at}`"
-                    class="text-sm"
                 >
                     <p class="font-medium">
                         {{ revisionActionLabel(revision.action) }} · Evaluation
                         v{{ revision.version_sequence }}
                     </p>
-                    <p class="mt-0.5 text-muted-foreground">
+                    <p class="mt-0.5 text-xs text-muted-foreground">
                         {{ revision.actor_name ?? 'Recorded actor' }} ·
                         {{ dateTime(revision.occurred_at) }}
                     </p>

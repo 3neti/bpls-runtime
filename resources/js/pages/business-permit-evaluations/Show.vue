@@ -16,7 +16,6 @@ import {
     LockKeyhole,
     PhilippinePeso,
     RefreshCw,
-    Scale,
     ShieldCheck,
     UserRound,
 } from '@lucide/vue';
@@ -29,30 +28,32 @@ import {
     initialize,
     refresh,
 } from '@/actions/App/Http/Controllers/Staff/BusinessPermitEvaluationController';
-import { show as showFeeRule } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
 import {
     show as showAssessment,
     store as prepareAssessment,
 } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
+import EvaluationComponentRow from '@/components/evaluations/EvaluationComponentRow.vue';
 import EvaluationItemCard from '@/components/evaluations/EvaluationItemCard.vue';
+import EvaluationTotalPanel from '@/components/evaluations/EvaluationTotalPanel.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import {
     applicationTypeLabel,
+    componentReconciliation,
+    dateTime,
+    money,
     officeLabel,
-    pricingBasisSummary,
     readinessBlockers,
 } from '@/lib/evaluationPresentation';
+import type { ResponsibilityDraft } from '@/lib/evaluationPresentation';
 import type {
     BreadcrumbItem,
     BusinessPermitEvaluationData,
-    EvaluationApplicability,
     EvaluationCapabilities,
     EvaluationItem,
     EvaluationLineOfBusinessOption,
-    EvaluationProjectedCharge,
 } from '@/types';
 
 type Evaluation = BusinessPermitEvaluationData;
@@ -90,26 +91,43 @@ const selectedLineIds = reactive<number[]>(
 const lineCorrectionReason = reactive({ value: '' });
 const counterCheckReason = reactive({ value: '' });
 
-type ItemDraft = {
-    applicability: EvaluationApplicability;
-    amount: string;
-    reason: string;
-    inspectionMode: '' | 'physical' | 'virtual' | 'document_review';
-    inspectionCompleted: boolean;
-    findings: string;
-};
+const isCitizenLens = computed(() => props.evaluation?.lens === 'citizen');
 
-const orderedItems = computed(() =>
-    [...(props.evaluation?.items ?? [])].sort(
-        (left, right) => Number(right.is_mine) - Number(left.is_mine),
+/**
+ * The financial build-up. Components come from the typed contract: governed
+ * charges projected by the municipal pricing path, plus the charges offices
+ * resolve on this application. The canonical `current_evaluated_amount_cents`
+ * stays the authority; this only explains how it was assembled.
+ */
+const reconciliation = computed(() =>
+    props.evaluation === null
+        ? null
+        : componentReconciliation(props.evaluation),
+);
+
+const itemsById = computed<Map<number, EvaluationItem>>(
+    () =>
+        new Map((props.evaluation?.items ?? []).map((item) => [item.id, item])),
+);
+
+/** Non-monetary municipal work: recorded facts and office determinations. */
+const responsibilityItems = computed(() =>
+    [...(props.evaluation?.items ?? [])]
+        .filter((item) => item.item_type !== 'charge')
+        .sort((left, right) => Number(right.is_mine) - Number(left.is_mine)),
+);
+
+/** Work this viewer legitimately owns and has not finished. */
+const myOpenWork = computed(() =>
+    (props.evaluation?.items ?? []).filter(
+        (item) => item.is_mine && item.resolution !== 'resolved',
     ),
 );
-const myItems = computed(() =>
-    orderedItems.value.filter((item) => item.is_mine),
+
+const canRecordWork = computed(
+    () => props.can.contribute && props.evaluation?.financial_lock === false,
 );
-const otherItems = computed(() =>
-    orderedItems.value.filter((item) => !item.is_mine),
-);
+
 const canViewFeeRules = computed(
     () =>
         Boolean(
@@ -117,13 +135,15 @@ const canViewFeeRules = computed(
                 ?.can_view_fee_rules,
         ) && props.evaluation?.lens === 'internal',
 );
+
+const latestAssessment = computed(() => props.evaluation?.latest_assessment);
 const currentAssessmentExists = computed(
     () =>
-        props.evaluation?.latest_assessment !== null &&
-        props.evaluation?.latest_assessment.superseded === false &&
-        props.evaluation?.latest_assessment.consumes_current_evaluation ===
-            true,
+        latestAssessment.value != null &&
+        latestAssessment.value.superseded === false &&
+        latestAssessment.value.consumes_current_evaluation === true,
 );
+
 /**
  * Readiness stays canonical: `ready` and the issue list come straight from
  * `BusinessPermitEvaluationReadiness`. Only the wording is municipal —
@@ -165,10 +185,11 @@ const readiness = computed(() => {
     return {
         ready: false,
         label: 'Not ready for assessment',
-        note: 'Resolve the responsibilities and pricing issues below before preparing an Assessment.',
+        note: 'The municipal evaluations below are still open. The evaluated amount can still change.',
         blockers: blockersFor(evaluation.readiness.provisional_uat.issues),
     };
 });
+
 const statusTone = computed(() => {
     const status = props.evaluation?.status_label ?? '';
 
@@ -182,39 +203,6 @@ const statusTone = computed(() => {
 
     return 'border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100';
 });
-
-function money(amountCents: number): string {
-    return new Intl.NumberFormat('en-PH', {
-        style: 'currency',
-        currency: 'PHP',
-    }).format(amountCents / 100);
-}
-
-function dateTime(value: string | null): string {
-    if (!value) {
-        return 'Not recorded';
-    }
-
-    return new Intl.DateTimeFormat('en-PH', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-    }).format(new Date(value));
-}
-
-/**
- * A fee rule with no configured basis has no basis amount to show. Its
- * structural zero is never paired with the basis label, while the charge's
- * own resolved amount is always rendered — an accepted ₱0.00 stays real.
- */
-function pricingBasis(charge: EvaluationProjectedCharge): string {
-    const summary = pricingBasisSummary(charge);
-
-    if (summary.amountCents === null) {
-        return summary.label;
-    }
-
-    return `${summary.label} · ${money(summary.amountCents)}`;
-}
 
 function toggleLine(id: number): void {
     const index = selectedLineIds.indexOf(id);
@@ -259,10 +247,9 @@ function submitLineCorrection(): void {
             expected_fingerprint: props.evaluation!.version.fingerprint,
             idempotency_key: crypto.randomUUID(),
         });
-        const action =
-            props.evaluation!.lens === 'citizen'
-                ? correctCitizenLinesOfBusiness(props.application.id)
-                : correctStaffLinesOfBusiness(props.application.id);
+        const action = isCitizenLens.value
+            ? correctCitizenLinesOfBusiness(props.application.id)
+            : correctStaffLinesOfBusiness(props.application.id);
         form.post(action.url, {
             preserveScroll: true,
             onFinish: () => {
@@ -272,22 +259,30 @@ function submitLineCorrection(): void {
     });
 }
 
-function submitResponsibility(item: EvaluationItem, draft: ItemDraft): void {
+function submitResponsibility(
+    item: EvaluationItem,
+    draft: ResponsibilityDraft,
+): void {
     if (!props.evaluation) {
         return;
     }
 
+    // Vue casts `v-model` on a number input to a number, so the draft amount
+    // arrives as either a string or a number depending on whether the office
+    // typed in the field.
+    const amountText = String(draft.amount ?? '').trim();
+
     if (
         item.item_type === 'charge' &&
         draft.applicability === 'applicable' &&
-        draft.amount.trim() === ''
+        amountText === ''
     ) {
         return;
     }
 
     if (
         !window.confirm(
-            `Record the ${item.responsible_party} determination for ${item.label}?`,
+            `Record the ${officeLabel(item.responsible_party)} determination for ${item.label}?`,
         )
     ) {
         return;
@@ -295,9 +290,7 @@ function submitResponsibility(item: EvaluationItem, draft: ItemDraft): void {
 
     runOnce(`item-${item.id}`, () => {
         const amountCents =
-            draft.amount.trim() === ''
-                ? null
-                : Math.round(Number(draft.amount) * 100);
+            amountText === '' ? null : Math.round(Number(amountText) * 100);
         const form = useForm({
             expected_version_sequence: props.evaluation!.version.sequence,
             expected_fingerprint: props.evaluation!.version.fingerprint,
@@ -405,9 +398,11 @@ function submitPrepareAssessment(): void {
                     <p
                         class="max-w-3xl text-sm leading-6 text-muted-foreground"
                     >
-                        One shared view of the applicant declaration, governed
-                        proposals, office determinations, and the exact state
-                        that can enter Assessment.
+                        {{
+                            isCitizenLens
+                                ? 'What you declared, what the Municipality currently evaluates, and which municipal reviews are still open.'
+                                : 'How the municipal charges on this application build up, who owns each one, and what changed.'
+                        }}
                     </p>
                 </div>
                 <Badge
@@ -475,147 +470,191 @@ function submitPrepareAssessment(): void {
                 </div>
             </section>
 
-            <template v-else>
+            <template v-else-if="reconciliation">
+                <!-- 1. Whose application this is -->
                 <section
-                    class="overflow-hidden rounded-2xl border bg-card shadow-xs"
-                    aria-label="Application evaluation summary"
+                    class="rounded-2xl border bg-card p-5 shadow-xs sm:p-6"
+                    aria-labelledby="application-identity-heading"
                 >
-                    <div
-                        class="grid gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto]"
-                    >
-                        <div class="min-w-0">
-                            <div class="flex items-start gap-3">
-                                <div
-                                    class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
-                                >
-                                    <BriefcaseBusiness
-                                        class="size-5"
-                                        aria-hidden="true"
-                                    />
-                                </div>
-                                <div class="min-w-0">
-                                    <h2
-                                        class="text-xl font-semibold break-words"
-                                    >
-                                        {{
-                                            evaluation.application.business_name
-                                        }}
-                                    </h2>
-                                    <p
-                                        class="mt-1 text-sm text-muted-foreground"
-                                    >
-                                        {{ evaluation.application.owner_name }}
-                                        ·
-                                        {{
-                                            applicationTypeLabel(
-                                                evaluation.application.type,
-                                            )
-                                        }}
-                                        · {{ evaluation.application.year }}
-                                    </p>
-                                    <p
-                                        class="mt-2 text-xs text-muted-foreground"
-                                    >
-                                        <template
-                                            v-if="
-                                                evaluation.application
-                                                    .application_number
-                                            "
-                                        >
-                                            Application
-                                            {{
-                                                evaluation.application
-                                                    .application_number
-                                            }}
-                                        </template>
-                                        <template
-                                            v-else-if="
-                                                evaluation.application
-                                                    .tracking_reference
-                                            "
-                                        >
-                                            Tracking reference
-                                            {{
-                                                evaluation.application
-                                                    .tracking_reference
-                                            }}
-                                        </template>
-                                        <template v-else
-                                            >Application record #{{
-                                                evaluation.application.id
-                                            }}</template
-                                        >
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="flex items-start gap-3">
                         <div
-                            class="rounded-xl bg-primary px-5 py-4 text-primary-foreground lg:min-w-64"
+                            class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
                         >
-                            <p class="text-xs font-medium opacity-80">
-                                Current evaluated amount
-                            </p>
-                            <p class="mt-1 text-2xl font-semibold tabular-nums">
+                            <BriefcaseBusiness
+                                class="size-5"
+                                aria-hidden="true"
+                            />
+                        </div>
+                        <div class="min-w-0">
+                            <h2
+                                id="application-identity-heading"
+                                class="text-xl font-semibold break-words"
+                            >
+                                {{ evaluation.application.business_name }}
+                            </h2>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                {{ evaluation.application.owner_name }} ·
                                 {{
-                                    money(
-                                        evaluation.current_evaluated_amount_cents,
+                                    applicationTypeLabel(
+                                        evaluation.application.type,
                                     )
                                 }}
+                                · {{ evaluation.application.year }}
                             </p>
-                            <p class="mt-2 text-xs leading-5 opacity-80">
-                                Derived from resolved charge items. The total is
-                                never directly editable.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="grid border-t bg-muted/20 sm:grid-cols-3">
-                        <div class="border-b p-4 sm:border-r sm:border-b-0">
-                            <p class="text-xs text-muted-foreground">
-                                Office work
-                            </p>
-                            <p class="mt-1 font-semibold">
-                                {{
-                                    evaluation.items.filter(
-                                        (item) =>
-                                            item.resolution === 'resolved',
-                                    ).length
-                                }}
-                                of {{ evaluation.items.length }} complete
-                            </p>
-                        </div>
-                        <div class="border-b p-4 sm:border-r sm:border-b-0">
-                            <p class="text-xs text-muted-foreground">
-                                Treasury counter-check
-                            </p>
-                            <p class="mt-1 font-semibold">
-                                {{
-                                    evaluation.version.treasury_counter_check
-                                        ? 'Complete'
-                                        : 'Awaiting Treasury Review'
-                                }}
-                            </p>
-                        </div>
-                        <div class="p-4">
-                            <p class="text-xs text-muted-foreground">
-                                Assessment
-                            </p>
-                            <p class="mt-1 font-semibold">
-                                {{
-                                    evaluation.latest_assessment
-                                        ? evaluation.latest_assessment
-                                              .superseded
-                                            ? 'Previous Assessment superseded'
-                                            : 'Assessment Prepared'
-                                        : readiness?.label
-                                }}
+                            <p class="mt-2 text-xs text-muted-foreground">
+                                <template
+                                    v-if="
+                                        evaluation.application
+                                            .application_number
+                                    "
+                                >
+                                    Application
+                                    {{
+                                        evaluation.application
+                                            .application_number
+                                    }}
+                                </template>
+                                <template
+                                    v-else-if="
+                                        evaluation.application
+                                            .tracking_reference
+                                    "
+                                >
+                                    Tracking reference
+                                    {{
+                                        evaluation.application
+                                            .tracking_reference
+                                    }}
+                                </template>
+                                <template v-else>
+                                    Application record #{{
+                                        evaluation.application.id
+                                    }}
+                                </template>
                             </p>
                         </div>
                     </div>
                 </section>
 
+                <!-- 2. What it currently costs, and how that was assembled -->
+                <EvaluationTotalPanel
+                    :reconciliation="reconciliation"
+                    :status-label="evaluation.status_label"
+                    :financial-lock="evaluation.financial_lock"
+                />
+
+                <!-- 3. The viewer's own legitimate work -->
+                <section
+                    v-if="canRecordWork && myOpenWork.length"
+                    class="rounded-2xl border-2 border-primary/40 bg-primary/5 p-4 sm:p-5"
+                    aria-labelledby="your-action-heading"
+                >
+                    <div class="flex items-start gap-3">
+                        <div
+                            class="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                        >
+                            <ClipboardCheck class="size-4" aria-hidden="true" />
+                        </div>
+                        <div class="min-w-0">
+                            <p
+                                class="text-xs font-semibold tracking-wide text-primary uppercase"
+                            >
+                                Your action
+                            </p>
+                            <h2 id="your-action-heading" class="font-semibold">
+                                {{
+                                    officeLabel(myOpenWork[0].responsible_party)
+                                }}
+                                has
+                                {{ myOpenWork.length }}
+                                open
+                                {{
+                                    myOpenWork.length === 1
+                                        ? 'responsibility'
+                                        : 'responsibilities'
+                                }}
+                                on this application
+                            </h2>
+                            <ul class="mt-2 grid gap-1 text-sm">
+                                <li
+                                    v-for="item in myOpenWork"
+                                    :key="item.id"
+                                    class="flex items-start gap-2"
+                                >
+                                    <ChevronRight
+                                        class="mt-0.5 size-4 shrink-0"
+                                        aria-hidden="true"
+                                    />
+                                    <span>
+                                        {{ item.label }}
+                                        <span class="text-muted-foreground">
+                                            —
+                                            {{
+                                                item.item_type === 'charge'
+                                                    ? 'confirm or change the proposed amount below'
+                                                    : 'record your determination below'
+                                            }}
+                                        </span>
+                                    </span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. The financial build-up -->
+                <section class="space-y-4" aria-labelledby="build-up-heading">
+                    <div>
+                        <p
+                            class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                        >
+                            Financial build-up
+                        </p>
+                        <h2
+                            id="build-up-heading"
+                            class="mt-1 text-lg font-semibold"
+                        >
+                            Municipal charges on this application
+                        </h2>
+                        <p class="mt-1 text-sm leading-6 text-muted-foreground">
+                            Each charge shows what the Municipality proposed,
+                            what it resolved, and which office owns it.
+                        </p>
+                    </div>
+
+                    <div
+                        v-if="reconciliation.components.length"
+                        class="grid gap-4"
+                    >
+                        <EvaluationComponentRow
+                            v-for="component in reconciliation.components"
+                            :key="component.key"
+                            :component="component"
+                            :item="
+                                component.itemId === null
+                                    ? null
+                                    : (itemsById.get(component.itemId) ?? null)
+                            "
+                            :editable="canRecordWork && component.isMine"
+                            :submitting="
+                                pendingAction === `item-${component.itemId}`
+                            "
+                            :can-view-fee-rules="canViewFeeRules"
+                            @submit="submitResponsibility"
+                        />
+                    </div>
+                    <p
+                        v-else
+                        class="rounded-xl bg-muted/40 p-4 text-sm text-muted-foreground"
+                    >
+                        No municipal charge applies to this application yet.
+                    </p>
+                </section>
+
+                <!-- 5. What is still open -->
                 <section
                     :class="['rounded-xl border p-4', statusTone]"
-                    aria-labelledby="next-action-title"
+                    aria-labelledby="open-work-heading"
                 >
                     <div class="flex items-start gap-3">
                         <LockKeyhole
@@ -634,7 +673,7 @@ function submitPrepareAssessment(): void {
                             aria-hidden="true"
                         />
                         <div class="min-w-0 flex-1">
-                            <h2 id="next-action-title" class="font-semibold">
+                            <h2 id="open-work-heading" class="font-semibold">
                                 {{
                                     evaluation.financial_lock
                                         ? 'Payment locked after Assessment'
@@ -671,745 +710,561 @@ function submitPrepareAssessment(): void {
                     </div>
                 </section>
 
-                <div
-                    class="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.75fr)]"
+                <!-- 6. Declaration versus municipal determination -->
+                <section
+                    class="rounded-2xl border bg-card p-5 shadow-xs sm:p-6"
+                    aria-labelledby="declaration-heading"
                 >
-                    <div class="min-w-0 space-y-5">
-                        <section
-                            class="rounded-2xl border bg-card p-5 shadow-xs sm:p-6"
-                            aria-labelledby="declaration-heading"
+                    <div
+                        class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+                    >
+                        <div>
+                            <p
+                                class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                            >
+                                Business activities
+                            </p>
+                            <h2
+                                id="declaration-heading"
+                                class="mt-1 text-lg font-semibold"
+                            >
+                                Applicant declaration and municipal
+                                determination
+                            </h2>
+                            <p
+                                class="mt-1 text-sm leading-6 text-muted-foreground"
+                            >
+                                The original declaration remains visible when
+                                the Municipality records a correction or
+                                additional activity.
+                            </p>
+                        </div>
+                        <Badge
+                            v-if="
+                                can.correct_lines_of_business &&
+                                !evaluation.financial_lock
+                            "
+                            variant="outline"
                         >
-                            <div
-                                class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
-                            >
-                                <div>
-                                    <p
-                                        class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
-                                    >
-                                        Business activities
-                                    </p>
-                                    <h2
-                                        id="declaration-heading"
-                                        class="mt-1 text-lg font-semibold"
-                                    >
-                                        Applicant declaration and municipal
-                                        determination
-                                    </h2>
-                                    <p
-                                        class="mt-1 text-sm leading-6 text-muted-foreground"
-                                    >
-                                        The original declaration remains visible
-                                        when the Municipality records a
-                                        correction or additional activity.
-                                    </p>
-                                </div>
-                                <Badge
-                                    v-if="
-                                        can.correct_lines_of_business &&
-                                        !evaluation.financial_lock
-                                    "
-                                    variant="outline"
-                                    >{{
-                                        evaluation.lens === 'citizen'
-                                            ? 'Your declaration'
-                                            : 'Treasury correction control'
-                                    }}</Badge
-                                >
-                            </div>
+                            {{
+                                isCitizenLens
+                                    ? 'Your declaration'
+                                    : 'Treasury correction control'
+                            }}
+                        </Badge>
+                    </div>
 
-                            <div class="mt-5 grid gap-4 md:grid-cols-2">
-                                <div class="rounded-xl border bg-muted/20 p-4">
-                                    <div class="flex items-center gap-2">
-                                        <UserRound
-                                            class="size-4 text-muted-foreground"
-                                            aria-hidden="true"
-                                        />
-                                        <h3 class="font-semibold">
-                                            Applicant declared
-                                        </h3>
-                                    </div>
-                                    <ul class="mt-3 grid gap-3">
-                                        <li
-                                            v-for="line in evaluation.applicant_declaration"
-                                            :key="line.line_of_business_id"
-                                            class="rounded-lg bg-background p-3"
-                                        >
-                                            <p class="font-medium">
-                                                {{
-                                                    line.line_of_business_name ??
-                                                    `Activity #${line.line_of_business_id}`
-                                                }}
-                                            </p>
-                                            <p
-                                                v-if="
-                                                    line.declared_gross_sales_cents !==
-                                                        undefined &&
-                                                    line.declared_gross_sales_cents !==
-                                                        null
-                                                "
-                                                class="mt-1 text-xs text-muted-foreground"
-                                            >
-                                                Declared gross sales ·
-                                                {{
-                                                    money(
-                                                        line.declared_gross_sales_cents,
-                                                    )
-                                                }}
-                                            </p>
-                                            <p
-                                                v-if="
-                                                    line.capital_investment_cents !==
-                                                        undefined &&
-                                                    line.capital_investment_cents !==
-                                                        null
-                                                "
-                                                class="mt-1 text-xs text-muted-foreground"
-                                            >
-                                                Capital investment ·
-                                                {{
-                                                    money(
-                                                        line.capital_investment_cents,
-                                                    )
-                                                }}
-                                            </p>
-                                        </li>
-                                    </ul>
-                                </div>
-                                <div
-                                    class="rounded-xl border border-primary/30 bg-primary/5 p-4"
-                                >
-                                    <div class="flex items-center gap-2">
-                                        <Landmark
-                                            class="size-4 text-primary"
-                                            aria-hidden="true"
-                                        />
-                                        <h3 class="font-semibold">
-                                            Municipal resolved activities
-                                        </h3>
-                                    </div>
-                                    <ul class="mt-3 grid gap-2">
-                                        <li
-                                            v-for="line in evaluation.municipal_resolved_lines"
-                                            :key="line.id"
-                                            class="flex items-start gap-2 rounded-lg bg-background p-3"
-                                        >
-                                            <Check
-                                                class="mt-0.5 size-4 shrink-0 text-primary"
-                                                aria-hidden="true"
-                                            />
-                                            <span class="font-medium">{{
-                                                line.name ??
-                                                `Activity #${line.id}`
-                                            }}</span>
-                                        </li>
-                                    </ul>
-                                </div>
+                    <div class="mt-5 grid gap-4 md:grid-cols-2">
+                        <div class="rounded-xl border bg-muted/20 p-4">
+                            <div class="flex items-center gap-2">
+                                <UserRound
+                                    class="size-4 text-muted-foreground"
+                                    aria-hidden="true"
+                                />
+                                <h3 class="font-semibold">
+                                    Applicant declared
+                                </h3>
                             </div>
-
-                            <form
-                                v-if="
-                                    can.correct_lines_of_business &&
-                                    !evaluation.financial_lock
-                                "
-                                class="mt-5 rounded-xl border-2 border-dashed border-primary/30 p-4"
-                                @submit.prevent="submitLineCorrection"
-                            >
-                                <fieldset>
-                                    <legend class="font-semibold">
+                            <ul class="mt-3 grid gap-3">
+                                <li
+                                    v-for="line in evaluation.applicant_declaration"
+                                    :key="line.line_of_business_id"
+                                    class="rounded-lg bg-background p-3"
+                                >
+                                    <p class="font-medium">
                                         {{
-                                            evaluation.lens === 'citizen'
-                                                ? 'Correct your declared activities'
-                                                : 'Treasury — correct or add application activities'
-                                        }}
-                                    </legend>
-                                    <p
-                                        class="mt-1 text-sm leading-6 text-muted-foreground"
-                                    >
-                                        {{
-                                            evaluation.lens === 'citizen'
-                                                ? 'Your original declaration is preserved in the history.'
-                                                : 'This changes this permit application only. It does not change the legal Business registry.'
+                                            line.line_of_business_name ??
+                                            `Activity #${line.line_of_business_id}`
                                         }}
                                     </p>
-                                    <div class="mt-4 grid gap-2 sm:grid-cols-2">
-                                        <label
-                                            v-for="line in lineOfBusinesses"
-                                            :key="line.id"
-                                            class="flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border p-3 outline-none has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                class="mt-1 size-4"
-                                                :checked="
-                                                    selectedLineIds.includes(
-                                                        line.id,
-                                                    )
-                                                "
-                                                :value="line.id"
-                                                @change="toggleLine(line.id)"
-                                            />
-                                            <span class="min-w-0"
-                                                ><span
-                                                    class="block font-medium break-words"
-                                                    >{{ line.name }}</span
-                                                ><span
-                                                    v-if="line.code"
-                                                    class="text-xs text-muted-foreground"
-                                                    >{{ line.code }}</span
-                                                ></span
-                                            >
-                                        </label>
-                                    </div>
-                                    <div class="mt-4 grid gap-2">
-                                        <Label for="line-correction-reason"
-                                            >Reason for correction
-                                            <span aria-hidden="true"
-                                                >*</span
-                                            ></Label
-                                        >
-                                        <textarea
-                                            id="line-correction-reason"
-                                            v-model="lineCorrectionReason.value"
-                                            required
-                                            rows="3"
-                                            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                                        />
-                                    </div>
-                                    <Button
-                                        type="submit"
-                                        class="mt-4 w-full sm:w-auto"
-                                        :disabled="
-                                            selectedLineIds.length === 0 ||
-                                            pendingAction !== null
+                                    <p
+                                        v-if="
+                                            line.declared_gross_sales_cents !==
+                                            null
                                         "
+                                        class="mt-1 text-xs text-muted-foreground"
                                     >
-                                        <RefreshCw aria-hidden="true" />
+                                        Declared gross sales ·
                                         {{
-                                            pendingAction === 'line-correction'
-                                                ? 'Recording…'
-                                                : 'Record correction and re-evaluate'
+                                            money(
+                                                line.declared_gross_sales_cents,
+                                            )
                                         }}
-                                    </Button>
-                                </fieldset>
-                            </form>
-                        </section>
-
-                        <section
-                            class="space-y-4"
-                            aria-labelledby="responsibilities-heading"
+                                    </p>
+                                    <p
+                                        v-if="
+                                            line.capital_investment_cents !==
+                                            null
+                                        "
+                                        class="mt-1 text-xs text-muted-foreground"
+                                    >
+                                        Capital investment ·
+                                        {{
+                                            money(line.capital_investment_cents)
+                                        }}
+                                    </p>
+                                </li>
+                            </ul>
+                        </div>
+                        <div
+                            class="rounded-xl border border-primary/30 bg-primary/5 p-4"
                         >
+                            <div class="flex items-center gap-2">
+                                <Landmark
+                                    class="size-4 text-primary"
+                                    aria-hidden="true"
+                                />
+                                <h3 class="font-semibold">
+                                    Municipal resolved activities
+                                </h3>
+                            </div>
+                            <ul class="mt-3 grid gap-2">
+                                <li
+                                    v-for="line in evaluation.municipal_resolved_lines"
+                                    :key="line.id"
+                                    class="flex items-start gap-2 rounded-lg bg-background p-3"
+                                >
+                                    <Check
+                                        class="mt-0.5 size-4 shrink-0 text-primary"
+                                        aria-hidden="true"
+                                    />
+                                    <span class="font-medium">
+                                        {{
+                                            line.name ?? `Activity #${line.id}`
+                                        }}
+                                    </span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <form
+                        v-if="
+                            can.correct_lines_of_business &&
+                            !evaluation.financial_lock
+                        "
+                        class="mt-5 rounded-xl border-2 border-dashed border-primary/30 p-4"
+                        @submit.prevent="submitLineCorrection"
+                    >
+                        <fieldset>
+                            <legend class="font-semibold">
+                                {{
+                                    isCitizenLens
+                                        ? 'Correct your declared activities'
+                                        : 'Treasury — correct or add application activities'
+                                }}
+                            </legend>
+                            <p
+                                class="mt-1 text-sm leading-6 text-muted-foreground"
+                            >
+                                {{
+                                    isCitizenLens
+                                        ? 'Your original declaration is preserved in the history.'
+                                        : 'This changes this permit application only. It does not change the legal Business registry, and it re-evaluates affected office responsibilities.'
+                                }}
+                            </p>
+                            <div class="mt-4 grid gap-2 sm:grid-cols-2">
+                                <label
+                                    v-for="line in lineOfBusinesses"
+                                    :key="line.id"
+                                    class="flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border p-3 outline-none has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        class="mt-1 size-4"
+                                        :checked="
+                                            selectedLineIds.includes(line.id)
+                                        "
+                                        :value="line.id"
+                                        @change="toggleLine(line.id)"
+                                    />
+                                    <span class="min-w-0">
+                                        <span
+                                            class="block font-medium break-words"
+                                        >
+                                            {{ line.name }}
+                                        </span>
+                                        <span
+                                            v-if="line.code"
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            {{ line.code }}
+                                        </span>
+                                    </span>
+                                </label>
+                            </div>
+                            <div class="mt-4 grid gap-2">
+                                <Label for="line-correction-reason">
+                                    Reason for correction
+                                    <span aria-hidden="true">*</span>
+                                </Label>
+                                <textarea
+                                    id="line-correction-reason"
+                                    v-model="lineCorrectionReason.value"
+                                    required
+                                    rows="3"
+                                    class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                                />
+                            </div>
+                            <Button
+                                type="submit"
+                                class="mt-4 w-full sm:w-auto"
+                                :disabled="
+                                    selectedLineIds.length === 0 ||
+                                    pendingAction !== null
+                                "
+                            >
+                                <RefreshCw aria-hidden="true" />
+                                {{
+                                    pendingAction === 'line-correction'
+                                        ? 'Recording…'
+                                        : 'Record correction and re-evaluate'
+                                }}
+                            </Button>
+                        </fieldset>
+                    </form>
+                </section>
+
+                <!-- 7. Non-monetary municipal work -->
+                <section
+                    v-if="responsibilityItems.length"
+                    class="space-y-4"
+                    aria-labelledby="responsibilities-heading"
+                >
+                    <div>
+                        <p
+                            class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                        >
+                            Concerned offices
+                        </p>
+                        <h2
+                            id="responsibilities-heading"
+                            class="mt-1 text-lg font-semibold"
+                        >
+                            Municipal reviews and recorded facts
+                        </h2>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                            These do not carry an amount, but the Assessment
+                            cannot proceed until the required ones are complete.
+                        </p>
+                    </div>
+                    <div class="grid gap-4">
+                        <EvaluationItemCard
+                            v-for="item in responsibilityItems"
+                            :key="item.id"
+                            :item="item"
+                            :editable="canRecordWork && item.is_mine"
+                            :submitting="pendingAction === `item-${item.id}`"
+                            @submit="submitResponsibility"
+                        />
+                    </div>
+                </section>
+
+                <!-- 8. Role context: Treasury, Assessment Officer, Municipal Treasurer -->
+                <div class="grid min-w-0 gap-4 xl:grid-cols-2">
+                    <section
+                        v-if="can.counter_check && !evaluation.financial_lock"
+                        class="rounded-2xl border-2 border-dashed border-primary/40 bg-card p-5"
+                        aria-labelledby="treasury-heading"
+                    >
+                        <div class="flex items-center gap-3">
+                            <div
+                                class="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                            >
+                                <Landmark class="size-4" aria-hidden="true" />
+                            </div>
+                            <div>
+                                <p
+                                    class="text-xs font-semibold tracking-wide text-primary uppercase"
+                                >
+                                    Your action — Treasury
+                                </p>
+                                <h2 id="treasury-heading" class="font-semibold">
+                                    Counter-check this Evaluation
+                                </h2>
+                            </div>
+                        </div>
+                        <p class="mt-3 text-sm leading-6 text-muted-foreground">
+                            Treasury counter-check confirms this exact
+                            Evaluation version. It is separate from Municipal
+                            Treasurer approval and never overrides an amount.
+                        </p>
+                        <template
+                            v-if="evaluation.version.treasury_counter_check"
+                        >
+                            <p class="mt-4 text-sm font-medium">
+                                Counter-check complete
+                            </p>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                {{
+                                    evaluation.version.treasury_counter_check
+                                        .checked_by
+                                }}
+                                ·
+                                {{
+                                    dateTime(
+                                        evaluation.version
+                                            .treasury_counter_check.checked_at,
+                                    )
+                                }}
+                            </p>
+                            <p
+                                v-if="
+                                    evaluation.version.treasury_counter_check
+                                        .reason
+                                "
+                                class="mt-2 text-sm"
+                            >
+                                {{
+                                    evaluation.version.treasury_counter_check
+                                        .reason
+                                }}
+                            </p>
+                        </template>
+                        <form
+                            v-else
+                            class="mt-4"
+                            @submit.prevent="submitCounterCheck"
+                        >
+                            <Label for="counter-check-reason">
+                                Review note (optional)
+                            </Label>
+                            <textarea
+                                id="counter-check-reason"
+                                v-model="counterCheckReason.value"
+                                rows="3"
+                                class="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                            />
+                            <Button
+                                type="submit"
+                                class="mt-3 w-full"
+                                :disabled="pendingAction !== null"
+                            >
+                                <ShieldCheck aria-hidden="true" />
+                                {{
+                                    pendingAction === 'counter-check'
+                                        ? 'Confirming…'
+                                        : 'Confirm exact-version counter-check'
+                                }}
+                            </Button>
+                        </form>
+                    </section>
+
+                    <section
+                        v-if="
+                            can.prepare_assessment && !evaluation.financial_lock
+                        "
+                        class="rounded-2xl border bg-card p-5 shadow-xs"
+                        aria-labelledby="assessment-action-heading"
+                    >
+                        <div class="flex items-center gap-3">
+                            <div
+                                class="flex size-9 items-center justify-center rounded-full bg-muted"
+                            >
+                                <FileClock class="size-4" aria-hidden="true" />
+                            </div>
                             <div>
                                 <p
                                     class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
                                 >
-                                    Concerned offices
+                                    Your action — Assessment Officer
                                 </p>
-                                <h2
-                                    id="responsibilities-heading"
-                                    class="mt-1 text-lg font-semibold"
-                                >
-                                    Evaluation responsibilities
-                                </h2>
-                                <p class="mt-1 text-sm text-muted-foreground">
-                                    Applicable work is authoritative
-                                    responsibility, not an informal message.
-                                </p>
-                            </div>
-
-                            <div
-                                v-if="myItems.length"
-                                class="rounded-2xl border-2 border-primary/40 bg-primary/5 p-4 sm:p-5"
-                            >
-                                <div class="flex items-center gap-3">
-                                    <div
-                                        class="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground"
-                                    >
-                                        <ClipboardCheck
-                                            class="size-4"
-                                            aria-hidden="true"
-                                        />
-                                    </div>
-                                    <div>
-                                        <p
-                                            class="text-xs font-semibold tracking-wide text-primary uppercase"
-                                        >
-                                            Your action
-                                        </p>
-                                        <h3 class="font-semibold">
-                                            {{
-                                                officeLabel(
-                                                    myItems[0]
-                                                        .responsible_party,
-                                                )
-                                            }}
-                                            responsibilities
-                                        </h3>
-                                    </div>
-                                </div>
-                                <div class="mt-4 grid gap-4">
-                                    <EvaluationItemCard
-                                        v-for="item in myItems"
-                                        :key="item.id"
-                                        :item="item"
-                                        :editable="
-                                            can.contribute &&
-                                            !evaluation.financial_lock
-                                        "
-                                        :submitting="
-                                            pendingAction === `item-${item.id}`
-                                        "
-                                        @submit="submitResponsibility"
-                                    />
-                                </div>
-                            </div>
-
-                            <div class="grid gap-4">
-                                <EvaluationItemCard
-                                    v-for="item in otherItems"
-                                    :key="item.id"
-                                    :item="item"
-                                    :editable="false"
-                                    :submitting="false"
-                                    @submit="submitResponsibility"
-                                />
-                            </div>
-                        </section>
-
-                        <section
-                            class="rounded-2xl border bg-card p-5 shadow-xs sm:p-6"
-                            aria-labelledby="charges-heading"
-                        >
-                            <div class="flex items-start gap-3">
-                                <div
-                                    class="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted"
-                                >
-                                    <Scale class="size-4" aria-hidden="true" />
-                                </div>
-                                <div>
-                                    <h2
-                                        id="charges-heading"
-                                        class="text-lg font-semibold"
-                                    >
-                                        Governed system proposals
-                                    </h2>
-                                    <p
-                                        class="mt-1 text-sm leading-6 text-muted-foreground"
-                                    >
-                                        These charges come from the same
-                                        governed pricing path used by Services &
-                                        Fees and Assessment. Office-resolved
-                                        charges are not duplicated here.
-                                    </p>
-                                </div>
-                            </div>
-                            <div
-                                v-if="evaluation.projected_charges.length"
-                                class="mt-5 grid gap-3"
-                            >
-                                <article
-                                    v-for="charge in evaluation.projected_charges"
-                                    :key="charge.key"
-                                    class="grid gap-3 rounded-xl border p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-                                >
-                                    <div class="min-w-0">
-                                        <div
-                                            class="flex flex-wrap items-center gap-2"
-                                        >
-                                            <h3 class="font-semibold">
-                                                {{ charge.name }}
-                                            </h3>
-                                            <Badge variant="outline">{{
-                                                charge.code
-                                            }}</Badge>
-                                        </div>
-                                        <p
-                                            class="mt-1 text-sm text-muted-foreground"
-                                        >
-                                            {{ pricingBasis(charge) }}
-                                        </p>
-                                        <p
-                                            v-if="charge.legal_basis"
-                                            class="mt-1 text-xs text-muted-foreground"
-                                        >
-                                            {{ charge.legal_basis }}
-                                        </p>
-                                    </div>
-                                    <div
-                                        class="flex items-center justify-between gap-4 sm:block sm:text-right"
-                                    >
-                                        <p
-                                            class="text-lg font-semibold tabular-nums"
-                                        >
-                                            {{ money(charge.amount_cents) }}
-                                        </p>
-                                        <Link
-                                            v-if="canViewFeeRules"
-                                            :href="
-                                                showFeeRule(charge.fee_rule_id)
-                                            "
-                                            class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
-                                        >
-                                            Pricing basis
-                                            <ArrowRight
-                                                class="size-3"
-                                                aria-hidden="true"
-                                            />
-                                        </Link>
-                                        <p
-                                            v-else
-                                            class="text-xs text-muted-foreground"
-                                        >
-                                            Municipal pricing basis
-                                        </p>
-                                    </div>
-                                </article>
-                            </div>
-                            <p
-                                v-else
-                                class="mt-4 rounded-xl bg-muted/40 p-4 text-sm text-muted-foreground"
-                            >
-                                No governed system proposal currently applies.
-                            </p>
-                        </section>
-                    </div>
-
-                    <aside class="min-w-0 space-y-5">
-                        <section
-                            v-if="
-                                can.counter_check && !evaluation.financial_lock
-                            "
-                            class="rounded-2xl border-2 border-dashed border-primary/40 bg-card p-5"
-                            aria-labelledby="treasury-heading"
-                        >
-                            <div class="flex items-center gap-3">
-                                <div
-                                    class="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground"
-                                >
-                                    <Landmark
-                                        class="size-4"
-                                        aria-hidden="true"
-                                    />
-                                </div>
-                                <div>
-                                    <p
-                                        class="text-xs font-semibold tracking-wide text-primary uppercase"
-                                    >
-                                        Your action — Treasury
-                                    </p>
-                                    <h2
-                                        id="treasury-heading"
-                                        class="font-semibold"
-                                    >
-                                        Counter-check Evaluation
-                                    </h2>
-                                </div>
-                            </div>
-                            <template
-                                v-if="evaluation.version.treasury_counter_check"
-                            >
-                                <p class="mt-4 text-sm font-medium">
-                                    Counter-check complete
-                                </p>
-                                <p class="mt-1 text-sm text-muted-foreground">
-                                    {{
-                                        evaluation.version
-                                            .treasury_counter_check.checked_by
-                                    }}
-                                    ·
-                                    {{
-                                        dateTime(
-                                            evaluation.version
-                                                .treasury_counter_check
-                                                .checked_at,
-                                        )
-                                    }}
-                                </p>
-                                <p
-                                    v-if="
-                                        evaluation.version
-                                            .treasury_counter_check.reason
-                                    "
-                                    class="mt-2 text-sm"
-                                >
-                                    {{
-                                        evaluation.version
-                                            .treasury_counter_check.reason
-                                    }}
-                                </p>
-                            </template>
-                            <form
-                                v-else
-                                class="mt-4"
-                                @submit.prevent="submitCounterCheck"
-                            >
-                                <Label for="counter-check-reason"
-                                    >Review note (optional)</Label
-                                >
-                                <textarea
-                                    id="counter-check-reason"
-                                    v-model="counterCheckReason.value"
-                                    rows="3"
-                                    class="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                                />
-                                <Button
-                                    type="submit"
-                                    class="mt-3 w-full"
-                                    :disabled="pendingAction !== null"
-                                    ><ShieldCheck aria-hidden="true" />{{
-                                        pendingAction === 'counter-check'
-                                            ? 'Confirming…'
-                                            : 'Confirm exact-version counter-check'
-                                    }}</Button
-                                >
-                            </form>
-                        </section>
-
-                        <section
-                            v-if="
-                                can.prepare_assessment &&
-                                !evaluation.financial_lock
-                            "
-                            class="rounded-2xl border bg-card p-5 shadow-xs"
-                            aria-labelledby="assessment-action-heading"
-                        >
-                            <div class="flex items-center gap-3">
-                                <div
-                                    class="flex size-9 items-center justify-center rounded-full bg-muted"
-                                >
-                                    <FileClock
-                                        class="size-4"
-                                        aria-hidden="true"
-                                    />
-                                </div>
                                 <h2
                                     id="assessment-action-heading"
                                     class="font-semibold"
                                 >
-                                    Assessment Officer
+                                    Prepare the Assessment
                                 </h2>
                             </div>
-                            <p
-                                class="mt-3 text-sm leading-6 text-muted-foreground"
-                            >
-                                Prepare an immutable Assessment from this exact
-                                resolved Evaluation. Municipal Treasurer
-                                approval remains a separate decision.
-                            </p>
-                            <Button
-                                class="mt-4 w-full"
-                                :disabled="
-                                    !readiness?.ready ||
-                                    currentAssessmentExists ||
-                                    pendingAction !== null
+                        </div>
+                        <p class="mt-3 text-sm leading-6 text-muted-foreground">
+                            This freezes the
+                            {{ money(reconciliation.canonicalTotalCents) }}
+                            build-up above into an immutable Assessment.
+                            Municipal Treasurer approval remains a separate
+                            decision.
+                        </p>
+                        <Button
+                            class="mt-4 w-full"
+                            :disabled="
+                                !readiness?.ready ||
+                                currentAssessmentExists ||
+                                pendingAction !== null
+                            "
+                            @click="submitPrepareAssessment"
+                        >
+                            <PhilippinePeso aria-hidden="true" />
+                            {{
+                                currentAssessmentExists
+                                    ? 'Assessment already prepared'
+                                    : pendingAction === 'prepare-assessment'
+                                      ? 'Preparing…'
+                                      : 'Prepare Assessment'
+                            }}
+                        </Button>
+                        <p
+                            v-if="!readiness?.ready"
+                            class="mt-2 text-xs text-muted-foreground"
+                        >
+                            Available once the open municipal evaluations above
+                            are resolved.
+                        </p>
+                    </section>
+
+                    <section
+                        class="rounded-2xl border bg-card p-5 shadow-xs"
+                        aria-labelledby="assessment-trace-heading"
+                    >
+                        <h2 id="assessment-trace-heading" class="font-semibold">
+                            Assessment of record
+                        </h2>
+                        <template v-if="latestAssessment">
+                            <component
+                                :is="isCitizenLens ? 'div' : Link"
+                                v-bind="
+                                    isCitizenLens
+                                        ? {}
+                                        : {
+                                              href: showAssessment(
+                                                  latestAssessment.id,
+                                              ),
+                                          }
                                 "
-                                @click="submitPrepareAssessment"
-                                ><PhilippinePeso aria-hidden="true" />{{
-                                    currentAssessmentExists
-                                        ? 'Assessment already prepared'
-                                        : pendingAction === 'prepare-assessment'
-                                          ? 'Preparing…'
-                                          : 'Prepare Assessment'
-                                }}</Button
+                                class="mt-3 flex items-start gap-3 rounded-xl bg-muted/40 p-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                                :class="isCitizenLens ? '' : 'hover:bg-muted'"
                             >
-                        </section>
-
-                        <section
-                            class="rounded-2xl border bg-card p-5 shadow-xs"
-                            aria-labelledby="assessment-trace-heading"
-                        >
-                            <h2
-                                id="assessment-trace-heading"
-                                class="font-semibold"
-                            >
-                                Assessment traceability
-                            </h2>
-                            <template v-if="evaluation.latest_assessment">
-                                <Link
-                                    v-if="evaluation.lens === 'internal'"
-                                    :href="
-                                        showAssessment(
-                                            evaluation.latest_assessment.id,
-                                        )
-                                    "
-                                    class="mt-3 flex items-start gap-3 rounded-xl bg-muted/40 p-3 outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
-                                >
-                                    <CheckCircle2
-                                        v-if="
-                                            evaluation.latest_assessment
-                                                .consumes_current_evaluation &&
-                                            !evaluation.latest_assessment
-                                                .superseded
-                                        "
-                                        class="mt-0.5 size-5 shrink-0 text-emerald-600"
-                                        aria-hidden="true"
-                                    />
-                                    <AlertTriangle
-                                        v-else
-                                        class="mt-0.5 size-5 shrink-0 text-amber-600"
-                                        aria-hidden="true"
-                                    />
-                                    <div class="min-w-0 flex-1">
-                                        <p class="font-medium">
-                                            Assessment #{{
-                                                evaluation.latest_assessment
-                                                    .sequence
-                                            }}
-                                        </p>
-                                        <p
-                                            class="mt-1 text-sm text-muted-foreground"
-                                        >
-                                            {{
-                                                money(
-                                                    evaluation.latest_assessment
-                                                        .total_amount_cents,
-                                                )
-                                            }}
-                                        </p>
-                                        <p
-                                            class="mt-1 text-xs text-muted-foreground"
-                                        >
-                                            {{
-                                                evaluation.latest_assessment
-                                                    .superseded
-                                                    ? 'Superseded after Evaluation changed'
-                                                    : evaluation
-                                                            .latest_assessment
-                                                            .consumes_current_evaluation
-                                                      ? 'Consumes the current exact Evaluation'
-                                                      : 'Consumes an earlier Evaluation version'
-                                            }}
-                                        </p>
-                                    </div>
-                                    <ArrowRight
-                                        class="mt-1 size-4 shrink-0 text-muted-foreground"
-                                        aria-hidden="true"
-                                    />
-                                </Link>
-                                <div
-                                    v-else
-                                    class="mt-3 flex items-start gap-3 rounded-xl bg-muted/40 p-3"
-                                >
-                                    <CheckCircle2
-                                        v-if="
-                                            evaluation.latest_assessment
-                                                .consumes_current_evaluation &&
-                                            !evaluation.latest_assessment
-                                                .superseded
-                                        "
-                                        class="mt-0.5 size-5 shrink-0 text-emerald-600"
-                                        aria-hidden="true"
-                                    />
-                                    <AlertTriangle
-                                        v-else
-                                        class="mt-0.5 size-5 shrink-0 text-amber-600"
-                                        aria-hidden="true"
-                                    />
-                                    <div>
-                                        <p class="font-medium">
-                                            Assessment #{{
-                                                evaluation.latest_assessment
-                                                    .sequence
-                                            }}
-                                        </p>
-                                        <p
-                                            class="mt-1 text-sm text-muted-foreground"
-                                        >
-                                            {{
-                                                money(
-                                                    evaluation.latest_assessment
-                                                        .total_amount_cents,
-                                                )
-                                            }}
-                                        </p>
-                                    </div>
-                                </div>
-                            </template>
-                            <p
-                                v-else
-                                class="mt-2 text-sm leading-6 text-muted-foreground"
-                            >
-                                No Assessment consumes this Evaluation yet.
-                            </p>
-                        </section>
-
-                        <details
-                            class="group rounded-2xl border bg-card shadow-xs"
-                        >
-                            <summary
-                                class="flex cursor-pointer list-none items-center justify-between gap-3 p-5 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                            >
-                                <span
-                                    class="flex items-center gap-2 font-semibold"
-                                    ><History
-                                        class="size-4"
-                                        aria-hidden="true"
-                                    />Audit details</span
-                                >
-                                <ChevronRight
-                                    class="size-4 transition-transform group-open:rotate-90"
+                                <CheckCircle2
+                                    v-if="currentAssessmentExists"
+                                    class="mt-0.5 size-5 shrink-0 text-emerald-600"
                                     aria-hidden="true"
                                 />
-                            </summary>
-                            <div class="border-t p-5 text-sm">
-                                <dl class="grid gap-3">
-                                    <div>
-                                        <dt
-                                            class="text-xs text-muted-foreground"
-                                        >
-                                            Evaluation version
-                                        </dt>
-                                        <dd class="mt-1 font-medium">
-                                            Version
-                                            {{ evaluation.version.sequence }}
-                                        </dd>
-                                    </div>
-                                    <div>
-                                        <dt
-                                            class="text-xs text-muted-foreground"
-                                        >
-                                            Version integrity
-                                        </dt>
-                                        <dd class="mt-1 font-medium">
-                                            {{
-                                                evaluation.version
-                                                    .fingerprint_current
-                                                    ? 'Current'
-                                                    : 'Changed — refresh required'
-                                            }}
-                                        </dd>
-                                    </div>
-                                    <div>
-                                        <dt
-                                            class="text-xs text-muted-foreground"
-                                        >
-                                            Exact reference
-                                        </dt>
-                                        <dd
-                                            class="mt-1 font-mono text-xs break-all"
-                                        >
-                                            {{ evaluation.version.fingerprint }}
-                                        </dd>
-                                    </div>
-                                </dl>
-                                <Button
-                                    v-if="
-                                        can.initialize &&
-                                        !evaluation.financial_lock
-                                    "
-                                    variant="outline"
-                                    class="mt-4 w-full"
-                                    :disabled="pendingAction !== null"
-                                    @click="submitRefresh"
-                                    ><RefreshCw aria-hidden="true" />{{
-                                        pendingAction === 'refresh'
-                                            ? 'Refreshing…'
-                                            : 'Refresh dependencies'
-                                    }}</Button
-                                >
-                            </div>
-                        </details>
-                    </aside>
+                                <AlertTriangle
+                                    v-else
+                                    class="mt-0.5 size-5 shrink-0 text-amber-600"
+                                    aria-hidden="true"
+                                />
+                                <div class="min-w-0 flex-1">
+                                    <p class="font-medium">
+                                        Assessment #{{
+                                            latestAssessment.sequence
+                                        }}
+                                        ·
+                                        {{
+                                            money(
+                                                latestAssessment.total_amount_cents,
+                                            )
+                                        }}
+                                    </p>
+                                    <p
+                                        class="mt-1 text-sm text-muted-foreground"
+                                    >
+                                        {{
+                                            latestAssessment.superseded
+                                                ? 'Superseded after the Evaluation changed'
+                                                : latestAssessment.consumes_current_evaluation
+                                                  ? 'Prepared from this exact Evaluation version'
+                                                  : 'Prepared from an earlier Evaluation version'
+                                        }}
+                                    </p>
+                                    <p
+                                        v-if="!isCitizenLens"
+                                        class="mt-1 text-xs text-muted-foreground"
+                                    >
+                                        Municipal Treasurer approval and return
+                                        for correction are recorded on the
+                                        Assessment itself.
+                                    </p>
+                                </div>
+                                <ArrowRight
+                                    v-if="!isCitizenLens"
+                                    class="mt-1 size-4 shrink-0 text-muted-foreground"
+                                    aria-hidden="true"
+                                />
+                            </component>
+                        </template>
+                        <p
+                            v-else
+                            class="mt-2 text-sm leading-6 text-muted-foreground"
+                        >
+                            {{
+                                isCitizenLens
+                                    ? 'The Municipality has not issued an assessment for this application yet, so the amount above can still change.'
+                                    : 'No Assessment consumes this Evaluation yet.'
+                            }}
+                        </p>
+                    </section>
                 </div>
+
+                <!-- 9. Audit detail, deliberately last -->
+                <details class="group rounded-2xl border bg-card shadow-xs">
+                    <summary
+                        class="flex cursor-pointer list-none items-center justify-between gap-3 p-5 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                    >
+                        <span class="flex items-center gap-2 font-semibold">
+                            <History class="size-4" aria-hidden="true" />
+                            Audit detail
+                        </span>
+                        <ChevronRight
+                            class="size-4 transition-transform group-open:rotate-90"
+                            aria-hidden="true"
+                        />
+                    </summary>
+                    <div class="border-t p-5 text-sm">
+                        <dl class="grid gap-3">
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Evaluation version
+                                </dt>
+                                <dd class="mt-1 font-medium">
+                                    Version {{ evaluation.version.sequence }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Version integrity
+                                </dt>
+                                <dd class="mt-1 font-medium">
+                                    {{
+                                        evaluation.version.fingerprint_current
+                                            ? 'Current'
+                                            : 'Dependencies changed — refresh required'
+                                    }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Exact reference
+                                </dt>
+                                <dd class="mt-1 font-mono text-xs break-all">
+                                    {{ evaluation.version.fingerprint }}
+                                </dd>
+                            </div>
+                            <div v-if="evaluation.pricing_issues.length">
+                                <dt class="text-xs text-muted-foreground">
+                                    Municipal pricing needs review
+                                </dt>
+                                <dd class="mt-1">
+                                    {{ evaluation.pricing_issues.length }}
+                                    recorded pricing issue(s)
+                                </dd>
+                            </div>
+                        </dl>
+                        <Button
+                            v-if="can.initialize && !evaluation.financial_lock"
+                            variant="outline"
+                            class="mt-4 w-full sm:w-auto"
+                            :disabled="pendingAction !== null"
+                            @click="submitRefresh"
+                        >
+                            <RefreshCw aria-hidden="true" />
+                            {{
+                                pendingAction === 'refresh'
+                                    ? 'Refreshing…'
+                                    : 'Refresh dependencies'
+                            }}
+                        </Button>
+                    </div>
+                </details>
             </template>
         </main>
     </AppLayout>
