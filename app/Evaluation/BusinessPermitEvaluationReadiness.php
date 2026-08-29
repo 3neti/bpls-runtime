@@ -90,6 +90,14 @@ class BusinessPermitEvaluationReadiness
             $issues[] = 'Selected pricing rule is blocked or ambiguous: '.$issue;
         }
 
+        if ($mode === 'commissioned') {
+            foreach ($projection['projected_charges'] as $charge) {
+                if ($charge['source_classification'] === BusinessPermitEvaluationSource::ProvisionalUat->value) {
+                    $issues[] = "Projected charge [{$charge['code']}] is provisional_uat and cannot establish production liability.";
+                }
+            }
+        }
+
         if (! $projection['fingerprint_current']) {
             $issues[] = 'Evaluation fingerprint is stale and must be refreshed before assessment.';
         }

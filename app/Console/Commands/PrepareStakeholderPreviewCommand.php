@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Actions\CreateBillingGroup;
 use App\Actions\CreateBillingGroupDraftRecord;
 use App\Actions\CreateBillingGroupReconciliationEvidence;
+use App\Actions\PrepareBusinessPermitEvaluatorUatDataset;
 use App\Enums\BillingGroupEvidenceType;
 use App\Enums\BillingGroupFieldType;
 use App\Enums\StakeholderPreviewPersona;
@@ -36,6 +37,7 @@ class PrepareStakeholderPreviewCommand extends Command
         CreateBillingGroup $createBillingGroup,
         CreateBillingGroupDraftRecord $createDraftRecord,
         CreateBillingGroupReconciliationEvidence $createReconciliationEvidence,
+        PrepareBusinessPermitEvaluatorUatDataset $prepareEvaluatorUat,
     ): int {
         try {
             $this->assertSafeEnvironment($previewSafety);
@@ -53,6 +55,7 @@ class PrepareStakeholderPreviewCommand extends Command
                     $createBillingGroup,
                     $createDraftRecord,
                     $createReconciliationEvidence,
+                    $prepareEvaluatorUat,
                 );
             }
 
@@ -105,6 +108,7 @@ class PrepareStakeholderPreviewCommand extends Command
             'bplo' => $this->preparePersona(StakeholderPreviewPersona::Bplo, $password),
             'assessment_officer' => $this->preparePersona(StakeholderPreviewPersona::AssessmentOfficer, $password),
             'treasury' => $this->preparePersona(StakeholderPreviewPersona::Treasury, $password),
+            'municipal_treasurer' => $this->preparePersona(StakeholderPreviewPersona::MunicipalTreasurer, $password),
             'cashier' => $this->preparePersona(StakeholderPreviewPersona::Cashier, $password),
             'management' => $this->preparePersona(StakeholderPreviewPersona::Management, $password),
             'engineering' => $this->preparePersona(StakeholderPreviewPersona::Engineering, $password),
@@ -172,7 +176,7 @@ class PrepareStakeholderPreviewCommand extends Command
         config()->set('lifecycle_scenarios.actors.citizen_applicant.email', $accounts['citizen']->email);
         config()->set('lifecycle_scenarios.actors.primary_operator.email', $accounts['bplo']->email);
         config()->set('lifecycle_scenarios.actors.assessment_preparer.email', $accounts['assessment_officer']->email);
-        config()->set('lifecycle_scenarios.actors.assessment_approver.email', $accounts['treasury']->email);
+        config()->set('lifecycle_scenarios.actors.assessment_approver.email', $accounts['municipal_treasurer']->email);
         config()->set('lifecycle_scenarios.actors.preview_cashier.email', $accounts['cashier']->email);
         config()->set('lifecycle_scenarios.actors.sample_recipient.email', $accounts['management']->email);
         config()->set('lifecycle_scenarios.actors.preview_engineering.email', $accounts['engineering']->email);
@@ -190,10 +194,10 @@ class PrepareStakeholderPreviewCommand extends Command
             'LIFECYCLE_BROWSER_OPERATOR_PASSWORD' => $password,
             'LIFECYCLE_BROWSER_BPLO_EMAIL' => $accounts['bplo']->email,
             'LIFECYCLE_BROWSER_BPLO_PASSWORD' => $password,
-            'LIFECYCLE_BROWSER_TREASURY_EMAIL' => $accounts['treasury']->email,
+            'LIFECYCLE_BROWSER_TREASURY_EMAIL' => $accounts['municipal_treasurer']->email,
             'LIFECYCLE_BROWSER_TREASURY_PASSWORD' => $password,
             'LIFECYCLE_ASSESSMENT_PREPARER_EMAIL' => $accounts['assessment_officer']->email,
-            'LIFECYCLE_ASSESSMENT_APPROVER_EMAIL' => $accounts['treasury']->email,
+            'LIFECYCLE_ASSESSMENT_APPROVER_EMAIL' => $accounts['municipal_treasurer']->email,
             'LIFECYCLE_PREVIEW_CASHIER_EMAIL' => $accounts['cashier']->email,
             'LIFECYCLE_PREVIEW_ENGINEERING_EMAIL' => $accounts['engineering']->email,
             'LIFECYCLE_PREVIEW_MPDO_EMAIL' => $accounts['mpdo']->email,
@@ -234,6 +238,7 @@ class PrepareStakeholderPreviewCommand extends Command
         CreateBillingGroup $createBillingGroup,
         CreateBillingGroupDraftRecord $createDraftRecord,
         CreateBillingGroupReconciliationEvidence $createReconciliationEvidence,
+        PrepareBusinessPermitEvaluatorUatDataset $prepareEvaluatorUat,
     ): void {
         $billingGroup = BillingGroup::query()->where('metadata->scenario_run_id', $runId)->first();
         if (! $billingGroup instanceof BillingGroup) {
@@ -276,6 +281,15 @@ class PrepareStakeholderPreviewCommand extends Command
             ], ['scenario_run_id' => $runId, 'preview_data' => 'synthetic']);
         }
 
+        $evaluatorUat = $prepareEvaluatorUat->handle($runId, [
+            'citizen' => $accounts['citizen'],
+            'assessment_officer' => $accounts['assessment_officer'],
+            'treasury' => $accounts['treasury'],
+            'municipal_treasurer' => $accounts['municipal_treasurer'],
+            'engineering' => $accounts['engineering'],
+            'health' => $accounts['health'],
+        ]);
+
         $store = new ScenarioArtifactStore('stakeholder_preview_cycle_1', $runId);
         $manifest = $store->readJson('manifest.json') ?? throw new RuntimeException('Stakeholder preview manifest is missing after preparation.');
         $manifest['preview'] = [
@@ -300,6 +314,7 @@ class PrepareStakeholderPreviewCommand extends Command
                 'billing_groups' => route('staff.billing-groups.index', absolute: false),
                 'billing_group_detail' => route('staff.billing-groups.show', $billingGroup, false),
                 'billing_group_abstract' => route('staff.reports.billing-groups.abstract.index', $billingGroup, false),
+                'business_permit_evaluator' => data_get($evaluatorUat, 'cases.awaiting-engineering.url'),
             ],
             'provisional_semantics' => [
                 'classification' => 'provisional_uat',
@@ -321,6 +336,7 @@ class PrepareStakeholderPreviewCommand extends Command
                 'execution_status' => $reconciliation->execution_status,
                 'financial_effect' => 'none',
             ],
+            'business_permit_evaluator' => $evaluatorUat,
         ];
         $store->putJson('manifest.json', $manifest);
     }

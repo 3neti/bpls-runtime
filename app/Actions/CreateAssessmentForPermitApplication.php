@@ -39,7 +39,8 @@ class CreateAssessmentForPermitApplication
             $evaluationProjection = null;
 
             if ($evaluation instanceof BusinessPermitEvaluation) {
-                $readiness = $this->evaluationReadiness->forAssessment($evaluation, 'commissioned');
+                $evaluationMode = $this->evaluationMode($permitApplication);
+                $readiness = $this->evaluationReadiness->forAssessment($evaluation, $evaluationMode);
                 if (! $readiness['ready']) {
                     throw new UnsupportedAssessmentPolicy('Business Permit Evaluation is not Ready for Assessment: '.implode(' ', $readiness['issues']));
                 }
@@ -185,7 +186,10 @@ class CreateAssessmentForPermitApplication
                 'basis_amount_cents' => $expected['basis_amount_cents'],
                 'amount_cents' => $expected['amount_cents'],
                 'legal_basis' => $expected['legal_basis'],
-                'rule_snapshot' => $expected['rule_snapshot'],
+                'rule_snapshot' => [
+                    ...$expected['rule_snapshot'],
+                    'evaluation_source_classification' => $expected['source_classification'],
+                ],
             ]);
         }
 
@@ -318,5 +322,18 @@ class CreateAssessmentForPermitApplication
                     ],
                 ]);
             });
+    }
+
+    private function evaluationMode(PermitApplication $permitApplication): string
+    {
+        if (data_get($permitApplication->metadata, 'business_permit_evaluation.semantic_classification') !== 'provisional_uat') {
+            return 'commissioned';
+        }
+
+        if (app()->isProduction()) {
+            throw new UnsupportedAssessmentPolicy('provisional_uat Evaluation values cannot establish production taxpayer liability.');
+        }
+
+        return 'provisional_uat';
     }
 }

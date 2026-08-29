@@ -90,7 +90,9 @@ class BusinessPermitEvaluationController extends Controller
         ]);
         $latestSource = $item->revisions()->latest('id')->value('source_classification');
         $source = BusinessPermitEvaluationSource::tryFrom((string) data_get($item->metadata, 'correction_source_classification'))
-            ?? BusinessPermitEvaluationSource::tryFrom((string) $latestSource)
+            ?? ($latestSource instanceof BusinessPermitEvaluationSource
+                ? $latestSource
+                : BusinessPermitEvaluationSource::tryFrom((string) $latestSource))
             ?? BusinessPermitEvaluationSource::ProvisionalUat;
         $value = [
             'inspection' => [

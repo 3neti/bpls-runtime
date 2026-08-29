@@ -249,13 +249,17 @@ class BusinessPermitEvaluationResolver
             return;
         }
 
+        $source = data_get($feeRule->metadata, 'semantic_classification') === BusinessPermitEvaluationSource::ProvisionalUat->value
+            ? BusinessPermitEvaluationSource::ProvisionalUat
+            : BusinessPermitEvaluationSource::GovernedRule;
+
         $charges->push([
             'key' => 'rule.'.$feeRule->id.'.line.'.($applicationLine?->id ?? 'none'),
             'item_type' => BusinessPermitEvaluationItemType::Charge->value,
             'responsible_party' => 'system',
             'applicability' => BusinessPermitEvaluationApplicability::Applicable->value,
             'resolution' => 'resolved',
-            'source_classification' => BusinessPermitEvaluationSource::GovernedRule->value,
+            'source_classification' => $source->value,
             'fee_rule_id' => $feeRule->id,
             'permit_application_line_id' => $applicationLine?->id,
             'line_of_business_id' => $feeRule->scope === FeeRuleScope::LineOfBusiness

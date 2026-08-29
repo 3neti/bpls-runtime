@@ -8,6 +8,7 @@ enum StakeholderPreviewPersona: string
     case Bplo = 'bplo';
     case AssessmentOfficer = 'assessment_officer';
     case Treasury = 'treasury';
+    case MunicipalTreasurer = 'municipal_treasurer';
     case Cashier = 'cashier';
     case Management = 'management';
     case Engineering = 'engineering';
@@ -25,6 +26,7 @@ enum StakeholderPreviewPersona: string
             self::Bplo => 'BPLO',
             self::AssessmentOfficer => 'Assessment Officer',
             self::Treasury => 'Treasury',
+            self::MunicipalTreasurer => 'Municipal Treasurer',
             self::Cashier => 'Cashier',
             self::Management => 'Management',
             self::Engineering => 'Engineering',
@@ -44,6 +46,7 @@ enum StakeholderPreviewPersona: string
             self::Bplo => 'Preview BPLO Operator',
             self::AssessmentOfficer => 'Preview Assessment Officer',
             self::Treasury => 'Preview Treasury Operator',
+            self::MunicipalTreasurer => 'Preview Municipal Treasurer',
             self::Cashier => 'Preview Cashier',
             self::Management => 'Preview Municipal Management',
             self::Engineering => 'Preview Engineering Officer',
@@ -63,6 +66,7 @@ enum StakeholderPreviewPersona: string
             self::Bplo => 'stakeholder.preview.bplo@example.test',
             self::AssessmentOfficer => 'stakeholder.preview.assessment-officer@example.test',
             self::Treasury => 'stakeholder.preview.treasury@example.test',
+            self::MunicipalTreasurer => 'stakeholder.preview.municipal-treasurer@example.test',
             self::Cashier => 'stakeholder.preview.cashier@example.test',
             self::Management => 'stakeholder.preview.management@example.test',
             self::Engineering => 'stakeholder.preview.engineering@example.test',
@@ -86,7 +90,8 @@ enum StakeholderPreviewPersona: string
             self::Citizen => 'Apply, submit, track processing, and inspect payment and clearance progress.',
             self::Bplo => 'Receive applications, coordinate clearances, and inspect fee rules without preparing assessments or collecting payment.',
             self::AssessmentOfficer => 'Consolidate the exact assessment and prepare its payment schedule for Treasurer approval.',
-            self::Treasury => 'Approve assessment amounts, then inspect payment schedules, collections, receipts, and Treasury reports.',
+            self::Treasury => 'Counter-check Evaluations and inspect payment schedules, collections, receipts, and Treasury reports.',
+            self::MunicipalTreasurer => 'Approve or return one exact immutable Assessment snapshot without performing the earlier Treasury counter-check.',
             self::Cashier => 'Record authorized payments and issue official receipts without approving assessments.',
             self::Management => 'Review reports, user access, municipality settings, and fees.',
             self::Engineering => 'Review applications routed to Engineering and submit the office charge for consolidation.',
@@ -112,6 +117,8 @@ enum StakeholderPreviewPersona: string
                 UserPermission::ViewOwnPermitApplications,
                 UserPermission::ViewOwnPermitApplicationDocuments,
                 UserPermission::ViewOwnPermitApplicationFinancials,
+                UserPermission::ViewOwnBusinessPermitEvaluations,
+                UserPermission::CorrectOwnEvaluationDeclarations,
             ],
             self::Bplo => [
                 UserPermission::AccessStaff,
@@ -121,6 +128,7 @@ enum StakeholderPreviewPersona: string
                 UserPermission::CompletePermitClearances,
                 UserPermission::ViewFeeRules,
                 UserPermission::ViewPaymentSchedules,
+                UserPermission::ViewBusinessPermitEvaluations,
             ],
             self::AssessmentOfficer => [
                 UserPermission::AccessStaff,
@@ -128,15 +136,25 @@ enum StakeholderPreviewPersona: string
                 UserPermission::AssessPermitApplications,
                 UserPermission::ViewPaymentSchedules,
                 UserPermission::PreparePaymentSchedules,
+                UserPermission::ViewBusinessPermitEvaluations,
             ],
             self::Treasury => [
                 UserPermission::AccessStaff,
                 UserPermission::ViewPermitApplications,
-                UserPermission::ApproveAssessments,
                 UserPermission::ViewPaymentSchedules,
                 UserPermission::ViewCollections,
                 UserPermission::ViewReceipts,
                 UserPermission::ViewReports,
+                UserPermission::ViewBusinessPermitEvaluations,
+                UserPermission::CounterCheckBusinessPermitEvaluations,
+                UserPermission::CorrectEvaluationLinesOfBusiness,
+            ],
+            self::MunicipalTreasurer => [
+                UserPermission::AccessStaff,
+                UserPermission::ViewPermitApplications,
+                UserPermission::ViewBusinessPermitEvaluations,
+                UserPermission::ApproveAssessments,
+                UserPermission::ViewPaymentSchedules,
             ],
             self::Cashier => [
                 UserPermission::AccessStaff,
@@ -159,13 +177,19 @@ enum StakeholderPreviewPersona: string
                 UserPermission::ViewFeeRules,
                 UserPermission::ViewBillingGroups,
                 UserPermission::ViewBillingGroupRecords,
+                UserPermission::ViewBusinessPermitEvaluations,
                 UserPermission::ManageStoryboards,
             ],
             self::Engineering,
             self::Mpdo,
             self::Assessor,
             self::Health,
-            self::Menro,
+            self::Menro => [
+                UserPermission::AccessStaff,
+                UserPermission::ViewPermitApplications,
+                UserPermission::ViewBusinessPermitEvaluations,
+                UserPermission::ContributeBusinessPermitEvaluations,
+            ],
             self::MayorOffice,
             self::Releasing => [
                 UserPermission::AccessStaff,

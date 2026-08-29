@@ -5,6 +5,7 @@ use App\Actions\CorrectEvaluationLinesOfBusiness;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\DefineBusinessPermitEvaluationItem;
 use App\Actions\InitializeBusinessPermitEvaluation;
+use App\Actions\PrepareBusinessPermitEvaluatorUatDataset;
 use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
 use App\Actions\RefreshBusinessPermitEvaluation;
 use App\Enums\BusinessPermitEvaluationApplicability;
@@ -248,4 +249,46 @@ it('keeps pre-Evaluator historical and operational applications compatible witho
         ->and($assessment->business_permit_evaluation_version_id)->toBeNull()
         ->and($assessment->business_permit_evaluation_fingerprint)->toBeNull()
         ->and($assessment->total_amount_cents)->toBe(5_000);
+});
+
+it('prepares an idempotent substantial provisional UAT Evaluator inventory with distinct responsibilities', function () {
+    $actors = [
+        'citizen' => User::factory()->create(),
+        'assessment_officer' => User::factory()->create(),
+        'treasury' => User::factory()->create(),
+        'municipal_treasurer' => User::factory()->create(),
+        'engineering' => User::factory()->create(),
+        'health' => User::factory()->create(),
+    ];
+    $prepare = app(PrepareBusinessPermitEvaluatorUatDataset::class);
+
+    $first = $prepare->handle('evaluator-test-run', $actors);
+    $retry = $prepare->handle('evaluator-test-run', $actors);
+
+    expect($first['semantic_classification'])->toBe('provisional_uat')
+        ->and($first['production_liability'])->toBeFalse()
+        ->and($first['cases'])->toHaveCount(13)
+        ->and(array_keys($first['cases']))->toContain(
+            'awaiting-engineering',
+            'awaiting-health',
+            'office-confirms-default',
+            'office-override',
+            'accepted-not-applicable',
+            'ready-for-assessment',
+            'assessment-prepared',
+            'treasury-lob-reopens',
+            'fresh-reassessment',
+            'treasurer-approved',
+            'returned-for-correction',
+            'payment-locked',
+        )
+        ->and($retry)->toBe($first);
+
+    $locked = PermitApplication::query()->findOrFail($first['cases']['payment-locked']['permit_application_id']);
+    $reopened = PermitApplication::query()->findOrFail($first['cases']['treasury-lob-reopens']['permit_application_id']);
+
+    expect($locked->paymentSchedules()->count())->toBe(1)
+        ->and($locked->status)->toBe(PermitApplicationStatus::PendingPayment)
+        ->and($reopened->assessments()->whereNotNull('superseded_at')->count())->toBe(1)
+        ->and($reopened->businessPermitEvaluation->items()->where('responsible_party', 'health')->exists())->toBeTrue();
 });
