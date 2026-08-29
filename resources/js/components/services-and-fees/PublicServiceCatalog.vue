@@ -20,9 +20,8 @@ defineProps<{
             </h1>
             <p class="max-w-3xl text-base leading-7 text-muted-foreground">
                 A read-only price book for Business Permit and Licensing
-                services: what you can apply for, which services are
-                available online, and the charges the Municipality currently
-                confirms.
+                services: what you can apply for, which services are available
+                online, and the charges the Municipality currently confirms.
             </p>
         </header>
 
@@ -46,8 +45,8 @@ defineProps<{
                     aria-hidden="true"
                 />
                 <p class="text-sm leading-6">
-                    <span class="font-medium">One confirmed charge.</span> It
-                    is a component of the cost, not the full assessment.
+                    <span class="font-medium">One confirmed charge.</span> It is
+                    a component of the cost, not the full assessment.
                 </p>
             </div>
             <div class="flex items-start gap-3">
@@ -85,10 +84,10 @@ defineProps<{
             <p class="font-semibold">Why your final assessment may differ</p>
             <p class="mt-1 max-w-4xl text-muted-foreground">
                 This is a read-only service menu as of
-                {{ priceList.catalog.as_of_date }}. A confirmed charge is not
-                a complete assessment. Your declared business tax basis, line
-                of business, and findings from concerned municipal offices
-                can all change the final amount you are asked to pay.
+                {{ priceList.catalog.as_of_date }}. A confirmed charge is not a
+                complete assessment. Your declared business tax basis, line of
+                business, and findings from concerned municipal offices can all
+                change the final amount you are asked to pay.
             </p>
         </aside>
     </div>

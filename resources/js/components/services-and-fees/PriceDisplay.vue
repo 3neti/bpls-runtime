@@ -37,22 +37,33 @@ const inForceStatus: PricingStatusInfo = {
                 >
                     <div>
                         <p class="font-medium">{{ charge.label }}</p>
-                        <p class="mt-1 text-xs text-emerald-800 dark:text-emerald-200">
+                        <p
+                            class="mt-1 text-xs text-emerald-800 dark:text-emerald-200"
+                        >
                             {{ charge.traceability.legal_basis }}
                         </p>
                     </div>
                     <div class="text-left sm:text-right">
-                        <p class="text-2xl font-semibold tracking-tight tabular-nums">
+                        <p
+                            class="text-2xl font-semibold tracking-tight tabular-nums"
+                        >
                             {{ money(charge.amount_cents) }}
-                            <span class="text-sm font-medium">/ {{ charge.cadence }}</span>
+                            <span class="text-sm font-medium"
+                                >/ {{ charge.cadence }}</span
+                            >
                         </p>
-                        <ChargeStatusChip :status="inForceStatus" class="mt-2" />
+                        <ChargeStatusChip
+                            :status="inForceStatus"
+                            class="mt-2"
+                        />
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="flex items-start gap-3 rounded-xl bg-muted/60 p-4 text-sm leading-6">
+        <div
+            class="flex items-start gap-3 rounded-xl bg-muted/60 p-4 text-sm leading-6"
+        >
             <CircleAlert
                 class="mt-0.5 size-5 shrink-0 text-muted-foreground"
                 aria-hidden="true"

@@ -54,6 +54,7 @@ class HandleInertiaRequests extends Middleware
                 'can_view_permit_applications' => $user?->can('permit_applications.view') ?? false,
                 'can_assess_permit_applications' => $user?->can('permit_applications.assess') ?? false,
                 'can_approve_assessments' => $user?->can('assessments.approve') ?? false,
+                'can_counter_check_business_permit_evaluations' => $user?->can('business_permit_evaluations.counter_check') ?? false,
                 'can_view_payment_schedules' => $user?->can('payment_schedules.view') ?? false,
                 'can_prepare_payment_schedules' => $user?->can('payment_schedules.prepare') ?? false,
                 'can_view_collections' => $user?->can('collections.view') ?? false,

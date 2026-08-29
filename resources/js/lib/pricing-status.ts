@@ -62,7 +62,8 @@ type StatusInput = Pick<
  * Derives the plain-language Price Book status for a single recorded rule.
  */
 export function ruleStatus(rule: StatusInput): PricingStatusInfo {
-    const usedByAssessment = rule.automatic_assessment_status === 'used_by_assessment';
+    const usedByAssessment =
+        rule.automatic_assessment_status === 'used_by_assessment';
 
     if (rule.publication_status === 'confirmed_exact' && usedByAssessment) {
         return { key: 'in_force', label: 'In Force', tone: 'green' };

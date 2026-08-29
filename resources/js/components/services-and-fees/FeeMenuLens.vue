@@ -2,7 +2,11 @@
 import { computed } from 'vue';
 import FeeMenuRow from '@/components/services-and-fees/FeeMenuRow.vue';
 import { CONCERNED_OFFICES, collectFeeMenuEntries } from '@/lib/price-book';
-import { OFFICE_DETERMINED_STATUS, recordedValueLabel, ruleStatus } from '@/lib/pricing-status';
+import {
+    OFFICE_DETERMINED_STATUS,
+    recordedValueLabel,
+    ruleStatus,
+} from '@/lib/pricing-status';
 import type { MunicipalPriceList } from '@/types';
 
 const props = withDefaults(
@@ -21,8 +25,8 @@ const feeEntries = computed(() => collectFeeMenuEntries(props.priceList));
 <template>
     <div class="space-y-3">
         <p class="text-sm text-muted-foreground">
-            Every recorded charge, rate, and schedule BPLS currently knows
-            about — the Municipality's pricing universe in one place.
+            Every recorded charge, rate, and schedule BPLS currently knows about
+            — the Municipality's pricing universe in one place.
         </p>
 
         <FeeMenuRow

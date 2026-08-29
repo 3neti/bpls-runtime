@@ -80,7 +80,11 @@ function toggle(): void {
                         Source classification
                     </dt>
                     <dd class="mt-1 font-medium">
-                        {{ sourceClassificationLabel(rule.source_classification) }}
+                        {{
+                            sourceClassificationLabel(
+                                rule.source_classification,
+                            )
+                        }}
                     </dd>
                 </div>
                 <div>
@@ -107,7 +111,9 @@ function toggle(): void {
                             Version {{ rule.reconciliation.version }} ·
                             {{ rule.reconciliation.legal_authority }}
                         </template>
-                        <template v-else> No accepted version recorded </template>
+                        <template v-else>
+                            No accepted version recorded
+                        </template>
                     </dd>
                 </div>
                 <div v-if="rule.legal_basis" class="sm:col-span-2">

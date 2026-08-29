@@ -67,7 +67,10 @@ const icon = computed(() => {
             v-if="service.code === 'new_business_permit'"
             :pricing="service.pricing"
         />
-        <div v-else class="flex items-start gap-3 rounded-lg bg-muted/60 p-4 text-sm leading-6">
+        <div
+            v-else
+            class="flex items-start gap-3 rounded-lg bg-muted/60 p-4 text-sm leading-6"
+        >
             <div>
                 <p class="font-medium">Municipal confirmation still required</p>
                 <p class="mt-1 text-muted-foreground">

@@ -99,7 +99,10 @@ const open = ref(false);
                     {{ effectiveUntil ?? 'present' }}
                 </p>
                 <p v-if="legalBasis" class="leading-6">{{ legalBasis }}</p>
-                <FeeScheduleBrackets v-if="ranges.length > 0" :ranges="ranges" />
+                <FeeScheduleBrackets
+                    v-if="ranges.length > 0"
+                    :ranges="ranges"
+                />
             </div>
         </template>
     </div>

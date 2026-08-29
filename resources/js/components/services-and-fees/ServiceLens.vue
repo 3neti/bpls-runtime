@@ -40,13 +40,13 @@ withDefaults(
                     />
                 </div>
 
-                <div
-                    class="space-y-3 rounded-xl bg-muted/50 p-4"
-                >
+                <div class="space-y-3 rounded-xl bg-muted/50 p-4">
                     <p class="text-xs font-semibold tracking-wide uppercase">
                         What the public sees
                     </p>
-                    <template v-if="service.pricing.confirmed_charges.length > 0">
+                    <template
+                        v-if="service.pricing.confirmed_charges.length > 0"
+                    >
                         <div
                             v-for="charge in service.pricing.confirmed_charges"
                             :key="charge.traceability.fee_rule_id"
@@ -98,30 +98,42 @@ withDefaults(
                         </div>
                     </div>
 
-                    <div v-if="service.internal?.line_of_business_pricing.length">
-                        <p class="text-xs font-semibold tracking-wide uppercase">
+                    <div
+                        v-if="service.internal?.line_of_business_pricing.length"
+                    >
+                        <p
+                            class="text-xs font-semibold tracking-wide uppercase"
+                        >
                             Line of business schedules
                         </p>
                         <div class="mt-3 space-y-3">
                             <LineOfBusinessScheduleCard
-                                v-for="entry in service.internal.line_of_business_pricing"
+                                v-for="entry in service.internal
+                                    .line_of_business_pricing"
                                 :key="entry.id"
                                 :entry="entry"
                             />
                         </div>
                     </div>
 
-                    <div class="rounded-xl border border-dashed p-4 text-sm leading-6">
-                        <div class="flex flex-wrap items-center justify-between gap-2">
-                            <p class="font-medium">Concerned municipal offices</p>
-                            <ChargeStatusChip :status="OFFICE_DETERMINED_STATUS" />
+                    <div
+                        class="rounded-xl border border-dashed p-4 text-sm leading-6"
+                    >
+                        <div
+                            class="flex flex-wrap items-center justify-between gap-2"
+                        >
+                            <p class="font-medium">
+                                Concerned municipal offices
+                            </p>
+                            <ChargeStatusChip
+                                :status="OFFICE_DETERMINED_STATUS"
+                            />
                         </div>
                         <p class="mt-1 text-muted-foreground">
                             {{ service.internal?.office_determined.display }}
                         </p>
                         <p class="mt-2 text-xs text-muted-foreground">
-                            No office-specific official amount is asserted
-                            here.
+                            No office-specific official amount is asserted here.
                         </p>
                     </div>
                 </div>

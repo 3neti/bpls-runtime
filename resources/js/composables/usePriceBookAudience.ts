@@ -1,6 +1,6 @@
 import { usePage } from '@inertiajs/vue3';
-import { computed  } from 'vue';
-import type {ComputedRef} from 'vue';
+import { computed } from 'vue';
+import type { ComputedRef } from 'vue';
 import type { ConcernedOfficeCode } from '@/lib/price-book';
 
 export type PriceBookLens = 'service' | 'fee' | 'lineOfBusiness' | 'office';
@@ -50,14 +50,19 @@ export function usePriceBookAudience(): ComputedRef<PriceBookAudience> {
         const persona = page.props.stakeholder_preview?.current_persona ?? null;
 
         const isManagement =
-            auth.can_view_users || auth.can_view_roles || auth.can_view_municipality_configuration;
-        const isTreasury = auth.can_approve_assessments;
+            auth.can_view_users ||
+            auth.can_view_roles ||
+            auth.can_view_municipality_configuration;
+        const isTreasury = auth.can_counter_check_business_permit_evaluations;
+        const isMunicipalTreasurer = auth.can_approve_assessments;
         const isAssessmentOfficer = auth.can_assess_permit_applications;
         const isCashier =
-            !isTreasury && (auth.can_record_collections || auth.can_issue_receipts);
+            !isTreasury &&
+            (auth.can_record_collections || auth.can_issue_receipts);
         const isBplo =
             !isManagement &&
             !isTreasury &&
+            !isMunicipalTreasurer &&
             !isAssessmentOfficer &&
             !isCashier &&
             auth.can_view_fee_rules &&
@@ -82,6 +87,19 @@ export function usePriceBookAudience(): ComputedRef<PriceBookAudience> {
                 title: 'Treasury view',
                 message:
                     'Fiscal control view: what is currently in force, what is recorded and awaiting confirmation, and what may not yet enter Assessment.',
+                lenses: ['fee', 'lineOfBusiness', 'service'],
+                defaultLens: 'fee',
+                concise: false,
+                emphasizedOfficeCode: null,
+            };
+        }
+
+        if (isMunicipalTreasurer) {
+            return {
+                key: 'municipal_treasurer',
+                title: 'Municipal Treasurer view',
+                message:
+                    'Approval context for the exact immutable Assessment: confirmed prices and blocked pricing remain visible, without turning the Price Book into an approval or Evaluation surface.',
                 lenses: ['fee', 'lineOfBusiness', 'service'],
                 defaultLens: 'fee',
                 concise: false,
@@ -141,7 +159,10 @@ export function usePriceBookAudience(): ComputedRef<PriceBookAudience> {
             };
         }
 
-        if (persona !== null && (CONCERNED_OFFICE_PERSONAS as string[]).includes(persona)) {
+        if (
+            persona !== null &&
+            (CONCERNED_OFFICE_PERSONAS as string[]).includes(persona)
+        ) {
             return {
                 key: 'concerned_office',
                 title: 'Concerned-office view',

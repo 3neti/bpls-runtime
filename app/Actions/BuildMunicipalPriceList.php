@@ -11,7 +11,6 @@ use App\Enums\MunicipalServiceOfferingCode;
 use App\Models\FeeRule;
 use App\Models\FeeRuleRange;
 use App\Models\FeeRuleReconciliation;
-use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -32,7 +31,6 @@ class BuildMunicipalPriceList
                 offering: $offering,
                 applicationYear: $applicationYear,
                 includeInternalEvidence: $includeInternalEvidence,
-                asOfDate: $effectiveDate,
             ))
             ->values();
 
@@ -58,7 +56,6 @@ class BuildMunicipalPriceList
         MunicipalServiceOfferingCode $offering,
         int $applicationYear,
         bool $includeInternalEvidence,
-        CarbonInterface $asOfDate,
     ): array {
         $feeRules = $this->applicableFeeRuleQuery->forApplicationFacts(
             applicationType: $offering->applicationType(),
@@ -102,7 +99,7 @@ class BuildMunicipalPriceList
         ];
 
         if ($includeInternalEvidence) {
-            $lineOfBusinessFeeRules = $this->lineOfBusinessFeeRules($offering, $asOfDate);
+            $lineOfBusinessFeeRules = $this->lineOfBusinessFeeRules($offering, $applicationYear);
 
             $payload['internal'] = [
                 'selected_rule_count' => $feeRules->count(),
@@ -112,6 +109,7 @@ class BuildMunicipalPriceList
                         feeRule: $feeRule,
                         applicationYear: $applicationYear,
                         ambiguous: $ambiguousRuleKeys->contains($this->ruleApplicabilityKey($feeRule)),
+                        selectedByAssessment: true,
                     ))
                     ->values()
                     ->all(),
@@ -120,6 +118,7 @@ class BuildMunicipalPriceList
                         feeRule: $feeRule,
                         applicationYear: $applicationYear,
                         ambiguous: false,
+                        selectedByAssessment: false,
                     ))
                     ->values()
                     ->all(),
@@ -142,17 +141,19 @@ class BuildMunicipalPriceList
      *
      * @return Collection<int, FeeRule>
      */
-    private function lineOfBusinessFeeRules(MunicipalServiceOfferingCode $offering, CarbonInterface $asOfDate): Collection
+    private function lineOfBusinessFeeRules(MunicipalServiceOfferingCode $offering, int $applicationYear): Collection
     {
+        $applicationYearStart = "{$applicationYear}-01-01";
+
         return FeeRule::query()
             ->with(['lineOfBusiness', 'ranges', 'currentReconciliation'])
             ->where('scope', FeeRuleScope::LineOfBusiness->value)
             ->where('is_active', true)
-            ->whereDate('effective_from', '<=', $asOfDate)
-            ->where(function ($query) use ($asOfDate): void {
+            ->whereDate('effective_from', '<=', $applicationYearStart)
+            ->where(function ($query) use ($applicationYearStart): void {
                 $query
                     ->whereNull('effective_until')
-                    ->orWhereDate('effective_until', '>=', $asOfDate);
+                    ->orWhereDate('effective_until', '>=', $applicationYearStart);
             })
             ->orderBy('code')
             ->get()
@@ -251,8 +252,12 @@ class BuildMunicipalPriceList
     }
 
     /** @return array<string, mixed> */
-    private function internalRulePayload(FeeRule $feeRule, int $applicationYear, bool $ambiguous): array
-    {
+    private function internalRulePayload(
+        FeeRule $feeRule,
+        int $applicationYear,
+        bool $ambiguous,
+        bool $selectedByAssessment,
+    ): array {
         $source = FeeRulePublicationSource::forRule($feeRule);
         $reconciliation = $feeRule->currentReconciliation;
         $isExecutable = $reconciliation instanceof FeeRuleReconciliation
@@ -301,13 +306,15 @@ class BuildMunicipalPriceList
             'publication_status' => $this->mayPublishExactAmount($feeRule) && ! $ambiguous
                 ? 'confirmed_exact'
                 : 'not_published_exact',
-            'selected_by_assessment' => true,
-            'automatic_assessment_status' => $isExecutable && ! $ambiguous
+            'selected_by_assessment' => $selectedByAssessment,
+            'automatic_assessment_status' => $selectedByAssessment && $isExecutable && ! $ambiguous
                 ? 'used_by_assessment'
                 : 'not_available_for_automatic_assessment',
-            'automatic_assessment_label' => $isExecutable && ! $ambiguous
+            'automatic_assessment_label' => $selectedByAssessment && $isExecutable && ! $ambiguous
                 ? 'Used by assessment'
-                : 'Not available for automatic assessment',
+                : ($selectedByAssessment
+                    ? 'Not available for automatic assessment'
+                    : 'Browsable pricing knowledge only'),
             'application_year' => $applicationYear,
             'overlap_ambiguous' => $ambiguous,
             'reconciliation' => $reconciliation instanceof FeeRuleReconciliation ? [
@@ -322,7 +329,9 @@ class BuildMunicipalPriceList
                 'execution_status' => $reconciliation->execution_status->value,
                 'execution_reason' => $reconciliation->execution_reason,
             ] : null,
-            'plain_language_status' => $this->plainLanguageRuleStatus($feeRule, $source, $isExecutable, $ambiguous),
+            'plain_language_status' => $selectedByAssessment
+                ? $this->plainLanguageRuleStatus($feeRule, $source, $isExecutable, $ambiguous)
+                : 'Recorded Line-of-Business pricing knowledge for review; this browsable entry is not selected by Assessment.',
         ];
     }
 

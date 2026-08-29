@@ -60,7 +60,7 @@ export type InternalFeeRule = {
     legal_source_id: string | null;
     source_classification: string;
     publication_status: 'confirmed_exact' | 'not_published_exact';
-    selected_by_assessment: true;
+    selected_by_assessment: boolean;
     automatic_assessment_status:
         'used_by_assessment' | 'not_available_for_automatic_assessment';
     automatic_assessment_label: string;

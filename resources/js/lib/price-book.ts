@@ -11,19 +11,16 @@ import type {
  * from the one governed Price Book projection (or is explicitly absent).
  */
 export type ConcernedOfficeCode =
-    | 'engineering'
-    | 'mpdo'
-    | 'assessor'
-    | 'health'
-    | 'menro';
+    'engineering' | 'mpdo' | 'assessor' | 'health' | 'menro';
 
-export const CONCERNED_OFFICES: { code: ConcernedOfficeCode; label: string }[] = [
-    { code: 'engineering', label: 'Engineering' },
-    { code: 'mpdo', label: 'MPDO / MPDC' },
-    { code: 'assessor', label: 'Assessor' },
-    { code: 'health', label: 'Health' },
-    { code: 'menro', label: 'MENRO' },
-];
+export const CONCERNED_OFFICES: { code: ConcernedOfficeCode; label: string }[] =
+    [
+        { code: 'engineering', label: 'Engineering' },
+        { code: 'mpdo', label: 'MPDO / MPDC' },
+        { code: 'assessor', label: 'Assessor' },
+        { code: 'health', label: 'Health' },
+        { code: 'menro', label: 'MENRO' },
+    ];
 
 export type FeeMenuEntry = InternalFeeRule & {
     appliesToServices: string[];
@@ -35,7 +32,9 @@ export type FeeMenuEntry = InternalFeeRule & {
  * aggregation over data the backend already resolved and classified — it
  * does not recompute, reclassify, or invent any pricing fact.
  */
-export function collectFeeMenuEntries(priceList: MunicipalPriceList): FeeMenuEntry[] {
+export function collectFeeMenuEntries(
+    priceList: MunicipalPriceList,
+): FeeMenuEntry[] {
     const byId = new Map<number, FeeMenuEntry>();
 
     for (const service of priceList.services) {
@@ -69,7 +68,8 @@ export function collectFeeMenuEntries(priceList: MunicipalPriceList): FeeMenuEnt
 
     return Array.from(byId.values()).sort((a, b) => {
         const priorityDiff =
-            (statusPriority[ruleStatus(a).key] ?? 5) - (statusPriority[ruleStatus(b).key] ?? 5);
+            (statusPriority[ruleStatus(a).key] ?? 5) -
+            (statusPriority[ruleStatus(b).key] ?? 5);
 
         return priorityDiff !== 0 ? priorityDiff : a.name.localeCompare(b.name);
     });
@@ -79,9 +79,14 @@ export function collectFeeMenuEntries(priceList: MunicipalPriceList): FeeMenuEnt
  * Flattens Line-of-Business schedules across every service into one
  * deduplicated "By Line of Business" list.
  */
-export function collectLineOfBusinessEntries(priceList: MunicipalPriceList): FeeMenuEntry[] {
+export function collectLineOfBusinessEntries(
+    priceList: MunicipalPriceList,
+): FeeMenuEntry[] {
     return collectFeeMenuEntries(priceList).filter(
-        (entry): entry is FeeMenuEntry & { line_of_business: LineOfBusinessReference } =>
-            entry.line_of_business !== null,
+        (
+            entry,
+        ): entry is FeeMenuEntry & {
+            line_of_business: LineOfBusinessReference;
+        } => entry.line_of_business !== null,
     );
 }

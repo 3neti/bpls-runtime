@@ -31,21 +31,23 @@ const props = defineProps<{
 
 const entering = ref<string | null>(null);
 
-const personaIcons: Record<StakeholderPreviewPersona['key'], typeof UserRound> = {
-    citizen: UserRound,
-    bplo: ClipboardCheck,
-    assessment_officer: Calculator,
-    treasury: WalletCards,
-    cashier: Banknote,
-    management: UsersRound,
-    engineering: HardHat,
-    mpdo: MapPinned,
-    assessor: Scale,
-    health: Stethoscope,
-    menro: Leaf,
-    mayor_office: Landmark,
-    releasing: PackageCheck,
-};
+const personaIcons: Record<StakeholderPreviewPersona['key'], typeof UserRound> =
+    {
+        citizen: UserRound,
+        bplo: ClipboardCheck,
+        assessment_officer: Calculator,
+        treasury: WalletCards,
+        municipal_treasurer: Landmark,
+        cashier: Banknote,
+        management: UsersRound,
+        engineering: HardHat,
+        mpdo: MapPinned,
+        assessor: Scale,
+        health: Stethoscope,
+        menro: Leaf,
+        mayor_office: Landmark,
+        releasing: PackageCheck,
+    };
 
 type PersonaGroup = {
     title: string;
@@ -66,8 +68,9 @@ const personaGroups: PersonaGroup[] = [
     },
     {
         title: 'Treasury & Collection',
-        description: 'Approve amounts, then collect and receipt payment.',
-        keys: ['treasury', 'cashier'],
+        description:
+            'Counter-check, approve the exact Assessment, then collect and receipt payment.',
+        keys: ['treasury', 'municipal_treasurer', 'cashier'],
     },
     {
         title: 'Concerned Municipal Offices',
@@ -86,8 +89,13 @@ const groupedPersonas = computed(() =>
         .map((group) => ({
             ...group,
             personas: group.keys
-                .map((key) => props.personas.find((persona) => persona.key === key))
-                .filter((persona): persona is StakeholderPreviewPersona => persona !== undefined),
+                .map((key) =>
+                    props.personas.find((persona) => persona.key === key),
+                )
+                .filter(
+                    (persona): persona is StakeholderPreviewPersona =>
+                        persona !== undefined,
+                ),
         }))
         .filter((group) => group.personas.length > 0),
 );

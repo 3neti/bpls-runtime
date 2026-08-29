@@ -280,6 +280,9 @@ it('exposes recorded Line of Business schedules to staff only, scoped to the mat
 
     expect($schedule['line_of_business']['name'])
         ->toBe('Wholesalers, Retailers, Dealers or Distributors')
+        ->and($schedule['selected_by_assessment'])->toBeFalse()
+        ->and($schedule['automatic_assessment_status'])->toBe('not_available_for_automatic_assessment')
+        ->and($schedule['automatic_assessment_label'])->toBe('Browsable pricing knowledge only')
         ->and($schedule['source_classification'])->toBe('municipal_confirmation_required')
         ->and($schedule['publication_status'])->toBe('not_published_exact')
         ->and($schedule['range_count'])->toBe(23)
@@ -292,6 +295,25 @@ it('exposes recorded Line of Business schedules to staff only, scoped to the mat
     $publicPayload = json_encode(municipalPriceList());
 
     expect($publicPayload)->not->toContain('line_of_business_pricing');
+});
+
+it('anchors browsable Line of Business pricing to the same application-year date used by Assessment', function () {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+
+    $midYearRule = FeeRule::factory()->create([
+        'code' => 'LOB-MIDYEAR-NOT-2026',
+        'scope' => 'line_of_business',
+        'line_of_business_id' => FeeRule::query()
+            ->whereNotNull('line_of_business_id')
+            ->value('line_of_business_id'),
+        'effective_from' => '2026-06-01',
+        'metadata' => ['application_types' => ['renewal']],
+    ]);
+
+    $renewal = collect(municipalPriceList(internal: true)['services'])->firstWhere('code', 'renewal');
+
+    expect(collect($renewal['internal']['line_of_business_pricing'])->pluck('id'))
+        ->not->toContain($midYearRule->id);
 });
 
 it('surfaces the recorded policy note for a ceiling amount so it is not shown as an exact figure', function () {

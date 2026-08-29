@@ -31,7 +31,10 @@ const props = defineProps<{
 const page = usePage();
 const audience = usePriceBookAudience();
 
-const lensMeta: Record<PriceBookLens, { label: string; icon: typeof ClipboardList }> = {
+const lensMeta: Record<
+    PriceBookLens,
+    { label: string; icon: typeof ClipboardList }
+> = {
     service: { label: 'By Service', icon: ClipboardList },
     fee: { label: 'Fee Menu', icon: Banknote },
     lineOfBusiness: { label: 'By Line of Business', icon: ListTree },
@@ -50,6 +53,7 @@ watch(
 const audienceIcon = computed(() => {
     switch (audience.value.key) {
         case 'treasury':
+        case 'municipal_treasurer':
             return Landmark;
         case 'concerned_office':
             return Building2;
@@ -77,7 +81,8 @@ const recordedAwaitingConfirmationCount = computed(() =>
         return (
             total +
             [...rules, ...schedules].filter(
-                (rule) => ruleStatus(rule).key === 'recorded_confirmation_required',
+                (rule) =>
+                    ruleStatus(rule).key === 'recorded_confirmation_required',
             ).length
         );
     }, 0),
@@ -173,7 +178,11 @@ const recordedAwaitingConfirmationCount = computed(() =>
                     :aria-pressed="activeLens === lens"
                     @click="activeLens = lens"
                 >
-                    <component :is="lensMeta[lens].icon" class="size-4" aria-hidden="true" />
+                    <component
+                        :is="lensMeta[lens].icon"
+                        class="size-4"
+                        aria-hidden="true"
+                    />
                     {{ lensMeta[lens].label }}
                 </button>
             </nav>

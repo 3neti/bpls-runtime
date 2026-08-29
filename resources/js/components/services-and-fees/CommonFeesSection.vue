@@ -16,7 +16,9 @@ const inForceStatus: PricingStatusInfo = {
 };
 
 const confirmedCharges = computed(() =>
-    props.priceList.services.flatMap((service) => service.pricing.confirmed_charges),
+    props.priceList.services.flatMap(
+        (service) => service.pricing.confirmed_charges,
+    ),
 );
 </script>
 
@@ -43,7 +45,9 @@ const confirmedCharges = computed(() =>
             :effective-until="charge.traceability.effective_until"
         />
 
-        <p class="rounded-xl border border-dashed p-4 text-sm leading-6 text-muted-foreground">
+        <p
+            class="rounded-xl border border-dashed p-4 text-sm leading-6 text-muted-foreground"
+        >
             Business tax, permit fees, and charges from concerned municipal
             offices may also apply depending on your business information and
             applicable municipal rules.

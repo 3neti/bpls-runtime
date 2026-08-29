@@ -28,11 +28,16 @@ const steps: Record<StakeholderPreviewPersona['key'], string[]> = {
         'Prepare its payment schedule for Treasurer approval.',
     ],
     treasury: [
-        'Open Assessment Work and inspect the exact amount prepared by the Assessment Officer.',
-        'Approve the assessment amount and confirm the preparer and approver are recorded separately.',
-        'Open Payment Schedules and inspect the schedule made available after approval.',
+        'Open Applications for Treasury Review and counter-check the current Evaluation version.',
+        'Confirm that Treasury cannot approve the Assessment prepared from that Evaluation.',
+        'Open Payment Schedules and inspect the financial result after Municipal Treasurer approval.',
         'Review its collection and receipt details.',
         'Open Daily Collections and Revenue Sources.',
+    ],
+    municipal_treasurer: [
+        'Open Assessment Work and inspect the exact immutable amount prepared by the Assessment Officer.',
+        'Approve or return that exact Assessment snapshot without performing the earlier Treasury counter-check.',
+        'Confirm that payment remains bound to the approved Assessment and cannot mutate the Evaluation.',
     ],
     cashier: [
         'Open Payment Schedules and locate an authorized, approved schedule.',

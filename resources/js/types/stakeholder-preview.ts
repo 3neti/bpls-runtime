@@ -4,6 +4,7 @@ export type StakeholderPreviewPersona = {
         | 'bplo'
         | 'assessment_officer'
         | 'treasury'
+        | 'municipal_treasurer'
         | 'cashier'
         | 'management'
         | 'engineering'

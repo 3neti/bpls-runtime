@@ -18,6 +18,7 @@ export type Auth = {
     can_view_permit_applications: boolean;
     can_assess_permit_applications: boolean;
     can_approve_assessments: boolean;
+    can_counter_check_business_permit_evaluations: boolean;
     can_view_payment_schedules: boolean;
     can_prepare_payment_schedules: boolean;
     can_view_collections: boolean;

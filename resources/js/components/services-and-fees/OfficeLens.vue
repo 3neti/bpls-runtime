@@ -2,8 +2,8 @@
 import { Building2, Star } from '@lucide/vue';
 import { computed } from 'vue';
 import ChargeStatusChip from '@/components/services-and-fees/ChargeStatusChip.vue';
-import { CONCERNED_OFFICES  } from '@/lib/price-book';
-import type {ConcernedOfficeCode} from '@/lib/price-book';
+import { CONCERNED_OFFICES } from '@/lib/price-book';
+import type { ConcernedOfficeCode } from '@/lib/price-book';
 import { OFFICE_DETERMINED_STATUS } from '@/lib/pricing-status';
 
 const props = withDefaults(
@@ -30,7 +30,9 @@ const orderedOffices = computed(() => {
 
     return [
         emphasized,
-        ...CONCERNED_OFFICES.filter((office) => office.code !== props.emphasizedOfficeCode),
+        ...CONCERNED_OFFICES.filter(
+            (office) => office.code !== props.emphasizedOfficeCode,
+        ),
     ];
 });
 </script>
@@ -39,8 +41,8 @@ const orderedOffices = computed(() => {
     <div class="space-y-3">
         <p class="text-sm text-muted-foreground">
             No concerned office has an accepted official amount recorded yet.
-            Each office's contribution is determined case-by-case and is
-            never a synthetic walkthrough figure.
+            Each office's contribution is determined case-by-case and is never a
+            synthetic walkthrough figure.
         </p>
 
         <article
@@ -55,7 +57,9 @@ const orderedOffices = computed(() => {
         >
             <div class="flex min-w-0 items-start gap-3">
                 <component
-                    :is="office.code === emphasizedOfficeCode ? Star : Building2"
+                    :is="
+                        office.code === emphasizedOfficeCode ? Star : Building2
+                    "
                     class="mt-0.5 size-5 shrink-0 text-muted-foreground"
                     aria-hidden="true"
                 />
