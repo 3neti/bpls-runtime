@@ -44,8 +44,12 @@ return new class extends Migration
 
         Schema::create('business_permit_evaluation_item_revisions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('business_permit_evaluation_item_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('business_permit_evaluation_version_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('business_permit_evaluation_item_id')
+                ->constrained(indexName: 'evaluation_item_revision_item_fk')
+                ->cascadeOnDelete();
+            $table->foreignId('business_permit_evaluation_version_id')
+                ->constrained(indexName: 'evaluation_item_revision_version_fk')
+                ->cascadeOnDelete();
             $table->string('action');
             $table->string('applicability');
             $table->json('value')->nullable();
@@ -65,7 +69,10 @@ return new class extends Migration
 
         Schema::create('business_permit_evaluation_counter_checks', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('business_permit_evaluation_version_id')->unique()->constrained()->cascadeOnDelete();
+            $table->foreignId('business_permit_evaluation_version_id')
+                ->unique()
+                ->constrained(indexName: 'evaluation_counter_check_version_fk')
+                ->cascadeOnDelete();
             $table->foreignId('checked_by_id')->constrained('users')->restrictOnDelete();
             $table->text('reason')->nullable();
             $table->text('evidence_provenance');
