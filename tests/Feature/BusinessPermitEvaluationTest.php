@@ -34,6 +34,7 @@ use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
 use App\Models\User;
+use Database\Seeders\RevenueCodeFeeCatalogSeeder;
 
 function evaluationFixture(): array
 {
@@ -365,6 +366,7 @@ it('prepares an idempotent substantial provisional UAT Evaluator inventory with 
 });
 
 it('operates one assessment-slip-shaped multi-LOB working paper through reassessment approval and payment lock', function () {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
     configureBusinessPermitEvaluatorPreviewSafety();
     $actors = businessPermitEvaluatorPreviewActors();
     $inventory = app(PrepareBusinessPermitEvaluatorUatDataset::class)->handle('working-paper-run', $actors);
@@ -377,9 +379,10 @@ it('operates one assessment-slip-shaped multi-LOB working paper through reassess
     $officeCharges = collect($initial['items'])->where('item_type', 'charge');
     $applicableOfficeCharges = $officeCharges->where('applicability', 'applicable');
 
-    expect($initial['projected_charges'])->toHaveCount(1)
+    expect($initial['projected_charges'])->toHaveCount(2)
         ->and($application->type)->toBe(PermitApplicationType::Renewal)
-        ->and($initial['projected_charges'][0]['amount_cents'])->toBe(10_000)
+        ->and(collect($initial['projected_charges'])->firstWhere('code', 'EVAL-UAT-BASE')['amount_cents'])->toBe(10_000)
+        ->and(collect($initial['projected_charges'])->firstWhere('code', 'MRC-3A-04-BUSINESS-INSPECTION')['amount_cents'])->toBe(35_000)
         ->and($officeCharges)->toHaveCount(9)
         ->and($applicableOfficeCharges)->toHaveCount(7)
         ->and($applicableOfficeCharges->pluck('responsible_party')->sort()->values()->all())->toBe([
@@ -397,7 +400,7 @@ it('operates one assessment-slip-shaped multi-LOB working paper through reassess
                 && $item['resolution'] === 'awaiting_responsible_confirmation'
                 && $item['default_source_classification'] === 'provisional_uat',
         ))->toBeTrue()
-        ->and($initial['total_amount_cents'])->toBe(10_000);
+        ->and($initial['total_amount_cents'])->toBe(45_000);
 
     $record = function (
         string $key,
@@ -447,21 +450,21 @@ it('operates one assessment-slip-shaped multi-LOB working paper through reassess
 
     $afterOffices = $resolver->resolve($evaluation->fresh());
     $weightMeasure = collect($afterOffices['items'])->firstWhere('key', 'retail.weight-measure.charge');
-    expect($afterOffices['total_amount_cents'])->toBe(66_000)
+    expect($afterOffices['total_amount_cents'])->toBe(101_000)
         ->and($weightMeasure['applicability'])->toBe('not_applicable')
         ->and($weightMeasure['resolution'])->toBe('resolved')
         ->and(data_get($afterOffices, 'financial_working_paper.line_sections.0.subtotal_amount_cents'))->toBe(22_500)
         ->and(data_get($afterOffices, 'financial_working_paper.line_sections.1.subtotal_amount_cents'))->toBe(33_500)
-        ->and(data_get($afterOffices, 'financial_working_paper.application_subtotal_amount_cents'))->toBe(10_000)
-        ->and(data_get($afterOffices, 'financial_working_paper.grand_total_amount_cents'))->toBe(66_000);
+        ->and(data_get($afterOffices, 'financial_working_paper.application_subtotal_amount_cents'))->toBe(45_000)
+        ->and(data_get($afterOffices, 'financial_working_paper.grand_total_amount_cents'))->toBe(101_000);
 
     app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($evaluation->fresh(), $actors['treasury']);
     expect(app(BusinessPermitEvaluationReadiness::class)->forAssessment($evaluation->fresh(), 'provisional_uat')['ready'])->toBeTrue();
 
     $firstAssessment = app(CreateAssessmentForPermitApplication::class)->handle($application->fresh(), $actors['assessment_officer']);
-    expect($firstAssessment->total_amount_cents)->toBe(66_000)
-        ->and($firstAssessment->lines)->toHaveCount(7)
-        ->and($firstAssessment->lines->sum('amount_cents'))->toBe(66_000)
+    expect($firstAssessment->total_amount_cents)->toBe(101_000)
+        ->and($firstAssessment->lines)->toHaveCount(8)
+        ->and($firstAssessment->lines->sum('amount_cents'))->toBe(101_000)
         ->and($firstAssessment->lines->pluck('business_permit_evaluation_item_id')->filter()->unique())->toHaveCount(6)
         ->and($firstAssessment->lines->whereNotNull('line_of_business_id'))->toHaveCount(6);
 
@@ -500,7 +503,7 @@ it('operates one assessment-slip-shaped multi-LOB working paper through reassess
         ->and($restaurantHealth['applicability'])->toBe('applicable')
         ->and($restaurantHealth['resolution'])->toBe('awaiting_responsible_confirmation')
         ->and(data_get($restaurantHealth, 'default_value.amount_cents'))->toBe(8_700)
-        ->and($reopened['total_amount_cents'])->toBe(66_000)
+        ->and($reopened['total_amount_cents'])->toBe(101_000)
         ->and(data_get($reopened, 'financial_working_paper.grand_total_available'))->toBeFalse()
         ->and(data_get($reopened, 'financial_working_paper.grand_total_amount_cents'))->toBeNull();
 
@@ -510,12 +513,12 @@ it('operates one assessment-slip-shaped multi-LOB working paper through reassess
     $resolved = $resolver->resolve($evaluation->fresh());
     $freshAssessment = app(CreateAssessmentForPermitApplication::class)->handle($application->fresh(), $actors['assessment_officer']);
 
-    expect($resolved['total_amount_cents'])->toBe(80_800)
+    expect($resolved['total_amount_cents'])->toBe(115_800)
         ->and(data_get($resolved, 'financial_working_paper.line_sections.2.subtotal_amount_cents'))->toBe(14_800)
-        ->and(data_get($resolved, 'financial_working_paper.grand_total_amount_cents'))->toBe(80_800)
-        ->and($freshAssessment->total_amount_cents)->toBe(80_800)
-        ->and($freshAssessment->lines->sum('amount_cents'))->toBe(80_800)
-        ->and($freshAssessment->lines)->toHaveCount(9)
+        ->and(data_get($resolved, 'financial_working_paper.grand_total_amount_cents'))->toBe(115_800)
+        ->and($freshAssessment->total_amount_cents)->toBe(115_800)
+        ->and($freshAssessment->lines->sum('amount_cents'))->toBe(115_800)
+        ->and($freshAssessment->lines)->toHaveCount(10)
         ->and($freshAssessment->lines->pluck('business_permit_evaluation_item_id')->filter()->unique())->toHaveCount(8)
         ->and($freshAssessment->business_permit_evaluation_version_id)->toBe($evaluation->fresh()->currentVersion->id)
         ->and($freshAssessment->business_permit_evaluation_fingerprint)->toBe($evaluation->fresh()->currentVersion->fingerprint);
@@ -530,7 +533,7 @@ it('operates one assessment-slip-shaped multi-LOB working paper through reassess
 
     expect($decision->action)->toBe(AssessmentDecisionAction::Approved)
         ->and($decision->assessment_snapshot_hash)->toBe(app(AssessmentSnapshotFingerprint::class)->hash($freshAssessment->fresh()))
-        ->and($schedule->total_amount_cents)->toBe(80_800)
+        ->and($schedule->total_amount_cents)->toBe(115_800)
         ->and($application->fresh()->status)->toBe(PermitApplicationStatus::PendingPayment);
 
     $engineering = $evaluation->items()->where('key', 'retail.mayors-permit.charge')->sole();
