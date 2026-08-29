@@ -48,6 +48,13 @@ type Assessment = {
     assessed_by: string | null;
     total_amount_cents: number;
     snapshot_hash: string;
+    business_permit_evaluation: {
+        evaluation_id: number;
+        version_id: number;
+        version_sequence: number;
+        fingerprint: string;
+        view_url: string;
+    } | null;
     payment_schedule_available: boolean;
     decision: {
         id: number;
@@ -241,6 +248,64 @@ function money(amountCents: number): string {
                     </div>
                 </template>
             </WorkflowStageSummary>
+
+            <section
+                v-if="assessment.business_permit_evaluation"
+                class="rounded-xl border border-sidebar-border/70 bg-background p-4 shadow-xs dark:border-sidebar-border"
+                data-testid="assessment-evaluation-trace"
+                aria-labelledby="assessment-evaluation-trace-title"
+            >
+                <div
+                    class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
+                >
+                    <div class="min-w-0">
+                        <p
+                            class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                        >
+                            Evaluation traceability
+                        </p>
+                        <h2
+                            id="assessment-evaluation-trace-title"
+                            class="mt-1 font-semibold"
+                        >
+                            Exact Evaluation version consumed
+                        </h2>
+                        <p
+                            class="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground"
+                        >
+                            This immutable Assessment was prepared from Business
+                            Permit Evaluation version
+                            {{
+                                assessment.business_permit_evaluation
+                                    .version_sequence
+                            }}. Later Evaluation changes do not alter this
+                            Assessment.
+                        </p>
+                    </div>
+                    <Button as-child variant="outline" size="sm">
+                        <Link
+                            :href="
+                                assessment.business_permit_evaluation.view_url
+                            "
+                        >
+                            <FileText aria-hidden="true" />
+                            Inspect Evaluation
+                        </Link>
+                    </Button>
+                </div>
+                <details class="group mt-4 border-t pt-4">
+                    <summary
+                        class="cursor-pointer text-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                    >
+                        Exact audit reference
+                    </summary>
+                    <p
+                        class="mt-2 font-mono text-xs break-all text-muted-foreground"
+                    >
+                        {{ assessment.business_permit_evaluation.fingerprint }}
+                    </p>
+                </details>
+            </section>
 
             <section
                 v-if="assessment.decision"
