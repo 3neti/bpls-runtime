@@ -19,6 +19,7 @@ use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRulePublicationSource;
 use App\Enums\FeeRuleScope;
 use App\Enums\PermitApplicationStatus;
+use App\Enums\PermitApplicationType;
 use App\Enums\StakeholderPreviewPersona;
 use App\Enums\UserPermission;
 use App\Evaluation\BusinessPermitEvaluationReadiness;
@@ -377,6 +378,7 @@ it('operates one assessment-slip-shaped multi-LOB working paper through reassess
     $applicableOfficeCharges = $officeCharges->where('applicability', 'applicable');
 
     expect($initial['projected_charges'])->toHaveCount(1)
+        ->and($application->type)->toBe(PermitApplicationType::Renewal)
         ->and($initial['projected_charges'][0]['amount_cents'])->toBe(10_000)
         ->and($officeCharges)->toHaveCount(9)
         ->and($applicableOfficeCharges)->toHaveCount(7)

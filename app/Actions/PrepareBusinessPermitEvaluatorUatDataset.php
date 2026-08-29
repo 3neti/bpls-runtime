@@ -218,7 +218,7 @@ class PrepareBusinessPermitEvaluatorUatDataset
             'submitted_by_id' => $citizen->id,
             'application_number' => 'EVAL-UAT-'.str(hash('sha256', $runId.'-'.$key))->substr(0, 10)->upper(),
             'tracking_reference' => 'EVAL-'.str(hash('sha256', $key.'-'.$runId))->substr(0, 12)->upper(),
-            'type' => PermitApplicationType::New,
+            'type' => PermitApplicationType::Renewal,
             'status' => PermitApplicationStatus::Assessment,
             'application_year' => 2099,
             'submitted_at' => now(),
