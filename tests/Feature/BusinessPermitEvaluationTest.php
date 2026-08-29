@@ -27,6 +27,7 @@ use App\Evaluation\BusinessPermitEvaluationResolver;
 use App\Models\Assessment;
 use App\Models\AssessmentLine;
 use App\Models\Business;
+use App\Models\BusinessPermitEvaluationItem;
 use App\Models\BusinessPermitEvaluationItemRevision;
 use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
@@ -326,18 +327,26 @@ it('keeps Treasury counter-check authority separate from Municipal Treasurer exa
 });
 
 it('prepares an idempotent substantial provisional UAT Evaluator inventory with distinct responsibilities', function () {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
     configureBusinessPermitEvaluatorPreviewSafety();
     $actors = businessPermitEvaluatorPreviewActors();
     $prepare = app(PrepareBusinessPermitEvaluatorUatDataset::class);
 
     $first = $prepare->handle('evaluator-test-run', $actors);
+    $countsBeforeRetry = [
+        'fee_rules' => FeeRule::query()->count(),
+        'evaluation_items' => BusinessPermitEvaluationItem::query()->count(),
+        'assessment_lines' => AssessmentLine::query()->count(),
+    ];
     $retry = $prepare->handle('evaluator-test-run', $actors);
+    $secondRetry = $prepare->handle('evaluator-test-run', $actors);
 
     expect($first['semantic_classification'])->toBe('provisional_uat')
         ->and($first['production_liability'])->toBeFalse()
-        ->and($first['cases'])->toHaveCount(14)
+        ->and($first['cases'])->toHaveCount(15)
         ->and(array_keys($first['cases']))->toContain(
-            'financial-working-paper',
+            'interactive-golden',
+            'completed-assessment-conformance-golden',
             'awaiting-engineering',
             'awaiting-health',
             'office-confirms-default',
@@ -351,18 +360,43 @@ it('prepares an idempotent substantial provisional UAT Evaluator inventory with 
             'returned-for-correction',
             'payment-locked',
         )
-        ->and($retry)->toBe($first);
+        ->and($retry)->toBe($first)
+        ->and($secondRetry)->toBe($first)
+        ->and([
+            'fee_rules' => FeeRule::query()->count(),
+            'evaluation_items' => BusinessPermitEvaluationItem::query()->count(),
+            'assessment_lines' => AssessmentLine::query()->count(),
+        ])->toBe($countsBeforeRetry);
 
     $locked = PermitApplication::query()->findOrFail($first['cases']['payment-locked']['permit_application_id']);
     $reopened = PermitApplication::query()->findOrFail($first['cases']['treasury-lob-reopens']['permit_application_id']);
-    $workingPaper = PermitApplication::query()->findOrFail($first['cases']['financial-working-paper']['permit_application_id']);
+    $interactive = PermitApplication::query()->findOrFail($first['cases']['interactive-golden']['permit_application_id']);
+    $completed = PermitApplication::query()->findOrFail($first['cases']['completed-assessment-conformance-golden']['permit_application_id']);
+    $completedAssessment = $completed->assessments()->whereNull('superseded_at')->with(['lines', 'decision'])->sole();
+    $completedProjection = app(BusinessPermitEvaluationResolver::class)->resolve($completed->businessPermitEvaluation);
 
     expect($locked->paymentSchedules()->count())->toBe(1)
         ->and($locked->status)->toBe(PermitApplicationStatus::PendingPayment)
         ->and($reopened->assessments()->whereNotNull('superseded_at')->count())->toBe(1)
         ->and($reopened->businessPermitEvaluation->items()->where('responsible_party', 'health')->exists())->toBeTrue()
-        ->and($workingPaper->businessPermitEvaluation->items()->count())->toBe(10)
-        ->and($workingPaper->businessPermitEvaluation->items()->where('item_type', 'charge')->count())->toBe(9);
+        ->and($interactive->business->name)->toBe('Interactive Golden')
+        ->and($interactive->businessPermitEvaluation->items()->count())->toBe(10)
+        ->and($interactive->businessPermitEvaluation->items()->where('item_type', 'charge')->count())->toBe(9)
+        ->and($interactive->assessments()->count())->toBe(0)
+        ->and($completed->business->name)->toBe('Completed Assessment Conformance Golden')
+        ->and($completed->lines()->count())->toBe(2)
+        ->and(data_get($completedProjection, 'financial_working_paper.line_sections.0.subtotal_amount_cents'))->toBe(22_500)
+        ->and(data_get($completedProjection, 'financial_working_paper.line_sections.1.subtotal_amount_cents'))->toBe(33_500)
+        ->and(data_get($completedProjection, 'financial_working_paper.line_sections.2.subtotal_amount_cents'))->toBe(14_800)
+        ->and(data_get($completedProjection, 'financial_working_paper.application_subtotal_amount_cents'))->toBe(45_000)
+        ->and(data_get($completedProjection, 'financial_working_paper.grand_total_amount_cents'))->toBe(115_800)
+        ->and(collect($completedProjection['items'])->where('item_type', 'charge')->where('resolution', '!=', 'resolved'))->toHaveCount(0)
+        ->and($completedAssessment->total_amount_cents)->toBe(115_800)
+        ->and($completedAssessment->lines)->toHaveCount(10)
+        ->and($completedAssessment->decision?->action)->toBe(AssessmentDecisionAction::Approved)
+        ->and($completedAssessment->decision?->decided_by_id)->toBe($actors['municipal_treasurer']->id)
+        ->and($completedAssessment->decision?->assessment_snapshot_hash)->toBe(app(AssessmentSnapshotFingerprint::class)->hash($completedAssessment))
+        ->and($completed->paymentSchedules()->count())->toBe(0);
 });
 
 it('operates one assessment-slip-shaped multi-LOB working paper through reassessment approval and payment lock', function () {
@@ -370,7 +404,7 @@ it('operates one assessment-slip-shaped multi-LOB working paper through reassess
     configureBusinessPermitEvaluatorPreviewSafety();
     $actors = businessPermitEvaluatorPreviewActors();
     $inventory = app(PrepareBusinessPermitEvaluatorUatDataset::class)->handle('working-paper-run', $actors);
-    $application = PermitApplication::query()->findOrFail($inventory['cases']['financial-working-paper']['permit_application_id']);
+    $application = PermitApplication::query()->findOrFail($inventory['cases']['interactive-golden']['permit_application_id']);
     $evaluation = $application->businessPermitEvaluation;
     $resolver = app(BusinessPermitEvaluationResolver::class);
     $complete = app(CompleteBusinessPermitEvaluationResponsibility::class);
@@ -552,6 +586,7 @@ it('operates one assessment-slip-shaped multi-LOB working paper through reassess
 });
 
 it('normalizes legacy preview pricing across three persistent runs without changing historical snapshots or municipal rules', function () {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
     configureBusinessPermitEvaluatorPreviewSafety();
 
     $legacyRules = collect(['first-run', 'second-run'])->map(fn (string $runId): FeeRule => FeeRule::factory()->create([
@@ -607,22 +642,22 @@ it('normalizes legacy preview pricing across three persistent runs without chang
         $assessment = $application->assessments()->whereNull('superseded_at')->with('lines')->sole();
         $preparedAssessments->push($assessment);
         $goldenApplication = PermitApplication::query()
-            ->whereKey($inventory['cases']['financial-working-paper']['permit_application_id'])
+            ->whereKey($inventory['cases']['interactive-golden']['permit_application_id'])
             ->sole();
         $goldenProjection = app(BusinessPermitEvaluationResolver::class)->resolve($goldenApplication->businessPermitEvaluation);
         $goldenWorkingPaperTotals->push($goldenProjection['total_amount_cents']);
 
-        expect($assessment->total_amount_cents)->toBe(10_000)
-            ->and($assessment->lines)->toHaveCount(1)
-            ->and($assessment->lines->sole()->code)->toBe('EVAL-UAT-BASE')
+        expect($assessment->total_amount_cents)->toBe(45_000)
+            ->and($assessment->lines)->toHaveCount(2)
+            ->and($assessment->lines->where('code', 'EVAL-UAT-BASE'))->toHaveCount(1)
             ->and($inventory['pricing_fixture'])->toBe([
                 'stable_code' => 'EVAL-UAT-BASE',
                 'active_rule_count' => 1,
                 'inactive_legacy_rule_count' => 2,
             ])
             ->and($goldenApplication->businessPermitEvaluation->items()->where('item_type', 'charge')->count())->toBe(9)
-            ->and($goldenProjection['projected_charges'])->toHaveCount(1)
-            ->and($goldenProjection['total_amount_cents'])->toBe(10_000)
+            ->and($goldenProjection['projected_charges'])->toHaveCount(2)
+            ->and($goldenProjection['total_amount_cents'])->toBe(45_000)
             ->and(data_get($goldenProjection, 'financial_working_paper.grand_total_available'))->toBeFalse()
             ->and(FeeRule::query()->where('code', 'EVAL-UAT-BASE')->where('is_active', true)->count())->toBe(1);
     }
@@ -638,9 +673,9 @@ it('normalizes legacy preview pricing across three persistent runs without chang
         ->and($historicalAssessment->fresh()->total_amount_cents)->toBe(10_000)
         ->and($historicalLine->fresh()->fee_rule_id)->toBe($legacyRules->first()->id)
         ->and($historicalLine->rule_snapshot)->toBe($historicalSnapshot)
-        ->and($preparedAssessments->first()->fresh()->total_amount_cents)->toBe(10_000)
-        ->and($preparedAssessments->first()->lines()->sole()->rule_snapshot['code'])->toBe('EVAL-UAT-BASE')
-        ->and($goldenWorkingPaperTotals->all())->toBe([10_000, 10_000, 10_000])
+        ->and($preparedAssessments->first()->fresh()->total_amount_cents)->toBe(45_000)
+        ->and($preparedAssessments->first()->lines()->where('code', 'EVAL-UAT-BASE')->sole()->rule_snapshot['code'])->toBe('EVAL-UAT-BASE')
+        ->and($goldenWorkingPaperTotals->all())->toBe([45_000, 45_000, 45_000])
         ->and($municipalRule->fresh()->getAttributes())->toBe($municipalState);
 });
 

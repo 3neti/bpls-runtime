@@ -11,6 +11,7 @@ use App\Models\PermitApplication;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
 use App\Models\User;
+use Database\Seeders\RevenueCodeFeeCatalogSeeder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -32,6 +33,7 @@ test('stakeholder preview is a local synthetic composition of existing lifecycle
 });
 
 test('preview preparation creates synthetic role accounts and policy-bound evidence without storing credentials', function () {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
     Storage::fake('local');
     $password = 'Stakeholder-Preview-Only-2026';
     configureSafeStakeholderPreview($password);

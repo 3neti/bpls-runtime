@@ -64,7 +64,21 @@ class PrepareBusinessPermitEvaluatorUatDataset
             $cases = [];
             $cases['just_created'] = $this->case($runId, 'just-created', $actors['citizen'], $retail, $actors['assessment_officer']);
 
-            $cases['financial_working_paper'] = $this->financialWorkingPaperCase($runId, $actors, $retail, $repair, $restaurant);
+            $cases['interactive_golden'] = $this->financialWorkingPaperCase(
+                $runId,
+                'interactive-golden',
+                $actors,
+                $retail,
+                $repair,
+                $restaurant,
+            );
+            $cases['completed_assessment_conformance_golden'] = $this->completedAssessmentConformanceGolden(
+                $runId,
+                $actors,
+                $retail,
+                $repair,
+                $restaurant,
+            );
 
             $cases['awaiting_engineering'] = $this->case($runId, 'awaiting-engineering', $actors['citizen'], $retail, $actors['assessment_officer']);
             $this->officeItem($cases['awaiting_engineering'], 'engineering', $actors['engineering'], 12_500, true);
@@ -211,8 +225,13 @@ class PrepareBusinessPermitEvaluatorUatDataset
     /** @param LineOfBusiness|array<int, LineOfBusiness> $linesOfBusiness */
     private function case(string $runId, string $key, User $citizen, LineOfBusiness|array $linesOfBusiness, User $creator): BusinessPermitEvaluation
     {
+        $fixtureLabel = match ($key) {
+            'interactive-golden' => 'Interactive Golden',
+            'completed-assessment-conformance-golden' => 'Completed Assessment Conformance Golden',
+            default => null,
+        };
         $owner = BusinessOwner::query()->create(['name' => 'Synthetic Evaluator Owner '.str($key)->headline(), 'metadata' => ['uat_run_id' => $runId]]);
-        $business = Business::query()->create(['business_owner_id' => $owner->id, 'name' => 'Synthetic '.str($key)->headline().' Business', 'metadata' => ['uat_run_id' => $runId]]);
+        $business = Business::query()->create(['business_owner_id' => $owner->id, 'name' => $fixtureLabel ?? 'Synthetic '.str($key)->headline().' Business', 'metadata' => ['uat_run_id' => $runId]]);
         $application = PermitApplication::query()->create([
             'business_id' => $business->id,
             'submitted_by_id' => $citizen->id,
@@ -222,7 +241,7 @@ class PrepareBusinessPermitEvaluatorUatDataset
             'status' => PermitApplicationStatus::Assessment,
             'application_year' => 2099,
             'submitted_at' => now(),
-            'metadata' => ['business_permit_evaluation' => ['semantic_classification' => 'provisional_uat', 'uat_run_id' => $runId, 'case' => $key, 'production_liability' => false]],
+            'metadata' => ['business_permit_evaluation' => ['semantic_classification' => 'provisional_uat', 'uat_run_id' => $runId, 'case' => $key, 'fixture_label' => $fixtureLabel, 'production_liability' => false]],
         ]);
         collect(is_array($linesOfBusiness) ? $linesOfBusiness : [$linesOfBusiness])
             ->values()
@@ -249,12 +268,13 @@ class PrepareBusinessPermitEvaluatorUatDataset
     /** @param array<string, User> $actors */
     private function financialWorkingPaperCase(
         string $runId,
+        string $key,
         array $actors,
         LineOfBusiness $retail,
         LineOfBusiness $repair,
         LineOfBusiness $restaurant,
     ): BusinessPermitEvaluation {
-        $evaluation = $this->case($runId, 'financial-working-paper', $actors['citizen'], [$retail, $repair], $actors['assessment_officer']);
+        $evaluation = $this->case($runId, $key, $actors['citizen'], [$retail, $repair], $actors['assessment_officer']);
         $applicationLines = $evaluation->permitApplication->lines->keyBy('line_of_business_id');
         $retailScope = $this->lineChargeMetadata($retail, $applicationLines->get($retail->id)?->id);
         $repairScope = $this->lineChargeMetadata($repair, $applicationLines->get($repair->id)?->id);
@@ -302,6 +322,63 @@ class PrepareBusinessPermitEvaluatorUatDataset
             ],
             'health',
         );
+
+        return $evaluation->fresh();
+    }
+
+    /** @param array<string, User> $actors */
+    private function completedAssessmentConformanceGolden(
+        string $runId,
+        array $actors,
+        LineOfBusiness $retail,
+        LineOfBusiness $repair,
+        LineOfBusiness $restaurant,
+    ): BusinessPermitEvaluation {
+        $evaluation = $this->financialWorkingPaperCase(
+            $runId,
+            'completed-assessment-conformance-golden',
+            $actors,
+            $retail,
+            $repair,
+            $restaurant,
+        );
+
+        $this->completeWorkingPaperCharge($evaluation, 'retail.business-tax.charge', $actors['assessor'], BusinessPermitEvaluationApplicability::Applicable, 14_300, 'Assessor confirmed the synthetic Retail Business Tax proposal.');
+        $this->completeWorkingPaperCharge($evaluation, 'retail.mayors-permit.charge', $actors['engineering'], BusinessPermitEvaluationApplicability::Applicable, 8_200, 'Engineering corrected the synthetic Mayor permit proposal after inspection.');
+        $this->completeWorkingPaperCharge($evaluation, 'retail.weight-measure.charge', $actors['assessor'], BusinessPermitEvaluationApplicability::NotApplicable, 3_400, 'Weight and Measure is not applicable to this synthetic Retail activity.');
+        $this->completeWorkingPaperCharge($evaluation, 'repair.business-tax.charge', $actors['assessor'], BusinessPermitEvaluationApplicability::Applicable, 16_800, 'Assessor confirmed the synthetic Repair Business Tax proposal.');
+        $this->completeWorkingPaperCharge($evaluation, 'repair.occupation-fee.charge', $actors['engineering'], BusinessPermitEvaluationApplicability::Applicable, 6_900, 'Engineering confirmed the synthetic Occupation Fee proposal.');
+        $this->completeWorkingPaperCharge($evaluation, 'repair.solid-waste.charge', $actors['menro'], BusinessPermitEvaluationApplicability::Applicable, 5_200, 'MENRO confirmed the synthetic Solid Waste proposal.');
+        $this->completeWorkingPaperCharge($evaluation, 'repair.sanitary-permit.charge', $actors['health'], BusinessPermitEvaluationApplicability::Applicable, 4_600, 'Health confirmed the synthetic Repair Sanitary Permit proposal.');
+
+        $this->counterCheck->handle($evaluation->fresh(), $actors['treasury']);
+        $initialAssessment = $this->createAssessment->handle($evaluation->permitApplication->fresh(), $actors['assessment_officer']);
+        $beforeCorrection = $evaluation->fresh()->currentVersion;
+        $this->correctLinesOfBusiness->handle(
+            $evaluation,
+            [$retail->id, $repair->id, $restaurant->id],
+            $actors['treasury'],
+            'Treasury identified Restaurant in addition to the preserved Retail and Repair Services declaration.',
+            $beforeCorrection->sequence,
+            $beforeCorrection->fingerprint,
+            "{$runId}:completed-assessment-conformance-golden:lob-correction",
+        );
+
+        $this->completeWorkingPaperCharge($evaluation, 'restaurant.health-certificate.charge', $actors['health'], BusinessPermitEvaluationApplicability::Applicable, 8_700, 'Health completed the synthetic Restaurant Health Certificate review.');
+        $this->completeWorkingPaperCharge($evaluation, 'restaurant.sanitary-permit.charge', $actors['health'], BusinessPermitEvaluationApplicability::Applicable, 6_100, 'Health completed the synthetic Restaurant Sanitary Permit review.');
+        $this->counterCheck->handle($evaluation->fresh(), $actors['treasury']);
+
+        $assessment = $this->createAssessment->handle($evaluation->permitApplication->fresh(), $actors['assessment_officer']);
+        $this->recordAssessmentDecision->handle(
+            $assessment,
+            $actors['municipal_treasurer'],
+            AssessmentDecisionAction::Approved,
+            $this->assessmentFingerprint->hash($assessment),
+        );
+
+        if ($initialAssessment->refresh()->superseded_at === null || $assessment->total_amount_cents !== 115_800) {
+            throw new RuntimeException('Completed Assessment Conformance Golden did not reproduce the accepted PHP 1,158.00 lifecycle.');
+        }
 
         return $evaluation->fresh();
     }
@@ -418,6 +495,39 @@ class PrepareBusinessPermitEvaluatorUatDataset
         );
     }
 
+    private function completeWorkingPaperCharge(
+        BusinessPermitEvaluation $evaluation,
+        string $key,
+        User $actor,
+        BusinessPermitEvaluationApplicability $applicability,
+        int $amount,
+        string $reason,
+    ): void {
+        $item = $evaluation->items()->where('key', $key)->sole();
+        $version = $evaluation->fresh()->currentVersion;
+        $inspectionRequired = (bool) data_get($item->metadata, 'inspection_required');
+
+        $this->completeResponsibility->handle(
+            $item,
+            $actor,
+            $applicability,
+            [
+                'amount_cents' => $amount,
+                'inspection' => [
+                    'required' => $inspectionRequired,
+                    'mode' => $inspectionRequired ? 'physical' : 'document_review',
+                    'completed' => true,
+                    'findings' => $reason,
+                ],
+            ],
+            BusinessPermitEvaluationSource::ProvisionalUat,
+            $reason,
+            $version->sequence,
+            $version->fingerprint,
+            'uat-completed-golden-'.$item->id.'-'.$applicability->value,
+        );
+    }
+
     /**
      * @param  iterable<int, PermitApplication>  $applications
      * @return array<string, mixed>
@@ -441,13 +551,22 @@ class PrepareBusinessPermitEvaluatorUatDataset
                     ->filter(fn (FeeRule $feeRule): bool => str_starts_with($feeRule->code, 'EVAL-UAT-BASE-'))
                     ->count(),
             ],
-            'cases' => collect($applications)->mapWithKeys(fn (PermitApplication $application): array => [
-                data_get($application->metadata, 'business_permit_evaluation.case') => [
+            'cases' => collect($applications)->mapWithKeys(function (PermitApplication $application): array {
+                $evaluation = $application->businessPermitEvaluation;
+                $assessment = $application->assessments()->whereNull('superseded_at')->first();
+
+                return [data_get($application->metadata, 'business_permit_evaluation.case') => [
                     'permit_application_id' => $application->id,
-                    'evaluation_id' => $application->businessPermitEvaluation?->id,
+                    'application_number' => $application->application_number,
+                    'tracking_reference' => $application->tracking_reference,
+                    'fixture_label' => data_get($application->metadata, 'business_permit_evaluation.fixture_label'),
+                    'evaluation_id' => $evaluation?->id,
+                    'evaluation_version' => $evaluation?->currentVersion?->sequence,
+                    'assessment_id' => $assessment?->id,
+                    'assessment_total_amount_cents' => $assessment?->total_amount_cents,
                     'url' => route('staff.permit-applications.evaluation.show', $application, false),
-                ],
-            ])->all(),
+                ]];
+            })->all(),
         ];
     }
 }

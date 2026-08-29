@@ -317,7 +317,9 @@ class PrepareStakeholderPreviewCommand extends Command
                 'billing_groups' => route('staff.billing-groups.index', absolute: false),
                 'billing_group_detail' => route('staff.billing-groups.show', $billingGroup, false),
                 'billing_group_abstract' => route('staff.reports.billing-groups.abstract.index', $billingGroup, false),
-                'business_permit_evaluator' => data_get($evaluatorUat, 'cases.financial-working-paper.url'),
+                'business_permit_evaluator' => data_get($evaluatorUat, 'cases.interactive-golden.url'),
+                'business_permit_evaluator_interactive_golden' => data_get($evaluatorUat, 'cases.interactive-golden.url'),
+                'business_permit_evaluator_completed_golden' => data_get($evaluatorUat, 'cases.completed-assessment-conformance-golden.url'),
             ],
             'provisional_semantics' => [
                 'classification' => 'provisional_uat',
