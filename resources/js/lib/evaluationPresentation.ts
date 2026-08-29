@@ -24,7 +24,12 @@
  *   lifecycle state is introduced.
  */
 
-import type { EvaluationApplicability } from '@/types';
+import type {
+    EvaluationApplicability,
+    EvaluationFinancialWorkingPaper,
+    EvaluationItem,
+    EvaluationWorkingPaperCharge,
+} from '@/types';
 
 const NOT_RECORDED = 'Not recorded';
 
@@ -471,11 +476,10 @@ export function readinessBlockers(
 /* -------------------------------------------------------------------------
  * Financial working paper
  *
- * The Evaluator has two kinds of money, both supplied by the typed contract:
- * governed charges projected from the municipal pricing path, and charges an
- * office resolves on this application. A municipal working paper has to show
- * them as one build-up, so these helpers normalize both into a single row
- * model and then explain the canonical total rather than recomputing it.
+ * The backend supplies the authoritative Application -> Line(s) of Business
+ * -> Charges projection, including every subtotal and the Grand Total. These
+ * helpers only attach presentation vocabulary and Evaluation Item provenance;
+ * they never add charge amounts or decide membership in a subtotal.
  * ---------------------------------------------------------------------- */
 
 export type ComponentStatusKey =
@@ -489,9 +493,6 @@ export type ComponentStatus = {
     tone: ComponentStatusTone;
 };
 
-/** Where a component's money comes from. */
-export type ComponentOrigin = 'governed' | 'office';
-
 /** One revision as supplied by `EvaluationItemData.history`. */
 export type WorkingPaperRevision = {
     version_sequence: number;
@@ -502,37 +503,6 @@ export type WorkingPaperRevision = {
     actor_name: string | null;
     reason: string | null;
     occurred_at: string | null;
-};
-
-export type WorkingPaperItem = PresentableEvaluationItem & {
-    id: number;
-    item_type: string;
-    is_required: boolean;
-    is_mine: boolean;
-    applicability: string;
-    resolution: string;
-    default_value: unknown;
-    default_source_classification: string | null;
-    resolved_value: unknown;
-    source_classification: string | null;
-    reason: string | null;
-    occurred_at: string | null;
-    inspection_required: boolean;
-    history: readonly WorkingPaperRevision[];
-};
-
-export type WorkingPaperCharge = PresentableProjectedCharge & {
-    key: string;
-    fee_rule_id: number;
-    amount_cents: number;
-    legal_basis: string | null;
-    source_classification: string;
-};
-
-export type WorkingPaperEvaluation = {
-    current_evaluated_amount_cents: number;
-    projected_charges: readonly WorkingPaperCharge[];
-    items: readonly WorkingPaperItem[];
 };
 
 /** A recorded correction: what the amount was, what it became, and why. */
@@ -547,21 +517,17 @@ export type ComponentChange = {
 export type FinancialComponent = {
     /** Stable list key; never rendered. */
     key: string;
-    origin: ComponentOrigin;
+    sourceType: 'fee_rule' | 'evaluation_item';
+    scope: 'application' | 'line_of_business';
     label: string;
-    /** Municipal fee code for governed charges. */
     reference: string | null;
-    /** Who owns this component's amount. */
     owner: string;
-    whyItApplies: string;
-    /** The system or office default proposal, when one exists. */
     proposalCents: number | null;
-    /** The amount the Municipality currently resolves. */
     resolvedCents: number | null;
-    includedInTotal: boolean;
+    includedInSubtotal: boolean;
+    includedInGrandTotal: boolean;
     status: ComponentStatus;
     sourceLabel: string;
-    legalBasis: string | null;
     feeRuleId: number | null;
     itemId: number | null;
     isMine: boolean;
@@ -570,18 +536,21 @@ export type FinancialComponent = {
     history: readonly WorkingPaperRevision[];
 };
 
-export type ComponentReconciliation = {
-    components: FinancialComponent[];
-    included: FinancialComponent[];
-    pending: FinancialComponent[];
-    includedTotalCents: number;
-    canonicalTotalCents: number;
-    /**
-     * True when the components shown add up to the canonical total. The
-     * canonical total is always the displayed authority; when this is false the
-     * UI says the build-up cannot be reconciled instead of inventing a figure.
-     */
-    reconciled: boolean;
+export type FinancialWorkingPaperSection = {
+    key: string;
+    lineOfBusinessId: number | null;
+    permitApplicationLineId: number | null;
+    label: string;
+    charges: FinancialComponent[];
+    subtotalCents: number;
+};
+
+export type FinancialWorkingPaperPresentation = {
+    lineSections: FinancialWorkingPaperSection[];
+    applicationSection: FinancialWorkingPaperSection | null;
+    requiredUnresolvedChargeCount: number;
+    grandTotalAvailable: boolean;
+    grandTotalCents: number | null;
 };
 
 const COMPONENT_STATUSES: Record<ComponentStatusKey, ComponentStatus> = {
@@ -661,36 +630,24 @@ export function amountFromValue(value: unknown): number | null {
     return typeof amount === 'number' ? amount : null;
 }
 
-/**
- * A charge item contributes to the canonical total only when the Municipality
- * has actually resolved it as applicable. This mirrors the resolver, so the
- * build-up can say which components are inside the total and which are still
- * proposals.
- */
-function contributesToTotal(item: WorkingPaperItem): boolean {
-    return (
-        item.item_type === 'charge' &&
-        item.applicability === 'applicable' &&
-        item.resolution === 'resolved'
-    );
-}
-
-function officeComponentStatus(item: WorkingPaperItem): ComponentStatus {
-    if (item.applicability === 'not_applicable') {
+function workingPaperChargeStatus(
+    charge: EvaluationWorkingPaperCharge,
+): ComponentStatus {
+    if (charge.applicability === 'not_applicable') {
         return COMPONENT_STATUSES.not_applicable;
     }
 
-    if (item.resolution === 'superseded') {
+    if (charge.resolution === 'superseded') {
         return COMPONENT_STATUSES.superseded;
     }
 
-    if (contributesToTotal(item)) {
+    if (charge.included_in_grand_total) {
         return COMPONENT_STATUSES.in_total;
     }
 
     return {
         ...COMPONENT_STATUSES.awaiting_office,
-        label: `Awaiting ${officeLabel(item.responsible_party)}`,
+        label: `Awaiting ${officeLabel(charge.responsible_party)}`,
     };
 }
 
@@ -699,7 +656,9 @@ function officeComponentStatus(item: WorkingPaperItem): ComponentStatus {
  * supplied provenance. Returns `null` when the office simply confirmed the
  * proposal, because nothing changed.
  */
-export function latestChange(item: WorkingPaperItem): ComponentChange | null {
+export function latestChange(
+    item: Pick<EvaluationItem, 'history'>,
+): ComponentChange | null {
     const amounts = item.history.filter(
         (revision) => amountFromValue(revision.value) !== null,
     );
@@ -726,107 +685,78 @@ export function latestChange(item: WorkingPaperItem): ComponentChange | null {
     };
 }
 
-function governedComponent(charge: WorkingPaperCharge): FinancialComponent {
-    const basis = pricingBasisSummary(charge);
+export function presentWorkingPaperCharge(
+    charge: EvaluationWorkingPaperCharge,
+    itemsById: ReadonlyMap<number, EvaluationItem>,
+): FinancialComponent {
+    const item =
+        charge.evaluation_item_id === null
+            ? null
+            : (itemsById.get(charge.evaluation_item_id) ?? null);
 
     return {
-        key: `governed-${charge.key}`,
-        origin: 'governed',
-        label: charge.name,
-        reference: charge.code,
-        owner: officeLabel('system'),
-        whyItApplies:
-            basis.amountCents === null
-                ? basis.label
-                : `${basis.label} · ${money(basis.amountCents)}`,
-        proposalCents: charge.amount_cents,
-        resolvedCents: charge.amount_cents,
-        includedInTotal: true,
-        status: COMPONENT_STATUSES.in_total,
+        key: charge.identity,
+        sourceType: charge.source_type,
+        scope: charge.scope,
+        label: charge.label,
+        reference: charge.code || null,
+        owner: officeLabel(charge.responsible_party),
+        proposalCents: charge.proposal_amount_cents,
+        resolvedCents: charge.resolved_amount_cents,
+        includedInSubtotal: charge.included_in_subtotal,
+        includedInGrandTotal: charge.included_in_grand_total,
+        status: workingPaperChargeStatus(charge),
         sourceLabel: sourceLabel(charge.source_classification),
-        legalBasis: charge.legal_basis,
         feeRuleId: charge.fee_rule_id,
-        itemId: null,
-        isMine: false,
-        inspectionRequired: false,
-        change: null,
-        history: [],
+        itemId: charge.evaluation_item_id,
+        isMine: item?.is_mine ?? false,
+        inspectionRequired: item?.inspection_required ?? false,
+        change: item === null ? null : latestChange(item),
+        history: item?.history ?? [],
     };
 }
 
-function officeComponent(item: WorkingPaperItem): FinancialComponent {
+/**
+ * Attach display vocabulary to the canonical hierarchy. Subtotals and the
+ * Grand Total are copied verbatim from the backend projection; this function
+ * deliberately contains no arithmetic.
+ */
+export function presentFinancialWorkingPaper(
+    workingPaper: EvaluationFinancialWorkingPaper,
+    items: readonly EvaluationItem[],
+): FinancialWorkingPaperPresentation {
+    const itemsById = new Map(items.map((item) => [item.id, item]));
+
     return {
-        key: `office-${item.id}`,
-        origin: 'office',
-        label: item.label,
-        reference: null,
-        owner: officeLabel(item.responsible_party),
-        whyItApplies: item.is_required
-            ? 'Required municipal evaluation for this application'
-            : 'Supporting municipal evaluation for this application',
-        proposalCents: amountFromValue(item.default_value),
-        resolvedCents:
-            item.applicability === 'not_applicable'
+        lineSections: workingPaper.line_sections.map((section, index) => ({
+            key: `line-${section.permit_application_line_id ?? section.line_of_business_id}-${index}`,
+            lineOfBusinessId: section.line_of_business_id,
+            permitApplicationLineId: section.permit_application_line_id,
+            label:
+                section.line_of_business_name ??
+                `Line of Business ${section.line_of_business_id}`,
+            charges: section.charges.map((charge) =>
+                presentWorkingPaperCharge(charge, itemsById),
+            ),
+            subtotalCents: section.subtotal_amount_cents,
+        })),
+        applicationSection:
+            workingPaper.application_charges.length === 0
                 ? null
-                : amountFromValue(item.resolved_value),
-        includedInTotal: contributesToTotal(item),
-        status: officeComponentStatus(item),
-        sourceLabel: sourceLabel(
-            item.source_classification ?? item.default_source_classification,
-        ),
-        legalBasis: null,
-        feeRuleId: null,
-        itemId: item.id,
-        isMine: item.is_mine,
-        inspectionRequired: item.inspection_required,
-        change: latestChange(item),
-        history: item.history,
-    };
-}
-
-/**
- * Every monetary component of one Evaluation, governed charges first, then the
- * charges offices resolve on this application.
- */
-export function financialComponents(
-    evaluation: WorkingPaperEvaluation,
-): FinancialComponent[] {
-    return [
-        ...evaluation.projected_charges.map(governedComponent),
-        ...evaluation.items
-            .filter((item) => item.item_type === 'charge')
-            .map(officeComponent),
-    ];
-}
-
-/**
- * Explain the canonical evaluated total: which components are inside it, which
- * remain proposals, and whether the two agree.
- */
-export function componentReconciliation(
-    evaluation: WorkingPaperEvaluation,
-): ComponentReconciliation {
-    const components = financialComponents(evaluation);
-    const included = components.filter(
-        (component) => component.includedInTotal,
-    );
-    const pending = components.filter(
-        (component) =>
-            !component.includedInTotal &&
-            component.status.key !== 'not_applicable',
-    );
-    const includedTotalCents = included.reduce(
-        (total, component) => total + (component.resolvedCents ?? 0),
-        0,
-    );
-
-    return {
-        components,
-        included,
-        pending,
-        includedTotalCents,
-        canonicalTotalCents: evaluation.current_evaluated_amount_cents,
-        reconciled:
-            includedTotalCents === evaluation.current_evaluated_amount_cents,
+                : {
+                      key: 'application-wide',
+                      lineOfBusinessId: null,
+                      permitApplicationLineId: null,
+                      label: 'Application-wide charges',
+                      charges: workingPaper.application_charges.map((charge) =>
+                          presentWorkingPaperCharge(charge, itemsById),
+                      ),
+                      subtotalCents:
+                          workingPaper.application_subtotal_amount_cents,
+                  },
+        requiredUnresolvedChargeCount:
+            workingPaper.required_unresolved_charge_count,
+        grandTotalAvailable: workingPaper.grand_total_available,
+        grandTotalCents: workingPaper.grand_total_amount_cents,
     };
 }

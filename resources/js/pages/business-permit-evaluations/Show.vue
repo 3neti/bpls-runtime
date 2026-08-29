@@ -41,10 +41,10 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import {
     applicationTypeLabel,
-    componentReconciliation,
     dateTime,
     money,
     officeLabel,
+    presentFinancialWorkingPaper,
     readinessBlockers,
 } from '@/lib/evaluationPresentation';
 import type { ResponsibilityDraft } from '@/lib/evaluationPresentation';
@@ -93,16 +93,14 @@ const counterCheckReason = reactive({ value: '' });
 
 const isCitizenLens = computed(() => props.evaluation?.lens === 'citizen');
 
-/**
- * The financial build-up. Components come from the typed contract: governed
- * charges projected by the municipal pricing path, plus the charges offices
- * resolve on this application. The canonical `current_evaluated_amount_cents`
- * stays the authority; this only explains how it was assembled.
- */
-const reconciliation = computed(() =>
+/** Presentation-only hierarchy over backend-provided charges and totals. */
+const workingPaper = computed(() =>
     props.evaluation === null
         ? null
-        : componentReconciliation(props.evaluation),
+        : presentFinancialWorkingPaper(
+              props.evaluation.financial_working_paper,
+              props.evaluation.items,
+          ),
 );
 
 const itemsById = computed<Map<number, EvaluationItem>>(
@@ -470,7 +468,7 @@ function submitPrepareAssessment(): void {
                 </div>
             </section>
 
-            <template v-else-if="reconciliation">
+            <template v-else-if="workingPaper">
                 <!-- 1. Whose application this is -->
                 <section
                     class="rounded-2xl border bg-card p-5 shadow-xs sm:p-6"
@@ -538,7 +536,7 @@ function submitPrepareAssessment(): void {
 
                 <!-- 2. What it currently costs, and how that was assembled -->
                 <EvaluationTotalPanel
-                    :reconciliation="reconciliation"
+                    :working-paper="workingPaper"
                     :status-label="evaluation.status_label"
                     :financial-lock="evaluation.financial_lock"
                 />
@@ -608,40 +606,156 @@ function submitPrepareAssessment(): void {
                         <p
                             class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
                         >
-                            Financial build-up
+                            Computation / Assessment working paper
                         </p>
                         <h2
                             id="build-up-heading"
                             class="mt-1 text-lg font-semibold"
                         >
-                            Municipal charges on this application
+                            Charges by Line of Business
                         </h2>
                         <p class="mt-1 text-sm leading-6 text-muted-foreground">
-                            Each charge shows what the Municipality proposed,
-                            what it resolved, and which office owns it.
+                            The Municipality builds this Evaluation from each
+                            Line of Business, its applicable charges, and any
+                            charges that apply to the whole application.
                         </p>
                     </div>
 
                     <div
-                        v-if="reconciliation.components.length"
+                        v-if="
+                            workingPaper.lineSections.length ||
+                            workingPaper.applicationSection
+                        "
                         class="grid gap-4"
                     >
-                        <EvaluationComponentRow
-                            v-for="component in reconciliation.components"
-                            :key="component.key"
-                            :component="component"
-                            :item="
-                                component.itemId === null
-                                    ? null
-                                    : (itemsById.get(component.itemId) ?? null)
-                            "
-                            :editable="canRecordWork && component.isMine"
-                            :submitting="
-                                pendingAction === `item-${component.itemId}`
-                            "
-                            :can-view-fee-rules="canViewFeeRules"
-                            @submit="submitResponsibility"
-                        />
+                        <section
+                            v-for="(
+                                section, index
+                            ) in workingPaper.lineSections"
+                            :key="section.key"
+                            class="overflow-hidden rounded-2xl border bg-muted/15"
+                            :aria-labelledby="`lob-section-${index}`"
+                            :data-testid="`working-paper-line-${section.lineOfBusinessId}`"
+                        >
+                            <header
+                                class="flex flex-col gap-3 border-b bg-card p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5"
+                            >
+                                <div class="min-w-0">
+                                    <p
+                                        class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                                    >
+                                        Line of Business {{ index + 1 }}
+                                    </p>
+                                    <h3
+                                        :id="`lob-section-${index}`"
+                                        class="mt-1 text-lg font-semibold break-words"
+                                    >
+                                        {{ section.label }}
+                                    </h3>
+                                </div>
+                                <div class="sm:text-right">
+                                    <p class="text-xs text-muted-foreground">
+                                        LOB Subtotal
+                                    </p>
+                                    <p
+                                        class="mt-1 text-xl font-semibold tabular-nums"
+                                        :data-testid="`working-paper-line-subtotal-${section.lineOfBusinessId}`"
+                                    >
+                                        {{ money(section.subtotalCents) }}
+                                    </p>
+                                </div>
+                            </header>
+                            <div class="grid gap-3 p-3 sm:p-4">
+                                <EvaluationComponentRow
+                                    v-for="component in section.charges"
+                                    :key="component.key"
+                                    :component="component"
+                                    :item="
+                                        component.itemId === null
+                                            ? null
+                                            : (itemsById.get(
+                                                  component.itemId,
+                                              ) ?? null)
+                                    "
+                                    :editable="
+                                        canRecordWork && component.isMine
+                                    "
+                                    :submitting="
+                                        pendingAction ===
+                                        `item-${component.itemId}`
+                                    "
+                                    :can-view-fee-rules="canViewFeeRules"
+                                    :simplified="isCitizenLens"
+                                    @submit="submitResponsibility"
+                                />
+                            </div>
+                        </section>
+
+                        <section
+                            v-if="workingPaper.applicationSection"
+                            class="overflow-hidden rounded-2xl border border-dashed bg-muted/15"
+                            aria-labelledby="application-charge-section"
+                            data-testid="working-paper-application-section"
+                        >
+                            <header
+                                class="flex flex-col gap-3 border-b bg-card p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5"
+                            >
+                                <div class="min-w-0">
+                                    <p
+                                        class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                                    >
+                                        Whole application
+                                    </p>
+                                    <h3
+                                        id="application-charge-section"
+                                        class="mt-1 text-lg font-semibold"
+                                    >
+                                        Application-wide charges
+                                    </h3>
+                                </div>
+                                <div class="sm:text-right">
+                                    <p class="text-xs text-muted-foreground">
+                                        Application-wide subtotal
+                                    </p>
+                                    <p
+                                        class="mt-1 text-xl font-semibold tabular-nums"
+                                        data-testid="working-paper-application-subtotal"
+                                    >
+                                        {{
+                                            money(
+                                                workingPaper.applicationSection
+                                                    .subtotalCents,
+                                            )
+                                        }}
+                                    </p>
+                                </div>
+                            </header>
+                            <div class="grid gap-3 p-3 sm:p-4">
+                                <EvaluationComponentRow
+                                    v-for="component in workingPaper
+                                        .applicationSection.charges"
+                                    :key="component.key"
+                                    :component="component"
+                                    :item="
+                                        component.itemId === null
+                                            ? null
+                                            : (itemsById.get(
+                                                  component.itemId,
+                                              ) ?? null)
+                                    "
+                                    :editable="
+                                        canRecordWork && component.isMine
+                                    "
+                                    :submitting="
+                                        pendingAction ===
+                                        `item-${component.itemId}`
+                                    "
+                                    :can-view-fee-rules="canViewFeeRules"
+                                    :simplified="isCitizenLens"
+                                    @submit="submitResponsibility"
+                                />
+                            </div>
+                        </section>
                     </div>
                     <p
                         v-else
@@ -1078,11 +1192,9 @@ function submitPrepareAssessment(): void {
                             </div>
                         </div>
                         <p class="mt-3 text-sm leading-6 text-muted-foreground">
-                            This freezes the
-                            {{ money(reconciliation.canonicalTotalCents) }}
-                            build-up above into an immutable Assessment.
-                            Municipal Treasurer approval remains a separate
-                            decision.
+                            This freezes the canonical financial build-up above
+                            into an immutable Assessment. Municipal Treasurer
+                            approval remains a separate decision.
                         </p>
                         <Button
                             class="mt-4 w-full"

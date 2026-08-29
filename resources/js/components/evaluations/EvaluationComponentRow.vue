@@ -26,6 +26,7 @@ defineProps<{
     editable: boolean;
     submitting: boolean;
     canViewFeeRules: boolean;
+    simplified: boolean;
 }>();
 const emit = defineEmits<{
     submit: [item: EvaluationItem, draft: ResponsibilityDraft];
@@ -57,17 +58,41 @@ const emit = defineEmits<{
                     </Badge>
                 </div>
                 <p class="text-sm text-muted-foreground">
-                    {{ component.owner }} · {{ component.whyItApplies }}
+                    {{ component.owner }} ·
+                    {{
+                        component.scope === 'application'
+                            ? 'Whole application'
+                            : 'This Line of Business'
+                    }}
                 </p>
             </div>
             <EvaluationStatusChip :status="component.status" />
         </div>
 
-        <dl class="mt-4 grid gap-3 sm:grid-cols-2">
+        <div
+            v-if="simplified"
+            class="mt-4 flex flex-wrap items-baseline justify-between gap-2 rounded-lg bg-muted/40 p-3"
+        >
+            <span class="text-sm text-muted-foreground">
+                {{
+                    component.includedInGrandTotal
+                        ? 'Amount in the evaluated total'
+                        : component.status.label
+                }}
+            </span>
+            <span
+                v-if="component.resolvedCents !== null"
+                class="font-semibold tabular-nums"
+            >
+                {{ money(component.resolvedCents) }}
+            </span>
+        </div>
+
+        <dl v-else class="mt-4 grid gap-3 sm:grid-cols-2">
             <div class="rounded-lg bg-muted/40 p-3">
                 <dt class="text-xs text-muted-foreground">
                     {{
-                        component.origin === 'governed'
+                        component.sourceType === 'fee_rule'
                             ? 'Municipal pricing'
                             : 'Proposed to the office'
                     }}
@@ -93,16 +118,16 @@ const emit = defineEmits<{
                 </dd>
                 <dd class="mt-1 text-xs text-muted-foreground">
                     {{
-                        component.includedInTotal
-                            ? 'Counted in the evaluated total'
-                            : 'Not counted in the evaluated total yet'
+                        component.includedInGrandTotal
+                            ? 'Included by the canonical Evaluation'
+                            : 'Not included by the canonical Evaluation'
                     }}
                 </dd>
             </div>
         </dl>
 
         <div
-            v-if="component.change"
+            v-if="!simplified && component.change"
             class="mt-3 rounded-lg border-l-2 border-primary bg-muted/30 p-3 text-sm"
         >
             <p class="flex flex-wrap items-center gap-2 font-medium">
@@ -134,7 +159,7 @@ const emit = defineEmits<{
         </div>
 
         <div
-            v-if="editable && item"
+            v-if="!simplified && editable && item"
             class="mt-4 rounded-lg border-2 border-dashed border-primary/40 p-3 sm:p-4"
         >
             <EvaluationResponsibilityForm
@@ -144,7 +169,7 @@ const emit = defineEmits<{
             />
         </div>
 
-        <details class="group mt-4 border-t pt-3">
+        <details v-if="!simplified" class="group mt-4 border-t pt-3">
             <summary
                 class="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
@@ -165,11 +190,17 @@ const emit = defineEmits<{
                         </dt>
                         <dd class="mt-0.5">{{ component.sourceLabel }}</dd>
                     </div>
-                    <div v-if="component.legalBasis">
+                    <div>
                         <dt class="text-xs text-muted-foreground">
-                            Legal basis
+                            Charge scope
                         </dt>
-                        <dd class="mt-0.5">{{ component.legalBasis }}</dd>
+                        <dd class="mt-0.5">
+                            {{
+                                component.scope === 'application'
+                                    ? 'Application-wide'
+                                    : 'Line of Business'
+                            }}
+                        </dd>
                     </div>
                     <div v-if="component.inspectionRequired">
                         <dt class="text-xs text-muted-foreground">
