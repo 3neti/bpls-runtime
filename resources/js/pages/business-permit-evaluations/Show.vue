@@ -39,6 +39,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
+import {
+    applicationTypeLabel,
+    officeLabel,
+    pricingBasisSummary,
+    readinessBlockers,
+} from '@/lib/evaluationPresentation';
 import type {
     BreadcrumbItem,
     BusinessPermitEvaluationData,
@@ -46,6 +52,7 @@ import type {
     EvaluationCapabilities,
     EvaluationItem,
     EvaluationLineOfBusinessOption,
+    EvaluationProjectedCharge,
 } from '@/types';
 
 type Evaluation = BusinessPermitEvaluationData;
@@ -117,26 +124,41 @@ const currentAssessmentExists = computed(
         props.evaluation?.latest_assessment.consumes_current_evaluation ===
             true,
 );
+/**
+ * Readiness stays canonical: `ready` and the issue list come straight from
+ * `BusinessPermitEvaluationReadiness`. Only the wording is municipal —
+ * `readinessBlockers()` rewrites each canonical issue 1:1 so no internal
+ * item key or status token reaches a stakeholder.
+ */
 const readiness = computed(() => {
-    if (!props.evaluation) {
+    const evaluation = props.evaluation;
+
+    if (!evaluation) {
         return null;
     }
 
-    if (props.evaluation.readiness.commissioned.ready) {
+    const blockersFor = (issues: string[]): string[] =>
+        readinessBlockers(
+            issues,
+            evaluation.items,
+            evaluation.projected_charges,
+        );
+
+    if (evaluation.readiness.commissioned.ready) {
         return {
             ready: true,
             label: 'Ready for Assessment',
             note: 'All commissioned readiness checks are satisfied.',
-            issues: [] as string[],
+            blockers: [] as string[],
         };
     }
 
-    if (props.evaluation.readiness.provisional_uat.ready) {
+    if (evaluation.readiness.provisional_uat.ready) {
         return {
             ready: true,
             label: 'Ready for Assessment — UAT only',
             note: 'This sample uses provisional UAT evidence and does not establish production liability.',
-            issues: props.evaluation.readiness.commissioned.issues,
+            blockers: blockersFor(evaluation.readiness.commissioned.issues),
         };
     }
 
@@ -144,7 +166,7 @@ const readiness = computed(() => {
         ready: false,
         label: 'Not ready for assessment',
         note: 'Resolve the responsibilities and pricing issues below before preparing an Assessment.',
-        issues: props.evaluation.readiness.provisional_uat.issues,
+        blockers: blockersFor(evaluation.readiness.provisional_uat.issues),
     };
 });
 const statusTone = computed(() => {
@@ -179,20 +201,19 @@ function dateTime(value: string | null): string {
     }).format(new Date(value));
 }
 
-function plainLabel(value: string | null): string {
-    if (!value) {
-        return 'Not recorded';
+/**
+ * A fee rule with no configured basis has no basis amount to show. Its
+ * structural zero is never paired with the basis label, while the charge's
+ * own resolved amount is always rendered — an accepted ₱0.00 stays real.
+ */
+function pricingBasis(charge: EvaluationProjectedCharge): string {
+    const summary = pricingBasisSummary(charge);
+
+    if (summary.amountCents === null) {
+        return summary.label;
     }
 
-    const labels: Record<string, string> = {
-        provisional_uat: 'Provisional UAT',
-        accepted_municipal_authority: 'Accepted municipal source',
-        awaiting_responsible_confirmation: 'Awaiting responsible confirmation',
-        not_applicable: 'Not Applicable',
-        document_review: 'Document review',
-    };
-
-    return labels[value] ?? value.replaceAll('_', ' ');
+    return `${summary.label} · ${money(summary.amountCents)}`;
 }
 
 function toggleLine(id: number): void {
@@ -486,7 +507,7 @@ function submitPrepareAssessment(): void {
                                         {{ evaluation.application.owner_name }}
                                         ·
                                         {{
-                                            plainLabel(
+                                            applicationTypeLabel(
                                                 evaluation.application.type,
                                             )
                                         }}
@@ -630,20 +651,20 @@ function submitPrepareAssessment(): void {
                             <ul
                                 v-if="
                                     !evaluation.financial_lock &&
-                                    readiness?.issues.length
+                                    readiness?.blockers.length
                                 "
                                 class="mt-2 grid gap-1 text-sm"
                             >
                                 <li
-                                    v-for="issue in readiness.issues"
-                                    :key="issue"
+                                    v-for="blocker in readiness.blockers"
+                                    :key="blocker"
                                     class="flex items-start gap-2"
                                 >
                                     <ChevronRight
                                         class="mt-0.5 size-4 shrink-0"
                                         aria-hidden="true"
                                     />
-                                    <span>{{ issue }}</span>
+                                    <span>{{ blocker }}</span>
                                 </li>
                             </ul>
                         </div>
@@ -916,7 +937,7 @@ function submitPrepareAssessment(): void {
                                         </p>
                                         <h3 class="font-semibold">
                                             {{
-                                                plainLabel(
+                                                officeLabel(
                                                     myItems[0]
                                                         .responsible_party,
                                                 )
@@ -934,7 +955,9 @@ function submitPrepareAssessment(): void {
                                             can.contribute &&
                                             !evaluation.financial_lock
                                         "
-                                        :submitting="pendingAction === `item-${item.id}`"
+                                        :submitting="
+                                            pendingAction === `item-${item.id}`
+                                        "
                                         @submit="submitResponsibility"
                                     />
                                 </div>
@@ -1002,20 +1025,7 @@ function submitPrepareAssessment(): void {
                                         <p
                                             class="mt-1 text-sm text-muted-foreground"
                                         >
-                                            {{ plainLabel(charge.basis)
-                                            }}<template
-                                                v-if="
-                                                    charge.basis_amount_cents !==
-                                                    null
-                                                "
-                                            >
-                                                ·
-                                                {{
-                                                    money(
-                                                        charge.basis_amount_cents,
-                                                    )
-                                                }}</template
-                                            >
+                                            {{ pricingBasis(charge) }}
                                         </p>
                                         <p
                                             v-if="charge.legal_basis"
@@ -1216,7 +1226,11 @@ function submitPrepareAssessment(): void {
                             <template v-if="evaluation.latest_assessment">
                                 <Link
                                     v-if="evaluation.lens === 'internal'"
-                                    :href="showAssessment(evaluation.latest_assessment.id)"
+                                    :href="
+                                        showAssessment(
+                                            evaluation.latest_assessment.id,
+                                        )
+                                    "
                                     class="mt-3 flex items-start gap-3 rounded-xl bg-muted/40 p-3 outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
                                 >
                                     <CheckCircle2

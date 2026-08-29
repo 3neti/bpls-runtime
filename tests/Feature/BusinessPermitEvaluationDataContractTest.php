@@ -13,6 +13,8 @@ use App\Enums\BusinessPermitEvaluationSource;
 use App\Enums\PermitApplicationStatus;
 use App\Evaluation\BusinessPermitEvaluationResolver;
 use App\Models\Business;
+use App\Models\BusinessPermitEvaluationItem;
+use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
@@ -154,4 +156,231 @@ it('does not fabricate Evaluation history for an application that never entered 
     ]);
 
     expect($application->businessPermitEvaluation()->first())->toBeNull();
+});
+
+/**
+ * The exact serialized shape the Evaluator frontend consumes, and the
+ * backend anchor for the hand-maintained TypeScript mirror in
+ * `resources/js/types/business-permit-evaluation.ts`.
+ *
+ * Field *names* are the contract; presentation copy is not. Each list is
+ * declaration-ordered, so an accidental rename, removal, or reordering of
+ * a contract field fails here instead of silently breaking the frontend.
+ *
+ * @return array<string, array<int, string>>
+ */
+function evaluationContractKeys(): array
+{
+    return [
+        'root' => [
+            'id',
+            'version',
+            'status_label',
+            'application',
+            'applicant_declaration',
+            'municipal_resolved_lines',
+            'items',
+            'projected_charges',
+            'current_evaluated_amount_cents',
+            'pricing_issues',
+            'readiness',
+            'my_item_ids',
+            'latest_assessment',
+            'financial_lock',
+            'lens',
+        ],
+        'version' => ['id', 'sequence', 'fingerprint', 'fingerprint_current', 'treasury_counter_check'],
+        'treasury_counter_check' => ['checked_at', 'checked_by', 'reason', 'evidence_provenance'],
+        'application' => ['id', 'application_number', 'tracking_reference', 'business_name', 'owner_name', 'type', 'year'],
+        'applicant_declaration' => ['line_of_business_id', 'line_of_business_name', 'declared_gross_sales_cents', 'capital_investment_cents', 'quantity'],
+        'municipal_resolved_lines' => ['id', 'name'],
+        'items' => [
+            'id',
+            'key',
+            'label',
+            'item_type',
+            'responsible_party',
+            'is_required',
+            'requires_confirmation',
+            'is_mine',
+            'applicability',
+            'resolution',
+            'action',
+            'default_value',
+            'default_source_classification',
+            'resolved_value',
+            'source_classification',
+            'reason',
+            'occurred_at',
+            'inspection_required',
+            'history',
+        ],
+        'history' => ['version_sequence', 'action', 'applicability', 'value', 'source_classification', 'actor_name', 'reason', 'occurred_at'],
+        'projected_charges' => ['key', 'fee_rule_id', 'code', 'name', 'amount_cents', 'basis', 'basis_amount_cents', 'legal_basis', 'source_classification'],
+        'readiness' => ['commissioned', 'provisional_uat'],
+        'readiness_outcome' => ['ready', 'issues'],
+        'latest_assessment' => [
+            'id',
+            'sequence',
+            'total_amount_cents',
+            'superseded',
+            'decision',
+            'evaluation_version_id',
+            'evaluation_fingerprint',
+            'consumes_current_evaluation',
+        ],
+    ];
+}
+
+/**
+ * One serialized Evaluation item, resolved by its canonical key.
+ *
+ * @param  array<string, mixed>  $serialized
+ * @return array<string, mixed>
+ */
+function contractItem(array $serialized, string $key): array
+{
+    /** @var array<int, array<string, mixed>> $items */
+    $items = $serialized['items'];
+
+    foreach ($items as $item) {
+        if ($item['key'] === $key) {
+            return $item;
+        }
+    }
+
+    throw new RuntimeException("The serialized Evaluation contract is missing item [{$key}].");
+}
+
+/**
+ * A fixture that populates every branch of the contract at once: a
+ * governed FeeRule projection, an office charge item with provenance, a
+ * recorded Treasury counter-check, and a prepared Assessment.
+ *
+ * @return array{item: BusinessPermitEvaluationItem, officer: User, serialized: array<string, mixed>}
+ */
+function fullyPopulatedContract(): array
+{
+    $fixture = contractFixture();
+    FeeRule::factory()->create([
+        'code' => 'CONTRACT-BASE',
+        'name' => 'Contract fixture base proposal',
+        'legal_basis' => 'Contract fixture ordinance reference',
+    ]);
+    $officer = User::factory()->create();
+    $item = app(DefineBusinessPermitEvaluationItem::class)->handle(
+        $fixture['evaluation'],
+        'engineering.charge',
+        BusinessPermitEvaluationItemType::Charge,
+        'engineering',
+        true,
+        true,
+        BusinessPermitEvaluationApplicability::Applicable,
+        ['amount_cents' => 12_500, 'inspection' => ['required' => false, 'completed' => false]],
+        BusinessPermitEvaluationSource::GovernedOfficeProcedure,
+        $fixture['actor'],
+        'Contract fixture office proposal.',
+        ['label' => 'Engineering evaluation charge', 'authorized_actor_id' => $officer->id],
+    );
+    $version = $fixture['evaluation']->fresh()->currentVersion;
+    app(CompleteBusinessPermitEvaluationResponsibility::class)->handle(
+        $item,
+        $officer,
+        BusinessPermitEvaluationApplicability::Applicable,
+        ['amount_cents' => 12_500],
+        BusinessPermitEvaluationSource::GovernedOfficeProcedure,
+        'Contract fixture office confirmation.',
+        $version->sequence,
+        $version->fingerprint,
+        'contract-serialization-confirm',
+    );
+    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($fixture['evaluation']->fresh(), $fixture['actor']);
+    app(CreateAssessmentForPermitApplication::class)->handle($fixture['application']->fresh(), $fixture['actor']);
+
+    return [
+        'item' => $item,
+        'officer' => $officer,
+        'serialized' => app(DescribeBusinessPermitEvaluation::class)
+            ->handle($fixture['evaluation']->fresh(), $officer, 'internal')
+            ->toArray(),
+    ];
+}
+
+it('serializes the complete typed contract, including every nested Data object key', function () {
+    $context = fullyPopulatedContract();
+    $data = $context['serialized'];
+    $keys = evaluationContractKeys();
+    $chargeItem = contractItem($data, 'engineering.charge');
+
+    expect(array_keys($data))->toBe($keys['root'])
+        ->and(array_keys($data['version']))->toBe($keys['version'])
+        ->and(array_keys($data['version']['treasury_counter_check']))->toBe($keys['treasury_counter_check'])
+        ->and(array_keys($data['application']))->toBe($keys['application'])
+        ->and($data['applicant_declaration'])->not->toBeEmpty()
+        ->and(array_keys($data['applicant_declaration'][0]))->toBe($keys['applicant_declaration'])
+        ->and($data['municipal_resolved_lines'])->not->toBeEmpty()
+        ->and(array_keys($data['municipal_resolved_lines'][0]))->toBe($keys['municipal_resolved_lines'])
+        ->and($data['items'])->not->toBeEmpty()
+        ->and($data['projected_charges'])->not->toBeEmpty()
+        ->and(array_keys($data['projected_charges'][0]))->toBe($keys['projected_charges'])
+        ->and(array_keys($data['readiness']))->toBe($keys['readiness'])
+        ->and(array_keys($data['readiness']['commissioned']))->toBe($keys['readiness_outcome'])
+        ->and(array_keys($data['readiness']['provisional_uat']))->toBe($keys['readiness_outcome'])
+        ->and($data['latest_assessment'])->not->toBeNull()
+        ->and(array_keys($data['latest_assessment']))->toBe($keys['latest_assessment']);
+
+    /** @var array<int, array<string, mixed>> $items */
+    $items = $data['items'];
+
+    foreach ($items as $item) {
+        expect(array_keys($item))->toBe($keys['items']);
+    }
+
+    /** @var array<int, array<string, mixed>> $history */
+    $history = $chargeItem['history'];
+
+    expect($history)->not->toBeEmpty()
+        ->and(array_keys($history[0]))->toBe($keys['history']);
+});
+
+it('keeps the serialized contract value types stable without freezing presentation copy', function () {
+    $context = fullyPopulatedContract();
+    $data = $context['serialized'];
+    $chargeItem = contractItem($data, 'engineering.charge');
+
+    expect($data['id'])->toBeInt()
+        ->and($data['version']['sequence'])->toBeInt()
+        ->and($data['version']['fingerprint'])->toBeString()
+        ->and(mb_strlen((string) $data['version']['fingerprint']))->toBe(64)
+        ->and($data['version']['fingerprint_current'])->toBeTrue()
+        ->and($data['status_label'])->toBeString()
+        ->and(mb_strlen((string) $data['status_label']))->toBeGreaterThan(0)
+        ->and($data['current_evaluated_amount_cents'])->toBeInt()
+        ->and($data['pricing_issues'])->toBeArray()
+        ->and($data['readiness']['commissioned']['ready'])->toBeBool()
+        ->and($data['readiness']['commissioned']['issues'])->toBeArray()
+        ->and($data['my_item_ids'])->toContain($context['item']->id)
+        ->and($data['financial_lock'])->toBeFalse()
+        ->and($data['lens'])->toBe('internal')
+        ->and($data['latest_assessment']['consumes_current_evaluation'])->toBeTrue();
+
+    // The Board invariant: a system proposal and a resolved municipal value
+    // stay two separate serialized fields and are never collapsed.
+    expect($chargeItem['default_value'])->toBeArray()
+        ->and($chargeItem['resolved_value'])->toBeArray()
+        ->and($chargeItem['default_source_classification'])->toBe('governed_office_procedure')
+        ->and($chargeItem['resolution'])->toBe('resolved');
+});
+
+it('keeps the hand-maintained TypeScript mirror aligned with every serialized contract key', function () {
+    $mirror = file_get_contents(base_path('resources/js/types/business-permit-evaluation.ts'));
+
+    expect($mirror)->toBeString();
+
+    foreach (evaluationContractKeys() as $group => $groupKeys) {
+        foreach ($groupKeys as $key) {
+            expect(str_contains((string) $mirror, $key.':'))
+                ->toBeTrue("The TypeScript mirror is missing the [{$group}] contract field [{$key}].");
+        }
+    }
 });

@@ -15,9 +15,7 @@
  */
 
 export type EvaluationApplicability =
-    | 'applicable'
-    | 'not_applicable'
-    | 'undetermined';
+    'applicable' | 'not_applicable' | 'undetermined';
 
 export type EvaluationItemType = 'fact' | 'determination' | 'charge';
 
@@ -27,11 +25,7 @@ export type EvaluationLens = 'citizen' | 'internal';
  * `{ inspection: {...} }`, `{ line_of_business_ids: number[] }`); never
  * assume a fixed shape beyond what a specific item's `key` implies. */
 export type EvaluationValue =
-    | Record<string, unknown>
-    | string
-    | number
-    | boolean
-    | null;
+    Record<string, unknown> | string | number | boolean | null;
 
 export type EvaluationRevision = {
     version_sequence: number;

@@ -5,6 +5,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    applicabilityLabel,
+    inspectionModeLabels,
+    itemTypeLabel,
+    officeLabel,
+    revisionActionLabel,
+    sourceLabel,
+} from '@/lib/evaluationPresentation';
 import type {
     EvaluationApplicability as Applicability,
     EvaluationItem,
@@ -66,22 +74,6 @@ function dateTime(value: string | null): string {
         dateStyle: 'medium',
         timeStyle: 'short',
     }).format(new Date(value));
-}
-
-function plainLabel(value: string | null): string {
-    if (!value) {
-        return 'Not recorded';
-    }
-
-    const labels: Record<string, string> = {
-        provisional_uat: 'Provisional UAT',
-        accepted_municipal_authority: 'Accepted municipal source',
-        awaiting_responsible_confirmation: 'Awaiting responsible confirmation',
-        not_applicable: 'Not Applicable',
-        document_review: 'Document review',
-    };
-
-    return labels[value] ?? value.replaceAll('_', ' ');
 }
 
 function amountFromValue(value: EvaluationValue): string | null {
@@ -178,7 +170,7 @@ function displayValue(value: EvaluationValue): string {
 function itemStatus(): string {
     if (props.item.resolution === 'resolved') {
         return props.item.applicability === 'not_applicable'
-            ? 'Not Applicable'
+            ? 'Not applicable'
             : 'Complete';
     }
 
@@ -186,7 +178,7 @@ function itemStatus(): string {
         return 'Superseded';
     }
 
-    return `Awaiting ${plainLabel(props.item.responsible_party)}`;
+    return `Awaiting ${officeLabel(props.item.responsible_party)}`;
 }
 </script>
 
@@ -202,11 +194,11 @@ function itemStatus(): string {
                 <div class="flex flex-wrap items-center gap-2">
                     <h3 class="font-semibold break-words">{{ item.label }}</h3>
                     <Badge variant="outline">{{
-                        plainLabel(item.item_type)
+                        itemTypeLabel(item.item_type)
                     }}</Badge>
                 </div>
                 <p class="mt-1 text-sm text-muted-foreground">
-                    {{ plainLabel(item.responsible_party) }} ·
+                    {{ officeLabel(item.responsible_party) }} ·
                     {{ item.is_required ? 'Required' : 'Supporting' }}
                 </p>
             </div>
@@ -228,7 +220,7 @@ function itemStatus(): string {
                     {{ displayValue(item.default_value) }}
                 </p>
                 <p class="mt-1 text-xs text-muted-foreground">
-                    {{ plainLabel(item.default_source_classification) }}
+                    {{ sourceLabel(item.default_source_classification) }}
                 </p>
             </div>
             <div class="rounded-lg bg-primary/5 p-3">
@@ -238,12 +230,12 @@ function itemStatus(): string {
                 <p class="mt-1 font-medium">
                     {{
                         item.applicability === 'not_applicable'
-                            ? 'Not Applicable'
+                            ? 'Not applicable'
                             : displayValue(item.resolved_value)
                     }}
                 </p>
                 <p class="mt-1 text-xs text-muted-foreground">
-                    {{ plainLabel(item.source_classification) }}
+                    {{ sourceLabel(item.source_classification) }}
                 </p>
             </div>
         </div>
@@ -263,7 +255,7 @@ function itemStatus(): string {
             <fieldset class="grid gap-4">
                 <legend class="font-semibold">
                     Record
-                    {{ plainLabel(item.responsible_party) }} determination
+                    {{ officeLabel(item.responsible_party) }} determination
                 </legend>
 
                 <div class="grid gap-2">
@@ -276,8 +268,8 @@ function itemStatus(): string {
                         class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                     >
                         <option value="applicable">Applicable</option>
-                        <option value="not_applicable">Not Applicable</option>
-                        <option value="undetermined">Undetermined</option>
+                        <option value="not_applicable">Not applicable</option>
+                        <option value="undetermined">Not yet determined</option>
                     </select>
                 </div>
 
@@ -317,12 +309,12 @@ function itemStatus(): string {
                             class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                         >
                             <option value="" disabled>Select mode</option>
-                            <option value="physical">
-                                Physical inspection
-                            </option>
-                            <option value="virtual">Virtual inspection</option>
-                            <option value="document_review">
-                                Document review
+                            <option
+                                v-for="(label, mode) in inspectionModeLabels"
+                                :key="mode"
+                                :value="mode"
+                            >
+                                {{ label }}
                             </option>
                         </select>
                     </div>
@@ -392,9 +384,8 @@ function itemStatus(): string {
                     class="text-sm"
                 >
                     <p class="font-medium">
-                        {{ plainLabel(revision.action) }} · Evaluation v{{
-                            revision.version_sequence
-                        }}
+                        {{ revisionActionLabel(revision.action) }} · Evaluation
+                        v{{ revision.version_sequence }}
                     </p>
                     <p class="mt-0.5 text-muted-foreground">
                         {{ revision.actor_name ?? 'Recorded actor' }} ·
@@ -404,8 +395,8 @@ function itemStatus(): string {
                         {{ revision.reason }}
                     </p>
                     <p class="mt-1 text-xs text-muted-foreground">
-                        {{ plainLabel(revision.applicability) }} ·
-                        {{ plainLabel(revision.source_classification) }}
+                        {{ applicabilityLabel(revision.applicability) }} ·
+                        {{ sourceLabel(revision.source_classification) }}
                     </p>
                 </li>
             </ol>
