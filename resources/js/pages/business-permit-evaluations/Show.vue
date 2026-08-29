@@ -20,7 +20,7 @@ import {
     ShieldCheck,
     UserRound,
 } from '@lucide/vue';
-import { computed, reactive } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { correctLinesOfBusiness as correctCitizenLinesOfBusiness } from '@/actions/App/Http/Controllers/Citizen/BusinessPermitEvaluationController';
 import {
     confirmResponsibility,
@@ -30,130 +30,35 @@ import {
     refresh,
 } from '@/actions/App/Http/Controllers/Staff/BusinessPermitEvaluationController';
 import { show as showFeeRule } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
-import { store as prepareAssessment } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
+import {
+    show as showAssessment,
+    store as prepareAssessment,
+} from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import EvaluationItemCard from '@/components/evaluations/EvaluationItemCard.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
-import type { BreadcrumbItem } from '@/types';
+import type {
+    BreadcrumbItem,
+    BusinessPermitEvaluationData,
+    EvaluationApplicability,
+    EvaluationCapabilities,
+    EvaluationItem,
+    EvaluationLineOfBusinessOption,
+} from '@/types';
 
-type Applicability = 'applicable' | 'not_applicable' | 'undetermined';
-type EvaluationValue =
-    Record<string, unknown> | string | number | boolean | null;
-
-type Revision = {
-    version_sequence: number;
-    action: string;
-    applicability: Applicability;
-    value: EvaluationValue;
-    source_classification: string | null;
-    actor_name: string | null;
-    reason: string | null;
-    occurred_at: string | null;
-};
-
-type EvaluationItem = {
-    id: number;
-    key: string;
-    label: string;
-    item_type: 'fact' | 'determination' | 'charge';
-    responsible_party: string;
-    is_required: boolean;
-    requires_confirmation: boolean;
-    is_mine: boolean;
-    applicability: Applicability;
-    resolution: string;
-    action: string | null;
-    default_value: EvaluationValue;
-    default_source_classification: string | null;
-    resolved_value: EvaluationValue;
-    source_classification: string | null;
-    reason: string | null;
-    occurred_at: string | null;
-    inspection_required: boolean;
-    history: Revision[];
-};
-
-type Evaluation = {
-    id: number;
-    version: {
-        id: number;
-        sequence: number;
-        fingerprint: string;
-        fingerprint_current: boolean;
-        treasury_counter_check: {
-            checked_at: string;
-            checked_by: string;
-            reason: string | null;
-            evidence_provenance: string | null;
-        } | null;
-    };
-    status_label: string;
-    application: {
-        id: number;
-        application_number: string | null;
-        tracking_reference: string | null;
-        business_name: string;
-        owner_name: string;
-        type: string;
-        year: number;
-    };
-    applicant_declaration: {
-        line_of_business_id: number;
-        line_of_business_name: string | null;
-        declared_gross_sales_cents?: number | null;
-        capital_investment_cents?: number | null;
-        quantity?: number | null;
-    }[];
-    municipal_resolved_lines: { id: number; name: string | null }[];
-    items: EvaluationItem[];
-    projected_charges: {
-        key: string;
-        fee_rule_id: number;
-        code: string;
-        name: string;
-        amount_cents: number;
-        basis: string;
-        basis_amount_cents: number | null;
-        legal_basis: string | null;
-        source_classification: string;
-    }[];
-    current_evaluated_amount_cents: number;
-    pricing_issues: string[];
-    readiness: {
-        commissioned: { ready: boolean; issues: string[] };
-        provisional_uat: { ready: boolean; issues: string[] };
-    };
-    my_item_ids: number[];
-    latest_assessment: {
-        id: number;
-        sequence: number;
-        total_amount_cents: number;
-        superseded: boolean;
-        decision: string | null;
-        evaluation_version_id: number | null;
-        evaluation_fingerprint: string | null;
-        consumes_current_evaluation: boolean;
-    } | null;
-    financial_lock: boolean;
-    lens: 'citizen' | 'internal';
-};
-
-type LineOfBusiness = { id: number; code: string | null; name: string };
+type Evaluation = BusinessPermitEvaluationData;
+type LineOfBusiness = EvaluationLineOfBusinessOption;
 
 const props = defineProps<{
     evaluation: Evaluation | null;
     application: { id: number; application_number: string | null };
     lineOfBusinesses: LineOfBusiness[];
-    can: {
-        initialize: boolean;
-        contribute: boolean;
-        counter_check: boolean;
-        correct_lines_of_business: boolean;
-        prepare_assessment: boolean;
-    };
+    can: EvaluationCapabilities;
 }>();
+
+const pendingAction = ref<string | null>(null);
 
 const page = usePage();
 const evaluationError = computed(() =>
@@ -179,7 +84,7 @@ const lineCorrectionReason = reactive({ value: '' });
 const counterCheckReason = reactive({ value: '' });
 
 type ItemDraft = {
-    applicability: Applicability;
+    applicability: EvaluationApplicability;
     amount: string;
     reason: string;
     inspectionMode: '' | 'physical' | 'virtual' | 'document_review';
@@ -300,6 +205,21 @@ function toggleLine(id: number): void {
     }
 }
 
+/**
+ * A single in-flight-mutation guard shared by every action on this page.
+ * Buttons disable themselves while their own key is pending, which also
+ * prevents accidentally firing a second mutation (e.g. a counter-check
+ * and a line correction) against the same Evaluation version at once.
+ */
+function runOnce(key: string, action: () => void): void {
+    if (pendingAction.value !== null) {
+        return;
+    }
+
+    pendingAction.value = key;
+    action();
+}
+
 function submitLineCorrection(): void {
     if (
         !props.evaluation ||
@@ -310,18 +230,25 @@ function submitLineCorrection(): void {
         return;
     }
 
-    const form = useForm({
-        line_of_business_ids: [...selectedLineIds],
-        reason: lineCorrectionReason.value,
-        expected_version_sequence: props.evaluation.version.sequence,
-        expected_fingerprint: props.evaluation.version.fingerprint,
-        idempotency_key: crypto.randomUUID(),
+    runOnce('line-correction', () => {
+        const form = useForm({
+            line_of_business_ids: [...selectedLineIds],
+            reason: lineCorrectionReason.value,
+            expected_version_sequence: props.evaluation!.version.sequence,
+            expected_fingerprint: props.evaluation!.version.fingerprint,
+            idempotency_key: crypto.randomUUID(),
+        });
+        const action =
+            props.evaluation!.lens === 'citizen'
+                ? correctCitizenLinesOfBusiness(props.application.id)
+                : correctStaffLinesOfBusiness(props.application.id);
+        form.post(action.url, {
+            preserveScroll: true,
+            onFinish: () => {
+                pendingAction.value = null;
+            },
+        });
     });
-    const action =
-        props.evaluation.lens === 'citizen'
-            ? correctCitizenLinesOfBusiness(props.application.id)
-            : correctStaffLinesOfBusiness(props.application.id);
-    form.post(action.url, { preserveScroll: true });
 }
 
 function submitResponsibility(item: EvaluationItem, draft: ItemDraft): void {
@@ -345,23 +272,28 @@ function submitResponsibility(item: EvaluationItem, draft: ItemDraft): void {
         return;
     }
 
-    const amountCents =
-        draft.amount.trim() === ''
-            ? null
-            : Math.round(Number(draft.amount) * 100);
-    const form = useForm({
-        expected_version_sequence: props.evaluation.version.sequence,
-        expected_fingerprint: props.evaluation.version.fingerprint,
-        idempotency_key: crypto.randomUUID(),
-        applicability: draft.applicability,
-        amount_cents: amountCents,
-        reason: draft.reason || null,
-        inspection_mode: draft.inspectionMode || null,
-        inspection_completed: draft.inspectionCompleted,
-        findings: draft.findings || null,
-    });
-    form.post(confirmResponsibility([props.application.id, item.id]).url, {
-        preserveScroll: true,
+    runOnce(`item-${item.id}`, () => {
+        const amountCents =
+            draft.amount.trim() === ''
+                ? null
+                : Math.round(Number(draft.amount) * 100);
+        const form = useForm({
+            expected_version_sequence: props.evaluation!.version.sequence,
+            expected_fingerprint: props.evaluation!.version.fingerprint,
+            idempotency_key: crypto.randomUUID(),
+            applicability: draft.applicability,
+            amount_cents: amountCents,
+            reason: draft.reason || null,
+            inspection_mode: draft.inspectionMode || null,
+            inspection_completed: draft.inspectionCompleted,
+            findings: draft.findings || null,
+        });
+        form.post(confirmResponsibility([props.application.id, item.id]).url, {
+            preserveScroll: true,
+            onFinish: () => {
+                pendingAction.value = null;
+            },
+        });
     });
 }
 
@@ -375,11 +307,18 @@ function submitCounterCheck(): void {
         return;
     }
 
-    useForm({
-        reason: counterCheckReason.value || null,
-        expected_version_sequence: props.evaluation.version.sequence,
-        expected_fingerprint: props.evaluation.version.fingerprint,
-    }).post(counterCheck(props.application.id).url, { preserveScroll: true });
+    runOnce('counter-check', () => {
+        useForm({
+            reason: counterCheckReason.value || null,
+            expected_version_sequence: props.evaluation!.version.sequence,
+            expected_fingerprint: props.evaluation!.version.fingerprint,
+        }).post(counterCheck(props.application.id).url, {
+            preserveScroll: true,
+            onFinish: () => {
+                pendingAction.value = null;
+            },
+        });
+    });
 }
 
 function submitRefresh(): void {
@@ -387,10 +326,17 @@ function submitRefresh(): void {
         return;
     }
 
-    useForm({
-        expected_version_sequence: props.evaluation.version.sequence,
-        expected_fingerprint: props.evaluation.version.fingerprint,
-    }).post(refresh(props.application.id).url, { preserveScroll: true });
+    runOnce('refresh', () => {
+        useForm({
+            expected_version_sequence: props.evaluation!.version.sequence,
+            expected_fingerprint: props.evaluation!.version.fingerprint,
+        }).post(refresh(props.application.id).url, {
+            preserveScroll: true,
+            onFinish: () => {
+                pendingAction.value = null;
+            },
+        });
+    });
 }
 
 function submitPrepareAssessment(): void {
@@ -403,12 +349,17 @@ function submitPrepareAssessment(): void {
         return;
     }
 
-    useForm({
-        evaluation_version_id: props.evaluation.version.id,
-        evaluation_fingerprint: props.evaluation.version.fingerprint,
-        idempotency_key: crypto.randomUUID(),
-    }).post(prepareAssessment(props.application.id).url, {
-        preserveScroll: true,
+    runOnce('prepare-assessment', () => {
+        useForm({
+            evaluation_version_id: props.evaluation!.version.id,
+            evaluation_fingerprint: props.evaluation!.version.fingerprint,
+            idempotency_key: crypto.randomUUID(),
+        }).post(prepareAssessment(props.application.id).url, {
+            preserveScroll: true,
+            onFinish: () => {
+                pendingAction.value = null;
+            },
+        });
     });
 }
 </script>
@@ -906,10 +857,17 @@ function submitPrepareAssessment(): void {
                                     <Button
                                         type="submit"
                                         class="mt-4 w-full sm:w-auto"
-                                        :disabled="selectedLineIds.length === 0"
+                                        :disabled="
+                                            selectedLineIds.length === 0 ||
+                                            pendingAction !== null
+                                        "
                                     >
                                         <RefreshCw aria-hidden="true" />
-                                        Record correction and re-evaluate
+                                        {{
+                                            pendingAction === 'line-correction'
+                                                ? 'Recording…'
+                                                : 'Record correction and re-evaluate'
+                                        }}
                                     </Button>
                                 </fieldset>
                             </form>
@@ -976,6 +934,7 @@ function submitPrepareAssessment(): void {
                                             can.contribute &&
                                             !evaluation.financial_lock
                                         "
+                                        :submitting="pendingAction === `item-${item.id}`"
                                         @submit="submitResponsibility"
                                     />
                                 </div>
@@ -987,6 +946,7 @@ function submitPrepareAssessment(): void {
                                     :key="item.id"
                                     :item="item"
                                     :editable="false"
+                                    :submitting="false"
                                     @submit="submitResponsibility"
                                 />
                             </div>
@@ -1181,9 +1141,15 @@ function submitPrepareAssessment(): void {
                                     rows="3"
                                     class="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                                 />
-                                <Button type="submit" class="mt-3 w-full"
-                                    ><ShieldCheck aria-hidden="true" />Confirm
-                                    exact-version counter-check</Button
+                                <Button
+                                    type="submit"
+                                    class="mt-3 w-full"
+                                    :disabled="pendingAction !== null"
+                                    ><ShieldCheck aria-hidden="true" />{{
+                                        pendingAction === 'counter-check'
+                                            ? 'Confirming…'
+                                            : 'Confirm exact-version counter-check'
+                                    }}</Button
                                 >
                             </form>
                         </section>
@@ -1222,13 +1188,17 @@ function submitPrepareAssessment(): void {
                             <Button
                                 class="mt-4 w-full"
                                 :disabled="
-                                    !readiness?.ready || currentAssessmentExists
+                                    !readiness?.ready ||
+                                    currentAssessmentExists ||
+                                    pendingAction !== null
                                 "
                                 @click="submitPrepareAssessment"
                                 ><PhilippinePeso aria-hidden="true" />{{
                                     currentAssessmentExists
                                         ? 'Assessment already prepared'
-                                        : 'Prepare Assessment'
+                                        : pendingAction === 'prepare-assessment'
+                                          ? 'Preparing…'
+                                          : 'Prepare Assessment'
                                 }}</Button
                             >
                         </section>
@@ -1244,7 +1214,65 @@ function submitPrepareAssessment(): void {
                                 Assessment traceability
                             </h2>
                             <template v-if="evaluation.latest_assessment">
+                                <Link
+                                    v-if="evaluation.lens === 'internal'"
+                                    :href="showAssessment(evaluation.latest_assessment.id)"
+                                    class="mt-3 flex items-start gap-3 rounded-xl bg-muted/40 p-3 outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+                                >
+                                    <CheckCircle2
+                                        v-if="
+                                            evaluation.latest_assessment
+                                                .consumes_current_evaluation &&
+                                            !evaluation.latest_assessment
+                                                .superseded
+                                        "
+                                        class="mt-0.5 size-5 shrink-0 text-emerald-600"
+                                        aria-hidden="true"
+                                    />
+                                    <AlertTriangle
+                                        v-else
+                                        class="mt-0.5 size-5 shrink-0 text-amber-600"
+                                        aria-hidden="true"
+                                    />
+                                    <div class="min-w-0 flex-1">
+                                        <p class="font-medium">
+                                            Assessment #{{
+                                                evaluation.latest_assessment
+                                                    .sequence
+                                            }}
+                                        </p>
+                                        <p
+                                            class="mt-1 text-sm text-muted-foreground"
+                                        >
+                                            {{
+                                                money(
+                                                    evaluation.latest_assessment
+                                                        .total_amount_cents,
+                                                )
+                                            }}
+                                        </p>
+                                        <p
+                                            class="mt-1 text-xs text-muted-foreground"
+                                        >
+                                            {{
+                                                evaluation.latest_assessment
+                                                    .superseded
+                                                    ? 'Superseded after Evaluation changed'
+                                                    : evaluation
+                                                            .latest_assessment
+                                                            .consumes_current_evaluation
+                                                      ? 'Consumes the current exact Evaluation'
+                                                      : 'Consumes an earlier Evaluation version'
+                                            }}
+                                        </p>
+                                    </div>
+                                    <ArrowRight
+                                        class="mt-1 size-4 shrink-0 text-muted-foreground"
+                                        aria-hidden="true"
+                                    />
+                                </Link>
                                 <div
+                                    v-else
                                     class="mt-3 flex items-start gap-3 rounded-xl bg-muted/40 p-3"
                                 >
                                     <CheckCircle2
@@ -1277,20 +1305,6 @@ function submitPrepareAssessment(): void {
                                                     evaluation.latest_assessment
                                                         .total_amount_cents,
                                                 )
-                                            }}
-                                        </p>
-                                        <p
-                                            class="mt-1 text-xs text-muted-foreground"
-                                        >
-                                            {{
-                                                evaluation.latest_assessment
-                                                    .superseded
-                                                    ? 'Superseded after Evaluation changed'
-                                                    : evaluation
-                                                            .latest_assessment
-                                                            .consumes_current_evaluation
-                                                      ? 'Consumes the current exact Evaluation'
-                                                      : 'Consumes an earlier Evaluation version'
                                             }}
                                         </p>
                                     </div>
@@ -1370,9 +1384,13 @@ function submitPrepareAssessment(): void {
                                     "
                                     variant="outline"
                                     class="mt-4 w-full"
+                                    :disabled="pendingAction !== null"
                                     @click="submitRefresh"
-                                    ><RefreshCw aria-hidden="true" />Refresh
-                                    dependencies</Button
+                                    ><RefreshCw aria-hidden="true" />{{
+                                        pendingAction === 'refresh'
+                                            ? 'Refreshing…'
+                                            : 'Refresh dependencies'
+                                    }}</Button
                                 >
                             </div>
                         </details>

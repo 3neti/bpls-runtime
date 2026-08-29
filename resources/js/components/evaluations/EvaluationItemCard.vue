@@ -5,43 +5,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-
-type Applicability = 'applicable' | 'not_applicable' | 'undetermined';
-type EvaluationValue =
-    Record<string, unknown> | string | number | boolean | null;
-
-type Revision = {
-    version_sequence: number;
-    action: string;
-    applicability: Applicability;
-    value: EvaluationValue;
-    source_classification: string | null;
-    actor_name: string | null;
-    reason: string | null;
-    occurred_at: string | null;
-};
-
-type EvaluationItem = {
-    id: number;
-    key: string;
-    label: string;
-    item_type: 'fact' | 'determination' | 'charge';
-    responsible_party: string;
-    is_required: boolean;
-    requires_confirmation: boolean;
-    is_mine: boolean;
-    applicability: Applicability;
-    resolution: string;
-    action: string | null;
-    default_value: EvaluationValue;
-    default_source_classification: string | null;
-    resolved_value: EvaluationValue;
-    source_classification: string | null;
-    reason: string | null;
-    occurred_at: string | null;
-    inspection_required: boolean;
-    history: Revision[];
-};
+import type {
+    EvaluationApplicability as Applicability,
+    EvaluationItem,
+    EvaluationValue,
+} from '@/types';
 
 type Draft = {
     applicability: Applicability;
@@ -52,7 +20,11 @@ type Draft = {
     findings: string;
 };
 
-const props = defineProps<{ item: EvaluationItem; editable: boolean }>();
+const props = defineProps<{
+    item: EvaluationItem;
+    editable: boolean;
+    submitting: boolean;
+}>();
 const emit = defineEmits<{ submit: [item: EvaluationItem, draft: Draft] }>();
 
 const draft = reactive<Draft>({
@@ -389,9 +361,13 @@ function itemStatus(): string {
                     />
                 </div>
 
-                <Button type="submit" class="w-full sm:w-auto">
+                <Button
+                    type="submit"
+                    class="w-full sm:w-auto"
+                    :disabled="submitting"
+                >
                     <ClipboardCheck aria-hidden="true" />
-                    Record determination
+                    {{ submitting ? 'Recording…' : 'Record determination' }}
                 </Button>
             </fieldset>
         </form>
