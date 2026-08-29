@@ -17,6 +17,14 @@ import {
     Upload,
 } from '@lucide/vue';
 import { watch } from 'vue';
+import InputError from '@/components/InputError.vue';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
+import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue';
+import type { BreadcrumbItem } from '@/types';
 import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Citizen/PaymentScheduleController';
 import {
     create,
@@ -29,14 +37,6 @@ import {
     download as downloadDocument,
     store as storeDocument,
 } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationDocumentController';
-import InputError from '@/components/InputError.vue';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
-import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue';
-import type { BreadcrumbItem } from '@/types';
 
 type PermitApplication = {
     id: number;
@@ -414,7 +414,9 @@ function blockerLabel(blocker: string): string {
                 <template #actions>
                     <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                         <Button
-                            v-if="permitApplication.business_permit_evaluation_url"
+                            v-if="
+                                permitApplication.business_permit_evaluation_url
+                            "
                             as-child
                             variant="outline"
                         >

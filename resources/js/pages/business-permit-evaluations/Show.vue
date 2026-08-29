@@ -21,6 +21,12 @@ import {
     UserRound,
 } from '@lucide/vue';
 import { computed, reactive } from 'vue';
+import EvaluationItemCard from '@/components/evaluations/EvaluationItemCard.vue';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import AppLayout from '@/layouts/AppLayout.vue';
+import type { BreadcrumbItem } from '@/types';
 import { correctLinesOfBusiness as correctCitizenLinesOfBusiness } from '@/actions/App/Http/Controllers/Citizen/BusinessPermitEvaluationController';
 import {
     confirmResponsibility,
@@ -31,12 +37,6 @@ import {
 } from '@/actions/App/Http/Controllers/Staff/BusinessPermitEvaluationController';
 import { show as showFeeRule } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
 import { store as prepareAssessment } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
-import EvaluationItemCard from '@/components/evaluations/EvaluationItemCard.vue';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import AppLayout from '@/layouts/AppLayout.vue';
-import type { BreadcrumbItem } from '@/types';
 
 type Applicability = 'applicable' | 'not_applicable' | 'undetermined';
 type EvaluationValue =
