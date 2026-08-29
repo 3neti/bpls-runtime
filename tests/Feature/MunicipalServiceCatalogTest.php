@@ -268,6 +268,43 @@ it('refuses coherent exact publication when applicable rule versions overlap', f
         ->toBeTrue();
 });
 
+it('exposes recorded Line of Business schedules to staff only, scoped to the matching application type', function () {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+
+    $internalServices = collect(municipalPriceList(internal: true)['services']);
+    $renewal = $internalServices->firstWhere('code', 'renewal');
+    $newBusinessPermit = $internalServices->firstWhere('code', 'new_business_permit');
+
+    $schedule = collect($renewal['internal']['line_of_business_pricing'])
+        ->sole(fn (array $rule): bool => $rule['code'] === 'MRC-2A-02-B-RETAIL-BUSINESS-TAX');
+
+    expect($schedule['line_of_business']['name'])
+        ->toBe('Wholesalers, Retailers, Dealers or Distributors')
+        ->and($schedule['source_classification'])->toBe('municipal_confirmation_required')
+        ->and($schedule['publication_status'])->toBe('not_published_exact')
+        ->and($schedule['range_count'])->toBe(23)
+        ->and($schedule['ranges'])->toHaveCount(23)
+        ->and($schedule['ranges'][0])
+        ->min_basis_cents->toBe(0)
+        ->amount_cents->toBe(2_266)
+        ->and($newBusinessPermit['internal']['line_of_business_pricing'])->toBeEmpty();
+
+    $publicPayload = json_encode(municipalPriceList());
+
+    expect($publicPayload)->not->toContain('line_of_business_pricing');
+});
+
+it('surfaces the recorded policy note for a ceiling amount so it is not shown as an exact figure', function () {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+
+    $newService = collect(municipalPriceList(internal: true)['services'])->firstWhere('code', 'new_business_permit');
+    $registrationPlate = collect($newService['internal']['rules'])
+        ->sole(fn (array $rule): bool => $rule['code'] === 'MRC-3A-05-BUSINESS-REGISTRATION-PLATE');
+
+    expect($registrationPlate['policy_note'])
+        ->toBe('Ordinance states not to exceed PHP 300.00; production configuration must confirm the exact charged amount.');
+});
+
 it('serves the public catalog read-only and authorizes the internal catalog through existing generic access', function () {
     $this->seed(RevenueCodeFeeCatalogSeeder::class);
 

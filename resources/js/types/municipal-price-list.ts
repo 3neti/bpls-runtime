@@ -27,16 +27,33 @@ export type ConfirmedCharge = {
     traceability: PriceTraceability;
 };
 
+export type FeeRuleRangePreview = {
+    min_basis_cents: number;
+    max_basis_cents: number | null;
+    amount_cents: number;
+    rate_basis_points: number | null;
+};
+
+export type LineOfBusinessReference = {
+    id: number;
+    code: string | null;
+    name: string;
+};
+
 export type InternalFeeRule = {
     id: number;
     code: string;
     name: string;
     category: string;
     scope: string;
+    line_of_business: LineOfBusinessReference | null;
     calculation_type: string;
     basis: string;
     recorded_amount_cents: number | null;
     rate_basis_points: number | null;
+    range_count: number;
+    ranges: FeeRuleRangePreview[];
+    policy_note: string | null;
     effective_from: string;
     effective_until: string | null;
     legal_basis: string | null;
@@ -92,6 +109,7 @@ export type MunicipalServiceOffering = {
         selected_rule_count: number;
         ambiguous_rule_keys: string[];
         rules: InternalFeeRule[];
+        line_of_business_pricing: InternalFeeRule[];
         office_determined: {
             status: 'office_determined';
             display: string;

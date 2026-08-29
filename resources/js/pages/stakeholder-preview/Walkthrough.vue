@@ -18,16 +18,26 @@ const steps: Record<StakeholderPreviewPersona['key'], string[]> = {
         'Observe where the workflow stops at authority review.',
     ],
     bplo: [
-        'Open All Applications and the assessment work queue.',
-        'Inspect the amount prepared by the Assessment Officer, supporting documents, and clearances.',
+        'Open All Applications and coordinate clearances for a received application.',
+        'Inspect Taxes & Fees and confirm what the Assessment Officer will select.',
         'Confirm that municipal release is still shown as not confirmed.',
     ],
+    assessment_officer: [
+        'Open Assessment Work and consolidate the exact assessment for a received application.',
+        'Inspect the confirmed and recorded rules that make up the amount.',
+        'Prepare its payment schedule for Treasurer approval.',
+    ],
     treasury: [
-        'Open Assessment Work and inspect the exact amount approved by the Municipal Treasurer.',
-        'Confirm the preparer and approving Treasurer are recorded separately.',
-        'Open Payment Schedules and inspect the paid schedule made available after approval.',
+        'Open Assessment Work and inspect the exact amount prepared by the Assessment Officer.',
+        'Approve the assessment amount and confirm the preparer and approver are recorded separately.',
+        'Open Payment Schedules and inspect the schedule made available after approval.',
         'Review its collection and receipt details.',
         'Open Daily Collections and Revenue Sources.',
+    ],
+    cashier: [
+        'Open Payment Schedules and locate an authorized, approved schedule.',
+        'Record the payment collection against that schedule.',
+        'Issue the official receipt and inspect its recorded detail.',
     ],
     management: [
         'Open the Report Catalog and representative management reports.',

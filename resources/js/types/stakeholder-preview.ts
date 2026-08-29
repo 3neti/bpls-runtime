@@ -2,7 +2,9 @@ export type StakeholderPreviewPersona = {
     key:
         | 'citizen'
         | 'bplo'
+        | 'assessment_officer'
         | 'treasury'
+        | 'cashier'
         | 'management'
         | 'engineering'
         | 'mpdo'

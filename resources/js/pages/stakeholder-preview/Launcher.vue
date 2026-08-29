@@ -2,40 +2,95 @@
 import { Head, Link, router } from '@inertiajs/vue3';
 import {
     ArrowRight,
-    Building2,
+    Banknote,
+    Calculator,
     ClipboardCheck,
+    Compass,
+    HardHat,
     Landmark,
+    Leaf,
+    MapPinned,
+    PackageCheck,
+    Scale,
     ShieldAlert,
+    Stethoscope,
     UserRound,
     UsersRound,
     WalletCards,
 } from '@lucide/vue';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import {
     enter,
     walkthrough,
 } from '@/actions/App/Http/Controllers/StakeholderPreviewController';
 import type { StakeholderPreviewPersona } from '@/types';
 
-defineProps<{
+const props = defineProps<{
     personas: StakeholderPreviewPersona[];
 }>();
 
 const entering = ref<string | null>(null);
 
-const personaIcons = {
+const personaIcons: Record<StakeholderPreviewPersona['key'], typeof UserRound> = {
     citizen: UserRound,
     bplo: ClipboardCheck,
+    assessment_officer: Calculator,
     treasury: WalletCards,
+    cashier: Banknote,
     management: UsersRound,
-    engineering: Building2,
-    mpdo: Building2,
-    assessor: Building2,
-    health: Building2,
-    menro: Building2,
+    engineering: HardHat,
+    mpdo: MapPinned,
+    assessor: Scale,
+    health: Stethoscope,
+    menro: Leaf,
     mayor_office: Landmark,
-    releasing: ClipboardCheck,
+    releasing: PackageCheck,
 };
+
+type PersonaGroup = {
+    title: string;
+    description: string;
+    keys: StakeholderPreviewPersona['key'][];
+};
+
+const personaGroups: PersonaGroup[] = [
+    {
+        title: 'Public',
+        description: 'The citizen-facing entry point into BPLS.',
+        keys: ['citizen'],
+    },
+    {
+        title: 'Front Office & Assessment',
+        description: 'Receive applications and prepare the exact assessment.',
+        keys: ['bplo', 'assessment_officer'],
+    },
+    {
+        title: 'Treasury & Collection',
+        description: 'Approve amounts, then collect and receipt payment.',
+        keys: ['treasury', 'cashier'],
+    },
+    {
+        title: 'Concerned Municipal Offices',
+        description: 'Review routed applications and submit office charges.',
+        keys: ['engineering', 'mpdo', 'assessor', 'health', 'menro'],
+    },
+    {
+        title: 'Leadership & Release',
+        description: 'Oversight, final review, and permit release.',
+        keys: ['management', 'mayor_office', 'releasing'],
+    },
+];
+
+const groupedPersonas = computed(() =>
+    personaGroups
+        .map((group) => ({
+            ...group,
+            personas: group.keys
+                .map((key) => props.personas.find((persona) => persona.key === key))
+                .filter((persona): persona is StakeholderPreviewPersona => persona !== undefined),
+        }))
+        .filter((group) => group.personas.length > 0),
+);
 
 function enterAs(persona: StakeholderPreviewPersona): void {
     entering.value = persona.key;
@@ -93,51 +148,66 @@ function enterAs(persona: StakeholderPreviewPersona): void {
                     :href="walkthrough()"
                     class="inline-flex w-fit items-center gap-2 rounded-lg border border-zinc-700 px-4 py-3 text-sm font-semibold outline-none hover:bg-zinc-900 focus-visible:ring-2 focus-visible:ring-amber-300"
                 >
-                    <Building2 class="size-4" aria-hidden="true" />
+                    <Compass class="size-4" aria-hidden="true" />
                     Open Quick Start
                 </Link>
             </header>
 
             <section
-                class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-                aria-label="Preview personas"
+                v-for="group in groupedPersonas"
+                :key="group.title"
+                class="space-y-4"
+                :aria-label="group.title"
             >
-                <article
-                    v-for="persona in personas"
-                    :key="persona.key"
-                    class="flex min-h-60 flex-col justify-between gap-7 rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl"
+                <div
+                    class="flex flex-wrap items-baseline justify-between gap-2 border-b border-zinc-800 pb-2"
                 >
-                    <div class="space-y-4">
-                        <component
-                            :is="personaIcons[persona.key]"
-                            class="size-7 text-amber-300"
-                            aria-hidden="true"
-                        />
-                        <div class="space-y-2">
-                            <h2 class="text-2xl font-semibold">
-                                {{ persona.label }}
-                            </h2>
-                            <p class="text-sm leading-6 text-zinc-300">
-                                {{ persona.description }}
-                            </p>
-                        </div>
-                    </div>
-                    <button
-                        type="button"
-                        class="inline-flex w-full items-center justify-between gap-3 rounded-lg bg-white px-4 py-3 text-sm font-bold text-zinc-950 outline-none hover:bg-amber-200 focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-wait disabled:opacity-60"
-                        :disabled="entering !== null"
-                        @click="enterAs(persona)"
+                    <h2 class="text-lg font-semibold text-white">
+                        {{ group.title }}
+                    </h2>
+                    <p class="text-sm text-zinc-400">
+                        {{ group.description }}
+                    </p>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <article
+                        v-for="persona in group.personas"
+                        :key="persona.key"
+                        class="flex min-h-56 flex-col justify-between gap-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl"
                     >
-                        <span>
-                            {{
-                                entering === persona.key
-                                    ? 'Entering…'
-                                    : `Enter as ${persona.label}`
-                            }}
-                        </span>
-                        <ArrowRight class="size-4" aria-hidden="true" />
-                    </button>
-                </article>
+                        <div class="space-y-4">
+                            <component
+                                :is="personaIcons[persona.key]"
+                                class="size-7 text-amber-300"
+                                aria-hidden="true"
+                            />
+                            <div class="space-y-2">
+                                <h3 class="text-xl font-semibold">
+                                    {{ persona.label }}
+                                </h3>
+                                <p class="text-sm leading-6 text-zinc-300">
+                                    {{ persona.description }}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            class="inline-flex w-full items-center justify-between gap-3 rounded-lg bg-white px-4 py-3 text-sm font-bold text-zinc-950 outline-none hover:bg-amber-200 focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-wait disabled:opacity-60"
+                            :disabled="entering !== null"
+                            @click="enterAs(persona)"
+                        >
+                            <span>
+                                {{
+                                    entering === persona.key
+                                        ? 'Entering…'
+                                        : `Enter as ${persona.label}`
+                                }}
+                            </span>
+                            <ArrowRight class="size-4" aria-hidden="true" />
+                        </button>
+                    </article>
+                </div>
             </section>
 
             <aside

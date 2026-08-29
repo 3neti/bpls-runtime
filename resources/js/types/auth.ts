@@ -16,8 +16,14 @@ export type Auth = {
     can_access_staff: boolean;
     can_access_citizen: boolean;
     can_view_permit_applications: boolean;
+    can_assess_permit_applications: boolean;
+    can_approve_assessments: boolean;
     can_view_payment_schedules: boolean;
+    can_prepare_payment_schedules: boolean;
+    can_view_collections: boolean;
+    can_record_collections: boolean;
     can_view_receipts: boolean;
+    can_issue_receipts: boolean;
     can_view_billing_groups: boolean;
     can_view_reports: boolean;
     can_view_fee_rules: boolean;
