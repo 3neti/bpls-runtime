@@ -14,17 +14,17 @@ done
 magick montage \
     "${asset_dir}/01-application-lodged-and-payable-current.png" \
     "${render_dir}/01-citizen-lodged-target.png" \
-    "${asset_dir}/04-concerned-office-queue-current.png" \
+    "${asset_dir}/audit-final-health-work-surface.png" \
     "${render_dir}/04-responsibility-work-queue-target.png" \
-    "${asset_dir}/05-concerned-office-evaluation-current.png" \
+    "${asset_dir}/audit-final-evaluation-responsibilities.png" \
     "${render_dir}/05-office-responsibility-target.png" \
     "${asset_dir}/07-assessment-officer-working-paper-current.png" \
     "${render_dir}/08-ready-for-assessment-target.png" \
-    "${asset_dir}/09-immutable-prepared-assessment-current.png" \
-    "${asset_dir}/10-treasury-counter-check-current.png" \
-    "${asset_dir}/11-municipal-treasurer-assessment-current.png" \
+    "${asset_dir}/audit-final-assessment-desktop.png" \
+    "${asset_dir}/audit-final-assessment-mobile-390.png" \
+    "${asset_dir}/audit-final-assessment-desktop.png" \
     "${render_dir}/11-treasurer-decision-target.png" \
-    "${asset_dir}/12-approved-payable-current.png" \
+    "${asset_dir}/audit-final-payable.png" \
     "${render_dir}/14-qr-issuance-target.png" \
     "${render_dir}/16-receipt-target.png" \
     -thumbnail 720x450 \

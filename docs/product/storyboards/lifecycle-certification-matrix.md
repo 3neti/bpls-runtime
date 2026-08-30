@@ -4,7 +4,7 @@ Scenario is the unit of completion. Only Scenario 01 has been executed. No statu
 
 | Tier | Stable scenario id | Business question (one line) | Status |
 |---|---|---|---|
-| A | `renewal-happy-path` | Can a normal Renewal become an approved payable? | **ENGINE PASSED · PRODUCT AUDIT PENDING/FAILED UNTIL FINAL DISPOSITION** |
+| A | `renewal-happy-path` | Can a normal Renewal become an approved payable? | **ENGINE PASSED · PRODUCT PASSED** |
 | A | `new-permit-happy-path` | Can a normal New application become an approved payable? | **NOT RUN** |
 | A | `department-confirms-default` | Can an office confirm a legitimate default without changing it? | **NOT RUN** |
 | A | `department-corrects-charge` | Can an office make an authorized correction with provenance? | **NOT RUN** |

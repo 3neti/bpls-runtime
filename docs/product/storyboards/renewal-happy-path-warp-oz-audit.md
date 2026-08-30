@@ -15,3 +15,16 @@ Authority behaved correctly: Health could not open the Payment Schedule; Treasur
 ## Chief Architect disposition
 
 Authorize only UI/view-model corrections: responsibility-derived work discovery, frozen Assessment grouping in Nelson/Ipil grammar, visible counter-check/approval evidence, responsive Assessment rows, and visible canonical completion evidence. Do not change Actions, pricing, applicability, office ownership, permissions, Treasury/Treasurer authority, QR/receipt semantics, or stored lifecycle state.
+
+## Final independent re-audit
+
+Disposition after bounded correction: **ENGINE PASS / PRODUCT PASS**.
+
+- Completed Scenario 01 is absent from the Health, Assessment Officer, Treasury, and Municipal Treasurer open-work surfaces.
+- Assessment `16` now shows Retail `₱330`, Food Service `₱540`, application-wide `₱350`, Grand Total `₱1,220`, Prepared By, Treasury no-correction, exact Treasurer approval, and `Approved · Payable`.
+- At 390 px, browser `scrollWidth` equals `innerWidth` (`390`); all seven amounts remain visible without horizontal discovery.
+- Evaluation `15` shows six of six canonical completion records with office, LOB, applicability, actual review stage, selection reason, and completion reason.
+- Payable `7` remains pending: `₱1,220` balance, `₱0` paid; unsupported installment and electronic-settlement policy remains honestly blocked.
+- Health remains denied Payable access; approved Assessment exposes no further Treasurer decision action.
+
+Residual: unrelated historical/UAT records remain in their legitimate role queues, so global counts can be nonzero. Completed Scenario 01 itself is correctly suppressed.
