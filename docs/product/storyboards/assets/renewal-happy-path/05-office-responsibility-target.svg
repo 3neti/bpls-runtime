@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <rect width="1440" height="900" fill="#f6f7fb"/>
+  <rect width="1440" height="72" fill="#123b5d"/>
+  <text x="46" y="45" font-family="Arial" font-size="22" fill="white" font-weight="700">Health responsibility · Scenario 01</text>
+  <text x="1130" y="43" font-family="Arial" font-size="15" fill="#dce9f2">Health Officer</text>
+  <text x="64" y="126" font-family="Arial" font-size="30" fill="#17364b" font-weight="700">Food Service review</text>
+  <text x="64" y="158" font-family="Arial" font-size="16" fill="#526573">Scenario 01 Market and Kitchen · Renewal · Application #20</text>
+  <rect x="64" y="196" width="820" height="594" rx="16" fill="white" stroke="#d9e0e8"/>
+  <text x="98" y="240" font-family="Arial" font-size="14" fill="#667684" font-weight="700">YOUR RESPONSIBILITY 1 OF 2</text>
+  <text x="98" y="282" font-family="Arial" font-size="25" fill="#17364b" font-weight="700">Health Certificate</text>
+  <text x="98" y="316" font-family="Arial" font-size="15" fill="#526573">LOB: Food Service · provisional UAT applicability</text>
+  <text x="98" y="372" font-family="Arial" font-size="14" fill="#667684" font-weight="700">INSPECTION / REVIEW</text>
+  <rect x="98" y="394" width="348" height="76" rx="10" fill="#f4f8fb" stroke="#cbd9e3"/>
+  <text x="118" y="426" font-family="Arial" font-size="16" fill="#17364b" font-weight="700">Review recorded</text>
+  <text x="118" y="452" font-family="Arial" font-size="14" fill="#526573">Synthetic facts inspected</text>
+  <text x="98" y="522" font-family="Arial" font-size="14" fill="#667684" font-weight="700">APPLICABILITY</text>
+  <rect x="98" y="544" width="156" height="42" rx="8" fill="#e6f6ed"/><text x="126" y="571" font-family="Arial" font-size="15" fill="#17643a" font-weight="700">Applicable</text>
+  <text x="98" y="636" font-family="Arial" font-size="14" fill="#667684" font-weight="700">CHARGE RESOLUTION</text>
+  <text x="98" y="680" font-family="Arial" font-size="17" fill="#526573">Proposed</text><text x="300" y="680" font-family="Arial" font-size="24" fill="#17364b" font-weight="700">₱95.00</text>
+  <text x="98" y="718" font-family="Arial" font-size="17" fill="#526573">Resolved amount</text><text x="300" y="718" font-family="Arial" font-size="24" fill="#17364b" font-weight="700">₱95.00</text>
+  <rect x="630" y="696" width="206" height="52" rx="9" fill="#17643a"/><text x="664" y="729" font-family="Arial" font-size="17" fill="white" font-weight="700">Confirm responsibility</text>
+  <rect x="920" y="196" width="456" height="324" rx="16" fill="white" stroke="#d9e0e8"/>
+  <text x="952" y="240" font-family="Arial" font-size="18" fill="#17364b" font-weight="700">Business context</text>
+  <text x="952" y="282" font-family="Arial" font-size="14" fill="#667684">LINES OF BUSINESS</text>
+  <text x="952" y="318" font-family="Arial" font-size="16" fill="#526573">1 · Retail Trading</text>
+  <text x="952" y="352" font-family="Arial" font-size="16" fill="#17364b" font-weight="700">2 · Food Service · your work</text>
+  <text x="952" y="410" font-family="Arial" font-size="14" fill="#667684">NEXT DESTINATION</text>
+  <text x="952" y="446" font-family="Arial" font-size="16" fill="#526573">Evaluation readiness gate</text>
+  <text x="952" y="476" font-family="Arial" font-size="16" fill="#526573">after 6 of 6 complete</text>
+  <text x="64" y="838" font-family="Arial" font-size="14" fill="#6a7780">PROPOSED TARGET · canonical responsibility state, not a parallel work item</text>
+</svg>

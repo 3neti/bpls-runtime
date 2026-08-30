@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <rect width="1440" height="900" fill="#f6f7fb"/>
+  <rect x="170" y="92" width="1100" height="716" rx="18" fill="white" stroke="#d9e0e8"/>
+  <text x="224" y="150" font-family="Arial" font-size="14" fill="#667684" font-weight="700">PAYMENT SCHEDULE #1 · PENDING</text>
+  <text x="224" y="196" font-family="Arial" font-size="30" fill="#17364b" font-weight="700">Payable ₱1,220.00</text>
+  <rect x="224" y="234" width="520" height="424" rx="14" fill="#f4f8fb" stroke="#cbd9e3"/>
+  <text x="260" y="278" font-family="Arial" font-size="20" fill="#17364b" font-weight="700">QR Ph payment request</text>
+  <rect x="324" y="314" width="280" height="280" fill="white" stroke="#17364b" stroke-width="12"/>
+  <path d="M350 340h70v70h-70zM508 340h70v70h-70zM350 498h70v70h-70z" fill="none" stroke="#17364b" stroke-width="18"/>
+  <path d="M458 344h18v54h-18zm0 90h72v18h-72zm36 36h18v72h-18zm54 18h30v18h-30zm-90 54h54v18h-54z" fill="#17364b"/>
+  <text x="318" y="632" font-family="Arial" font-size="15" fill="#526573">Issued · awaiting payment confirmation</text>
+  <text x="798" y="284" font-family="Arial" font-size="18" fill="#17364b" font-weight="700">Payment is not yet confirmed</text>
+  <text x="798" y="326" font-family="Arial" font-size="16" fill="#526573">A QR request does not mark the schedule paid.</text>
+  <text x="798" y="366" font-family="Arial" font-size="16" fill="#526573">Receipt / OR remains unavailable.</text>
+  <rect x="798" y="416" width="398" height="112" rx="12" fill="#fff8e5" stroke="#eedaa0"/>
+  <text x="824" y="452" font-family="Arial" font-size="15" fill="#735500" font-weight="700">PENDING LIVE SETTLEMENT PROOF</text>
+  <text x="824" y="486" font-family="Arial" font-size="15" fill="#594f32">Provider confirmation and Treasury matching</text>
+  <text x="824" y="512" font-family="Arial" font-size="15" fill="#594f32">remain outside Scenario 01 certification.</text>
+  <text x="170" y="850" font-family="Arial" font-size="14" fill="#6a7780">PROPOSED TARGET · QR issuance is separate from settlement and receipt</text>
+</svg>

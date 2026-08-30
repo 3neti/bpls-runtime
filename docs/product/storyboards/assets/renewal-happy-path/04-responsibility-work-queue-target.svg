@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <rect width="1440" height="900" fill="#f6f7fb"/>
+  <rect x="0" width="260" height="900" fill="#123b5d"/>
+  <text x="32" y="48" font-family="Arial" font-size="22" fill="white" font-weight="700">Ipil BPLS</text>
+  <text x="32" y="120" font-family="Arial" font-size="15" fill="#bcd0dd">OVERVIEW</text>
+  <text x="32" y="168" font-family="Arial" font-size="18" fill="white">My municipal work</text>
+  <circle cx="222" cy="161" r="18" fill="#f9b233"/><text x="217" y="167" font-family="Arial" font-size="15" fill="#17364b" font-weight="700">2</text>
+  <text x="32" y="214" font-family="Arial" font-size="18" fill="#bcd0dd">All applications</text>
+  <text x="304" y="62" font-family="Arial" font-size="28" fill="#17364b" font-weight="700">Health · My municipal work</text>
+  <text x="304" y="96" font-family="Arial" font-size="16" fill="#526573">Projected from unresolved Health responsibilities — no separate queue state.</text>
+  <rect x="304" y="132" width="1080" height="116" rx="14" fill="white" stroke="#d9e0e8"/>
+  <rect x="328" y="154" width="86" height="28" rx="14" fill="#fff1c9"/><text x="345" y="174" font-family="Arial" font-size="13" fill="#735500" font-weight="700">NEW · 2</text>
+  <text x="328" y="214" font-family="Arial" font-size="22" fill="#17364b" font-weight="700">Scenario 01 Market and Kitchen</text>
+  <text x="680" y="174" font-family="Arial" font-size="15" fill="#526573">Renewal · Food Service</text>
+  <text x="680" y="210" font-family="Arial" font-size="15" fill="#526573">Why on my desk: Health Certificate + Sanitary Permit</text>
+  <rect x="1208" y="166" width="140" height="46" rx="8" fill="#17643a"/><text x="1237" y="195" font-family="Arial" font-size="16" fill="white" font-weight="700">Open work</text>
+  <text x="304" y="306" font-family="Arial" font-size="14" fill="#667684" font-weight="700">COMPLETED TODAY</text>
+  <rect x="304" y="330" width="1080" height="92" rx="14" fill="white" stroke="#d9e0e8"/>
+  <text x="328" y="369" font-family="Arial" font-size="18" fill="#17364b" font-weight="700">No additional Scenario 01 responsibilities</text>
+  <text x="328" y="398" font-family="Arial" font-size="15" fill="#526573">Completed work remains discoverable in the Evaluation audit trail.</text>
+  <rect x="304" y="484" width="1080" height="220" rx="14" fill="#eef5f9"/>
+  <text x="336" y="528" font-family="Arial" font-size="19" fill="#17364b" font-weight="700">Role acceptance questions</text>
+  <text x="336" y="570" font-family="Arial" font-size="16" fill="#354e5d">What arrived?  Two Health responsibilities for Food Service.</text>
+  <text x="336" y="606" font-family="Arial" font-size="16" fill="#354e5d">What do I own?  Applicability, inspection/review evidence, and the resolved amount.</text>
+  <text x="336" y="642" font-family="Arial" font-size="16" fill="#354e5d">Where next?  Evaluation readiness after every required department completes.</text>
+  <text x="304" y="838" font-family="Arial" font-size="14" fill="#6a7780">PROPOSED TARGET · responsibility-derived queue and badge</text>
+</svg>

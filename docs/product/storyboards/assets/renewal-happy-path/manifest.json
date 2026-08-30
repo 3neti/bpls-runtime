@@ -1,0 +1,26 @@
+{
+  "scenario_id": "renewal-happy-path",
+  "certification_boundary": "payable_without_external_settlement",
+  "synthetic_only": true,
+  "current_screens": [
+    "01-application-lodged-and-payable-current.png",
+    "04-concerned-office-queue-current.png",
+    "05-concerned-office-evaluation-current.png",
+    "07-assessment-officer-working-paper-current.png",
+    "09-immutable-prepared-assessment-current.png",
+    "10-treasury-counter-check-current.png",
+    "11-municipal-treasurer-assessment-current.png",
+    "12-approved-payable-current.png",
+    "audit-mobile-evaluation-current.png",
+    "audit-mobile-assessment-current.png"
+  ],
+  "proposed_targets": [
+    "01-citizen-lodged-target.svg",
+    "04-responsibility-work-queue-target.svg",
+    "05-office-responsibility-target.svg",
+    "08-ready-for-assessment-target.svg",
+    "11-treasurer-decision-target.svg",
+    "14-qr-issuance-target.svg",
+    "16-receipt-target.svg"
+  ]
+}

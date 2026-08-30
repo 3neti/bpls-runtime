@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <rect width="1440" height="900" fill="#f6f7fb"/><rect x="252" y="76" width="936" height="742" fill="white" stroke="#cbd9e3"/>
+  <text x="304" y="130" font-family="Arial" font-size="15" fill="#667684" font-weight="700">MUNICIPALITY OF IPIL · OFFICIAL RECEIPT</text>
+  <text x="304" y="184" font-family="Arial" font-size="31" fill="#17364b" font-weight="700">OR 0000001</text>
+  <rect x="870" y="144" width="250" height="48" rx="24" fill="#e6f6ed"/><text x="916" y="175" font-family="Arial" font-size="15" fill="#17643a" font-weight="700">Payment confirmed</text>
+  <text x="304" y="250" font-family="Arial" font-size="14" fill="#667684">PAID BY</text><text x="304" y="282" font-family="Arial" font-size="20" fill="#17364b" font-weight="700">Scenario 01 Synthetic Owner</text>
+  <text x="304" y="332" font-family="Arial" font-size="14" fill="#667684">BUSINESS</text><text x="304" y="364" font-family="Arial" font-size="20" fill="#17364b" font-weight="700">Scenario 01 Market and Kitchen</text>
+  <line x1="304" y1="406" x2="1136" y2="406" stroke="#cbd9e3"/>
+  <text x="304" y="454" font-family="Arial" font-size="16" fill="#526573">Assessment #1 · Payment Schedule #1</text>
+  <text x="304" y="500" font-family="Arial" font-size="16" fill="#526573">Amount received</text><text x="954" y="500" font-family="Arial" font-size="26" fill="#17364b" font-weight="700">₱1,220.00</text>
+  <rect x="304" y="554" width="832" height="108" rx="12" fill="#fff8e5" stroke="#eedaa0"/>
+  <text x="332" y="592" font-family="Arial" font-size="15" fill="#735500" font-weight="700">NOT PART OF SCENARIO 01 ENGINE CERTIFICATION</text>
+  <text x="332" y="626" font-family="Arial" font-size="15" fill="#594f32">Render only after safe collection confirmation and globally unique 7-digit OR issuance.</text>
+  <text x="252" y="858" font-family="Arial" font-size="14" fill="#6a7780">PROPOSED TARGET · synthetic identity · no receipt has been issued</text>
+</svg>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <rect width="1440" height="900" fill="#f6f7fb"/><rect width="1440" height="72" fill="#123b5d"/>
+  <text x="48" y="45" font-family="Arial" font-size="22" fill="white" font-weight="700">Assessment Officer · Financial Working Paper</text>
+  <rect x="64" y="108" width="1312" height="680" rx="16" fill="white" stroke="#d9e0e8"/>
+  <text x="104" y="156" font-family="Arial" font-size="14" fill="#667684" font-weight="700">SCENARIO 01 MARKET AND KITCHEN · RENEWAL · 2 LOBS</text>
+  <text x="104" y="204" font-family="Arial" font-size="32" fill="#17364b" font-weight="700">Ready for Assessment</text>
+  <rect x="104" y="232" width="252" height="42" rx="21" fill="#e6f6ed"/><text x="132" y="259" font-family="Arial" font-size="15" fill="#17643a" font-weight="700">6 of 6 departments complete</text>
+  <text x="104" y="328" font-family="Arial" font-size="18" fill="#17364b" font-weight="700">Retail Trading subtotal</text><text x="1190" y="328" font-family="Arial" font-size="18" fill="#17364b">₱330.00</text>
+  <text x="104" y="376" font-family="Arial" font-size="18" fill="#17364b" font-weight="700">Food Service subtotal</text><text x="1190" y="376" font-family="Arial" font-size="18" fill="#17364b">₱540.00</text>
+  <text x="104" y="424" font-family="Arial" font-size="18" fill="#17364b" font-weight="700">Application-wide subtotal</text><text x="1190" y="424" font-family="Arial" font-size="18" fill="#17364b">₱350.00</text>
+  <line x1="104" y1="456" x2="1276" y2="456" stroke="#cbd9e3"/>
+  <text x="104" y="510" font-family="Arial" font-size="23" fill="#17364b" font-weight="700">Grand Total</text><text x="1140" y="510" font-family="Arial" font-size="30" fill="#17364b" font-weight="700">₱1,220.00</text>
+  <rect x="104" y="560" width="870" height="102" rx="12" fill="#eef5f9"/>
+  <text x="132" y="596" font-family="Arial" font-size="15" fill="#497087" font-weight="700">GATES SATISFIED</text>
+  <text x="132" y="628" font-family="Arial" font-size="15" fill="#354e5d">Treasury counter-check: no correction · Evaluation version 13 · exact fingerprint current</text>
+  <rect x="1020" y="586" width="256" height="58" rx="9" fill="#17643a"/><text x="1066" y="622" font-family="Arial" font-size="17" fill="white" font-weight="700">Prepare Assessment</text>
+  <text x="64" y="838" font-family="Arial" font-size="14" fill="#6a7780">PROPOSED TARGET · readiness is explicit before immutable preparation</text>
+</svg>

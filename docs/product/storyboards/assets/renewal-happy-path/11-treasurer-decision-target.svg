@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <rect width="1440" height="900" fill="#f6f7fb"/>
+  <rect width="1440" height="72" fill="#123b5d"/>
+  <text x="48" y="45" font-family="Arial" font-size="22" fill="white" font-weight="700">Municipal Treasurer · exact Assessment decision</text>
+  <text x="1040" y="43" font-family="Arial" font-size="15" fill="#dce9f2">Scenario 01 Municipal Treasurer</text>
+  <rect x="64" y="108" width="1312" height="688" rx="16" fill="white" stroke="#d9e0e8"/>
+  <text x="104" y="154" font-family="Arial" font-size="14" fill="#667684" font-weight="700">ASSESSMENT #1 · RENEWAL · 2098</text>
+  <text x="104" y="196" font-family="Arial" font-size="28" fill="#17364b" font-weight="700">Scenario 01 Market and Kitchen</text>
+  <text x="104" y="232" font-family="Arial" font-size="16" fill="#526573">Prepared by Scenario 01 Assessment Officer · Evaluation version 13</text>
+  <rect x="104" y="266" width="1232" height="92" rx="12" fill="#eef5f9"/>
+  <text x="132" y="304" font-family="Arial" font-size="14" fill="#497087" font-weight="700">EXACT RECORDED GRAND TOTAL</text>
+  <text x="1088" y="329" font-family="Arial" font-size="36" fill="#17364b" font-weight="700">₱1,220.00</text>
+  <text x="104" y="412" font-family="Arial" font-size="17" fill="#17364b" font-weight="700">Retail Trading subtotal</text><text x="1200" y="412" font-family="Arial" font-size="17" fill="#17364b">₱330.00</text>
+  <text x="104" y="456" font-family="Arial" font-size="17" fill="#17364b" font-weight="700">Food Service subtotal</text><text x="1200" y="456" font-family="Arial" font-size="17" fill="#17364b">₱540.00</text>
+  <text x="104" y="500" font-family="Arial" font-size="17" fill="#17364b" font-weight="700">Application-wide subtotal</text><text x="1200" y="500" font-family="Arial" font-size="17" fill="#17364b">₱350.00</text>
+  <line x1="104" y1="534" x2="1290" y2="534" stroke="#cbd9e3"/>
+  <text x="104" y="580" font-family="Arial" font-size="15" fill="#526573">Treasury counter-check</text>
+  <rect x="320" y="552" width="192" height="38" rx="19" fill="#e6f6ed"/><text x="342" y="577" font-family="Arial" font-size="14" fill="#17643a" font-weight="700">No correction · exact</text>
+  <text x="104" y="632" font-family="Arial" font-size="15" fill="#526573">Decision binds Assessment fingerprint</text>
+  <text x="386" y="632" font-family="monospace" font-size="14" fill="#354e5d">0f83232939c4ede3…</text>
+  <rect x="104" y="688" width="168" height="54" rx="9" fill="white" stroke="#9e3a3a" stroke-width="2"/><text x="153" y="722" font-family="Arial" font-size="17" fill="#9e3a3a" font-weight="700">Return</text>
+  <rect x="1104" y="688" width="232" height="54" rx="9" fill="#17643a"/><text x="1146" y="722" font-family="Arial" font-size="17" fill="white" font-weight="700">Approve ₱1,220.00</text>
+  <text x="64" y="838" font-family="Arial" font-size="14" fill="#6a7780">PROPOSED TARGET · exact Assessment approval; no Evaluation mutation</text>
+</svg>
