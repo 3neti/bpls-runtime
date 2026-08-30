@@ -7,6 +7,7 @@ use App\Models\BusinessPermitEvaluationItem;
 use App\Models\FeeRule;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
+use App\Models\User;
 use Database\Seeders\RevenueCodeFeeCatalogSeeder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
@@ -62,7 +63,10 @@ test('Scenario 01 proves a deterministic multi-LOB Renewal becomes an approved p
         ->and(BusinessPermitEvaluationItem::query()->where('metadata->scenario_id', RenewalHappyPathDefinition::Id)->count())->toBe($counts['responsibilities'])
         ->and(Assessment::query()->count())->toBe($counts['assessments'])
         ->and(PaymentSchedule::query()->count())->toBe($counts['schedules'])
-        ->and(FeeRule::query()->count())->toBe($counts['fee_rules']);
+        ->and(FeeRule::query()->count())->toBe($counts['fee_rules'])
+        ->and(User::query()->where('email', 'scenario-01-assessment-officer@example.test')->sole()->can('business_permit_evaluations.view'))->toBeTrue()
+        ->and(User::query()->where('email', 'scenario-01-treasury-counter-check@example.test')->sole()->can('business_permit_evaluations.correct_lines_of_business'))->toBeTrue()
+        ->and(User::query()->where('email', 'scenario-01-municipal-treasurer@example.test')->sole()->cannot('business_permit_evaluations.counter_check'))->toBeTrue();
 
     $store = new ScenarioArtifactStore(RenewalHappyPathDefinition::Id, RenewalHappyPathDefinition::RunId);
     expect($store->readJson('result.json'))->toBe($second)

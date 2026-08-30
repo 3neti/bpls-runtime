@@ -58,6 +58,8 @@ final class RenewalHappyPathScenario
         $existing = $this->existingApplication();
 
         if ($existing instanceof PermitApplication) {
+            $this->actors();
+
             return $this->checkpoint('Deterministic rerun found stale or nonconformant state', fn (): array => $this->result($existing));
         }
 
@@ -472,14 +474,14 @@ final class RenewalHappyPathScenario
     private function actors(): array
     {
         return [
-            'intake' => $this->actor('intake', 'Scenario 01 BPLO Intake Officer', [UserPermission::AccessStaff, UserPermission::CreatePermitApplications]),
-            'assessment_officer' => $this->actor('assessment-officer', 'Scenario 01 Assessment Officer', [UserPermission::AccessStaff, UserPermission::AssessPermitApplications, UserPermission::PreparePaymentSchedules]),
-            'assessor' => $this->actor('assessor', 'Scenario 01 Assessor', [UserPermission::AccessStaff, UserPermission::ContributeBusinessPermitEvaluations]),
-            'engineering' => $this->actor('engineering', 'Scenario 01 Engineering Officer', [UserPermission::AccessStaff, UserPermission::ContributeBusinessPermitEvaluations]),
-            'health' => $this->actor('health', 'Scenario 01 Health Officer', [UserPermission::AccessStaff, UserPermission::ContributeBusinessPermitEvaluations]),
-            'menro' => $this->actor('menro', 'Scenario 01 MENRO Officer', [UserPermission::AccessStaff, UserPermission::ContributeBusinessPermitEvaluations]),
-            'treasury' => $this->actor('treasury-counter-check', 'Scenario 01 Treasury Counter-checker', [UserPermission::AccessStaff, UserPermission::CounterCheckBusinessPermitEvaluations]),
-            'municipal_treasurer' => $this->actor('municipal-treasurer', 'Scenario 01 Municipal Treasurer', [UserPermission::AccessStaff, UserPermission::ApproveAssessments]),
+            'intake' => $this->actor('intake', 'Scenario 01 BPLO Intake Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::CreatePermitApplications]),
+            'assessment_officer' => $this->actor('assessment-officer', 'Scenario 01 Assessment Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::AssessPermitApplications, UserPermission::ViewPaymentSchedules, UserPermission::PreparePaymentSchedules]),
+            'assessor' => $this->actor('assessor', 'Scenario 01 Assessor', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ContributeBusinessPermitEvaluations]),
+            'engineering' => $this->actor('engineering', 'Scenario 01 Engineering Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ContributeBusinessPermitEvaluations]),
+            'health' => $this->actor('health', 'Scenario 01 Health Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ContributeBusinessPermitEvaluations]),
+            'menro' => $this->actor('menro', 'Scenario 01 MENRO Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ContributeBusinessPermitEvaluations]),
+            'treasury' => $this->actor('treasury-counter-check', 'Scenario 01 Treasury Counter-checker', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::CounterCheckBusinessPermitEvaluations, UserPermission::CorrectEvaluationLinesOfBusiness]),
+            'municipal_treasurer' => $this->actor('municipal-treasurer', 'Scenario 01 Municipal Treasurer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ApproveAssessments]),
         ];
     }
 
