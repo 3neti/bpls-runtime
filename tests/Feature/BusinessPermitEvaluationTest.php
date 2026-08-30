@@ -391,7 +391,7 @@ it('prepares an idempotent substantial provisional UAT Evaluator inventory with 
         ->and(data_get($completedProjection, 'financial_working_paper.application_subtotal_amount_cents'))->toBe(45_000)
         ->and(data_get($completedProjection, 'financial_working_paper.grand_total_amount_cents'))->toBe(115_800)
         ->and(collect($completedProjection['items'])->where('item_type', 'charge')->where('resolution', '!=', 'resolved'))->toHaveCount(0)
-        ->and($completedAssessment->total_amount_cents)->toBe(115_800)
+        ->and($completedAssessment->total_amount_cents)->toBeInt()->toBe(115_800)
         ->and($completedAssessment->lines)->toHaveCount(10)
         ->and($completedAssessment->decision?->action)->toBe(AssessmentDecisionAction::Approved)
         ->and($completedAssessment->decision?->decided_by_id)->toBe($actors['municipal_treasurer']->id)

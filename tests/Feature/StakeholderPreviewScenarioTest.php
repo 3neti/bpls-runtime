@@ -2,10 +2,14 @@
 
 use App\Enums\StakeholderPreviewPersona;
 use App\Enums\UserPermission;
+use App\Evaluation\BusinessPermitEvaluationResolver;
 use App\LifecycleScenarios\LifecycleScenarioRegistry;
 use App\LifecycleScenarios\ScenarioArtifactStore;
+use App\Models\AssessmentLine;
 use App\Models\BillingGroup;
 use App\Models\BillingGroupRecord;
+use App\Models\BusinessPermitEvaluationItem;
+use App\Models\FeeRule;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use App\Models\Receipt;
@@ -90,6 +94,12 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
     $store = new ScenarioArtifactStore('stakeholder_preview_cycle_1', 'stakeholder-preview-test-001');
     $manifest = $store->readJson('manifest.json');
     $encodedManifest = json_encode($manifest, JSON_THROW_ON_ERROR);
+    $completedGolden = PermitApplication::query()
+        ->where('metadata->business_permit_evaluation->uat_run_id', 'stakeholder-preview-test-001')
+        ->where('metadata->business_permit_evaluation->case', 'completed-assessment-conformance-golden')
+        ->sole();
+    $completedProjection = app(BusinessPermitEvaluationResolver::class)->resolve($completedGolden->businessPermitEvaluation);
+    $completedAssessment = $completedGolden->assessments()->whereNull('superseded_at')->with('decision')->sole();
     $billingGroup = BillingGroup::query()->where('metadata->scenario_run_id', 'stakeholder-preview-test-001')->sole();
     $record = BillingGroupRecord::query()->where('source_snapshot->scenario_run_id', 'stakeholder-preview-test-001')->sole();
     $qrGoldenApplications = PermitApplication::query()
@@ -107,6 +117,9 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
         'schedules' => PaymentSchedule::query()->count(),
         'collections' => TreasuryCollection::query()->count(),
         'receipts' => Receipt::query()->count(),
+        'fee_rules' => FeeRule::query()->count(),
+        'evaluation_items' => BusinessPermitEvaluationItem::query()->count(),
+        'assessment_lines' => AssessmentLine::query()->count(),
     ];
 
     expect($accounts)->toHaveCount(14)
@@ -168,7 +181,14 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
         ->and($manifest['resources']['collection_received_by_id'])->toBe($accounts['stakeholder.preview.cashier@example.test']->id)
         ->and($manifest['resources']['receipt_issued_by_id'])->toBe($accounts['stakeholder.preview.cashier@example.test']->id)
         ->and($manifest['resources']['office_charge_contribution_count'])->toBe(5)
-        ->and($manifest['resources']['provisional_uat_permit_status'])->toBe('released_in_preview');
+        ->and($manifest['resources']['provisional_uat_permit_status'])->toBe('released_in_preview')
+        ->and(data_get($completedProjection, 'financial_working_paper.line_sections.0.subtotal_amount_cents'))->toBe(22_500)
+        ->and(data_get($completedProjection, 'financial_working_paper.line_sections.1.subtotal_amount_cents'))->toBe(33_500)
+        ->and(data_get($completedProjection, 'financial_working_paper.line_sections.2.subtotal_amount_cents'))->toBe(14_800)
+        ->and(data_get($completedProjection, 'financial_working_paper.application_subtotal_amount_cents'))->toBe(45_000)
+        ->and(data_get($completedProjection, 'financial_working_paper.grand_total_amount_cents'))->toBe(115_800)
+        ->and($completedAssessment->total_amount_cents)->toBeInt()->toBe(115_800)
+        ->and($completedAssessment->decision?->total_amount_cents)->toBe(115_800);
 
     $this->assertSame(0, Artisan::call('lifecycle:prepare-stakeholder-preview', [
         '--run-id' => 'stakeholder-preview-test-001',
@@ -180,6 +200,9 @@ test('preview preparation creates synthetic role accounts and policy-bound evide
         'schedules' => PaymentSchedule::query()->count(),
         'collections' => TreasuryCollection::query()->count(),
         'receipts' => Receipt::query()->count(),
+        'fee_rules' => FeeRule::query()->count(),
+        'evaluation_items' => BusinessPermitEvaluationItem::query()->count(),
+        'assessment_lines' => AssessmentLine::query()->count(),
     ])->toBe($countsBeforeRepeat);
 
     Http::assertNothingSent();

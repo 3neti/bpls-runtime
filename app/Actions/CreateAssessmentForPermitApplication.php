@@ -92,7 +92,7 @@ class CreateAssessmentForPermitApplication
             }
 
             $assessment->update([
-                'total_amount_cents' => $assessment->lines()->sum('amount_cents'),
+                'total_amount_cents' => (int) $assessment->lines()->sum('amount_cents'),
             ]);
 
             $permitApplication->update([
