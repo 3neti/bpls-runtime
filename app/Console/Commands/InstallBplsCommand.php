@@ -55,6 +55,21 @@ class InstallBplsCommand extends Command
         $this->line('Authority seats · '.count($manifest['positions']).' · named assignments remain separate');
         $this->line('Super User · '.$manifest['commissioning_administrator']['provisioning_status'].' · administrative envelope, not a municipal office');
         $this->newLine();
+        $this->line('STAKEHOLDER PREVIEW');
+        $this->line('Mode · '.$manifest['stakeholder_preview']['mode']);
+        if ($manifest['stakeholder_preview']['mode'] === 'enabled') {
+            $this->line('Required personas · '.$manifest['stakeholder_preview']['required_personas']);
+            $this->line('Ready personas · '.$manifest['stakeholder_preview']['ready_personas']);
+            $this->line('Missing personas · '.count($manifest['stakeholder_preview']['missing_personas']));
+            if ($manifest['stakeholder_preview']['missing_personas'] !== []) {
+                $this->line('  '.implode(', ', $manifest['stakeholder_preview']['missing_personas']));
+            }
+            $this->line('Launcher readiness · '.strtoupper($manifest['stakeholder_preview']['launcher_readiness']));
+            $this->line('Synthetic permit transactions · '.$manifest['stakeholder_preview']['synthetic_permit_transactions']);
+        } else {
+            $this->line('Persona provisioning · not required');
+        }
+        $this->newLine();
         $this->line('TRANSACTIONAL STATE');
         foreach ($manifest['zero_state']['counts'] as $name => $count) {
             $this->line('  '.str($name)->replace('_', ' ')->title().' · '.$count);

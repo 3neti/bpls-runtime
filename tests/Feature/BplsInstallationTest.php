@@ -2,6 +2,7 @@
 
 use App\Actions\BuildMunicipalPriceList;
 use App\Actions\InstallBplsBaseline;
+use App\Enums\StakeholderPreviewPersona;
 use App\Enums\UserPermission;
 use App\Models\BusinessOwner;
 use App\Models\FeeRule;
@@ -9,10 +10,15 @@ use App\Models\InstitutionalPosition;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+
+beforeEach(function () {
+    config()->set('stakeholder_preview.mode', false);
+});
 
 test('bpls install establishes a coherent zero-transaction institutional baseline idempotently', function () {
     Storage::fake('local');
@@ -72,6 +78,116 @@ test('bpls install check is strictly read only', function () {
         ->and(Storage::disk('local')->get('private/bpls-installation/manifest.json'))->toBe($manifestBefore);
 });
 
+test('preview enabled install provisions only the canonical launcher identities idempotently', function () {
+    Storage::fake('local');
+    configurePreviewEnabledInstallation();
+
+    $first = app(InstallBplsBaseline::class)->handle();
+    $firstAccounts = User::query()
+        ->whereIn('email', collect(StakeholderPreviewPersona::cases())->map->approvedEmail())
+        ->with('role.permissions')
+        ->get()
+        ->mapWithKeys(fn (User $user): array => [$user->email => [
+            'id' => $user->id,
+            'password' => $user->password,
+            'role' => $user->role?->code,
+            'permissions' => $user->role?->permissions->pluck('code')->sort()->values()->all(),
+        ]])
+        ->all();
+    $second = app(InstallBplsBaseline::class)->handle();
+    $secondAccounts = User::query()
+        ->whereIn('email', collect(StakeholderPreviewPersona::cases())->map->approvedEmail())
+        ->with('role.permissions')
+        ->get()
+        ->mapWithKeys(fn (User $user): array => [$user->email => [
+            'id' => $user->id,
+            'password' => $user->password,
+            'role' => $user->role?->code,
+            'permissions' => $user->role?->permissions->pluck('code')->sort()->values()->all(),
+        ]])
+        ->all();
+
+    expect($first['stakeholder_preview'])->toMatchArray([
+        'mode' => 'enabled',
+        'provisioning' => 'required',
+        'canonical_persona_source' => StakeholderPreviewPersona::class,
+        'classification' => 'synthetic_preview_access_infrastructure',
+        'required_personas' => 14,
+        'ready_personas' => 14,
+        'missing_personas' => [],
+        'launcher_readiness' => 'pass',
+        'synthetic_permit_transactions' => 0,
+    ])
+        ->and($first['zero_state']['is_empty'])->toBeTrue()
+        ->and($second['stakeholder_preview'])->toBe($first['stakeholder_preview'])
+        ->and($secondAccounts)->toBe($firstAccounts)
+        ->and(User::query()->where('email', StakeholderPreviewPersona::Citizen->approvedEmail())->value('business_owner_id'))->toBeNull()
+        ->and(Role::query()->whereIn('code', collect(StakeholderPreviewPersona::cases())->map->roleCode())->count())->toBe(14)
+        ->and(InstitutionalPosition::query()->where('assignment_status', 'unassigned')->count())->toBe(13)
+        ->and(InstitutionalPosition::query()->where('metadata->production_commissioned', true)->count())->toBe(0)
+        ->and(InstitutionalPosition::query()->where('code', 'municipal_treasurer')->value('capability_role_id'))
+        ->not->toBe(Role::query()->where('code', StakeholderPreviewPersona::MunicipalTreasurer->roleCode())->value('id'));
+
+    app(StakeholderPreviewSafety::class)->ensureReady();
+
+    $beforeCheck = databaseSnapshot();
+    expect(Artisan::call('bpls:install', ['--check' => true]))->toBe(0)
+        ->and(Artisan::output())->toContain('STAKEHOLDER PREVIEW')
+        ->toContain('Required personas · 14')
+        ->toContain('Ready personas · 14')
+        ->toContain('Launcher readiness · PASS')
+        ->toContain('Synthetic permit transactions · 0')
+        ->and(databaseSnapshot())->toBe($beforeCheck);
+});
+
+test('preview check fails closed for a missing persona without repairing it', function () {
+    Storage::fake('local');
+    configurePreviewEnabledInstallation();
+    Artisan::call('bpls:install');
+    User::query()->where('email', StakeholderPreviewPersona::Treasury->approvedEmail())->delete();
+    $before = databaseSnapshot();
+
+    expect(Artisan::call('bpls:install', ['--check' => true, '--json' => true]))->toBe(1);
+    $check = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($check['stakeholder_preview']['ready_personas'])->toBe(13)
+        ->and($check['stakeholder_preview']['missing_personas'])->toBe(['treasury'])
+        ->and($check['stakeholder_preview']['launcher_readiness'])->toBe('fail')
+        ->and($check['integrity']['pass'])->toBeFalse()
+        ->and(databaseSnapshot())->toBe($before);
+});
+
+test('preview disabled install neither creates nor removes preview identities', function () {
+    Storage::fake('local');
+    config()->set('stakeholder_preview.mode', false);
+    $disabled = app(InstallBplsBaseline::class)->handle();
+
+    expect($disabled['stakeholder_preview'])->toMatchArray([
+        'mode' => 'disabled',
+        'provisioning' => 'not_required',
+        'launcher_readiness' => 'not_required',
+    ])->and(User::query()->where('email', StakeholderPreviewPersona::Citizen->approvedEmail())->exists())->toBeFalse();
+
+    configurePreviewEnabledInstallation();
+    app(InstallBplsBaseline::class)->handle();
+    $previewUserIds = User::query()
+        ->whereIn('email', collect(StakeholderPreviewPersona::cases())->map->approvedEmail())
+        ->pluck('id')
+        ->sort()
+        ->values()
+        ->all();
+
+    config()->set('stakeholder_preview.mode', false);
+    app(InstallBplsBaseline::class)->handle();
+
+    expect(User::query()
+        ->whereIn('email', collect(StakeholderPreviewPersona::cases())->map->approvedEmail())
+        ->pluck('id')
+        ->sort()
+        ->values()
+        ->all())->toBe($previewUserIds);
+});
+
 test('bpls install never removes existing local transaction data', function () {
     Storage::fake('local');
     Artisan::call('bpls:install');
@@ -126,4 +242,17 @@ function databaseSnapshot(): array
             return [$table => $rows];
         })
         ->all();
+}
+
+function configurePreviewEnabledInstallation(): void
+{
+    config()->set([
+        'stakeholder_preview.mode' => true,
+        'stakeholder_preview.profile' => StakeholderPreviewSafety::Profile,
+        'stakeholder_preview.data_classification' => 'synthetic_only',
+        'stakeholder_preview.pii_mode' => 'synthetic_only',
+        'stakeholder_preview.production_migration_enabled' => false,
+        'stakeholder_preview.production_integrations' => 'disabled',
+        'stakeholder_preview.password' => 'Stakeholder-Preview-Test-Only-2026',
+    ]);
 }

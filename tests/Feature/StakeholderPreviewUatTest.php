@@ -1,12 +1,16 @@
 <?php
 
 use App\Enums\StakeholderPreviewPersona;
+use App\Models\Assessment;
 use App\Models\OfficeChargeContribution;
 use App\Models\Permission;
 use App\Models\PermitApplication;
+use App\Models\Receipt;
 use App\Models\Role;
+use App\Models\TreasuryCollection;
 use App\Models\User;
 use App\StakeholderPreview\StakeholderPreviewSafety;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Route;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -20,7 +24,7 @@ beforeEach(function () {
 });
 
 test('safe preview configuration registers an intentional launcher without credentials', function () {
-    createStakeholderPreviewAccounts();
+    Artisan::call('bpls:install');
 
     expect(Route::has('stakeholder-preview.enter'))
         ->toBeTrue()
@@ -41,7 +45,11 @@ test('safe preview configuration registers an intentional launcher without crede
 
     expect($response->getContent())
         ->not->toContain((string) config('stakeholder_preview.password'))
-        ->not->toContain('password');
+        ->not->toContain('password')
+        ->and(PermitApplication::query()->count())->toBe(0)
+        ->and(Assessment::query()->count())->toBe(0)
+        ->and(TreasuryCollection::query()->count())->toBe(0)
+        ->and(Receipt::query()->count())->toBe(0);
 });
 
 test('launcher remains unavailable until the complete exact synthetic account set is ready', function () {

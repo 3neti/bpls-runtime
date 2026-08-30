@@ -10,6 +10,7 @@ class InstallBplsBaseline
     public function __construct(
         private readonly RevenueCodeFeeCatalogSeeder $revenueCodeFeeCatalog,
         private readonly EnsureBplsInstitution $ensureInstitution,
+        private readonly ProvisionStakeholderPreviewPersonas $provisionPreviewPersonas,
         private readonly InspectBplsInstallation $inspectInstallation,
     ) {}
 
@@ -18,6 +19,7 @@ class InstallBplsBaseline
     {
         $this->revenueCodeFeeCatalog->run();
         $this->ensureInstitution->handle();
+        $this->provisionPreviewPersonas->handle();
 
         $manifest = $this->inspectInstallation->handle();
         $manifest['evidence']['installed_at'] = now()->toIso8601String();

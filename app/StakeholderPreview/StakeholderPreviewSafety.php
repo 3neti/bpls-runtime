@@ -51,6 +51,66 @@ class StakeholderPreviewSafety
         }
     }
 
+    /** @return array{mode: string, provisioning: string, canonical_persona_source: string, classification: string, required_personas: int, ready_personas: int, missing_personas: list<string>, launcher_readiness: string} */
+    public function readiness(): array
+    {
+        $modeEnabled = config('stakeholder_preview.mode') === true;
+        if (! $modeEnabled) {
+            return [
+                'mode' => 'disabled',
+                'provisioning' => 'not_required',
+                'canonical_persona_source' => StakeholderPreviewPersona::class,
+                'classification' => 'synthetic_preview_access_infrastructure',
+                'required_personas' => count(StakeholderPreviewPersona::cases()),
+                'ready_personas' => 0,
+                'missing_personas' => [],
+                'launcher_readiness' => 'not_required',
+            ];
+        }
+
+        if (! $this->isEnabled()) {
+            return [
+                'mode' => 'enabled',
+                'provisioning' => 'required',
+                'canonical_persona_source' => StakeholderPreviewPersona::class,
+                'classification' => 'synthetic_preview_access_infrastructure',
+                'required_personas' => count(StakeholderPreviewPersona::cases()),
+                'ready_personas' => 0,
+                'missing_personas' => array_map(
+                    fn (StakeholderPreviewPersona $persona): string => $persona->value,
+                    StakeholderPreviewPersona::cases(),
+                ),
+                'launcher_readiness' => 'fail',
+            ];
+        }
+
+        $readyPersonaKeys = collect(StakeholderPreviewPersona::cases())
+            ->filter(function (StakeholderPreviewPersona $persona): bool {
+                $user = User::query()->with('role.permissions')->where('email', $persona->approvedEmail())->first();
+
+                return $user instanceof User && $this->matchesPersona($user, $persona);
+            })
+            ->map(fn (StakeholderPreviewPersona $persona): string => $persona->value)
+            ->values()
+            ->all();
+        $requiredPersonaKeys = array_map(
+            fn (StakeholderPreviewPersona $persona): string => $persona->value,
+            StakeholderPreviewPersona::cases(),
+        );
+        $missingPersonaKeys = array_values(array_diff($requiredPersonaKeys, $readyPersonaKeys));
+
+        return [
+            'mode' => 'enabled',
+            'provisioning' => 'required',
+            'canonical_persona_source' => StakeholderPreviewPersona::class,
+            'classification' => 'synthetic_preview_access_infrastructure',
+            'required_personas' => count($requiredPersonaKeys),
+            'ready_personas' => count($readyPersonaKeys),
+            'missing_personas' => $missingPersonaKeys,
+            'launcher_readiness' => $missingPersonaKeys === [] ? 'pass' : 'fail',
+        ];
+    }
+
     public function account(StakeholderPreviewPersona $persona): User
     {
         $this->ensureEnabled();
@@ -162,7 +222,7 @@ class StakeholderPreviewSafety
             ->all());
     }
 
-    private function matchesPersona(User $user, StakeholderPreviewPersona $persona): bool
+    public function matchesPersona(User $user, StakeholderPreviewPersona $persona): bool
     {
         $actualPermissions = $user->role?->permissions->pluck('code')->sort()->values()->all() ?? [];
         $expectedPermissions = collect($persona->permissions())->map->value->sort()->values()->all();

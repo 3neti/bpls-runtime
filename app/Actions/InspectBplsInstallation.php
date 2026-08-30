@@ -6,6 +6,7 @@ use App\Assessment\ApplicableFeeRuleQuery;
 use App\Enums\FeeRuleExecutionStatus;
 use App\Enums\FeeRulePublicationSource;
 use App\Enums\PermitApplicationType;
+use App\Enums\StakeholderPreviewPersona;
 use App\Enums\UserPermission;
 use App\Enums\UserRole;
 use App\Models\Assessment;
@@ -34,6 +35,7 @@ use App\Models\RevenueCodeProvision;
 use App\Models\Role;
 use App\Models\TreasuryCollection;
 use App\Models\User;
+use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Support\Collection;
 
 class InspectBplsInstallation
@@ -44,6 +46,7 @@ class InspectBplsInstallation
         private readonly BuildMunicipalPriceList $buildPriceList,
         private readonly ApplicableFeeRuleQuery $applicableFeeRules,
         private readonly EnsureBplsInstitution $institution,
+        private readonly StakeholderPreviewSafety $previewSafety,
     ) {}
 
     /** @return array<string, mixed> */
@@ -79,6 +82,8 @@ class InspectBplsInstallation
         $roles = $this->roles();
         $positions = $this->positions();
         $transactionCounts = $this->transactionCounts();
+        $stakeholderPreview = $this->previewSafety->readiness();
+        $stakeholderPreview['synthetic_permit_transactions'] = $this->stakeholderPreviewPermitTransactions();
         $issues = $this->integrityIssues(
             $acceptedInspectionRules,
             $uniquePublishedCharges,
@@ -87,6 +92,7 @@ class InspectBplsInstallation
             $assessmentParity,
             $roles,
             $positions,
+            $stakeholderPreview,
         );
 
         $pricePayload = [
@@ -141,10 +147,14 @@ class InspectBplsInstallation
                 'payment_capability' => 'software_capability_installed_authority_assignment_required',
                 'permit_release' => 'not_commissioned',
             ],
+            'stakeholder_preview' => collect($stakeholderPreview)
+                ->except('synthetic_permit_transactions')
+                ->all(),
         ];
 
         return [
             ...$semanticPayload,
+            'stakeholder_preview' => $stakeholderPreview,
             'zero_state' => [
                 'is_empty' => collect($transactionCounts)->every(fn (int $count): bool => $count === 0),
                 'counts' => $transactionCounts,
@@ -266,6 +276,24 @@ class InspectBplsInstallation
         ];
     }
 
+    private function stakeholderPreviewPermitTransactions(): int
+    {
+        $previewUsers = User::query()
+            ->whereIn('email', array_map(
+                fn (StakeholderPreviewPersona $persona): string => $persona->approvedEmail(),
+                StakeholderPreviewPersona::cases(),
+            ));
+        $previewUserIds = (clone $previewUsers)->pluck('id');
+        $previewOwnerIds = (clone $previewUsers)->whereNotNull('business_owner_id')->pluck('business_owner_id');
+
+        return PermitApplication::query()
+            ->where(function ($query) use ($previewUserIds, $previewOwnerIds): void {
+                $query->whereIn('submitted_by_id', $previewUserIds)
+                    ->orWhereHas('business', fn ($businessQuery) => $businessQuery->whereIn('business_owner_id', $previewOwnerIds));
+            })
+            ->count();
+    }
+
     /**
      * @param  Collection<int, FeeRule>  $acceptedInspectionRules
      * @param  Collection<int, array<string, mixed>>  $publishedCharges
@@ -274,6 +302,7 @@ class InspectBplsInstallation
      * @param  array{pass: bool, new: bool, renewal: bool}  $assessmentParity
      * @param  list<array<string, mixed>>  $roles
      * @param  list<array<string, mixed>>  $positions
+     * @param  array<string, mixed>  $stakeholderPreview
      * @return list<string>
      */
     private function integrityIssues(
@@ -284,6 +313,7 @@ class InspectBplsInstallation
         array $assessmentParity,
         array $roles,
         array $positions,
+        array $stakeholderPreview,
     ): array {
         $issues = [];
         $inspection = $acceptedInspectionRules->first();
@@ -316,6 +346,12 @@ class InspectBplsInstallation
         }
         if (count($positions) !== count($this->institution->positionDefinitions())) {
             $issues[] = 'One or more critical institutional positions are missing.';
+        }
+        if ($stakeholderPreview['mode'] === 'enabled' && $stakeholderPreview['launcher_readiness'] !== 'pass') {
+            $missing = $stakeholderPreview['missing_personas'] === []
+                ? 'canonical synthetic-only safety configuration'
+                : implode(', ', $stakeholderPreview['missing_personas']);
+            $issues[] = 'Stakeholder Preview readiness failed: '.$missing.'.';
         }
 
         return $issues;

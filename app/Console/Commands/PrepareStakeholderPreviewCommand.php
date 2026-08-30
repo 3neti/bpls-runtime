@@ -6,22 +6,18 @@ use App\Actions\CreateBillingGroup;
 use App\Actions\CreateBillingGroupDraftRecord;
 use App\Actions\CreateBillingGroupReconciliationEvidence;
 use App\Actions\PrepareBusinessPermitEvaluatorUatDataset;
+use App\Actions\ProvisionStakeholderPreviewPersonas;
 use App\Enums\BillingGroupEvidenceType;
 use App\Enums\BillingGroupFieldType;
-use App\Enums\StakeholderPreviewPersona;
-use App\Enums\UserPermission;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\Models\BillingGroup;
 use App\Models\BillingGroupReconciliation;
 use App\Models\BillingGroupRecord;
-use App\Models\Permission;
-use App\Models\Role;
 use App\Models\User;
 use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Hash;
 use RuntimeException;
 use Throwable;
 
@@ -38,12 +34,13 @@ class PrepareStakeholderPreviewCommand extends Command
         CreateBillingGroupDraftRecord $createDraftRecord,
         CreateBillingGroupReconciliationEvidence $createReconciliationEvidence,
         PrepareBusinessPermitEvaluatorUatDataset $prepareEvaluatorUat,
+        ProvisionStakeholderPreviewPersonas $provisionPreviewPersonas,
     ): int {
         try {
             $this->assertSafeEnvironment($previewSafety);
             $password = $this->runtimePassword();
             $runId = $this->runId();
-            $accounts = $this->prepareAccounts($password);
+            $accounts = $provisionPreviewPersonas->handle($password);
             $this->configureScenario($accounts, $password);
             $phase = (string) $this->option('phase');
 
@@ -98,76 +95,6 @@ class PrepareStakeholderPreviewCommand extends Command
         }
 
         return $password;
-    }
-
-    /** @return array<string, User> */
-    private function prepareAccounts(string $password): array
-    {
-        return [
-            'citizen' => $this->preparePersona(StakeholderPreviewPersona::Citizen, $password),
-            'bplo' => $this->preparePersona(StakeholderPreviewPersona::Bplo, $password),
-            'assessment_officer' => $this->preparePersona(StakeholderPreviewPersona::AssessmentOfficer, $password),
-            'treasury' => $this->preparePersona(StakeholderPreviewPersona::Treasury, $password),
-            'municipal_treasurer' => $this->preparePersona(StakeholderPreviewPersona::MunicipalTreasurer, $password),
-            'cashier' => $this->preparePersona(StakeholderPreviewPersona::Cashier, $password),
-            'management' => $this->preparePersona(StakeholderPreviewPersona::Management, $password),
-            'engineering' => $this->preparePersona(StakeholderPreviewPersona::Engineering, $password),
-            'mpdo' => $this->preparePersona(StakeholderPreviewPersona::Mpdo, $password),
-            'assessor' => $this->preparePersona(StakeholderPreviewPersona::Assessor, $password),
-            'health' => $this->preparePersona(StakeholderPreviewPersona::Health, $password),
-            'menro' => $this->preparePersona(StakeholderPreviewPersona::Menro, $password),
-            'mayor_office' => $this->preparePersona(StakeholderPreviewPersona::MayorOffice, $password),
-            'releasing' => $this->preparePersona(StakeholderPreviewPersona::Releasing, $password),
-        ];
-    }
-
-    private function preparePersona(StakeholderPreviewPersona $persona, string $password): User
-    {
-        return $this->prepareUser(
-            $persona->approvedEmail(),
-            $persona->accountName(),
-            $password,
-            $this->previewRole($persona),
-        );
-    }
-
-    private function previewRole(StakeholderPreviewPersona $persona): Role
-    {
-        $role = Role::query()->firstOrCreate(
-            ['code' => $persona->roleCode()],
-            [
-                'name' => 'Preview '.$persona->label(),
-                'description' => 'Synthetic preview-only effective-permission mapping; not accepted municipal job-role policy.',
-            ],
-        );
-        $permissionIds = collect($persona->permissions())->map(function (UserPermission $permission): int {
-            return Permission::query()->firstOrCreate(
-                ['code' => $permission->value],
-                [
-                    'name' => str($permission->value)->replace(['.', '_'], ' ')->title()->toString(),
-                    'description' => null,
-                ],
-            )->id;
-        });
-        $role->permissions()->sync($permissionIds->all());
-
-        return $role;
-    }
-
-    private function prepareUser(string $email, string $name, string $password, Role $role): User
-    {
-        $user = User::query()->firstOrNew(['email' => $email]);
-        $user->forceFill([
-            'name' => $name,
-            'role_id' => $role->id,
-            'password' => Hash::make($password),
-            'email_verified_at' => $user->email_verified_at ?? now(),
-            'two_factor_secret' => null,
-            'two_factor_recovery_codes' => null,
-            'two_factor_confirmed_at' => null,
-        ])->save();
-
-        return $user->refresh();
     }
 
     /** @param array<string, User> $accounts */
