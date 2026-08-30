@@ -27,6 +27,7 @@ test('citizens can add and download private supporting evidence for an owned dra
         'status' => PermitApplicationStatus::Draft,
         'type' => PermitApplicationType::New,
     ]);
+    linkPortalUserToApplicationOwner($citizen, $application);
 
     $this->actingAs($citizen)
         ->post(route('citizen.permit-applications.documents.store', $application), [
@@ -78,6 +79,7 @@ test('citizen supporting evidence validates label and private file type', functi
         'application_number' => null,
         'status' => PermitApplicationStatus::Draft,
     ]);
+    linkPortalUserToApplicationOwner($citizen, $application);
 
     $this->actingAs($citizen)
         ->post(route('citizen.permit-applications.documents.store', $application), [
@@ -162,6 +164,7 @@ test('citizens cannot add supporting evidence after municipal processing begins'
         'application_number' => 'APP-PROCESSED-DOCUMENT-001',
         'status' => PermitApplicationStatus::PendingPayment,
     ]);
+    linkPortalUserToApplicationOwner($citizen, $application);
 
     $this->actingAs($citizen)
         ->post(route('citizen.permit-applications.documents.store', $application), [

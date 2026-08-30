@@ -12,13 +12,18 @@ for target in "${asset_dir}"/*-target.svg; do
 done
 
 magick montage \
-    "${asset_dir}/01-first-principles-onboarding-application-lobs-current.png" \
-    "${asset_dir}/05-first-principles-routing-responsibilities-current.png" \
-    "${asset_dir}/audit-final-health-work-surface.png" \
-    "${asset_dir}/audit-final-evaluation-responsibilities.png" \
-    "${asset_dir}/07-assessment-officer-working-paper-current.png" \
-    "${asset_dir}/11-first-principles-assessment-treasury-treasurer-current.png" \
-    "${asset_dir}/14-first-principles-payable-current.png" \
+    "${asset_dir}/product-01-citizen-my-permit-applications.png" \
+    "${asset_dir}/product-02-citizen-scenario-detail.png" \
+    "${asset_dir}/product-03-bplo-lifecycle-summary.png" \
+    "${asset_dir}/product-04-bplo-treasury-timeline.png" \
+    "${asset_dir}/product-05-assessment-officer-working-paper.png" \
+    "${asset_dir}/product-06-concerned-office-health.png" \
+    "${asset_dir}/product-07-treasury-lens.png" \
+    "${asset_dir}/product-08-municipal-treasurer-lens.png" \
+    "${asset_dir}/product-09-payable-payment-schedule.png" \
+    "${asset_dir}/product-10-mobile-citizen-detail.png" \
+    "${asset_dir}/product-11-mobile-bplo-summary.png" \
+    "${asset_dir}/product-12-mobile-municipal-treasurer.png" \
     -thumbnail 720x450 \
     -background '#eef2f5' \
     -geometry 720x450+18+18 \

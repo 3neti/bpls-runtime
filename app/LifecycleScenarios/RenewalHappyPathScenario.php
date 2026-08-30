@@ -117,6 +117,8 @@ final class RenewalHappyPathScenario
                 $this->assert($application->application_number === null, 'Scenario manufactured an unresolved official application number.');
                 $this->assert($application->lines()->count() === 2, 'Renewal did not preserve exactly two declared LOBs.');
 
+                $this->linkCitizenPortalIdentity($actors['citizen'], $application);
+
                 return $application;
             });
 
@@ -319,6 +321,7 @@ final class RenewalHappyPathScenario
         $linesOfBusiness = $this->linesOfBusiness();
         $this->assertAcceptedInspectionRule();
         $application->load(['business.owner', 'lines.lineOfBusiness', 'businessPermitEvaluation']);
+        $this->linkCitizenPortalIdentity($actors['citizen'], $application);
         $evaluation = $application->businessPermitEvaluation;
         $this->assert($evaluation instanceof BusinessPermitEvaluation, 'Persisted scenario application has no Evaluation.');
         $projection = $this->evaluationResolver->resolve($evaluation->fresh());
@@ -391,7 +394,15 @@ final class RenewalHappyPathScenario
             'system_bootstrap' => $this->bootstrapInventory($actors, $linesOfBusiness),
             'onboarding' => [
                 'canonical_action' => 'CreatePermitApplication',
-                'disposition' => 'Canonical staff intake owns BusinessOwner creation, Business creation, lodged Renewal creation, and LOB declarations atomically.',
+                'disposition' => 'Canonical staff intake owns BusinessOwner creation, Business creation, lodged Renewal creation, and LOB declarations atomically. Portal visibility follows the durable User to BusinessOwner to Businesses relationship; submitted_by_id remains the BPLO intake audit actor.',
+                'portal_identity' => [
+                    'id' => $actors['citizen']->id,
+                    'name' => $actors['citizen']->name,
+                    'business_owner_id' => $actors['citizen']->business_owner_id,
+                    'application_submitter_id' => $application->submitted_by_id,
+                    'visible_via' => 'user.business_owner_id -> businesses.business_owner_id -> permit_applications.business_id',
+                    'synthetic' => true,
+                ],
                 'owner_customer' => [
                     'id' => $application->business->owner->id,
                     'name' => $application->business->owner->name,
@@ -540,6 +551,7 @@ final class RenewalHappyPathScenario
     private function actors(): array
     {
         return [
+            'citizen' => $this->actor('citizen', 'Scenario 01 Citizen Owner', [UserPermission::AccessCitizen, UserPermission::ViewOwnPermitApplications, UserPermission::ViewOwnPermitApplicationDocuments, UserPermission::ViewOwnPermitApplicationFinancials, UserPermission::ViewOwnBusinessPermitEvaluations]),
             'intake' => $this->actor('intake', 'Scenario 01 BPLO Intake Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::CreatePermitApplications]),
             'assessment_officer' => $this->actor('assessment-officer', 'Scenario 01 Assessment Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::AssessPermitApplications, UserPermission::ViewPaymentSchedules, UserPermission::PreparePaymentSchedules]),
             'assessor' => $this->actor('assessor', 'Scenario 01 Assessor', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ContributeBusinessPermitEvaluations]),
@@ -549,6 +561,23 @@ final class RenewalHappyPathScenario
             'treasury' => $this->actor('treasury-counter-check', 'Scenario 01 Treasury Counter-checker', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::CounterCheckBusinessPermitEvaluations, UserPermission::CorrectEvaluationLinesOfBusiness]),
             'municipal_treasurer' => $this->actor('municipal-treasurer', 'Scenario 01 Municipal Treasurer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ApproveAssessments]),
         ];
+    }
+
+    private function linkCitizenPortalIdentity(User $citizen, PermitApplication $application): void
+    {
+        $businessOwnerId = $application->business->business_owner_id;
+        $this->assert(
+            $citizen->business_owner_id === null || $citizen->business_owner_id === $businessOwnerId,
+            'Deterministic Scenario 01 Citizen identity is already linked to another BusinessOwner.',
+        );
+
+        if ($citizen->business_owner_id === null) {
+            $citizen->forceFill(['business_owner_id' => $businessOwnerId])->save();
+        }
+
+        $citizen->refresh();
+        $this->assert($citizen->business_owner_id === $businessOwnerId, 'Scenario 01 Citizen portal identity is not linked to the application BusinessOwner.');
+        $this->assert($application->submitted_by_id !== $citizen->id, 'Staff-lodged Scenario 01 incorrectly records the Citizen as its submission actor.');
     }
 
     /** @param list<UserPermission> $permissions */

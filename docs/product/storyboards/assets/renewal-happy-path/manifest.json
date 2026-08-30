@@ -33,7 +33,19 @@
     "audit-final-assessment-mobile-390.png",
     "audit-final-evaluation-responsibilities.png",
     "audit-final-health-work-surface.png",
-    "audit-final-payable.png"
+    "audit-final-payable.png",
+    "product-01-citizen-my-permit-applications.png",
+    "product-02-citizen-scenario-detail.png",
+    "product-03-bplo-lifecycle-summary.png",
+    "product-04-bplo-treasury-timeline.png",
+    "product-05-assessment-officer-working-paper.png",
+    "product-06-concerned-office-health.png",
+    "product-07-treasury-lens.png",
+    "product-08-municipal-treasurer-lens.png",
+    "product-09-payable-payment-schedule.png",
+    "product-10-mobile-citizen-detail.png",
+    "product-11-mobile-bplo-summary.png",
+    "product-12-mobile-municipal-treasurer.png"
   ],
   "proposed_targets": [
     "01-citizen-lodged-target.svg",

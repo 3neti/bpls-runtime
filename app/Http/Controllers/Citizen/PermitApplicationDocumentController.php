@@ -51,7 +51,7 @@ class PermitApplicationDocumentController extends Controller
     {
         return PermitApplication::query()
             ->whereKey($permitApplication)
-            ->whereBelongsTo($request->user(), 'submittedBy')
+            ->visibleToPortalOwner($request->user())
             ->firstOrFail();
     }
 }

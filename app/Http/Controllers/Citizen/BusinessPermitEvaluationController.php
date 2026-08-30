@@ -74,10 +74,11 @@ class BusinessPermitEvaluationController extends Controller
 
     private function authorizeOwner(PermitApplication $permitApplication): void
     {
-        $permitApplication->loadMissing('business.owner.users');
         abort_unless(
-            $permitApplication->submitted_by_id === auth()->id()
-                || $permitApplication->business->owner->users->contains('id', auth()->id()),
+            PermitApplication::query()
+                ->whereKey($permitApplication)
+                ->visibleToPortalOwner(auth()->user())
+                ->exists(),
             403,
         );
     }

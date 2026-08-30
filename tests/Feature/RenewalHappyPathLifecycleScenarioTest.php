@@ -162,3 +162,66 @@ test('Scenario 01 projects its immutable Assessment and suppresses completed rol
                 ->has('permitApplications.data', 0));
     }
 });
+
+test('Scenario 01 is visible through the canonical Citizen owner relationship and projects the complete payable lifecycle', function () {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+
+    $result = app(RenewalHappyPathScenario::class)->run();
+    $application = PermitApplication::query()->findOrFail($result['application']['id']);
+    $citizen = User::query()->where('email', 'scenario-01-citizen@example.test')->sole();
+    $intake = User::query()->where('email', 'scenario-01-intake@example.test')->sole();
+
+    expect($citizen->business_owner_id)->toBe($application->business->business_owner_id)
+        ->and($application->submitted_by_id)->toBe($intake->id)
+        ->and($application->submitted_by_id)->not->toBe($citizen->id)
+        ->and($result['onboarding']['portal_identity'])->toMatchArray([
+            'id' => $citizen->id,
+            'business_owner_id' => $application->business->business_owner_id,
+            'application_submitter_id' => $intake->id,
+            'synthetic' => true,
+        ]);
+
+    $this->withoutVite()
+        ->actingAs($citizen)
+        ->get(route('citizen.permit-applications.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('citizen/permit-applications/Index', false)
+            ->has('permitApplications.data', 1)
+            ->where('permitApplications.data.0.id', $application->id)
+            ->where('permitApplications.data.0.type', 'renewal')
+            ->where('permitApplications.data.0.business_name', 'Scenario 01 Market and Kitchen'));
+
+    $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.show', $application))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('citizen/permit-applications/Show', false)
+            ->where('permitApplication.type', 'renewal')
+            ->where('permitApplication.lines.0.line_of_business.name', 'Scenario 01 Retail Trading')
+            ->where('permitApplication.lines.1.line_of_business.name', 'Scenario 01 Food Service')
+            ->where('permitApplication.processing.assessment.total_amount_cents', 122_000)
+            ->where('permitApplication.processing.assessment.treasury_counter_check.result', 'no_correction')
+            ->where('permitApplication.processing.assessment.treasurer_decision.action', 'approved')
+            ->where('permitApplication.processing.payment_schedule.total_amount_cents', 122_000)
+            ->where('permitApplication.processing.payment_schedule.balance_amount_cents', 122_000)
+            ->where('permitApplication.processing.payment_schedule.status', 'pending')
+            ->has('permitApplication.timeline', 7)
+            ->where('permitApplication.timeline.1.key', "assessment-computed:{$result['assessment']['id']}")
+            ->where('permitApplication.timeline.2.key', "treasury-counter-check:{$result['treasury_counter_check']['id']}")
+            ->where('permitApplication.timeline.2.title', 'Treasury counter-check completed — no correction')
+            ->where('permitApplication.timeline.3.key', fn (string $key): bool => str_starts_with($key, 'assessment-decision:'))
+            ->where('permitApplication.timeline.4.key', "payment-schedule-prepared:{$result['payment_schedule']['id']}"));
+
+    $this->actingAs($intake)
+        ->get(route('staff.permit-applications.show', $application))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Show', false)
+            ->where('permitApplication.latest_assessment.total_amount_cents', 122_000)
+            ->where('permitApplication.latest_assessment.treasury_counter_check.result', 'no_correction')
+            ->where('permitApplication.latest_assessment.treasurer_decision.action', 'approved')
+            ->where('permitApplication.latest_payment_schedule.total_amount_cents', 122_000)
+            ->where('permitApplication.latest_payment_schedule.paid_amount_cents', 0)
+            ->where('permitApplication.timeline.2.key', "treasury-counter-check:{$result['treasury_counter_check']['id']}"));
+});

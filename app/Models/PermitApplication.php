@@ -6,6 +6,7 @@ use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
 use Database\Factories\PermitApplicationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -111,6 +112,16 @@ class PermitApplication extends Model
     public function provisionalUatPermitCompletion(): HasOne
     {
         return $this->hasOne(ProvisionalUatPermitCompletion::class);
+    }
+
+    /** @param Builder<PermitApplication> $query */
+    public function scopeVisibleToPortalOwner(Builder $query, User $citizen): Builder
+    {
+        return $query->whereHas(
+            'business',
+            fn (Builder $businessQuery): Builder => $businessQuery
+                ->where('business_owner_id', $citizen->business_owner_id ?? 0),
+        );
     }
 
     public function canContinue(): bool

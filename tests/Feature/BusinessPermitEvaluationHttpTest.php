@@ -25,6 +25,9 @@ function httpEvaluationFixture(?User $submitter = null): array
         'status' => PermitApplicationStatus::Assessment,
         'submitted_at' => now(),
     ]);
+    if ($submitter->hasRole(UserRole::Citizen)) {
+        linkPortalUserToApplicationOwner($submitter, $application);
+    }
     PermitApplicationLine::factory()->for($application)->for($lineOfBusiness)->create();
     $evaluation = app(InitializeBusinessPermitEvaluation::class)->handle($application, $submitter);
 

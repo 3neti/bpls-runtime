@@ -354,6 +354,7 @@ test('invalid citizen draft edits preserve all existing records', function () {
         'status' => PermitApplicationStatus::Draft,
         'type' => PermitApplicationType::New,
     ]);
+    linkPortalUserToApplicationOwner($citizen, $application);
     $line = PermitApplicationLine::factory()->for($application)->for($lineOfBusiness)->create([
         'declared_gross_sales_cents' => 100_000,
     ]);
@@ -372,7 +373,7 @@ test('invalid citizen draft edits preserve all existing records', function () {
         ->and($line->refresh()->declared_gross_sales_cents)->toBe(100_000);
 });
 
-test('citizen draft editing refuses shared registry records without mutation', function () {
+test('citizen draft editing preserves shared registry records while updating declarations', function () {
     $citizen = userWithPermissions([
         UserPermission::AccessCitizen,
         UserPermission::EditOwnPermitApplications,
@@ -384,6 +385,7 @@ test('citizen draft editing refuses shared registry records without mutation', f
         'status' => PermitApplicationStatus::Draft,
         'type' => PermitApplicationType::New,
     ]);
+    linkPortalUserToApplicationOwner($citizen, $application);
     $line = PermitApplicationLine::factory()->for($application)->for($lineOfBusiness)->create([
         'declared_gross_sales_cents' => 100_000,
     ]);
@@ -393,7 +395,7 @@ test('citizen draft editing refuses shared registry records without mutation', f
 
     $this->actingAs($citizen)
         ->get(route('citizen.permit-applications.edit', $application))
-        ->assertConflict();
+        ->assertOk();
 
     $this->actingAs($citizen)
         ->patch(route('citizen.permit-applications.update', $application), citizenPermitDraftPayload([
@@ -406,10 +408,11 @@ test('citizen draft editing refuses shared registry records without mutation', f
                 'quantity' => 1,
             ]],
         ]))
-        ->assertSessionHasErrors('draft');
+        ->assertRedirect(route('citizen.permit-applications.show', $application));
 
     expect($application->business->refresh()->name)->toBe($originalBusinessName)
-        ->and($line->refresh()->declared_gross_sales_cents)->toBe(100_000);
+        ->and(PermitApplicationLine::query()->whereKey($line)->exists())->toBeFalse()
+        ->and($application->lines()->sole()->declared_gross_sales_cents)->toBe(999_999);
 });
 
 test('citizen draft update refuses stale or municipally processed records without mutation', function (array $applicationOverrides, bool $stale): void {
@@ -425,6 +428,7 @@ test('citizen draft update refuses stale or municipally processed records withou
         'type' => PermitApplicationType::New,
         ...$applicationOverrides,
     ]);
+    linkPortalUserToApplicationOwner($citizen, $application);
     $line = PermitApplicationLine::factory()->for($application)->for($lineOfBusiness)->create([
         'declared_gross_sales_cents' => 100_000,
     ]);
@@ -453,7 +457,7 @@ test('citizen draft update refuses stale or municipally processed records withou
     'non-draft application' => [['status' => PermitApplicationStatus::PendingPayment], false],
 ]);
 
-test('citizen application lists and details are scoped to the authenticated submitter', function () {
+test('citizen application lists and details are scoped to the authenticated portal owner', function () {
     $citizen = userWithPermissions([
         UserPermission::AccessCitizen,
         UserPermission::ViewOwnPermitApplications,
@@ -469,6 +473,8 @@ test('citizen application lists and details are scoped to the authenticated subm
         'application_number' => null,
         'status' => PermitApplicationStatus::Draft,
     ]);
+    linkPortalUserToApplicationOwner($citizen, $ownedApplication);
+    linkPortalUserToApplicationOwner($otherCitizen, $otherApplication);
     PermitApplicationLine::factory()->for($ownedApplication)->create();
     PermitApplicationLine::factory()->for($otherApplication)->create();
 

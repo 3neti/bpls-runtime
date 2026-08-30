@@ -3,6 +3,7 @@
 use App\Enums\UserPermission;
 use App\Enums\UserRole;
 use App\Models\Permission;
+use App\Models\PermitApplication;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -74,4 +75,11 @@ function userWithPermissions(array $permissions, UserRole $roleCode = UserRole::
     return User::factory()->create([
         'role_id' => $role->id,
     ]);
+}
+
+function linkPortalUserToApplicationOwner(User $citizen, PermitApplication $application): void
+{
+    $citizen->forceFill([
+        'business_owner_id' => $application->business->business_owner_id,
+    ])->save();
 }

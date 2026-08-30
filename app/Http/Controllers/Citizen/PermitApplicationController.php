@@ -42,7 +42,7 @@ class PermitApplicationController extends Controller
         Gate::authorize(UserPermission::ViewOwnPermitApplications->value);
 
         $permitApplications = PermitApplication::query()
-            ->whereBelongsTo($request->user(), 'submittedBy')
+            ->visibleToPortalOwner($request->user())
             ->with(['business', 'lines.lineOfBusiness'])
             ->latest('id')
             ->paginate(15)
@@ -244,9 +244,11 @@ class PermitApplicationController extends Controller
                     'citizen_submitted_at' => data_get($application->metadata, 'citizen_submission.submitted_at'),
                     'municipality_received_at' => data_get($application->metadata, 'municipal_receipt.received_at'),
                     'documentary_sufficiency_determined' => (bool) data_get($application->metadata, 'submission_policy_boundary.documentary_sufficiency_determined', false),
-                    'statement' => $isDraft
-                        ? 'Formal submission places this draft in the municipal processing queue. It does not confirm documentary sufficiency, approval, assessment acceptance, payment, or permit issuance.'
-                        : 'The citizen submitted this application and the municipality received it into the processing queue. Later determinations remain separate municipal actions.',
+                    'statement' => match (true) {
+                        $isDraft => 'Formal submission places this draft in the municipal processing queue. It does not confirm documentary sufficiency, approval, assessment acceptance, payment, or permit issuance.',
+                        data_get($application->metadata, 'citizen_submission.submitted_at') !== null => 'You submitted this application and the municipality received it into the processing queue. Later determinations remain separate municipal actions.',
+                        default => 'Municipal staff lodged this application for your business. It appears here through your linked owner/customer account.',
+                    },
                 ],
                 'processing' => [
                     'has_entered_municipal_processing' => ! $isDraft
@@ -254,13 +256,23 @@ class PermitApplicationController extends Controller
                         || $assessmentStarted,
                     'application_status' => $application->status->value,
                     'current_stage' => $currentProcessingStage,
-                    'statement' => 'This view reports the current municipal processing record. Submission does not authorize online payment or determine documentary sufficiency.',
+                    'statement' => $latestPaymentSchedule?->status->value === 'pending'
+                        ? 'Municipal evaluation is complete, the Assessment is approved, and payment is pending.'
+                        : 'This view reports the municipality’s current processing record and payment state.',
                     'assessment' => $latestAssessment === null ? null : [
                         'id' => $latestAssessment->id,
                         'sequence' => $latestAssessment->sequence,
                         'status' => $latestAssessment->status->value,
                         'total_amount_cents' => $latestAssessment->total_amount_cents,
                         'assessed_at' => $latestAssessment->assessed_at?->toIso8601String(),
+                        'treasury_counter_check' => $latestAssessment->treasuryCounterCheck === null ? null : [
+                            'result' => $latestAssessment->treasuryCounterCheck->result?->value,
+                            'checked_at' => $latestAssessment->treasuryCounterCheck->checked_at->toIso8601String(),
+                        ],
+                        'treasurer_decision' => $latestAssessment->decision === null ? null : [
+                            'action' => $latestAssessment->decision->action->value,
+                            'decided_at' => $latestAssessment->decision->decided_at->toIso8601String(),
+                        ],
                     ],
                     'payment_schedule' => $latestPaymentSchedule === null ? null : [
                         'id' => $latestPaymentSchedule->id,
@@ -344,13 +356,16 @@ class PermitApplicationController extends Controller
     {
         return PermitApplication::query()
             ->whereKey($permitApplication)
-            ->whereBelongsTo($request->user(), 'submittedBy')
+            ->visibleToPortalOwner($request->user())
             ->with([
                 'business.owner',
                 'submittedBy',
                 'lines.lineOfBusiness',
                 'documents' => fn ($query) => $query->latest('uploaded_at')->latest('id'),
-                'assessments' => fn ($query) => $query->whereNull('superseded_at')->latest('sequence'),
+                'assessments' => fn ($query) => $query
+                    ->whereNull('superseded_at')
+                    ->with(['decision', 'treasuryCounterCheck'])
+                    ->latest('sequence'),
                 'paymentSchedules' => fn ($query) => $query->latest('sequence'),
                 'paymentSchedules.treasuryCollections' => fn ($query) => $query->oldest('id'),
                 'paymentSchedules.treasuryCollections.receipt',

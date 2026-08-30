@@ -112,6 +112,14 @@ type PermitApplication = {
             status: string;
             total_amount_cents: number;
             assessed_at: string | null;
+            treasury_counter_check: {
+                result: string | null;
+                checked_at: string;
+            } | null;
+            treasurer_decision: {
+                action: string;
+                decided_at: string;
+            } | null;
         } | null;
         payment_schedule: {
             id: number;
@@ -316,6 +324,12 @@ function statusLabel(status: string): string {
     return labels[status] ?? status.replaceAll('_', ' ');
 }
 
+function applicationTypeLabel(type: string): string {
+    return type
+        .replaceAll('_', ' ')
+        .replace(/^./, (letter) => letter.toUpperCase());
+}
+
 function blockerLabel(blocker: string): string {
     const labels: Record<string, string> = {
         issuance_authority: 'Responsible issuing authority',
@@ -352,21 +366,24 @@ function blockerLabel(blocker: string): string {
                     </p>
                     <p class="text-sm text-muted-foreground">
                         {{ permitApplication.business.name }} ·
-                        {{ permitApplication.application_year }} new permit
+                        {{ permitApplication.application_year }}
+                        {{ applicationTypeLabel(permitApplication.type) }}
                     </p>
                 </div>
             </section>
 
             <WorkflowStageSummary
-                eyebrow="Applicant journey"
+                data-testid="citizen-lifecycle-summary"
+                eyebrow="Your permit application"
                 :title="
-                    permitApplication.processing.current_stage ===
-                    'ready_for_authority_review'
-                        ? 'Ready for authority review'
+                    permitApplication.processing.payment_schedule &&
+                    permitApplication.processing.payment_schedule
+                        .balance_amount_cents > 0
+                        ? `${applicationTypeLabel(permitApplication.type)} ready for payment`
                         : permitApplication.processing
                                 .has_entered_municipal_processing
-                          ? 'Municipal processing is underway'
-                          : 'Application draft and submission'
+                          ? `${applicationTypeLabel(permitApplication.type)} under municipal review`
+                          : `${applicationTypeLabel(permitApplication.type)} draft`
                 "
                 :description="
                     permitApplication.processing
@@ -376,38 +393,48 @@ function blockerLabel(blocker: string): string {
                 "
                 :items="[
                     {
-                        label: 'Current state',
-                        value: statusLabel(
-                            permitApplication.processing.current_stage,
-                        ),
-                        detail: permitApplication.draft_boundary.statement,
+                        label: 'Business',
+                        value: permitApplication.business.name,
+                        detail: `${applicationTypeLabel(permitApplication.type)} · ${permitApplication.application_year}`,
                     },
                     {
-                        label: referenceLabel(permitApplication),
-                        value: permitApplication.display_reference,
-                        detail: permitApplication.application_number
-                            ? 'Official application number recorded'
-                            : 'Applicant-facing tracking identity only',
+                        label: 'Lines of business',
+                        value:
+                            permitApplication.lines
+                                .map(
+                                    (line) =>
+                                        line.line_of_business.name ??
+                                        'Unclassified',
+                                )
+                                .join(' + ') || 'Not yet declared',
+                        detail: `${permitApplication.activity_count} declared ${permitApplication.activity_count === 1 ? 'activity' : 'activities'}`,
                     },
                     {
-                        label: 'Submission',
-                        value: permitApplication.submission_boundary
-                            .citizen_submitted_at
-                            ? 'Submitted'
-                            : 'Not submitted',
-                        detail: permitApplication.submission_boundary
-                            .municipality_received_at
-                            ? 'Municipality receipt recorded'
-                            : 'Municipality receipt not recorded',
+                        label: 'Assessment',
+                        value: permitApplication.processing.assessment
+                            ? money(
+                                  permitApplication.processing.assessment
+                                      .total_amount_cents,
+                              )
+                            : 'Not yet prepared',
+                        detail: permitApplication.processing.assessment
+                            ?.treasurer_decision
+                            ? `Municipal Treasurer ${statusLabel(permitApplication.processing.assessment.treasurer_decision.action)}`
+                            : 'Municipal decision pending',
                     },
                     {
-                        label: 'Current authorized task',
-                        value: permitApplication.can_submit
-                            ? 'Submit this application'
-                            : permitApplication.can_edit
-                              ? 'Continue editing this draft'
-                              : 'Review the recorded progress',
-                        detail: permitApplication.processing.statement,
+                        label: 'Amount due',
+                        value: permitApplication.processing.payment_schedule
+                            ? money(
+                                  permitApplication.processing.payment_schedule
+                                      .balance_amount_cents,
+                              )
+                            : 'Not yet payable',
+                        detail: permitApplication.processing.payment_schedule
+                            ? `Payment ${statusLabel(permitApplication.processing.payment_schedule.status)}`
+                            : statusLabel(
+                                  permitApplication.processing.current_stage,
+                              ),
                     },
                 ]"
             >

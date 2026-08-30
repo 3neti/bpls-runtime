@@ -30,6 +30,7 @@ test('citizens can view authoritative assessment and payment state for an owned 
         'application_number' => 'APP-CITIZEN-TRACKING-001',
         'status' => PermitApplicationStatus::PendingPayment,
     ]);
+    linkPortalUserToApplicationOwner($citizen, $application);
     $assessment = Assessment::factory()->for($application)->create([
         'sequence' => 2,
         'status' => AssessmentStatus::Computed,
@@ -95,6 +96,7 @@ test('citizen financial state remains hidden without the explicit permission', f
     $application = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
         'status' => PermitApplicationStatus::PendingPayment,
     ]);
+    linkPortalUserToApplicationOwner($citizen, $application);
     $assessment = Assessment::factory()->for($application)->create([
         'status' => AssessmentStatus::Computed,
         'total_amount_cents' => 90_000,
@@ -126,6 +128,7 @@ test('citizen payment state is not paired with a superseded assessment schedule'
     $application = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
         'status' => PermitApplicationStatus::PendingPayment,
     ]);
+    linkPortalUserToApplicationOwner($citizen, $application);
     $supersededAssessment = Assessment::factory()->for($application)->create([
         'sequence' => 1,
         'status' => AssessmentStatus::Computed,
@@ -166,6 +169,7 @@ test('citizens can view collection receipt clearance and authority review eviden
         'application_number' => 'APP-CITIZEN-AUTHORITY-001',
         'status' => PermitApplicationStatus::PendingPayment,
     ]);
+    linkPortalUserToApplicationOwner($citizen, $application);
     $assessment = Assessment::factory()->for($application)->create([
         'status' => AssessmentStatus::Computed,
         'total_amount_cents' => 150_000,

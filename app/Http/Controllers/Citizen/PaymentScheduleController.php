@@ -23,7 +23,7 @@ class PaymentScheduleController extends Controller
 
         $ownedPaymentSchedule = PaymentSchedule::query()
             ->whereKey($paymentSchedule)
-            ->whereHas('permitApplication', fn ($query) => $query->whereBelongsTo($request->user(), 'submittedBy'))
+            ->whereHas('permitApplication', fn ($query) => $query->visibleToPortalOwner($request->user()))
             ->firstOrFail();
 
         return Inertia::render('citizen/payment-schedules/Show', [

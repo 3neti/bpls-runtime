@@ -101,7 +101,7 @@ test('citizen submission rejects a draft whose business is not linked to the cit
 
     $this->actingAs($citizen)
         ->post(route('citizen.permit-applications.submit', $application))
-        ->assertSessionHasErrors('submission');
+        ->assertNotFound();
 
     expect($application->refresh()->status)->toBe(PermitApplicationStatus::Draft)
         ->and($application->submitted_at)->toBeNull();

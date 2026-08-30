@@ -180,7 +180,9 @@ class PermitApplicationController extends Controller
             'submittedBy',
             'documents' => fn ($query) => $query->with('uploadedBy')->latest('uploaded_at'),
             'lines.lineOfBusiness',
-            'assessments' => fn ($query) => $query->with('assessedBy')->latest(),
+            'assessments' => fn ($query) => $query
+                ->with(['assessedBy', 'treasuryCounterCheck.checkedBy', 'decision.decidedBy'])
+                ->latest(),
             'paymentSchedules' => fn ($query) => $query->with('preparedBy')->latest(),
             'treasuryCollections' => fn ($query) => $query->with(['receivedBy', 'receipt.issuedBy'])->oldest(),
             'clearances' => fn ($query) => $query->with('completedBy')->orderBy('id'),
@@ -296,6 +298,14 @@ class PermitApplicationController extends Controller
                 'status' => $latestAssessment->status->value,
                 'total_amount_cents' => $latestAssessment->total_amount_cents,
                 'assessed_at' => $latestAssessment->assessed_at?->toIso8601String(),
+                'treasury_counter_check' => $latestAssessment->treasuryCounterCheck === null ? null : [
+                    'result' => $latestAssessment->treasuryCounterCheck->result?->value,
+                    'checked_at' => $latestAssessment->treasuryCounterCheck->checked_at->toIso8601String(),
+                ],
+                'treasurer_decision' => $latestAssessment->decision === null ? null : [
+                    'action' => $latestAssessment->decision->action->value,
+                    'decided_at' => $latestAssessment->decision->decided_at->toIso8601String(),
+                ],
             ],
             'latest_payment_schedule' => $latestPaymentSchedule === null ? null : [
                 'id' => $latestPaymentSchedule->id,

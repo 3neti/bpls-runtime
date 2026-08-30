@@ -198,6 +198,7 @@ function qrPhScheduleFixture(bool $approved = true): array
         'status' => PermitApplicationStatus::PendingPayment,
         'application_year' => 2026,
     ]);
+    linkPortalUserToApplicationOwner($citizen, $application);
     $assessment = Assessment::factory()->for($application)->create([
         'status' => AssessmentStatus::Computed,
         'total_amount_cents' => 12_550,

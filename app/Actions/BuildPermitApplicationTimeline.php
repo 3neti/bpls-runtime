@@ -23,6 +23,7 @@ class BuildPermitApplicationTimeline
             'submittedBy',
             'documents.uploadedBy',
             'assessments.assessedBy',
+            'assessments.treasuryCounterCheck.checkedBy',
             'assessments.decision.decidedBy',
             'paymentSchedules.preparedBy',
             'treasuryCollections.receivedBy',
@@ -90,6 +91,25 @@ class BuildPermitApplicationTimeline
                 sourceType: 'assessment',
                 sourceId: $assessment->id,
             ));
+
+            if ($assessment->treasuryCounterCheck !== null) {
+                $counterCheck = $assessment->treasuryCounterCheck;
+                $events->push($this->event(
+                    key: "treasury-counter-check:{$counterCheck->id}",
+                    category: 'treasury',
+                    title: $counterCheck->result->value === 'no_correction'
+                        ? 'Treasury counter-check completed — no correction'
+                        : 'Treasury counter-check completed — correction required',
+                    description: $counterCheck->result->value === 'no_correction'
+                        ? 'Treasury confirmed the prepared Assessment without changing its amount.'
+                        : 'Treasury returned the prepared Assessment for correction.',
+                    status: $counterCheck->result->value,
+                    actor: $this->actor($counterCheck->checkedBy),
+                    occurredAt: $counterCheck->checked_at,
+                    sourceType: 'treasury_counter_check',
+                    sourceId: $counterCheck->id,
+                ));
+            }
 
             if ($assessment->decision !== null) {
                 $decision = $assessment->decision;
@@ -305,6 +325,7 @@ class BuildPermitApplicationTimeline
             'municipal_receipt' => 12,
             'permit_application_document' => 15,
             'assessment' => 20,
+            'treasury_counter_check' => 22,
             'assessment_decision' => 25,
             'payment_schedule' => 30,
             'permit_application_status_history' => 40,

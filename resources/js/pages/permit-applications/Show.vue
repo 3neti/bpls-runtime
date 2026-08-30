@@ -90,6 +90,14 @@ type PermitApplication = {
         status: string;
         total_amount_cents: number;
         assessed_at: string | null;
+        treasury_counter_check: {
+            result: string | null;
+            checked_at: string;
+        } | null;
+        treasurer_decision: {
+            action: string;
+            decided_at: string;
+        } | null;
     } | null;
     latest_payment_schedule: {
         id: number;
@@ -359,41 +367,83 @@ function fileSize(sizeBytes: number): string {
             </section>
 
             <WorkflowStageSummary
-                eyebrow="Current application record"
-                :title="label(permitApplication.status)"
-                description="Use only the actions currently available for this record. Financial, clearance, permit document, and approval details are shown separately below."
+                data-testid="permit-lifecycle-summary"
+                eyebrow="Certified lifecycle"
+                :title="`${label(permitApplication.type)} · ${permitApplication.latest_payment_schedule ? `${money(permitApplication.latest_payment_schedule.total_amount_cents - permitApplication.latest_payment_schedule.paid_amount_cents)} pending payment` : label(permitApplication.status)}`"
+                :description="`${label(permitApplication.type)} → ${permitApplication.lines.map((line) => line.line_of_business.name ?? 'Unclassified').join(' + ')} → ${permitApplication.latest_assessment ? `Assessment ${money(permitApplication.latest_assessment.total_amount_cents)}` : 'Assessment pending'} → ${permitApplication.latest_assessment?.treasury_counter_check?.result === 'no_correction' ? 'Treasury counter-check complete — no correction' : 'Treasury counter-check pending'} → ${permitApplication.latest_assessment?.treasurer_decision?.action === 'approved' ? 'Municipal Treasurer approved' : 'Municipal Treasurer decision pending'}`"
                 :items="[
                     {
-                        label: 'Application type',
+                        label: 'Application / transaction',
                         value: label(permitApplication.type),
-                        detail: String(permitApplication.application_year),
+                        detail: `${permitApplication.business.name} · ${permitApplication.application_year}`,
                     },
                     {
-                        label: 'Latest assessment',
+                        label: 'Lines of business',
+                        value:
+                            permitApplication.lines
+                                .map(
+                                    (line) =>
+                                        line.line_of_business.name ??
+                                        'Unclassified',
+                                )
+                                .join(' + ') || 'Not declared',
+                        detail: `${permitApplication.lines.length} declared ${permitApplication.lines.length === 1 ? 'activity' : 'activities'}`,
+                    },
+                    {
+                        label: 'Current Assessment',
                         value: permitApplication.latest_assessment
-                            ? `Assessment #${permitApplication.latest_assessment.sequence}`
+                            ? money(
+                                  permitApplication.latest_assessment
+                                      .total_amount_cents,
+                              )
                             : 'Not assessed',
-                        detail:
-                            permitApplication.latest_assessment?.status ?? null,
-                    },
-                    {
-                        label: 'Payment schedule',
-                        value: permitApplication.latest_payment_schedule
-                            ? `Schedule #${permitApplication.latest_payment_schedule.sequence}`
-                            : 'Not prepared',
-                        detail: permitApplication.latest_payment_schedule
-                            ? `${label(permitApplication.latest_payment_schedule.status)} · Balance ${money(permitApplication.latest_payment_schedule.total_amount_cents - permitApplication.latest_payment_schedule.paid_amount_cents)}`
+                        detail: permitApplication.latest_assessment
+                            ? `Immutable Assessment #${permitApplication.latest_assessment.sequence}`
                             : null,
                     },
                     {
-                        label: 'Authority review',
-                        value: permitApplication.release_readiness
-                            .ready_for_authority_review
-                            ? 'Ready for Authority Review'
-                            : 'Not ready for authority review',
-                        detail: permitApplication.release_readiness.can_release
-                            ? 'Release action available'
-                            : 'Release remains unavailable',
+                        label: 'Treasury counter-check',
+                        value:
+                            permitApplication.latest_assessment
+                                ?.treasury_counter_check?.result ===
+                            'no_correction'
+                                ? 'Complete — no correction'
+                                : 'Pending',
+                        detail: 'Treasury reviews; it does not approve the Assessment',
+                    },
+                    {
+                        label: 'Municipal Treasurer',
+                        value:
+                            permitApplication.latest_assessment
+                                ?.treasurer_decision?.action === 'approved'
+                                ? 'Approved'
+                                : 'Decision pending',
+                        detail: 'Decision on the exact prepared Assessment',
+                    },
+                    {
+                        label: 'Amount due',
+                        value: permitApplication.latest_payment_schedule
+                            ? money(
+                                  permitApplication.latest_payment_schedule
+                                      .total_amount_cents -
+                                      permitApplication.latest_payment_schedule
+                                          .paid_amount_cents,
+                              )
+                            : 'Not yet payable',
+                        detail: permitApplication.latest_payment_schedule
+                            ? `Payment ${label(permitApplication.latest_payment_schedule.status)}`
+                            : null,
+                    },
+                    {
+                        label: 'Remaining legitimate action',
+                        value: permitApplication.latest_payment_schedule
+                            ? 'Receive payment'
+                            : permitApplication.has_business_permit_evaluation
+                              ? 'Continue municipal review'
+                              : 'Start Evaluation',
+                        detail: permitApplication.latest_payment_schedule
+                            ? 'No financial mutation; collect against the Payable'
+                            : null,
                     },
                 ]"
             >

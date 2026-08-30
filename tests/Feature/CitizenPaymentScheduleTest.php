@@ -58,6 +58,7 @@ test('citizens can inspect authoritative payment evidence for an owned applicati
             'status' => PermitApplicationStatus::PendingPayment,
             'application_year' => 2026,
         ]);
+    linkPortalUserToApplicationOwner($citizen, $application);
     $assessment = Assessment::factory()->for($application)->create([
         'sequence' => 2,
         'status' => AssessmentStatus::Computed,
