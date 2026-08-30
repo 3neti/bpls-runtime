@@ -40,10 +40,25 @@ type AssessmentLine = {
     legal_basis: string | null;
 };
 
+type AssessmentWorkingPaper = {
+    line_sections: {
+        line_of_business_id: number;
+        line_of_business_name: string | null;
+        charges: AssessmentLine[];
+        subtotal_amount_cents: number;
+    }[];
+    application_charges: AssessmentLine[];
+    application_subtotal_amount_cents: number;
+    grand_total_amount_cents: number;
+    grouped_total_amount_cents: number;
+    reconciles: boolean;
+};
+
 type Assessment = {
     id: number;
     sequence: number;
     status: string;
+    display_status: string;
     assessed_at: string | null;
     assessed_by: string | null;
     total_amount_cents: number;
@@ -54,6 +69,12 @@ type Assessment = {
         version_sequence: number;
         fingerprint: string;
         view_url: string;
+    } | null;
+    treasury_counter_check: {
+        checked_at: string;
+        checked_by: string;
+        reason: string | null;
+        evidence_provenance: string;
     } | null;
     payment_schedule_available: boolean;
     decision: {
@@ -75,6 +96,7 @@ type Assessment = {
         business_name: string;
         owner_name: string;
     };
+    financial_working_paper: AssessmentWorkingPaper;
     lines: AssessmentLine[];
     latest_payment_schedule: {
         id: number;
@@ -134,7 +156,9 @@ function money(amountCents: number): string {
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head :title="`Assessment #${assessment.sequence}`" />
 
-        <main class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
+        <main
+            class="flex h-full min-w-0 flex-1 flex-col gap-4 overflow-x-hidden p-4"
+        >
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="flex flex-col gap-1">
                     <Button
@@ -160,19 +184,17 @@ function money(amountCents: number): string {
 
             <WorkflowStageSummary
                 eyebrow="Recorded assessment"
-                :title="money(assessment.total_amount_cents)"
-                description="This total and every line below are the recorded assessment reviewed for payment. This page does not recalculate liability."
+                :title="`Grand Total · ${money(assessment.total_amount_cents)}`"
+                description="This immutable total and every line below are the exact recorded Assessment reviewed by Treasury and the Municipal Treasurer. This page does not recalculate liability."
                 :items="[
                     {
-                        label: 'Assessment status',
-                        value: assessment.status.replaceAll('_', ' '),
+                        label: 'Lifecycle status',
+                        value: assessment.display_status,
                     },
                     {
-                        label: 'Application status',
-                        value: assessment.permit_application.status.replaceAll(
-                            '_',
-                            ' ',
-                        ),
+                        label: 'Stored Assessment state',
+                        value: assessment.status.replaceAll('_', ' '),
+                        detail: 'Immutable recorded snapshot',
                     },
                     {
                         label: 'Prepared by Assessment Officer',
@@ -180,9 +202,9 @@ function money(amountCents: number): string {
                         detail: assessment.assessed_at ?? 'No timestamp',
                     },
                     {
-                        label: 'Current task',
+                        label: 'Next destination',
                         value: assessment.latest_payment_schedule
-                            ? 'Review payment schedule'
+                            ? 'Payable · Review payment schedule'
                             : assessment.decision?.action ===
                                 'returned_for_correction'
                               ? 'Prepare corrected assessment'
@@ -305,6 +327,44 @@ function money(amountCents: number): string {
                         {{ assessment.business_permit_evaluation.fingerprint }}
                     </p>
                 </details>
+            </section>
+
+            <section
+                v-if="assessment.treasury_counter_check"
+                class="rounded-xl border border-sky-300 bg-sky-50 p-4 text-sky-950 shadow-xs dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-100"
+                data-testid="assessment-treasury-counter-check"
+                aria-labelledby="assessment-treasury-counter-check-title"
+            >
+                <div class="flex items-start gap-3">
+                    <CheckCircle2 class="mt-0.5 size-5 shrink-0" />
+                    <div class="min-w-0">
+                        <p
+                            class="text-xs font-medium tracking-wide uppercase opacity-80"
+                        >
+                            Treasury counter-check
+                        </p>
+                        <h2
+                            id="assessment-treasury-counter-check-title"
+                            class="mt-1 font-semibold"
+                        >
+                            Exact Evaluation version reconciled
+                        </h2>
+                        <p class="mt-1 text-sm">
+                            {{ assessment.treasury_counter_check.checked_by }} ·
+                            {{ assessment.treasury_counter_check.checked_at }}
+                        </p>
+                        <p
+                            v-if="assessment.treasury_counter_check.reason"
+                            class="mt-2 text-sm"
+                        >
+                            {{ assessment.treasury_counter_check.reason }}
+                        </p>
+                        <p class="mt-2 text-xs opacity-80">
+                            Counter-check confirms the exact Evaluation version;
+                            it does not approve or rewrite this Assessment.
+                        </p>
+                    </div>
+                </div>
             </section>
 
             <section
@@ -477,81 +537,204 @@ function money(amountCents: number): string {
             </section>
 
             <section
-                class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
+                class="overflow-hidden rounded-2xl border border-sidebar-border/70 bg-background shadow-xs dark:border-sidebar-border"
+                aria-labelledby="assessment-working-paper-title"
+                data-testid="assessment-financial-working-paper"
             >
                 <div
                     class="border-b border-sidebar-border/70 p-4 dark:border-sidebar-border"
                 >
                     <WorkflowSectionHeader
-                        eyebrow="Supporting evidence"
-                        title="Assessment lines"
-                        description="Amounts, bases, and classifications are displayed exactly as recorded for this assessment."
+                        eyebrow="Computation / Assessment working paper"
+                        title="Charges by Line of Business"
+                        description="The exact immutable Assessment snapshot follows the Ipil working-paper grammar: each Line of Business, its charges and subtotal, application-wide charges, then the Grand Total."
                     />
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full min-w-[820px] text-sm">
-                        <thead
-                            class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
+                <div class="grid gap-4 p-3 sm:p-4">
+                    <section
+                        v-for="(section, index) in assessment
+                            .financial_working_paper.line_sections"
+                        :key="section.line_of_business_id"
+                        class="overflow-hidden rounded-xl border"
+                    >
+                        <header
+                            class="flex flex-col gap-2 border-b bg-muted/30 p-4 sm:flex-row sm:items-end sm:justify-between"
                         >
-                            <tr>
-                                <th class="px-4 py-3 font-medium">Code</th>
-                                <th class="px-4 py-3 font-medium">Fee / Tax</th>
-                                <th class="px-4 py-3 font-medium">Category</th>
-                                <th class="px-4 py-3 font-medium">Basis</th>
-                                <th class="px-4 py-3 text-right font-medium">
-                                    Basis amount
-                                </th>
-                                <th class="px-4 py-3 text-right font-medium">
-                                    Amount
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr
-                                v-for="line in assessment.lines"
+                            <div>
+                                <p
+                                    class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                                >
+                                    Line of Business {{ index + 1 }}
+                                </p>
+                                <h3 class="mt-1 font-semibold">
+                                    {{
+                                        section.line_of_business_name ??
+                                        'Recorded Line of Business'
+                                    }}
+                                </h3>
+                            </div>
+                            <div class="sm:text-right">
+                                <p class="text-xs text-muted-foreground">
+                                    LOB Subtotal
+                                </p>
+                                <p
+                                    class="mt-1 text-xl font-semibold tabular-nums"
+                                >
+                                    {{ money(section.subtotal_amount_cents) }}
+                                </p>
+                            </div>
+                        </header>
+                        <div class="divide-y">
+                            <article
+                                v-for="line in section.charges"
                                 :key="line.id"
-                                class="border-b last:border-b-0"
+                                class="grid min-w-0 gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,0.6fr)_auto] sm:items-start"
                                 data-testid="assessment-line"
                                 :data-line-code="line.code"
                             >
-                                <td
-                                    class="px-4 py-3 align-top font-mono text-xs"
-                                >
-                                    {{ line.code }}
-                                </td>
-                                <td class="px-4 py-3 align-top">
-                                    <div class="font-medium">
+                                <div class="min-w-0">
+                                    <h4 class="font-medium break-words">
                                         {{ line.name }}
-                                    </div>
-                                    <div class="text-xs text-muted-foreground">
-                                        {{
-                                            line.line_of_business ??
-                                            'Application-wide'
-                                        }}
-                                    </div>
-                                </td>
-                                <td class="px-4 py-3 align-top capitalize">
-                                    {{ line.category }}
-                                </td>
-                                <td class="px-4 py-3 align-top">
-                                    <div class="capitalize">
-                                        {{ line.calculation_type }}
-                                    </div>
-                                    <div class="text-xs text-muted-foreground">
+                                    </h4>
+                                    <p
+                                        class="mt-1 font-mono text-xs break-all text-muted-foreground"
+                                    >
+                                        {{ line.code }}
+                                    </p>
+                                </div>
+                                <div class="text-sm">
+                                    <p class="capitalize">
+                                        {{ line.calculation_type }} ·
+                                        {{ line.category }}
+                                    </p>
+                                    <p
+                                        class="mt-1 text-xs text-muted-foreground capitalize"
+                                    >
                                         {{ line.basis.replaceAll('_', ' ') }}
-                                    </div>
-                                </td>
-                                <td class="px-4 py-3 text-right align-top">
-                                    {{ money(line.basis_amount_cents) }}
-                                </td>
-                                <td
-                                    class="px-4 py-3 text-right align-top font-medium"
+                                    </p>
+                                </div>
+                                <div class="sm:text-right">
+                                    <p class="text-xs text-muted-foreground">
+                                        Amount
+                                    </p>
+                                    <p
+                                        class="mt-1 text-lg font-semibold tabular-nums"
+                                    >
+                                        {{ money(line.amount_cents) }}
+                                    </p>
+                                </div>
+                            </article>
+                        </div>
+                    </section>
+
+                    <section class="overflow-hidden rounded-xl border">
+                        <header
+                            class="flex flex-col gap-2 border-b bg-muted/30 p-4 sm:flex-row sm:items-end sm:justify-between"
+                        >
+                            <div>
+                                <p
+                                    class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
                                 >
-                                    {{ money(line.amount_cents) }}
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                                    Whole application
+                                </p>
+                                <h3 class="mt-1 font-semibold">
+                                    Application-wide charges
+                                </h3>
+                            </div>
+                            <div class="sm:text-right">
+                                <p class="text-xs text-muted-foreground">
+                                    Application-wide subtotal
+                                </p>
+                                <p
+                                    class="mt-1 text-xl font-semibold tabular-nums"
+                                >
+                                    {{
+                                        money(
+                                            assessment.financial_working_paper
+                                                .application_subtotal_amount_cents,
+                                        )
+                                    }}
+                                </p>
+                            </div>
+                        </header>
+                        <div class="divide-y">
+                            <article
+                                v-for="line in assessment
+                                    .financial_working_paper
+                                    .application_charges"
+                                :key="line.id"
+                                class="grid min-w-0 gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,0.6fr)_auto] sm:items-start"
+                                data-testid="assessment-line"
+                                :data-line-code="line.code"
+                            >
+                                <div class="min-w-0">
+                                    <h4 class="font-medium break-words">
+                                        {{ line.name }}
+                                    </h4>
+                                    <p
+                                        class="mt-1 font-mono text-xs break-all text-muted-foreground"
+                                    >
+                                        {{ line.code }}
+                                    </p>
+                                </div>
+                                <div class="text-sm">
+                                    <p class="capitalize">
+                                        {{ line.calculation_type }} ·
+                                        {{ line.category }}
+                                    </p>
+                                    <p
+                                        class="mt-1 text-xs text-muted-foreground capitalize"
+                                    >
+                                        {{ line.basis.replaceAll('_', ' ') }}
+                                    </p>
+                                </div>
+                                <div class="sm:text-right">
+                                    <p class="text-xs text-muted-foreground">
+                                        Amount
+                                    </p>
+                                    <p
+                                        class="mt-1 text-lg font-semibold tabular-nums"
+                                    >
+                                        {{ money(line.amount_cents) }}
+                                    </p>
+                                </div>
+                            </article>
+                        </div>
+                    </section>
+
+                    <div
+                        class="flex flex-col gap-3 rounded-xl bg-foreground p-5 text-background sm:flex-row sm:items-center sm:justify-between"
+                        data-testid="assessment-grand-total"
+                    >
+                        <div>
+                            <p
+                                class="text-xs font-medium tracking-wide uppercase opacity-70"
+                            >
+                                Immutable Assessment
+                            </p>
+                            <p class="mt-1 text-lg font-semibold">
+                                Grand Total
+                            </p>
+                            <p
+                                v-if="
+                                    !assessment.financial_working_paper
+                                        .reconciles
+                                "
+                                class="mt-1 text-xs text-amber-300"
+                            >
+                                Grouped lines do not reconcile to the recorded
+                                Assessment total.
+                            </p>
+                        </div>
+                        <p class="text-3xl font-semibold tabular-nums">
+                            {{
+                                money(
+                                    assessment.financial_working_paper
+                                        .grand_total_amount_cents,
+                                )
+                            }}
+                        </p>
+                    </div>
                 </div>
             </section>
 

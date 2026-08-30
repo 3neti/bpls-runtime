@@ -45,6 +45,10 @@ function item(overrides: Partial<EvaluationItem> = {}): EvaluationItem {
         id: 7,
         key: 'health.certificate.charge',
         label: 'Health Certificate',
+        line_of_business_id: 11,
+        line_of_business_name: 'Retail trade',
+        department_selection_reason:
+            'Health reviews the applicable regulated activity.',
         item_type: 'charge',
         responsible_party: 'health',
         is_required: true,

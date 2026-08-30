@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
 import { AlertTriangle, Calculator, Eye } from '@lucide/vue';
+import { show as evaluationShow } from '@/actions/App/Http/Controllers/Staff/BusinessPermitEvaluationController';
 import {
     index as assessmentIndex,
     show,
@@ -32,6 +33,14 @@ type PermitApplicationRow = {
     business_name: string;
     owner_name: string;
     line_count: number;
+    work_items: {
+        label: string;
+        line_of_business: string | null;
+        reason: string;
+        responsible_party: string;
+        resolution: string;
+    }[];
+    can_prepare_assessment: boolean;
     latest_assessment: LatestAssessment | null;
     assessment_policy_boundary: {
         status: string;
@@ -53,6 +62,15 @@ defineProps<{
         from: number | null;
         to: number | null;
         total: number;
+    };
+    workSurface: {
+        id: string;
+        eyebrow: string;
+        title: string;
+        description: string;
+        empty_message: string;
+        count: number;
+        count_label: string;
     };
     can: {
         assess_permit_applications: boolean;
@@ -89,14 +107,21 @@ function statusLabel(value: string): string {
             <section class="flex flex-col gap-2">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h1 class="text-xl font-semibold text-foreground">
-                            Permit Assessments
+                        <p
+                            class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                        >
+                            {{ workSurface.eyebrow }}
+                        </p>
+                        <h1 class="mt-1 text-xl font-semibold text-foreground">
+                            {{ workSurface.title }}
                         </h1>
                         <p class="text-sm text-muted-foreground">
-                            Review permit applications and prepare assessment
-                            amounts.
+                            {{ workSurface.description }}
                         </p>
                     </div>
+                    <Badge variant="outline" class="w-fit shrink-0">
+                        {{ workSurface.count }} {{ workSurface.count_label }}
+                    </Badge>
                 </div>
             </section>
 
@@ -123,7 +148,7 @@ function statusLabel(value: string): string {
                     v-if="permitApplications.data.length === 0"
                     class="px-4 py-10 text-center text-sm text-muted-foreground"
                 >
-                    No permit applications are available for assessment.
+                    {{ workSurface.empty_message }}
                 </div>
 
                 <ul
@@ -174,6 +199,37 @@ function statusLabel(value: string): string {
                                         .reason
                                 }}
                             </p>
+                        </div>
+
+                        <div
+                            v-if="permitApplication.work_items.length > 0"
+                            class="grid gap-2"
+                        >
+                            <article
+                                v-for="workItem in permitApplication.work_items"
+                                :key="`${workItem.label}-${workItem.resolution}`"
+                                class="rounded-lg border-l-2 border-primary bg-muted/30 p-3 text-sm"
+                            >
+                                <div
+                                    class="flex flex-wrap items-start justify-between gap-2"
+                                >
+                                    <p class="font-medium">
+                                        {{ workItem.label }}
+                                    </p>
+                                    <Badge variant="outline" class="capitalize">
+                                        {{ statusLabel(workItem.resolution) }}
+                                    </Badge>
+                                </div>
+                                <p
+                                    v-if="workItem.line_of_business"
+                                    class="mt-1 text-xs font-medium text-muted-foreground"
+                                >
+                                    {{ workItem.line_of_business }}
+                                </p>
+                                <p class="mt-2 text-xs leading-5">
+                                    {{ workItem.reason }}
+                                </p>
+                            </article>
                         </div>
 
                         <dl
@@ -264,7 +320,7 @@ function statusLabel(value: string): string {
                                 </Link>
                             </Button>
                             <Link
-                                v-if="can.assess_permit_applications"
+                                v-if="permitApplication.can_prepare_assessment"
                                 :href="store(permitApplication.id)"
                                 method="post"
                                 as="button"
@@ -273,6 +329,22 @@ function statusLabel(value: string): string {
                                 <Calculator />
                                 Assess
                             </Link>
+                            <Button
+                                v-if="
+                                    workSurface.id ===
+                                        'department_responsibilities' ||
+                                    workSurface.id === 'treasury_counter_check'
+                                "
+                                as-child
+                                size="sm"
+                            >
+                                <Link
+                                    :href="evaluationShow(permitApplication.id)"
+                                >
+                                    <Eye />
+                                    Open Evaluation
+                                </Link>
+                            </Button>
                         </div>
                     </li>
                 </ul>
@@ -281,7 +353,7 @@ function statusLabel(value: string): string {
                     v-if="permitApplications.data.length > 0"
                     class="hidden overflow-x-auto md:block"
                 >
-                    <table class="w-full min-w-[860px] text-sm">
+                    <table class="w-full min-w-[1100px] text-sm">
                         <thead
                             class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
                         >
@@ -294,6 +366,9 @@ function statusLabel(value: string): string {
                                 <th class="px-4 py-3 font-medium">Status</th>
                                 <th class="px-4 py-3 text-right font-medium">
                                     Lines
+                                </th>
+                                <th class="px-4 py-3 font-medium">
+                                    What arrived and why
                                 </th>
                                 <th class="px-4 py-3 text-right font-medium">
                                     Latest assessment
@@ -363,6 +438,56 @@ function statusLabel(value: string): string {
                                 <td class="px-4 py-3 text-right align-top">
                                     {{ permitApplication.line_count }}
                                 </td>
+                                <td class="max-w-[360px] px-4 py-3 align-top">
+                                    <div
+                                        v-if="
+                                            permitApplication.work_items
+                                                .length > 0
+                                        "
+                                        class="grid gap-2"
+                                    >
+                                        <article
+                                            v-for="workItem in permitApplication.work_items"
+                                            :key="`${workItem.label}-${workItem.resolution}`"
+                                            class="rounded-md border-l-2 border-primary bg-muted/30 p-2"
+                                        >
+                                            <div
+                                                class="flex flex-wrap items-start justify-between gap-2"
+                                            >
+                                                <p class="font-medium">
+                                                    {{ workItem.label }}
+                                                </p>
+                                                <Badge
+                                                    variant="outline"
+                                                    class="capitalize"
+                                                >
+                                                    {{
+                                                        statusLabel(
+                                                            workItem.resolution,
+                                                        )
+                                                    }}
+                                                </Badge>
+                                            </div>
+                                            <p
+                                                v-if="workItem.line_of_business"
+                                                class="mt-1 text-xs font-medium text-muted-foreground"
+                                            >
+                                                {{ workItem.line_of_business }}
+                                            </p>
+                                            <p
+                                                class="mt-1 text-xs leading-5 text-muted-foreground"
+                                            >
+                                                {{ workItem.reason }}
+                                            </p>
+                                        </article>
+                                    </div>
+                                    <span
+                                        v-else
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        Record view only
+                                    </span>
+                                </td>
                                 <td class="px-4 py-3 text-right align-top">
                                     <div
                                         v-if="
@@ -431,7 +556,7 @@ function statusLabel(value: string): string {
                                         </Button>
                                         <Link
                                             v-if="
-                                                can.assess_permit_applications
+                                                permitApplication.can_prepare_assessment
                                             "
                                             :href="store(permitApplication.id)"
                                             method="post"
@@ -443,6 +568,27 @@ function statusLabel(value: string): string {
                                             <Calculator />
                                             Assess
                                         </Link>
+                                        <Button
+                                            v-if="
+                                                workSurface.id ===
+                                                    'department_responsibilities' ||
+                                                workSurface.id ===
+                                                    'treasury_counter_check'
+                                            "
+                                            as-child
+                                            size="sm"
+                                        >
+                                            <Link
+                                                :href="
+                                                    evaluationShow(
+                                                        permitApplication.id,
+                                                    )
+                                                "
+                                            >
+                                                <Eye />
+                                                Open Evaluation
+                                            </Link>
+                                        </Button>
                                     </div>
                                 </td>
                             </tr>

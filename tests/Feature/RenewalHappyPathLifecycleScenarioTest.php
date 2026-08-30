@@ -1,6 +1,7 @@
 <?php
 
 use App\LifecycleScenarios\RenewalHappyPathDefinition;
+use App\LifecycleScenarios\RenewalHappyPathScenario;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\Models\Assessment;
 use App\Models\BusinessPermitEvaluationItem;
@@ -11,6 +12,7 @@ use App\Models\User;
 use Database\Seeders\RevenueCodeFeeCatalogSeeder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Testing\AssertableInertia as Assert;
 
 test('Scenario 01 proves a deterministic multi-LOB Renewal becomes an approved payable', function () {
     Storage::fake('local');
@@ -87,4 +89,50 @@ test('Scenario 01 has compact human output and native discovery', function () {
         ->expectsOutputToContain('Grand Total: PHP 1,220.00')
         ->expectsOutputToContain('Responsibilities: 6/6 resolved')
         ->assertSuccessful();
+});
+
+test('Scenario 01 projects its immutable Assessment and suppresses completed role work', function () {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+
+    $result = app(RenewalHappyPathScenario::class)->run();
+    $assessment = Assessment::query()->findOrFail($result['assessment']['id']);
+    $assessmentOfficer = User::query()->where('email', 'scenario-01-assessment-officer@example.test')->sole();
+
+    $this->withoutVite()
+        ->actingAs($assessmentOfficer)
+        ->get(route('staff.permit-applications.assessments.show', $assessment))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Assessments/Show', false)
+            ->where('assessment.display_status', 'Approved · Payable')
+            ->where('assessment.financial_working_paper.line_sections.0.line_of_business_name', 'Scenario 01 Retail Trading')
+            ->where('assessment.financial_working_paper.line_sections.0.subtotal_amount_cents', 33_000)
+            ->where('assessment.financial_working_paper.line_sections.1.line_of_business_name', 'Scenario 01 Food Service')
+            ->where('assessment.financial_working_paper.line_sections.1.subtotal_amount_cents', 54_000)
+            ->where('assessment.financial_working_paper.application_subtotal_amount_cents', 35_000)
+            ->where('assessment.financial_working_paper.grand_total_amount_cents', 122_000)
+            ->where('assessment.financial_working_paper.grouped_total_amount_cents', 122_000)
+            ->where('assessment.financial_working_paper.reconciles', true)
+            ->where('assessment.treasury_counter_check.checked_by', 'Scenario 01 Treasury Counter-checker')
+            ->where('assessment.decision.action', 'approved')
+            ->where('assessment.decision.total_amount_cents', 122_000)
+            ->where('assessment.latest_payment_schedule.status', 'pending')
+            ->where('assessment.latest_payment_schedule.total_amount_cents', 122_000));
+
+    foreach ([
+        'scenario-01-health@example.test' => 'department_responsibilities',
+        'scenario-01-treasury-counter-check@example.test' => 'treasury_counter_check',
+        'scenario-01-municipal-treasurer@example.test' => 'treasurer_approval',
+        'scenario-01-assessment-officer@example.test' => 'assessment_preparation',
+    ] as $email => $surface) {
+        $user = User::query()->where('email', $email)->sole();
+
+        $this->actingAs($user)
+            ->get(route('staff.permit-applications.assessments.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('workSurface.id', $surface)
+                ->where('workSurface.count', 0)
+                ->has('permitApplications.data', 0));
+    }
 });

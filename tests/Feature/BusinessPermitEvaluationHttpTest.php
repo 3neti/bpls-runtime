@@ -102,6 +102,7 @@ it('lets the assigned concerned office complete only its own provisional respons
     $fixture = httpEvaluationFixture();
     $engineering = userWithPermissions([
         UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
         UserPermission::ViewBusinessPermitEvaluations,
         UserPermission::ContributeBusinessPermitEvaluations,
     ]);
@@ -117,7 +118,13 @@ it('lets the assigned concerned office complete only its own provisional respons
         ['amount_cents' => 12_500],
         BusinessPermitEvaluationSource::ProvisionalUat,
         $fixture['submitter'],
-        metadata: ['label' => 'Engineering evaluation', 'authorized_actor_id' => $engineering->id, 'inspection_required' => true],
+        metadata: [
+            'label' => 'Engineering evaluation',
+            'authorized_actor_id' => $engineering->id,
+            'inspection_required' => true,
+            'line_of_business_id' => $fixture['lineOfBusiness']->id,
+            'department_selection_reason' => 'Retail requires an Engineering inspection in this synthetic test.',
+        ],
     );
     $version = $fixture['evaluation']->fresh()->currentVersion;
     $payload = [
@@ -131,6 +138,17 @@ it('lets the assigned concerned office complete only its own provisional respons
         'findings' => 'Synthetic UAT inspection complete.',
     ];
 
+    $this->actingAs($engineering)
+        ->get(route('staff.permit-applications.assessments.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Assessments/Index')
+            ->where('workSurface.id', 'department_responsibilities')
+            ->where('workSurface.count', 1)
+            ->where('permitApplications.data.0.work_items.0.label', 'Engineering evaluation')
+            ->where('permitApplications.data.0.work_items.0.line_of_business', 'Retail')
+            ->where('permitApplications.data.0.work_items.0.reason', 'Retail requires an Engineering inspection in this synthetic test.'));
+
     $this->actingAs($otherOffice)
         ->post(route('staff.permit-applications.evaluation.items.confirm', [$fixture['application'], $item]), $payload)
         ->assertSessionHasErrors('evaluation');
@@ -140,6 +158,14 @@ it('lets the assigned concerned office complete only its own provisional respons
         ->assertSessionHasNoErrors();
 
     expect($item->revisions()->count())->toBe(2);
+
+    $this->actingAs($engineering)
+        ->get(route('staff.permit-applications.assessments.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('workSurface.id', 'department_responsibilities')
+            ->where('workSurface.count', 0)
+            ->has('permitApplications.data', 0));
 });
 
 it('uses the same Evaluator surface for the owning Citizen and rejects another Citizen', function () {

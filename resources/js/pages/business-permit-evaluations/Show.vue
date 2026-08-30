@@ -41,11 +41,13 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import {
     applicationTypeLabel,
+    applicabilityLabel,
     dateTime,
     money,
     officeLabel,
     presentFinancialWorkingPaper,
     readinessBlockers,
+    sourceLabel,
 } from '@/lib/evaluationPresentation';
 import type { ResponsibilityDraft } from '@/lib/evaluationPresentation';
 import type {
@@ -115,11 +117,66 @@ const responsibilityItems = computed(() =>
         .sort((left, right) => Number(right.is_mine) - Number(left.is_mine)),
 );
 
+/** Canonical departmental charge responsibilities, including completed work. */
+const departmentResponsibilities = computed(() =>
+    (props.evaluation?.items ?? []).filter(
+        (item) => item.item_type === 'charge' && item.requires_confirmation,
+    ),
+);
+
+const completedDepartmentResponsibilityCount = computed(
+    () =>
+        departmentResponsibilities.value.filter(
+            (item) => item.resolution === 'resolved',
+        ).length,
+);
+
+function reviewStage(item: EvaluationItem): string {
+    const value = item.resolved_value;
+    const inspection =
+        value && typeof value === 'object' && !Array.isArray(value)
+            ? (value as Record<string, unknown>).inspection
+            : null;
+
+    if (
+        inspection &&
+        typeof inspection === 'object' &&
+        !Array.isArray(inspection)
+    ) {
+        const review = inspection as Record<string, unknown>;
+
+        if (review.completed === true) {
+            const mode =
+                typeof review.mode === 'string'
+                    ? review.mode.replaceAll('_', ' ')
+                    : item.inspection_required
+                      ? 'office review'
+                      : 'document review';
+
+            return `${mode} complete`;
+        }
+    }
+
+    if (item.inspection_required) {
+        return 'Inspection/review still required';
+    }
+
+    return item.resolution === 'resolved'
+        ? 'Determination recorded; no inspection required'
+        : 'Department determination still required';
+}
+
 /** Work this viewer legitimately owns and has not finished. */
 const myOpenWork = computed(() =>
     (props.evaluation?.items ?? []).filter(
         (item) => item.is_mine && item.resolution !== 'resolved',
     ),
+);
+
+const requiredResponsibilitiesComplete = computed(() =>
+    (props.evaluation?.items ?? [])
+        .filter((item) => item.is_required)
+        .every((item) => item.resolution === 'resolved'),
 );
 
 const canRecordWork = computed(
@@ -824,7 +881,143 @@ function submitPrepareAssessment(): void {
                     </div>
                 </section>
 
-                <!-- 6. Declaration versus municipal determination -->
+                <!-- 6. Canonical departmental responsibility evidence -->
+                <section
+                    v-if="
+                        !isCitizenLens && departmentResponsibilities.length > 0
+                    "
+                    class="rounded-2xl border bg-card p-5 shadow-xs sm:p-6"
+                    aria-labelledby="department-responsibilities-heading"
+                    data-testid="department-responsibility-evidence"
+                >
+                    <div
+                        class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+                    >
+                        <div>
+                            <p
+                                class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                            >
+                                Department work
+                            </p>
+                            <h2
+                                id="department-responsibilities-heading"
+                                class="mt-1 text-lg font-semibold"
+                            >
+                                Responsibilities created and resolved
+                            </h2>
+                            <p
+                                class="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground"
+                            >
+                                These are the canonical Evaluation
+                                responsibilities behind the charge rows above.
+                                Completion comes from each responsibility's
+                                recorded revision, not from whether an amount is
+                                present.
+                            </p>
+                        </div>
+                        <Badge variant="outline" class="w-fit shrink-0">
+                            {{ completedDepartmentResponsibilityCount }} of
+                            {{ departmentResponsibilities.length }} complete
+                        </Badge>
+                    </div>
+
+                    <div class="mt-5 grid gap-3 lg:grid-cols-2">
+                        <article
+                            v-for="item in departmentResponsibilities"
+                            :key="item.id"
+                            class="rounded-xl border bg-background p-4"
+                            :data-testid="`department-responsibility-${item.id}`"
+                        >
+                            <div
+                                class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+                            >
+                                <div class="min-w-0">
+                                    <h3 class="font-semibold break-words">
+                                        {{ item.label }}
+                                    </h3>
+                                    <p
+                                        class="mt-1 text-sm text-muted-foreground"
+                                    >
+                                        {{
+                                            officeLabel(item.responsible_party)
+                                        }}
+                                        ·
+                                        {{
+                                            item.line_of_business_name ??
+                                            'Whole application'
+                                        }}
+                                    </p>
+                                </div>
+                                <Badge
+                                    :variant="
+                                        item.resolution === 'resolved'
+                                            ? 'secondary'
+                                            : 'outline'
+                                    "
+                                    class="w-fit shrink-0"
+                                >
+                                    {{
+                                        item.resolution === 'resolved'
+                                            ? 'Complete'
+                                            : 'Open'
+                                    }}
+                                </Badge>
+                            </div>
+
+                            <dl class="mt-4 grid gap-3 sm:grid-cols-2">
+                                <div class="rounded-lg bg-muted/40 p-3">
+                                    <dt class="text-xs text-muted-foreground">
+                                        Applicability / determination
+                                    </dt>
+                                    <dd class="mt-1 font-medium">
+                                        {{
+                                            applicabilityLabel(
+                                                item.applicability,
+                                            )
+                                        }}
+                                    </dd>
+                                    <dd
+                                        class="mt-1 text-xs text-muted-foreground"
+                                    >
+                                        {{
+                                            sourceLabel(
+                                                item.source_classification,
+                                            )
+                                        }}
+                                    </dd>
+                                </div>
+                                <div class="rounded-lg bg-muted/40 p-3">
+                                    <dt class="text-xs text-muted-foreground">
+                                        Review stage
+                                    </dt>
+                                    <dd class="mt-1 font-medium capitalize">
+                                        {{ reviewStage(item) }}
+                                    </dd>
+                                </div>
+                            </dl>
+
+                            <div
+                                v-if="item.department_selection_reason"
+                                class="mt-3 rounded-lg border-l-2 border-primary bg-muted/30 p-3 text-sm"
+                            >
+                                <p class="text-xs text-muted-foreground">
+                                    Why this department
+                                </p>
+                                <p class="mt-1">
+                                    {{ item.department_selection_reason }}
+                                </p>
+                            </div>
+                            <p
+                                v-if="item.reason"
+                                class="mt-3 text-sm text-muted-foreground"
+                            >
+                                Recorded completion: {{ item.reason }}
+                            </p>
+                        </article>
+                    </div>
+                </section>
+
+                <!-- 7. Declaration versus municipal determination -->
                 <section
                     class="rounded-2xl border bg-card p-5 shadow-xs sm:p-6"
                     aria-labelledby="declaration-heading"
@@ -1039,7 +1232,7 @@ function submitPrepareAssessment(): void {
                     </form>
                 </section>
 
-                <!-- 7. Non-monetary municipal work -->
+                <!-- 8. Non-monetary municipal work -->
                 <section
                     v-if="responsibilityItems.length"
                     class="space-y-4"
@@ -1074,7 +1267,7 @@ function submitPrepareAssessment(): void {
                     </div>
                 </section>
 
-                <!-- 8. Role context: Treasury, Assessment Officer, Municipal Treasurer -->
+                <!-- 9. Role context: Treasury, Assessment Officer, Municipal Treasurer -->
                 <div class="grid min-w-0 gap-4 xl:grid-cols-2">
                     <section
                         v-if="can.counter_check && !evaluation.financial_lock"
@@ -1136,7 +1329,7 @@ function submitPrepareAssessment(): void {
                             </p>
                         </template>
                         <form
-                            v-else
+                            v-else-if="requiredResponsibilitiesComplete"
                             class="mt-4"
                             @submit.prevent="submitCounterCheck"
                         >
@@ -1162,6 +1355,13 @@ function submitPrepareAssessment(): void {
                                 }}
                             </Button>
                         </form>
+                        <p
+                            v-else
+                            class="mt-4 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground"
+                        >
+                            Counter-check becomes available after every required
+                            department responsibility above is complete.
+                        </p>
                     </section>
 
                     <section

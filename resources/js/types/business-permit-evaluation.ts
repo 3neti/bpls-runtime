@@ -43,6 +43,10 @@ export type EvaluationItem = {
     id: number;
     key: string;
     label: string;
+    line_of_business_id: number | null;
+    line_of_business_name: string | null;
+    /** Internal product explanation of why this office owns the item. */
+    department_selection_reason: string | null;
     item_type: EvaluationItemType;
     responsible_party: string;
     is_required: boolean;

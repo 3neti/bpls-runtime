@@ -95,7 +95,12 @@ class DescribeBusinessPermitEvaluation
                 id: $id,
                 name: $lineNames->get($id)?->name,
             ))->all(),
-            items: collect($projection['items'])->map(fn (array $item): EvaluationItemData => $this->itemPayload($item, $lens, in_array($item['id'], $myItems, true)))->all(),
+            items: collect($projection['items'])->map(fn (array $item): EvaluationItemData => $this->itemPayload(
+                $item,
+                $lens,
+                in_array($item['id'], $myItems, true),
+                $lineNames->get(data_get($item, 'metadata.line_of_business_id'))?->name,
+            ))->all(),
             projected_charges: collect($projection['projected_charges'])->map(fn (array $charge): EvaluationProjectedChargeData => new EvaluationProjectedChargeData(
                 key: $charge['key'],
                 fee_rule_id: $charge['fee_rule_id'],
@@ -134,7 +139,7 @@ class DescribeBusinessPermitEvaluation
     /**
      * @param  array<string, mixed>  $item
      */
-    private function itemPayload(array $item, string $lens, bool $isMine): EvaluationItemData
+    private function itemPayload(array $item, string $lens, bool $isMine, ?string $lineOfBusinessName): EvaluationItemData
     {
         $revisionHistory = $item['revision_history'] ?? [];
         $history = collect(is_array($revisionHistory) ? $revisionHistory : [])->map(fn (array $revision): EvaluationRevisionData => new EvaluationRevisionData(
@@ -152,6 +157,11 @@ class DescribeBusinessPermitEvaluation
             id: $item['id'],
             key: $item['key'],
             label: data_get($item, 'metadata.label', str($item['key'])->headline()->toString()),
+            line_of_business_id: data_get($item, 'metadata.line_of_business_id'),
+            line_of_business_name: $lineOfBusinessName,
+            department_selection_reason: $lens === 'internal'
+                ? data_get($item, 'metadata.department_selection_reason')
+                : null,
             item_type: $item['item_type'],
             responsible_party: $item['responsible_party'],
             is_required: $item['is_required'],
