@@ -42,7 +42,12 @@ test('Scenario 01 proves a deterministic multi-LOB Renewal becomes an approved p
         ->and($first['status'])->toBe('passed')
         ->and($first['application']['type'])->toBe('renewal')
         ->and($first['application']['application_number'])->toBeNull()
+        ->and($first['system_bootstrap']['accepted_business_inspection_fee']['provisional_uat'])->toBeFalse()
+        ->and($first['onboarding']['canonical_action'])->toBe('CreatePermitApplication')
         ->and($first['lines_of_business'])->toHaveCount(2)
+        ->and($first['application_evaluation_routing']['disposition'])->toBe('projected')
+        ->and($first['application_evaluation_routing']['persisted_aggregate_created'])->toBeFalse()
+        ->and($first['application_evaluation_routing']['required_work_count'])->toBe(6)
         ->and($first['responsibilities']['created_count'])->toBe(6)
         ->and($first['responsibilities']['resolved_count'])->toBe(6)
         ->and($first['evaluation']['readiness'])->toBe('ready')
@@ -54,10 +59,25 @@ test('Scenario 01 proves a deterministic multi-LOB Renewal becomes an approved p
         ->and($first['evaluation']['grand_total_amount_cents'])->toBe(122_000)
         ->and($first['assessment']['total_amount_cents'])->toBe(122_000)
         ->and($first['assessment']['line_count'])->toBe(7)
+        ->and($first['treasury_counter_check']['assessment_id'])->toBe($first['assessment']['id'])
+        ->and($first['treasury_counter_check']['evaluation_version_id'])->toBe($first['assessment']['evaluation_version_id'])
+        ->and($first['treasury_counter_check']['result'])->toBe('no_correction')
         ->and($first['treasurer_decision']['action'])->toBe('approved')
         ->and($first['payment_schedule']['status'])->toBe('pending')
         ->and($first['payable']['status'])->toBe('payable')
         ->and($first['payable']['externally_settled'])->toBeFalse()
+        ->and($first['isolation_inventory'])->toMatchArray([
+            'scenario_applications' => 1,
+            'scenario_businesses' => 1,
+            'scenario_responsibilities' => 6,
+            'scenario_evaluation_charges' => 7,
+            'current_assessments' => 1,
+            'assessment_lines' => 7,
+            'treasury_counter_checks' => 1,
+            'payment_schedules' => 1,
+            'accepted_inspection_fee_rules' => 1,
+            'expected_nonaccumulating' => true,
+        ])
         ->and(collect($first['negative_assertions'])->every(fn (array $assertion): bool => $assertion['passed']))->toBeTrue()
         ->and($second)->toBe($first)
         ->and($second['semantic_result_hash'])->toBe($first['semantic_result_hash'])
@@ -87,7 +107,13 @@ test('Scenario 01 has compact human output and native discovery', function () {
         ->expectsOutputToContain('RENEWAL HAPPY PATH: PASS')
         ->expectsOutputToContain('FINANCIAL WORKING PAPER')
         ->expectsOutputToContain('Grand Total: PHP 1,220.00')
-        ->expectsOutputToContain('Responsibilities: 6/6 resolved')
+        ->expectsOutputToContain('SYSTEM BOOTSTRAP')
+        ->expectsOutputToContain('ONBOARDING')
+        ->expectsOutputToContain('APPLICATION EVALUATION ROUTING')
+        ->expectsOutputToContain('Routing required work = generated responsibilities exactly · 6')
+        ->expectsOutputToContain('6/6 resolved · six departmental amounts are provisional_uat')
+        ->expectsOutputToContain('Ready for Assessment before Treasury counter-check')
+        ->expectsOutputToContain('completed, no correction')
         ->assertSuccessful();
 });
 

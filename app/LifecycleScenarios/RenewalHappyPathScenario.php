@@ -19,6 +19,7 @@ use App\Enums\FeeRuleExecutionStatus;
 use App\Enums\FeeRuleScope;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
+use App\Enums\TreasuryCounterCheckResult;
 use App\Enums\UserPermission;
 use App\Evaluation\BusinessPermitEvaluationReadiness;
 use App\Evaluation\BusinessPermitEvaluationResolver;
@@ -33,6 +34,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 final class RenewalHappyPathScenario
@@ -99,6 +101,7 @@ final class RenewalHappyPathScenario
                 $metadata['lifecycle_scenario'] = [
                     'id' => RenewalHappyPathDefinition::Id,
                     'run_id' => RenewalHappyPathDefinition::RunId,
+                    'definition_revision' => RenewalHappyPathDefinition::Revision,
                     'semantic_classification' => 'synthetic_only',
                     'production_liability' => false,
                 ];
@@ -118,15 +121,9 @@ final class RenewalHappyPathScenario
             });
 
             $evaluation = $this->checkpoint('Evaluation did not initialize from the lodged Renewal', fn (): BusinessPermitEvaluation => $this->initializeEvaluation->handle($application, $actors['assessment_officer']));
+            $routing = $this->applicationEvaluationRouting($application, $linesOfBusiness);
 
-            $this->expectFailure(
-                'Assessment preparation before department completion was not safely refused',
-                fn (): Assessment => $this->createAssessment->handle($application->fresh(), $actors['assessment_officer']),
-                'Business Permit Evaluation is not Ready for Assessment',
-            );
-            $this->assert($application->assessments()->count() === 0, 'Premature Assessment refusal left a persisted Assessment.');
-
-            $this->checkpoint('Required departmental responsibilities were not created', function () use ($evaluation, $actors, $linesOfBusiness): void {
+            $this->checkpoint('Required departmental responsibilities were not created', function () use ($evaluation, $actors, $linesOfBusiness, $routing): void {
                 foreach ($this->definition->responsibilities() as $responsibility) {
                     $lineOfBusiness = $linesOfBusiness[$responsibility['line_of_business_code']];
                     $applicationLine = $evaluation->permitApplication->lines()->where('line_of_business_id', $lineOfBusiness->id)->sole();
@@ -169,7 +166,18 @@ final class RenewalHappyPathScenario
                 $created = $this->scenarioResponsibilityProjection($evaluation->fresh());
                 $this->assert(count($created) === 6, 'Expected six canonical charge responsibilities; found '.count($created).'.');
                 $this->assert(collect($created)->every(fn (array $item): bool => $item['resolution'] === 'awaiting_responsible_confirmation'), 'A new responsibility was not waiting for its responsible department confirmation.');
+                $this->assert(
+                    $this->responsibilityKeys($created) === $this->routingKeys($routing),
+                    'Application Evaluation routing and generated responsibilities do not reconcile exactly.',
+                );
             });
+
+            $this->expectFailure(
+                'Assessment preparation before department completion was not safely refused',
+                fn (): Assessment => $this->createAssessment->handle($application->fresh(), $actors['assessment_officer']),
+                'Business Permit Evaluation is not Ready for Assessment',
+            );
+            $this->assert($application->assessments()->count() === 0, 'Premature Assessment refusal left a persisted Assessment.');
 
             $this->checkpoint('Canonical department work did not resolve every responsibility', function () use ($evaluation, $actors): void {
                 foreach ($this->definition->responsibilities() as $responsibility) {
@@ -193,7 +201,7 @@ final class RenewalHappyPathScenario
                         $responsibility['reason'],
                         $version->sequence,
                         $version->fingerprint,
-                        RenewalHappyPathDefinition::Id.':'.$responsibility['key'].':complete',
+                        RenewalHappyPathDefinition::Id.':'.RenewalHappyPathDefinition::Revision.':'.$responsibility['key'].':complete',
                     );
                 }
 
@@ -202,26 +210,13 @@ final class RenewalHappyPathScenario
                 $this->assert(collect($completed)->every(fn (array $item): bool => $item['inspection_completed'] === true), 'At least one required inspection/review was not completed.');
             });
 
-            $beforeCounterCheck = $this->evaluationReadiness->forAssessment($evaluation->fresh(), 'provisional_uat');
-            $this->assert(! $beforeCounterCheck['ready'], 'Evaluation became Ready before Treasury counter-check.');
-            $this->assert(collect($beforeCounterCheck['issues'])->contains(fn (string $issue): bool => str_contains($issue, 'Treasury counter-check')), 'Pre-counter-check readiness did not identify the exact Treasury gate.');
+            $readyForAssessment = $this->evaluationReadiness->forAssessment($evaluation->fresh(), 'provisional_uat');
+            $this->assert($readyForAssessment['ready'], 'Evaluation did not become Ready after all department work: '.implode(' ', $readyForAssessment['issues']));
 
             $this->checkpoint('Treasury counter-checker could approve the Assessment', function () use ($actors): void {
                 $this->assert($actors['treasury']->cannot(UserPermission::ApproveAssessments->value), 'Treasury counter-checker unexpectedly has assessments.approve.');
                 $this->assert($actors['municipal_treasurer']->can(UserPermission::ApproveAssessments->value), 'Municipal Treasurer lacks assessments.approve.');
             });
-
-            $evaluationVersion = $evaluation->fresh()->currentVersion;
-            $this->checkpoint('Treasury counter-check did not bind the current Evaluation version', fn () => $this->recordCounterCheck->handle(
-                $evaluation->fresh(),
-                $actors['treasury'],
-                'No correction: Treasury reconciled the exact current Evaluation working paper.',
-                $evaluationVersion->sequence,
-                $evaluationVersion->fingerprint,
-            ));
-
-            $ready = $this->evaluationReadiness->forAssessment($evaluation->fresh(), 'provisional_uat');
-            $this->assert($ready['ready'], 'Evaluation did not become Ready after all department work and Treasury counter-check: '.implode(' ', $ready['issues']));
 
             $this->expectFailure(
                 'Municipal Treasurer could arbitrarily mutate an office Evaluation responsibility',
@@ -238,7 +233,7 @@ final class RenewalHappyPathScenario
                         'Unauthorized mutation attempt.',
                         $version->sequence,
                         $version->fingerprint,
-                        RenewalHappyPathDefinition::Id.':unauthorized-treasurer-mutation',
+                        RenewalHappyPathDefinition::Id.':'.RenewalHappyPathDefinition::Revision.':unauthorized-treasurer-mutation',
                     );
                 },
                 'belongs to',
@@ -253,11 +248,30 @@ final class RenewalHappyPathScenario
             );
 
             $this->expectFailure(
+                'Municipal Treasurer could decide before Treasury counter-check of the prepared Assessment',
+                fn () => $this->recordAssessmentDecision->handle($assessment, $actors['municipal_treasurer'], AssessmentDecisionAction::Approved),
+                'requires Treasury counter-check of this exact snapshot',
+            );
+
+            $this->expectFailure(
                 'Payment Schedule was created before exact Treasurer approval',
                 fn (): PaymentSchedule => $this->createPaymentSchedule->handle($assessment, $actors['assessment_officer']),
                 'approved by the Municipal Treasurer',
             );
             $this->assert($application->paymentSchedules()->count() === 0, 'Pre-approval Payment Schedule refusal left a persisted schedule.');
+
+            $evaluationVersion = $evaluation->fresh()->currentVersion;
+            $counterCheck = $this->checkpoint('Treasury counter-check did not bind the prepared Assessment and its source Evaluation version', fn () => $this->recordCounterCheck->handle(
+                $assessment,
+                $actors['treasury'],
+                TreasuryCounterCheckResult::NoCorrection,
+                'No correction: Treasury reconciled prepared Assessment #1 and its exact source Evaluation working paper.',
+                $evaluationVersion->sequence,
+                $evaluationVersion->fingerprint,
+            ));
+            $this->assert($counterCheck->assessment_id === $assessment->id, 'Treasury counter-check is not bound to prepared Assessment #1.');
+            $this->assert($counterCheck->business_permit_evaluation_version_id === $assessment->business_permit_evaluation_version_id, 'Treasury counter-check is not bound to Assessment #1 source Evaluation version.');
+            $this->assert($counterCheck->result === TreasuryCounterCheckResult::NoCorrection, 'Scenario 01 Treasury result is not no correction.');
 
             $assessmentHash = $this->assessmentFingerprint->hash($assessment);
             $decision = $this->checkpoint('Municipal Treasurer did not approve the exact Assessment snapshot', fn () => $this->recordAssessmentDecision->handle(
@@ -287,7 +301,7 @@ final class RenewalHappyPathScenario
                         'Mutation after payment scheduling must fail.',
                         $version->sequence,
                         $version->fingerprint,
-                        RenewalHappyPathDefinition::Id.':post-schedule-mutation',
+                        RenewalHappyPathDefinition::Id.':'.RenewalHappyPathDefinition::Revision.':post-schedule-mutation',
                     );
                 },
                 'cannot change after a Payment Schedule exists',
@@ -301,6 +315,9 @@ final class RenewalHappyPathScenario
     private function result(PermitApplication $application): array
     {
         $definition = $this->definition->describe();
+        $actors = $this->actors();
+        $linesOfBusiness = $this->linesOfBusiness();
+        $this->assertAcceptedInspectionRule();
         $application->load(['business.owner', 'lines.lineOfBusiness', 'businessPermitEvaluation']);
         $evaluation = $application->businessPermitEvaluation;
         $this->assert($evaluation instanceof BusinessPermitEvaluation, 'Persisted scenario application has no Evaluation.');
@@ -309,10 +326,12 @@ final class RenewalHappyPathScenario
         $responsibilities = $this->scenarioResponsibilityProjection($evaluation->fresh());
         $assessment = $application->assessments()
             ->whereNull('superseded_at')
-            ->with(['lines.lineOfBusiness', 'assessedBy', 'decision.decidedBy'])
+            ->with(['lines.lineOfBusiness', 'assessedBy', 'decision.decidedBy', 'treasuryCounterCheck.checkedBy'])
             ->sole();
         $schedule = $application->paymentSchedules()->with('lines')->sole();
         $decision = $assessment->decision;
+        $counterCheck = $assessment->treasuryCounterCheck;
+        $routing = $this->applicationEvaluationRouting($application, $linesOfBusiness);
 
         $this->assert($application->status === PermitApplicationStatus::PendingPayment, 'Application is not in the payable pending_payment state.');
         $this->assert($readiness['ready'], 'Persisted Evaluation is not Ready: '.implode(' ', $readiness['issues']));
@@ -326,6 +345,13 @@ final class RenewalHappyPathScenario
         $this->assert($assessment->lines->where('code', 'MRC-3A-04-BUSINESS-INSPECTION')->count() === 1, 'Accepted Business Inspection Fee is absent or duplicated.');
         $this->assert($assessment->business_permit_evaluation_version_id === $projection['version_id'], 'Assessment is not bound to the exact Evaluation version.');
         $this->assert($assessment->business_permit_evaluation_fingerprint === $projection['current_fingerprint'], 'Assessment is not bound to the exact Evaluation fingerprint.');
+        $this->assert($counterCheck?->assessment_id === $assessment->id, 'Treasury counter-check is not bound to the current prepared Assessment.');
+        $this->assert($counterCheck?->assessment_snapshot_hash === $this->assessmentFingerprint->hash($assessment), 'Treasury counter-check no longer matches the prepared Assessment fingerprint.');
+        $this->assert($counterCheck?->result === TreasuryCounterCheckResult::NoCorrection, 'Treasury counter-check did not preserve the no-correction result.');
+        $this->assert(
+            $this->responsibilityKeys($responsibilities) === $this->routingKeys($routing),
+            'Application Evaluation routing and responsibilities changed after certification.',
+        );
         $this->assert($assessment->assessed_by_id !== $decision?->decided_by_id, 'Assessment preparer and Municipal Treasurer are not distinct.');
         $this->assert($decision?->assessment_snapshot_hash === $this->assessmentFingerprint->hash($assessment), 'Treasurer approval no longer matches the Assessment fingerprint.');
         $this->assert($schedule->total_amount_cents === $assessment->total_amount_cents, 'Payment Schedule total does not equal Assessment total.');
@@ -355,12 +381,29 @@ final class RenewalHappyPathScenario
         return [
             'schema_version' => 'bpls.lifecycle-certification.v1',
             'scenario_id' => RenewalHappyPathDefinition::Id,
+            'scenario_revision' => RenewalHappyPathDefinition::Revision,
             'status' => 'passed',
             'business_question' => RenewalHappyPathDefinition::EvidenceQuestion,
             'evidence' => $definition['evidence'],
             'first_failure' => null,
             'semantic_result_hash' => $semanticHash,
             'database_driver' => DB::connection()->getDriverName(),
+            'system_bootstrap' => $this->bootstrapInventory($actors, $linesOfBusiness),
+            'onboarding' => [
+                'canonical_action' => 'CreatePermitApplication',
+                'disposition' => 'Canonical staff intake owns BusinessOwner creation, Business creation, lodged Renewal creation, and LOB declarations atomically.',
+                'owner_customer' => [
+                    'id' => $application->business->owner->id,
+                    'name' => $application->business->owner->name,
+                    'synthetic' => true,
+                ],
+                'business' => [
+                    'id' => $application->business->id,
+                    'name' => $application->business->name,
+                    'business_owner_id' => $application->business->business_owner_id,
+                    'synthetic' => true,
+                ],
+            ],
             'application' => [
                 'id' => $application->id,
                 'type' => $application->type->value,
@@ -387,6 +430,7 @@ final class RenewalHappyPathScenario
                 ])->values()->all(),
                 'subtotal_amount_cents' => $section['subtotal_amount_cents'],
             ])->values()->all(),
+            'application_evaluation_routing' => $routing,
             'responsibilities' => [
                 'created_count' => count($responsibilities),
                 'resolved_count' => collect($responsibilities)->where('resolution', 'resolved')->count(),
@@ -418,11 +462,17 @@ final class RenewalHappyPathScenario
                 'line_count' => $assessment->lines->count(),
             ],
             'treasury_counter_check' => [
-                'id' => $evaluation->fresh()->currentVersion?->counterCheck?->id,
-                'status' => 'completed_no_correction',
+                'id' => $counterCheck?->id,
+                'status' => 'completed',
+                'result' => $counterCheck?->result?->value,
+                'assessment_id' => $counterCheck?->assessment_id,
+                'assessment_snapshot_hash' => $counterCheck?->assessment_snapshot_hash,
                 'evaluation_version_id' => $projection['version_id'],
-                'checked_by' => data_get($evaluation->fresh()->currentVersion?->counterCheck?->checkedBy, 'name'),
-                'reason' => $evaluation->fresh()->currentVersion?->counterCheck?->reason,
+                'evaluation_version_sequence' => $projection['version_sequence'],
+                'evaluation_fingerprint' => $projection['current_fingerprint'],
+                'checked_by' => ['id' => $counterCheck?->checkedBy?->id, 'name' => $counterCheck?->checkedBy?->name],
+                'checked_at' => $counterCheck?->checked_at->toIso8601String(),
+                'note' => $counterCheck?->reason,
             ],
             'treasurer_decision' => [
                 'action' => $decision?->action->value,
@@ -445,6 +495,21 @@ final class RenewalHappyPathScenario
                 'amount_cents' => $schedule->total_amount_cents - $schedule->paid_amount_cents,
                 'externally_settled' => false,
             ],
+            'isolation_inventory' => [
+                'scenario_applications' => PermitApplication::query()
+                    ->where('metadata->lifecycle_scenario->id', RenewalHappyPathDefinition::Id)
+                    ->where('metadata->lifecycle_scenario->definition_revision', RenewalHappyPathDefinition::Revision)
+                    ->count(),
+                'scenario_businesses' => $application->business()->where('registration_number', 'S01-RENEWAL-HAPPY-PATH')->count(),
+                'scenario_responsibilities' => count($responsibilities),
+                'scenario_evaluation_charges' => collect($this->evaluationCharges($projection))->count(),
+                'current_assessments' => $application->assessments()->whereNull('superseded_at')->count(),
+                'assessment_lines' => $assessment->lines->count(),
+                'treasury_counter_checks' => $application->businessPermitEvaluation?->versions()->whereHas('counterCheck')->count(),
+                'payment_schedules' => $application->paymentSchedules()->count(),
+                'accepted_inspection_fee_rules' => FeeRule::query()->where('code', 'MRC-3A-04-BUSINESS-INSPECTION')->count(),
+                'expected_nonaccumulating' => true,
+            ],
             'negative_assertions' => $this->stableNegativeAssertions(),
             'milestones' => collect($timeline)->pluck('milestone')->all(),
             'timeline' => $timeline,
@@ -461,6 +526,7 @@ final class RenewalHappyPathScenario
     {
         $applications = PermitApplication::query()
             ->where('metadata->lifecycle_scenario->id', RenewalHappyPathDefinition::Id)
+            ->where('metadata->lifecycle_scenario->definition_revision', RenewalHappyPathDefinition::Revision)
             ->get();
 
         if ($applications->count() > 1) {
@@ -573,19 +639,172 @@ final class RenewalHappyPathScenario
             ->all());
     }
 
+    /**
+     * @param  array<string, User>  $actors
+     * @param  array<string, LineOfBusiness>  $linesOfBusiness
+     * @return array<string, mixed>
+     */
+    private function bootstrapInventory(array $actors, array $linesOfBusiness): array
+    {
+        $inspectionRule = FeeRule::query()->with('currentReconciliation')->where('code', 'MRC-3A-04-BUSINESS-INSPECTION')->sole();
+
+        return [
+            'schema' => [
+                'migrations_repository_present' => Schema::hasTable('migrations'),
+                'required_operational_tables_present' => collect([
+                    'users',
+                    'business_owners',
+                    'businesses',
+                    'permit_applications',
+                    'permit_application_lines',
+                    'business_permit_evaluations',
+                    'assessments',
+                    'business_permit_evaluation_counter_checks',
+                    'payment_schedules',
+                ])->every(fn (string $table): bool => Schema::hasTable($table)),
+            ],
+            'municipal_runtime_configuration' => [
+                'municipality' => config('municipality.name'),
+                'province' => config('municipality.province'),
+                'system_name' => config('municipality.system_name'),
+                'source' => 'config/municipality.php',
+            ],
+            'actor_capabilities' => collect($actors)->map(fn (User $actor): array => [
+                'role_code' => $actor->role?->code,
+                'permissions' => $actor->role?->permissions->pluck('code')->sort()->values()->all() ?? [],
+                'classification' => 'synthetic_scenario_actor',
+            ])->all(),
+            'reference_data' => [
+                'scenario_line_of_business_codes' => collect($linesOfBusiness)->pluck('code')->sort()->values()->all(),
+                'classification' => 'provisional_uat_routing_reference',
+            ],
+            'accepted_business_inspection_fee' => [
+                'fee_rule_id' => $inspectionRule->id,
+                'code' => $inspectionRule->code,
+                'amount_cents' => $inspectionRule->amount_cents,
+                'scope' => $inspectionRule->scope->value,
+                'classification' => 'accepted_governed_municipal_rule',
+                'provisional_uat' => false,
+                'execution_status' => $inspectionRule->currentReconciliation?->execution_status->value,
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, LineOfBusiness>  $linesOfBusiness
+     * @return array<string, mixed>
+     */
+    private function applicationEvaluationRouting(PermitApplication $application, array $linesOfBusiness): array
+    {
+        $declaredLineIds = $application->lines()->pluck('line_of_business_id')->map(fn (mixed $id): int => (int) $id);
+        $requiredWork = collect($this->definition->responsibilities())->map(function (array $responsibility) use ($declaredLineIds, $linesOfBusiness): array {
+            $lineOfBusiness = $linesOfBusiness[$responsibility['line_of_business_code']];
+            $this->assert($declaredLineIds->contains($lineOfBusiness->id), "Routing requires an undeclared LOB [{$lineOfBusiness->code}].");
+
+            return [
+                'key' => $responsibility['key'],
+                'line_of_business_id' => $lineOfBusiness->id,
+                'line_of_business_code' => $lineOfBusiness->code,
+                'line_of_business_name' => $lineOfBusiness->name,
+                'department' => $responsibility['department'],
+                'work_label' => $responsibility['label'],
+                'reason' => $responsibility['reason'],
+                'inspection_or_review_required' => $responsibility['inspection_required'],
+                'classification' => 'provisional_uat',
+            ];
+        })->sortBy('key')->values();
+
+        return [
+            'canonical_noun' => 'Business Permit Evaluation required-work routing',
+            'disposition' => 'projected',
+            'persisted_aggregate_created' => false,
+            'source_facts' => ['lodged Renewal', 'declared Lines of Business', 'Scenario 01 provisional UAT applicability', 'generated Evaluation responsibilities'],
+            'classification' => 'provisional_uat',
+            'groups' => $requiredWork
+                ->groupBy('line_of_business_id')
+                ->map(fn ($items): array => [
+                    'line_of_business_id' => $items->first()['line_of_business_id'],
+                    'line_of_business_code' => $items->first()['line_of_business_code'],
+                    'line_of_business_name' => $items->first()['line_of_business_name'],
+                    'required_work' => $items->map(fn (array $item): array => [
+                        'key' => $item['key'],
+                        'department' => $item['department'],
+                        'work_label' => $item['work_label'],
+                        'reason' => $item['reason'],
+                        'inspection_or_review_required' => $item['inspection_or_review_required'],
+                    ])->values()->all(),
+                ])->values()->all(),
+            'required_work_count' => $requiredWork->count(),
+            'required_work' => $requiredWork->all(),
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $responsibilities
+     * @return list<string>
+     */
+    private function responsibilityKeys(array $responsibilities): array
+    {
+        $keys = [];
+
+        foreach ($responsibilities as $responsibility) {
+            $key = $responsibility['key'] ?? null;
+            if (! is_string($key)) {
+                throw new RenewalHappyPathFailure('Responsibility identity is present', 'A projected responsibility has no canonical key.');
+            }
+
+            $keys[] = $key;
+        }
+
+        sort($keys);
+
+        return $keys;
+    }
+
+    /**
+     * @param  array<string, mixed>  $routing
+     * @return list<string>
+     */
+    private function routingKeys(array $routing): array
+    {
+        $requiredWork = $routing['required_work'] ?? null;
+        if (! is_array($requiredWork)) {
+            throw new RenewalHappyPathFailure('Routing required work is present', 'The routing projection returned no required-work list.');
+        }
+
+        $keys = [];
+        foreach ($requiredWork as $item) {
+            $key = is_array($item) ? ($item['key'] ?? null) : null;
+            if (! is_string($key)) {
+                throw new RenewalHappyPathFailure('Routing identity is present', 'A routing requirement has no canonical key.');
+            }
+
+            $keys[] = $key;
+        }
+
+        sort($keys);
+
+        return $keys;
+    }
+
     /** @return list<array<string, mixed>> */
     private function timeline(): array
     {
         $steps = [
-            ['renewal_lodged', 'BPLO Intake Officer', 'CreatePermitApplication', 'Renewal lodged with two declared LOBs.'],
+            ['system_bootstrapped', 'System', 'Canonical migrations + RevenueCodeFeeCatalogSeeder + scenario actor/reference preparation', 'Required schema, actor capabilities, reference data, and the governed Business Inspection Fee are available.'],
+            ['owner_onboarded', 'BPLO Intake Officer', 'CreatePermitApplication', 'Canonical staff intake creates the synthetic BusinessOwner as part of one atomic intake action.'],
+            ['business_onboarded', 'BPLO Intake Officer', 'CreatePermitApplication', 'The same canonical intake action creates the synthetic Business owned by that BusinessOwner.'],
+            ['renewal_lodged', 'BPLO Intake Officer', 'CreatePermitApplication', 'Renewal is lodged without manufacturing an official application number.'],
+            ['lines_of_business_declared', 'BPLO Intake Officer', 'CreatePermitApplication', 'Two LOB declarations are persisted with the lodged Renewal.'],
             ['evaluation_initialized', 'Assessment Officer', 'InitializeBusinessPermitEvaluation', 'Applicant LOB facts enter versioned Evaluation.'],
-            ['premature_assessment_refused', 'Assessment Officer', 'CreateAssessmentForPermitApplication', 'Readiness guard refuses incomplete department work.'],
+            ['application_evaluation_routing_projected', 'System', 'Business Permit Evaluation read projection', 'Provisional UAT applicability compiles the required municipal work by LOB and reason without a second persisted aggregate.'],
             ['responsibilities_created', 'Assessment Officer', 'DefineBusinessPermitEvaluationItem', 'Six required department charge responsibilities are created.'],
+            ['premature_assessment_refused', 'Assessment Officer', 'CreateAssessmentForPermitApplication', 'Readiness guard refuses incomplete department work.'],
             ['departments_completed', 'Concerned Offices', 'CompleteBusinessPermitEvaluationResponsibility', 'Six confirmations resolve applicability, review, and amounts.'],
-            ['treasury_counter_checked', 'Treasury', 'RecordBusinessPermitEvaluationCounterCheck', 'Treasury records no correction against the current version.'],
-            ['evaluation_ready', 'System', 'BusinessPermitEvaluationReadiness', 'All canonical readiness gates pass.'],
+            ['evaluation_ready_for_assessment', 'System', 'BusinessPermitEvaluationReadiness', 'Department completion makes the Evaluation ready before Treasury counter-check.'],
             ['assessment_prepared', 'Assessment Officer', 'CreateAssessmentForPermitApplication', 'Immutable Assessment binds exact Evaluation version and fingerprint.'],
             ['preapproval_schedule_refused', 'Assessment Officer', 'CreatePaymentScheduleForAssessment', 'Payment remains unavailable before approval.'],
+            ['treasury_counter_checked', 'Treasury', 'RecordBusinessPermitEvaluationCounterCheck', 'Treasury records no correction against prepared Assessment #1 and its source Evaluation version.'],
             ['assessment_approved', 'Municipal Treasurer', 'RecordAssessmentDecision', 'Exact Assessment and total are approved.'],
             ['payable_created', 'Assessment Officer', 'CreatePaymentScheduleForAssessment', 'Pending Payment Schedule makes the approved amount payable.'],
             ['evaluation_mutation_locked', 'MENRO', 'CompleteBusinessPermitEvaluationResponsibility', 'Ordinary financial mutation is refused after scheduling.'],
@@ -673,9 +892,10 @@ final class RenewalHappyPathScenario
     {
         return [
             'premature_assessment_refused' => ['passed' => true, 'message' => 'Assessment readiness refused incomplete department work.'],
-            'treasury_cannot_approve' => ['passed' => true, 'message' => 'Treasury counter-check actor is denied assessments.approve.'],
+            'treasury_cannot_approve' => ['passed' => true, 'message' => 'Treasury counter-check actor is denied assessments.approve by the canonical authorization layer.'],
             'treasurer_cannot_mutate_evaluation' => ['passed' => true, 'message' => 'Municipal Treasurer is not an authorized Evaluation responsibility owner.'],
             'assessment_officer_cannot_self_approve' => ['passed' => true, 'message' => 'Assessment preparer cannot record the Municipal Treasurer decision.'],
+            'pre_counter_check_treasurer_decision_refused' => ['passed' => true, 'message' => 'Municipal Treasurer decision requires Treasury counter-check of the exact prepared Assessment snapshot.'],
             'preapproval_schedule_refused' => ['passed' => true, 'message' => 'Payment Schedule requires exact Treasurer approval.'],
             'post_schedule_evaluation_lock' => ['passed' => true, 'message' => 'Evaluation mutation is locked after Payment Schedule creation.'],
         ];

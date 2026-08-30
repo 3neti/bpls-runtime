@@ -66,6 +66,11 @@ class DescribeBusinessPermitEvaluation
                 fingerprint: $projection['current_fingerprint'],
                 fingerprint_current: $projection['fingerprint_current'],
                 treasury_counter_check: $evaluation->currentVersion?->counterCheck === null ? null : new EvaluationTreasuryCounterCheckData(
+                    assessment_id: $evaluation->currentVersion->counterCheck->assessment_id,
+                    assessment_snapshot_hash: $lens === 'internal'
+                        ? $evaluation->currentVersion->counterCheck->assessment_snapshot_hash
+                        : null,
+                    result: $evaluation->currentVersion->counterCheck->result?->value,
                     checked_at: $evaluation->currentVersion->counterCheck->checked_at->toIso8601String(),
                     checked_by: $evaluation->currentVersion->counterCheck->checkedBy->name,
                     reason: $evaluation->currentVersion->counterCheck->reason,

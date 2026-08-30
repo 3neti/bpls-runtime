@@ -136,8 +136,8 @@ it('hides internal actor identity and counter-check evidence provenance from the
 
 it('traces an Assessment back to the exact Evaluation version and fingerprint that produced it', function () {
     $fixture = contractFixture();
-    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($fixture['evaluation']->fresh(), $fixture['actor']);
     $assessment = app(CreateAssessmentForPermitApplication::class)->handle($fixture['application']->fresh(), $fixture['actor']);
+    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($assessment, $fixture['actor']);
 
     $data = app(DescribeBusinessPermitEvaluation::class)->handle($fixture['evaluation']->fresh(), $fixture['actor'], 'internal');
 
@@ -191,7 +191,7 @@ function evaluationContractKeys(): array
             'lens',
         ],
         'version' => ['id', 'sequence', 'fingerprint', 'fingerprint_current', 'treasury_counter_check'],
-        'treasury_counter_check' => ['checked_at', 'checked_by', 'reason', 'evidence_provenance'],
+        'treasury_counter_check' => ['assessment_id', 'assessment_snapshot_hash', 'result', 'checked_at', 'checked_by', 'reason', 'evidence_provenance'],
         'application' => ['id', 'application_number', 'tracking_reference', 'business_name', 'owner_name', 'type', 'year'],
         'applicant_declaration' => ['line_of_business_id', 'line_of_business_name', 'declared_gross_sales_cents', 'capital_investment_cents', 'quantity'],
         'municipal_resolved_lines' => ['id', 'name'],
@@ -328,8 +328,8 @@ function fullyPopulatedContract(): array
         $version->fingerprint,
         'contract-serialization-confirm',
     );
-    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($fixture['evaluation']->fresh(), $fixture['actor']);
-    app(CreateAssessmentForPermitApplication::class)->handle($fixture['application']->fresh(), $fixture['actor']);
+    $assessment = app(CreateAssessmentForPermitApplication::class)->handle($fixture['application']->fresh(), $fixture['actor']);
+    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($assessment, $fixture['actor']);
 
     return [
         'item' => $item,

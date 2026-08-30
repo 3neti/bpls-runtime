@@ -2,7 +2,19 @@
   "scenario_id": "renewal-happy-path",
   "certification_boundary": "payable_without_external_settlement",
   "synthetic_only": true,
+  "scenario_revision": "first_principles_v2",
+  "certified_local_state": {
+    "application_id": 21,
+    "evaluation_version": 13,
+    "assessment_id": 17,
+    "payment_schedule_id": 8,
+    "grand_total_amount_cents": 122000
+  },
   "current_screens": [
+    "01-first-principles-onboarding-application-lobs-current.png",
+    "05-first-principles-routing-responsibilities-current.png",
+    "11-first-principles-assessment-treasury-treasurer-current.png",
+    "14-first-principles-payable-current.png",
     "01-application-lodged-and-payable-current.png",
     "04-concerned-office-queue-current.png",
     "05-concerned-office-evaluation-current.png",

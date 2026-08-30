@@ -12,6 +12,7 @@ use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
+use App\Enums\TreasuryCounterCheckResult;
 use App\Models\Business;
 use App\Models\BusinessOwner;
 use App\Models\BusinessPermitEvaluation;
@@ -131,6 +132,7 @@ class PrepareBusinessPermitEvaluatorUatDataset
 
             $cases['returned_for_correction'] = $this->readyCase($runId, 'returned-for-correction', $actors, $retail);
             $returnedAssessment = $this->createAssessment->handle($cases['returned_for_correction']->permitApplication, $actors['assessment_officer']);
+            $this->counterCheck->handle($returnedAssessment, $actors['treasury']);
             $this->recordAssessmentDecision->handle(
                 $returnedAssessment,
                 $actors['municipal_treasurer'],
@@ -259,10 +261,7 @@ class PrepareBusinessPermitEvaluatorUatDataset
     /** @param array<string, User> $actors */
     private function readyCase(string $runId, string $key, array $actors, LineOfBusiness $retail): BusinessPermitEvaluation
     {
-        $evaluation = $this->case($runId, $key, $actors['citizen'], $retail, $actors['assessment_officer']);
-        $this->counterCheck->handle($evaluation, $actors['treasury']);
-
-        return $evaluation->fresh();
+        return $this->case($runId, $key, $actors['citizen'], $retail, $actors['assessment_officer'])->fresh();
     }
 
     /** @param array<string, User> $actors */
@@ -351,8 +350,13 @@ class PrepareBusinessPermitEvaluatorUatDataset
         $this->completeWorkingPaperCharge($evaluation, 'repair.solid-waste.charge', $actors['menro'], BusinessPermitEvaluationApplicability::Applicable, 5_200, 'MENRO confirmed the synthetic Solid Waste proposal.');
         $this->completeWorkingPaperCharge($evaluation, 'repair.sanitary-permit.charge', $actors['health'], BusinessPermitEvaluationApplicability::Applicable, 4_600, 'Health confirmed the synthetic Repair Sanitary Permit proposal.');
 
-        $this->counterCheck->handle($evaluation->fresh(), $actors['treasury']);
         $initialAssessment = $this->createAssessment->handle($evaluation->permitApplication->fresh(), $actors['assessment_officer']);
+        $this->counterCheck->handle(
+            $initialAssessment,
+            $actors['treasury'],
+            TreasuryCounterCheckResult::MaterialCorrection,
+            'Treasury identified a material Line of Business correction against this prepared Assessment.',
+        );
         $beforeCorrection = $evaluation->fresh()->currentVersion;
         $this->correctLinesOfBusiness->handle(
             $evaluation,
@@ -366,9 +370,8 @@ class PrepareBusinessPermitEvaluatorUatDataset
 
         $this->completeWorkingPaperCharge($evaluation, 'restaurant.health-certificate.charge', $actors['health'], BusinessPermitEvaluationApplicability::Applicable, 8_700, 'Health completed the synthetic Restaurant Health Certificate review.');
         $this->completeWorkingPaperCharge($evaluation, 'restaurant.sanitary-permit.charge', $actors['health'], BusinessPermitEvaluationApplicability::Applicable, 6_100, 'Health completed the synthetic Restaurant Sanitary Permit review.');
-        $this->counterCheck->handle($evaluation->fresh(), $actors['treasury']);
-
         $assessment = $this->createAssessment->handle($evaluation->permitApplication->fresh(), $actors['assessment_officer']);
+        $this->counterCheck->handle($assessment, $actors['treasury']);
         $this->recordAssessmentDecision->handle(
             $assessment,
             $actors['municipal_treasurer'],
@@ -402,8 +405,8 @@ class PrepareBusinessPermitEvaluatorUatDataset
         $this->correctLinesOfBusiness->handle($evaluation, [$retail->id, $restaurant->id], $actors['treasury'], 'Synthetic UAT additional activity determination.', $current->sequence, $current->fingerprint, "{$runId}:{$key}:lob");
         $health = $this->officeDetermination($evaluation, 'health', $actors['health'], BusinessPermitEvaluationApplicability::Applicable, 'Synthetic UAT dependency reopened Health responsibility.');
         $this->completeDetermination($health, $actors['health'], BusinessPermitEvaluationApplicability::Applicable, 'Synthetic UAT Health review complete.');
-        $this->counterCheck->handle($evaluation->fresh(), $actors['treasury']);
-        $this->createAssessment->handle($evaluation->permitApplication->fresh(), $actors['assessment_officer']);
+        $freshAssessment = $this->createAssessment->handle($evaluation->permitApplication->fresh(), $actors['assessment_officer']);
+        $this->counterCheck->handle($freshAssessment, $actors['treasury']);
 
         if ($oldAssessment->refresh()->superseded_at === null) {
             throw new RuntimeException('Evaluator UAT reassessment failed to supersede the prior Assessment.');

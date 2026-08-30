@@ -102,10 +102,6 @@ class BusinessPermitEvaluationReadiness
             $issues[] = 'Evaluation fingerprint is stale and must be refreshed before assessment.';
         }
 
-        if ($version->counterCheck === null) {
-            $issues[] = 'Required Treasury counter-check is not complete for the current Evaluation version.';
-        }
-
         return [
             'ready' => $issues === [],
             'mode' => $mode,

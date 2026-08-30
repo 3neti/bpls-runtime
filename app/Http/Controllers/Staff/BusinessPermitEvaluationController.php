@@ -10,8 +10,10 @@ use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
 use App\Actions\RefreshBusinessPermitEvaluation;
 use App\Enums\BusinessPermitEvaluationApplicability;
 use App\Enums\BusinessPermitEvaluationSource;
+use App\Enums\TreasuryCounterCheckResult;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
+use App\Models\Assessment;
 use App\Models\BusinessPermitEvaluation;
 use App\Models\BusinessPermitEvaluationItem;
 use App\Models\LineOfBusiness;
@@ -158,8 +160,9 @@ class BusinessPermitEvaluationController extends Controller
         ]);
 
         return $this->attempt(fn () => $counterCheck->handle(
-            $this->evaluation($permitApplication),
+            $this->assessmentForCounterCheck($permitApplication),
             auth()->user(),
+            TreasuryCounterCheckResult::NoCorrection,
             $data['reason'] ?? null,
             $data['expected_version_sequence'],
             $data['expected_fingerprint'],
@@ -169,6 +172,17 @@ class BusinessPermitEvaluationController extends Controller
     private function evaluation(PermitApplication $permitApplication): BusinessPermitEvaluation
     {
         return $permitApplication->businessPermitEvaluation()->firstOrFail();
+    }
+
+    private function assessmentForCounterCheck(PermitApplication $permitApplication): Assessment
+    {
+        $assessment = $permitApplication->assessments()->whereNull('superseded_at')->first();
+
+        if (! $assessment instanceof Assessment) {
+            throw new LogicException('Treasury counter-check requires the Assessment Officer to prepare the immutable Assessment first.');
+        }
+
+        return $assessment;
     }
 
     /** @return array<string, bool> */

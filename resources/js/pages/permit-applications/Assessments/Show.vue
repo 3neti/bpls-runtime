@@ -71,6 +71,9 @@ type Assessment = {
         view_url: string;
     } | null;
     treasury_counter_check: {
+        assessment_id: number | null;
+        assessment_snapshot_hash: string | null;
+        result: 'no_correction' | 'material_correction' | null;
         checked_at: string;
         checked_by: string;
         reason: string | null;
@@ -347,7 +350,16 @@ function money(amountCents: number): string {
                             id="assessment-treasury-counter-check-title"
                             class="mt-1 font-semibold"
                         >
-                            Exact Evaluation version reconciled
+                            Assessment #{{
+                                assessment.treasury_counter_check.assessment_id
+                            }}
+                            reconciled ·
+                            {{
+                                assessment.treasury_counter_check.result ===
+                                'no_correction'
+                                    ? 'No correction'
+                                    : 'Material correction'
+                            }}
                         </h2>
                         <p class="mt-1 text-sm">
                             {{ assessment.treasury_counter_check.checked_by }} ·
@@ -360,8 +372,9 @@ function money(amountCents: number): string {
                             {{ assessment.treasury_counter_check.reason }}
                         </p>
                         <p class="mt-2 text-xs opacity-80">
-                            Counter-check confirms the exact Evaluation version;
-                            it does not approve or rewrite this Assessment.
+                            Counter-check binds this immutable Assessment and
+                            its exact source Evaluation version; it does not
+                            approve or rewrite the amount.
                         </p>
                     </div>
                 </div>

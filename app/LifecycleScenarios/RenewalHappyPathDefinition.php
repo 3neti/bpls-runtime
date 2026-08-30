@@ -8,6 +8,8 @@ final class RenewalHappyPathDefinition
 
     public const string RunId = 'scenario-01-canonical';
 
+    public const string Revision = 'first_principles_v2';
+
     public const int ApplicationYear = 2098;
 
     public const int ExpectedGrandTotalCents = 122_000;
@@ -34,7 +36,7 @@ final class RenewalHappyPathDefinition
                 ],
                 'synthetic_applicability_and_prices' => [
                     'classification' => 'provisional_uat',
-                    'meaning' => 'Scenario-only product evidence; does not commission production pricing or universal applicability.',
+                    'meaning' => 'The six scenario-specific departmental amounts are provisional_uat. The ₱350 Business Inspection Fee is an accepted governed municipal rule and is not provisional_uat.',
                 ],
                 'external_settlement' => [
                     'classification' => 'blocked',

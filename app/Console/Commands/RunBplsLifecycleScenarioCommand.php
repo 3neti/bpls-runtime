@@ -58,7 +58,37 @@ class RunBplsLifecycleScenarioCommand extends Command
     {
         $this->info('BPLS LIFECYCLE SCENARIO 01 — RENEWAL HAPPY PATH: PASS');
         $this->line('Question: '.$result['business_question']);
-        $this->line('Application: Renewal #'.$result['application']['id'].' · '.$result['application']['business']['name']);
+        $this->newLine();
+        $this->line('SYSTEM BOOTSTRAP');
+        $this->line('[PASS] '.$result['system_bootstrap']['municipal_runtime_configuration']['municipality'].' · '.$result['system_bootstrap']['municipal_runtime_configuration']['system_name']);
+        $this->line('[PASS] Required schema and operational tables available');
+        $this->line('[PASS] '.count($result['system_bootstrap']['actor_capabilities']).' synthetic role/capability sets available');
+        $this->line('[PASS] Business Inspection Fee · accepted governed municipal rule · '.$this->pesos($result['system_bootstrap']['accepted_business_inspection_fee']['amount_cents']).' · NOT provisional_uat');
+        $this->line('[PASS] Scenario routing reference LOBs available · provisional_uat');
+        $this->newLine();
+        $this->line('ONBOARDING');
+        $this->line('[PASS] Owner/customer onboarded · '.$result['onboarding']['owner_customer']['name']);
+        $this->line('[PASS] Business onboarded · '.$result['onboarding']['business']['name']);
+        $this->line('Canonical action: '.$result['onboarding']['canonical_action'].' owns both onboarding nouns and lodged staff intake.');
+        $this->newLine();
+        $this->line('APPLICATION / LINES OF BUSINESS');
+        $this->line('[PASS] Renewal #'.$result['application']['id'].' lodged · no official application number manufactured');
+        foreach ($result['lines_of_business'] as $lineOfBusiness) {
+            $this->line('[PASS] '.$lineOfBusiness['name'].' declared');
+        }
+        $this->newLine();
+        $this->line('APPLICATION EVALUATION ROUTING');
+        $this->line('Canonical noun: '.$result['application_evaluation_routing']['canonical_noun'].' · projected, not a second persisted aggregate');
+        foreach ($result['application_evaluation_routing']['groups'] as $group) {
+            $this->line($group['line_of_business_name']);
+            foreach ($group['required_work'] as $work) {
+                $this->line('  '.$work['work_label'].' · '.$work['department'].' · Required · '.$work['reason']);
+            }
+        }
+        $this->line('[PASS] Routing required work = generated responsibilities exactly · '.$result['responsibilities']['created_count']);
+        $this->newLine();
+        $this->line('DEPARTMENT RESPONSIBILITIES');
+        $this->line('[PASS] '.$result['responsibilities']['resolved_count'].'/'.$result['responsibilities']['created_count'].' resolved · six departmental amounts are provisional_uat');
         $this->newLine();
         $this->line('FINANCIAL WORKING PAPER');
 
@@ -74,10 +104,9 @@ class RunBplsLifecycleScenarioCommand extends Command
         $this->line('  Business Inspection Fee · accepted governed rule · '.$this->pesos($result['evaluation']['subtotals']['application_wide_amount_cents']));
         $this->line('Grand Total: '.$this->pesos($result['evaluation']['grand_total_amount_cents']));
         $this->newLine();
-        $this->line('Responsibilities: '.$result['responsibilities']['resolved_count'].'/'.$result['responsibilities']['created_count'].' resolved');
-        $this->line('Evaluation: Ready · version '.$result['evaluation']['version_sequence']);
-        $this->line('Assessment: #'.$result['assessment']['id'].' · '.$this->pesos($result['assessment']['total_amount_cents']).' · Prepared by '.$result['assessment']['prepared_by']['name']);
-        $this->line('Treasury: completed, no correction');
+        $this->line('Evaluation: Ready for Assessment before Treasury counter-check · version '.$result['evaluation']['version_sequence']);
+        $this->line('Assessment: #'.$result['assessment']['id'].' · '.$this->pesos($result['assessment']['total_amount_cents']).' · Prepared by '.$result['assessment']['prepared_by']['name'].' · immutable');
+        $this->line('Treasury: Assessment #'.$result['treasury_counter_check']['assessment_id'].' · source Evaluation version '.$result['treasury_counter_check']['evaluation_version_sequence'].' · completed, no correction');
         $this->line('Municipal Treasurer: approved exact Assessment');
         $this->line('Payable: Payment Schedule #'.$result['payment_schedule']['id'].' · '.$this->pesos($result['payable']['amount_cents']));
         $this->line('Database: '.$result['database_driver'].' · Semantic result '.$result['semantic_result_hash']);
@@ -89,6 +118,7 @@ class RunBplsLifecycleScenarioCommand extends Command
         $result = [
             'schema_version' => 'bpls.lifecycle-certification.v1',
             'scenario_id' => $artifactStore->scenarioKey,
+            'scenario_revision' => RenewalHappyPathDefinition::Revision,
             'status' => 'failed',
             'business_question' => RenewalHappyPathDefinition::EvidenceQuestion,
             'first_failure' => [

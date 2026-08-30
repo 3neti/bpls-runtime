@@ -21,6 +21,7 @@ use App\Enums\FeeRuleScope;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
 use App\Enums\StakeholderPreviewPersona;
+use App\Enums\TreasuryCounterCheckResult;
 use App\Enums\UserPermission;
 use App\Evaluation\BusinessPermitEvaluationReadiness;
 use App\Evaluation\BusinessPermitEvaluationResolver;
@@ -102,7 +103,6 @@ it('rejects blank charges, preserves accepted zero, and segregates provisional U
         metadata: ['label' => 'Engineering charge'],
     );
 
-    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($fixture['evaluation']->fresh(), $fixture['actor']);
     $commissioned = app(BusinessPermitEvaluationReadiness::class)->forAssessment($fixture['evaluation']->fresh(), 'commissioned');
     $uat = app(BusinessPermitEvaluationReadiness::class)->forAssessment($fixture['evaluation']->fresh(), 'provisional_uat');
 
@@ -202,9 +202,8 @@ it('binds one exact ready evaluation version to an idempotent assessment with ca
         'effective_from' => '2026-01-01',
     ]);
     app(RefreshBusinessPermitEvaluation::class)->handle($fixture['evaluation'], $fixture['actor']);
-    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($fixture['evaluation']->fresh(), $fixture['actor']);
-
     $first = app(CreateAssessmentForPermitApplication::class)->handle($fixture['application']->fresh(), $fixture['actor']);
+    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($first, $fixture['actor']);
     $retry = app(CreateAssessmentForPermitApplication::class)->handle($fixture['application']->fresh(), $fixture['actor']);
     $current = $fixture['evaluation']->fresh()->currentVersion;
 
@@ -244,9 +243,8 @@ it('maps each governed and human-resolved charge exactly once without duplicate 
         $fixture['actor'],
         metadata: ['label' => 'Resolved Engineering charge'],
     );
-    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($fixture['evaluation']->fresh(), $fixture['actor']);
-
     $assessment = app(CreateAssessmentForPermitApplication::class)->handle($fixture['application']->fresh(), $fixture['actor']);
+    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($assessment, $fixture['actor']);
 
     expect($assessment->lines)->toHaveCount(2)
         ->and($assessment->lines->where('fee_rule_id', $feeRule->id))->toHaveCount(1)
@@ -279,8 +277,8 @@ it('detects rule drift, refreshes dynamic dependencies, and supersedes an unsche
         'effective_from' => '2026-01-01',
     ]);
     app(RefreshBusinessPermitEvaluation::class)->handle($fixture['evaluation'], $fixture['actor']);
-    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($fixture['evaluation']->fresh(), $fixture['actor']);
     $assessment = app(CreateAssessmentForPermitApplication::class)->handle($fixture['application']->fresh(), $fixture['actor']);
+    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($assessment, $fixture['actor']);
 
     $feeRule->update(['amount_cents' => 11_000]);
     $stale = app(BusinessPermitEvaluationReadiness::class)->forAssessment($fixture['evaluation']->fresh());
@@ -492,10 +490,15 @@ it('operates one assessment-slip-shaped multi-LOB working paper through reassess
         ->and(data_get($afterOffices, 'financial_working_paper.application_subtotal_amount_cents'))->toBe(45_000)
         ->and(data_get($afterOffices, 'financial_working_paper.grand_total_amount_cents'))->toBe(101_000);
 
-    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($evaluation->fresh(), $actors['treasury']);
     expect(app(BusinessPermitEvaluationReadiness::class)->forAssessment($evaluation->fresh(), 'provisional_uat')['ready'])->toBeTrue();
 
     $firstAssessment = app(CreateAssessmentForPermitApplication::class)->handle($application->fresh(), $actors['assessment_officer']);
+    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle(
+        $firstAssessment,
+        $actors['treasury'],
+        TreasuryCounterCheckResult::MaterialCorrection,
+        'Treasury identified a material Line of Business correction.',
+    );
     expect($firstAssessment->total_amount_cents)->toBe(101_000)
         ->and($firstAssessment->lines)->toHaveCount(8)
         ->and($firstAssessment->lines->sum('amount_cents'))->toBe(101_000)
@@ -543,9 +546,9 @@ it('operates one assessment-slip-shaped multi-LOB working paper through reassess
 
     $record('restaurant.health-certificate.charge', $actors['health'], BusinessPermitEvaluationApplicability::Applicable, 8_700, 'Health completed the synthetic Restaurant Health Certificate review.', true);
     $record('restaurant.sanitary-permit.charge', $actors['health'], BusinessPermitEvaluationApplicability::Applicable, 6_100, 'Health completed the synthetic Restaurant Sanitary Permit review.', true);
-    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($evaluation->fresh(), $actors['treasury']);
     $resolved = $resolver->resolve($evaluation->fresh());
     $freshAssessment = app(CreateAssessmentForPermitApplication::class)->handle($application->fresh(), $actors['assessment_officer']);
+    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($freshAssessment, $actors['treasury']);
 
     expect($resolved['total_amount_cents'])->toBe(115_800)
         ->and(data_get($resolved, 'financial_working_paper.line_sections.2.subtotal_amount_cents'))->toBe(14_800)

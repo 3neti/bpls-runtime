@@ -1270,7 +1270,11 @@ function submitPrepareAssessment(): void {
                 <!-- 9. Role context: Treasury, Assessment Officer, Municipal Treasurer -->
                 <div class="grid min-w-0 gap-4 xl:grid-cols-2">
                     <section
-                        v-if="can.counter_check && !evaluation.financial_lock"
+                        v-if="
+                            can.counter_check &&
+                            (!evaluation.financial_lock ||
+                                evaluation.version.treasury_counter_check)
+                        "
                         class="rounded-2xl border-2 border-dashed border-primary/40 bg-card p-5"
                         aria-labelledby="treasury-heading"
                     >
@@ -1287,20 +1291,27 @@ function submitPrepareAssessment(): void {
                                     Your action — Treasury
                                 </p>
                                 <h2 id="treasury-heading" class="font-semibold">
-                                    Counter-check this Evaluation
+                                    Counter-check the prepared Assessment
                                 </h2>
                             </div>
                         </div>
                         <p class="mt-3 text-sm leading-6 text-muted-foreground">
-                            Treasury counter-check confirms this exact
-                            Evaluation version. It is separate from Municipal
-                            Treasurer approval and never overrides an amount.
+                            Treasury investigates the immutable prepared
+                            Assessment and its exact source Evaluation version.
+                            It is separate from Municipal Treasurer approval and
+                            never edits the Assessment amount.
                         </p>
                         <template
                             v-if="evaluation.version.treasury_counter_check"
                         >
                             <p class="mt-4 text-sm font-medium">
-                                Counter-check complete
+                                Counter-check complete ·
+                                {{
+                                    evaluation.version.treasury_counter_check
+                                        .result === 'no_correction'
+                                        ? 'No correction'
+                                        : 'Material correction'
+                                }}
                             </p>
                             <p class="mt-1 text-sm text-muted-foreground">
                                 {{
@@ -1329,7 +1340,12 @@ function submitPrepareAssessment(): void {
                             </p>
                         </template>
                         <form
-                            v-else-if="requiredResponsibilitiesComplete"
+                            v-else-if="
+                                requiredResponsibilitiesComplete &&
+                                evaluation.latest_assessment
+                                    ?.consumes_current_evaluation &&
+                                !evaluation.latest_assessment.decision
+                            "
                             class="mt-4"
                             @submit.prevent="submitCounterCheck"
                         >
@@ -1351,7 +1367,7 @@ function submitPrepareAssessment(): void {
                                 {{
                                     pendingAction === 'counter-check'
                                         ? 'Confirming…'
-                                        : 'Confirm exact-version counter-check'
+                                        : 'Confirm Assessment counter-check'
                                 }}
                             </Button>
                         </form>
@@ -1359,8 +1375,16 @@ function submitPrepareAssessment(): void {
                             v-else
                             class="mt-4 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground"
                         >
-                            Counter-check becomes available after every required
-                            department responsibility above is complete.
+                            <template v-if="!requiredResponsibilitiesComplete">
+                                Counter-check becomes available after every
+                                required department responsibility above is
+                                complete.
+                            </template>
+                            <template v-else>
+                                The Assessment Officer must prepare the
+                                immutable Assessment before Treasury
+                                counter-checks it.
+                            </template>
                         </p>
                     </section>
 

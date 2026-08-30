@@ -12,21 +12,13 @@ for target in "${asset_dir}"/*-target.svg; do
 done
 
 magick montage \
-    "${asset_dir}/01-application-lodged-and-payable-current.png" \
-    "${render_dir}/01-citizen-lodged-target.png" \
+    "${asset_dir}/01-first-principles-onboarding-application-lobs-current.png" \
+    "${asset_dir}/05-first-principles-routing-responsibilities-current.png" \
     "${asset_dir}/audit-final-health-work-surface.png" \
-    "${render_dir}/04-responsibility-work-queue-target.png" \
     "${asset_dir}/audit-final-evaluation-responsibilities.png" \
-    "${render_dir}/05-office-responsibility-target.png" \
     "${asset_dir}/07-assessment-officer-working-paper-current.png" \
-    "${render_dir}/08-ready-for-assessment-target.png" \
-    "${asset_dir}/audit-final-assessment-desktop.png" \
-    "${asset_dir}/audit-final-assessment-mobile-390.png" \
-    "${asset_dir}/audit-final-assessment-desktop.png" \
-    "${render_dir}/11-treasurer-decision-target.png" \
-    "${asset_dir}/audit-final-payable.png" \
-    "${render_dir}/14-qr-issuance-target.png" \
-    "${render_dir}/16-receipt-target.png" \
+    "${asset_dir}/11-first-principles-assessment-treasury-treasurer-current.png" \
+    "${asset_dir}/14-first-principles-payable-current.png" \
     -thumbnail 720x450 \
     -background '#eef2f5' \
     -geometry 720x450+18+18 \

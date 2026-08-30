@@ -90,7 +90,7 @@ enum StakeholderPreviewPersona: string
             self::Citizen => 'Apply, submit, track processing, and inspect payment and clearance progress.',
             self::Bplo => 'Receive applications, coordinate clearances, and inspect fee rules without preparing assessments or collecting payment.',
             self::AssessmentOfficer => 'Consolidate the exact assessment and prepare its payment schedule for Treasurer approval.',
-            self::Treasury => 'Counter-check Evaluations and inspect payment schedules, collections, receipts, and Treasury reports.',
+            self::Treasury => 'Counter-check prepared Assessments against their source Evaluations and inspect payment schedules, collections, receipts, and Treasury reports.',
             self::MunicipalTreasurer => 'Approve or return one exact immutable Assessment snapshot without performing the earlier Treasury counter-check.',
             self::Cashier => 'Record authorized payments and issue official receipts without approving assessments.',
             self::Management => 'Review reports, user access, municipality settings, and fees.',

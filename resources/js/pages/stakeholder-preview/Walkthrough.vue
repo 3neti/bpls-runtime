@@ -28,7 +28,7 @@ const steps: Record<StakeholderPreviewPersona['key'], string[]> = {
         'Prepare its payment schedule for Treasurer approval.',
     ],
     treasury: [
-        'Open Applications for Treasury Review and counter-check the current Evaluation version.',
+        'Open Applications for Treasury Review and counter-check the prepared Assessment against its source Evaluation version.',
         'Confirm that Treasury cannot approve the Assessment prepared from that Evaluation.',
         'Open Payment Schedules and inspect the financial result after Municipal Treasurer approval.',
         'Review its collection and receipt details.',

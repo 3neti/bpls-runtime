@@ -44,7 +44,7 @@ class PermitApplicationAssessmentController extends Controller
             ->with([
                 'business.owner',
                 'lines.lineOfBusiness',
-                'assessments' => fn ($query) => $query->with(['decision', 'assessedBy'])->latest(),
+                'assessments' => fn ($query) => $query->with(['decision', 'assessedBy', 'treasuryCounterCheck'])->latest(),
                 'paymentSchedules',
                 'businessPermitEvaluation.currentVersion.counterCheck',
                 'businessPermitEvaluation.items.revisions.version',
@@ -120,7 +120,7 @@ class PermitApplicationAssessmentController extends Controller
             'permitApplication.lines.lineOfBusiness',
             'lines.lineOfBusiness',
             'paymentSchedules' => fn ($query) => $query->latest(),
-            'businessPermitEvaluationVersion.counterCheck.checkedBy',
+            'treasuryCounterCheck.checkedBy',
             'businessPermitEvaluationVersion.evaluation.items.revisions.version',
         ]);
 
@@ -134,7 +134,10 @@ class PermitApplicationAssessmentController extends Controller
             && $assessment->superseded_at === null
             && $assessment->paymentSchedules->isEmpty()
             && $assessment->permitApplication->status === PermitApplicationStatus::Assessment
-            && $assessment->assessed_by_id !== auth()->id();
+            && $assessment->assessed_by_id !== auth()->id()
+            && ($assessment->business_permit_evaluation_version_id === null
+                || ($assessment->treasuryCounterCheck?->assessment_snapshot_hash !== null
+                    && hash_equals($assessment->treasuryCounterCheck->assessment_snapshot_hash, $snapshotHash)));
 
         return Inertia::render('permit-applications/Assessments/Show', [
             'assessment' => [
@@ -159,7 +162,7 @@ class PermitApplicationAssessmentController extends Controller
                     ),
                 ],
                 'treasury_counter_check' => $this->counterCheckPayload(
-                    $assessment->businessPermitEvaluationVersion?->counterCheck,
+                    $assessment->treasuryCounterCheck,
                 ),
                 'payment_schedule_available' => $paymentScheduleAvailable,
                 'decision' => $assessment->decision === null ? null : [
@@ -333,6 +336,7 @@ class PermitApplicationAssessmentController extends Controller
                 || $permitApplication->paymentSchedules->contains('assessment_id', $assessment->id)
                 || $assessment->status !== AssessmentStatus::Computed
                 || $permitApplication->status !== PermitApplicationStatus::Assessment
+                || $assessment->treasuryCounterCheck === null
                 || $assessment->assessed_by_id === $user->id) {
                 return [];
             }
@@ -387,21 +391,25 @@ class PermitApplicationAssessmentController extends Controller
         }
 
         if ($surface === 'treasury_counter_check') {
+            $assessment = $permitApplication->assessments->firstWhere('superseded_at', null);
             $requiredWorkComplete = $items
                 ->where('is_required', true)
                 ->every(fn (array $item): bool => $item['resolution'] === 'resolved');
 
             if (! $requiredWorkComplete
                 || ! $projection['fingerprint_current']
+                || ! $assessment instanceof Assessment
+                || $assessment->business_permit_evaluation_version_id !== $projection['version_id']
+                || $assessment->business_permit_evaluation_fingerprint !== $projection['current_fingerprint']
                 || $evaluation->currentVersion?->counterCheck !== null
                 || $permitApplication->paymentSchedules->isNotEmpty()) {
                 return [];
             }
 
             return [[
-                'label' => 'Exact Evaluation version '.$projection['version_sequence'],
+                'label' => 'Prepared Assessment #'.$assessment->sequence,
                 'line_of_business' => $permitApplication->lines->pluck('lineOfBusiness.name')->implode(', '),
-                'reason' => 'All required department responsibilities are complete; Treasury may reconcile this exact fingerprint without approving it.',
+                'reason' => 'Treasury may reconcile this immutable Assessment and source Evaluation version '.$projection['version_sequence'].' without approving it.',
                 'responsible_party' => 'treasury',
                 'resolution' => 'awaiting_counter_check',
             ]];
@@ -424,7 +432,7 @@ class PermitApplicationAssessmentController extends Controller
         return [[
             'label' => 'Prepare immutable Assessment',
             'line_of_business' => $permitApplication->lines->pluck('lineOfBusiness.name')->implode(', '),
-            'reason' => 'Every required department responsibility and the exact Treasury counter-check are complete.',
+            'reason' => 'Every required department responsibility is complete; Assessment preparation precedes Treasury counter-check.',
             'responsible_party' => 'assessment_officer',
             'resolution' => 'ready',
         ]];
@@ -482,6 +490,9 @@ class PermitApplicationAssessmentController extends Controller
         }
 
         return [
+            'assessment_id' => $counterCheck->assessment_id,
+            'assessment_snapshot_hash' => $counterCheck->assessment_snapshot_hash,
+            'result' => $counterCheck->result?->value,
             'checked_at' => $counterCheck->checked_at->toIso8601String(),
             'checked_by' => $counterCheck->checkedBy->name,
             'reason' => $counterCheck->reason,

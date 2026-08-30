@@ -71,6 +71,10 @@ export type EvaluationItem = {
 };
 
 export type EvaluationTreasuryCounterCheck = {
+    assessment_id: number | null;
+    /** Available only under the internal lens. */
+    assessment_snapshot_hash: string | null;
+    result: 'no_correction' | 'material_correction' | null;
     checked_at: string;
     checked_by: string;
     reason: string | null;

@@ -30,6 +30,7 @@ use Illuminate\Support\Collection;
  * @property Carbon|null $updated_at
  * @property-read Collection<int, AssessmentLine> $lines
  * @property-read AssessmentDecision|null $decision
+ * @property-read BusinessPermitEvaluationCounterCheck|null $treasuryCounterCheck
  * @property-read BusinessPermitEvaluationVersion|null $businessPermitEvaluationVersion
  */
 #[Fillable(['permit_application_id', 'business_permit_evaluation_version_id', 'business_permit_evaluation_fingerprint', 'assessed_by_id', 'sequence', 'status', 'assessed_at', 'superseded_at', 'total_amount_cents', 'source_snapshot', 'legacy_source_id'])]
@@ -77,6 +78,12 @@ class Assessment extends Model
     public function decision(): HasOne
     {
         return $this->hasOne(AssessmentDecision::class);
+    }
+
+    /** @return HasOne<BusinessPermitEvaluationCounterCheck, $this> */
+    public function treasuryCounterCheck(): HasOne
+    {
+        return $this->hasOne(BusinessPermitEvaluationCounterCheck::class);
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Enums\AssessmentStatus;
 use App\Enums\PermitApplicationStatus;
 use App\Models\Assessment;
 use App\Models\AssessmentDecision;
+use App\Models\BusinessPermitEvaluationCounterCheck;
 use App\Models\PermitApplication;
 use App\Models\User;
 use DomainException;
@@ -35,7 +36,7 @@ class RecordAssessmentDecision
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $lockedAssessment->load(['decision', 'lines' => fn ($query) => $query->orderBy('id')]);
+            $lockedAssessment->load(['decision', 'treasuryCounterCheck', 'lines' => fn ($query) => $query->orderBy('id')]);
             $decidedBy->loadMissing('role');
 
             $this->assertDecisionMayBeRecorded($lockedAssessment, $permitApplication, $decidedBy);
@@ -110,6 +111,18 @@ class RecordAssessmentDecision
 
         if ($assessment->paymentSchedules()->exists()) {
             throw new DomainException('An assessment decision cannot be recorded after payment scheduling has begun.');
+        }
+
+        if ($assessment->business_permit_evaluation_version_id !== null) {
+            $counterCheck = $assessment->treasuryCounterCheck;
+            $snapshotHash = $this->fingerprint->hash($assessment);
+
+            if (! $counterCheck instanceof BusinessPermitEvaluationCounterCheck
+                || $counterCheck->business_permit_evaluation_version_id !== $assessment->business_permit_evaluation_version_id
+                || $counterCheck->assessment_snapshot_hash === null
+                || ! hash_equals($counterCheck->assessment_snapshot_hash, $snapshotHash)) {
+                throw new DomainException('The prepared assessment requires Treasury counter-check of this exact snapshot before Municipal Treasurer decision.');
+            }
         }
 
         if ($permitApplication->status !== PermitApplicationStatus::Assessment) {
