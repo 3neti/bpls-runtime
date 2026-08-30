@@ -8,6 +8,7 @@ use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\CreatePermitApplication;
 use App\Actions\DefineBusinessPermitEvaluationItem;
 use App\Actions\InitializeBusinessPermitEvaluation;
+use App\Actions\InspectBplsInstallation;
 use App\Actions\RecordAssessmentDecision;
 use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
 use App\Assessment\AssessmentSnapshotFingerprint;
@@ -26,6 +27,7 @@ use App\Evaluation\BusinessPermitEvaluationResolver;
 use App\Models\Assessment;
 use App\Models\BusinessPermitEvaluation;
 use App\Models\FeeRule;
+use App\Models\LifecycleScenarioSpecimen;
 use App\Models\LineOfBusiness;
 use App\Models\PaymentSchedule;
 use App\Models\Permission;
@@ -41,6 +43,7 @@ final class RenewalHappyPathScenario
 {
     public function __construct(
         private readonly RenewalHappyPathDefinition $definition,
+        private readonly InspectBplsInstallation $inspectInstallation,
         private readonly CreatePermitApplication $createPermitApplication,
         private readonly InitializeBusinessPermitEvaluation $initializeEvaluation,
         private readonly DefineBusinessPermitEvaluationItem $defineEvaluationItem,
@@ -57,6 +60,9 @@ final class RenewalHappyPathScenario
     /** @return array<string, mixed> */
     public function run(): array
     {
+        $installation = $this->inspectInstallation->handle();
+        $this->assert($installation['integrity']['pass'], 'Scenario 01 requires a coherent bpls:install baseline.');
+
         $existing = $this->existingApplication();
 
         if ($existing instanceof PermitApplication) {
@@ -535,16 +541,29 @@ final class RenewalHappyPathScenario
 
     private function existingApplication(): ?PermitApplication
     {
+        $specimen = LifecycleScenarioSpecimen::query()
+            ->where('scenario_id', RenewalHappyPathDefinition::Id)
+            ->where('scenario_revision', RenewalHappyPathDefinition::Revision)
+            ->with('permitApplication')
+            ->first();
         $applications = PermitApplication::query()
             ->where('metadata->lifecycle_scenario->id', RenewalHappyPathDefinition::Id)
             ->where('metadata->lifecycle_scenario->definition_revision', RenewalHappyPathDefinition::Revision)
             ->get();
 
-        if ($applications->count() > 1) {
-            throw new RenewalHappyPathFailure('Deterministic scenario identity is unique', 'More than one Scenario 01 application exists.');
+        if ($specimen instanceof LifecycleScenarioSpecimen) {
+            if ($applications->count() !== 1 || $applications->first()?->id !== $specimen->permit_application_id) {
+                throw new RenewalHappyPathFailure('Harness-owned persisted specimen is singular', 'Scenario 01 ownership manifest does not match exactly one application.');
+            }
+
+            return $specimen->permitApplication;
         }
 
-        return $applications->first();
+        if ($applications->isNotEmpty()) {
+            throw new RenewalHappyPathFailure('Scenario persistence is harness-owned', 'Unowned Scenario 01 transactional residue exists; refusing name or metadata inference.');
+        }
+
+        return null;
     }
 
     /** @return array<string, User> */
@@ -699,6 +718,7 @@ final class RenewalHappyPathScenario
                 'source' => 'config/municipality.php',
             ],
             'actor_capabilities' => collect($actors)->map(fn (User $actor): array => [
+                'user_id' => $actor->id,
                 'role_code' => $actor->role?->code,
                 'permissions' => $actor->role?->permissions->pluck('code')->sort()->values()->all() ?? [],
                 'classification' => 'synthetic_scenario_actor',

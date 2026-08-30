@@ -6,20 +6,21 @@ use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\Models\Assessment;
 use App\Models\BusinessPermitEvaluationItem;
 use App\Models\FeeRule;
+use App\Models\LifecycleScenarioSpecimen;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use App\Models\User;
-use Database\Seeders\RevenueCodeFeeCatalogSeeder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
-test('Scenario 01 proves a deterministic multi-LOB Renewal becomes an approved payable', function () {
+test('Scenario 01 proves a deterministic persisted multi-LOB Renewal becomes an approved payable', function () {
     Storage::fake('local');
-    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+    Artisan::call('bpls:install');
 
     $firstExit = Artisan::call('bpls:lifecycle:run', [
         'scenario' => RenewalHappyPathDefinition::Id,
+        '--persist' => true,
         '--json' => true,
     ]);
     $first = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
@@ -33,6 +34,7 @@ test('Scenario 01 proves a deterministic multi-LOB Renewal becomes an approved p
 
     $secondExit = Artisan::call('bpls:lifecycle:run', [
         'scenario' => RenewalHappyPathDefinition::Id,
+        '--persist' => true,
         '--json' => true,
     ]);
     $second = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
@@ -86,6 +88,7 @@ test('Scenario 01 proves a deterministic multi-LOB Renewal becomes an approved p
         ->and(Assessment::query()->count())->toBe($counts['assessments'])
         ->and(PaymentSchedule::query()->count())->toBe($counts['schedules'])
         ->and(FeeRule::query()->count())->toBe($counts['fee_rules'])
+        ->and(LifecycleScenarioSpecimen::query()->count())->toBe(1)
         ->and(User::query()->where('email', 'scenario-01-assessment-officer@example.test')->sole()->can('business_permit_evaluations.view'))->toBeTrue()
         ->and(User::query()->where('email', 'scenario-01-treasury-counter-check@example.test')->sole()->can('business_permit_evaluations.correct_lines_of_business'))->toBeTrue()
         ->and(User::query()->where('email', 'scenario-01-municipal-treasurer@example.test')->sole()->cannot('business_permit_evaluations.counter_check'))->toBeTrue();
@@ -97,7 +100,7 @@ test('Scenario 01 proves a deterministic multi-LOB Renewal becomes an approved p
 
 test('Scenario 01 has compact human output and native discovery', function () {
     Storage::fake('local');
-    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+    Artisan::call('bpls:install');
 
     $this->artisan('bpls:lifecycle:list')
         ->expectsOutputToContain('renewal-happy-path')
@@ -118,7 +121,7 @@ test('Scenario 01 has compact human output and native discovery', function () {
 });
 
 test('Scenario 01 projects its immutable Assessment and suppresses completed role work', function () {
-    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+    Artisan::call('bpls:install');
 
     $result = app(RenewalHappyPathScenario::class)->run();
     $assessment = Assessment::query()->findOrFail($result['assessment']['id']);
@@ -164,7 +167,7 @@ test('Scenario 01 projects its immutable Assessment and suppresses completed rol
 });
 
 test('Scenario 01 is visible through the canonical Citizen owner relationship and projects the complete payable lifecycle', function () {
-    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+    Artisan::call('bpls:install');
 
     $result = app(RenewalHappyPathScenario::class)->run();
     $application = PermitApplication::query()->findOrFail($result['application']['id']);
