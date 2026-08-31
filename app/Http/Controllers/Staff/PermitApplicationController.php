@@ -119,7 +119,7 @@ class PermitApplicationController extends Controller
                 ])
                 ->values(),
             'lineOfBusinesses' => LineOfBusiness::query()
-                ->where('is_active', true)
+                ->availableToMunicipalCatalog()
                 ->orderBy('name')
                 ->get(['id', 'name', 'code']),
         ]);

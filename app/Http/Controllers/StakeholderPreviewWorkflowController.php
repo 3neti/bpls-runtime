@@ -8,6 +8,7 @@ use App\Actions\RecordProvisionalUatPermitDecision;
 use App\Enums\PaymentScheduleStatus;
 use App\Enums\PermitClearanceStatus;
 use App\Enums\StakeholderPreviewPersona;
+use App\Evaluation\BusinessPermitEvaluationResolver;
 use App\Http\Requests\RecordProvisionalUatPermitDecisionRequest;
 use App\Http\Requests\StoreOfficeChargeContributionRequest;
 use App\Models\PermitApplication;
@@ -22,8 +23,11 @@ class StakeholderPreviewWorkflowController extends Controller
 {
     public function __construct(private readonly StakeholderPreviewSafety $safety) {}
 
-    public function index(Request $request, DescribeProvisionalUatPermitCompletion $describeCompletion): Response
-    {
+    public function index(
+        Request $request,
+        DescribeProvisionalUatPermitCompletion $describeCompletion,
+        BusinessPermitEvaluationResolver $evaluationResolver,
+    ): Response {
         $this->safety->ensureReady();
         $persona = $this->safety->personaFor($request->user());
 
@@ -41,22 +45,36 @@ class StakeholderPreviewWorkflowController extends Controller
                 'paymentSchedules',
                 'clearances',
                 'provisionalUatPermitCompletion',
+                'businessPermitEvaluation.currentVersion',
+                'businessPermitEvaluation.items.revisions.version',
             ])
-            ->whereNotNull('submitted_at')
-            ->where('metadata->provisional_uat_workflow->semantic_classification', 'provisional_uat');
+            ->whereNotNull('submitted_at');
 
         if ($officeCode !== null) {
-            $applicationQuery->whereHas(
-                'officeChargeContributions',
-                fn ($query) => $query->where('office_code', $officeCode),
-            );
+            $applicationQuery->where(function ($query) use ($officeCode): void {
+                $query
+                    ->where(function ($legacyPreviewQuery) use ($officeCode): void {
+                        $legacyPreviewQuery
+                            ->where('metadata->provisional_uat_workflow->semantic_classification', 'provisional_uat')
+                            ->whereHas(
+                                'officeChargeContributions',
+                                fn ($contributionQuery) => $contributionQuery->where('office_code', $officeCode),
+                            );
+                    })
+                    ->orWhereHas(
+                        'businessPermitEvaluation.items',
+                        fn ($responsibilityQuery) => $responsibilityQuery->where('responsible_party', $officeCode),
+                    );
+            });
+        } else {
+            $applicationQuery->where('metadata->provisional_uat_workflow->semantic_classification', 'provisional_uat');
         }
 
         $applications = $applicationQuery
             ->latest()
             ->limit(25)
             ->get()
-            ->map(function (PermitApplication $application) use ($persona, $describeCompletion): array {
+            ->map(function (PermitApplication $application) use ($persona, $describeCompletion, $evaluationResolver): array {
                 $officeCode = $persona->officeCode();
                 $officeContribution = $officeCode === null
                     ? null
@@ -91,6 +109,7 @@ class StakeholderPreviewWorkflowController extends Controller
                         'amount_cents' => $contribution->amount_cents,
                         'status' => $contribution->status,
                     ])->values()->all(),
+                    'evaluation_responsibilities' => $this->evaluationResponsibilities($application, $officeCode, $evaluationResolver),
                     'charge_locked' => ($latestAssessment?->decision !== null) || $application->paymentSchedules->isNotEmpty(),
                     'latest_assessment_total_cents' => $latestAssessment?->total_amount_cents,
                     'payment_confirmed' => $application->paymentSchedules->contains(fn ($schedule): bool => $schedule->status === PaymentScheduleStatus::Paid),
@@ -111,6 +130,35 @@ class StakeholderPreviewWorkflowController extends Controller
                 : config('stakeholder_preview.weekend_hypothesis.office_charges.'.$persona->officeCode()),
             'applications' => $applications,
         ]);
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function evaluationResponsibilities(
+        PermitApplication $application,
+        ?string $officeCode,
+        BusinessPermitEvaluationResolver $resolver,
+    ): array {
+        if ($officeCode === null || $application->businessPermitEvaluation === null) {
+            return [];
+        }
+
+        $lineNames = $application->lines->pluck('lineOfBusiness.name', 'line_of_business_id');
+
+        return array_values(collect($resolver->resolve($application->businessPermitEvaluation)['items'])
+            ->where('responsible_party', $officeCode)
+            ->map(fn (array $item): array => [
+                'label' => (string) data_get($item, 'metadata.label', str($item['key'])->headline()),
+                'line_of_business' => $lineNames->get(data_get($item, 'metadata.line_of_business_id')),
+                'reason' => data_get($item, 'metadata.department_selection_reason')
+                    ?? $item['reason']
+                    ?? 'Required canonical Evaluation responsibility.',
+                'applicability' => $item['applicability'],
+                'resolution' => $item['resolution'],
+                'amount_cents' => data_get($item, 'value.amount_cents'),
+                'source_classification' => $item['source_classification'],
+            ])
+            ->values()
+            ->all());
     }
 
     /** @return list<array{label: string, value: string}> */

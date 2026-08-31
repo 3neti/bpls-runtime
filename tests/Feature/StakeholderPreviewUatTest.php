@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\StakeholderPreviewPersona;
+use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\LifecycleScenarios\RenewalHappyPathDefinition;
 use App\Models\Assessment;
 use App\Models\LifecycleScenarioSpecimen;
@@ -139,6 +140,71 @@ test('launcher enters the persisted lifecycle specimen through its manifest-owne
                 'status' => 'pending',
                 'amount_due_cents' => 122_000,
             ]));
+});
+
+test('launcher exposes both coexisting lifecycle specimens through their own manifest-owned Citizens', function () {
+    Storage::fake('local');
+    Artisan::call('bpls:install');
+
+    foreach ([RenewalHappyPathDefinition::Id, NewApplicationHappyPathDefinition::Id] as $scenarioId) {
+        expect(Artisan::call('bpls:lifecycle:run', [
+            'scenario' => $scenarioId,
+            '--persist' => true,
+            '--json' => true,
+        ]))->toBe(0);
+    }
+
+    $specimens = LifecycleScenarioSpecimen::query()->orderBy('scenario_id')->get();
+    $this->get('/')
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('citizenSpecimens', 2)
+            ->where('citizenSpecimens.0.label', 'New Application Happy Path Citizen')
+            ->where('citizenSpecimens.1.label', 'Renewal Happy Path Citizen'));
+
+    foreach ($specimens as $specimen) {
+        $this->post(route('stakeholder-preview.specimens.enter-citizen', $specimen))
+            ->assertRedirect(route('citizen.profile.show'));
+
+        $expectedCitizen = User::query()
+            ->where('email', $specimen->scenario_id === NewApplicationHappyPathDefinition::Id
+                ? 'scenario-02-citizen@example.test'
+                : 'scenario-01-citizen@example.test')
+            ->sole();
+        $this->assertAuthenticatedAs($expectedCitizen);
+    }
+});
+
+test('Engineering workspace shows coexisting scenario work from canonical Evaluation responsibilities', function () {
+    Storage::fake('local');
+    Artisan::call('bpls:install');
+
+    foreach ([RenewalHappyPathDefinition::Id, NewApplicationHappyPathDefinition::Id] as $scenarioId) {
+        Artisan::call('bpls:lifecycle:run', [
+            'scenario' => $scenarioId,
+            '--persist' => true,
+            '--json' => true,
+        ]);
+    }
+
+    $engineering = User::query()->where('email', StakeholderPreviewPersona::Engineering->approvedEmail())->sole();
+
+    $this->actingAs($engineering)
+        ->get(route('stakeholder-preview.workflow'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('persona.key', 'engineering')
+            ->has('applications', 2)
+            ->where('applications', fn ($applications): bool => collect($applications)->contains(
+                fn (array $application): bool => $application['business_name'] === 'Scenario 02 Market and Kitchen'
+                    && $application['office_contribution'] === null
+                    && collect($application['evaluation_responsibilities'])->contains(
+                        fn (array $responsibility): bool => $responsibility['label'] === "Mayor's Permit Fee"
+                            && $responsibility['line_of_business'] === 'Scenario 02 Retail Trading'
+                            && $responsibility['resolution'] === 'resolved'
+                            && $responsibility['amount_cents'] === 9_000,
+                    ),
+            )));
 });
 
 test('specimen Citizen entry fails closed when explicit lifecycle ownership gates do not agree', function () {

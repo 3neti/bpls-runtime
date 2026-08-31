@@ -42,8 +42,8 @@ class CorrectEvaluationLinesOfBusiness
             }
 
             $supportedIds = LineOfBusiness::query()
+                ->availableToMunicipalCatalog()
                 ->whereIn('id', $normalizedIds)
-                ->where('is_active', true)
                 ->pluck('id')
                 ->sort()
                 ->values();

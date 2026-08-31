@@ -34,7 +34,7 @@ class CorrectOwnEvaluationLinesOfBusiness
         }
 
         $ids = collect($lineOfBusinessIds)->map(fn (mixed $id): int => (int) $id)->unique()->sort()->values();
-        if ($ids->isEmpty() || LineOfBusiness::query()->whereIn('id', $ids)->where('is_active', true)->count() !== $ids->count()) {
+        if ($ids->isEmpty() || LineOfBusiness::query()->availableToMunicipalCatalog()->whereIn('id', $ids)->count() !== $ids->count()) {
             throw new LogicException('Applicant correction requires at least one active canonical Line of Business.');
         }
 

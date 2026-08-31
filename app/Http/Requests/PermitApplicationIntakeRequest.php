@@ -48,7 +48,13 @@ abstract class PermitApplicationIntakeRequest extends FormRequest
             'application_year' => ['required', 'integer', 'min:2020', 'max:'.(now()->year + 1)],
             'lines' => ['required', 'array', 'list', 'min:1', 'max:20'],
             'lines.*' => ['required', 'array:line_of_business_id,declared_gross_sales_pesos,capital_investment_pesos,quantity,started_on'],
-            'lines.*.line_of_business_id' => ['required', 'integer', Rule::exists('line_of_businesses', 'id')],
+            'lines.*.line_of_business_id' => [
+                'required',
+                'integer',
+                Rule::exists('line_of_businesses', 'id')->where(
+                    fn ($query) => $query->where('is_active', true)->whereNull('metadata->scenario_id'),
+                ),
+            ],
             'lines.*.declared_gross_sales_pesos' => ['required', 'numeric', 'min:0', 'max:999999999.99'],
             'lines.*.capital_investment_pesos' => ['required', 'numeric', 'min:0', 'max:999999999.99'],
             'lines.*.quantity' => ['required', 'integer', 'min:1', 'max:999'],

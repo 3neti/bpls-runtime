@@ -65,7 +65,7 @@ class PermitApplicationController extends Controller
                 'value' => PermitApplicationType::New->value,
             ]],
             'lineOfBusinesses' => LineOfBusiness::query()
-                ->where('is_active', true)
+                ->availableToMunicipalCatalog()
                 ->orderBy('name')
                 ->get(['id', 'name', 'code']),
             'applicant' => [
@@ -103,7 +103,7 @@ class PermitApplicationController extends Controller
                 'value' => PermitApplicationType::New->value,
             ]],
             'lineOfBusinesses' => LineOfBusiness::query()
-                ->where('is_active', true)
+                ->availableToMunicipalCatalog()
                 ->orderBy('name')
                 ->get(['id', 'name', 'code']),
             'applicant' => [

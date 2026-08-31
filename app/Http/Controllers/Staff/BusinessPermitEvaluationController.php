@@ -41,7 +41,7 @@ class BusinessPermitEvaluationController extends Controller
                 'id' => $permitApplication->id,
                 'application_number' => $permitApplication->application_number,
             ],
-            'lineOfBusinesses' => LineOfBusiness::query()->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']),
+            'lineOfBusinesses' => LineOfBusiness::query()->availableToMunicipalCatalog()->orderBy('name')->get(['id', 'code', 'name']),
             'can' => $this->capabilities(),
         ]);
     }
@@ -129,7 +129,7 @@ class BusinessPermitEvaluationController extends Controller
         Gate::authorize(UserPermission::CorrectEvaluationLinesOfBusiness->value);
         $data = $request->validate([
             'line_of_business_ids' => ['required', 'array', 'min:1'],
-            'line_of_business_ids.*' => ['required', 'integer', 'distinct', Rule::exists('line_of_businesses', 'id')->where('is_active', true)],
+            'line_of_business_ids.*' => ['required', 'integer', 'distinct', Rule::exists('line_of_businesses', 'id')->where(fn ($query) => $query->where('is_active', true)->whereNull('metadata->scenario_id'))],
             'reason' => ['required', 'string', 'max:2000'],
             'expected_version_sequence' => ['required', 'integer', 'min:1'],
             'expected_fingerprint' => ['required', 'string', 'size:64'],

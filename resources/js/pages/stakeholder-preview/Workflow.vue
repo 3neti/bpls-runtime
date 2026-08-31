@@ -44,6 +44,15 @@ type Application = {
         amount_cents: number | null;
         status: string;
     }[];
+    evaluation_responsibilities: {
+        label: string;
+        line_of_business: string | null;
+        reason: string;
+        applicability: string;
+        resolution: string;
+        amount_cents: number | null;
+        source_classification: string;
+    }[];
     charge_locked: boolean;
     latest_assessment_total_cents: number | null;
     payment_confirmed: boolean;
@@ -325,82 +334,189 @@ function money(cents: number | null): string {
                             v-if="office"
                             class="rounded-lg border bg-muted/30 p-4"
                         >
-                            <h3 class="text-sm font-semibold">
-                                {{ officeGuidance?.heading ?? office.label }}
-                            </h3>
-                            <p
-                                class="mt-1 text-xs leading-5 text-muted-foreground"
+                            <template
+                                v-if="
+                                    application.evaluation_responsibilities
+                                        .length > 0
+                                "
                             >
-                                Applicability and amount are provisional for
-                                this sample workflow.
-                            </p>
-                            <div class="mt-4 space-y-4">
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input
-                                        v-model="
-                                            formFor(application).is_applicable
-                                        "
-                                        type="checkbox"
-                                        :disabled="application.charge_locked"
-                                    />
-                                    Include this office in the sample assessment
-                                </label>
-                                <label class="block text-sm">
-                                    <span
-                                        class="flex items-center justify-between gap-2 font-medium"
+                                <h3 class="text-sm font-semibold">
+                                    Canonical Evaluation responsibilities
+                                </h3>
+                                <p
+                                    class="mt-1 text-xs leading-5 text-muted-foreground"
+                                >
+                                    This work comes directly from the
+                                    application's versioned Business Permit
+                                    Evaluation. Its recorded state is shown
+                                    without creating a second office queue or
+                                    charge.
+                                </p>
+                                <ul
+                                    class="mt-4 space-y-3"
+                                    data-testid="canonical-evaluation-responsibilities"
+                                >
+                                    <li
+                                        v-for="responsibility in application.evaluation_responsibilities"
+                                        :key="`${responsibility.label}-${responsibility.line_of_business}`"
+                                        class="min-w-0 rounded-md border bg-background p-3"
                                     >
-                                        Preview contribution amount
-                                        <span
-                                            class="rounded-full border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                                        <div
+                                            class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
                                         >
-                                            Preview · Sample Data
+                                            <div class="min-w-0">
+                                                <p
+                                                    class="text-sm font-semibold break-words"
+                                                >
+                                                    {{ responsibility.label }}
+                                                </p>
+                                                <p
+                                                    v-if="
+                                                        responsibility.line_of_business
+                                                    "
+                                                    class="mt-0.5 text-xs text-muted-foreground"
+                                                >
+                                                    {{
+                                                        responsibility.line_of_business
+                                                    }}
+                                                </p>
+                                            </div>
+                                            <span
+                                                class="w-fit rounded-full border px-2 py-0.5 text-[10px] font-semibold capitalize"
+                                            >
+                                                {{ responsibility.resolution }}
+                                            </span>
+                                        </div>
+                                        <p
+                                            class="mt-2 text-xs leading-5 text-muted-foreground"
+                                        >
+                                            {{ responsibility.reason }}
+                                        </p>
+                                        <dl
+                                            class="mt-3 grid grid-cols-2 gap-3 text-xs"
+                                        >
+                                            <div>
+                                                <dt
+                                                    class="text-muted-foreground"
+                                                >
+                                                    Applicability
+                                                </dt>
+                                                <dd class="mt-0.5 capitalize">
+                                                    {{
+                                                        responsibility.applicability
+                                                    }}
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt
+                                                    class="text-muted-foreground"
+                                                >
+                                                    Recorded amount
+                                                </dt>
+                                                <dd class="mt-0.5 font-medium">
+                                                    {{
+                                                        money(
+                                                            responsibility.amount_cents,
+                                                        )
+                                                    }}
+                                                </dd>
+                                            </div>
+                                        </dl>
+                                    </li>
+                                </ul>
+                            </template>
+                            <template v-else>
+                                <h3 class="text-sm font-semibold">
+                                    {{
+                                        officeGuidance?.heading ?? office.label
+                                    }}
+                                </h3>
+                                <p
+                                    class="mt-1 text-xs leading-5 text-muted-foreground"
+                                >
+                                    Applicability and amount are provisional for
+                                    this sample workflow.
+                                </p>
+                                <div class="mt-4 space-y-4">
+                                    <label
+                                        class="flex items-center gap-2 text-sm"
+                                    >
+                                        <input
+                                            v-model="
+                                                formFor(application)
+                                                    .is_applicable
+                                            "
+                                            type="checkbox"
+                                            :disabled="
+                                                application.charge_locked
+                                            "
+                                        />
+                                        Include this office in the sample
+                                        assessment
+                                    </label>
+                                    <label class="block text-sm">
+                                        <span
+                                            class="flex items-center justify-between gap-2 font-medium"
+                                        >
+                                            Preview contribution amount
+                                            <span
+                                                class="rounded-full border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                                            >
+                                                Preview · Sample Data
+                                            </span>
                                         </span>
-                                    </span>
-                                    <input
-                                        v-model="formFor(application).amount"
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
+                                        <input
+                                            v-model="
+                                                formFor(application).amount
+                                            "
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            :disabled="
+                                                application.charge_locked ||
+                                                !formFor(application)
+                                                    .is_applicable
+                                            "
+                                            class="mt-2 w-full rounded-md border bg-background px-3 py-2"
+                                        />
+                                    </label>
+                                    <button
+                                        type="button"
                                         :disabled="
-                                            application.charge_locked ||
+                                            working !== null ||
+                                            application.charge_locked
+                                        "
+                                        class="w-full rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+                                        @click="submitOfficeCharge(application)"
+                                    >
+                                        {{
+                                            working === application.id
+                                                ? 'Saving contribution…'
+                                                : application.office_contribution
+                                                  ? 'Update preview contribution'
+                                                  : 'Record preview contribution'
+                                        }}
+                                    </button>
+                                    <p
+                                        v-if="
                                             !formFor(application).is_applicable
                                         "
-                                        class="mt-2 w-full rounded-md border bg-background px-3 py-2"
-                                    />
-                                </label>
-                                <button
-                                    type="button"
-                                    :disabled="
-                                        working !== null ||
-                                        application.charge_locked
-                                    "
-                                    class="w-full rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-                                    @click="submitOfficeCharge(application)"
-                                >
-                                    {{
-                                        working === application.id
-                                            ? 'Saving contribution…'
-                                            : application.office_contribution
-                                              ? 'Update preview contribution'
-                                              : 'Record preview contribution'
-                                    }}
-                                </button>
-                                <p
-                                    v-if="!formFor(application).is_applicable"
-                                    class="text-xs text-muted-foreground"
-                                >
-                                    No amount will be recorded while this office
-                                    is not included in the sample assessment.
-                                </p>
-                                <p
-                                    v-if="application.charge_locked"
-                                    class="flex gap-2 text-xs text-muted-foreground"
-                                >
-                                    <LockKeyhole class="size-4 shrink-0" />
-                                    This contribution cannot change after
-                                    Treasury approval or payment begins.
-                                </p>
-                            </div>
+                                        class="text-xs text-muted-foreground"
+                                    >
+                                        No amount will be recorded while this
+                                        office is not included in the sample
+                                        assessment.
+                                    </p>
+                                    <p
+                                        v-if="application.charge_locked"
+                                        class="flex gap-2 text-xs text-muted-foreground"
+                                    >
+                                        <LockKeyhole class="size-4 shrink-0" />
+                                        This contribution cannot change after
+                                        Treasury approval or payment begins.
+                                    </p>
+                                </div>
+                            </template>
                         </section>
 
                         <section

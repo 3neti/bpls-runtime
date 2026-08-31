@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\LineOfBusinessFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -26,14 +27,27 @@ class LineOfBusiness extends Model
     /** @use HasFactory<LineOfBusinessFactory> */
     use HasFactory;
 
+    /** @return HasMany<FeeRule, $this> */
     public function feeRules(): HasMany
     {
         return $this->hasMany(FeeRule::class);
     }
 
+    /** @return HasMany<PermitApplicationLine, $this> */
     public function permitApplicationLines(): HasMany
     {
         return $this->hasMany(PermitApplicationLine::class);
+    }
+
+    /**
+     * @param  Builder<LineOfBusiness>  $query
+     * @return Builder<LineOfBusiness>
+     */
+    public function scopeAvailableToMunicipalCatalog(Builder $query): Builder
+    {
+        return $query
+            ->where('is_active', true)
+            ->whereNull('metadata->scenario_id');
     }
 
     /**

@@ -66,7 +66,7 @@ class BusinessPermitEvaluationResolver
             ->map(fn (BusinessPermitEvaluationItem $item): array => $this->resolveItem($item, $version))
             ->values();
         $lineOfBusinessIds = $this->resolvedLineOfBusinessIds($evaluation, $items);
-        [$projectedCharges, $pricingIssues] = $this->projectRuleCharges($evaluation, $lineOfBusinessIds);
+        [$projectedCharges, $pricingIssues] = $this->projectRuleCharges($evaluation, $lineOfBusinessIds, $items);
         $application = $this->applicationProjection($evaluation, $lineOfBusinessIds);
         $totalAmountCents = $projectedCharges->sum('amount_cents')
             + $items
@@ -315,16 +315,24 @@ class BusinessPermitEvaluationResolver
 
     /**
      * @param  list<int>  $lineOfBusinessIds
+     * @param  Collection<int, array<string, mixed>>  $items
      * @return array{Collection<int, array<string, mixed>>, list<string>}
      */
-    private function projectRuleCharges(BusinessPermitEvaluation $evaluation, array $lineOfBusinessIds): array
+    private function projectRuleCharges(BusinessPermitEvaluation $evaluation, array $lineOfBusinessIds, Collection $items): array
     {
         $permitApplication = $evaluation->permitApplication;
+        $notApplicableFeeRuleIds = $items
+            ->where('item_type', BusinessPermitEvaluationItemType::Charge->value)
+            ->where('applicability', BusinessPermitEvaluationApplicability::NotApplicable->value)
+            ->where('resolution', 'resolved')
+            ->pluck('metadata.fee_rule_id')
+            ->filter(fn (mixed $feeRuleId): bool => is_int($feeRuleId))
+            ->all();
         $feeRules = $this->applicableFeeRuleQuery->forApplicationFacts(
             $permitApplication->type,
             $permitApplication->application_year,
             $lineOfBusinessIds,
-        );
+        )->whereNotIn('id', $notApplicableFeeRuleIds)->values();
         $applicationLinesByBusiness = $permitApplication->lines
             ->filter(fn (PermitApplicationLine $line): bool => $line->line_of_business_id !== null)
             ->keyBy('line_of_business_id');

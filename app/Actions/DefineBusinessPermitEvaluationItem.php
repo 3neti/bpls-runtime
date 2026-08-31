@@ -42,7 +42,9 @@ class DefineBusinessPermitEvaluationItem
             }
 
             $this->assertChargeValue($type, $applicability, $value, $source);
-            if ($type === BusinessPermitEvaluationItemType::Charge && data_get($metadata, 'fee_rule_id') !== null) {
+            if ($type === BusinessPermitEvaluationItemType::Charge
+                && $applicability !== BusinessPermitEvaluationApplicability::NotApplicable
+                && data_get($metadata, 'fee_rule_id') !== null) {
                 throw new LogicException('A governed FeeRule charge must remain on the canonical AssessmentCalculator path and cannot also be defined as a human Evaluation charge.');
             }
             $item = $evaluation->items()->create([

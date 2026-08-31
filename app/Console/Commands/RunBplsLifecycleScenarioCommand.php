@@ -3,6 +3,10 @@
 namespace App\Console\Commands;
 
 use App\Actions\InspectBplsInstallation;
+use App\LifecycleScenarios\LifecycleScenarioSpecimenOwnership;
+use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
+use App\LifecycleScenarios\NewApplicationHappyPathFailure;
+use App\LifecycleScenarios\NewApplicationHappyPathScenario;
 use App\LifecycleScenarios\RenewalHappyPathDefinition;
 use App\LifecycleScenarios\RenewalHappyPathFailure;
 use App\LifecycleScenarios\RenewalHappyPathScenario;
@@ -10,6 +14,7 @@ use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\Models\Assessment;
 use App\Models\LifecycleScenarioSpecimen;
 use App\Models\PermitApplication;
+use App\Models\User;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -21,12 +26,29 @@ use Throwable;
 #[Description('Run one deterministic BPLS lifecycle certification scenario.')]
 class RunBplsLifecycleScenarioCommand extends Command
 {
-    public function handle(RenewalHappyPathScenario $renewalHappyPath, InspectBplsInstallation $inspectInstallation): int
-    {
+    public function handle(
+        RenewalHappyPathScenario $renewalHappyPath,
+        NewApplicationHappyPathScenario $newApplicationHappyPath,
+        InspectBplsInstallation $inspectInstallation,
+        LifecycleScenarioSpecimenOwnership $specimenOwnership,
+    ): int {
         $scenarioId = (string) $this->argument('scenario');
-        $artifactStore = new ScenarioArtifactStore($scenarioId, RenewalHappyPathDefinition::RunId);
+        $definition = match ($scenarioId) {
+            RenewalHappyPathDefinition::Id => app(RenewalHappyPathDefinition::class),
+            NewApplicationHappyPathDefinition::Id => app(NewApplicationHappyPathDefinition::class),
+            default => null,
+        };
+        $scenario = match ($scenarioId) {
+            RenewalHappyPathDefinition::Id => $renewalHappyPath,
+            NewApplicationHappyPathDefinition::Id => $newApplicationHappyPath,
+            default => null,
+        };
+        $runId = $scenarioId === NewApplicationHappyPathDefinition::Id
+            ? NewApplicationHappyPathDefinition::RunId
+            : RenewalHappyPathDefinition::RunId;
+        $artifactStore = new ScenarioArtifactStore($scenarioId, $runId);
 
-        if ($scenarioId !== RenewalHappyPathDefinition::Id) {
+        if ($definition === null || $scenario === null) {
             return $this->failure($artifactStore, new RenewalHappyPathFailure(
                 'Requested lifecycle scenario is implemented',
                 "Scenario [{$scenarioId}] is NOT RUN. Use bpls:lifecycle:list.",
@@ -40,8 +62,8 @@ class RunBplsLifecycleScenarioCommand extends Command
             }
 
             $result = $this->option('persist')
-                ? $this->runPersisted($renewalHappyPath, $installation)
-                : $this->runCertification($renewalHappyPath, $installation);
+                ? $this->runPersisted($scenario, $definition, $installation, $specimenOwnership)
+                : $this->runCertification($scenario, $installation);
             $artifactStore->putJson('result.json', $result);
             $artifactStore->putJson('action-trace.json', ['actions' => $result['action_trace']]);
 
@@ -54,11 +76,11 @@ class RunBplsLifecycleScenarioCommand extends Command
             $this->renderHumanResult($result, $artifactStore, (bool) $this->option('persist'));
 
             return self::SUCCESS;
-        } catch (RenewalHappyPathFailure $failure) {
+        } catch (RenewalHappyPathFailure|NewApplicationHappyPathFailure $failure) {
             return $this->failure($artifactStore, $failure);
         } catch (Throwable $exception) {
             return $this->failure($artifactStore, new RenewalHappyPathFailure(
-                'Scenario 01 completed without an unclassified engine exception',
+                'Lifecycle scenario completed without an unclassified engine exception',
                 $exception->getMessage(),
                 $exception,
             ));
@@ -68,7 +90,9 @@ class RunBplsLifecycleScenarioCommand extends Command
     /** @param array<string, mixed> $result */
     private function renderHumanResult(array $result, ScenarioArtifactStore $artifactStore, bool $persisted): void
     {
-        $this->info('BPLS LIFECYCLE SCENARIO 01 — RENEWAL HAPPY PATH: PASS');
+        $this->info($result['scenario_id'] === RenewalHappyPathDefinition::Id
+            ? 'BPLS LIFECYCLE SCENARIO 01 — RENEWAL HAPPY PATH: PASS'
+            : 'BPLS LIFECYCLE SCENARIO 02 — NEW APPLICATION HAPPY PATH: PASS');
         $this->line('Question: '.$result['business_question']);
         $this->newLine();
         $this->line('SYSTEM BOOTSTRAP');
@@ -81,10 +105,10 @@ class RunBplsLifecycleScenarioCommand extends Command
         $this->line('ONBOARDING');
         $this->line('[PASS] Owner/customer onboarded · '.$result['onboarding']['owner_customer']['name']);
         $this->line('[PASS] Business onboarded · '.$result['onboarding']['business']['name']);
-        $this->line('Canonical action: '.$result['onboarding']['canonical_action'].' owns both onboarding nouns and lodged staff intake.');
+        $this->line('Canonical action: '.$result['onboarding']['canonical_action']);
         $this->newLine();
         $this->line('APPLICATION / LINES OF BUSINESS');
-        $this->line('[PASS] Renewal #'.$result['application']['id'].' lodged · no official application number manufactured');
+        $this->line('[PASS] '.str($result['application']['type'])->headline().' #'.$result['application']['id'].' lodged · no official application number manufactured');
         foreach ($result['lines_of_business'] as $lineOfBusiness) {
             $this->line('[PASS] '.$lineOfBusiness['name'].' declared');
         }
@@ -128,7 +152,7 @@ class RunBplsLifecycleScenarioCommand extends Command
             $applicationId = $result['application']['id'];
             $this->newLine();
             $this->line('PERSISTED PRODUCT SPECIMEN');
-            $this->line('Scenario · '.RenewalHappyPathDefinition::Id.' · '.RenewalHappyPathDefinition::Revision);
+            $this->line('Scenario · '.$result['scenario_id'].' · '.$result['scenario_revision']);
             $this->line('Business · '.$result['onboarding']['business']['name']);
             $this->line('Application · #'.$applicationId);
             $this->line('Citizen lens · '.route('citizen.permit-applications.show', $applicationId));
@@ -144,7 +168,7 @@ class RunBplsLifecycleScenarioCommand extends Command
      * @param  array<string, mixed>  $installation
      * @return array<string, mixed>
      */
-    private function runCertification(RenewalHappyPathScenario $scenario, array $installation): array
+    private function runCertification(RenewalHappyPathScenario|NewApplicationHappyPathScenario $scenario, array $installation): array
     {
         if (! $installation['zero_state']['is_empty']) {
             throw new RenewalHappyPathFailure('Certification run is disposable and isolated', 'Certification requires a zero-transaction installed database. Use --persist only for the curated product specimen.');
@@ -162,18 +186,27 @@ class RunBplsLifecycleScenarioCommand extends Command
      * @param  array<string, mixed>  $installation
      * @return array<string, mixed>
      */
-    private function runPersisted(RenewalHappyPathScenario $scenario, array $installation): array
-    {
+    private function runPersisted(
+        RenewalHappyPathScenario|NewApplicationHappyPathScenario $scenario,
+        RenewalHappyPathDefinition|NewApplicationHappyPathDefinition $definition,
+        array $installation,
+        LifecycleScenarioSpecimenOwnership $specimenOwnership,
+    ): array {
+        $description = $definition->describe();
         $existing = LifecycleScenarioSpecimen::query()
-            ->where('scenario_id', RenewalHappyPathDefinition::Id)
-            ->where('scenario_revision', RenewalHappyPathDefinition::Revision)
+            ->where('scenario_id', $description['id'])
+            ->where('scenario_revision', $resultRevision = $scenario instanceof NewApplicationHappyPathScenario ? NewApplicationHappyPathDefinition::Revision : RenewalHappyPathDefinition::Revision)
             ->first();
 
-        if (! $existing instanceof LifecycleScenarioSpecimen && ! $installation['zero_state']['is_empty']) {
-            throw new RenewalHappyPathFailure('Persist starts from a clean installed baseline', 'Unrelated transaction records exist; refusing to delete or replace them.');
-        }
+        return DB::transaction(function () use ($scenario, $existing, $description, $installation, $resultRevision, $specimenOwnership): array {
+            if (! $existing instanceof LifecycleScenarioSpecimen && ! $installation['zero_state']['is_empty']) {
+                try {
+                    $specimenOwnership->assertTransactionalResidueIsExplicitlyOwned();
+                } catch (Throwable $exception) {
+                    throw new RenewalHappyPathFailure('Persisted lifecycle specimens own all pre-existing transactional residue', 'Unrelated or multiply claimed transaction records exist; refusing to delete, claim, replace, or block them. '.$exception->getMessage(), $exception);
+                }
+            }
 
-        return DB::transaction(function () use ($scenario, $existing): array {
             $result = $scenario->run();
             $manifest = $this->ownedResourceManifest($result);
 
@@ -187,9 +220,15 @@ class RunBplsLifecycleScenarioCommand extends Command
                 return $result;
             }
 
+            try {
+                $specimenOwnership->assertDisjointFromPersistedSpecimens($manifest);
+            } catch (Throwable $exception) {
+                throw new RenewalHappyPathFailure('Persisted lifecycle specimen manifests are disjoint', 'The new specimen overlaps resources explicitly owned by another specimen; no claim or replacement was attempted.', $exception);
+            }
+
             LifecycleScenarioSpecimen::query()->create([
-                'scenario_id' => RenewalHappyPathDefinition::Id,
-                'scenario_revision' => RenewalHappyPathDefinition::Revision,
+                'scenario_id' => $description['id'],
+                'scenario_revision' => $resultRevision,
                 'permit_application_id' => $this->resultInteger($result, 'application.id'),
                 'semantic_result_hash' => $this->resultString($result, 'semantic_result_hash'),
                 'owned_resource_manifest' => $manifest,
@@ -219,11 +258,14 @@ class RunBplsLifecycleScenarioCommand extends Command
         ])->findOrFail($applicationId);
         $assessment = Assessment::query()->findOrFail($assessmentId);
 
-        return [
+        $manifest = [
             'business_owner_ids' => [$application->business->business_owner_id],
             'business_ids' => [$application->business_id],
+            'line_of_business_ids' => $application->lines->pluck('line_of_business_id')->filter()->sort()->values()->all(),
             'permit_application_ids' => [$application->id],
             'permit_application_line_ids' => $application->lines->pluck('id')->sort()->values()->all(),
+            'permit_clearance_ids' => $application->clearances()->pluck('id')->sort()->values()->all(),
+            'office_charge_contribution_ids' => $application->officeChargeContributions()->pluck('id')->sort()->values()->all(),
             'evaluation_ids' => [$application->businessPermitEvaluation?->id],
             'evaluation_version_ids' => $application->businessPermitEvaluation?->versions->pluck('id')->sort()->values()->all() ?? [],
             'evaluation_item_ids' => $application->businessPermitEvaluation?->items->pluck('id')->sort()->values()->all() ?? [],
@@ -234,10 +276,29 @@ class RunBplsLifecycleScenarioCommand extends Command
             'assessment_decision_ids' => [$assessment->decision?->id],
             'payment_schedule_ids' => [$this->resultInteger($result, 'payment_schedule.id')],
             'payment_schedule_line_ids' => $application->paymentSchedules->flatMap->lines->pluck('id')->sort()->values()->all(),
+            'treasury_collection_ids' => $application->treasuryCollections()->pluck('id')->sort()->values()->all(),
+            'collection_allocation_ids' => [],
+            'receipt_ids' => [],
+            'provisional_permit_completion_ids' => $application->provisionalUatPermitCompletion()->pluck('id')->sort()->values()->all(),
             'actor_user_ids' => $this->actorUserIds($result),
+            'actor_role_ids' => User::query()->whereKey($this->actorUserIds($result))->pluck('role_id')->filter()->unique()->sort()->values()->all(),
             'semantic_classification' => 'synthetic_only',
             'production_liability' => false,
         ];
+
+        $notificationIds = $application->submittedBy?->notifications()
+            ->get()
+            ->filter(fn ($notification): bool => data_get($notification->data, 'permit_application_id') === $application->id)
+            ->pluck('id')
+            ->sort()
+            ->values()
+            ->all() ?? [];
+
+        if ($notificationIds !== []) {
+            $manifest['database_notification_ids'] = $notificationIds;
+        }
+
+        return $manifest;
     }
 
     /** @param array<string, mixed> $result */
@@ -287,14 +348,15 @@ class RunBplsLifecycleScenarioCommand extends Command
         return $userIds;
     }
 
-    private function failure(ScenarioArtifactStore $artifactStore, RenewalHappyPathFailure $failure): int
+    private function failure(ScenarioArtifactStore $artifactStore, RenewalHappyPathFailure|NewApplicationHappyPathFailure $failure): int
     {
+        $isScenario02 = $artifactStore->scenarioKey === NewApplicationHappyPathDefinition::Id;
         $result = [
             'schema_version' => 'bpls.lifecycle-certification.v1',
             'scenario_id' => $artifactStore->scenarioKey,
-            'scenario_revision' => RenewalHappyPathDefinition::Revision,
+            'scenario_revision' => $isScenario02 ? NewApplicationHappyPathDefinition::Revision : RenewalHappyPathDefinition::Revision,
             'status' => 'failed',
-            'business_question' => RenewalHappyPathDefinition::EvidenceQuestion,
+            'business_question' => $isScenario02 ? NewApplicationHappyPathDefinition::EvidenceQuestion : RenewalHappyPathDefinition::EvidenceQuestion,
             'first_failure' => [
                 'invariant' => $failure->invariant,
                 'message' => $failure->getMessage(),
