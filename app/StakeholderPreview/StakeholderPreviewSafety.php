@@ -163,6 +163,7 @@ class StakeholderPreviewSafety
 
         $items = match ($persona) {
             StakeholderPreviewPersona::Citizen => [
+                ['label' => 'Open My Businesses', 'route' => 'citizen.profile.show', 'permission' => 'citizen.permit_applications.view'],
                 ['label' => 'Open My Permit Applications', 'route' => 'citizen.permit-applications.index', 'permission' => 'citizen.permit_applications.view'],
                 ['label' => 'Start a permit application', 'route' => 'citizen.permit-applications.create', 'permission' => 'citizen.permit_applications.create'],
                 ['label' => 'Read account notices', 'route' => 'citizen.notifications.index', 'permission' => 'citizen.access'],

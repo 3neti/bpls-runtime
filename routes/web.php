@@ -5,6 +5,7 @@ use App\Http\Controllers\Citizen\NotificationController as CitizenNotificationCo
 use App\Http\Controllers\Citizen\PaymentScheduleController as CitizenPaymentScheduleController;
 use App\Http\Controllers\Citizen\PermitApplicationController as CitizenPermitApplicationController;
 use App\Http\Controllers\Citizen\PermitApplicationDocumentController as CitizenPermitApplicationDocumentController;
+use App\Http\Controllers\Citizen\ProfileController as CitizenProfileController;
 use App\Http\Controllers\Citizen\QrPhPaymentController as CitizenQrPhPaymentController;
 use App\Http\Controllers\PublicMunicipalServiceCatalogController;
 use App\Http\Controllers\PublicPermitVerificationController;
@@ -45,6 +46,7 @@ use App\Http\Controllers\Staff\TotalCapitalGrossSummaryReportController;
 use App\Http\Controllers\Staff\UnpaidEstablishmentReportController;
 use App\Http\Controllers\Staff\UserDirectoryController;
 use App\Http\Controllers\StakeholderPreviewController;
+use App\Http\Controllers\StakeholderPreviewSpecimenController;
 use App\Http\Controllers\StakeholderPreviewWorkflowController;
 use App\Http\Middleware\EnsureStakeholderPreviewIsSafe;
 use App\StakeholderPreview\StakeholderPreviewSafety;
@@ -59,6 +61,8 @@ if ($stakeholderPreviewSafety->isEnabled()) {
             ->name('stakeholder-preview.walkthrough');
         Route::post('stakeholder-preview/enter/{persona}', [StakeholderPreviewController::class, 'enter'])
             ->name('stakeholder-preview.enter');
+        Route::post('stakeholder-preview/specimens/{lifecycleScenarioSpecimen}/enter-citizen', StakeholderPreviewSpecimenController::class)
+            ->name('stakeholder-preview.specimens.enter-citizen');
         Route::post('stakeholder-preview/switch/{persona}', [StakeholderPreviewController::class, 'switch'])
             ->middleware(['auth', 'verified'])
             ->name('stakeholder-preview.switch');
@@ -86,6 +90,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
 
     Route::prefix('citizen')->name('citizen.')->middleware('can:citizen.access')->group(function () {
+        Route::get('profile', CitizenProfileController::class)
+            ->name('profile.show');
         Route::get('notifications', [CitizenNotificationController::class, 'index'])
             ->name('notifications.index');
         Route::patch('notifications/{notification}', [CitizenNotificationController::class, 'update'])

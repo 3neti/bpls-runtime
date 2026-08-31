@@ -18,6 +18,7 @@ import {
 import { computed } from 'vue';
 import { index as citizenNotificationIndex } from '@/actions/App/Http/Controllers/Citizen/NotificationController';
 import { index as citizenPermitApplicationIndex } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
+import CitizenProfileController from '@/actions/App/Http/Controllers/Citizen/ProfileController';
 import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { index as billingGroupIndex } from '@/actions/App/Http/Controllers/Staff/BillingGroupController';
 import { index as feeRuleIndex } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
@@ -273,6 +274,11 @@ const citizenSections: NavSection[] = [
     {
         title: 'Permit Services',
         items: [
+            {
+                title: 'My Businesses',
+                href: CitizenProfileController(),
+                icon: Building2,
+            },
             {
                 title: 'My Permit Applications',
                 href: citizenPermitApplicationIndex(),

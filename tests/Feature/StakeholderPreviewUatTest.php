@@ -1,7 +1,9 @@
 <?php
 
 use App\Enums\StakeholderPreviewPersona;
+use App\LifecycleScenarios\RenewalHappyPathDefinition;
 use App\Models\Assessment;
+use App\Models\LifecycleScenarioSpecimen;
 use App\Models\OfficeChargeContribution;
 use App\Models\Permission;
 use App\Models\PermitApplication;
@@ -13,6 +15,7 @@ use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
@@ -40,6 +43,7 @@ test('safe preview configuration registers an intentional launcher without crede
         ->assertInertia(fn (Assert $page) => $page
             ->component('stakeholder-preview/Launcher')
             ->has('personas', 14)
+            ->has('citizenSpecimens', 0)
             ->where('personas.0.key', 'citizen')
             ->where('personas.13.key', 'releasing'));
 
@@ -74,6 +78,90 @@ test('one click entry authenticates each exact synthetic account through the web
         ->toBeNull()
         ->and(session()->getId())->not->toBe($oldSessionId);
 })->with(StakeholderPreviewPersona::cases());
+
+test('generic Preview Citizen remains a truthful unlinked My Businesses empty state', function () {
+    $accounts = createStakeholderPreviewAccounts();
+    $previewCitizen = $accounts[StakeholderPreviewPersona::Citizen->value];
+
+    expect($previewCitizen->business_owner_id)->toBeNull();
+
+    $this->actingAs($previewCitizen)
+        ->get(route('citizen.profile.show'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('citizen/profile/Show', false)
+            ->where('profile.linked', false)
+            ->where('profile.owner', null)
+            ->has('profile.businesses', 0));
+});
+
+test('launcher enters the persisted lifecycle specimen through its manifest-owned Citizen without linking the generic Preview Citizen', function () {
+    Storage::fake('local');
+    Artisan::call('bpls:install');
+    expect(Artisan::call('bpls:lifecycle:run', [
+        'scenario' => RenewalHappyPathDefinition::Id,
+        '--persist' => true,
+        '--json' => true,
+    ]))->toBe(0);
+
+    $specimen = LifecycleScenarioSpecimen::query()->sole();
+    $scenarioCitizen = User::query()->where('email', 'scenario-01-citizen@example.test')->sole();
+    $previewCitizen = User::query()->where('email', StakeholderPreviewPersona::Citizen->approvedEmail())->sole();
+
+    expect($scenarioCitizen->business_owner_id)->not->toBeNull()
+        ->and($previewCitizen->business_owner_id)->toBeNull()
+        ->and($scenarioCitizen->id)->not->toBe($previewCitizen->id);
+
+    $this->get('/')
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('citizenSpecimens', 1)
+            ->where('citizenSpecimens.0.id', $specimen->id)
+            ->where('citizenSpecimens.0.label', 'Renewal Happy Path Citizen'));
+
+    $this->post(route('stakeholder-preview.specimens.enter-citizen', $specimen))
+        ->assertRedirect(route('citizen.profile.show'));
+
+    $this->assertAuthenticatedAs($scenarioCitizen);
+
+    $this->get(route('citizen.profile.show'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('profile.owner.name', 'Scenario 01 Synthetic Owner')
+            ->where('profile.businesses.0.name', 'Scenario 01 Market and Kitchen')
+            ->where('profile.businesses.0.permit_applications.0.type', 'renewal')
+            ->where('profile.businesses.0.permit_applications.0.status', 'pending_payment')
+            ->where('profile.businesses.0.permit_applications.0.lines_of_business', [
+                'Scenario 01 Retail Trading',
+                'Scenario 01 Food Service',
+            ])
+            ->where('profile.businesses.0.permit_applications.0.payable', [
+                'status' => 'pending',
+                'amount_due_cents' => 122_000,
+            ]));
+});
+
+test('specimen Citizen entry fails closed when explicit lifecycle ownership gates do not agree', function () {
+    Storage::fake('local');
+    Artisan::call('bpls:install');
+    Artisan::call('bpls:lifecycle:run', [
+        'scenario' => RenewalHappyPathDefinition::Id,
+        '--persist' => true,
+        '--json' => true,
+    ]);
+    $specimen = LifecycleScenarioSpecimen::query()->sole();
+    $manifest = $specimen->owned_resource_manifest;
+    $manifest['production_liability'] = true;
+    $specimen->update(['owned_resource_manifest' => $manifest]);
+
+    $this->get('/')
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page->has('citizenSpecimens', 0));
+
+    $this->post(route('stakeholder-preview.specimens.enter-citizen', $specimen))
+        ->assertNotFound();
+    $this->assertGuest();
+});
 
 test('office workspace presents a bounded queue routed to that office with relevant recorded facts', function () {
     $accounts = createStakeholderPreviewAccounts();
@@ -222,7 +310,7 @@ test('preview context exposes only authorized real guidance and a persistent ban
         expect($item['href'])->toStartWith('/')->not->toContain('http');
     }
 })->with([
-    'citizen' => [StakeholderPreviewPersona::Citizen, 3],
+    'citizen' => [StakeholderPreviewPersona::Citizen, 4],
     'bplo' => [StakeholderPreviewPersona::Bplo, 2],
     'assessment officer' => [StakeholderPreviewPersona::AssessmentOfficer, 2],
     'treasury' => [StakeholderPreviewPersona::Treasury, 5],

@@ -186,6 +186,23 @@ test('Scenario 01 is visible through the canonical Citizen owner relationship an
 
     $this->withoutVite()
         ->actingAs($citizen)
+        ->get(route('citizen.profile.show'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('citizen/profile/Show', false)
+            ->where('profile.owner.name', 'Scenario 01 Synthetic Owner')
+            ->has('profile.businesses', 1)
+            ->where('profile.businesses.0.name', 'Scenario 01 Market and Kitchen')
+            ->where('profile.businesses.0.permit_applications.0.type', 'renewal')
+            ->where('profile.businesses.0.permit_applications.0.status', 'pending_payment')
+            ->where('profile.businesses.0.permit_applications.0.lines_of_business', [
+                'Scenario 01 Retail Trading',
+                'Scenario 01 Food Service',
+            ])
+            ->where('profile.businesses.0.permit_applications.0.payable.status', 'pending')
+            ->where('profile.businesses.0.permit_applications.0.payable.amount_due_cents', 122_000));
+
+    $this->actingAs($citizen)
         ->get(route('citizen.permit-applications.index'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page

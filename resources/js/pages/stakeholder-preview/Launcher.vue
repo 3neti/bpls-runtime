@@ -23,10 +23,16 @@ import {
     enter,
     walkthrough,
 } from '@/actions/App/Http/Controllers/StakeholderPreviewController';
+import StakeholderPreviewSpecimenController from '@/actions/App/Http/Controllers/StakeholderPreviewSpecimenController';
 import type { StakeholderPreviewPersona } from '@/types';
 
 const props = defineProps<{
     personas: StakeholderPreviewPersona[];
+    citizenSpecimens: {
+        id: number;
+        label: string;
+        description: string;
+    }[];
 }>();
 
 const entering = ref<string | null>(null);
@@ -104,6 +110,19 @@ function enterAs(persona: StakeholderPreviewPersona): void {
     entering.value = persona.key;
     router.post(
         enter(persona.key).url,
+        {},
+        {
+            onFinish: () => {
+                entering.value = null;
+            },
+        },
+    );
+}
+
+function enterCitizenSpecimen(specimenId: number): void {
+    entering.value = `specimen-${specimenId}`;
+    router.post(
+        StakeholderPreviewSpecimenController(specimenId).url,
         {},
         {
             onFinish: () => {
@@ -210,6 +229,63 @@ function enterAs(persona: StakeholderPreviewPersona): void {
                                     entering === persona.key
                                         ? 'Entering…'
                                         : `Enter as ${persona.label}`
+                                }}
+                            </span>
+                            <ArrowRight class="size-4" aria-hidden="true" />
+                        </button>
+                    </article>
+                </div>
+            </section>
+
+            <section
+                v-if="citizenSpecimens.length > 0"
+                class="space-y-4"
+                aria-label="Persisted lifecycle specimens"
+            >
+                <div
+                    class="flex flex-wrap items-baseline justify-between gap-2 border-b border-zinc-800 pb-2"
+                >
+                    <h2 class="text-lg font-semibold text-white">
+                        Persisted Citizen specimens
+                    </h2>
+                    <p class="text-sm text-zinc-400">
+                        Inspect prepared lifecycle records through their own
+                        owner-linked Citizen actors.
+                    </p>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <article
+                        v-for="specimen in citizenSpecimens"
+                        :key="specimen.id"
+                        data-testid="citizen-specimen-entry"
+                        class="flex min-h-56 flex-col justify-between gap-6 rounded-2xl border border-amber-400/30 bg-amber-300/10 p-6"
+                    >
+                        <div class="space-y-4">
+                            <UserRound
+                                class="size-7 text-amber-300"
+                                aria-hidden="true"
+                            />
+                            <div class="space-y-2">
+                                <h3 class="text-xl font-semibold">
+                                    {{ specimen.label }}
+                                </h3>
+                                <p class="text-sm leading-6 text-zinc-300">
+                                    {{ specimen.description }}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            class="inline-flex w-full items-center justify-between gap-3 rounded-lg bg-amber-300 px-4 py-3 text-sm font-bold text-amber-950 outline-none hover:bg-amber-200 focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-wait disabled:opacity-60"
+                            :disabled="entering !== null"
+                            @click="enterCitizenSpecimen(specimen.id)"
+                        >
+                            <span>
+                                {{
+                                    entering === `specimen-${specimen.id}`
+                                        ? 'Entering…'
+                                        : `Enter as ${specimen.label}`
                                 }}
                             </span>
                             <ArrowRight class="size-4" aria-hidden="true" />
