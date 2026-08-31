@@ -14,4 +14,11 @@ class PublicMunicipalServiceCatalogController extends Controller
             'priceList' => $buildMunicipalPriceList->handle(),
         ]);
     }
+
+    public function citizen(BuildMunicipalPriceList $buildMunicipalPriceList): Response
+    {
+        return Inertia::render('citizen/services-and-fees/Index', [
+            'priceList' => $buildMunicipalPriceList->handle(),
+        ]);
+    }
 }

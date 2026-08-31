@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/sidebar';
 import { reportCatalog } from '@/lib/reportCatalog';
 import { dashboard } from '@/routes';
+import { index as citizenServiceCatalogIndex } from '@/routes/citizen/services-and-fees';
 import { index as publicServiceCatalogIndex } from '@/routes/services-and-fees';
 import { index as staffServiceCatalogIndex } from '@/routes/staff/services-and-fees';
 import type { NavItem, NavSection } from '@/types';
@@ -59,6 +60,12 @@ const overviewItem: NavItem = {
 const publicServicesAndFeesItem: NavItem = {
     title: 'Services & Fees',
     href: publicServiceCatalogIndex(),
+    icon: BookOpenText,
+};
+
+const citizenServicesAndFeesItem: NavItem = {
+    title: 'Services & Fees',
+    href: citizenServiceCatalogIndex(),
     icon: BookOpenText,
 };
 
@@ -269,7 +276,7 @@ const staffSections = computed<NavSection[]>(() => {
 const citizenSections: NavSection[] = [
     {
         title: 'Overview',
-        items: [overviewItem, publicServicesAndFeesItem],
+        items: [overviewItem, citizenServicesAndFeesItem],
     },
     {
         title: 'Permit Services',

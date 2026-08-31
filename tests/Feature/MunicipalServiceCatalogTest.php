@@ -358,3 +358,24 @@ it('serves the public catalog read-only and authorizes the internal catalog thro
         ->values()
         ->all())->toBe(['GET', 'HEAD']);
 });
+
+it('serves the public catalog inside the Citizen application shell route', function () {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+
+    $this->get(route('citizen.services-and-fees.index'))
+        ->assertRedirect(route('login'));
+
+    $citizen = userWithPermissions([UserPermission::AccessCitizen]);
+
+    $this->actingAs($citizen)
+        ->get(route('citizen.services-and-fees.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('citizen/services-and-fees/Index')
+            ->where('priceList.catalog.audience', 'public')
+            ->where('priceList.catalog.read_only', true));
+
+    $this->actingAs(User::factory()->create())
+        ->get(route('citizen.services-and-fees.index'))
+        ->assertForbidden();
+});

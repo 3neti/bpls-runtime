@@ -26,7 +26,7 @@ import { index as userDirectoryIndex } from '@/actions/App/Http/Controllers/Staf
 import PageHeader from '@/components/PageHeader.vue';
 import ScopeBoundaryNotice from '@/components/ScopeBoundaryNotice.vue';
 import { dashboard } from '@/routes';
-import { index as publicServiceCatalogIndex } from '@/routes/services-and-fees';
+import { index as citizenServiceCatalogIndex } from '@/routes/citizen/services-and-fees';
 import { index as staffServiceCatalogIndex } from '@/routes/staff/services-and-fees';
 import type { NavItem } from '@/types';
 
@@ -133,7 +133,7 @@ const citizenActions: DashboardAction[] = [
         title: 'Services & Fees',
         description:
             'See available business-permit services and currently confirmed charges.',
-        href: publicServiceCatalogIndex(),
+        href: citizenServiceCatalogIndex(),
         icon: BookOpenText,
     },
     {

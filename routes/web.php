@@ -92,6 +92,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
 
     Route::prefix('citizen')->name('citizen.')->middleware('can:citizen.access')->group(function () {
+        Route::get('services-and-fees', [PublicMunicipalServiceCatalogController::class, 'citizen'])
+            ->name('services-and-fees.index');
         Route::get('profile', CitizenProfileController::class)
             ->name('profile.show');
         Route::get('profile/identity', CitizenIdentityController::class)
