@@ -203,6 +203,37 @@ test('Scenario 01 is visible through the canonical Citizen owner relationship an
             ->where('profile.businesses.0.permit_applications.0.payable.amount_due_cents', 122_000));
 
     $this->actingAs($citizen)
+        ->get(route('citizen.profile.identity.show'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('citizen/profile/Identity', false)
+            ->where('identity.owner.name', 'Scenario 01 Synthetic Owner')
+            ->where('identity.owner.address', 'Synthetic Ipil product laboratory address')
+            ->has('identity.businesses', 1)
+            ->where('identity.businesses.0.name', 'Scenario 01 Market and Kitchen')
+            ->missing('identity.owner.birth_date')
+            ->missing('identity.owner.metadata'));
+
+    $this->actingAs($citizen)
+        ->get(route('citizen.businesses.show', $application->business_id))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('citizen/businesses/Show', false)
+            ->where('business.name', 'Scenario 01 Market and Kitchen')
+            ->where('business.address', 'Synthetic Ipil product laboratory address')
+            ->where('business.barangay', 'Synthetic Barangay')
+            ->where('business.registration_number', 'S01-RENEWAL-HAPPY-PATH')
+            ->where('business.permit_applications.0.type', 'renewal')
+            ->where('business.permit_applications.0.status', 'pending_payment')
+            ->where('business.permit_applications.0.lines_of_business.0.name', 'Scenario 01 Retail Trading')
+            ->where('business.permit_applications.0.lines_of_business.1.name', 'Scenario 01 Food Service')
+            ->where('business.permit_applications.0.assessment.total_amount_cents', 122_000)
+            ->where('business.permit_applications.0.payable.status', 'pending')
+            ->where('business.permit_applications.0.payable.amount_due_cents', 122_000)
+            ->missing('business.metadata')
+            ->missing('business.legacy_source_id'));
+
+    $this->actingAs($citizen)
         ->get(route('citizen.permit-applications.index'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page

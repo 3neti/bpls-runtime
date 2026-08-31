@@ -94,6 +94,15 @@ test('generic Preview Citizen remains a truthful unlinked My Businesses empty st
             ->where('profile.linked', false)
             ->where('profile.owner', null)
             ->has('profile.businesses', 0));
+
+    $this->actingAs($previewCitizen)
+        ->get(route('citizen.profile.identity.show'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('citizen/profile/Identity', false)
+            ->where('identity.linked', false)
+            ->where('identity.owner', null)
+            ->has('identity.businesses', 0));
 });
 
 test('launcher enters the persisted lifecycle specimen through its manifest-owned Citizen without linking the generic Preview Citizen', function () {
@@ -140,6 +149,17 @@ test('launcher enters the persisted lifecycle specimen through its manifest-owne
                 'status' => 'pending',
                 'amount_due_cents' => 122_000,
             ]));
+
+    $application = PermitApplication::query()->sole();
+
+    $this->get(route('citizen.businesses.show', $application->business_id))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('citizen/businesses/Show', false)
+            ->where('business.name', 'Scenario 01 Market and Kitchen')
+            ->where('business.permit_applications.0.type', 'renewal')
+            ->where('business.permit_applications.0.assessment.total_amount_cents', 122_000)
+            ->where('business.permit_applications.0.payable.amount_due_cents', 122_000));
 });
 
 test('launcher exposes both coexisting lifecycle specimens through their own manifest-owned Citizens', function () {

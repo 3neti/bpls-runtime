@@ -8,6 +8,8 @@ import {
     FileText,
     UserRound,
 } from '@lucide/vue';
+import BusinessController from '@/actions/App/Http/Controllers/Citizen/BusinessController';
+import CitizenIdentityController from '@/actions/App/Http/Controllers/Citizen/CitizenIdentityController';
 import {
     create as createPermitApplication,
     show as showPermitApplication,
@@ -141,10 +143,13 @@ function pesos(amountCents: number): string {
                         >
                             Linked Business Owner
                         </p>
-                        <h2
-                            class="truncate text-lg font-semibold text-foreground"
-                        >
-                            {{ profile.owner?.name }}
+                        <h2 class="truncate text-lg font-semibold">
+                            <Link
+                                :href="CitizenIdentityController()"
+                                class="text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                            >
+                                {{ profile.owner?.name }}
+                            </Link>
                         </h2>
                     </div>
                     <Badge variant="secondary" class="sm:ml-auto">
@@ -194,10 +199,13 @@ function pesos(amountCents: number): string {
                                 <Building2 class="size-5" aria-hidden="true" />
                             </div>
                             <div class="min-w-0 flex-1">
-                                <h2
-                                    class="truncate text-lg font-semibold text-foreground"
-                                >
-                                    {{ business.name }}
+                                <h2 class="truncate text-lg font-semibold">
+                                    <Link
+                                        :href="BusinessController(business.id)"
+                                        class="text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                    >
+                                        {{ business.name }}
+                                    </Link>
                                 </h2>
                                 <p
                                     v-if="business.trade_name"
@@ -214,6 +222,12 @@ function pesos(amountCents: number): string {
                                         : 'applications'
                                 }}
                             </Badge>
+                            <Button as-child variant="ghost" size="sm">
+                                <Link :href="BusinessController(business.id)">
+                                    Business details
+                                    <ArrowRight />
+                                </Link>
+                            </Button>
                         </header>
 
                         <div

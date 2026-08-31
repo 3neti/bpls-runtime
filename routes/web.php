@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\Citizen\BusinessController as CitizenBusinessController;
 use App\Http\Controllers\Citizen\BusinessPermitEvaluationController as CitizenBusinessPermitEvaluationController;
+use App\Http\Controllers\Citizen\CitizenIdentityController;
 use App\Http\Controllers\Citizen\NotificationController as CitizenNotificationController;
 use App\Http\Controllers\Citizen\PaymentScheduleController as CitizenPaymentScheduleController;
 use App\Http\Controllers\Citizen\PermitApplicationController as CitizenPermitApplicationController;
@@ -92,6 +94,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('citizen')->name('citizen.')->middleware('can:citizen.access')->group(function () {
         Route::get('profile', CitizenProfileController::class)
             ->name('profile.show');
+        Route::get('profile/identity', CitizenIdentityController::class)
+            ->name('profile.identity.show');
+        Route::get('businesses/{business}', CitizenBusinessController::class)
+            ->name('businesses.show');
         Route::get('notifications', [CitizenNotificationController::class, 'index'])
             ->name('notifications.index');
         Route::patch('notifications/{notification}', [CitizenNotificationController::class, 'update'])
