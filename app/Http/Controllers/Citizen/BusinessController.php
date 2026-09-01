@@ -22,6 +22,7 @@ class BusinessController extends Controller
             $request->user(),
             $business,
             $request->user()->can(UserPermission::ViewOwnPermitApplicationFinancials->value),
+            $request->user()->can(UserPermission::ViewOwnPermitApplicationDocuments->value),
         );
 
         abort_if($businessDetail === null, 404);

@@ -91,9 +91,10 @@ class RunBplsLifecycleScenarioCommand extends Command
     private function renderHumanResult(array $result, ScenarioArtifactStore $artifactStore, bool $persisted): void
     {
         $this->info($result['scenario_id'] === RenewalHappyPathDefinition::Id
-            ? 'BPLS LIFECYCLE SCENARIO 01 — RENEWAL HAPPY PATH: PASS'
-            : 'BPLS LIFECYCLE SCENARIO 02 — NEW APPLICATION HAPPY PATH: PASS');
+            ? 'BPLS LIFECYCLE SCENARIO 02 — RENEWAL HAPPY PATH: PASS'
+            : 'BPLS LIFECYCLE SCENARIO 01 — NEW APPLICATION HAPPY PATH: PASS');
         $this->line('Question: '.$result['business_question']);
+        $this->line('Scenario effective date: '.$result['scenario_time']['effective_date'].' · execution timestamps remain actual');
         $this->newLine();
         $this->line('SYSTEM BOOTSTRAP');
         $this->line('[PASS] '.$result['system_bootstrap']['municipal_runtime_configuration']['municipality'].' · '.$result['system_bootstrap']['municipal_runtime_configuration']['system_name']);
@@ -257,11 +258,18 @@ class RunBplsLifecycleScenarioCommand extends Command
             'paymentSchedules.lines',
         ])->findOrFail($applicationId);
         $assessment = Assessment::query()->findOrFail($assessmentId);
+        $reusesNewApplicationIdentity = $result['scenario_id'] === RenewalHappyPathDefinition::Id
+            && LifecycleScenarioSpecimen::query()
+                ->where('scenario_id', NewApplicationHappyPathDefinition::Id)
+                ->where('scenario_revision', NewApplicationHappyPathDefinition::Revision)
+                ->exists();
 
         $manifest = [
-            'business_owner_ids' => [$application->business->business_owner_id],
-            'business_ids' => [$application->business_id],
-            'line_of_business_ids' => $application->lines->pluck('line_of_business_id')->filter()->sort()->values()->all(),
+            'business_owner_ids' => $reusesNewApplicationIdentity ? [] : [$application->business->business_owner_id],
+            'business_ids' => $reusesNewApplicationIdentity ? [] : [$application->business_id],
+            'referenced_business_owner_ids' => $reusesNewApplicationIdentity ? [$application->business->business_owner_id] : [],
+            'referenced_business_ids' => $reusesNewApplicationIdentity ? [$application->business_id] : [],
+            'reference_line_of_business_ids' => $application->lines->pluck('line_of_business_id')->filter()->sort()->values()->all(),
             'permit_application_ids' => [$application->id],
             'permit_application_line_ids' => $application->lines->pluck('id')->sort()->values()->all(),
             'permit_clearance_ids' => $application->clearances()->pluck('id')->sort()->values()->all(),
@@ -350,13 +358,13 @@ class RunBplsLifecycleScenarioCommand extends Command
 
     private function failure(ScenarioArtifactStore $artifactStore, RenewalHappyPathFailure|NewApplicationHappyPathFailure $failure): int
     {
-        $isScenario02 = $artifactStore->scenarioKey === NewApplicationHappyPathDefinition::Id;
+        $isNewApplication = $artifactStore->scenarioKey === NewApplicationHappyPathDefinition::Id;
         $result = [
             'schema_version' => 'bpls.lifecycle-certification.v1',
             'scenario_id' => $artifactStore->scenarioKey,
-            'scenario_revision' => $isScenario02 ? NewApplicationHappyPathDefinition::Revision : RenewalHappyPathDefinition::Revision,
+            'scenario_revision' => $isNewApplication ? NewApplicationHappyPathDefinition::Revision : RenewalHappyPathDefinition::Revision,
             'status' => 'failed',
-            'business_question' => $isScenario02 ? NewApplicationHappyPathDefinition::EvidenceQuestion : RenewalHappyPathDefinition::EvidenceQuestion,
+            'business_question' => $isNewApplication ? NewApplicationHappyPathDefinition::EvidenceQuestion : RenewalHappyPathDefinition::EvidenceQuestion,
             'first_failure' => [
                 'invariant' => $failure->invariant,
                 'message' => $failure->getMessage(),

@@ -27,9 +27,11 @@ class BuildCitizenProfile
                             'tracking_reference',
                             'type',
                             'status',
+                            'application_year',
                             'created_at',
                         ])
-                        ->latest('id')
+                        ->orderByDesc('application_year')
+                        ->orderByDesc('id')
                         ->with([
                             'lines:id,permit_application_id,line_of_business_id',
                             'lines.lineOfBusiness:id,name',
@@ -70,20 +72,25 @@ class BuildCitizenProfile
                 'name' => $owner->name,
             ],
             'businesses' => $owner->businesses
-                ->map(function ($business) use ($includeFinancials): array {
-                    if (! $business instanceof Business) {
-                        throw new \LogicException('Citizen Profile loaded an invalid Business relationship.');
-                    }
+                ->map(function (Business $business) use ($includeFinancials): array {
+                    $permitApplications = $business->permitApplications
+                        ->map(fn (PermitApplication $application): array => $this->applicationPayload($application, $includeFinancials))
+                        ->values();
+                    $currentApplication = $permitApplications->first();
 
                     return [
                         'id' => $business->id,
                         'name' => $business->name,
                         'trade_name' => $business->trade_name,
                         'application_count' => $business->permitApplications->count(),
-                        'permit_applications' => $business->permitApplications
-                            ->map(fn (PermitApplication $application): array => $this->applicationPayload($application, $includeFinancials))
-                            ->values()
-                            ->all(),
+                        'current_application' => $currentApplication === null ? null : [
+                            'id' => $currentApplication['id'],
+                            'type' => $currentApplication['type'],
+                            'status' => $currentApplication['status'],
+                            'application_year' => $currentApplication['application_year'],
+                        ],
+                        'amount_due' => $currentApplication['payable'] ?? null,
+                        'permit_applications' => $permitApplications->all(),
                     ];
                 })
                 ->values()
@@ -105,6 +112,7 @@ class BuildCitizenProfile
                 ?? 'Application record #'.$application->id,
             'type' => $application->type->value,
             'status' => $application->status->value,
+            'application_year' => $application->application_year,
             'saved_at' => $application->created_at?->toIso8601String(),
             'lines_of_business' => $application->lines
                 ->map(fn ($line): string => $line->lineOfBusiness->name)

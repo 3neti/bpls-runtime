@@ -63,7 +63,7 @@ final class NewApplicationHappyPathScenario
     public function run(): array
     {
         $installation = $this->inspectInstallation->handle();
-        $this->assert($installation['integrity']['pass'], 'Scenario 02 requires a coherent bpls:install baseline.');
+        $this->assert($installation['integrity']['pass'], 'Scenario 01 requires a coherent bpls:install baseline.');
 
         $existing = $this->existingApplication();
 
@@ -80,8 +80,8 @@ final class NewApplicationHappyPathScenario
 
             $application = $this->checkpoint('Brand-new Citizen did not establish and lodge the first canonical owner, business, and New Application', function () use ($actors, $linesOfBusiness): PermitApplication {
                 $citizen = $actors['citizen']->fresh();
-                $this->assert($citizen->business_owner_id === null, 'Scenario 02 Citizen did not start without a BusinessOwner.');
-                $this->assert($citizen->permitApplications()->count() === 0, 'Scenario 02 Citizen did not start without applications.');
+                $this->assert($citizen->business_owner_id === null, 'Scenario 01 Citizen did not start without a BusinessOwner.');
+                $this->assert($citizen->permitApplications()->count() === 0, 'Scenario 01 Citizen did not start without applications.');
 
                 $applicationLines = [];
                 foreach ($this->definition->linesOfBusiness() as $line) {
@@ -94,13 +94,13 @@ final class NewApplicationHappyPathScenario
                 }
 
                 $draft = $this->createCitizenDraft->handle([
-                    'owner_name' => 'Scenario 02 Synthetic Owner',
+                    'owner_name' => 'Scenario Synthetic Owner',
                     'owner_email' => null,
                     'owner_phone' => null,
                     'owner_address' => 'Synthetic Ipil product laboratory address',
-                    'business_name' => 'Scenario 02 Market and Kitchen',
-                    'trade_name' => 'Scenario 02 New Application Laboratory',
-                    'registration_number' => 'S02-NEW-APPLICATION-HAPPY-PATH',
+                    'business_name' => 'Scenario Market and Kitchen',
+                    'trade_name' => 'Scenario Product Laboratory',
+                    'registration_number' => 'PRODUCT-LAB-MARKET-KITCHEN',
                     'business_address' => 'Synthetic Ipil product laboratory address',
                     'barangay' => 'Synthetic Barangay',
                     'application_year' => NewApplicationHappyPathDefinition::ApplicationYear,
@@ -122,6 +122,8 @@ final class NewApplicationHappyPathScenario
                     'definition_revision' => NewApplicationHappyPathDefinition::Revision,
                     'semantic_classification' => 'synthetic_only',
                     'production_liability' => false,
+                    'effective_date' => NewApplicationHappyPathDefinition::EffectiveDate,
+                    'effective_time_source' => 'deterministic_scenario_clock',
                 ];
                 $metadata['business_permit_evaluation'] = [
                     'semantic_classification' => 'provisional_uat',
@@ -198,12 +200,12 @@ final class NewApplicationHappyPathScenario
                     [
                         'key' => 'policy.new-micro-industry-mayors-permit.not-applicable',
                         'code' => 'MRC-3A-02-NEW-MAYORS-PERMIT-MICRO',
-                        'reason' => 'The synthetic Scenario 02 business is not asserted to be a micro-industry; the unresolved enterprise-scale rule remains outside this provisional UAT payable.',
+                        'reason' => 'The synthetic Scenario 01 business is not asserted to be a micro-industry; the unresolved enterprise-scale rule remains outside this provisional UAT payable.',
                     ],
                     [
                         'key' => 'policy.business-registration-plate.not-applicable',
                         'code' => 'MRC-3A-05-BUSINESS-REGISTRATION-PLATE',
-                        'reason' => 'The statutory ceiling is not an executable exact charge; Scenario 02 records no registration-plate liability and does not infer a price.',
+                        'reason' => 'The statutory ceiling is not an executable exact charge; Scenario 01 records no registration-plate liability and does not infer a price.',
                     ],
                 ] as $boundary) {
                     $feeRule = FeeRule::query()->where('code', $boundary['code'])->sole();
@@ -331,7 +333,7 @@ final class NewApplicationHappyPathScenario
             ));
             $this->assert($counterCheck->assessment_id === $assessment->id, 'Treasury counter-check is not bound to prepared Assessment #1.');
             $this->assert($counterCheck->business_permit_evaluation_version_id === $assessment->business_permit_evaluation_version_id, 'Treasury counter-check is not bound to Assessment #1 source Evaluation version.');
-            $this->assert($counterCheck->result === TreasuryCounterCheckResult::NoCorrection, 'Scenario 02 Treasury result is not no correction.');
+            $this->assert($counterCheck->result === TreasuryCounterCheckResult::NoCorrection, 'Scenario 01 Treasury result is not no correction.');
 
             $assessmentHash = $this->assessmentFingerprint->hash($assessment);
             $decision = $this->checkpoint('Municipal Treasurer did not approve the exact Assessment snapshot', fn () => $this->recordAssessmentDecision->handle(
@@ -431,6 +433,7 @@ final class NewApplicationHappyPathScenario
         $semanticHash = hash('sha256', json_encode([
             'scenario_id' => NewApplicationHappyPathDefinition::Id,
             'application_type' => $application->type->value,
+            'effective_date' => NewApplicationHappyPathDefinition::EffectiveDate,
             'lob_codes' => $application->lines->pluck('lineOfBusiness.code')->sort()->values()->all(),
             'responsibility_keys' => collect($responsibilities)->pluck('key')->sort()->values()->all(),
             'assessment_lines' => $assessment->lines->map(fn ($line): array => ['code' => $line->code, 'amount_cents' => $line->amount_cents])->sortBy('code')->values()->all(),
@@ -449,6 +452,11 @@ final class NewApplicationHappyPathScenario
             'first_failure' => null,
             'semantic_result_hash' => $semanticHash,
             'database_driver' => DB::connection()->getDriverName(),
+            'scenario_time' => [
+                'effective_date' => NewApplicationHappyPathDefinition::EffectiveDate,
+                'application_year' => NewApplicationHappyPathDefinition::ApplicationYear,
+                'execution_timestamps_are_actual' => true,
+            ],
             'system_bootstrap' => $this->bootstrapInventory($actors, $linesOfBusiness),
             'onboarding' => [
                 'canonical_action' => 'CreateCitizenPermitApplicationDraft + SubmitCitizenPermitApplication',
@@ -575,7 +583,7 @@ final class NewApplicationHappyPathScenario
                     ->where('metadata->lifecycle_scenario->id', NewApplicationHappyPathDefinition::Id)
                     ->where('metadata->lifecycle_scenario->definition_revision', NewApplicationHappyPathDefinition::Revision)
                     ->count(),
-                'scenario_businesses' => $application->business()->where('registration_number', 'S02-NEW-APPLICATION-HAPPY-PATH')->count(),
+                'scenario_businesses' => $application->business()->where('registration_number', 'PRODUCT-LAB-MARKET-KITCHEN')->count(),
                 'scenario_responsibilities' => count($responsibilities),
                 'scenario_evaluation_charges' => collect($this->evaluationCharges($projection))->count(),
                 'current_assessments' => $application->assessments()->whereNull('superseded_at')->count(),
@@ -611,14 +619,14 @@ final class NewApplicationHappyPathScenario
 
         if ($specimen instanceof LifecycleScenarioSpecimen) {
             if ($applications->count() !== 1 || $applications->first()?->id !== $specimen->permit_application_id) {
-                throw new NewApplicationHappyPathFailure('Harness-owned persisted specimen is singular', 'Scenario 02 ownership manifest does not match exactly one application.');
+                throw new NewApplicationHappyPathFailure('Harness-owned persisted specimen is singular', 'Scenario 01 ownership manifest does not match exactly one application.');
             }
 
             return $specimen->permitApplication;
         }
 
         if ($applications->isNotEmpty()) {
-            throw new NewApplicationHappyPathFailure('Scenario persistence is harness-owned', 'Unowned Scenario 02 transactional residue exists; refusing name or metadata inference.');
+            throw new NewApplicationHappyPathFailure('Scenario persistence is harness-owned', 'Unowned Scenario 01 transactional residue exists; refusing name or metadata inference.');
         }
 
         return null;
@@ -628,15 +636,15 @@ final class NewApplicationHappyPathScenario
     private function actors(): array
     {
         return [
-            'citizen' => $this->actor('citizen', 'Scenario 02 Citizen Owner', [UserPermission::AccessCitizen, UserPermission::CreateOwnPermitApplications, UserPermission::EditOwnPermitApplications, UserPermission::SubmitOwnPermitApplications, UserPermission::UploadOwnPermitApplicationDocuments, UserPermission::ViewOwnPermitApplications, UserPermission::ViewOwnPermitApplicationDocuments, UserPermission::ViewOwnPermitApplicationFinancials, UserPermission::ViewOwnBusinessPermitEvaluations]),
-            'intake' => $this->actor('intake', 'Scenario 02 BPLO Intake Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::CreatePermitApplications]),
-            'assessment_officer' => $this->actor('assessment-officer', 'Scenario 02 Assessment Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::AssessPermitApplications, UserPermission::ViewPaymentSchedules, UserPermission::PreparePaymentSchedules]),
-            'assessor' => $this->actor('assessor', 'Scenario 02 Assessor', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ContributeBusinessPermitEvaluations]),
-            'engineering' => $this->actor('engineering', 'Scenario 02 Engineering Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ContributeBusinessPermitEvaluations]),
-            'health' => $this->actor('health', 'Scenario 02 Health Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ContributeBusinessPermitEvaluations]),
-            'menro' => $this->actor('menro', 'Scenario 02 MENRO Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ContributeBusinessPermitEvaluations]),
-            'treasury' => $this->actor('treasury-counter-check', 'Scenario 02 Treasury Counter-checker', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::CounterCheckBusinessPermitEvaluations, UserPermission::CorrectEvaluationLinesOfBusiness]),
-            'municipal_treasurer' => $this->actor('municipal-treasurer', 'Scenario 02 Municipal Treasurer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ApproveAssessments]),
+            'citizen' => $this->actor('citizen', 'Scenario Citizen', [UserPermission::AccessCitizen, UserPermission::CreateOwnPermitApplications, UserPermission::EditOwnPermitApplications, UserPermission::SubmitOwnPermitApplications, UserPermission::UploadOwnPermitApplicationDocuments, UserPermission::ViewOwnPermitApplications, UserPermission::ViewOwnPermitApplicationDocuments, UserPermission::ViewOwnPermitApplicationFinancials, UserPermission::ViewOwnBusinessPermitEvaluations]),
+            'intake' => $this->actor('intake', 'Scenario 01 BPLO Intake Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::CreatePermitApplications]),
+            'assessment_officer' => $this->actor('assessment-officer', 'Scenario 01 Assessment Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::AssessPermitApplications, UserPermission::ViewPaymentSchedules, UserPermission::PreparePaymentSchedules]),
+            'assessor' => $this->actor('assessor', 'Scenario 01 Assessor', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ContributeBusinessPermitEvaluations]),
+            'engineering' => $this->actor('engineering', 'Scenario 01 Engineering Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ContributeBusinessPermitEvaluations]),
+            'health' => $this->actor('health', 'Scenario 01 Health Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ContributeBusinessPermitEvaluations]),
+            'menro' => $this->actor('menro', 'Scenario 01 MENRO Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ContributeBusinessPermitEvaluations]),
+            'treasury' => $this->actor('treasury-counter-check', 'Scenario 01 Treasury Counter-checker', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::CounterCheckBusinessPermitEvaluations, UserPermission::CorrectEvaluationLinesOfBusiness]),
+            'municipal_treasurer' => $this->actor('municipal-treasurer', 'Scenario 01 Municipal Treasurer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ApproveAssessments]),
         ];
     }
 
@@ -644,18 +652,17 @@ final class NewApplicationHappyPathScenario
     {
         $businessOwnerId = $application->business->business_owner_id;
         $citizen->refresh();
-        $this->assert($citizen->business_owner_id === $businessOwnerId, 'Scenario 02 Citizen portal identity is not linked to the application BusinessOwner.');
-        $this->assert($application->submitted_by_id === $citizen->id, 'Citizen-originated Scenario 02 does not retain the Citizen submission actor.');
-        $this->assert($application->business->owner->businesses()->count() === 1, 'Scenario 02 Citizen does not own exactly the first newly established Business.');
-        $this->assert($application->business->permitApplications()->count() === 1, 'Scenario 02 Business does not retain exactly the first New Application.');
+        $this->assert($citizen->business_owner_id === $businessOwnerId, 'Scenario 01 Citizen portal identity is not linked to the application BusinessOwner.');
+        $this->assert($application->submitted_by_id === $citizen->id, 'Citizen-originated Scenario 01 does not retain the Citizen submission actor.');
+        $this->assert($application->business->owner->businesses()->count() === 1, 'Scenario 01 Citizen does not own exactly the first newly established Business.');
     }
 
     /** @param list<UserPermission> $permissions */
     private function actor(string $key, string $name, array $permissions): User
     {
         $role = Role::query()->firstOrCreate(
-            ['code' => 'scenario-02-'.$key],
-            ['name' => $name, 'description' => 'Synthetic Scenario 02 role; not a production municipal assignment.'],
+            ['code' => 'scenario-01-'.$key],
+            ['name' => $name, 'description' => 'Synthetic Scenario 01 role; not a production municipal assignment.'],
         );
         $permissionIds = collect($permissions)->map(function (UserPermission $permission): int {
             return Permission::query()->firstOrCreate(
@@ -666,11 +673,11 @@ final class NewApplicationHappyPathScenario
         $role->permissions()->sync($permissionIds);
 
         $user = User::query()->firstOrCreate(
-            ['email' => 'scenario-02-'.$key.'@example.test'],
+            ['email' => ($key === 'citizen' ? 'scenario-citizen' : 'scenario-01-'.$key).'@example.test'],
             [
                 'role_id' => $role->id,
                 'name' => $name,
-                'password' => Hash::make('scenario-02-not-a-login-credential'),
+                'password' => Hash::make('scenario-01-not-a-login-credential'),
                 'email_verified_at' => now(),
             ],
         );
@@ -690,13 +697,13 @@ final class NewApplicationHappyPathScenario
                     'major_category' => $definition['major_category'],
                     'is_active' => true,
                     'metadata' => [
-                        'scenario_id' => NewApplicationHappyPathDefinition::Id,
+                        'scenario_id' => 'product-lab-chronology',
                         'semantic_classification' => 'provisional_uat',
                         'production_liability' => false,
                     ],
                 ],
             );
-            $this->assert(data_get($lineOfBusiness->metadata, 'scenario_id') === NewApplicationHappyPathDefinition::Id, "LOB code [{$definition['code']}] is occupied by non-scenario data.");
+            $this->assert(data_get($lineOfBusiness->metadata, 'scenario_id') === 'product-lab-chronology', "LOB code [{$definition['code']}] is occupied by non-scenario data.");
 
             return [$definition['code'] => $lineOfBusiness];
         })->all();
@@ -820,7 +827,7 @@ final class NewApplicationHappyPathScenario
             'canonical_noun' => 'Business Permit Evaluation required-work routing',
             'disposition' => 'projected',
             'persisted_aggregate_created' => false,
-            'source_facts' => ['lodged New Application', 'declared Lines of Business', 'Scenario 02 provisional UAT applicability', 'generated Evaluation responsibilities'],
+            'source_facts' => ['lodged New Application', 'declared Lines of Business', 'Scenario 01 provisional UAT applicability', 'generated Evaluation responsibilities'],
             'classification' => 'provisional_uat',
             'groups' => $requiredWork
                 ->groupBy('line_of_business_id')
@@ -1041,7 +1048,7 @@ final class NewApplicationHappyPathScenario
     private function assert(bool $condition, string $detail): void
     {
         if (! $condition) {
-            throw new NewApplicationHappyPathFailure('Scenario 02 financial and lifecycle reconciliation', $detail);
+            throw new NewApplicationHappyPathFailure('Scenario 01 financial and lifecycle reconciliation', $detail);
         }
     }
 }

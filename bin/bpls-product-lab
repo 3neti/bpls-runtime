@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_directory="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
+repository_root="$(CDPATH='' cd -- "${script_directory}/.." && pwd -P)"
+
+cd "${repository_root}"
+
+php artisan bpls:product-lab:preflight
+
+printf '\nRebuilding the verified disposable local product-lab database...\n\n'
+
+php artisan migrate:fresh --force --no-interaction
+php artisan bpls:install --no-interaction
+php artisan bpls:install --check --no-interaction
+php artisan bpls:lifecycle:run new-application-happy-path --persist --no-interaction
+php artisan bpls:lifecycle:run renewal-happy-path --persist --no-interaction
+php artisan bpls:product-lab:inspect --no-interaction

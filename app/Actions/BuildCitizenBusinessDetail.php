@@ -6,13 +6,14 @@ use App\Enums\PaymentScheduleStatus;
 use App\Models\Business;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
+use App\Models\PermitApplicationDocument;
 use App\Models\PermitApplicationLine;
 use App\Models\User;
 
 class BuildCitizenBusinessDetail
 {
     /** @return array<string, mixed>|null */
-    public function handle(User $citizen, int $businessId, bool $includeFinancials): ?array
+    public function handle(User $citizen, int $businessId, bool $includeFinancials, bool $includeDocuments = false): ?array
     {
         $applicationRelations = [
             'permitApplications' => fn ($query) => $query
@@ -26,12 +27,27 @@ class BuildCitizenBusinessDetail
                     'application_year',
                     'created_at',
                 ])
-                ->latest('id')
+                ->orderByDesc('application_year')
+                ->orderByDesc('id')
                 ->with([
                     'lines:id,permit_application_id,line_of_business_id',
                     'lines.lineOfBusiness:id,code,name',
                 ]),
         ];
+
+        if ($includeDocuments) {
+            $applicationRelations['permitApplications.documents'] = fn ($query) => $query
+                ->select([
+                    'id',
+                    'permit_application_id',
+                    'label',
+                    'original_name',
+                    'mime_type',
+                    'size_bytes',
+                    'uploaded_at',
+                ])
+                ->latest('uploaded_at');
+        }
 
         if ($includeFinancials) {
             $applicationRelations['permitApplications.assessments'] = fn ($query) => $query
@@ -88,6 +104,11 @@ class BuildCitizenBusinessDetail
             return null;
         }
 
+        $permitApplications = $business->permitApplications
+            ->map(fn (PermitApplication $application): array => $this->applicationPayload($application, $includeFinancials))
+            ->values();
+        $currentApplication = $permitApplications->first();
+
         return [
             'id' => $business->id,
             'name' => $business->name,
@@ -106,10 +127,26 @@ class BuildCitizenBusinessDetail
                 'id' => $business->owner->id,
                 'name' => $business->owner->name,
             ],
-            'permit_applications' => $business->permitApplications
-                ->map(fn (PermitApplication $application): array => $this->applicationPayload($application, $includeFinancials))
-                ->values()
-                ->all(),
+            'current_permit_application_id' => $currentApplication['id'] ?? null,
+            'amount_due' => $currentApplication['payable'] ?? null,
+            'permit_applications' => $permitApplications->all(),
+            'documents_and_registration' => [
+                'source' => 'canonical_business_record_and_uploaded_permit_application_documents',
+                'documents' => $includeDocuments
+                    ? $business->permitApplications->flatMap(fn (PermitApplication $application): array => $application->documents->map(fn (PermitApplicationDocument $document): array => [
+                        'id' => $document->id,
+                        'permit_application_id' => $application->id,
+                        'application_year' => $application->application_year,
+                        'application_type' => $application->type->value,
+                        'label' => $document->label,
+                        'original_name' => $document->original_name,
+                        'mime_type' => $document->mime_type,
+                        'size_bytes' => $document->size_bytes,
+                        'uploaded_at' => $document->uploaded_at->toIso8601String(),
+                    ])->all())->values()->all()
+                    : [],
+                'statement' => 'Only documents actually uploaded to a canonical permit application are shown. No registry evidence is inferred or imported.',
+            ],
         ];
     }
 

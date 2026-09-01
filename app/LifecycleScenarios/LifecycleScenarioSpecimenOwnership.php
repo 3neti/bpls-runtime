@@ -98,14 +98,16 @@ final class LifecycleScenarioSpecimenOwnership
         $existingClaims = [];
 
         foreach (LifecycleScenarioSpecimen::query()->lockForUpdate()->get() as $specimen) {
-            foreach ($specimen->owned_resource_manifest as $manifestKey => $ids) {
+            foreach (array_keys(self::TransactionResources) as $manifestKey) {
+                $ids = $specimen->owned_resource_manifest[$manifestKey] ?? [];
                 foreach ($this->manifestIds([$manifestKey => $ids], (string) $manifestKey) as $id) {
                     $existingClaims[$manifestKey][$id] = $specimen->scenario_id;
                 }
             }
         }
 
-        foreach ($manifest as $manifestKey => $ids) {
+        foreach (array_keys(self::TransactionResources) as $manifestKey) {
+            $ids = $manifest[$manifestKey] ?? [];
             foreach ($this->manifestIds([$manifestKey => $ids], (string) $manifestKey) as $id) {
                 if (isset($existingClaims[$manifestKey][$id])) {
                     throw new LogicException("New lifecycle specimen would claim {$manifestKey} [{$id}] already owned by [{$existingClaims[$manifestKey][$id]}].");

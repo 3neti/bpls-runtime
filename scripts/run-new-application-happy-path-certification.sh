@@ -4,27 +4,27 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 evidence_root="${repository_root}/storage/app/private/lifecycle-scenarios/new-application-happy-path/certification"
 temporary_root="$(mktemp -d)"
-sqlite_database="${temporary_root}/bpls-scenario-02-fresh.sqlite"
+sqlite_database="${temporary_root}/bpls-scenario-01-fresh.sqlite"
 certification_run_token="$(php -r 'echo bin2hex(random_bytes(6));')"
-postgres_fresh_database="bpls_scenario_02_cert_fresh_${certification_run_token}"
-postgres_persistent_database="bpls_scenario_02_cert_persistent_${certification_run_token}"
+postgres_fresh_database="bpls_scenario_01_cert_fresh_${certification_run_token}"
+postgres_persistent_database="bpls_scenario_01_cert_persistent_${certification_run_token}"
 postgres_host="${BPLS_CERT_PG_HOST:-127.0.0.1}"
 postgres_port="${BPLS_CERT_PG_PORT:-5432}"
 postgres_username="${BPLS_CERT_PG_USERNAME:-postgres}"
 postgres_password="${BPLS_CERT_PG_PASSWORD:-}"
 
 if [[ "${postgres_host}" != "127.0.0.1" && "${postgres_host}" != "localhost" ]]; then
-    echo "Refusing Scenario 02 PostgreSQL certification outside local host." >&2
+    echo "Refusing Scenario 01 PostgreSQL certification outside local host." >&2
     exit 1
 fi
 
 if [[ "${postgres_port}" != "5432" ]]; then
-    echo "Refusing Scenario 02 PostgreSQL certification outside the explicit local DBngin port." >&2
+    echo "Refusing Scenario 01 PostgreSQL certification outside the explicit local DBngin port." >&2
     exit 1
 fi
 
 for disposable_database in "${postgres_fresh_database}" "${postgres_persistent_database}"; do
-    if [[ ! "${disposable_database}" =~ ^bpls_scenario_02_cert_(fresh|persistent)_[a-f0-9]{12}$ ]]; then
+    if [[ ! "${disposable_database}" =~ ^bpls_scenario_01_cert_(fresh|persistent)_[a-f0-9]{12}$ ]]; then
         echo "Refusing destructive database operation for unrecognized target [${disposable_database}]." >&2
         exit 1
     fi
@@ -53,9 +53,9 @@ $port = getenv('CERT_PG_PORT');
 
 if (! in_array($host, ['127.0.0.1', 'localhost'], true)
     || $port !== '5432'
-    || ! preg_match('/^bpls_scenario_02_cert_(fresh|persistent)_[a-f0-9]{12}$/', $database)
+    || ! preg_match('/^bpls_scenario_01_cert_(fresh|persistent)_[a-f0-9]{12}$/', $database)
     || ! in_array($operation, ['create', 'drop'], true)) {
-    fwrite(STDERR, "Scenario 02 PostgreSQL safety gate refused the requested operation.\n");
+    fwrite(STDERR, "Scenario 01 PostgreSQL safety gate refused the requested operation.\n");
     exit(1);
 }
 
@@ -75,7 +75,7 @@ if ($operation === 'drop') {
     $statement = $pdo->prepare('SELECT 1 FROM pg_database WHERE datname = ?');
     $statement->execute([$database]);
     if ($statement->fetchColumn() !== false) {
-        fwrite(STDERR, "Scenario 02 refused to reuse a pre-existing disposable database identity.\n");
+        fwrite(STDERR, "Scenario 01 refused to reuse a pre-existing disposable database identity.\n");
         exit(1);
     }
     $pdo->exec("CREATE DATABASE {$quotedDatabase}");
@@ -209,7 +209,7 @@ if ($sqlite["treasury_counter_check"]["assessment_id"] !== $sqlite["assessment"]
 
 php -r '
 $result = json_decode(file_get_contents($argv[1]), true, flags: JSON_THROW_ON_ERROR);
-echo "Scenario 02 first-principles certification PASS\n";
+echo "Scenario 01 first-principles certification PASS\n";
 echo "Semantic result: {$result["semantic_result_hash"]}\n";
 echo "Grand Total: {$result["evaluation"]["grand_total_amount_cents"]} centavos\n";
 echo "Evidence: {$argv[2]}\n";

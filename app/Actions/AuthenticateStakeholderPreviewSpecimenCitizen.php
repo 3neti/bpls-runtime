@@ -66,7 +66,10 @@ class AuthenticateStakeholderPreviewSpecimenCitizen
             return null;
         }
 
-        $ownerIds = $this->integerIds(data_get($manifest, 'business_owner_ids'));
+        $ownerIds = array_values(array_unique([
+            ...$this->integerIds(data_get($manifest, 'business_owner_ids')),
+            ...$this->integerIds(data_get($manifest, 'referenced_business_owner_ids')),
+        ]));
         $applicationIds = $this->integerIds(data_get($manifest, 'permit_application_ids'));
         $actorIds = $this->integerIds(data_get($manifest, 'actor_user_ids'));
 

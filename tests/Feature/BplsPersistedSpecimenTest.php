@@ -32,7 +32,7 @@ test('certification run executes canonical lifecycle and leaves the installed ba
         ->and(LifecycleScenarioSpecimen::query()->count())->toBe(0);
 });
 
-test('persist leaves exactly one harness-owned Scenario 01 specimen and reruns idempotently', function () {
+test('persist leaves exactly one harness-owned standalone Renewal specimen and reruns idempotently', function () {
     Storage::fake('local');
     Artisan::call('bpls:install');
 
@@ -57,8 +57,8 @@ test('persist leaves exactly one harness-owned Scenario 01 specimen and reruns i
     $second = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
     $specimen = LifecycleScenarioSpecimen::query()->sole();
     $application = PermitApplication::query()->with('business')->sole();
-    $citizen = User::query()->where('email', 'scenario-01-citizen@example.test')->sole();
-    $intake = User::query()->where('email', 'scenario-01-intake@example.test')->sole();
+    $citizen = User::query()->where('email', 'scenario-citizen@example.test')->sole();
+    $intake = User::query()->where('email', 'scenario-02-intake@example.test')->sole();
 
     expect($second)->toBe($first)
         ->and($specimen->scenario_id)->toBe(RenewalHappyPathDefinition::Id)

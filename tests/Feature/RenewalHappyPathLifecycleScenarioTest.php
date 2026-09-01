@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
-test('Scenario 01 proves a deterministic persisted multi-LOB Renewal becomes an approved payable', function () {
+test('Scenario 02 proves a deterministic persisted multi-LOB Renewal becomes an approved payable', function () {
     Storage::fake('local');
     Artisan::call('bpls:install');
 
@@ -54,8 +54,8 @@ test('Scenario 01 proves a deterministic persisted multi-LOB Renewal becomes an 
         ->and($first['responsibilities']['resolved_count'])->toBe(6)
         ->and($first['evaluation']['readiness'])->toBe('ready')
         ->and($first['evaluation']['subtotals']['line_of_business'])->toBe([
-            'Scenario 01 Retail Trading' => 33_000,
-            'Scenario 01 Food Service' => 54_000,
+            'Retail Trading' => 33_000,
+            'Food Service' => 54_000,
         ])
         ->and($first['evaluation']['subtotals']['application_wide_amount_cents'])->toBe(35_000)
         ->and($first['evaluation']['grand_total_amount_cents'])->toBe(122_000)
@@ -89,16 +89,16 @@ test('Scenario 01 proves a deterministic persisted multi-LOB Renewal becomes an 
         ->and(PaymentSchedule::query()->count())->toBe($counts['schedules'])
         ->and(FeeRule::query()->count())->toBe($counts['fee_rules'])
         ->and(LifecycleScenarioSpecimen::query()->count())->toBe(1)
-        ->and(User::query()->where('email', 'scenario-01-assessment-officer@example.test')->sole()->can('business_permit_evaluations.view'))->toBeTrue()
-        ->and(User::query()->where('email', 'scenario-01-treasury-counter-check@example.test')->sole()->can('business_permit_evaluations.correct_lines_of_business'))->toBeTrue()
-        ->and(User::query()->where('email', 'scenario-01-municipal-treasurer@example.test')->sole()->cannot('business_permit_evaluations.counter_check'))->toBeTrue();
+        ->and(User::query()->where('email', 'scenario-02-assessment-officer@example.test')->sole()->can('business_permit_evaluations.view'))->toBeTrue()
+        ->and(User::query()->where('email', 'scenario-02-treasury-counter-check@example.test')->sole()->can('business_permit_evaluations.correct_lines_of_business'))->toBeTrue()
+        ->and(User::query()->where('email', 'scenario-02-municipal-treasurer@example.test')->sole()->cannot('business_permit_evaluations.counter_check'))->toBeTrue();
 
     $store = new ScenarioArtifactStore(RenewalHappyPathDefinition::Id, RenewalHappyPathDefinition::RunId);
     expect($store->readJson('result.json'))->toBe($second)
         ->and($store->exists('action-trace.json'))->toBeTrue();
 });
 
-test('Scenario 01 has compact human output and native discovery', function () {
+test('Scenario 02 has compact human output and native discovery', function () {
     Storage::fake('local');
     Artisan::call('bpls:install');
 
@@ -120,12 +120,12 @@ test('Scenario 01 has compact human output and native discovery', function () {
         ->assertSuccessful();
 });
 
-test('Scenario 01 projects its immutable Assessment and suppresses completed role work', function () {
+test('Scenario 02 projects its immutable Assessment and suppresses completed role work', function () {
     Artisan::call('bpls:install');
 
     $result = app(RenewalHappyPathScenario::class)->run();
     $assessment = Assessment::query()->findOrFail($result['assessment']['id']);
-    $assessmentOfficer = User::query()->where('email', 'scenario-01-assessment-officer@example.test')->sole();
+    $assessmentOfficer = User::query()->where('email', 'scenario-02-assessment-officer@example.test')->sole();
 
     $this->withoutVite()
         ->actingAs($assessmentOfficer)
@@ -134,25 +134,25 @@ test('Scenario 01 projects its immutable Assessment and suppresses completed rol
         ->assertInertia(fn (Assert $page) => $page
             ->component('permit-applications/Assessments/Show', false)
             ->where('assessment.display_status', 'Approved · Payable')
-            ->where('assessment.financial_working_paper.line_sections.0.line_of_business_name', 'Scenario 01 Retail Trading')
+            ->where('assessment.financial_working_paper.line_sections.0.line_of_business_name', 'Retail Trading')
             ->where('assessment.financial_working_paper.line_sections.0.subtotal_amount_cents', 33_000)
-            ->where('assessment.financial_working_paper.line_sections.1.line_of_business_name', 'Scenario 01 Food Service')
+            ->where('assessment.financial_working_paper.line_sections.1.line_of_business_name', 'Food Service')
             ->where('assessment.financial_working_paper.line_sections.1.subtotal_amount_cents', 54_000)
             ->where('assessment.financial_working_paper.application_subtotal_amount_cents', 35_000)
             ->where('assessment.financial_working_paper.grand_total_amount_cents', 122_000)
             ->where('assessment.financial_working_paper.grouped_total_amount_cents', 122_000)
             ->where('assessment.financial_working_paper.reconciles', true)
-            ->where('assessment.treasury_counter_check.checked_by', 'Scenario 01 Treasury Counter-checker')
+            ->where('assessment.treasury_counter_check.checked_by', 'Scenario 02 Treasury Counter-checker')
             ->where('assessment.decision.action', 'approved')
             ->where('assessment.decision.total_amount_cents', 122_000)
             ->where('assessment.latest_payment_schedule.status', 'pending')
             ->where('assessment.latest_payment_schedule.total_amount_cents', 122_000));
 
     foreach ([
-        'scenario-01-health@example.test' => 'department_responsibilities',
-        'scenario-01-treasury-counter-check@example.test' => 'treasury_counter_check',
-        'scenario-01-municipal-treasurer@example.test' => 'treasurer_approval',
-        'scenario-01-assessment-officer@example.test' => 'assessment_preparation',
+        'scenario-02-health@example.test' => 'department_responsibilities',
+        'scenario-02-treasury-counter-check@example.test' => 'treasury_counter_check',
+        'scenario-02-municipal-treasurer@example.test' => 'treasurer_approval',
+        'scenario-02-assessment-officer@example.test' => 'assessment_preparation',
     ] as $email => $surface) {
         $user = User::query()->where('email', $email)->sole();
 
@@ -166,13 +166,13 @@ test('Scenario 01 projects its immutable Assessment and suppresses completed rol
     }
 });
 
-test('Scenario 01 is visible through the canonical Citizen owner relationship and projects the complete payable lifecycle', function () {
+test('Scenario 02 is visible through the canonical Citizen owner relationship and projects the complete payable lifecycle', function () {
     Artisan::call('bpls:install');
 
     $result = app(RenewalHappyPathScenario::class)->run();
     $application = PermitApplication::query()->findOrFail($result['application']['id']);
-    $citizen = User::query()->where('email', 'scenario-01-citizen@example.test')->sole();
-    $intake = User::query()->where('email', 'scenario-01-intake@example.test')->sole();
+    $citizen = User::query()->where('email', 'scenario-citizen@example.test')->sole();
+    $intake = User::query()->where('email', 'scenario-02-intake@example.test')->sole();
 
     expect($citizen->business_owner_id)->toBe($application->business->business_owner_id)
         ->and($application->submitted_by_id)->toBe($intake->id)
@@ -190,14 +190,14 @@ test('Scenario 01 is visible through the canonical Citizen owner relationship an
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('citizen/profile/Show', false)
-            ->where('profile.owner.name', 'Scenario 01 Synthetic Owner')
+            ->where('profile.owner.name', 'Scenario Synthetic Owner')
             ->has('profile.businesses', 1)
-            ->where('profile.businesses.0.name', 'Scenario 01 Market and Kitchen')
+            ->where('profile.businesses.0.name', 'Scenario Market and Kitchen')
             ->where('profile.businesses.0.permit_applications.0.type', 'renewal')
             ->where('profile.businesses.0.permit_applications.0.status', 'pending_payment')
             ->where('profile.businesses.0.permit_applications.0.lines_of_business', [
-                'Scenario 01 Retail Trading',
-                'Scenario 01 Food Service',
+                'Retail Trading',
+                'Food Service',
             ])
             ->where('profile.businesses.0.permit_applications.0.payable.status', 'pending')
             ->where('profile.businesses.0.permit_applications.0.payable.amount_due_cents', 122_000));
@@ -207,10 +207,10 @@ test('Scenario 01 is visible through the canonical Citizen owner relationship an
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('citizen/profile/Identity', false)
-            ->where('identity.owner.name', 'Scenario 01 Synthetic Owner')
+            ->where('identity.owner.name', 'Scenario Synthetic Owner')
             ->where('identity.owner.address', 'Synthetic Ipil product laboratory address')
             ->has('identity.businesses', 1)
-            ->where('identity.businesses.0.name', 'Scenario 01 Market and Kitchen')
+            ->where('identity.businesses.0.name', 'Scenario Market and Kitchen')
             ->missing('identity.owner.birth_date')
             ->missing('identity.owner.metadata'));
 
@@ -219,14 +219,14 @@ test('Scenario 01 is visible through the canonical Citizen owner relationship an
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('citizen/businesses/Show', false)
-            ->where('business.name', 'Scenario 01 Market and Kitchen')
+            ->where('business.name', 'Scenario Market and Kitchen')
             ->where('business.address', 'Synthetic Ipil product laboratory address')
             ->where('business.barangay', 'Synthetic Barangay')
-            ->where('business.registration_number', 'S01-RENEWAL-HAPPY-PATH')
+            ->where('business.registration_number', 'PRODUCT-LAB-MARKET-KITCHEN')
             ->where('business.permit_applications.0.type', 'renewal')
             ->where('business.permit_applications.0.status', 'pending_payment')
-            ->where('business.permit_applications.0.lines_of_business.0.name', 'Scenario 01 Retail Trading')
-            ->where('business.permit_applications.0.lines_of_business.1.name', 'Scenario 01 Food Service')
+            ->where('business.permit_applications.0.lines_of_business.0.name', 'Retail Trading')
+            ->where('business.permit_applications.0.lines_of_business.1.name', 'Food Service')
             ->where('business.permit_applications.0.assessment.total_amount_cents', 122_000)
             ->where('business.permit_applications.0.payable.status', 'pending')
             ->where('business.permit_applications.0.payable.amount_due_cents', 122_000)
@@ -241,7 +241,7 @@ test('Scenario 01 is visible through the canonical Citizen owner relationship an
             ->has('permitApplications.data', 1)
             ->where('permitApplications.data.0.id', $application->id)
             ->where('permitApplications.data.0.type', 'renewal')
-            ->where('permitApplications.data.0.business_name', 'Scenario 01 Market and Kitchen'));
+            ->where('permitApplications.data.0.business_name', 'Scenario Market and Kitchen'));
 
     $this->actingAs($citizen)
         ->get(route('citizen.permit-applications.show', $application))
@@ -249,8 +249,8 @@ test('Scenario 01 is visible through the canonical Citizen owner relationship an
         ->assertInertia(fn (Assert $page) => $page
             ->component('citizen/permit-applications/Show', false)
             ->where('permitApplication.type', 'renewal')
-            ->where('permitApplication.lines.0.line_of_business.name', 'Scenario 01 Retail Trading')
-            ->where('permitApplication.lines.1.line_of_business.name', 'Scenario 01 Food Service')
+            ->where('permitApplication.lines.0.line_of_business.name', 'Retail Trading')
+            ->where('permitApplication.lines.1.line_of_business.name', 'Food Service')
             ->where('permitApplication.processing.assessment.total_amount_cents', 122_000)
             ->where('permitApplication.processing.assessment.treasury_counter_check.result', 'no_correction')
             ->where('permitApplication.processing.assessment.treasurer_decision.action', 'approved')

@@ -115,7 +115,7 @@ test('launcher enters the persisted lifecycle specimen through its manifest-owne
     ]))->toBe(0);
 
     $specimen = LifecycleScenarioSpecimen::query()->sole();
-    $scenarioCitizen = User::query()->where('email', 'scenario-01-citizen@example.test')->sole();
+    $scenarioCitizen = User::query()->where('email', 'scenario-citizen@example.test')->sole();
     $previewCitizen = User::query()->where('email', StakeholderPreviewPersona::Citizen->approvedEmail())->sole();
 
     expect($scenarioCitizen->business_owner_id)->not->toBeNull()
@@ -137,13 +137,13 @@ test('launcher enters the persisted lifecycle specimen through its manifest-owne
     $this->get(route('citizen.profile.show'))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('profile.owner.name', 'Scenario 01 Synthetic Owner')
-            ->where('profile.businesses.0.name', 'Scenario 01 Market and Kitchen')
+            ->where('profile.owner.name', 'Scenario Synthetic Owner')
+            ->where('profile.businesses.0.name', 'Scenario Market and Kitchen')
             ->where('profile.businesses.0.permit_applications.0.type', 'renewal')
             ->where('profile.businesses.0.permit_applications.0.status', 'pending_payment')
             ->where('profile.businesses.0.permit_applications.0.lines_of_business', [
-                'Scenario 01 Retail Trading',
-                'Scenario 01 Food Service',
+                'Retail Trading',
+                'Food Service',
             ])
             ->where('profile.businesses.0.permit_applications.0.payable', [
                 'status' => 'pending',
@@ -156,7 +156,7 @@ test('launcher enters the persisted lifecycle specimen through its manifest-owne
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->component('citizen/businesses/Show', false)
-            ->where('business.name', 'Scenario 01 Market and Kitchen')
+            ->where('business.name', 'Scenario Market and Kitchen')
             ->where('business.permit_applications.0.type', 'renewal')
             ->where('business.permit_applications.0.assessment.total_amount_cents', 122_000)
             ->where('business.permit_applications.0.payable.amount_due_cents', 122_000));
@@ -166,7 +166,7 @@ test('launcher exposes both coexisting lifecycle specimens through their own man
     Storage::fake('local');
     Artisan::call('bpls:install');
 
-    foreach ([RenewalHappyPathDefinition::Id, NewApplicationHappyPathDefinition::Id] as $scenarioId) {
+    foreach ([NewApplicationHappyPathDefinition::Id, RenewalHappyPathDefinition::Id] as $scenarioId) {
         expect(Artisan::call('bpls:lifecycle:run', [
             'scenario' => $scenarioId,
             '--persist' => true,
@@ -179,18 +179,14 @@ test('launcher exposes both coexisting lifecycle specimens through their own man
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->has('citizenSpecimens', 2)
-            ->where('citizenSpecimens.0.label', 'New Application Happy Path Citizen')
-            ->where('citizenSpecimens.1.label', 'Renewal Happy Path Citizen'));
+            ->where('citizenSpecimens.0.label', 'Renewal Happy Path Citizen')
+            ->where('citizenSpecimens.1.label', 'New Application Happy Path Citizen'));
 
     foreach ($specimens as $specimen) {
         $this->post(route('stakeholder-preview.specimens.enter-citizen', $specimen))
             ->assertRedirect(route('citizen.profile.show'));
 
-        $expectedCitizen = User::query()
-            ->where('email', $specimen->scenario_id === NewApplicationHappyPathDefinition::Id
-                ? 'scenario-02-citizen@example.test'
-                : 'scenario-01-citizen@example.test')
-            ->sole();
+        $expectedCitizen = User::query()->where('email', 'scenario-citizen@example.test')->sole();
         $this->assertAuthenticatedAs($expectedCitizen);
     }
 });
@@ -199,7 +195,7 @@ test('Engineering workspace shows coexisting scenario work from canonical Evalua
     Storage::fake('local');
     Artisan::call('bpls:install');
 
-    foreach ([RenewalHappyPathDefinition::Id, NewApplicationHappyPathDefinition::Id] as $scenarioId) {
+    foreach ([NewApplicationHappyPathDefinition::Id, RenewalHappyPathDefinition::Id] as $scenarioId) {
         Artisan::call('bpls:lifecycle:run', [
             'scenario' => $scenarioId,
             '--persist' => true,
@@ -216,11 +212,11 @@ test('Engineering workspace shows coexisting scenario work from canonical Evalua
             ->where('persona.key', 'engineering')
             ->has('applications', 2)
             ->where('applications', fn ($applications): bool => collect($applications)->contains(
-                fn (array $application): bool => $application['business_name'] === 'Scenario 02 Market and Kitchen'
+                fn (array $application): bool => $application['business_name'] === 'Scenario Market and Kitchen'
                     && $application['office_contribution'] === null
                     && collect($application['evaluation_responsibilities'])->contains(
                         fn (array $responsibility): bool => $responsibility['label'] === "Mayor's Permit Fee"
-                            && $responsibility['line_of_business'] === 'Scenario 02 Retail Trading'
+                            && $responsibility['line_of_business'] === 'Retail Trading'
                             && $responsibility['resolution'] === 'resolved'
                             && $responsibility['amount_cents'] === 9_000,
                     ),

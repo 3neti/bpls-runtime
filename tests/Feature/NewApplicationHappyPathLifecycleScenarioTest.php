@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
-test('Scenario 02 certifies the empty-to-first-business Citizen lifecycle and rolls back by default', function () {
+test('Scenario 01 certifies the effective-2025 empty-to-first-business Citizen lifecycle and rolls back by default', function () {
     Storage::fake('local');
     Artisan::call('bpls:install');
 
@@ -28,6 +28,11 @@ test('Scenario 02 certifies the empty-to-first-business Citizen lifecycle and ro
     $result = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
 
     expect($result['status'])->toBe('passed')
+        ->and($result['scenario_time'])->toBe([
+            'effective_date' => '2025-01-15',
+            'application_year' => 2025,
+            'execution_timestamps_are_actual' => true,
+        ])
         ->and($result['application']['type'])->toBe('new')
         ->and($result['application']['application_number'])->toBeNull()
         ->and($result['application']['tracking_reference'])->toStartWith('SUB-')
@@ -52,7 +57,7 @@ test('Scenario 02 certifies the empty-to-first-business Citizen lifecycle and ro
         ->and(LifecycleScenarioSpecimen::query()->count())->toBe(0);
 });
 
-test('Scenario 02 persist is idempotent, explicitly owned, and visible through its own Citizen profile', function () {
+test('Scenario 01 persist is idempotent, explicitly owned, and visible through its own Citizen profile', function () {
     Storage::fake('local');
     Artisan::call('bpls:install');
 
@@ -71,7 +76,7 @@ test('Scenario 02 persist is idempotent, explicitly owned, and visible through i
     $second = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
     $application = PermitApplication::query()->with('business')->sole();
     $specimen = LifecycleScenarioSpecimen::query()->sole();
-    $scenarioCitizen = User::query()->where('email', 'scenario-02-citizen@example.test')->sole();
+    $scenarioCitizen = User::query()->where('email', 'scenario-citizen@example.test')->sole();
     $previewCitizen = User::query()->where('email', StakeholderPreviewPersona::Citizen->approvedEmail())->sole();
 
     expect($second)->toBe($first)
@@ -95,14 +100,14 @@ test('Scenario 02 persist is idempotent, explicitly owned, and visible through i
         ->get(route('citizen.profile.show'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('profile.owner.name', 'Scenario 02 Synthetic Owner')
+            ->where('profile.owner.name', 'Scenario Synthetic Owner')
             ->has('profile.businesses', 1)
-            ->where('profile.businesses.0.name', 'Scenario 02 Market and Kitchen')
+            ->where('profile.businesses.0.name', 'Scenario Market and Kitchen')
             ->where('profile.businesses.0.permit_applications.0.type', 'new')
             ->where('profile.businesses.0.permit_applications.0.status', 'pending_payment')
             ->where('profile.businesses.0.permit_applications.0.lines_of_business', [
-                'Scenario 02 Retail Trading',
-                'Scenario 02 Food Service',
+                'Retail Trading',
+                'Food Service',
             ])
             ->where('profile.businesses.0.permit_applications.0.payable', [
                 'status' => 'pending',
@@ -137,19 +142,19 @@ test('Scenario 02 persist is idempotent, explicitly owned, and visible through i
             ->where('lineOfBusinesses.0.code', 'MRC-2A-02-B-WHOLESALE-RETAIL'));
 });
 
-test('Scenario 01 and Scenario 02 persisted specimens coexist in either order with disjoint explicit ownership', function (string $firstScenario, string $secondScenario) {
+test('Scenario 01 then Scenario 02 persist one coherent 2025 to 2026 product-lab chronology', function () {
     Storage::fake('local');
     Artisan::call('bpls:install');
 
     expect(Artisan::call('bpls:lifecycle:run', [
-        'scenario' => $firstScenario,
+        'scenario' => NewApplicationHappyPathDefinition::Id,
         '--persist' => true,
         '--json' => true,
     ]))->toBe(0);
     $first = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
 
     expect(Artisan::call('bpls:lifecycle:run', [
-        'scenario' => $secondScenario,
+        'scenario' => RenewalHappyPathDefinition::Id,
         '--persist' => true,
         '--json' => true,
     ]))->toBe(0);
@@ -165,22 +170,22 @@ test('Scenario 01 and Scenario 02 persisted specimens coexist in either order wi
             RenewalHappyPathDefinition::Id,
         ])
         ->and($applications)->toHaveCount(2)
+        ->and($applications->pluck('business_id')->unique()->values()->all())->toHaveCount(1)
+        ->and($applications->pluck('application_year')->sort()->values()->all())->toBe([2025, 2026])
+        ->and($applications->pluck('type')->map->value->all())->toBe(['new', 'renewal'])
         ->and($applications->flatMap->assessments->pluck('total_amount_cents')->all())->toBe([122_000, 122_000])
         ->and($applications->flatMap->paymentSchedules->pluck('total_amount_cents')->all())->toBe([122_000, 122_000])
         ->and($inspection['integrity']['pass'])->toBeTrue()
         ->and($inspection['price_list']['synthetic_uat_exact_published_count'])->toBe(0)
         ->and(LineOfBusiness::query()->availableToMunicipalCatalog()->pluck('code')->all())->toBe(['MRC-2A-02-B-WHOLESALE-RETAIL']);
 
-    $manifests = $specimens->pluck('owned_resource_manifest');
-    foreach ($manifests->first() as $key => $firstIds) {
-        if (! str_ends_with((string) $key, '_ids') || ! is_array($firstIds)) {
-            continue;
-        }
+    $newManifest = $specimens->firstWhere('scenario_id', NewApplicationHappyPathDefinition::Id)->owned_resource_manifest;
+    $renewalManifest = $specimens->firstWhere('scenario_id', RenewalHappyPathDefinition::Id)->owned_resource_manifest;
+    expect($newManifest['business_ids'])->toBe([$applications->first()->business_id])
+        ->and($renewalManifest['business_ids'])->toBe([])
+        ->and($renewalManifest['referenced_business_ids'])->toBe([$applications->first()->business_id]);
 
-        expect(array_intersect($firstIds, $manifests->last()[$key] ?? []))->toBe([]);
-    }
-
-    foreach ([[$firstScenario, $first], [$secondScenario, $second]] as [$scenarioId, $original]) {
+    foreach ([[NewApplicationHappyPathDefinition::Id, $first], [RenewalHappyPathDefinition::Id, $second]] as [$scenarioId, $original]) {
         expect(Artisan::call('bpls:lifecycle:run', [
             'scenario' => $scenarioId,
             '--persist' => true,
@@ -188,23 +193,20 @@ test('Scenario 01 and Scenario 02 persisted specimens coexist in either order wi
         ]))->toBe(0)
             ->and(json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR))->toBe($original);
     }
-})->with([
-    'renewal then new application' => [RenewalHappyPathDefinition::Id, NewApplicationHappyPathDefinition::Id],
-    'new application then renewal' => [NewApplicationHappyPathDefinition::Id, RenewalHappyPathDefinition::Id],
-]);
+});
 
 test('a second persisted specimen refuses unrelated residue without deleting or claiming it', function () {
     Storage::fake('local');
     Artisan::call('bpls:install');
     Artisan::call('bpls:lifecycle:run', [
-        'scenario' => RenewalHappyPathDefinition::Id,
+        'scenario' => NewApplicationHappyPathDefinition::Id,
         '--persist' => true,
         '--json' => true,
     ]);
     $unrelatedOwner = BusinessOwner::factory()->create(['name' => 'Protected unrelated owner']);
 
     expect(Artisan::call('bpls:lifecycle:run', [
-        'scenario' => NewApplicationHappyPathDefinition::Id,
+        'scenario' => RenewalHappyPathDefinition::Id,
         '--persist' => true,
         '--json' => true,
     ]))->toBe(1)
@@ -213,7 +215,7 @@ test('a second persisted specimen refuses unrelated residue without deleting or 
         ->and(PermitApplication::query()->count())->toBe(1);
 });
 
-test('Scenario 02 discovery is canonical and Scenario 01 semantic certification remains unchanged', function () {
+test('scenario discovery is canonical and standalone Renewal certification remains deterministic', function () {
     Storage::fake('local');
     Artisan::call('bpls:install');
 
@@ -227,7 +229,16 @@ test('Scenario 02 discovery is canonical and Scenario 01 semantic certification 
         '--json' => true,
     ]))->toBe(0);
 
-    $scenario01 = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
-    expect($scenario01['semantic_result_hash'])->toBe('9ce435c29f1fa0122381f15cf5bd002652cc95539078d07a689476e8064c6783')
-        ->and($scenario01['evaluation']['grand_total_amount_cents'])->toBe(122_000);
+    $first = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+    expect(Artisan::call('bpls:lifecycle:run', [
+        'scenario' => RenewalHappyPathDefinition::Id,
+        '--json' => true,
+    ]))->toBe(0);
+    $second = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($second['semantic_result_hash'])->toBe($first['semantic_result_hash'])
+        ->and($second['scenario_time'])->toBe($first['scenario_time'])
+        ->and($second['evaluation']['grand_total_amount_cents'])->toBe($first['evaluation']['grand_total_amount_cents'])
+        ->and($first['scenario_time']['effective_date'])->toBe('2026-01-15')
+        ->and($first['evaluation']['grand_total_amount_cents'])->toBe(122_000);
 });

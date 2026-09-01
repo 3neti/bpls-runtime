@@ -24,6 +24,7 @@ type CitizenPermitApplication = {
     display_reference: string;
     type: string;
     status: string;
+    application_year: number;
     saved_at: string | null;
     lines_of_business: string[];
     payable: {
@@ -37,6 +38,13 @@ type CitizenBusiness = {
     name: string;
     trade_name: string | null;
     application_count: number;
+    current_application: {
+        id: number;
+        type: string;
+        status: string;
+        application_year: number;
+    } | null;
+    amount_due: CitizenPermitApplication['payable'];
     permit_applications: CitizenPermitApplication[];
 };
 
@@ -231,6 +239,62 @@ function pesos(amountCents: number): string {
                         </header>
 
                         <div
+                            v-if="business.current_application"
+                            class="grid gap-4 border-b border-sidebar-border/70 bg-primary/5 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center dark:border-sidebar-border"
+                        >
+                            <div>
+                                <p
+                                    class="text-xs font-semibold tracking-wide text-primary uppercase"
+                                >
+                                    Current permit activity
+                                </p>
+                                <p
+                                    class="font-semibold text-foreground capitalize"
+                                >
+                                    {{
+                                        business.current_application
+                                            .application_year
+                                    }}
+                                    ·
+                                    {{
+                                        sentenceCase(
+                                            business.current_application.type,
+                                        )
+                                    }}
+                                </p>
+                                <p
+                                    class="text-sm text-muted-foreground capitalize"
+                                >
+                                    {{
+                                        sentenceCase(
+                                            business.current_application.status,
+                                        )
+                                    }}
+                                </p>
+                            </div>
+                            <div
+                                v-if="business.amount_due"
+                                class="sm:text-right"
+                            >
+                                <p
+                                    class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                                >
+                                    Amount Due
+                                </p>
+                                <p
+                                    class="text-2xl font-semibold text-foreground"
+                                >
+                                    {{
+                                        pesos(
+                                            business.amount_due
+                                                .amount_due_cents,
+                                        )
+                                    }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div
                             v-if="business.permit_applications.length === 0"
                             class="flex items-center gap-3 p-5 text-sm text-muted-foreground"
                         >
@@ -299,43 +363,13 @@ function pesos(amountCents: number): string {
                                     </p>
                                 </div>
 
-                                <div
+                                <Badge
                                     v-if="permitApplication.payable"
-                                    class="flex items-center gap-3 rounded-lg bg-muted/60 px-4 py-3 lg:min-w-52"
+                                    variant="secondary"
+                                    class="justify-self-start"
                                 >
-                                    <CircleDollarSign
-                                        class="size-5 text-muted-foreground"
-                                        aria-hidden="true"
-                                    />
-                                    <div>
-                                        <p
-                                            class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
-                                        >
-                                            Amount Due
-                                        </p>
-                                        <p
-                                            class="font-semibold text-foreground"
-                                        >
-                                            {{
-                                                pesos(
-                                                    permitApplication.payable
-                                                        .amount_due_cents,
-                                                )
-                                            }}
-                                        </p>
-                                        <p
-                                            class="text-xs text-muted-foreground capitalize"
-                                        >
-                                            {{
-                                                sentenceCase(
-                                                    permitApplication.payable
-                                                        .status,
-                                                )
-                                            }}
-                                            payment
-                                        </p>
-                                    </div>
-                                </div>
+                                    <CircleDollarSign /> Payable
+                                </Badge>
 
                                 <Button as-child variant="outline" size="sm">
                                     <Link

@@ -6,11 +6,13 @@ final class NewApplicationHappyPathDefinition
 {
     public const string Id = 'new-application-happy-path';
 
-    public const string RunId = 'scenario-02-canonical';
+    public const string RunId = 'scenario-01-canonical';
 
-    public const string Revision = 'first_principles_v1';
+    public const string Revision = 'product_lab_chronology_v1';
 
-    public const int ApplicationYear = 2097;
+    public const int ApplicationYear = 2025;
+
+    public const string EffectiveDate = '2025-01-15';
 
     public const int ExpectedGrandTotalCents = 122_000;
 
@@ -21,7 +23,7 @@ final class NewApplicationHappyPathDefinition
     {
         return [
             'id' => self::Id,
-            'label' => 'Scenario 02 — New Application Happy Path',
+            'label' => 'Scenario 01 — New Application Happy Path',
             'business_question' => self::EvidenceQuestion,
             'evidence' => [
                 'assessment_grammar' => [
@@ -44,6 +46,7 @@ final class NewApplicationHappyPathDefinition
                 ],
             ],
             'application_year' => self::ApplicationYear,
+            'effective_date' => self::EffectiveDate,
             'lines_of_business' => $this->linesOfBusiness(),
             'responsibilities' => $this->responsibilities(),
             'application_wide_charges' => [[
@@ -78,16 +81,16 @@ final class NewApplicationHappyPathDefinition
     {
         return [
             [
-                'code' => 'S02-RETAIL-TRADING',
-                'name' => 'Scenario 02 Retail Trading',
+                'code' => 'PRODUCT-LAB-RETAIL-TRADING',
+                'name' => 'Retail Trading',
                 'major_category' => 'Retail',
                 'declared_gross_sales_cents' => 120_000_000,
                 'capital_investment_cents' => 60_000_000,
                 'subtotal_amount_cents' => 33_000,
             ],
             [
-                'code' => 'S02-FOOD-SERVICE',
-                'name' => 'Scenario 02 Food Service',
+                'code' => 'PRODUCT-LAB-FOOD-SERVICE',
+                'name' => 'Food Service',
                 'major_category' => 'Food Service',
                 'declared_gross_sales_cents' => 85_000_000,
                 'capital_investment_cents' => 45_000_000,
@@ -114,12 +117,12 @@ final class NewApplicationHappyPathDefinition
     public function responsibilities(): array
     {
         return [
-            $this->responsibility('retail.business-tax.charge', 'assessor', 'S02-RETAIL-TRADING', 'S02-RETAIL-BUSINESS-TAX', 'Business Tax', 24_000, false, 'Assessor reviews the declared gross-receipts basis for the Retail Trading LOB.'),
-            $this->responsibility('retail.mayors-permit.charge', 'engineering', 'S02-RETAIL-TRADING', 'S02-RETAIL-MAYORS-PERMIT', "Mayor's Permit Fee", 9_000, true, 'Engineering reviews the Retail premises for provisional permit-fee applicability.'),
-            $this->responsibility('food.business-tax.charge', 'assessor', 'S02-FOOD-SERVICE', 'S02-FOOD-BUSINESS-TAX', 'Business Tax', 31_000, false, 'Assessor reviews the declared gross-receipts basis for the Food Service LOB.'),
-            $this->responsibility('food.health-certificate.charge', 'health', 'S02-FOOD-SERVICE', 'S02-FOOD-HEALTH-CERTIFICATE', 'Health Certificate', 9_500, true, 'Health reviews Food Service operations for provisional Health Certificate applicability.'),
-            $this->responsibility('food.sanitary-permit.charge', 'health', 'S02-FOOD-SERVICE', 'S02-FOOD-SANITARY-PERMIT', 'Sanitary Permit Fee', 6_500, true, 'Health reviews Food Service sanitation for provisional Sanitary Permit applicability.'),
-            $this->responsibility('food.solid-waste.charge', 'menro', 'S02-FOOD-SERVICE', 'S02-FOOD-SOLID-WASTE', 'Solid Waste Management', 7_000, true, 'MENRO reviews the provisionally waste-producing Food Service activity.'),
+            $this->responsibility('retail.business-tax.charge', 'assessor', 'PRODUCT-LAB-RETAIL-TRADING', 'S01-RETAIL-BUSINESS-TAX', 'Business Tax', 24_000, false, 'Assessor reviews the declared gross-receipts basis for the Retail Trading LOB.'),
+            $this->responsibility('retail.mayors-permit.charge', 'engineering', 'PRODUCT-LAB-RETAIL-TRADING', 'S01-RETAIL-MAYORS-PERMIT', "Mayor's Permit Fee", 9_000, true, 'Engineering reviews the Retail premises for provisional permit-fee applicability.'),
+            $this->responsibility('food.business-tax.charge', 'assessor', 'PRODUCT-LAB-FOOD-SERVICE', 'S01-FOOD-BUSINESS-TAX', 'Business Tax', 31_000, false, 'Assessor reviews the declared gross-receipts basis for the Food Service LOB.'),
+            $this->responsibility('food.health-certificate.charge', 'health', 'PRODUCT-LAB-FOOD-SERVICE', 'S01-FOOD-HEALTH-CERTIFICATE', 'Health Certificate', 9_500, true, 'Health reviews Food Service operations for provisional Health Certificate applicability.'),
+            $this->responsibility('food.sanitary-permit.charge', 'health', 'PRODUCT-LAB-FOOD-SERVICE', 'S01-FOOD-SANITARY-PERMIT', 'Sanitary Permit Fee', 6_500, true, 'Health reviews Food Service sanitation for provisional Sanitary Permit applicability.'),
+            $this->responsibility('food.solid-waste.charge', 'menro', 'PRODUCT-LAB-FOOD-SERVICE', 'S01-FOOD-SOLID-WASTE', 'Solid Waste Management', 7_000, true, 'MENRO reviews the provisionally waste-producing Food Service activity.'),
         ];
     }
 
@@ -159,7 +162,7 @@ final class NewApplicationHappyPathDefinition
             'applicability' => 'applicable',
             'classification' => 'provisional_uat',
             'reason' => $reason,
-            'provenance' => 'Deterministic Scenario 02 synthetic proposal for product and engine certification only.',
+            'provenance' => 'Deterministic Scenario 01 synthetic proposal for product and engine certification only.',
         ];
     }
 }

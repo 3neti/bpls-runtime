@@ -15,6 +15,7 @@ use App\Models\LineOfBusiness;
 use App\Models\PaymentSchedule;
 use App\Models\Permission;
 use App\Models\PermitApplication;
+use App\Models\PermitApplicationDocument;
 use App\Models\PermitApplicationLine;
 use App\Models\Role;
 use App\Models\User;
@@ -247,4 +248,32 @@ test('business detail suppresses assessment and payable truth without financial 
 
     expect(data_get($detail, 'permit_applications.0.assessment'))->toBeNull()
         ->and(data_get($detail, 'permit_applications.0.payable'))->toBeNull();
+});
+
+test('business detail shows only canonical uploaded documents when document visibility is granted', function () {
+    $application = PermitApplication::factory()->create(['application_year' => 2026]);
+    $citizen = User::factory()->create([
+        'business_owner_id' => $application->business->business_owner_id,
+    ]);
+    $document = PermitApplicationDocument::factory()->for($application)->create([
+        'label' => 'DTI Registration',
+        'original_name' => 'dti-registration.pdf',
+        'source_snapshot' => ['private_provenance' => 'not-for-citizen-read-model'],
+    ]);
+
+    $detail = app(BuildCitizenBusinessDetail::class)->handle(
+        $citizen,
+        $application->business_id,
+        includeFinancials: false,
+        includeDocuments: true,
+    );
+
+    expect(data_get($detail, 'documents_and_registration.documents.0'))->toMatchArray([
+        'id' => $document->id,
+        'permit_application_id' => $application->id,
+        'application_year' => 2026,
+        'label' => 'DTI Registration',
+        'original_name' => 'dti-registration.pdf',
+    ])
+        ->and(json_encode($detail, JSON_THROW_ON_ERROR))->not->toContain('private_provenance');
 });
