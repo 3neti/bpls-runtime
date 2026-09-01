@@ -34,10 +34,13 @@ beforeEach(function () {
     config()->set('cache.default', 'array');
     config()->set('services.x_change', [
         'base_url' => 'https://x-change.example.test',
+        'token_endpoint' => '/oauth/token',
         'client_id' => 'synthetic-client',
         'client_secret' => 'synthetic-secret',
-        'scope' => 'capabilities:read pay-codes:issue pay-codes:pay pay-codes:read',
+        'scope' => 'pay-codes:estimate pay-codes:issue pay-codes:read pay-codes:pay',
+        'settlement_rail' => 'INSTAPAY',
         'token_refresh_leeway_seconds' => 60,
+        'connect_timeout_seconds' => 2,
         'timeout_seconds' => 5,
     ]);
     Cache::flush();
@@ -69,7 +72,9 @@ test('QR Ph initiation sends the exact approved amount and returns the x-change 
         ->assertJsonPath('qr_data_url', 'data:image/png;base64,'.$png);
 
     Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/api/partner/v1/pay-codes')
-        && $request['target_amount'] === 125.5);
+        && $request['amount'] === 125.5
+        && $request['target_amount'] === 125.5
+        && $request['cash']['settlement_rail'] === 'INSTAPAY');
 });
 
 test('eligible citizen payment detail exposes the QR Ph action without partner internals', function () {
@@ -269,6 +274,7 @@ function fakeQrPhIssueAndAttempt(PaymentSchedule $schedule, string $png, bool $p
                 'code' => 'TEST',
                 'external_reference' => $request['external_reference'],
                 'consumer_status' => 'payable',
+                'links' => ['pay' => 'https://x-change.example.test/x/pay/TEST'],
             ],
         ], 201);
     });

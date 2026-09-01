@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Http;
 final class XChangePartnerApiClient
 {
     /**
-     * @return array{code: string, voucher_id: string|null, external_reference: string, consumer_status: string|null}
+     * @return array{code: string, voucher_id: string|null, external_reference: string, consumer_status: string|null, payer_url: string}
      */
     public function issuePayable(
         int $amountCents,
@@ -25,17 +25,22 @@ final class XChangePartnerApiClient
             '/api/partner/v1/pay-codes',
             [
                 'voucher_type' => 'payable',
+                'amount' => round($amountCents / 100, 2),
                 'target_amount' => round($amountCents / 100, 2),
+                'currency' => 'PHP',
+                'purpose' => 'BPLS payment',
                 'count' => 1,
                 'cash' => [
                     'amount' => 0,
                     'currency' => 'PHP',
+                    'settlement_rail' => $this->requiredConfig('settlement_rail'),
                     'validation' => ['secret' => $bindingSecret],
                 ],
                 'inputs' => ['fields' => []],
                 'feedback' => ['email' => null],
-                'rider' => ['message' => null],
+                'rider' => ['message' => 'BPLS payment'],
                 'external_reference' => $externalReference,
+                'metadata' => ['source' => 'bpls'],
             ],
             $idempotencyKey,
         );
@@ -55,11 +60,17 @@ final class XChangePartnerApiClient
             throw new XChangePartnerApiException('PAYABLE_RESPONSE_INVALID', 'x-change did not return a payment code.');
         }
 
+        $payerUrl = data_get($data, 'links.pay');
+        if (! is_string($payerUrl) || ! str_ends_with($payerUrl, "/x/pay/{$code}")) {
+            throw new XChangePartnerApiException('PAYER_URL_MISMATCH', 'x-change did not return the payable payer route.');
+        }
+
         return [
             'code' => $code,
             'voucher_id' => is_scalar(data_get($data, 'voucher_id')) ? (string) data_get($data, 'voucher_id') : null,
             'external_reference' => $returnedReference,
             'consumer_status' => is_string(data_get($data, 'consumer_status')) ? data_get($data, 'consumer_status') : null,
+            'payer_url' => $payerUrl,
         ];
     }
 
@@ -213,16 +224,26 @@ final class XChangePartnerApiClient
         }
 
         try {
-            $response = Http::baseUrl($this->requiredConfig('base_url'))
-                ->acceptJson()
+            $request = Http::acceptJson()
                 ->asJson()
-                ->timeout($this->timeoutSeconds())
-                ->post('/oauth/token', [
+                ->connectTimeout($this->connectTimeoutSeconds())
+                ->timeout($this->timeoutSeconds());
+            $tokenEndpoint = $this->requiredConfig('token_endpoint');
+            $response = str_starts_with($tokenEndpoint, 'http://') || str_starts_with($tokenEndpoint, 'https://')
+                ? $request->post($tokenEndpoint, [
                     'grant_type' => 'client_credentials',
                     'client_id' => $clientId,
                     'client_secret' => $this->requiredConfig('client_secret'),
                     'scope' => $this->requiredConfig('scope'),
-                ]);
+                ])
+                : $request
+                    ->baseUrl($this->requiredConfig('base_url'))
+                    ->post('/'.ltrim($tokenEndpoint, '/'), [
+                        'grant_type' => 'client_credentials',
+                        'client_id' => $clientId,
+                        'client_secret' => $this->requiredConfig('client_secret'),
+                        'scope' => $this->requiredConfig('scope'),
+                    ]);
         } catch (ConnectionException) {
             throw new XChangePartnerApiException('OAUTH_UNAVAILABLE', 'x-change authorization could not be reached.', true);
         }
@@ -252,6 +273,7 @@ final class XChangePartnerApiClient
             ->acceptJson()
             ->asJson()
             ->withToken($accessToken)
+            ->connectTimeout($this->connectTimeoutSeconds())
             ->timeout($this->timeoutSeconds());
     }
 
@@ -288,5 +310,10 @@ final class XChangePartnerApiClient
     private function timeoutSeconds(): int
     {
         return max(1, (int) config('services.x_change.timeout_seconds', 15));
+    }
+
+    private function connectTimeoutSeconds(): int
+    {
+        return max(1, (int) config('services.x_change.connect_timeout_seconds', 5));
     }
 }

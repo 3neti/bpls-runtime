@@ -10,10 +10,13 @@ beforeEach(function () {
     config()->set('cache.default', 'array');
     config()->set('services.x_change', [
         'base_url' => 'https://x-change.example.test',
+        'token_endpoint' => '/oauth/token',
         'client_id' => 'synthetic-client',
         'client_secret' => 'synthetic-secret',
-        'scope' => 'capabilities:read pay-codes:issue pay-codes:pay pay-codes:read',
+        'scope' => 'pay-codes:estimate pay-codes:issue pay-codes:read pay-codes:pay',
+        'settlement_rail' => 'INSTAPAY',
         'token_refresh_leeway_seconds' => 60,
+        'connect_timeout_seconds' => 2,
         'timeout_seconds' => 5,
     ]);
     Cache::flush();
@@ -34,6 +37,7 @@ test('client caches OAuth and implements the live payable QR and inquiry contrac
                 'code' => 'TEST',
                 'external_reference' => 'bpls-obligation-1',
                 'consumer_status' => 'payable',
+                'links' => ['pay' => 'https://x-change.example.test/x/pay/TEST'],
             ],
         ], 201),
         'x-change.example.test/api/partner/v1/pay-codes/TEST/payment-attempts' => Http::response([
@@ -76,6 +80,7 @@ test('client caches OAuth and implements the live payable QR and inquiry contrac
         'code' => 'TEST',
         'voucher_id' => '192',
         'external_reference' => 'bpls-obligation-1',
+        'payer_url' => 'https://x-change.example.test/x/pay/TEST',
     ])->and($attempt['base64_payload'])->toBe($png)
         ->and($attempt['amount_cents'])->toBe(12_550)
         ->and($inquiry['target_amount_cents'])->toBe(12_550)
@@ -85,17 +90,22 @@ test('client caches OAuth and implements the live payable QR and inquiry contrac
     Http::assertSent(fn (Request $request): bool => $request->url() === 'https://x-change.example.test/api/partner/v1/pay-codes'
         && $request->header('Idempotency-Key') === ['issue-key']
         && $request['voucher_type'] === 'payable'
+        && $request['amount'] === 125.5
         && $request['target_amount'] === 125.5
+        && $request['currency'] === 'PHP'
+        && $request['purpose'] === 'BPLS payment'
         && $request['count'] === 1
         && $request['cash'] === [
             'amount' => 0,
             'currency' => 'PHP',
+            'settlement_rail' => 'INSTAPAY',
             'validation' => ['secret' => '123456'],
         ]
         && $request['inputs'] === ['fields' => []]
         && $request['feedback'] === ['email' => null]
-        && $request['rider'] === ['message' => null]
-        && $request['external_reference'] === 'bpls-obligation-1');
+        && $request['rider'] === ['message' => 'BPLS payment']
+        && $request['external_reference'] === 'bpls-obligation-1'
+        && $request['metadata'] === ['source' => 'bpls']);
 });
 
 test('client refreshes once after 401 and reuses the same POST idempotency key', function () {
@@ -103,7 +113,11 @@ test('client refreshes once after 401 and reuses the same POST idempotency key',
         ->push(['expires_in' => 900, 'access_token' => 'first-token'])
         ->push([], 401)
         ->push(['expires_in' => 900, 'access_token' => 'second-token'])
-        ->push(['data' => ['code' => 'RETRY', 'external_reference' => 'bpls-obligation-2']], 201);
+        ->push(['data' => [
+            'code' => 'RETRY',
+            'external_reference' => 'bpls-obligation-2',
+            'links' => ['pay' => 'https://x-change.example.test/x/pay/RETRY'],
+        ]], 201);
 
     app(XChangePartnerApiClient::class)->issuePayable(10_000, 'bpls-obligation-2', '123456', 'same-key');
 
@@ -120,7 +134,11 @@ test('client retries server failures with the same idempotency key', function ()
     Http::fakeSequence()
         ->push(['expires_in' => 900, 'access_token' => 'synthetic-token'])
         ->push([], 500)
-        ->push(['data' => ['code' => 'RETRY', 'external_reference' => 'bpls-obligation-3']], 201);
+        ->push(['data' => [
+            'code' => 'RETRY',
+            'external_reference' => 'bpls-obligation-3',
+            'links' => ['pay' => 'https://x-change.example.test/x/pay/RETRY'],
+        ]], 201);
 
     app(XChangePartnerApiClient::class)->issuePayable(10_000, 'bpls-obligation-3', '123456', 'same-key');
 
@@ -154,3 +172,23 @@ test('client fails closed on validation external reference conflict and correlat
     'conflict' => [409, ['message' => 'External reference conflict'], 'EXTERNAL_REFERENCE_CONFLICT'],
     'mismatch' => [201, ['data' => ['code' => 'TEST', 'external_reference' => 'different']], 'EXTERNAL_REFERENCE_MISMATCH'],
 ]);
+
+test('client rejects a claim-only response for a payable Pay Code', function () {
+    Http::fakeSequence()
+        ->push(['expires_in' => 900, 'access_token' => 'synthetic-token'])
+        ->push(['data' => [
+            'code' => 'CLAIM-ONLY',
+            'external_reference' => 'bpls-obligation-5',
+            'links' => ['redeem' => 'https://x-change.example.test/x/claim/CLAIM-ONLY'],
+        ]], 201);
+
+    expect(fn () => app(XChangePartnerApiClient::class)->issuePayable(
+        10_000,
+        'bpls-obligation-5',
+        '123456',
+        'issue-key',
+    ))->toThrow(
+        XChangePartnerApiException::class,
+        'x-change did not return the payable payer route.',
+    );
+});

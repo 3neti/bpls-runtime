@@ -36,11 +36,14 @@ return [
     ],
 
     'x_change' => [
-        'base_url' => env('XCHANGE_BASE_URL'),
+        'base_url' => env('XCHANGE_BASE_URL') ?: env('XCHANGE_API_BASE_URL'),
+        'token_endpoint' => env('XCHANGE_TOKEN_ENDPOINT') ?: '/oauth/token',
         'client_id' => env('XCHANGE_CLIENT_ID'),
         'client_secret' => env('XCHANGE_CLIENT_SECRET'),
-        'scope' => env('XCHANGE_SCOPE', 'capabilities:read pay-codes:issue pay-codes:pay pay-codes:read'),
+        'scope' => env('XCHANGE_SCOPE', 'pay-codes:estimate pay-codes:issue pay-codes:read pay-codes:pay'),
+        'settlement_rail' => env('XCHANGE_SETTLEMENT_RAIL', 'INSTAPAY'),
         'token_refresh_leeway_seconds' => (int) env('XCHANGE_TOKEN_REFRESH_LEEWAY_SECONDS', 60),
+        'connect_timeout_seconds' => (int) env('XCHANGE_CONNECT_TIMEOUT_SECONDS', 5),
         'timeout_seconds' => (int) env('XCHANGE_TIMEOUT_SECONDS', 15),
     ],
 

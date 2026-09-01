@@ -25,6 +25,7 @@ test('live x-change testing issues a payable QR and supports inquiry', function 
     $inquiry = $client->inquire($issued['code']);
 
     expect($issued['external_reference'])->toBe($externalReference)
+        ->and($issued['payer_url'])->toEndWith('/x/pay/'.$issued['code'])
         ->and($attempt['mime_type'])->toBe('image/png')
         ->and($attempt['amount_cents'])->toBe(10_000)
         ->and($inquiry['external_reference'])->toBe($externalReference)
@@ -40,6 +41,7 @@ test('live x-change testing issues a payable QR and supports inquiry', function 
         'attempt_status' => $attempt['status'],
         'attempt_expires_at' => $attempt['expires_at'],
         'qr_png_returned' => true,
+        'payer_route_verified' => true,
         'inquiry_succeeded' => true,
         'is_fully_collected' => $inquiry['is_fully_collected'],
         'result' => 'passed',
