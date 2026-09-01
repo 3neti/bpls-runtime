@@ -27,6 +27,12 @@ export type StakeholderPreviewContext = {
     enabled: true;
     current_persona: StakeholderPreviewPersona['key'] | null;
     current_label: string | null;
+    cleanroom_actor: {
+        run_id: number;
+        public_id: string;
+        key: string;
+        label: string;
+    } | null;
     personas: StakeholderPreviewPersona[];
     what_to_try: StakeholderPreviewGuidance[];
     recovery_message: string;

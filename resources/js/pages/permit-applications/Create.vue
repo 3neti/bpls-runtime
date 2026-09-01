@@ -90,6 +90,24 @@ type Registry = {
     }[];
 };
 
+type CleanroomIntake = {
+    run_id: string;
+    application_year: number;
+    owner_name: string;
+    owner_address: string;
+    business_name: string;
+    trade_name: string;
+    registration_number: string;
+    business_address: string;
+    barangay: string;
+    ownership_type: string;
+    occupancy: string;
+    business_area_square_meters: string;
+    male_employee_count: number;
+    female_employee_count: number;
+    lines: BusinessActivityRow[];
+};
+
 const props = defineProps<{
     intakeAudience: 'staff' | 'citizen';
     currentApplicationYear: number;
@@ -101,6 +119,7 @@ const props = defineProps<{
     };
     registry?: Registry;
     draft?: PermitApplicationDraft;
+    cleanroomIntake?: CleanroomIntake | null;
 }>();
 
 const isCitizenIntake = computed(() => props.intakeAudience === 'citizen');
@@ -171,9 +190,11 @@ const intakeSummaryItems = computed(() => [
 ]);
 
 const businessActivities = ref<BusinessActivityRow[]>(
-    props.draft?.lines.map((line) => ({ ...line, key: line.id })) ?? [
-        { key: 1 },
-    ],
+    props.draft?.lines.map((line) => ({ ...line, key: line.id })) ??
+        props.cleanroomIntake?.lines.map((line, index) => ({
+            ...line,
+            key: index + 1,
+        })) ?? [{ key: 1 }],
 );
 let nextBusinessActivityKey =
     Math.max(0, ...businessActivities.value.map((activity) => activity.key)) +
@@ -293,6 +314,20 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     It does not submit the application for assessment or assign
                     an official application number.
                 </section>
+                <section
+                    v-if="cleanroomIntake"
+                    data-testid="lifecycle-cleanroom-intake"
+                    class="grid gap-1 border-l-4 border-emerald-500 bg-emerald-50 px-4 py-3 text-sm text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-100"
+                >
+                    <strong>
+                        Lifecycle Cleanroom {{ cleanroomIntake.run_id }}
+                    </strong>
+                    <span>
+                        Review the certified synthetic Owner, Business, and
+                        activity inputs. Saving still creates only an
+                        unsubmitted draft.
+                    </span>
+                </section>
                 <InputError :message="errors.draft" />
                 <input
                     v-if="draft"
@@ -326,6 +361,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             :default-value="
                                 draft?.owner_name ??
                                 registry?.owner?.name ??
+                                cleanroomIntake?.owner_name ??
                                 applicant?.name
                             "
                             required
@@ -371,7 +407,8 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             :default-value="
                                 inputValue(
                                     draft?.owner_address ??
-                                        registry?.owner?.address,
+                                        registry?.owner?.address ??
+                                        cleanroomIntake?.owner_address,
                                 )
                             "
                         />
@@ -490,7 +527,12 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <Input
                             id="business_name"
                             name="business_name"
-                            :default-value="inputValue(draft?.business_name)"
+                            :default-value="
+                                inputValue(
+                                    draft?.business_name ??
+                                        cleanroomIntake?.business_name,
+                                )
+                            "
                             required
                         />
                         <InputError :message="errors.business_name" />
@@ -500,7 +542,12 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <Input
                             id="trade_name"
                             name="trade_name"
-                            :default-value="inputValue(draft?.trade_name)"
+                            :default-value="
+                                inputValue(
+                                    draft?.trade_name ??
+                                        cleanroomIntake?.trade_name,
+                                )
+                            "
                         />
                         <InputError :message="errors.trade_name" />
                     </div>
@@ -512,7 +559,10 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             id="registration_number"
                             name="registration_number"
                             :default-value="
-                                inputValue(draft?.registration_number)
+                                inputValue(
+                                    draft?.registration_number ??
+                                        cleanroomIntake?.registration_number,
+                                )
                             "
                         />
                         <InputError :message="errors.registration_number" />
@@ -522,7 +572,12 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <Input
                             id="barangay"
                             name="barangay"
-                            :default-value="inputValue(draft?.barangay)"
+                            :default-value="
+                                inputValue(
+                                    draft?.barangay ??
+                                        cleanroomIntake?.barangay,
+                                )
+                            "
                         />
                         <InputError :message="errors.barangay" />
                     </div>
@@ -531,7 +586,12 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <Input
                             id="business_address"
                             name="business_address"
-                            :default-value="inputValue(draft?.business_address)"
+                            :default-value="
+                                inputValue(
+                                    draft?.business_address ??
+                                        cleanroomIntake?.business_address,
+                                )
+                            "
                         />
                         <InputError :message="errors.business_address" />
                     </div>
@@ -542,14 +602,24 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             name="ownership_type"
                             class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            <option value="" :selected="!draft?.ownership_type">
+                            <option
+                                value=""
+                                :selected="
+                                    !(
+                                        draft?.ownership_type ??
+                                        cleanroomIntake?.ownership_type
+                                    )
+                                "
+                            >
                                 Not recorded
                             </option>
                             <option
                                 value="sole-proprietorship"
                                 :selected="
                                     draft?.ownership_type ===
-                                    'sole-proprietorship'
+                                        'sole-proprietorship' ||
+                                    cleanroomIntake?.ownership_type ===
+                                        'sole-proprietorship'
                                 "
                             >
                                 Sole proprietorship
@@ -617,7 +687,15 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             name="occupancy"
                             class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            <option value="" :selected="!draft?.occupancy">
+                            <option
+                                value=""
+                                :selected="
+                                    !(
+                                        draft?.occupancy ??
+                                        cleanroomIntake?.occupancy
+                                    )
+                                "
+                            >
                                 Not recorded
                             </option>
                             <option
@@ -628,7 +706,10 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             </option>
                             <option
                                 value="rented"
-                                :selected="draft?.occupancy === 'rented'"
+                                :selected="
+                                    draft?.occupancy === 'rented' ||
+                                    cleanroomIntake?.occupancy === 'rented'
+                                "
                             >
                                 Rented
                             </option>
@@ -668,7 +749,10 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             min="0.01"
                             step="0.01"
                             :default-value="
-                                inputValue(draft?.business_area_square_meters)
+                                inputValue(
+                                    draft?.business_area_square_meters ??
+                                        cleanroomIntake?.business_area_square_meters,
+                                )
                             "
                         />
                         <InputError
@@ -685,7 +769,10 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             type="number"
                             min="0"
                             :default-value="
-                                inputValue(draft?.male_employee_count)
+                                inputValue(
+                                    draft?.male_employee_count ??
+                                        cleanroomIntake?.male_employee_count,
+                                )
                             "
                         />
                         <InputError :message="errors.male_employee_count" />
@@ -700,7 +787,10 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             type="number"
                             min="0"
                             :default-value="
-                                inputValue(draft?.female_employee_count)
+                                inputValue(
+                                    draft?.female_employee_count ??
+                                        cleanroomIntake?.female_employee_count,
+                                )
                             "
                         />
                         <InputError :message="errors.female_employee_count" />

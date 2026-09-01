@@ -14,6 +14,13 @@ import {
 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import {
+    close as closeCleanroomRoute,
+    enterActor as enterCleanroomActorRoute,
+    runNext as runCleanroomNextRoute,
+    runToMilestone as runCleanroomMilestoneRoute,
+    start as startCleanroomRoute,
+} from '@/actions/App/Http/Controllers/LifecycleCleanroomController';
+import {
     enterActor,
     runNext,
     runToMilestone,
@@ -58,7 +65,46 @@ type Scenario = {
     actors: { key: string; label: string }[];
 };
 
+type CleanroomStep = {
+    key: string;
+    year: number;
+    label: string;
+    description: string;
+    mode: 'complete_on_start' | 'product_form' | 'system_action';
+    actor: string | null;
+    milestone: string;
+    completed: boolean;
+    status: 'completed' | 'current' | 'pending';
+    delta: Record<string, string>;
+};
+
+type CleanroomState = {
+    run: { id: number; public_id: string; status: string };
+    progress: {
+        completed_steps: number;
+        total_steps: number;
+        percent: number;
+        complete: boolean;
+        next_step: CleanroomStep | null;
+    };
+    steps: CleanroomStep[];
+    applications: {
+        new: { current_total_amount_cents: number } | null;
+        renewal: { current_total_amount_cents: number } | null;
+    };
+    actors: { key: string; label: string }[];
+};
+
 const props = defineProps<{
+    cleanroom: {
+        active: CleanroomState | null;
+        history: {
+            public_id: string;
+            closed_at: string;
+            new_application_id: number | null;
+            renewal_application_id: number | null;
+        }[];
+    };
     laboratory: {
         safety: {
             classification: string;
@@ -82,6 +128,9 @@ const working = ref<string | null>(null);
 const selectedMilestone = ref(
     props.laboratory.progress.next_scenario_id ??
         props.laboratory.scenarios[1].id,
+);
+const selectedCleanroomMilestone = ref(
+    props.cleanroom.active?.progress.next_step?.key ?? 'payable_created',
 );
 const progressPercent = computed(
     () =>
@@ -128,6 +177,70 @@ function openAsActor(scenario: Scenario, actorKey: string): void {
 
     working.value = `${scenario.id}:${actorKey}`;
     router.post(enterActor([scenario.specimen_id, actorKey]).url);
+}
+
+function startCleanroom(): void {
+    working.value = 'cleanroom:start';
+    router.post(
+        startCleanroomRoute().url,
+        {},
+        { onFinish: () => (working.value = null) },
+    );
+}
+
+function runCleanroomNext(): void {
+    if (!props.cleanroom.active) {
+        return;
+    }
+
+    working.value = 'cleanroom:next';
+    router.post(
+        runCleanroomNextRoute(props.cleanroom.active.run.id).url,
+        {},
+        { onFinish: () => (working.value = null) },
+    );
+}
+
+function runCleanroomMilestone(): void {
+    if (!props.cleanroom.active) {
+        return;
+    }
+
+    working.value = 'cleanroom:milestone';
+    router.post(
+        runCleanroomMilestoneRoute(props.cleanroom.active.run.id).url,
+        { step_key: selectedCleanroomMilestone.value },
+        { onFinish: () => (working.value = null) },
+    );
+}
+
+function openCleanroomActor(actor: string): void {
+    if (!props.cleanroom.active) {
+        return;
+    }
+
+    working.value = `cleanroom:actor:${actor}`;
+    router.post(
+        enterCleanroomActorRoute([props.cleanroom.active.run.id, actor]).url,
+    );
+}
+
+function closeCleanroom(): void {
+    if (
+        !props.cleanroom.active ||
+        !window.confirm(
+            'Close this cleanroom and retain all synthetic evidence? Nothing will be deleted.',
+        )
+    ) {
+        return;
+    }
+
+    working.value = 'cleanroom:close';
+    router.post(
+        closeCleanroomRoute(props.cleanroom.active.run.id).url,
+        {},
+        { onFinish: () => (working.value = null) },
+    );
 }
 </script>
 
@@ -210,9 +323,269 @@ function openAsActor(scenario: Scenario, actorKey: string): void {
         </header>
 
         <section
+            class="overflow-hidden rounded-2xl border-2 border-amber-300 bg-white shadow-sm dark:border-amber-700 dark:bg-zinc-950"
+        >
+            <div
+                class="border-b border-amber-200 bg-amber-50 p-5 sm:p-6 dark:border-amber-800 dark:bg-amber-950/30"
+            >
+                <div
+                    class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
+                >
+                    <div class="max-w-3xl space-y-2">
+                        <div
+                            class="text-xs font-bold tracking-wider text-amber-700 uppercase dark:text-amber-300"
+                        >
+                            Guided cleanroom · real product forms
+                        </div>
+                        <h2
+                            class="text-2xl font-semibold text-zinc-950 dark:text-white"
+                        >
+                            Build a fresh two-year municipal history, one step
+                            at a time
+                        </h2>
+                        <p
+                            class="text-sm leading-6 text-zinc-700 dark:text-zinc-300"
+                        >
+                            Run Next Step either performs one bounded canonical
+                            system action or signs you in as the exact cleanroom
+                            actor and opens the real form you must complete. The
+                            screen recognizes completion from persisted
+                            municipal state.
+                        </p>
+                    </div>
+                    <button
+                        v-if="!cleanroom.active"
+                        type="button"
+                        :disabled="working !== null"
+                        class="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-zinc-950 px-5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-amber-300 dark:text-amber-950"
+                        @click="startCleanroom"
+                    >
+                        <FlaskConical class="size-4" /> Start cleanroom
+                    </button>
+                </div>
+            </div>
+
+            <div
+                v-if="cleanroom.active"
+                class="grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_22rem]"
+            >
+                <div class="min-w-0 space-y-5">
+                    <div class="rounded-xl bg-zinc-950 p-5 text-white">
+                        <div
+                            class="flex flex-wrap items-center justify-between gap-3"
+                        >
+                            <div>
+                                <p class="text-xs text-zinc-400">
+                                    Cleanroom
+                                    {{ cleanroom.active.run.public_id }}
+                                </p>
+                                <h3 class="mt-1 text-lg font-semibold">
+                                    {{
+                                        cleanroom.active.progress.next_step
+                                            ?.label ??
+                                        'Two-year chronology complete'
+                                    }}
+                                </h3>
+                                <p class="mt-1 text-sm leading-5 text-zinc-300">
+                                    {{
+                                        cleanroom.active.progress.next_step
+                                            ?.description ??
+                                        'The 2025 New application and 2026 Renewal both reached approved Payable.'
+                                    }}
+                                </p>
+                            </div>
+                            <span
+                                class="rounded-full bg-white/10 px-3 py-1.5 text-sm font-semibold"
+                                >{{
+                                    cleanroom.active.progress.completed_steps
+                                }}/{{
+                                    cleanroom.active.progress.total_steps
+                                }}
+                                steps</span
+                            >
+                        </div>
+                        <div
+                            class="mt-4 h-2 overflow-hidden rounded-full bg-white/10"
+                        >
+                            <div
+                                class="h-full rounded-full bg-amber-300"
+                                :style="{
+                                    width: `${cleanroom.active.progress.percent}%`,
+                                }"
+                            />
+                        </div>
+                    </div>
+
+                    <ol class="space-y-2">
+                        <li
+                            v-for="step in cleanroom.active.steps"
+                            :key="step.key"
+                            :class="
+                                step.status === 'current'
+                                    ? 'border-amber-400 bg-amber-50 dark:border-amber-600 dark:bg-amber-950/20'
+                                    : 'border-zinc-200 dark:border-zinc-800'
+                            "
+                            class="rounded-xl border p-4"
+                        >
+                            <div class="flex items-start gap-3">
+                                <span
+                                    :class="
+                                        step.completed
+                                            ? 'bg-emerald-600 text-white'
+                                            : step.status === 'current'
+                                              ? 'bg-amber-400 text-amber-950'
+                                              : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800'
+                                    "
+                                    class="flex size-7 shrink-0 items-center justify-center rounded-full"
+                                    ><Check
+                                        v-if="step.completed"
+                                        class="size-4" /><Play
+                                        v-else-if="step.status === 'current'"
+                                        class="size-3.5" /><Circle
+                                        v-else
+                                        class="size-3"
+                                /></span>
+                                <div class="min-w-0 flex-1">
+                                    <div
+                                        class="flex flex-wrap items-center gap-2"
+                                    >
+                                        <h4
+                                            class="font-semibold text-zinc-950 dark:text-white"
+                                        >
+                                            {{ step.year }} · {{ step.label }}
+                                        </h4>
+                                        <span
+                                            class="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                                            >{{
+                                                step.mode === 'product_form'
+                                                    ? 'Real form'
+                                                    : step.mode ===
+                                                        'system_action'
+                                                      ? 'Canonical action'
+                                                      : 'Boundary'
+                                            }}</span
+                                        >
+                                    </div>
+                                    <p
+                                        class="mt-1 text-sm leading-5 text-zinc-600 dark:text-zinc-400"
+                                    >
+                                        {{ step.description }}
+                                    </p>
+                                    <div
+                                        v-if="Object.keys(step.delta).length"
+                                        class="mt-2 flex flex-wrap gap-2"
+                                    >
+                                        <span
+                                            v-for="(value, label) in step.delta"
+                                            :key="label"
+                                            class="rounded-md bg-white px-2 py-1 text-xs shadow-sm dark:bg-zinc-900"
+                                            ><span class="text-zinc-500"
+                                                >{{ label }} </span
+                                            ><strong>{{ value }}</strong></span
+                                        >
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                    </ol>
+                </div>
+
+                <aside class="space-y-4">
+                    <div
+                        class="sticky top-4 space-y-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800"
+                    >
+                        <button
+                            type="button"
+                            :disabled="
+                                working !== null ||
+                                cleanroom.active.progress.complete
+                            "
+                            class="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-zinc-950 px-4 text-sm font-bold text-white disabled:opacity-50 dark:bg-amber-300 dark:text-amber-950"
+                            @click="runCleanroomNext"
+                        >
+                            <Play class="size-4" />{{
+                                working === 'cleanroom:next'
+                                    ? 'Opening…'
+                                    : cleanroom.active.progress.complete
+                                      ? 'Cleanroom complete'
+                                      : 'Run Next Step'
+                            }}
+                        </button>
+                        <div class="space-y-2">
+                            <label
+                                for="cleanroom-milestone"
+                                class="text-sm font-semibold"
+                                >Run to milestone</label
+                            ><select
+                                id="cleanroom-milestone"
+                                v-model="selectedCleanroomMilestone"
+                                class="h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                            >
+                                <option
+                                    v-for="step in cleanroom.active.steps"
+                                    :key="step.key"
+                                    :value="step.key"
+                                >
+                                    {{ step.year }} · {{ step.milestone }}
+                                </option></select
+                            ><button
+                                type="button"
+                                :disabled="working !== null"
+                                class="h-10 w-full rounded-lg border border-zinc-300 text-sm font-semibold dark:border-zinc-700"
+                                @click="runCleanroomMilestone"
+                            >
+                                Continue toward milestone
+                            </button>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-semibold">
+                                Open as exact cleanroom actor
+                            </h3>
+                            <div class="mt-2 grid gap-2">
+                                <button
+                                    v-for="actor in cleanroom.active.actors"
+                                    :key="actor.key"
+                                    type="button"
+                                    :disabled="working !== null"
+                                    class="flex items-center justify-between rounded-lg border border-zinc-200 px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+                                    @click="openCleanroomActor(actor.key)"
+                                >
+                                    <span>{{ actor.label }}</span
+                                    ><ExternalLink class="size-4" />
+                                </button>
+                            </div>
+                        </div>
+                        <div
+                            class="rounded-lg bg-zinc-50 p-3 text-xs leading-5 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400"
+                        >
+                            <strong class="text-zinc-900 dark:text-white"
+                                >Financial destination</strong
+                            ><br />Retail Trading ₱330 + Food Service ₱540 +
+                            governed Business Inspection Fee ₱350 = ₱1,220 per
+                            year.
+                        </div>
+                        <button
+                            type="button"
+                            :disabled="working !== null"
+                            class="w-full text-sm font-semibold text-zinc-500 underline underline-offset-4"
+                            @click="closeCleanroom"
+                        >
+                            Close and retain evidence
+                        </button>
+                    </div>
+                </aside>
+            </div>
+        </section>
+
+        <section
             class="grid gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:grid-cols-[1fr_auto] sm:items-end sm:p-5 dark:border-zinc-800 dark:bg-zinc-950"
         >
             <div class="space-y-2">
+                <p
+                    class="text-xs font-bold tracking-wider text-zinc-500 uppercase"
+                >
+                    Certified reference specimens
+                </p>
                 <label
                     for="milestone"
                     class="text-sm font-semibold text-zinc-900 dark:text-zinc-100"

@@ -9,6 +9,7 @@ use App\Http\Controllers\Citizen\PermitApplicationController as CitizenPermitApp
 use App\Http\Controllers\Citizen\PermitApplicationDocumentController as CitizenPermitApplicationDocumentController;
 use App\Http\Controllers\Citizen\ProfileController as CitizenProfileController;
 use App\Http\Controllers\Citizen\QrPhPaymentController as CitizenQrPhPaymentController;
+use App\Http\Controllers\LifecycleCleanroomController;
 use App\Http\Controllers\LifecycleLaboratoryController;
 use App\Http\Controllers\PublicMunicipalServiceCatalogController;
 use App\Http\Controllers\PublicPermitVerificationController;
@@ -82,6 +83,16 @@ if ($stakeholderPreviewSafety->isEnabled()) {
                     ->name('stakeholder-preview.lifecycle-laboratory.run-to-milestone');
                 Route::post('stakeholder-preview/lifecycle-laboratory/specimens/{lifecycleScenarioSpecimen}/actors/{actor}', [LifecycleLaboratoryController::class, 'enterActor'])
                     ->name('stakeholder-preview.lifecycle-laboratory.enter-actor');
+                Route::post('stakeholder-preview/lifecycle-laboratory/cleanrooms', [LifecycleCleanroomController::class, 'start'])
+                    ->name('stakeholder-preview.lifecycle-laboratory.cleanrooms.start');
+                Route::post('stakeholder-preview/lifecycle-laboratory/cleanrooms/{lifecycleCleanroomRun}/next', [LifecycleCleanroomController::class, 'runNext'])
+                    ->name('stakeholder-preview.lifecycle-laboratory.cleanrooms.next');
+                Route::post('stakeholder-preview/lifecycle-laboratory/cleanrooms/{lifecycleCleanroomRun}/milestone', [LifecycleCleanroomController::class, 'runToMilestone'])
+                    ->name('stakeholder-preview.lifecycle-laboratory.cleanrooms.milestone');
+                Route::post('stakeholder-preview/lifecycle-laboratory/cleanrooms/{lifecycleCleanroomRun}/actors/{actor}', [LifecycleCleanroomController::class, 'enterActor'])
+                    ->name('stakeholder-preview.lifecycle-laboratory.cleanrooms.enter-actor');
+                Route::post('stakeholder-preview/lifecycle-laboratory/cleanrooms/{lifecycleCleanroomRun}/close', [LifecycleCleanroomController::class, 'close'])
+                    ->name('stakeholder-preview.lifecycle-laboratory.cleanrooms.close');
             });
             Route::get('stakeholder-preview/workflow', [StakeholderPreviewWorkflowController::class, 'index'])
                 ->name('stakeholder-preview.workflow');

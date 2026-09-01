@@ -8,6 +8,7 @@ use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\CreatePermitApplication;
 use App\Actions\CreateRenewalPermitApplicationForExistingBusiness;
 use App\Actions\DefineBusinessPermitEvaluationItem;
+use App\Actions\EnsureProductLabLineOfBusinessCatalog;
 use App\Actions\InitializeBusinessPermitEvaluation;
 use App\Actions\InspectBplsInstallation;
 use App\Actions\RecordAssessmentDecision;
@@ -58,6 +59,7 @@ final class RenewalHappyPathScenario
         private readonly AssessmentSnapshotFingerprint $assessmentFingerprint,
         private readonly RecordAssessmentDecision $recordAssessmentDecision,
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
+        private readonly EnsureProductLabLineOfBusinessCatalog $ensureProductLabCatalog,
     ) {}
 
     /** @return array<string, mixed> */
@@ -698,24 +700,7 @@ final class RenewalHappyPathScenario
     /** @return array<string, LineOfBusiness> */
     private function linesOfBusiness(): array
     {
-        return collect($this->definition->linesOfBusiness())->mapWithKeys(function (array $definition): array {
-            $lineOfBusiness = LineOfBusiness::query()->firstOrCreate(
-                ['code' => $definition['code']],
-                [
-                    'name' => $definition['name'],
-                    'major_category' => $definition['major_category'],
-                    'is_active' => true,
-                    'metadata' => [
-                        'scenario_id' => 'product-lab-chronology',
-                        'semantic_classification' => 'provisional_uat',
-                        'production_liability' => false,
-                    ],
-                ],
-            );
-            $this->assert(data_get($lineOfBusiness->metadata, 'scenario_id') === 'product-lab-chronology', "LOB code [{$definition['code']}] is occupied by non-scenario data.");
-
-            return [$definition['code'] => $lineOfBusiness];
-        })->all();
+        return $this->ensureProductLabCatalog->handle();
     }
 
     private function assertAcceptedInspectionRule(): void

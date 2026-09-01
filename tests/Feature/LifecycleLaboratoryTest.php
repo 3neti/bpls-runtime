@@ -1,10 +1,22 @@
 <?php
 
+use App\Actions\AdvanceLifecycleCleanroom;
+use App\Actions\BuildLifecycleCleanroomIntake;
+use App\Actions\CompleteBusinessPermitEvaluationResponsibility;
+use App\Actions\CreateAssessmentForPermitApplication;
+use App\Actions\CreatePaymentScheduleForAssessment;
+use App\Actions\RecordAssessmentDecision;
+use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
+use App\Actions\ResolveLifecycleCleanroomState;
+use App\Enums\AssessmentDecisionAction;
+use App\Enums\BusinessPermitEvaluationApplicability;
+use App\Enums\BusinessPermitEvaluationSource;
 use App\Enums\StakeholderPreviewPersona;
 use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\LifecycleScenarios\RenewalHappyPathDefinition;
 use App\Models\Business;
 use App\Models\BusinessOwner;
+use App\Models\LifecycleCleanroomRun;
 use App\Models\LifecycleScenarioSpecimen;
 use App\Models\PermitApplication;
 use App\Models\User;
@@ -29,6 +41,7 @@ test('laboratory is fail closed to guests and arbitrary preview accounts', funct
     $bplo = previewAccount(StakeholderPreviewPersona::Bplo);
     $this->actingAs($bplo)->get(route('stakeholder-preview.lifecycle-laboratory.index'))->assertNotFound();
     $this->actingAs($bplo)->post(route('stakeholder-preview.lifecycle-laboratory.run-next'))->assertNotFound();
+    $this->actingAs($bplo)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'))->assertNotFound();
 
     expect(LifecycleScenarioSpecimen::query()->count())->toBe(0)
         ->and(PermitApplication::query()->count())->toBe(0);
@@ -135,6 +148,129 @@ test('open as actor authenticates only exact manifest owned scenario identities 
         ->assertNotFound();
 
     expect(previewAccount(StakeholderPreviewPersona::Citizen)->business_owner_id)->toBeNull();
+});
+
+test('management starts a non destructive cleanroom and run next opens the real prefilled citizen intake form', function () {
+    $management = previewAccount(StakeholderPreviewPersona::Management);
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'))
+        ->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.index'));
+
+    $run = LifecycleCleanroomRun::query()->sole();
+    expect($run->new_application_id)->toBeNull()
+        ->and(data_get($run->actor_manifest, 'semantic_classification'))->toBe('synthetic_only')
+        ->and(data_get($run->owned_resource_manifest, 'permit_application_ids'))->toBe([]);
+
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.milestone', $run), ['step_key' => 'arbitrary-workflow'])
+        ->assertSessionHasErrors('step_key');
+
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))
+        ->assertRedirect(route('citizen.permit-applications.create'));
+    $citizen = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.citizen.user_id'));
+    $this->assertAuthenticatedAs($citizen);
+    $this->get(route('citizen.permit-applications.create'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Create')
+            ->where('currentApplicationYear', 2025)
+            ->where('cleanroomIntake.run_id', $run->public_id)
+            ->where('cleanroomIntake.lines.0.declared_gross_sales_pesos', '1200000')
+            ->has('cleanroomIntake.lines', 2));
+});
+
+test('cleanroom citizen form uses canonical draft and submit actions before canonical responsibility creation', function () {
+    $management = previewAccount(StakeholderPreviewPersona::Management);
+    $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'));
+    $run = LifecycleCleanroomRun::query()->sole();
+    $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run));
+    $intake = app(BuildLifecycleCleanroomIntake::class)->handle($run);
+
+    $this->post(route('citizen.permit-applications.store'), [
+        ...$intake,
+        'type' => 'new',
+        'owner_email' => null,
+        'owner_phone' => null,
+    ])->assertSessionHasNoErrors();
+    $run->refresh();
+    $application = PermitApplication::query()->findOrFail($run->new_application_id);
+    expect($application->status->value)->toBe('draft')
+        ->and($application->submitted_at)->toBeNull()
+        ->and($application->business->owner->name)->toStartWith('Cleanroom Synthetic Owner')
+        ->and(data_get($application->metadata, 'lifecycle_cleanroom.run_id'))->toBe($run->public_id);
+
+    $this->post(route('citizen.permit-applications.submit', $application))->assertSessionHasNoErrors();
+    expect($application->fresh()->submitted_at)->not->toBeNull();
+
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))
+        ->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.index'));
+    expect($application->fresh()->businessPermitEvaluation->items()->whereIn('key', collect(app(NewApplicationHappyPathDefinition::class)->responsibilities())->pluck('key'))->count())->toBe(6)
+        ->and(PermitApplication::query()->count())->toBe(1);
+
+    $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.close', $run));
+    expect($run->fresh()->status)->toBe('closed')
+        ->and(PermitApplication::query()->whereKey($application)->exists())->toBeTrue();
+});
+
+test('cleanroom remains compatible with the canonical two year action semantics through both payables', function () {
+    $management = previewAccount(StakeholderPreviewPersona::Management);
+    $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'));
+    $run = LifecycleCleanroomRun::query()->sole();
+    $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run));
+    $intake = app(BuildLifecycleCleanroomIntake::class)->handle($run);
+    $this->post(route('citizen.permit-applications.store'), [...$intake, 'type' => 'new'])->assertSessionHasNoErrors();
+    $run->refresh();
+    $this->post(route('citizen.permit-applications.submit', $run->new_application_id))->assertSessionHasNoErrors();
+
+    foreach (['new_application_id', 'renewal_application_id'] as $applicationKey) {
+        if ($applicationKey === 'renewal_application_id') {
+            app(AdvanceLifecycleCleanroom::class)->handle($run->fresh());
+        }
+        app(AdvanceLifecycleCleanroom::class)->handle($run->fresh());
+        $run->refresh();
+        $application = PermitApplication::query()->findOrFail($run->{$applicationKey});
+        $evaluation = $application->businessPermitEvaluation;
+
+        foreach (app(NewApplicationHappyPathDefinition::class)->responsibilities() as $responsibility) {
+            $evaluation->refresh();
+            $version = $evaluation->currentVersion;
+            $actor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.'.$responsibility['department'].'.user_id'));
+            app(CompleteBusinessPermitEvaluationResponsibility::class)->handle(
+                $evaluation->items()->where('key', $responsibility['key'])->sole(),
+                $actor,
+                BusinessPermitEvaluationApplicability::Applicable,
+                ['amount_cents' => $responsibility['amount_cents'], 'inspection' => ['required' => $responsibility['inspection_required'], 'mode' => $responsibility['inspection_required'] ? 'physical' : 'document_review', 'completed' => true, 'findings' => $responsibility['reason']]],
+                BusinessPermitEvaluationSource::ProvisionalUat,
+                $responsibility['reason'],
+                $version->sequence,
+                $version->fingerprint,
+                $run->public_id.':'.$application->application_year.':'.$responsibility['key'],
+            );
+        }
+
+        $assessmentOfficer = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.assessment_officer.user_id'));
+        $assessment = app(CreateAssessmentForPermitApplication::class)->handle($application, $assessmentOfficer);
+        expect($assessment->total_amount_cents)->toBe(122_000);
+        app(RecordBusinessPermitEvaluationCounterCheck::class)->handle(
+            $assessment,
+            User::query()->findOrFail(data_get($run->actor_manifest, 'actors.treasury.user_id')),
+        );
+        app(RecordAssessmentDecision::class)->handle(
+            $assessment,
+            User::query()->findOrFail(data_get($run->actor_manifest, 'actors.municipal_treasurer.user_id')),
+            AssessmentDecisionAction::Approved,
+        );
+        $schedule = app(CreatePaymentScheduleForAssessment::class)->handle($assessment, $assessmentOfficer);
+        expect($schedule->total_amount_cents)->toBe(122_000);
+    }
+
+    $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+    expect(data_get($state, 'progress.complete'))->toBeTrue()
+        ->and(data_get($state, 'progress.completed_steps'))->toBe(22)
+        ->and(PermitApplication::query()->whereIn('id', [$run->new_application_id, $run->renewal_application_id])->pluck('application_year')->sort()->values()->all())->toBe([2025, 2026])
+        ->and(PermitApplication::query()->whereIn('id', [$run->new_application_id, $run->renewal_application_id])->pluck('business_id')->unique())->toHaveCount(1);
 });
 
 function configureLifecycleLaboratoryPreview(): void

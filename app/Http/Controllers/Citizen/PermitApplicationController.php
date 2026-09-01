@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Citizen;
 
+use App\Actions\BuildLifecycleCleanroomIntake;
 use App\Actions\BuildPermitApplicationTimeline;
-use App\Actions\CreateCitizenPermitApplicationDraft;
+use App\Actions\CaptureLifecycleCleanroomIntake;
 use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Actions\DescribePaymentPolicyBoundary;
 use App\Actions\DescribePermitArtifact;
 use App\Actions\DescribePermitReleaseReadiness;
+use App\Actions\ResolveLifecycleCleanroomIntake;
 use App\Actions\SubmitCitizenPermitApplication;
 use App\Actions\UpdateCitizenPermitApplicationDraft;
 use App\Enums\PermitApplicationStatus;
@@ -53,19 +55,27 @@ class PermitApplicationController extends Controller
         ]);
     }
 
-    public function create(Request $request): Response
-    {
+    public function create(
+        Request $request,
+        ResolveLifecycleCleanroomIntake $resolveCleanroomIntake,
+        BuildLifecycleCleanroomIntake $buildCleanroomIntake,
+    ): Response {
         Gate::authorize(UserPermission::CreateOwnPermitApplications->value);
+        $cleanroom = $resolveCleanroomIntake->handle($request);
+        $cleanroomIntake = $cleanroom === null ? null : $buildCleanroomIntake->handle($cleanroom);
 
         return Inertia::render('permit-applications/Create', [
             'intakeAudience' => 'citizen',
-            'currentApplicationYear' => now()->year,
+            'currentApplicationYear' => $cleanroomIntake['application_year'] ?? now()->year,
             'applicationTypes' => [[
                 'label' => 'New',
                 'value' => PermitApplicationType::New->value,
             ]],
             'lineOfBusinesses' => LineOfBusiness::query()
-                ->availableToMunicipalCatalog()
+                ->when($cleanroomIntake !== null,
+                    fn ($query) => $query->where(fn ($lines) => $lines->availableToMunicipalCatalog()->orWhereIn('code', ['PRODUCT-LAB-RETAIL-TRADING', 'PRODUCT-LAB-FOOD-SERVICE'])),
+                    fn ($query) => $query->availableToMunicipalCatalog(),
+                )
                 ->orderBy('name')
                 ->get(['id', 'name', 'code']),
             'applicant' => [
@@ -73,13 +83,14 @@ class PermitApplicationController extends Controller
                 'email' => $request->user()->email,
             ],
             'registry' => $this->registryPayload($request),
+            'cleanroomIntake' => $cleanroomIntake,
         ]);
     }
 
-    public function store(StorePermitApplicationRequest $request, CreateCitizenPermitApplicationDraft $createDraft): RedirectResponse
+    public function store(StorePermitApplicationRequest $request, CaptureLifecycleCleanroomIntake $captureCleanroomIntake): RedirectResponse
     {
         try {
-            $permitApplication = $createDraft->handle($request->validatedForPersistence(), $request->user());
+            $permitApplication = $captureCleanroomIntake->create($request, $request->validatedForPersistence());
         } catch (DomainException $exception) {
             return back()->withErrors(['business_id' => $exception->getMessage()]);
         }

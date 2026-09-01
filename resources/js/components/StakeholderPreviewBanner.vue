@@ -2,7 +2,10 @@
 import { router, usePage } from '@inertiajs/vue3';
 import { ShieldAlert } from '@lucide/vue';
 import { computed, ref } from 'vue';
-import { switchMethod } from '@/actions/App/Http/Controllers/StakeholderPreviewController';
+import {
+    enterLaboratory,
+    switchMethod,
+} from '@/actions/App/Http/Controllers/StakeholderPreviewController';
 
 const page = usePage();
 const switchingTo = ref<string | null>(null);
@@ -27,6 +30,11 @@ function handlePersonaChange(event: Event): void {
     if (persona !== preview.value?.current_persona) {
         switchPersona(persona);
     }
+}
+
+function returnToLaboratory(): void {
+    switchingTo.value = 'laboratory';
+    router.post(enterLaboratory().url);
 }
 </script>
 
@@ -56,6 +64,14 @@ function handlePersonaChange(event: Event): void {
                             Exploring as {{ preview.current_label }}. This
                             preview role does not grant municipal authority.
                         </p>
+                        <p
+                            v-else-if="preview.cleanroom_actor"
+                            class="text-xs leading-4 font-medium"
+                        >
+                            Cleanroom actor:
+                            {{ preview.cleanroom_actor.label }} · Complete the
+                            real product form, then return to the Laboratory.
+                        </p>
                     </div>
                 </div>
 
@@ -80,6 +96,15 @@ function handlePersonaChange(event: Event): void {
                         </option>
                     </select>
                 </label>
+                <button
+                    v-if="preview.cleanroom_actor"
+                    type="button"
+                    :disabled="switchingTo !== null"
+                    class="shrink-0 rounded-md border border-amber-900/40 bg-white px-3 py-2 text-xs font-bold shadow-xs disabled:opacity-60"
+                    @click="returnToLaboratory"
+                >
+                    Return to Laboratory
+                </button>
             </div>
 
             <div

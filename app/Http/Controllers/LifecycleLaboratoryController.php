@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\AuthenticateLifecycleScenarioActor;
+use App\Actions\BuildLifecycleCleanroom;
 use App\Actions\BuildLifecycleLaboratory;
 use App\Actions\ExecutePersistedLifecycleScenario;
 use App\Http\Requests\RunLifecycleLaboratoryMilestoneRequest;
@@ -17,10 +18,11 @@ use Inertia\Response;
 
 final class LifecycleLaboratoryController extends Controller
 {
-    public function index(BuildLifecycleLaboratory $buildLaboratory): Response
+    public function index(BuildLifecycleLaboratory $buildLaboratory, BuildLifecycleCleanroom $buildCleanroom): Response
     {
         return Inertia::render('stakeholder-preview/LifecycleLaboratory', [
             'laboratory' => $buildLaboratory->handle(),
+            'cleanroom' => $buildCleanroom->handle(),
         ]);
     }
 

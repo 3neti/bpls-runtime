@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\LifecycleCleanroomRun;
 use App\Models\User;
 use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Http\Request;
@@ -42,6 +43,7 @@ class HandleInertiaRequests extends Middleware
 
         $previewSafety = app(StakeholderPreviewSafety::class);
         $previewPersona = $previewSafety->personaFor($user);
+        $cleanroomActor = $this->cleanroomActor($user, $previewSafety);
 
         return [
             ...parent::share($request),
@@ -72,11 +74,30 @@ class HandleInertiaRequests extends Middleware
                 'enabled' => true,
                 'current_persona' => $previewPersona?->value,
                 'current_label' => $previewPersona?->label(),
+                'cleanroom_actor' => $cleanroomActor,
                 'personas' => $previewSafety->personas(),
                 'what_to_try' => $previewSafety->guidanceFor($user),
                 'recovery_message' => 'Preview data can be restored by the preview administrator.',
             ] : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
+    }
+
+    /** @return array{run_id: int, public_id: string, key: string, label: string}|null */
+    private function cleanroomActor(?User $user, StakeholderPreviewSafety $safety): ?array
+    {
+        if (! $safety->isEnabled() || ! $user instanceof User) {
+            return null;
+        }
+
+        foreach (LifecycleCleanroomRun::query()->where('status', 'active')->latest('id')->limit(10)->get() as $run) {
+            foreach (data_get($run->actor_manifest, 'actors', []) as $key => $actor) {
+                if (($actor['user_id'] ?? null) === $user->id && ($actor['role_id'] ?? null) === $user->role_id) {
+                    return ['run_id' => $run->id, 'public_id' => $run->public_id, 'key' => $key, 'label' => $actor['label']];
+                }
+            }
+        }
+
+        return null;
     }
 }
