@@ -192,6 +192,7 @@ class StakeholderPreviewSafety
                 ['label' => 'Inspect Receipts', 'route' => 'staff.receipts.index', 'permission' => 'receipts.view'],
             ],
             StakeholderPreviewPersona::Management => [
+                ['label' => 'Open Lifecycle Laboratory', 'route' => 'stakeholder-preview.lifecycle-laboratory.index', 'permission' => 'reports.view'],
                 ['label' => 'Open the Report Catalog', 'route' => 'staff.reports.index', 'permission' => 'reports.view'],
                 ['label' => 'Inspect Users', 'route' => 'staff.users.index', 'permission' => 'users.view'],
                 ['label' => 'Inspect Roles & Permissions', 'route' => 'staff.roles.index', 'permission' => 'roles.view'],

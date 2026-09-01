@@ -398,7 +398,7 @@ test('preview context exposes only authorized real guidance and a persistent ban
     'treasury' => [StakeholderPreviewPersona::Treasury, 5],
     'municipal treasurer' => [StakeholderPreviewPersona::MunicipalTreasurer, 2],
     'cashier' => [StakeholderPreviewPersona::Cashier, 2],
-    'management' => [StakeholderPreviewPersona::Management, 5],
+    'management' => [StakeholderPreviewPersona::Management, 6],
     'engineering' => [StakeholderPreviewPersona::Engineering, 1],
     'mpdo' => [StakeholderPreviewPersona::Mpdo, 1],
     'assessor' => [StakeholderPreviewPersona::Assessor, 1],

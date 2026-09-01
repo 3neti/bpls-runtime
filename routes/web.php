@@ -9,6 +9,7 @@ use App\Http\Controllers\Citizen\PermitApplicationController as CitizenPermitApp
 use App\Http\Controllers\Citizen\PermitApplicationDocumentController as CitizenPermitApplicationDocumentController;
 use App\Http\Controllers\Citizen\ProfileController as CitizenProfileController;
 use App\Http\Controllers\Citizen\QrPhPaymentController as CitizenQrPhPaymentController;
+use App\Http\Controllers\LifecycleLaboratoryController;
 use App\Http\Controllers\PublicMunicipalServiceCatalogController;
 use App\Http\Controllers\PublicPermitVerificationController;
 use App\Http\Controllers\PublicPermitVerificationPageController;
@@ -50,6 +51,7 @@ use App\Http\Controllers\Staff\UserDirectoryController;
 use App\Http\Controllers\StakeholderPreviewController;
 use App\Http\Controllers\StakeholderPreviewSpecimenController;
 use App\Http\Controllers\StakeholderPreviewWorkflowController;
+use App\Http\Middleware\EnsureLifecycleLaboratoryOperator;
 use App\Http\Middleware\EnsureStakeholderPreviewIsSafe;
 use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Support\Facades\Route;
@@ -69,6 +71,16 @@ if ($stakeholderPreviewSafety->isEnabled()) {
             ->middleware(['auth', 'verified'])
             ->name('stakeholder-preview.switch');
         Route::middleware(['auth', 'verified'])->group(function () {
+            Route::middleware(EnsureLifecycleLaboratoryOperator::class)->group(function () {
+                Route::get('stakeholder-preview/lifecycle-laboratory', [LifecycleLaboratoryController::class, 'index'])
+                    ->name('stakeholder-preview.lifecycle-laboratory.index');
+                Route::post('stakeholder-preview/lifecycle-laboratory/run-next', [LifecycleLaboratoryController::class, 'runNext'])
+                    ->name('stakeholder-preview.lifecycle-laboratory.run-next');
+                Route::post('stakeholder-preview/lifecycle-laboratory/run-to-milestone', [LifecycleLaboratoryController::class, 'runToMilestone'])
+                    ->name('stakeholder-preview.lifecycle-laboratory.run-to-milestone');
+                Route::post('stakeholder-preview/lifecycle-laboratory/specimens/{lifecycleScenarioSpecimen}/actors/{actor}', [LifecycleLaboratoryController::class, 'enterActor'])
+                    ->name('stakeholder-preview.lifecycle-laboratory.enter-actor');
+            });
             Route::get('stakeholder-preview/workflow', [StakeholderPreviewWorkflowController::class, 'index'])
                 ->name('stakeholder-preview.workflow');
             Route::post('stakeholder-preview/applications/{permitApplication}/office-charge', [StakeholderPreviewWorkflowController::class, 'storeOfficeCharge'])
