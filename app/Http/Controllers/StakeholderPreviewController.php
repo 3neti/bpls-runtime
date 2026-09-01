@@ -40,6 +40,15 @@ class StakeholderPreviewController extends Controller
         return to_route('dashboard');
     }
 
+    public function enterLaboratory(
+        Request $request,
+        AuthenticateStakeholderPreviewPersona $authenticate,
+    ): RedirectResponse {
+        $authenticate->handle($request, StakeholderPreviewPersona::Management);
+
+        return to_route('stakeholder-preview.lifecycle-laboratory.index');
+    }
+
     public function switch(
         Request $request,
         StakeholderPreviewPersona $persona,

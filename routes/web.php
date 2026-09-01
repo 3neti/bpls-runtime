@@ -65,6 +65,8 @@ if ($stakeholderPreviewSafety->isEnabled()) {
             ->name('stakeholder-preview.walkthrough');
         Route::post('stakeholder-preview/enter/{persona}', [StakeholderPreviewController::class, 'enter'])
             ->name('stakeholder-preview.enter');
+        Route::post('stakeholder-preview/lifecycle-laboratory/enter', [StakeholderPreviewController::class, 'enterLaboratory'])
+            ->name('stakeholder-preview.lifecycle-laboratory.enter');
         Route::post('stakeholder-preview/specimens/{lifecycleScenarioSpecimen}/enter-citizen', StakeholderPreviewSpecimenController::class)
             ->name('stakeholder-preview.specimens.enter-citizen');
         Route::post('stakeholder-preview/switch/{persona}', [StakeholderPreviewController::class, 'switch'])

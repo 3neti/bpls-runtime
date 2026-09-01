@@ -35,6 +35,8 @@ test('safe preview configuration registers an intentional launcher without crede
         ->and(Route::has('stakeholder-preview.switch'))
         ->toBeTrue()
         ->and(Route::has('stakeholder-preview.walkthrough'))
+        ->toBeTrue()
+        ->and(Route::has('stakeholder-preview.lifecycle-laboratory.enter'))
         ->toBeTrue();
 
     $response = $this->get('/');
@@ -55,6 +57,27 @@ test('safe preview configuration registers an intentional launcher without crede
         ->and(Assessment::query()->count())->toBe(0)
         ->and(TreasuryCollection::query()->count())->toBe(0)
         ->and(Receipt::query()->count())->toBe(0);
+});
+
+test('launcher restores the exact Management operator after exploring a scenario actor', function () {
+    $accounts = createStakeholderPreviewAccounts();
+    $health = $accounts[StakeholderPreviewPersona::Health->value];
+    $management = $accounts[StakeholderPreviewPersona::Management->value];
+
+    $this->actingAs($health)
+        ->get(route('stakeholder-preview.lifecycle-laboratory.index'))
+        ->assertNotFound();
+
+    $this->get('/')->assertSuccessful();
+
+    $this->post(route('stakeholder-preview.lifecycle-laboratory.enter'))
+        ->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.index'));
+
+    $this->assertAuthenticatedAs($management);
+
+    $this->get(route('stakeholder-preview.lifecycle-laboratory.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page->component('stakeholder-preview/LifecycleLaboratory'));
 });
 
 test('launcher remains unavailable until the complete exact synthetic account set is ready', function () {
@@ -444,6 +467,7 @@ test('preview routes are not registered by a fresh production bootstrap even whe
 
     expect($result->successful())->toBeTrue()
         ->and($result->output())->not->toContain('stakeholder-preview/enter')
+        ->and($result->output())->not->toContain('stakeholder-preview/lifecycle-laboratory')
         ->and($result->output())->not->toContain('stakeholder-preview/switch')
         ->and($result->output())->not->toContain('stakeholder-preview/walkthrough');
 });
@@ -454,6 +478,7 @@ test('a false preview flag refuses the launcher in a non production environment'
     expect(app(StakeholderPreviewSafety::class)->isEnabled())->toBeFalse();
 
     $this->post('/stakeholder-preview/enter/citizen')->assertNotFound();
+    $this->post('/stakeholder-preview/lifecycle-laboratory/enter')->assertNotFound();
     $this->get('/')->assertHeaderMissing('X-Robots-Tag');
 });
 
