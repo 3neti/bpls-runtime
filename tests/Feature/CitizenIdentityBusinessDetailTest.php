@@ -6,9 +6,12 @@ use App\Enums\AssessmentStatus;
 use App\Enums\PaymentScheduleStatus;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
+use App\Enums\ReceiptStatus;
+use App\Enums\TreasuryCollectionStatus;
 use App\Enums\UserPermission;
 use App\Enums\UserRole;
 use App\Models\Assessment;
+use App\Models\AssessmentLine;
 use App\Models\Business;
 use App\Models\BusinessOwner;
 use App\Models\LineOfBusiness;
@@ -17,7 +20,9 @@ use App\Models\Permission;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationDocument;
 use App\Models\PermitApplicationLine;
+use App\Models\Receipt;
 use App\Models\Role;
+use App\Models\TreasuryCollection;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -103,6 +108,21 @@ test('business detail follows owner identity rather than submission actor and pr
         'status' => AssessmentStatus::Computed,
         'total_amount_cents' => 122_000,
     ]);
+    AssessmentLine::factory()->for($assessment)->create([
+        'line_of_business_id' => $activities[0]->id,
+        'name' => 'Retail charge',
+        'amount_cents' => 33_000,
+    ]);
+    AssessmentLine::factory()->for($assessment)->create([
+        'line_of_business_id' => $activities[1]->id,
+        'name' => 'Food service charge',
+        'amount_cents' => 54_000,
+    ]);
+    AssessmentLine::factory()->for($assessment)->create([
+        'line_of_business_id' => null,
+        'name' => 'Business Inspection Fee',
+        'amount_cents' => 35_000,
+    ]);
     $schedule = PaymentSchedule::factory()
         ->for($application, 'permitApplication')
         ->for($assessment)
@@ -128,12 +148,26 @@ test('business detail follows owner identity rather than submission actor and pr
         ->and(data_get($detail, 'permit_applications.0.id'))->toBe($application->id)
         ->and(data_get($detail, 'permit_applications.0.type'))->toBe('renewal')
         ->and(data_get($detail, 'permit_applications.0.status'))->toBe('pending_payment')
+        ->and(data_get($detail, 'permit_applications.0.citizen_label'))->toBe('2026 · Renewal')
+        ->and(data_get($detail, 'permit_applications.0.record_reference'))->toBe('Application record #'.$application->id)
+        ->and(data_get($detail, 'permit_applications.0.designation'))->toBe('current')
         ->and(data_get($detail, 'permit_applications.0.lines_of_business.*.name'))->toBe(['Retail Trading', 'Food Service'])
         ->and(data_get($detail, 'permit_applications.0.assessment.total_amount_cents'))->toBe(122_000)
+        ->and(data_get($detail, 'permit_applications.0.assessment.charge_groups.*.subtotal_amount_cents'))->toBe([
+            33_000,
+            54_000,
+            35_000,
+        ])
         ->and(data_get($detail, 'permit_applications.0.payable'))->toMatchArray([
             'id' => $schedule->id,
             'status' => 'pending',
             'amount_due_cents' => 122_000,
+        ])
+        ->and(data_get($detail, 'permit_applications.0.permit'))->toMatchArray([
+            'issuance_status' => 'not_issued',
+            'release_status' => 'not_released',
+            'status_label' => 'Permit not yet issued',
+            'artifact' => null,
         ])
         ->and($encodedDetail)
         ->not->toContain('legacy-business-secret')
@@ -152,6 +186,72 @@ test('business detail follows owner identity rather than submission actor and pr
             ->where('business.id', $business->id)
             ->where('business.permit_applications.0.assessment.total_amount_cents', 122_000)
             ->where('business.permit_applications.0.payable.amount_due_cents', 122_000));
+});
+
+test('business detail reconciles amount paid and receipt history from canonical payment truth', function () {
+    $application = PermitApplication::factory()->create([
+        'type' => PermitApplicationType::Renewal,
+        'application_year' => 2026,
+    ]);
+    $citizen = User::factory()->create([
+        'business_owner_id' => $application->business->business_owner_id,
+    ]);
+    $assessment = Assessment::factory()->for($application)->create([
+        'total_amount_cents' => 122_000,
+    ]);
+    AssessmentLine::factory()->for($assessment)->create([
+        'name' => 'Canonical charge',
+        'amount_cents' => 122_000,
+    ]);
+    $schedule = PaymentSchedule::factory()
+        ->for($application, 'permitApplication')
+        ->for($assessment)
+        ->create([
+            'status' => PaymentScheduleStatus::PartiallyPaid,
+            'total_amount_cents' => 122_000,
+            'paid_amount_cents' => 50_000,
+        ]);
+    $collection = TreasuryCollection::factory()->create([
+        'payment_schedule_id' => $schedule->id,
+        'permit_application_id' => $application->id,
+        'assessment_id' => $assessment->id,
+        'status' => TreasuryCollectionStatus::Receipted,
+        'amount_cents' => 50_000,
+    ]);
+    $receipt = Receipt::factory()->create([
+        'treasury_collection_id' => $collection->id,
+        'payment_schedule_id' => $schedule->id,
+        'permit_application_id' => $application->id,
+        'assessment_id' => $assessment->id,
+        'status' => ReceiptStatus::Issued,
+        'receipt_number' => 'OR-50001',
+        'amount_cents' => 50_000,
+    ]);
+
+    $detail = app(BuildCitizenBusinessDetail::class)->handle(
+        $citizen,
+        $application->business_id,
+        includeFinancials: true,
+    );
+
+    expect(data_get($detail, 'permit_applications.0.payable'))->toMatchArray([
+        'status' => 'partially_paid',
+        'total_amount_cents' => 122_000,
+        'paid_amount_cents' => 50_000,
+        'amount_due_cents' => 72_000,
+    ])
+        ->and(data_get($detail, 'permit_applications.0.payable.payments.0'))->toMatchArray([
+            'id' => $collection->id,
+            'status' => 'receipted',
+            'amount_cents' => 50_000,
+            'receipt' => [
+                'id' => $receipt->id,
+                'status' => 'issued',
+                'receipt_number' => 'OR-50001',
+                'amount_cents' => 50_000,
+                'issued_at' => $receipt->issued_at->toIso8601String(),
+            ],
+        ]);
 });
 
 test('citizen detail routes enforce permissions and exact owner isolation for multiple businesses', function () {

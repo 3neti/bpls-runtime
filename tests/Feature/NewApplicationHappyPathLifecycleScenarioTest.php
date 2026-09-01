@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\BuildCitizenBusinessDetail;
 use App\Actions\InspectBplsInstallation;
 use App\Enums\StakeholderPreviewPersona;
 use App\Enums\UserPermission;
@@ -163,6 +164,13 @@ test('Scenario 01 then Scenario 02 persist one coherent 2025 to 2026 product-lab
     $specimens = LifecycleScenarioSpecimen::query()->orderBy('scenario_id')->get();
     $applications = PermitApplication::query()->with(['assessments', 'paymentSchedules'])->get();
     $inspection = app(InspectBplsInstallation::class)->handle();
+    $citizen = User::query()->whereNotNull('business_owner_id')->sole();
+    $businessDetail = app(BuildCitizenBusinessDetail::class)->handle(
+        $citizen,
+        $applications->first()->business_id,
+        includeFinancials: true,
+        includeDocuments: true,
+    );
 
     expect($specimens)->toHaveCount(2)
         ->and($specimens->pluck('scenario_id')->all())->toBe([
@@ -177,7 +185,40 @@ test('Scenario 01 then Scenario 02 persist one coherent 2025 to 2026 product-lab
         ->and($applications->flatMap->paymentSchedules->pluck('total_amount_cents')->all())->toBe([122_000, 122_000])
         ->and($inspection['integrity']['pass'])->toBeTrue()
         ->and($inspection['price_list']['synthetic_uat_exact_published_count'])->toBe(0)
-        ->and(LineOfBusiness::query()->availableToMunicipalCatalog()->pluck('code')->all())->toBe(['MRC-2A-02-B-WHOLESALE-RETAIL']);
+        ->and(LineOfBusiness::query()->availableToMunicipalCatalog()->pluck('code')->all())->toBe(['MRC-2A-02-B-WHOLESALE-RETAIL'])
+        ->and(data_get($businessDetail, 'permit_applications.*.citizen_label'))->toBe([
+            '2026 · Renewal',
+            '2025 · New Business Permit',
+        ])
+        ->and(data_get($businessDetail, 'permit_applications.*.designation'))->toBe(['current', 'historical'])
+        ->and(data_get($businessDetail, 'permit_applications.*.record_reference'))->toBe([
+            'Application record #'.$applications->last()->id,
+            'Application record #'.$applications->first()->id,
+        ])
+        ->and(data_get($businessDetail, 'permit_applications.0.assessment.charge_groups.*.label'))->toBe([
+            'Retail Trading',
+            'Food Service',
+            'Business Inspection Fee',
+        ])
+        ->and(data_get($businessDetail, 'permit_applications.0.assessment.charge_groups.*.subtotal_amount_cents'))->toBe([
+            33_000,
+            54_000,
+            35_000,
+        ])
+        ->and(data_get($businessDetail, 'permit_applications.1.assessment.charge_groups.*.subtotal_amount_cents'))->toBe([
+            33_000,
+            54_000,
+            35_000,
+        ])
+        ->and(data_get($businessDetail, 'permit_applications.*.assessment.total_amount_cents'))->toBe([122_000, 122_000])
+        ->and(data_get($businessDetail, 'permit_applications.*.payable.paid_amount_cents'))->toBe([0, 0])
+        ->and(data_get($businessDetail, 'permit_applications.*.payable.amount_due_cents'))->toBe([122_000, 122_000])
+        ->and(data_get($businessDetail, 'permit_applications.*.permit.status_label'))->toBe([
+            'Permit not yet issued',
+            'Permit not yet issued',
+        ])
+        ->and(data_get($businessDetail, 'permit_applications.*.permit.artifact'))->toBe([null, null])
+        ->and(data_get($businessDetail, 'documents_and_registration.documents'))->toBe([]);
 
     $newManifest = $specimens->firstWhere('scenario_id', NewApplicationHappyPathDefinition::Id)->owned_resource_manifest;
     $renewalManifest = $specimens->firstWhere('scenario_id', RenewalHappyPathDefinition::Id)->owned_resource_manifest;
