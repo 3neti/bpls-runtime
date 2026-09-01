@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { router, usePage } from '@inertiajs/vue3';
-import { ShieldAlert } from '@lucide/vue';
+import { ArrowRight, ShieldAlert } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import {
     enterLaboratory,
@@ -34,7 +34,15 @@ function handlePersonaChange(event: Event): void {
 
 function returnToLaboratory(): void {
     switchingTo.value = 'laboratory';
-    router.post(enterLaboratory().url);
+    router.post(
+        enterLaboratory().url,
+        {},
+        {
+            onFinish: () => {
+                switchingTo.value = null;
+            },
+        },
+    );
 }
 </script>
 
@@ -100,10 +108,11 @@ function returnToLaboratory(): void {
                     v-if="preview.cleanroom_actor"
                     type="button"
                     :disabled="switchingTo !== null"
-                    class="shrink-0 rounded-md border border-amber-900/40 bg-white px-3 py-2 text-xs font-bold shadow-xs disabled:opacity-60"
+                    class="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-amber-950 bg-amber-950 px-3 py-2 text-xs font-bold text-white shadow-sm transition outline-none hover:bg-amber-800 focus-visible:ring-2 focus-visible:ring-amber-950 focus-visible:ring-offset-2 focus-visible:ring-offset-amber-300 disabled:cursor-wait disabled:opacity-60"
                     @click="returnToLaboratory"
                 >
-                    Return to Laboratory
+                    Continue in Laboratory
+                    <ArrowRight class="size-4" aria-hidden="true" />
                 </button>
             </div>
 
