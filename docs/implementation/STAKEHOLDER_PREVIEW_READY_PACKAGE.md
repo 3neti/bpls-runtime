@@ -19,6 +19,8 @@ This package hands the existing BPLS application to the Board for internal opera
 
 Run the deterministic preparation command with `STAKEHOLDER_PREVIEW_PASSWORD` supplied in the operator's runtime environment. The password must be at least 16 characters and must be delivered through an approved secret channel; it is not stored in Git, the manifest, screenshots, or this package.
 
+For the secured local Herd site, run `composer preview:ready` after pulling application changes or rebuilding the local database. The command clears stale configuration, applies pending migrations non-destructively, synchronizes the canonical synthetic preview personas, and rebuilds the stable `local-browser-testing` specimen at `https://bpls-runtime.test`. It fails closed when the preview safety configuration or runtime password is absent.
+
 Live browser verification covered Treasury/BPLO capability separation, the exact approved assessment snapshot, paid payment schedule, OTC collection and issued receipt, completed clearances, citizen timeline, and the post-clearance release refusal boundary. Desktop and 390px mobile views had zero application console errors and no horizontal overflow.
 
 ## Preview Accounts

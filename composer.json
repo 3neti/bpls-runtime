@@ -56,6 +56,11 @@
             "Composer\\Config::disableProcessTimeout",
             "@php artisan dev"
         ],
+        "preview:ready": [
+            "@php artisan config:clear --ansi",
+            "@php artisan migrate --force --no-interaction --ansi",
+            "@php artisan lifecycle:prepare-stakeholder-preview --phase=prepare --run-id=local-browser-testing --base-url=https://bpls-runtime.test"
+        ],
         "lint": [
             "pint --parallel"
         ],
