@@ -51,6 +51,7 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
         private readonly DescribeCitizenPaymentSchedule $describeCitizenPaymentSchedule,
         private readonly DescribePermitArtifact $describePermitArtifact,
         private readonly DescribePermitReleaseReadiness $describeReleaseReadiness,
+        private readonly ScenarioExternalDependencyProfile $externalDependencyProfile,
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly BuildPermitApplicationTimeline $buildPermitApplicationTimeline,
         private readonly ScenarioManifest $scenarioManifest,
@@ -142,9 +143,15 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
         $collection->refresh();
         $receipt->refresh();
         $releaseReadiness = $this->describeReleaseReadiness->handle($permitApplication);
-        $citizenPaymentSchedule = $this->describeCitizenPaymentSchedule->handle($paymentSchedule);
+        $citizenPaymentSchedule = $this->externalDependencyProfile->run(
+            $scenario->safety,
+            fn (): array => $this->describeCitizenPaymentSchedule->handle($paymentSchedule),
+        );
         $permitArtifact = $this->describePermitArtifact->handle($permitApplication);
-        $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
+        $onlinePaymentBoundary = $this->externalDependencyProfile->run(
+            $scenario->safety,
+            fn (): array => $this->describeOnlinePaymentBoundary->handle($paymentSchedule),
+        );
         $timeline = $this->buildPermitApplicationTimeline->handle($permitApplication);
         $timelineKeys = collect($timeline)->pluck('key')->all();
         $completedClearances = $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count();
@@ -358,7 +365,10 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
         $collection = TreasuryCollection::query()->findOrFail($manifest['resources']['collection_id']);
         $receipt = Receipt::query()->findOrFail($manifest['resources']['receipt_id']);
         $releaseReadiness = $this->describeReleaseReadiness->handle($permitApplication);
-        $citizenPaymentSchedule = $this->describeCitizenPaymentSchedule->handle($paymentSchedule);
+        $citizenPaymentSchedule = $this->externalDependencyProfile->run(
+            $manifest['safety'],
+            fn (): array => $this->describeCitizenPaymentSchedule->handle($paymentSchedule),
+        );
         $permitArtifact = $this->describePermitArtifact->handle($permitApplication);
         $timelineKeys = collect($this->buildPermitApplicationTimeline->handle($permitApplication))->pluck('key')->all();
         $browserReport = $artifactStore->readJson('browser/report.json') ?? ['result' => ['passed' => false]];

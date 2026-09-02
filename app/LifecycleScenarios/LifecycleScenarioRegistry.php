@@ -35,6 +35,7 @@ final class LifecycleScenarioRegistry
                 safety: [
                     'environments' => ['local', 'testing'],
                     'external_integrations' => false,
+                    'external_dependency_expectations' => ['x_change' => ScenarioExternalDependencyProfile::XChangeConfigured],
                     'irreversible_actions' => false,
                     'notifications' => true,
                     'external_notifications' => false,
@@ -85,6 +86,7 @@ final class LifecycleScenarioRegistry
                 safety: [
                     'environments' => ['local', 'testing'],
                     'external_integrations' => false,
+                    'external_dependency_expectations' => ['x_change' => ScenarioExternalDependencyProfile::XChangeUnconfigured],
                     'irreversible_actions' => false,
                     'notifications' => true,
                     'external_notifications' => false,
@@ -133,6 +135,7 @@ final class LifecycleScenarioRegistry
                 safety: [
                     'environments' => ['local', 'testing'],
                     'external_integrations' => false,
+                    'external_dependency_expectations' => ['x_change' => ScenarioExternalDependencyProfile::XChangeUnconfigured],
                     'irreversible_actions' => false,
                     'notifications' => true,
                     'external_notifications' => false,
@@ -217,6 +220,7 @@ final class LifecycleScenarioRegistry
                 safety: [
                     'environments' => ['local', 'testing'],
                     'external_integrations' => false,
+                    'external_dependency_expectations' => ['x_change' => ScenarioExternalDependencyProfile::XChangeUnconfigured],
                     'irreversible_actions' => false,
                     'notifications' => false,
                 ],
@@ -261,6 +265,7 @@ final class LifecycleScenarioRegistry
                 safety: [
                     'environments' => ['local', 'testing'],
                     'external_integrations' => false,
+                    'external_dependency_expectations' => ['x_change' => ScenarioExternalDependencyProfile::XChangeUnconfigured],
                     'irreversible_actions' => false,
                     'notifications' => false,
                 ],
@@ -437,6 +442,7 @@ final class LifecycleScenarioRegistry
                 safety: [
                     'environments' => ['local', 'testing'],
                     'external_integrations' => false,
+                    'external_dependency_expectations' => ['x_change' => ScenarioExternalDependencyProfile::XChangeUnconfigured],
                     'irreversible_actions' => false,
                     'notifications' => false,
                 ],
@@ -477,6 +483,7 @@ final class LifecycleScenarioRegistry
                 safety: [
                     'environments' => ['local', 'testing'],
                     'external_integrations' => false,
+                    'external_dependency_expectations' => ['x_change' => ScenarioExternalDependencyProfile::XChangeUnconfigured],
                     'irreversible_actions' => false,
                     'notifications' => false,
                 ],

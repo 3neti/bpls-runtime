@@ -28,6 +28,7 @@ use App\LifecycleScenarios\RevenueCodeFeeCatalogVisibilityScenario;
 use App\LifecycleScenarios\RolePermissionMatrixVisibilityScenario;
 use App\LifecycleScenarios\ScenarioActorResolver;
 use App\LifecycleScenarios\ScenarioArtifactStore;
+use App\LifecycleScenarios\ScenarioExternalDependencyProfile;
 use App\LifecycleScenarios\StoryboardTerminalStateVisibilityScenario;
 use App\LifecycleScenarios\UserDirectoryVisibilityScenario;
 use App\Models\Assessment;
@@ -189,6 +190,7 @@ test('scenario registry discovers the citizen permit processing visibility scena
         ->and($scenario->expectations['assessment_status'])->toBe('computed')
         ->and($scenario->expectations['online_payment_status'])->toBe('blocked')
         ->and($scenario->expectations['can_pay_online'])->toBeFalse()
+        ->and(data_get($scenario->safety, 'external_dependency_expectations.x_change'))->toBe(ScenarioExternalDependencyProfile::XChangeUnconfigured)
         ->and($scenario->safety['external_integrations'])->toBeFalse();
 });
 
@@ -208,7 +210,50 @@ test('scenario registry discovers the citizen permit authority review visibility
         ->and($scenario->expectations['public_verification_status'])->toBe('artifact_only')
         ->and($scenario->expectations['citizen_payment_detail'])->toBe('read_only')
         ->and($scenario->expectations['can_reconcile_online'])->toBeFalse()
+        ->and(data_get($scenario->safety, 'external_dependency_expectations.x_change'))->toBe(ScenarioExternalDependencyProfile::XChangeUnconfigured)
         ->and($scenario->safety['external_integrations'])->toBeFalse();
+});
+
+test('scenario external dependency profile isolates XChange and restores ambient configuration', function () {
+    config()->set('services.x_change', [
+        'base_url' => 'https://configured.example.test',
+        'client_id' => 'configured-client',
+        'client_secret' => 'configured-secret',
+    ]);
+
+    $profile = app(ScenarioExternalDependencyProfile::class);
+    $safety = [
+        'external_dependency_expectations' => [
+            'x_change' => ScenarioExternalDependencyProfile::XChangeUnconfigured,
+        ],
+    ];
+
+    $inside = $profile->run($safety, fn (): array => config('services.x_change'));
+
+    expect($inside)->toMatchArray([
+        'base_url' => null,
+        'client_id' => null,
+        'client_secret' => null,
+    ])->and(config('services.x_change'))->toMatchArray([
+        'base_url' => 'https://configured.example.test',
+        'client_id' => 'configured-client',
+        'client_secret' => 'configured-secret',
+    ]);
+
+    expect(fn () => $profile->run($safety, fn (): never => throw new RuntimeException('fixture failure')))
+        ->toThrow(RuntimeException::class, 'fixture failure')
+        ->and(config('services.x_change.base_url'))->toBe('https://configured.example.test')
+        ->and(config('services.x_change.client_id'))->toBe('configured-client')
+        ->and(config('services.x_change.client_secret'))->toBe('configured-secret');
+
+    $configuredSafety = [
+        'external_dependency_expectations' => [
+            'x_change' => ScenarioExternalDependencyProfile::XChangeConfigured,
+        ],
+    ];
+
+    expect($profile->expectsConfiguredXChange($configuredSafety))->toBeTrue()
+        ->and($profile->run($configuredSafety, fn (): string => (string) config('services.x_change.client_id')))->toBe('configured-client');
 });
 
 test('scenario registry discovers the citizen permit draft edit visibility scenario', function () {

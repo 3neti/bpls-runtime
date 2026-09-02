@@ -133,6 +133,12 @@ test('staff users without prepare permission cannot prepare a payment schedule',
 });
 
 test('staff users with view permission can review a payment schedule', function () {
+    config()->set('services.x_change', [
+        'base_url' => null,
+        'client_id' => null,
+        'client_secret' => null,
+    ]);
+
     $user = userWithPermissions([
         UserPermission::AccessStaff,
         UserPermission::ViewPaymentSchedules,

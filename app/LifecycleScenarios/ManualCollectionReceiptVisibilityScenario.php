@@ -99,6 +99,7 @@ final class ManualCollectionReceiptVisibilityScenario
         private readonly BuildPaidEstablishmentsReport $buildPaidEstablishmentsReport,
         private readonly BuildPaymentSummaryReport $buildPaymentSummaryReport,
         private readonly BuildPermitApplicationTimeline $buildPermitApplicationTimeline,
+        private readonly ScenarioExternalDependencyProfile $externalDependencyProfile,
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly DescribePermitArtifact $describePermitArtifact,
         private readonly DescribePermitReleaseReadiness $describeReleaseReadiness,
@@ -230,6 +231,7 @@ final class ManualCollectionReceiptVisibilityScenario
                 $applicant ?? throw new RuntimeException('Preview QR golden applicant was not resolved.'),
                 $assessmentPreparer,
                 $assessmentApprover,
+                $scenario->safety,
             )
             : null;
         $collection = $this->recordCollection->handle($paymentSchedule, [
@@ -312,10 +314,16 @@ final class ManualCollectionReceiptVisibilityScenario
             : collect();
         $receiptNotice = $receiptNotices->first();
         $reportSearch = $permitApplication->application_number ?? $permitApplication->business->name;
-        $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
-        $xChangeIsConfigured = $this->xChangeIsConfigured();
+        $onlinePaymentBoundary = $this->externalDependencyProfile->run(
+            $scenario->safety,
+            fn (): array => $this->describeOnlinePaymentBoundary->handle($paymentSchedule),
+        );
+        $xChangeIsConfigured = $this->externalDependencyProfile->expectsConfiguredXChange($scenario->safety);
         $citizenPaymentSchedule = $isCitizenOriginated
-            ? $this->describeCitizenPaymentSchedule->handle($paymentSchedule)
+            ? $this->externalDependencyProfile->run(
+                $scenario->safety,
+                fn (): array => $this->describeCitizenPaymentSchedule->handle($paymentSchedule),
+            )
             : null;
         $dailyCollectionsReport = $this->buildDailyCollectionsReport->handle([
             'date_from' => $collection->received_at->toDateString(),
@@ -912,11 +920,17 @@ final class ManualCollectionReceiptVisibilityScenario
         $permitApplication = PermitApplication::query()
             ->with(['business', 'clearances', 'lines.lineOfBusiness'])
             ->findOrFail($manifest['resources']['permit_application_id']);
-        $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
+        $onlinePaymentBoundary = $this->externalDependencyProfile->run(
+            $manifest['safety'],
+            fn (): array => $this->describeOnlinePaymentBoundary->handle($paymentSchedule),
+        );
         $qrGoldenOnlinePaymentBoundary = $qrGoldenSchedule instanceof PaymentSchedule
-            ? $this->describeOnlinePaymentBoundary->handle($qrGoldenSchedule)
+            ? $this->externalDependencyProfile->run(
+                $manifest['safety'],
+                fn (): array => $this->describeOnlinePaymentBoundary->handle($qrGoldenSchedule),
+            )
             : null;
-        $xChangeIsConfigured = $this->xChangeIsConfigured();
+        $xChangeIsConfigured = $this->externalDependencyProfile->expectsConfiguredXChange($manifest['safety']);
         $dailyCollectionsReport = $this->buildDailyCollectionsReport->handle([
             'date_from' => $collection->received_at->toDateString(),
             'date_to' => $collection->received_at->toDateString(),
@@ -1327,6 +1341,7 @@ final class ManualCollectionReceiptVisibilityScenario
     /**
      * @param  array<string, mixed>  $baseApplicationData
      * @param  array<string, User>  $actors
+     * @param  array<string, mixed>  $safety
      * @return array<string, mixed>
      */
     private function prepareQrGoldenObligation(
@@ -1336,6 +1351,7 @@ final class ManualCollectionReceiptVisibilityScenario
         User $applicant,
         User $assessmentPreparer,
         User $assessmentApprover,
+        array $safety,
     ): array {
         $reference = 'QR-PH-GOLDEN-'.$this->boundedRunReference($runId, 42);
         $permitApplication = $this->createCitizenPermitApplicationDraft->handle([
@@ -1376,7 +1392,10 @@ final class ManualCollectionReceiptVisibilityScenario
             AssessmentDecisionAction::Approved,
         );
         $paymentSchedule = $this->createPaymentSchedule->handle($assessment, $assessmentPreparer);
-        $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
+        $onlinePaymentBoundary = $this->externalDependencyProfile->run(
+            $safety,
+            fn (): array => $this->describeOnlinePaymentBoundary->handle($paymentSchedule),
+        );
         $paymentSchedule->load(['treasuryCollections.receipt']);
 
         return [
@@ -1596,12 +1615,6 @@ final class ManualCollectionReceiptVisibilityScenario
     private function safeRunReference(string $runId): string
     {
         return $this->boundedRunReference($runId, 60);
-    }
-
-    private function xChangeIsConfigured(): bool
-    {
-        return collect(['base_url', 'client_id', 'client_secret'])
-            ->every(fn (string $key): bool => is_string(config("services.x_change.{$key}")) && config("services.x_change.{$key}") !== '');
     }
 
     private function isCitizenOriginated(string $scenarioKey): bool

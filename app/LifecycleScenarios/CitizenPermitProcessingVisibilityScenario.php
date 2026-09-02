@@ -33,6 +33,7 @@ final class CitizenPermitProcessingVisibilityScenario
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
         private readonly BuildPermitApplicationTimeline $buildPermitApplicationTimeline,
         private readonly DescribePaymentPolicyBoundary $describePaymentPolicyBoundary,
+        private readonly ScenarioExternalDependencyProfile $externalDependencyProfile,
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly ScenarioManifest $scenarioManifest,
         private readonly ScenarioSummaryRenderer $summaryRenderer,
@@ -93,7 +94,10 @@ final class CitizenPermitProcessingVisibilityScenario
         $timeline = $this->buildPermitApplicationTimeline->handle($permitApplication);
         $timelineKeys = collect($timeline)->pluck('key')->all();
         $paymentPolicyBoundary = $this->describePaymentPolicyBoundary->handle($paymentSchedule);
-        $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
+        $onlinePaymentBoundary = $this->externalDependencyProfile->run(
+            $scenario->safety,
+            fn (): array => $this->describeOnlinePaymentBoundary->handle($paymentSchedule),
+        );
 
         $steps = [
             $this->step('actors-resolved', 'Resolve actual citizen and municipal operator', [
@@ -223,7 +227,10 @@ final class CitizenPermitProcessingVisibilityScenario
         $assessment = Assessment::query()->findOrFail($manifest['resources']['assessment_id']);
         $paymentSchedule = PaymentSchedule::query()->findOrFail($manifest['resources']['payment_schedule_id']);
         $paymentPolicyBoundary = $this->describePaymentPolicyBoundary->handle($paymentSchedule);
-        $onlinePaymentBoundary = $this->describeOnlinePaymentBoundary->handle($paymentSchedule);
+        $onlinePaymentBoundary = $this->externalDependencyProfile->run(
+            $manifest['safety'],
+            fn (): array => $this->describeOnlinePaymentBoundary->handle($paymentSchedule),
+        );
         $timelineKeys = collect($this->buildPermitApplicationTimeline->handle($permitApplication))->pluck('key')->all();
         $browserReport = $artifactStore->readJson('browser/report.json') ?? ['result' => ['passed' => false]];
 
