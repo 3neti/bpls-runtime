@@ -21,6 +21,7 @@ import {
 } from '@lucide/vue';
 import { computed, reactive, ref } from 'vue';
 import { correctLinesOfBusiness as correctCitizenLinesOfBusiness } from '@/actions/App/Http/Controllers/Citizen/BusinessPermitEvaluationController';
+import { store as recordBploRouting } from '@/actions/App/Http/Controllers/Staff/BploRoutingDeterminationController';
 import {
     confirmResponsibility,
     correctLinesOfBusiness as correctStaffLinesOfBusiness,
@@ -63,12 +64,72 @@ type LineOfBusiness = EvaluationLineOfBusinessOption;
 
 const props = defineProps<{
     evaluation: Evaluation | null;
-    application: { id: number; application_number: string | null };
+    application: {
+        id: number;
+        application_number: string | null;
+        lines: {
+            id: number;
+            line_of_business_id: number;
+            line_of_business_name: string | null;
+        }[];
+    };
+    bploRouting: {
+        id: number;
+        determined_by: string;
+        determined_at: string;
+        situational_context: string;
+        works: {
+            id: number;
+            office_code: string;
+            office_label: string;
+            situational_reason: string;
+            required_work: string;
+            line_of_business_name: string | null;
+            payment_orders: {
+                id: number;
+                sequence: number;
+                status: string;
+                total_amount_cents: number;
+                issued_by: string;
+                issued_at: string;
+                lines: {
+                    id: number;
+                    code: string;
+                    name: string;
+                    amount_cents: number;
+                }[];
+            }[];
+        }[];
+    } | null;
+    routingOfficeOptions: { code: string; label: string }[];
     lineOfBusinesses: LineOfBusiness[];
     can: EvaluationCapabilities;
 }>();
 
 const pendingAction = ref<string | null>(null);
+const routingContext = ref('');
+const routingCandidates = props.routingOfficeOptions.flatMap((office) =>
+    props.application.lines.map((line) => ({
+        key: `${office.code}-${line.id}`,
+        office,
+        line,
+    })),
+);
+const routingDrafts = reactive(
+    Object.fromEntries(
+        routingCandidates.map((candidate) => [
+            candidate.key,
+            {
+                selected: false,
+                reason: '',
+                requiredWork: '',
+            },
+        ]),
+    ) as Record<
+        string,
+        { selected: boolean; reason: string; requiredWork: string }
+    >,
+);
 
 const page = usePage();
 const evaluationError = computed(() =>
@@ -314,6 +375,30 @@ function submitLineCorrection(): void {
     });
 }
 
+function submitBploRouting(): void {
+    const selectedWork = routingCandidates
+        .filter((candidate) => routingDrafts[candidate.key].selected)
+        .map((candidate) => ({
+            office_code: candidate.office.code,
+            office_label: candidate.office.label,
+            situational_reason: routingDrafts[candidate.key].reason,
+            required_work: routingDrafts[candidate.key].requiredWork,
+            permit_application_line_id: candidate.line.id,
+        }));
+
+    runOnce('bplo-routing', () => {
+        useForm({
+            situational_context: routingContext.value,
+            selected_work: selectedWork,
+        }).post(recordBploRouting(props.application.id).url, {
+            preserveScroll: true,
+            onFinish: () => {
+                pendingAction.value = null;
+            },
+        });
+    });
+}
+
 function submitResponsibility(
     item: EvaluationItem,
     draft: ResponsibilityDraft,
@@ -488,6 +573,209 @@ function submitPrepareAssessment(): void {
                     </p>
                 </div>
             </div>
+
+            <section
+                class="overflow-hidden rounded-2xl border-2 border-[#1f416b]/35 bg-card shadow-xs"
+                data-testid="bplo-routing-boundary"
+                aria-labelledby="bplo-routing-title"
+            >
+                <div class="bg-[#1f416b] px-5 py-4 text-white">
+                    <p class="text-xs font-bold tracking-[0.18em] uppercase">
+                        After Application lodging
+                    </p>
+                    <h2 id="bplo-routing-title" class="mt-1 text-xl font-black">
+                        BPLO situational routing determination
+                    </h2>
+                    <p class="mt-1 max-w-3xl text-sm text-white/80">
+                        Application facts and Lines of Business inform the
+                        decision. BPLO owns the selected concerned offices; no
+                        LOB-only rule decides this route.
+                    </p>
+                </div>
+
+                <div v-if="bploRouting" class="grid gap-4 p-4 sm:p-5">
+                    <div class="grid gap-1 text-sm sm:grid-cols-[180px_1fr]">
+                        <p class="font-semibold">Determined by BPLO</p>
+                        <p>
+                            {{ bploRouting.determined_by }} ·
+                            {{ dateTime(bploRouting.determined_at) }}
+                        </p>
+                        <p class="font-semibold">Situational context</p>
+                        <p class="text-muted-foreground">
+                            {{ bploRouting.situational_context }}
+                        </p>
+                    </div>
+
+                    <div class="grid gap-3 lg:grid-cols-2">
+                        <article
+                            v-for="work in bploRouting.works"
+                            :key="work.id"
+                            class="min-w-0 rounded-xl border bg-background p-4"
+                        >
+                            <div
+                                class="flex flex-wrap items-start justify-between gap-2"
+                            >
+                                <div>
+                                    <p class="font-bold">
+                                        {{ work.office_label }}
+                                    </p>
+                                    <p class="text-xs text-muted-foreground">
+                                        {{
+                                            work.line_of_business_name ??
+                                            'Application-wide context'
+                                        }}
+                                    </p>
+                                </div>
+                                <Badge variant="outline">BPLO selected</Badge>
+                            </div>
+                            <p class="mt-3 text-sm">
+                                <strong>Required work:</strong>
+                                {{ work.required_work }}
+                            </p>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                {{ work.situational_reason }}
+                            </p>
+
+                            <div class="mt-4 border-t pt-3">
+                                <p
+                                    class="text-xs font-bold tracking-wide uppercase"
+                                >
+                                    Paperless Payment Orders
+                                </p>
+                                <p
+                                    v-if="work.payment_orders.length === 0"
+                                    class="mt-2 text-sm text-amber-700 dark:text-amber-300"
+                                >
+                                    Awaiting the office's amount-bearing
+                                    determination.
+                                </p>
+                                <div v-else class="mt-2 grid gap-2">
+                                    <div
+                                        v-for="order in work.payment_orders"
+                                        :key="order.id"
+                                        class="grid gap-1 rounded-lg bg-muted/55 p-3 text-sm sm:grid-cols-[1fr_auto]"
+                                        data-testid="paperless-payment-order"
+                                    >
+                                        <div>
+                                            <p class="font-semibold">
+                                                Issued by {{ order.issued_by }}
+                                            </p>
+                                            <p
+                                                class="text-xs text-muted-foreground"
+                                            >
+                                                Internal sequence
+                                                {{ order.sequence }} ·
+                                                {{ dateTime(order.issued_at) }}
+                                                · {{ order.status }}
+                                            </p>
+                                        </div>
+                                        <p class="font-black">
+                                            {{
+                                                money(order.total_amount_cents)
+                                            }}
+                                        </p>
+                                        <p
+                                            class="text-xs text-muted-foreground sm:col-span-2"
+                                        >
+                                            Included upstream of the
+                                            consolidated Assessment when current
+                                            and eligible. No official
+                                            payment-order number is invented.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+                </div>
+
+                <form
+                    v-else-if="can.determine_routing"
+                    class="grid gap-4 p-4 sm:p-5"
+                    @submit.prevent="submitBploRouting"
+                >
+                    <label class="grid gap-1 text-sm font-semibold">
+                        Situational context
+                        <textarea
+                            v-model="routingContext"
+                            required
+                            rows="3"
+                            class="rounded-md border bg-background px-3 py-2 font-normal"
+                            placeholder="Record the application circumstances BPLO considered."
+                        />
+                    </label>
+                    <div class="grid gap-3 lg:grid-cols-2">
+                        <fieldset
+                            v-for="candidate in routingCandidates"
+                            :key="candidate.key"
+                            class="grid gap-3 rounded-xl border p-4"
+                        >
+                            <label class="flex items-center gap-2 font-bold">
+                                <input
+                                    v-model="
+                                        routingDrafts[candidate.key].selected
+                                    "
+                                    type="checkbox"
+                                />
+                                {{ candidate.office.label }}
+                            </label>
+                            <template
+                                v-if="routingDrafts[candidate.key].selected"
+                            >
+                                <p
+                                    class="rounded-lg bg-muted px-3 py-2 text-sm"
+                                >
+                                    LOB context:
+                                    <strong>{{
+                                        candidate.line.line_of_business_name
+                                    }}</strong>
+                                </p>
+                                <label class="grid gap-1 text-sm"
+                                    >Situational reason
+                                    <textarea
+                                        v-model="
+                                            routingDrafts[candidate.key].reason
+                                        "
+                                        required
+                                        rows="2"
+                                        class="rounded-md border bg-background px-3 py-2"
+                                    />
+                                </label>
+                                <label class="grid gap-1 text-sm"
+                                    >Required office work
+                                    <textarea
+                                        v-model="
+                                            routingDrafts[candidate.key]
+                                                .requiredWork
+                                        "
+                                        required
+                                        rows="2"
+                                        class="rounded-md border bg-background px-3 py-2"
+                                    />
+                                </label>
+                            </template>
+                        </fieldset>
+                    </div>
+                    <p
+                        v-if="page.props.errors.routing"
+                        class="text-sm text-destructive"
+                    >
+                        {{ page.props.errors.routing }}
+                    </p>
+                    <Button
+                        type="submit"
+                        class="w-fit"
+                        :disabled="pendingAction !== null"
+                    >
+                        Record BPLO routing determination
+                    </Button>
+                </form>
+
+                <p v-else class="p-5 text-sm text-muted-foreground">
+                    Awaiting an authorized BPLO situational routing
+                    determination.
+                </p>
+            </section>
 
             <section
                 v-if="!evaluation"

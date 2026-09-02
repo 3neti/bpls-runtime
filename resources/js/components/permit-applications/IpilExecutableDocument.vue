@@ -24,20 +24,17 @@ type DocumentProjection = {
         verified_by: number | null;
         recommending_approval: string | null;
     }[];
-    assessment: {
-        id: number;
+    page_2_assessment: {
+        status: string;
+        statement: string;
+        populated_from_canonical_assessment: boolean;
+    };
+    computation_assessment_slip: {
+        assessment_id: number;
         sequence: number;
         status: string;
-        assessed_at: string | null;
         total_amount_cents: number;
-        lines: {
-            reference: string;
-            description: string;
-            line_of_business: string | null;
-            amount_due_cents: number;
-            penalty_surcharge_cents: number;
-            total_cents: number;
-        }[];
+        statement: string;
     } | null;
     treasury_counter_check: {
         result: string | null;
@@ -54,6 +51,10 @@ type DocumentProjection = {
         status: string;
         statement: string;
         mayor_signature_authority: string;
+    };
+    post_payment_office_signatures: {
+        status: string;
+        statement: string;
     };
 };
 
@@ -502,49 +503,31 @@ function date(value: string | null): string {
             >
                 Assessments
             </h2>
-            <div v-if="document.assessment" class="grid gap-3 p-4">
-                <div
-                    class="hidden grid-cols-[1fr_130px_130px_120px_130px] border border-stone-900 bg-slate-200 text-[10px] font-black uppercase md:grid dark:bg-slate-800"
-                >
-                    <span class="p-2">Local Taxes / Fees</span
-                    ><span class="p-2">Reference</span
-                    ><span class="p-2">Amount Due</span
-                    ><span class="p-2">Penalty/Surcharge</span
-                    ><span class="p-2">Total</span>
-                </div>
-                <div
-                    v-for="line in document.assessment.lines"
-                    :key="`${line.reference}-${line.description}`"
-                    class="grid gap-1 border border-stone-300 p-3 md:grid-cols-[1fr_130px_130px_120px_130px] md:border-t-0 md:p-0"
-                >
-                    <p class="md:p-2">
-                        <strong>{{ line.description }}</strong
-                        ><span
-                            v-if="line.line_of_business"
-                            class="block text-[10px] text-stone-500"
-                            >{{ line.line_of_business }}</span
-                        >
-                    </p>
-                    <p class="md:p-2">{{ line.reference }}</p>
-                    <p class="md:p-2">{{ money(line.amount_due_cents) }}</p>
-                    <p class="md:p-2">
-                        {{ money(line.penalty_surcharge_cents) }}
-                    </p>
-                    <p class="font-bold md:p-2">
-                        {{ money(line.total_cents) }}
-                    </p>
-                </div>
+            <div class="grid gap-3 p-4">
                 <p
-                    class="border-t-2 border-stone-900 pt-2 text-right text-lg font-black dark:border-stone-400"
+                    class="border-2 border-dashed border-stone-400 bg-stone-50 p-4 text-sm dark:bg-stone-800"
                 >
-                    GRAND TOTAL
-                    {{ money(document.assessment.total_amount_cents) }}
+                    <strong>Not used by Ipil.</strong>
+                    {{ document.page_2_assessment.statement }} It is
+                    deliberately not populated from the canonical Assessment.
+                </p>
+                <p
+                    v-if="document.computation_assessment_slip"
+                    class="text-sm font-semibold"
+                >
+                    {{ document.computation_assessment_slip.statement }} ·
+                    {{
+                        money(
+                            document.computation_assessment_slip
+                                .total_amount_cents,
+                        )
+                    }}
+                </p>
+                <p v-else class="text-sm text-stone-600">
+                    The separate Computation/Assessment Slip is not yet
+                    available.
                 </p>
             </div>
-            <p v-else class="p-4 text-sm text-stone-600">
-                Assessment not yet prepared. This section will populate only
-                from immutable Assessment truth.
-            </p>
 
             <h2
                 class="bg-[#1f416b] px-4 py-3 text-lg font-black text-white uppercase"
@@ -563,9 +546,7 @@ function date(value: string | null): string {
                     <p>{{ item.date_issued ?? 'Not available' }}</p>
                 </div>
                 <p class="text-[10px] text-stone-500">
-                    Only canonical clearance facts are projected. Missing
-                    recommending-approval and BPLO verification semantics remain
-                    uncommissioned.
+                    {{ document.post_payment_office_signatures.statement }}
                 </p>
             </div>
 

@@ -214,6 +214,7 @@ export type EvaluationLineOfBusinessOption = {
 
 export type EvaluationCapabilities = {
     initialize: boolean;
+    determine_routing: boolean;
     contribute: boolean;
     counter_check: boolean;
     correct_lines_of_business: boolean;

@@ -129,6 +129,7 @@ enum StakeholderPreviewPersona: string
                 UserPermission::ViewFeeRules,
                 UserPermission::ViewPaymentSchedules,
                 UserPermission::ViewBusinessPermitEvaluations,
+                UserPermission::DetermineBploRouting,
             ],
             self::AssessmentOfficer => [
                 UserPermission::AccessStaff,

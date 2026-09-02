@@ -42,20 +42,18 @@ class BuildExecutablePermitApplicationDocument
                     : data_get($application->metadata, 'applicant_declaration_draft'),
             ],
             'verification' => $this->verification($application),
-            'assessment' => $assessment === null ? null : [
-                'id' => $assessment->id,
+            'page_2_assessment' => [
+                'status' => 'unused_by_ipil',
+                'statement' => 'Ipil does not use the Application Form Page 2 Assessment portion.',
+                'populated_from_canonical_assessment' => false,
+            ],
+            'computation_assessment_slip' => $assessment === null ? null : [
+                'assessment_id' => $assessment->id,
                 'sequence' => $assessment->sequence,
                 'status' => $assessment->status->value,
-                'assessed_at' => $assessment->assessed_at?->toIso8601String(),
                 'total_amount_cents' => $assessment->total_amount_cents,
-                'lines' => $assessment->lines->map(fn ($line): array => [
-                    'reference' => $line->code,
-                    'description' => $line->name,
-                    'line_of_business' => $line->lineOfBusiness?->name,
-                    'amount_due_cents' => $line->amount_cents,
-                    'penalty_surcharge_cents' => 0,
-                    'total_cents' => $line->amount_cents,
-                ])->values()->all(),
+                'line_count' => $assessment->lines()->count(),
+                'statement' => 'Authoritative financial artifact: separate Computation/Assessment Slip',
             ],
             'treasury_counter_check' => $assessment?->treasuryCounterCheck === null ? null : [
                 'result' => $assessment->treasuryCounterCheck->result?->value,
@@ -74,6 +72,10 @@ class BuildExecutablePermitApplicationDocument
                 'status' => 'not_issued',
                 'statement' => 'Permit not yet issued',
                 'mayor_signature_authority' => 'unresolved',
+            ],
+            'post_payment_office_signatures' => [
+                'status' => 'not_implemented',
+                'statement' => 'Concerned-office verification and Page 2 signatures belong after payment; unavailable until that lifecycle is implemented.',
             ],
         ];
     }

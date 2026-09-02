@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Staff;
 
+use App\Actions\BuildComputationAssessmentSlip;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\RenderAssessmentPdf;
 use App\Assessment\AssessmentSnapshotFingerprint;
@@ -109,8 +110,11 @@ class PermitApplicationAssessmentController extends Controller
         return to_route('staff.permit-applications.assessments.show', $assessment);
     }
 
-    public function show(Assessment $assessment, AssessmentSnapshotFingerprint $fingerprint): Response
-    {
+    public function show(
+        Assessment $assessment,
+        AssessmentSnapshotFingerprint $fingerprint,
+        BuildComputationAssessmentSlip $buildSlip,
+    ): Response {
         Gate::authorize(UserPermission::ViewPermitApplications->value);
 
         $assessment->load([
@@ -140,6 +144,7 @@ class PermitApplicationAssessmentController extends Controller
                     && hash_equals($assessment->treasuryCounterCheck->assessment_snapshot_hash, $snapshotHash)));
 
         return Inertia::render('permit-applications/Assessments/Show', [
+            'computationAssessmentSlip' => $buildSlip->handle($assessment),
             'assessment' => [
                 'id' => $assessment->id,
                 'sequence' => $assessment->sequence,

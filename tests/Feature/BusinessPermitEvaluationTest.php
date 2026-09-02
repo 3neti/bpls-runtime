@@ -33,8 +33,10 @@ use App\Models\BusinessPermitEvaluationItemRevision;
 use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
 use App\Models\PaymentSchedule;
+use App\Models\Permission;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
+use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\RevenueCodeFeeCatalogSeeder;
 
@@ -53,6 +55,21 @@ function evaluationFixture(): array
         'declared_gross_sales_cents' => 500_000,
         'capital_investment_cents' => 250_000,
     ]);
+    $routing = $application->bploRoutingDetermination()->create([
+        'determined_by_id' => $actor->id,
+        'situational_context' => 'Test-only explicit BPLO routing fixture.',
+        'application_facts_snapshot' => ['applicant_declaration_preserved' => true],
+        'determined_at' => now(),
+    ]);
+    foreach (['assessor', 'engineering', 'health', 'menro'] as $office) {
+        $routing->works()->create([
+            'office_code' => $office,
+            'office_label' => str($office)->headline(),
+            'situational_reason' => 'Test-only situational selection.',
+            'required_work' => 'Test-only office work.',
+            'context_snapshot' => ['automatic_lob_rule' => false],
+        ]);
+    }
     $evaluation = app(InitializeBusinessPermitEvaluation::class)->handle($application, $actor);
 
     return compact('actor', 'business', 'retail', 'application', 'line', 'evaluation');
@@ -109,7 +126,8 @@ it('rejects blank charges, preserves accepted zero, and segregates provisional U
     expect($item->revisions()->latest()->first()->value['amount_cents'])->toBe(0)
         ->and($commissioned['ready'])->toBeFalse()
         ->and(implode(' ', $commissioned['issues']))->toContain('accepted commissioned source')
-        ->and($uat['ready'])->toBeTrue();
+        ->and($uat['ready'])->toBeFalse()
+        ->and(implode(' ', $uat['issues']))->toContain('current issued Paperless Payment Order');
 });
 
 it('preserves default and resolved amounts with idempotent optimistic office confirmation', function () {
@@ -236,12 +254,24 @@ it('maps each governed and human-resolved charge exactly once without duplicate 
         BusinessPermitEvaluationItemType::Charge,
         'engineering',
         true,
-        false,
+        true,
         BusinessPermitEvaluationApplicability::Applicable,
         ['amount_cents' => 7_500],
         BusinessPermitEvaluationSource::GovernedOfficeProcedure,
         $fixture['actor'],
-        metadata: ['label' => 'Resolved Engineering charge'],
+        metadata: ['label' => 'Resolved Engineering charge', 'authorized_actor_id' => $fixture['actor']->id],
+    );
+    $version = $fixture['evaluation']->fresh()->currentVersion;
+    app(CompleteBusinessPermitEvaluationResponsibility::class)->handle(
+        $item,
+        $fixture['actor'],
+        BusinessPermitEvaluationApplicability::Applicable,
+        ['amount_cents' => 7_500],
+        BusinessPermitEvaluationSource::GovernedOfficeProcedure,
+        'Test office amount confirmed.',
+        $version->sequence,
+        $version->fingerprint,
+        'resolved-charge-payment-order',
     );
     $assessment = app(CreateAssessmentForPermitApplication::class)->handle($fixture['application']->fresh(), $fixture['actor']);
     app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($assessment, $fixture['actor']);
@@ -718,6 +748,7 @@ it('fails closed without changing an accepted rule that occupies the stable prev
 /**
  * @return array{
  *     citizen: User,
+ *     bplo: User,
  *     assessment_officer: User,
  *     treasury: User,
  *     municipal_treasurer: User,
@@ -730,8 +761,16 @@ it('fails closed without changing an accepted rule that occupies the stable prev
  */
 function businessPermitEvaluatorPreviewActors(): array
 {
+    $routingPermission = Permission::query()->firstOrCreate(
+        ['code' => UserPermission::DetermineBploRouting->value],
+        ['name' => 'Determine BPLO routing'],
+    );
+    $bploRole = Role::factory()->create();
+    $bploRole->permissions()->sync([$routingPermission->id]);
+
     return [
         'citizen' => User::factory()->create(),
+        'bplo' => User::factory()->for($bploRole)->create(),
         'assessment_officer' => User::factory()->create(),
         'treasury' => User::factory()->create(),
         'municipal_treasurer' => User::factory()->create(),

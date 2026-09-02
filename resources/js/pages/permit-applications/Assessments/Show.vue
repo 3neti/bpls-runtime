@@ -20,6 +20,7 @@ import {
     index as assessmentIndex,
     pdf as assessmentPdf,
 } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
+import ComputationAssessmentSlip from '@/components/assessments/ComputationAssessmentSlip.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import WorkflowSectionHeader from '@/components/workflow/WorkflowSectionHeader.vue';
@@ -52,6 +53,21 @@ type AssessmentWorkingPaper = {
     grand_total_amount_cents: number;
     grouped_total_amount_cents: number;
     reconciles: boolean;
+};
+
+type AssessmentSlipCharge = {
+    assessment_line_id: number;
+    code: string;
+    name: string;
+    amount_cents: number;
+    source_type: 'governed_canonical_pricing' | 'paperless_payment_order';
+    paperless_payment_order: {
+        id: number | null;
+        sequence: number | null;
+        office_code: string | null;
+        office_label: string | null;
+        issued_at: string | null;
+    } | null;
 };
 
 type Assessment = {
@@ -114,6 +130,66 @@ type Assessment = {
 
 const props = defineProps<{
     assessment: Assessment;
+    computationAssessmentSlip: {
+        institution: {
+            country: string;
+            province: string;
+            municipality: string;
+            title: string;
+        };
+        reference: {
+            assessment_sequence: number;
+            official_number: null;
+            official_number_status: string;
+            snapshot_hash: string;
+        };
+        transaction_type: string;
+        owner_proprietor: string;
+        business_name: string;
+        business_address: string | null;
+        payment_mode: string;
+        line_of_businesses: {
+            id: number;
+            code: string | null;
+            name: string | null;
+        }[];
+        line_sections: {
+            line_of_business_id: number;
+            line_of_business_name: string | null;
+            charges: AssessmentSlipCharge[];
+            subtotal_amount_cents: number;
+        }[];
+        application_charges: AssessmentSlipCharge[];
+        application_subtotal_amount_cents: number;
+        grand_total_amount_cents: number;
+        grouped_total_amount_cents: number;
+        reconciles: boolean;
+        in_words: string | null;
+        schedule_of_payments: {
+            payment_mode: string;
+            allocation_status: string;
+            allocation_note: string;
+            quarters: {
+                section: string;
+                due_date: string | null;
+                amount_cents: number | null;
+                balance_cents: number | null;
+            }[];
+        };
+        prepared_by: {
+            name: string | null;
+            prepared_at: string | null;
+            role: string;
+        };
+        approved_by: {
+            name: string | null;
+            approved_at: string;
+            role: string;
+            snapshot_hash: string;
+        } | null;
+        acknowledged_by: null;
+        acknowledgement_note: string;
+    };
     can: {
         prepare_payment_schedule: boolean;
         approve_assessment: boolean;
@@ -184,6 +260,25 @@ function money(amountCents: number): string {
                     </p>
                 </div>
             </div>
+
+            <section aria-labelledby="actual-slip-heading" class="grid gap-3">
+                <div>
+                    <p
+                        class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                    >
+                        Authoritative financial artifact
+                    </p>
+                    <h2 id="actual-slip-heading" class="text-lg font-semibold">
+                        Actual Computation/Assessment Slip
+                    </h2>
+                    <p class="text-sm text-muted-foreground">
+                        A separate executable document projected from this
+                        immutable Assessment. It does not populate the unused
+                        Assessment boxes on Application Page 2.
+                    </p>
+                </div>
+                <ComputationAssessmentSlip :slip="computationAssessmentSlip" />
+            </section>
 
             <WorkflowStageSummary
                 eyebrow="Recorded assessment"

@@ -1,5 +1,7 @@
 # Nelson Operational Workflow Artifact Reconciliation
 
+> 2026-09-02 superseding disposition for routing and Payment Orders: the accepted 2026-09-01 Anaïs/Nelson Zoom walkthrough now establishes BPLO situational routing authority and amount-bearing concerned-office Paperless Payment Orders upstream of the Assessment Officer's consolidated Computation/Assessment Slip. The bounded implementation is documented in `PRE_ASSESSMENT_PAYMENT_ORDER_DECISION_PACKET_2026-08-20.md` and `ACTUAL_ASSESSMENT_PARITY.md`. Older “unmodeled/held” statements below remain the historical disposition of `OPERATIONAL-NELSON-001` before that new evidence; they no longer describe the implemented V1 boundary. Post-payment clearance/signature, portal, issuance, and release questions remain unresolved.
+
 Status: **SOURCE VERIFIED — BOUNDED ASSESSMENT APPROVAL REMAINS RESOLVED; FISCAL AND AUTHORITY DECISIONS BLOCK UAT FREEZE**
 
 Date reconciled: 2026-08-20

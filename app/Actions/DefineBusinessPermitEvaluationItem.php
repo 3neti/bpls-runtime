@@ -47,6 +47,16 @@ class DefineBusinessPermitEvaluationItem
                 && data_get($metadata, 'fee_rule_id') !== null) {
                 throw new LogicException('A governed FeeRule charge must remain on the canonical AssessmentCalculator path and cannot also be defined as a human Evaluation charge.');
             }
+
+            if ($type === BusinessPermitEvaluationItemType::Charge
+                && data_get($metadata, 'bplo_routing_work_id') === null) {
+                $matchingWork = $evaluation->permitApplication->bploRoutingDetermination?->works()
+                    ->where('office_code', $responsibleParty)
+                    ->get();
+                if ($matchingWork?->count() === 1) {
+                    $metadata = [...($metadata ?? []), 'bplo_routing_work_id' => $matchingWork->sole()->id];
+                }
+            }
             $item = $evaluation->items()->create([
                 'key' => $key,
                 'item_type' => $type,

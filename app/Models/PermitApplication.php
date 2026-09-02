@@ -36,6 +36,8 @@ use Illuminate\Support\Collection;
  * @property-read Collection<int, TreasuryCollection> $treasuryCollections
  * @property-read Collection<int, OfficeChargeContribution> $officeChargeContributions
  * @property-read BusinessPermitEvaluation|null $businessPermitEvaluation
+ * @property-read BploRoutingDetermination|null $bploRoutingDetermination
+ * @property-read Collection<int, PaperlessPaymentOrder> $paperlessPaymentOrders
  * @property-read PermitApplicationDeclaration|null $declaration
  * @property-read ProvisionalUatPermitCompletion|null $provisionalUatPermitCompletion
  */
@@ -107,6 +109,18 @@ class PermitApplication extends Model
     public function businessPermitEvaluation(): HasOne
     {
         return $this->hasOne(BusinessPermitEvaluation::class);
+    }
+
+    /** @return HasOne<BploRoutingDetermination, $this> */
+    public function bploRoutingDetermination(): HasOne
+    {
+        return $this->hasOne(BploRoutingDetermination::class);
+    }
+
+    /** @return HasMany<PaperlessPaymentOrder, $this> */
+    public function paperlessPaymentOrders(): HasMany
+    {
+        return $this->hasMany(PaperlessPaymentOrder::class)->orderBy('id');
     }
 
     /** @return HasOne<PermitApplicationDeclaration, $this> */

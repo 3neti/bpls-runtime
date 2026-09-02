@@ -7,6 +7,7 @@ use App\Enums\BusinessPermitEvaluationItemType;
 use App\Enums\BusinessPermitEvaluationSource;
 use App\Models\BusinessPermitEvaluation;
 use App\Models\BusinessPermitEvaluationVersion;
+use App\Models\PaperlessPaymentOrder;
 
 class BusinessPermitEvaluationReadiness
 {
@@ -28,6 +29,10 @@ class BusinessPermitEvaluationReadiness
 
         if ($evaluation->permitApplication->submitted_at === null) {
             $issues[] = 'Required applicant facts are not lodged because the permit application is not submitted.';
+        }
+
+        if ($evaluation->permitApplication->bploRoutingDetermination()->doesntExist()) {
+            $issues[] = 'BPLO has not recorded the situational concerned-office routing determination.';
         }
 
         if ($projection['resolved_line_of_business_ids'] === []) {
@@ -83,6 +88,24 @@ class BusinessPermitEvaluationReadiness
             }
             if ($mode === 'commissioned' && $source === BusinessPermitEvaluationSource::ProvisionalUat) {
                 $issues[] = "Applicable charge [{$item['key']}] is provisional_uat and cannot establish production liability.";
+            }
+
+            $routingWorkId = data_get($item, 'metadata.bplo_routing_work_id');
+            if (! is_int($routingWorkId)) {
+                $issues[] = "Applicable office charge [{$item['key']}] has no BPLO-routed work provenance.";
+
+                continue;
+            }
+
+            $paymentOrderExists = PaperlessPaymentOrder::query()
+                ->where('permit_application_id', $evaluation->permit_application_id)
+                ->where('bplo_routing_work_id', $routingWorkId)
+                ->where('business_permit_evaluation_item_revision_id', $item['revision_id'])
+                ->where('status', 'issued')
+                ->whereNull('superseded_at')
+                ->exists();
+            if (! $paymentOrderExists) {
+                $issues[] = "Applicable office charge [{$item['key']}] has no current issued Paperless Payment Order.";
             }
         }
 

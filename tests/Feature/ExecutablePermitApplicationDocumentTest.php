@@ -50,8 +50,14 @@ test('the same executable document progressively projects immutable assessment t
     $document = app(BuildExecutablePermitApplicationDocument::class)->handle($application);
 
     expect(data_get($document, 'declaration.state'))->toBe('frozen')
-        ->and(data_get($document, 'assessment.total_amount_cents'))->toBe(122_000)
-        ->and(data_get($document, 'assessment.lines'))->toHaveCount(7)
+        ->and(data_get($document, 'page_2_assessment'))->toBe([
+            'status' => 'unused_by_ipil',
+            'statement' => 'Ipil does not use the Application Form Page 2 Assessment portion.',
+            'populated_from_canonical_assessment' => false,
+        ])
+        ->and(data_get($document, 'computation_assessment_slip.total_amount_cents'))->toBe(122_000)
+        ->and(data_get($document, 'computation_assessment_slip.line_count'))->toBe(7)
+        ->and(data_get($document, 'post_payment_office_signatures.status'))->toBe('not_implemented')
         ->and(data_get($document, 'treasury_counter_check.statement'))->toBe('Counter-check completed - no correction')
         ->and(data_get($document, 'municipal_treasurer.exact_approval'))->toBeTrue()
         ->and(data_get($document, 'permit'))->toBe([
@@ -74,7 +80,7 @@ test('new and renewal documents preserve one owner and business chronology with 
         ->and($applications->pluck('declaration.snapshot_hash')->unique())->toHaveCount(2)
         ->and(data_get($applications->first()->declaration->snapshot, 'application.type'))->toBe('new')
         ->and(data_get($applications->last()->declaration->snapshot, 'application.type'))->toBe('renewal')
-        ->and($applications->every(fn (PermitApplication $application): bool => app(BuildExecutablePermitApplicationDocument::class)->handle($application)['assessment']['total_amount_cents'] === 122_000))->toBeTrue();
+        ->and($applications->every(fn (PermitApplication $application): bool => app(BuildExecutablePermitApplicationDocument::class)->handle($application)['computation_assessment_slip']['total_amount_cents'] === 122_000))->toBeTrue();
 });
 
 test('the citizen document page receives the executable projection rather than recalculating it in the browser', function (): void {
@@ -89,7 +95,8 @@ test('the citizen document page receives the executable projection rather than r
         ->assertInertia(fn ($page) => $page
             ->component('citizen/permit-applications/Show')
             ->where('executableDocument.declaration.state', 'frozen')
-            ->where('executableDocument.assessment.total_amount_cents', 122_000)
+            ->where('executableDocument.page_2_assessment.populated_from_canonical_assessment', false)
+            ->where('executableDocument.computation_assessment_slip.total_amount_cents', 122_000)
             ->where('executableDocument.treasury_counter_check.result', 'no_correction')
             ->where('executableDocument.municipal_treasurer.action', 'approved')
             ->where('executableDocument.permit.statement', 'Permit not yet issued'));

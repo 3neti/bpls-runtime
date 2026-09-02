@@ -235,17 +235,16 @@ test('staff users with view permission can open an assessment pdf artifact', fun
 
     expect($pdf)
         ->toStartWith('%PDF-1.4')
-        ->toContain('Assessment Sheet Artifact')
-        ->toContain('Assessment #1')
+        ->toContain('COMPUTATION/ASSESSMENT SLIP')
+        ->toContain('Reference: not officially assigned')
         ->toContain('APP-2026-ASSESSMENT')
         ->toContain('Assessment Artifact Store')
         ->toContain('Assessment Owner')
-        ->toContain('MAYOR-PERMIT')
+        ->toContain('LINE OF BUSINESS')
         ->toContain('Business Tax')
-        ->toContain('PHP 420.00')
-        ->toContain('This artifact renders persisted assessment lines and does not recalculate fees or')
-        ->toContain('taxes.')
-        ->toContain('Full Revenue Code fee/rate catalog extraction remains incomplete.')
+        ->toContain('Php. 420.00')
+        ->toContain('SCHEDULE OF PAYMENTS')
+        ->toContain('BLOCKED - MUNICIPAL FISCAL DECISION.')
         ->and(assessmentPdfPageCount($pdf))->toBe(1);
 });
 

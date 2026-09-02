@@ -19,7 +19,9 @@ Line-of-business declarations preserve the selected canonical catalog identifier
 ## Page 2 projection rules
 
 - Document verification is projected from canonical clearances where a supported match exists; unavailable facts are shown as unavailable, not fabricated.
-- Assessment is projected only from the current immutable Assessment and AssessmentLine records. The document contains no second calculator.
+- **Ipil does not use the Application Form Page 2 Assessment area.** It is always rendered as unused and is never populated from the canonical Assessment.
+- The authoritative financial artifact is the separate executable **Computation/Assessment Slip**, projected only from current immutable Assessment and AssessmentLine records. Neither document contains a second calculator.
+- Concerned-office receipt checking, certification, and Page 2 signatures occur after payment in the accepted Nelson walkthrough. They remain explicitly unavailable because post-payment office completion is outside this slice.
 - Treasury counter-check is projected from the canonical counter-check record.
 - Municipal Treasurer approval is exact only when the canonical decision action is `approve`.
 - Until a canonical permit exists, the projection explicitly says **Permit not yet issued**.
@@ -27,7 +29,7 @@ Line-of-business declarations preserve the selected canonical catalog identifier
 
 ## Browser Lifecycle Laboratory contract
 
-The human application milestone opens the real executable Page 1 form. Saving preserves a draft; submitting freezes the declaration. Reopening the same document progressively exposes canonical Verification, Assessment, Treasury counter-check, and Municipal Treasurer state. The persisted chronology remains one Citizen → BusinessOwner → Business with a 2025 New application followed by its 2026 Renewal.
+The human application milestone opens the real executable Page 1 form. Saving preserves a draft; submitting freezes the declaration. Reopening the same document preserves Page 1 and exposes the unused Page 2 Assessment boundary; the separate slip carries Assessment and Treasurer truth. The persisted chronology remains one Citizen → BusinessOwner → Business with a 2025 New application followed by its 2026 Renewal.
 
 ## AES precedent applied
 

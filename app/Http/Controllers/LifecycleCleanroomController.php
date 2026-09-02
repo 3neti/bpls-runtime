@@ -94,6 +94,9 @@ class LifecycleCleanroomController extends Controller
 
     private function destination(string $step): ?string
     {
+        if (str_contains($step, 'bplo_routing')) {
+            return 'staff.permit-applications.evaluation.show';
+        }
         if (str_contains($step, 'assessment_prepared')) {
             return 'staff.permit-applications.evaluation.show';
         }

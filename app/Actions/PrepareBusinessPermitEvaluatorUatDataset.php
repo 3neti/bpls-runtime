@@ -27,6 +27,8 @@ use RuntimeException;
 
 class PrepareBusinessPermitEvaluatorUatDataset
 {
+    private ?User $bploRoutingActor = null;
+
     public function __construct(
         private readonly InitializeBusinessPermitEvaluation $initialize,
         private readonly DefineBusinessPermitEvaluationItem $defineItem,
@@ -38,10 +40,11 @@ class PrepareBusinessPermitEvaluatorUatDataset
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
         private readonly AssessmentSnapshotFingerprint $assessmentFingerprint,
         private readonly StakeholderPreviewSafety $previewSafety,
+        private readonly RecordBploRoutingDetermination $recordBploRouting,
     ) {}
 
     /**
-     * @param  array{citizen: User, assessment_officer: User, treasury: User, municipal_treasurer: User, engineering: User, mpdo: User, assessor: User, health: User, menro: User}  $actors
+     * @param  array{citizen: User, bplo: User, assessment_officer: User, treasury: User, municipal_treasurer: User, engineering: User, mpdo: User, assessor: User, health: User, menro: User}  $actors
      * @return array<string, mixed>
      */
     public function handle(string $runId, array $actors): array
@@ -51,6 +54,7 @@ class PrepareBusinessPermitEvaluatorUatDataset
         }
 
         return DB::transaction(function () use ($runId, $actors): array {
+            $this->bploRoutingActor = $actors['bplo'];
             $this->scenarioFeeRule($runId);
 
             $existing = PermitApplication::query()->where('metadata->business_permit_evaluation->uat_run_id', $runId)->get();
@@ -255,6 +259,23 @@ class PrepareBusinessPermitEvaluatorUatDataset
                 'metadata' => ['semantic_classification' => 'provisional_uat'],
             ]));
 
+        if (! $this->bploRoutingActor instanceof User) {
+            throw new RuntimeException('Evaluator UAT requires an explicit BPLO routing actor.');
+        }
+
+        $this->recordBploRouting->handle(
+            $application,
+            $this->bploRoutingActor,
+            'Synthetic UAT BPLO situational determination; this fixture does not commission production routing rules.',
+            collect(['assessor', 'engineering', 'health', 'menro'])->map(fn (string $office): array => [
+                'office_code' => $office,
+                'office_label' => str($office)->headline()->toString(),
+                'situational_reason' => 'Selected by BPLO for this bounded synthetic UAT circumstance.',
+                'required_work' => 'Determine applicable office work and any amount-bearing contribution.',
+                'permit_application_line_id' => null,
+            ])->all(),
+        );
+
         return $this->initialize->handle($application, $creator);
     }
 
@@ -426,11 +447,16 @@ class PrepareBusinessPermitEvaluatorUatDataset
         array $metadata = [],
         ?string $responsibleParty = null,
     ): BusinessPermitEvaluationItem {
+        $responsibleOffice = $responsibleParty ?? $office;
+        $routingWork = $evaluation->permitApplication->bploRoutingDetermination?->works()
+            ->where('office_code', $responsibleOffice)
+            ->sole();
+
         return $this->defineItem->handle(
             $evaluation,
             "{$office}.charge",
             BusinessPermitEvaluationItemType::Charge,
-            $responsibleParty ?? $office,
+            $responsibleOffice,
             true,
             true,
             $applicability,
@@ -443,6 +469,7 @@ class PrepareBusinessPermitEvaluatorUatDataset
                 'authorized_actor_id' => $actor->id,
                 'inspection_required' => $inspectionRequired,
                 'semantic_classification' => 'provisional_uat',
+                'bplo_routing_work_id' => $routingWork?->id,
                 ...$metadata,
             ],
         );

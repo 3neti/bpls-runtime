@@ -17,6 +17,7 @@ enum UserPermission: string
     case AccessStaff = 'staff.access';
     case ViewPermitApplications = 'permit_applications.view';
     case ViewBusinessPermitEvaluations = 'business_permit_evaluations.view';
+    case DetermineBploRouting = 'business_permit_evaluations.determine_routing';
     case ContributeBusinessPermitEvaluations = 'business_permit_evaluations.contribute';
     case CounterCheckBusinessPermitEvaluations = 'business_permit_evaluations.counter_check';
     case CorrectEvaluationLinesOfBusiness = 'business_permit_evaluations.correct_lines_of_business';

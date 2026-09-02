@@ -40,6 +40,18 @@ class BusinessPermitEvaluationController extends Controller
             'application' => [
                 'id' => $permitApplication->id,
                 'application_number' => $permitApplication->application_number,
+                'lines' => $permitApplication->lines()->with('lineOfBusiness')->get()->map(fn ($line): array => [
+                    'id' => $line->id,
+                    'line_of_business_id' => $line->line_of_business_id,
+                    'line_of_business_name' => $line->lineOfBusiness?->name,
+                ])->all(),
+            ],
+            'bploRouting' => $this->routingPayload($permitApplication),
+            'routingOfficeOptions' => [
+                ['code' => 'engineering', 'label' => 'Engineering'],
+                ['code' => 'health', 'label' => 'Health'],
+                ['code' => 'assessor', 'label' => 'Municipal Assessor'],
+                ['code' => 'menro', 'label' => 'MENRO'],
             ],
             'lineOfBusinesses' => LineOfBusiness::query()->availableToMunicipalCatalog()->orderBy('name')->get(['id', 'code', 'name']),
             'can' => $this->capabilities(),
@@ -192,10 +204,57 @@ class BusinessPermitEvaluationController extends Controller
 
         return [
             'initialize' => $user?->can(UserPermission::AssessPermitApplications->value) ?? false,
+            'determine_routing' => $user?->can(UserPermission::DetermineBploRouting->value) ?? false,
             'contribute' => $user?->can(UserPermission::ContributeBusinessPermitEvaluations->value) ?? false,
             'counter_check' => $user?->can(UserPermission::CounterCheckBusinessPermitEvaluations->value) ?? false,
             'correct_lines_of_business' => $user?->can(UserPermission::CorrectEvaluationLinesOfBusiness->value) ?? false,
             'prepare_assessment' => $user?->can(UserPermission::AssessPermitApplications->value) ?? false,
+        ];
+    }
+
+    /** @return array<string, mixed>|null */
+    private function routingPayload(PermitApplication $permitApplication): ?array
+    {
+        $determination = $permitApplication->bploRoutingDetermination()
+            ->with([
+                'determinedBy',
+                'works.lineOfBusiness',
+                'works.paymentOrders' => fn ($query) => $query->with(['issuedBy', 'lines'])->orderBy('sequence'),
+            ])
+            ->first();
+
+        if ($determination === null) {
+            return null;
+        }
+
+        return [
+            'id' => $determination->id,
+            'determined_by' => $determination->determinedBy->name,
+            'determined_at' => $determination->determined_at->toIso8601String(),
+            'situational_context' => $determination->situational_context,
+            'application_facts_snapshot' => $determination->application_facts_snapshot,
+            'works' => $determination->works->map(fn ($work): array => [
+                'id' => $work->id,
+                'office_code' => $work->office_code,
+                'office_label' => $work->office_label,
+                'situational_reason' => $work->situational_reason,
+                'required_work' => $work->required_work,
+                'line_of_business_name' => $work->lineOfBusiness?->name,
+                'payment_orders' => $work->paymentOrders->map(fn ($order): array => [
+                    'id' => $order->id,
+                    'sequence' => $order->sequence,
+                    'status' => $order->superseded_at === null ? $order->status : 'superseded',
+                    'total_amount_cents' => $order->total_amount_cents,
+                    'issued_by' => $order->issuedBy->name,
+                    'issued_at' => $order->issued_at->toIso8601String(),
+                    'lines' => $order->lines->map(fn ($line): array => [
+                        'id' => $line->id,
+                        'code' => $line->code,
+                        'name' => $line->name,
+                        'amount_cents' => $line->amount_cents,
+                    ])->all(),
+                ])->all(),
+            ])->all(),
         ];
     }
 

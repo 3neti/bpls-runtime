@@ -8,7 +8,7 @@ final class RenewalHappyPathDefinition
 
     public const string RunId = 'scenario-02-canonical';
 
-    public const string Revision = 'product_lab_chronology_v1';
+    public const string Revision = 'bplo_routing_payment_orders_v1';
 
     public const int ApplicationYear = 2026;
 

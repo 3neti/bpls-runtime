@@ -12,6 +12,8 @@ This model starts from business meaning, not tables. `Confirmed` means supported
 | Business | Establishment or undertaking operating in Ipil, with registration, ownership, address, employees, occupancy, and documents. | Confirmed |
 | Line of Business | A business activity/classification used for assessment and reporting. | Confirmed |
 | Permit Application | Request for business permit processing through statuses such as Draft, Assessment, Approval, Pending Payment, Released. | Confirmed |
+| BPLO Routing Determination | Post-lodging situational selection of concerned offices and required work by BPLO, informed but not decided by applicant/LOB facts. | Confirmed by accepted 2026-09-01 Zoom |
+| Paperless Payment Order | Amount-bearing concerned-office financial determination upstream of consolidated Assessment. | Confirmed by accepted 2026-09-01 Zoom |
 | Assessment | Deterministic calculation and explanation of taxes, fees, charges, overrides, exclusions, and basis values. | Confirmed |
 | Fee / Tax / Charge | A billable item governed by ordinance, configuration, or Treasury policy. | Confirmed |
 | Payment Schedule | One or more due sections for an assessed application. | Confirmed |
@@ -58,6 +60,20 @@ Important invariants:
 - every line item records formula/range/config provenance;
 - overrides record actor, reason, and previous value;
 - unknown rules such as PIL are modeled as policy seams, not invented defaults.
+- only eligible current issued Paperless Payment Order lines and governed canonical pricing enter an Assessment, exactly once;
+- the Computation/Assessment Slip is a projection of Assessment truth, not a second calculator;
+- a corrected office amount creates a new immutable office revision/order and a fresh Assessment after return, rather than editing the prior slip.
+
+### BPLO Routing / Concerned-office Financial Determination
+
+Owns the explicit post-lodging BPLO route and each routed office's upstream amount-bearing contribution.
+
+Important invariants:
+
+- applicant declarations remain unchanged;
+- LOB/application facts are snapshotted as context but never become automatic routing authority;
+- only the selected office and its authorized actor may issue the routed Payment Order;
+- official numbering, cancellation, expiry, and automatic forwarding remain unimplemented until authorized.
 
 ### Treasury Collection
 
@@ -103,6 +119,8 @@ Important invariants:
 ## Lifecycle Ownership
 
 - Application submission: Permit Application boundary.
+- Concerned-office selection: BPLO Routing boundary.
+- Office amount determination: Paperless Payment Order boundary.
 - Assessment calculation: Assessment boundary.
 - Approval: Permit Application boundary with authorization/audit.
 - Payment/collection: Treasury Collection boundary.

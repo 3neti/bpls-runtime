@@ -34,6 +34,19 @@ function contractFixture(): array
     PermitApplicationLine::factory()->for($application)->for($lineOfBusiness)->create([
         'declared_gross_sales_cents' => 750_000,
     ]);
+    $routing = $application->bploRoutingDetermination()->create([
+        'determined_by_id' => $actor->id,
+        'situational_context' => 'Test-only explicit BPLO routing fixture.',
+        'application_facts_snapshot' => ['applicant_declaration_preserved' => true],
+        'determined_at' => now(),
+    ]);
+    $routing->works()->create([
+        'office_code' => 'engineering',
+        'office_label' => 'Engineering',
+        'situational_reason' => 'Test-only situational selection.',
+        'required_work' => 'Test-only office work.',
+        'context_snapshot' => ['automatic_lob_rule' => false],
+    ]);
     $evaluation = app(InitializeBusinessPermitEvaluation::class)->handle($application, $actor);
 
     return compact('actor', 'business', 'lineOfBusiness', 'application', 'evaluation');

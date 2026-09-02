@@ -9,11 +9,15 @@ use App\Enums\UserRole;
 use App\Models\BusinessPermitEvaluationItem;
 use App\Models\BusinessPermitEvaluationItemRevision;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use LogicException;
 
 class CompleteBusinessPermitEvaluationResponsibility
 {
-    public function __construct(private readonly ReviseBusinessPermitEvaluationItem $reviseItem) {}
+    public function __construct(
+        private readonly ReviseBusinessPermitEvaluationItem $reviseItem,
+        private readonly IssuePaperlessPaymentOrder $issuePaymentOrder,
+    ) {}
 
     /** @param array<string, mixed>|null $value */
     public function handle(
@@ -44,19 +48,29 @@ class CompleteBusinessPermitEvaluationResponsibility
             throw new LogicException('Changing the proposed amount requires a reason.');
         }
 
-        return $this->reviseItem->handle(
-            $item,
-            $isChangedCharge
-                ? BusinessPermitEvaluationRevisionAction::Correction
-                : BusinessPermitEvaluationRevisionAction::Confirmation,
-            $applicability,
-            $value,
-            $source,
-            $actor,
-            $reason,
-            $expectedVersionSequence,
-            $expectedFingerprint,
-            $idempotencyKey,
-        );
+        return DB::transaction(function () use ($item, $actor, $applicability, $value, $source, $reason, $expectedVersionSequence, $expectedFingerprint, $idempotencyKey, $isChangedCharge): BusinessPermitEvaluationItemRevision {
+            $revision = $this->reviseItem->handle(
+                $item,
+                $isChangedCharge
+                    ? BusinessPermitEvaluationRevisionAction::Correction
+                    : BusinessPermitEvaluationRevisionAction::Confirmation,
+                $applicability,
+                $value,
+                $source,
+                $actor,
+                $reason,
+                $expectedVersionSequence,
+                $expectedFingerprint,
+                $idempotencyKey,
+            );
+
+            if ($item->item_type->value === 'charge'
+                && $applicability === BusinessPermitEvaluationApplicability::Applicable
+                && data_get($item->metadata, 'bplo_routing_work_id') !== null) {
+                $this->issuePaymentOrder->handle($item, $revision, $actor);
+            }
+
+            return $revision;
+        });
     }
 }

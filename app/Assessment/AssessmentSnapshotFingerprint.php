@@ -52,6 +52,7 @@ class AssessmentSnapshotFingerprint
                     'permit_application_line_id' => $this->nullableInteger($line->permit_application_line_id),
                     'fee_rule_id' => $this->nullableInteger($line->fee_rule_id),
                     'business_permit_evaluation_item_id' => $this->nullableInteger($line->business_permit_evaluation_item_id),
+                    'paperless_payment_order_line_id' => $this->nullableInteger($line->paperless_payment_order_line_id),
                     'line_of_business_id' => $this->nullableInteger($line->line_of_business_id),
                     'code' => $line->code,
                     'name' => $line->name,

@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $permit_application_line_id
  * @property int|null $fee_rule_id
  * @property int|null $business_permit_evaluation_item_id
+ * @property int|null $paperless_payment_order_line_id
  * @property int|null $line_of_business_id
  * @property string $code
  * @property string $name
@@ -30,7 +31,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['assessment_id', 'permit_application_line_id', 'fee_rule_id', 'business_permit_evaluation_item_id', 'line_of_business_id', 'code', 'name', 'category', 'calculation_type', 'basis', 'basis_amount_cents', 'amount_cents', 'legal_basis', 'rule_snapshot'])]
+#[Fillable(['assessment_id', 'permit_application_line_id', 'fee_rule_id', 'business_permit_evaluation_item_id', 'paperless_payment_order_line_id', 'line_of_business_id', 'code', 'name', 'category', 'calculation_type', 'basis', 'basis_amount_cents', 'amount_cents', 'legal_basis', 'rule_snapshot'])]
 class AssessmentLine extends Model
 {
     /** @use HasFactory<AssessmentLineFactory> */
@@ -58,6 +59,12 @@ class AssessmentLine extends Model
     public function businessPermitEvaluationItem(): BelongsTo
     {
         return $this->belongsTo(BusinessPermitEvaluationItem::class);
+    }
+
+    /** @return BelongsTo<PaperlessPaymentOrderLine, $this> */
+    public function paperlessPaymentOrderLine(): BelongsTo
+    {
+        return $this->belongsTo(PaperlessPaymentOrderLine::class);
     }
 
     /** @return BelongsTo<LineOfBusiness, $this> */

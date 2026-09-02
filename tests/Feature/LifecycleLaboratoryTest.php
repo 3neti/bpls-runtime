@@ -6,6 +6,7 @@ use App\Actions\CompleteBusinessPermitEvaluationResponsibility;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\RecordAssessmentDecision;
+use App\Actions\RecordBploRoutingDetermination;
 use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
 use App\Actions\ResolveLifecycleCleanroomState;
 use App\Enums\AssessmentDecisionAction;
@@ -205,6 +206,10 @@ test('cleanroom citizen form uses canonical draft and submit actions before cano
 
     $this->actingAs($management)
         ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))
+        ->assertRedirect(route('staff.permit-applications.evaluation.show', $application));
+    recordCleanroomRouting($run, $application);
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))
         ->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.index'));
     expect($application->fresh()->businessPermitEvaluation->items()->whereIn('key', collect(app(NewApplicationHappyPathDefinition::class)->responsibilities())->pluck('key'))->count())->toBe(6)
         ->and($run->fresh()->owned_resource_manifest['permit_application_declaration_ids'])->toBe([$application->declaration()->sole()->id])
@@ -229,9 +234,12 @@ test('cleanroom remains compatible with the canonical two year action semantics 
         if ($applicationKey === 'renewal_application_id') {
             app(AdvanceLifecycleCleanroom::class)->handle($run->fresh());
         }
-        app(AdvanceLifecycleCleanroom::class)->handle($run->fresh());
         $run->refresh();
         $application = PermitApplication::query()->findOrFail($run->{$applicationKey});
+        recordCleanroomRouting($run, $application);
+        app(AdvanceLifecycleCleanroom::class)->handle($run->fresh());
+        $run->refresh();
+        $application->refresh();
         $evaluation = $application->businessPermitEvaluation;
 
         foreach (app(NewApplicationHappyPathDefinition::class)->responsibilities() as $responsibility) {
@@ -269,7 +277,7 @@ test('cleanroom remains compatible with the canonical two year action semantics 
 
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     expect(data_get($state, 'progress.complete'))->toBeTrue()
-        ->and(data_get($state, 'progress.completed_steps'))->toBe(22)
+        ->and(data_get($state, 'progress.completed_steps'))->toBe(24)
         ->and(PermitApplication::query()->whereIn('id', [$run->new_application_id, $run->renewal_application_id])->pluck('application_year')->sort()->values()->all())->toBe([2025, 2026])
         ->and(PermitApplication::query()->whereIn('id', [$run->new_application_id, $run->renewal_application_id])->pluck('business_id')->unique())->toHaveCount(1);
 });
@@ -289,4 +297,30 @@ function configureLifecycleLaboratoryPreview(): void
 function previewAccount(StakeholderPreviewPersona $persona): User
 {
     return User::query()->where('email', $persona->approvedEmail())->sole();
+}
+
+function recordCleanroomRouting(LifecycleCleanroomRun $run, PermitApplication $application): void
+{
+    $application->load('lines.lineOfBusiness');
+    $work = collect(app(NewApplicationHappyPathDefinition::class)->responsibilities())
+        ->groupBy(fn (array $responsibility): string => $responsibility['department'].'|'.$responsibility['line_of_business_code'])
+        ->map(function ($responsibilities) use ($application): array {
+            $first = $responsibilities->first();
+            $line = $application->lines->first(fn ($line): bool => $line->lineOfBusiness?->code === $first['line_of_business_code']);
+
+            return [
+                'office_code' => $first['department'],
+                'office_label' => str($first['department'])->headline()->toString(),
+                'situational_reason' => $responsibilities->pluck('reason')->implode(' '),
+                'required_work' => $responsibilities->pluck('label')->implode('; '),
+                'permit_application_line_id' => $line->id,
+            ];
+        })->values()->all();
+
+    app(RecordBploRoutingDetermination::class)->handle(
+        $application,
+        User::query()->findOrFail(data_get($run->actor_manifest, 'actors.intake.user_id')),
+        'Explicit test BPLO situational determination from the lodged Application and bounded cleanroom circumstances.',
+        $work,
+    );
 }

@@ -77,6 +77,10 @@ class AdvanceLifecycleCleanroom
 
     private function initializeResponsibilities(PermitApplication $application, LifecycleCleanroomRun $run, string $scenarioId): void
     {
+        $routingDetermination = $application->bploRoutingDetermination()->first();
+        if ($routingDetermination === null) {
+            throw new LogicException('Concerned-office work cannot be initialized before BPLO routing is recorded.');
+        }
         $evaluation = $this->initializeEvaluation->handle($application, $this->actor($run, 'assessment_officer'));
         if ($this->hasDeclaredResponsibilities($evaluation)) {
             return;
@@ -89,6 +93,10 @@ class AdvanceLifecycleCleanroom
             }
             $applicationLine = $application->lines()->where('line_of_business_id', $lineOfBusiness->id)->sole();
             $actor = $this->actor($run, $responsibility['department']);
+            $routingWork = $routingDetermination->works()
+                ->where('office_code', $responsibility['department'])
+                ->where('permit_application_line_id', $applicationLine->id)
+                ->sole();
             $this->defineEvaluationItem->handle(
                 $evaluation,
                 $responsibility['key'],
@@ -114,6 +122,7 @@ class AdvanceLifecycleCleanroom
                     'label' => $responsibility['label'],
                     'department_selection_reason' => $responsibility['reason'],
                     'inspection_required' => $responsibility['inspection_required'],
+                    'bplo_routing_work_id' => $routingWork->id,
                 ],
             );
         }

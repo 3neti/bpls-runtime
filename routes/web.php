@@ -23,6 +23,7 @@ use App\Http\Controllers\Staff\BillingGroupAbstractReportController;
 use App\Http\Controllers\Staff\BillingGroupController;
 use App\Http\Controllers\Staff\BillingGroupReconciliationController;
 use App\Http\Controllers\Staff\BillingGroupRecordController;
+use App\Http\Controllers\Staff\BploRoutingDeterminationController;
 use App\Http\Controllers\Staff\BspReportController;
 use App\Http\Controllers\Staff\BusinessPermitEvaluationController;
 use App\Http\Controllers\Staff\BusinessTaxByMajorTypeReportController;
@@ -162,6 +163,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.assessments.store');
         Route::get('permit-applications/{permitApplication}/evaluation', [BusinessPermitEvaluationController::class, 'show'])
             ->name('permit-applications.evaluation.show');
+        Route::post('permit-applications/{permitApplication}/bplo-routing', [BploRoutingDeterminationController::class, 'store'])
+            ->name('permit-applications.bplo-routing.store');
         Route::post('permit-applications/{permitApplication}/evaluation', [BusinessPermitEvaluationController::class, 'initialize'])
             ->name('permit-applications.evaluation.initialize');
         Route::post('permit-applications/{permitApplication}/evaluation/refresh', [BusinessPermitEvaluationController::class, 'refresh'])

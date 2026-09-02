@@ -2,6 +2,7 @@
 
 namespace App\LifecycleScenarios;
 
+use App\Actions\BuildComputationAssessmentSlip;
 use App\Actions\CompleteBusinessPermitEvaluationResponsibility;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreateCitizenPermitApplicationDraft;
@@ -11,6 +12,7 @@ use App\Actions\EnsureProductLabLineOfBusinessCatalog;
 use App\Actions\InitializeBusinessPermitEvaluation;
 use App\Actions\InspectBplsInstallation;
 use App\Actions\RecordAssessmentDecision;
+use App\Actions\RecordBploRoutingDetermination;
 use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
 use App\Actions\SubmitCitizenPermitApplication;
 use App\Assessment\AssessmentSnapshotFingerprint;
@@ -27,6 +29,7 @@ use App\Enums\UserPermission;
 use App\Evaluation\BusinessPermitEvaluationReadiness;
 use App\Evaluation\BusinessPermitEvaluationResolver;
 use App\Models\Assessment;
+use App\Models\BploRoutingDetermination;
 use App\Models\BusinessPermitEvaluation;
 use App\Models\FeeRule;
 use App\Models\LifecycleScenarioSpecimen;
@@ -48,6 +51,7 @@ final class NewApplicationHappyPathScenario
         private readonly InspectBplsInstallation $inspectInstallation,
         private readonly CreateCitizenPermitApplicationDraft $createCitizenDraft,
         private readonly SubmitCitizenPermitApplication $submitCitizenApplication,
+        private readonly RecordBploRoutingDetermination $recordBploRouting,
         private readonly InitializeBusinessPermitEvaluation $initializeEvaluation,
         private readonly DefineBusinessPermitEvaluationItem $defineEvaluationItem,
         private readonly CompleteBusinessPermitEvaluationResponsibility $completeResponsibility,
@@ -56,6 +60,7 @@ final class NewApplicationHappyPathScenario
         private readonly RecordBusinessPermitEvaluationCounterCheck $recordCounterCheck,
         private readonly CreateAssessmentForPermitApplication $createAssessment,
         private readonly AssessmentSnapshotFingerprint $assessmentFingerprint,
+        private readonly BuildComputationAssessmentSlip $buildComputationAssessmentSlip,
         private readonly RecordAssessmentDecision $recordAssessmentDecision,
         private readonly CreatePaymentScheduleForAssessment $createPaymentSchedule,
         private readonly EnsureProductLabLineOfBusinessCatalog $ensureProductLabCatalog,
@@ -147,14 +152,19 @@ final class NewApplicationHappyPathScenario
                 return $application;
             });
 
-            $evaluation = $this->checkpoint('Evaluation did not initialize from the lodged New Application', fn (): BusinessPermitEvaluation => $this->initializeEvaluation->handle($application, $actors['assessment_officer']));
-            $routing = $this->applicationEvaluationRouting($application, $linesOfBusiness);
+            $routingDetermination = $this->checkpoint('BPLO did not record the situational concerned-office routing determination', fn (): BploRoutingDetermination => $this->recordRouting($application, $actors['intake'], $linesOfBusiness));
+            $routing = $this->applicationEvaluationRouting($routingDetermination, $linesOfBusiness);
+            $evaluation = $this->checkpoint('Evaluation did not initialize from the lodged and BPLO-routed New Application', fn (): BusinessPermitEvaluation => $this->initializeEvaluation->handle($application, $actors['assessment_officer']));
 
-            $this->checkpoint('Required departmental responsibilities were not created', function () use ($evaluation, $actors, $linesOfBusiness, $routing): void {
+            $this->checkpoint('Required departmental responsibilities were not created', function () use ($evaluation, $actors, $linesOfBusiness, $routing, $routingDetermination): void {
                 foreach ($this->definition->responsibilities() as $responsibility) {
                     $lineOfBusiness = $linesOfBusiness[$responsibility['line_of_business_code']];
                     $applicationLine = $evaluation->permitApplication->lines()->where('line_of_business_id', $lineOfBusiness->id)->sole();
                     $actor = $actors[$responsibility['department']];
+                    $routingWork = $routingDetermination->works()
+                        ->where('office_code', $responsibility['department'])
+                        ->where('permit_application_line_id', $applicationLine->id)
+                        ->sole();
 
                     $this->defineEvaluationItem->handle(
                         $evaluation,
@@ -186,6 +196,7 @@ final class NewApplicationHappyPathScenario
                             'label' => $responsibility['label'],
                             'department_selection_reason' => $responsibility['reason'],
                             'inspection_required' => $responsibility['inspection_required'],
+                            'bplo_routing_work_id' => $routingWork->id,
                         ],
                     );
                 }
@@ -398,7 +409,14 @@ final class NewApplicationHappyPathScenario
         $schedule = $application->paymentSchedules()->with('lines')->sole();
         $decision = $assessment->decision;
         $counterCheck = $assessment->treasuryCounterCheck;
-        $routing = $this->applicationEvaluationRouting($application, $linesOfBusiness);
+        $routingDetermination = $application->bploRoutingDetermination()->with('permitApplication')->firstOrFail();
+        $routing = $this->applicationEvaluationRouting($routingDetermination, $linesOfBusiness);
+        $paymentOrders = $application->paperlessPaymentOrders()
+            ->with(['routingWork', 'issuedBy', 'lines'])
+            ->whereNull('superseded_at')
+            ->orderBy('id')
+            ->get();
+        $slip = $this->buildComputationAssessmentSlip->handle($assessment);
 
         $this->assert($application->status === PermitApplicationStatus::PendingPayment, 'Application is not in the payable pending_payment state.');
         $this->assert($readiness['ready'], 'Persisted Evaluation is not Ready: '.implode(' ', $readiness['issues']));
@@ -409,6 +427,9 @@ final class NewApplicationHappyPathScenario
         $this->assert($assessment->lines->count() === $definition['expected']['assessment_line_count'], 'Assessment does not contain exactly seven financial items.');
         $this->assert($assessment->lines->sum('amount_cents') === $assessment->total_amount_cents, 'Assessment lines do not reconcile to Assessment total.');
         $this->assert($assessment->lines->pluck('business_permit_evaluation_item_id')->filter()->unique()->count() === 6, 'Each resolved applicable Evaluation charge did not enter Assessment exactly once.');
+        $this->assert($paymentOrders->count() === 6 && $paymentOrders->sum('total_amount_cents') === 87_000, 'Issued Paperless Payment Orders no longer reconcile to PHP 870.00.');
+        $this->assert($assessment->lines->pluck('paperless_payment_order_line_id')->filter()->unique()->count() === 6, 'Paperless Payment Order lines did not enter Assessment exactly once.');
+        $this->assert($slip['reconciles'] === true, 'Computation/Assessment Slip no longer reconciles to the immutable Assessment.');
         $this->assert($assessment->lines->where('code', 'MRC-3A-04-BUSINESS-INSPECTION')->count() === 1, 'Accepted Business Inspection Fee is absent or duplicated.');
         $this->assert($assessment->business_permit_evaluation_version_id === $projection['version_id'], 'Assessment is not bound to the exact Evaluation version.');
         $this->assert($assessment->business_permit_evaluation_fingerprint === $projection['current_fingerprint'], 'Assessment is not bound to the exact Evaluation fingerprint.');
@@ -441,6 +462,7 @@ final class NewApplicationHappyPathScenario
             'lob_codes' => $application->lines->pluck('lineOfBusiness.code')->sort()->values()->all(),
             'responsibility_keys' => collect($responsibilities)->pluck('key')->sort()->values()->all(),
             'assessment_lines' => $assessment->lines->map(fn ($line): array => ['code' => $line->code, 'amount_cents' => $line->amount_cents])->sortBy('code')->values()->all(),
+            'paperless_payment_orders' => $paymentOrders->map(fn ($order): array => ['office' => $order->routingWork->office_code, 'amount_cents' => $order->total_amount_cents])->sortBy('office')->values()->all(),
             'grand_total_amount_cents' => $assessment->total_amount_cents,
             'terminal_status' => $application->status->value,
             'timeline' => collect($timeline)->pluck('milestone')->all(),
@@ -518,6 +540,18 @@ final class NewApplicationHappyPathScenario
                 'subtotal_amount_cents' => $section['subtotal_amount_cents'],
             ])->values()->all(),
             'application_evaluation_routing' => $routing,
+            'paperless_payment_orders' => [
+                'issued_count' => $paymentOrders->count(),
+                'total_amount_cents' => $paymentOrders->sum('total_amount_cents'),
+                'orders' => $paymentOrders->map(fn ($order): array => [
+                    'id' => $order->id,
+                    'office' => $order->routingWork->office_label,
+                    'lob_context' => $order->routingWork->lineOfBusiness?->name,
+                    'amount_cents' => $order->total_amount_cents,
+                    'status' => $order->status,
+                    'official_number' => null,
+                ])->all(),
+            ],
             'responsibilities' => [
                 'created_count' => count($responsibilities),
                 'resolved_count' => collect($responsibilities)->where('resolution', 'resolved')->count(),
@@ -547,6 +581,15 @@ final class NewApplicationHappyPathScenario
                 'total_amount_cents' => $assessment->total_amount_cents,
                 'prepared_by' => ['id' => $assessment->assessedBy?->id, 'name' => $assessment->assessedBy?->name],
                 'line_count' => $assessment->lines->count(),
+            ],
+            'computation_assessment_slip' => [
+                'official_number' => $slip['reference']['official_number'],
+                'line_of_business_subtotals_cents' => array_column($slip['line_sections'], 'subtotal_amount_cents'),
+                'application_subtotal_amount_cents' => $slip['application_subtotal_amount_cents'],
+                'grand_total_amount_cents' => $slip['grand_total_amount_cents'],
+                'in_words' => $slip['in_words'],
+                'reconciles' => $slip['reconciles'],
+                'quarter_allocation_status' => $slip['schedule_of_payments']['allocation_status'],
             ],
             'treasury_counter_check' => [
                 'id' => $counterCheck?->id,
@@ -641,7 +684,7 @@ final class NewApplicationHappyPathScenario
     {
         return [
             'citizen' => $this->actor('citizen', 'Scenario Citizen', [UserPermission::AccessCitizen, UserPermission::CreateOwnPermitApplications, UserPermission::EditOwnPermitApplications, UserPermission::SubmitOwnPermitApplications, UserPermission::UploadOwnPermitApplicationDocuments, UserPermission::ViewOwnPermitApplications, UserPermission::ViewOwnPermitApplicationDocuments, UserPermission::ViewOwnPermitApplicationFinancials, UserPermission::ViewOwnBusinessPermitEvaluations]),
-            'intake' => $this->actor('intake', 'Scenario 01 BPLO Intake Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::CreatePermitApplications]),
+            'intake' => $this->actor('intake', 'Scenario 01 BPLO Intake Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::CreatePermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::DetermineBploRouting]),
             'assessment_officer' => $this->actor('assessment-officer', 'Scenario 01 Assessment Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::AssessPermitApplications, UserPermission::ViewPaymentSchedules, UserPermission::PreparePaymentSchedules]),
             'assessor' => $this->actor('assessor', 'Scenario 01 Assessor', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ContributeBusinessPermitEvaluations]),
             'engineering' => $this->actor('engineering', 'Scenario 01 Engineering Officer', [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ContributeBusinessPermitEvaluations]),
@@ -752,7 +795,11 @@ final class NewApplicationHappyPathScenario
                     'businesses',
                     'permit_applications',
                     'permit_application_lines',
+                    'bplo_routing_determinations',
+                    'bplo_routing_works',
                     'business_permit_evaluations',
+                    'paperless_payment_orders',
+                    'paperless_payment_order_lines',
                     'assessments',
                     'business_permit_evaluation_counter_checks',
                     'payment_schedules',
@@ -788,10 +835,42 @@ final class NewApplicationHappyPathScenario
 
     /**
      * @param  array<string, LineOfBusiness>  $linesOfBusiness
+     */
+    private function recordRouting(PermitApplication $application, User $bploActor, array $linesOfBusiness): BploRoutingDetermination
+    {
+        $applicationLines = $application->lines()->get()->keyBy('line_of_business_id');
+        $selectedWork = collect($this->definition->responsibilities())
+            ->groupBy(fn (array $responsibility): string => $responsibility['department'].'|'.$responsibility['line_of_business_code'])
+            ->map(function ($responsibilities) use ($applicationLines, $linesOfBusiness): array {
+                $first = $responsibilities->first();
+                $lineOfBusiness = $linesOfBusiness[$first['line_of_business_code']];
+                $applicationLine = $applicationLines->get($lineOfBusiness->id);
+                $this->assert($applicationLine !== null, "BPLO routing references undeclared LOB [{$lineOfBusiness->code}].");
+
+                return [
+                    'office_code' => $first['department'],
+                    'office_label' => str($first['department'])->headline()->toString(),
+                    'situational_reason' => $responsibilities->pluck('reason')->implode(' '),
+                    'required_work' => $responsibilities->pluck('label')->implode('; '),
+                    'permit_application_line_id' => $applicationLine->id,
+                ];
+            })->values()->all();
+
+        return $this->recordBploRouting->handle(
+            $application,
+            $bploActor,
+            'BPLO selected concerned offices from the lodged Application, its declared activities, and the synthetic scenario circumstances. The scenario does not commission production routing rules.',
+            array_values($selectedWork),
+        );
+    }
+
+    /**
+     * @param  array<string, LineOfBusiness>  $linesOfBusiness
      * @return array<string, mixed>
      */
-    private function applicationEvaluationRouting(PermitApplication $application, array $linesOfBusiness): array
+    private function applicationEvaluationRouting(BploRoutingDetermination $determination, array $linesOfBusiness): array
     {
+        $application = $determination->permitApplication;
         $declaredLineIds = $application->lines()->pluck('line_of_business_id')->map(fn (mixed $id): int => (int) $id);
         $requiredWork = collect($this->definition->responsibilities())->map(function (array $responsibility) use ($declaredLineIds, $linesOfBusiness): array {
             $lineOfBusiness = $linesOfBusiness[$responsibility['line_of_business_code']];
@@ -811,10 +890,13 @@ final class NewApplicationHappyPathScenario
         })->sortBy('key')->values();
 
         return [
-            'canonical_noun' => 'Business Permit Evaluation required-work routing',
-            'disposition' => 'projected',
-            'persisted_aggregate_created' => false,
-            'source_facts' => ['lodged New Application', 'declared Lines of Business', 'Scenario 01 provisional UAT applicability', 'generated Evaluation responsibilities'],
+            'canonical_noun' => 'BPLO situational routing determination',
+            'disposition' => 'recorded',
+            'persisted_aggregate_created' => true,
+            'determination_id' => $determination->id,
+            'determined_by_id' => $determination->determined_by_id,
+            'determined_at' => $determination->determined_at->toIso8601String(),
+            'source_facts' => ['lodged New Application', 'declared Lines of Business', 'BPLO situational judgment', 'Scenario 01 provisional UAT context'],
             'classification' => 'provisional_uat',
             'groups' => $requiredWork
                 ->groupBy('line_of_business_id')
@@ -894,13 +976,15 @@ final class NewApplicationHappyPathScenario
             ['new_application_drafted', 'Citizen', 'CreateCitizenPermitApplicationDraft', 'New Application remains draft, unsubmitted, and officially unnumbered.'],
             ['lines_of_business_declared', 'Citizen', 'CreateCitizenPermitApplicationDraft', 'Two LOB declarations are persisted with the New Application draft.'],
             ['new_application_lodged', 'Citizen', 'SubmitCitizenPermitApplication', 'Citizen submission enters municipal processing with a non-official tracking reference and no manufactured official application number.'],
+            ['bplo_routing_determined', 'BPLO Intake Officer', 'RecordBploRoutingDetermination', 'BPLO records the situational office route after lodging; declared LOB facts inform but do not decide it.'],
             ['evaluation_initialized', 'Assessment Officer', 'InitializeBusinessPermitEvaluation', 'Applicant LOB facts enter versioned Evaluation.'],
-            ['application_evaluation_routing_projected', 'System', 'Business Permit Evaluation read projection', 'Provisional UAT applicability compiles the required municipal work by LOB and reason without a second persisted aggregate.'],
-            ['responsibilities_created', 'Assessment Officer', 'DefineBusinessPermitEvaluationItem', 'Six required department charge responsibilities are created.'],
+            ['concerned_office_work_created', 'Assessment Officer', 'DefineBusinessPermitEvaluationItem', 'Six office responsibilities bind to the recorded BPLO route.'],
             ['premature_assessment_refused', 'Assessment Officer', 'CreateAssessmentForPermitApplication', 'Readiness guard refuses incomplete department work.'],
             ['departments_completed', 'Concerned Offices', 'CompleteBusinessPermitEvaluationResponsibility', 'Six confirmations resolve applicability, review, and amounts.'],
+            ['paperless_payment_orders_issued', 'Concerned Offices', 'IssuePaperlessPaymentOrder', 'Each amount-bearing office determination issues an immutable Paperless Payment Order upstream of Assessment.'],
             ['evaluation_ready_for_assessment', 'System', 'BusinessPermitEvaluationReadiness', 'Department completion makes the Evaluation ready before Treasury counter-check.'],
-            ['assessment_prepared', 'Assessment Officer', 'CreateAssessmentForPermitApplication', 'Immutable Assessment binds exact Evaluation version and fingerprint.'],
+            ['assessment_prepared', 'Assessment Officer', 'CreateAssessmentForPermitApplication', 'Immutable Assessment consolidates eligible Paperless Payment Orders and governed pricing exactly once.'],
+            ['computation_assessment_slip_opened', 'Assessment Officer', 'BuildComputationAssessmentSlip', 'The actual separate Computation/Assessment Slip projects the immutable Assessment without a second calculator.'],
             ['preapproval_schedule_refused', 'Assessment Officer', 'CreatePaymentScheduleForAssessment', 'Payment remains unavailable before approval.'],
             ['treasury_counter_checked', 'Treasury', 'RecordBusinessPermitEvaluationCounterCheck', 'Treasury records no correction against prepared Assessment #1 and its source Evaluation version.'],
             ['assessment_approved', 'Municipal Treasurer', 'RecordAssessmentDecision', 'Exact Assessment and total are approved.'],

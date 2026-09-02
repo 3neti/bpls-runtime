@@ -210,6 +210,7 @@ class PrepareStakeholderPreviewCommand extends Command
 
         $evaluatorUat = $prepareEvaluatorUat->handle($runId, [
             'citizen' => $accounts['citizen'],
+            'bplo' => $accounts['bplo'],
             'assessment_officer' => $accounts['assessment_officer'],
             'treasury' => $accounts['treasury'],
             'municipal_treasurer' => $accounts['municipal_treasurer'],

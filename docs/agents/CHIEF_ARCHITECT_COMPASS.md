@@ -1,12 +1,12 @@
 # Chief Architect Compass
 
-Status: **BEST-EVIDENCE STAKEHOLDER UAT FROZEN; READY FOR INDEPENDENT MAC WARP/OZ REVIEW**
+Status: **BPLO ROUTING + PAPERLESS PAYMENT ORDER + COMPUTATION/ASSESSMENT V1 IMPLEMENTED; VERIFICATION IN PROGRESS**
 
 Stakeholder preview / UAT verified runtime baseline: `92eca94bda9b24eb9d4c6142aa7150772c2965a6`
 
 Latest migration evidence baseline: `eefc5d1`
 
-As of: 2026-08-21
+As of: 2026-09-02
 
 ## Direction
 
@@ -40,6 +40,12 @@ Operating package: `docs/implementation/STAKEHOLDER_PREVIEW_READY_PACKAGE.md`.
 | Deployment readiness | Architecture and deterministic verification are strong; production identity, configuration, financial, authority, and cutover reconciliation remain incomplete | Continue non-production readiness and reversible evidence work | Production mutation, migration, or cutover authorization |
 
 ## Current Control Decisions
+
+- Accepted 2026-09-01 Anaïs/Nelson Zoom evidence corrects the municipal spine: BPLO owns post-lodging situational routing; concerned offices issue amount-bearing Paperless Payment Orders; the Assessment Officer under Treasury consolidates them with governed pricing into a separate immutable Computation/Assessment Slip; the Municipal Treasurer approves or returns the exact snapshot; payment precedes concerned-office Page 2 signatures and BPLO release.
+- Application facts and LOBs may inform or eventually support proposals, but they do not select the route. No production routing rule is derived from scenario fixtures.
+- The Application Form Page 2 Assessment area is unused in Ipil and is no longer populated. Post-payment verification/signatures remain unavailable. The separate slip is the financial artifact.
+- The pre-existing Treasury counter-check remains intact as independently accepted Board operational recollection embodied by `InitializeBusinessPermitEvaluation::EVIDENCE_PROVENANCE`; the new Zoom does not establish or expand that step.
+- The actual slip directly supports a Q1–Q4 schedule section, but no allocation formula. Every quarterly value remains fail-closed pending a municipal fiscal decision.
 
 - Nelson operational feedback received 2026-08-19 is preserved additively as NFI-2026-001 through NFI-2026-007 and reconciled in `docs/implementation/NELSON_OPERATIONAL_FEEDBACK_RECONCILIATION_2026-08-19.md`.
 - NFI-2026-008 preserves Nelson's follow-up answers verbatim. `docs/implementation/APPROVAL_STAGE_DECISION_PACKET_2026-08-19.md` is **RESOLVED FOR IMPLEMENTATION** for exact-snapshot Treasurer approval/return and the payment gate.

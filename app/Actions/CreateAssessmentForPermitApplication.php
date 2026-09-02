@@ -15,6 +15,8 @@ use App\Exceptions\UnsupportedAssessmentPolicy;
 use App\Models\Assessment;
 use App\Models\BusinessPermitEvaluation;
 use App\Models\FeeRule;
+use App\Models\PaperlessPaymentOrder;
+use App\Models\PaperlessPaymentOrderLine;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
 use App\Models\User;
@@ -151,6 +153,13 @@ class CreateAssessmentForPermitApplication
                 ->orderBy('office_code')
                 ->pluck('id')
                 ->all(),
+            'bplo_routing_determination_id' => $permitApplication->bploRoutingDetermination?->id,
+            'paperless_payment_order_ids' => $permitApplication->paperlessPaymentOrders()
+                ->where('status', 'issued')
+                ->whereNull('superseded_at')
+                ->orderBy('id')
+                ->pluck('id')
+                ->all(),
             'business_permit_evaluation' => $evaluationProjection === null ? null : [
                 'evaluation_id' => $evaluationProjection['evaluation_id'],
                 'version_id' => $evaluationProjection['version_id'],
@@ -194,40 +203,68 @@ class CreateAssessmentForPermitApplication
             ]);
         }
 
-        foreach ($projection['items'] as $item) {
-            if ($item['item_type'] !== 'charge'
-                || $item['applicability'] !== 'applicable'
-                || $item['resolution'] !== 'resolved') {
-                continue;
-            }
+        $this->createPaperlessPaymentOrderLines($assessment, $projection);
+    }
 
-            $assessment->lines()->create([
-                'business_permit_evaluation_item_id' => $item['id'],
-                'permit_application_line_id' => data_get($item, 'metadata.permit_application_line_id'),
-                'line_of_business_id' => data_get($item, 'metadata.line_of_business_id'),
-                'code' => (string) data_get($item, 'metadata.code', str($item['key'])->upper()->replace('.', '-')),
-                'name' => (string) data_get($item, 'metadata.label', $item['key']),
-                'category' => FeeRuleCategory::Fee,
-                'calculation_type' => FeeRuleCalculationType::Fixed,
-                'basis' => 'resolved_evaluation_contribution',
-                'basis_amount_cents' => (int) data_get($item, 'value.amount_cents'),
-                'amount_cents' => (int) data_get($item, 'value.amount_cents'),
-                'legal_basis' => data_get($item, 'metadata.legal_basis'),
-                'rule_snapshot' => [
-                    'source' => 'business_permit_evaluation',
-                    'evaluation_id' => $projection['evaluation_id'],
-                    'evaluation_version_id' => $projection['version_id'],
-                    'evaluation_fingerprint' => $projection['current_fingerprint'],
-                    'evaluation_item_id' => $item['id'],
-                    'evaluation_item_key' => $item['key'],
-                    'source_classification' => $item['source_classification'],
-                    'action' => $item['action'],
-                    'actor_id' => $item['actor_id'],
-                    'reason' => $item['reason'],
-                    'occurred_at' => $item['occurred_at'],
-                ],
-            ]);
+    /** @param array<string, mixed> $projection */
+    private function createPaperlessPaymentOrderLines(Assessment $assessment, array $projection): void
+    {
+        $items = $projection['items'] ?? [];
+        if (! is_array($items)) {
+            throw new UnsupportedAssessmentPolicy('Evaluation item projection is invalid.');
         }
+
+        $eligibleRevisionIds = collect($items)
+            ->filter(fn (array $item): bool => $item['item_type'] === 'charge'
+                && $item['applicability'] === 'applicable'
+                && $item['resolution'] === 'resolved')
+            ->pluck('revision_id')
+            ->filter()
+            ->values();
+
+        PaperlessPaymentOrder::query()
+            ->where('permit_application_id', $assessment->permit_application_id)
+            ->whereIn('business_permit_evaluation_item_revision_id', $eligibleRevisionIds)
+            ->where('status', 'issued')
+            ->whereNull('superseded_at')
+            ->with(['lines', 'routingWork', 'evaluationItemRevision'])
+            ->orderBy('id')
+            ->get()
+            ->each(function (PaperlessPaymentOrder $order) use ($assessment, $projection): void {
+                if ((int) $order->lines->sum('amount_cents') !== $order->total_amount_cents) {
+                    throw new UnsupportedAssessmentPolicy("Paperless Payment Order [{$order->id}] does not reconcile to its financial lines.");
+                }
+
+                $order->lines->each(function (PaperlessPaymentOrderLine $line) use ($assessment, $order, $projection): void {
+                    $assessment->lines()->create([
+                        'business_permit_evaluation_item_id' => $order->evaluationItemRevision?->business_permit_evaluation_item_id,
+                        'paperless_payment_order_line_id' => $line->id,
+                        'permit_application_line_id' => $line->permit_application_line_id,
+                        'line_of_business_id' => $line->line_of_business_id,
+                        'code' => $line->code,
+                        'name' => $line->name,
+                        'category' => FeeRuleCategory::Fee,
+                        'calculation_type' => FeeRuleCalculationType::Fixed,
+                        'basis' => 'paperless_payment_order',
+                        'basis_amount_cents' => $line->amount_cents,
+                        'amount_cents' => $line->amount_cents,
+                        'legal_basis' => null,
+                        'rule_snapshot' => [
+                            'source' => 'paperless_payment_order',
+                            'paperless_payment_order_id' => $order->id,
+                            'paperless_payment_order_line_id' => $line->id,
+                            'office_code' => $order->routingWork->office_code,
+                            'office_label' => $order->routingWork->office_label,
+                            'bplo_routing_work_id' => $order->bplo_routing_work_id,
+                            'evaluation_version_id' => $projection['version_id'],
+                            'evaluation_fingerprint' => $projection['current_fingerprint'],
+                            'issued_by_id' => $order->issued_by_id,
+                            'issued_at' => $order->issued_at->toIso8601String(),
+                            'source_snapshot' => $order->source_snapshot,
+                        ],
+                    ]);
+                });
+            });
     }
 
     /**
