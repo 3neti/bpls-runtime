@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Actions\PermitApplicationStatusMutation;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
+use App\Models\Builders\PermitApplicationBuilder;
 use Database\Factories\PermitApplicationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -50,6 +52,41 @@ class PermitApplication extends Model
     protected $attributes = [
         'status' => 'draft',
     ];
+
+    public function setAttribute($key, $value)
+    {
+        if ($key === 'status' && $this->requiresStatusMutationPrivilege($value)) {
+            PermitApplicationStatusMutation::assertPrivileged();
+        }
+
+        return parent::setAttribute($key, $value);
+    }
+
+    /**
+     * @param  \Illuminate\Database\Query\Builder  $query
+     */
+    public function newEloquentBuilder($query): PermitApplicationBuilder
+    {
+        return new PermitApplicationBuilder($query);
+    }
+
+    protected function performUpdate(Builder $query)
+    {
+        if ($this->isDirty('status')) {
+            PermitApplicationStatusMutation::assertPrivileged();
+        }
+
+        return parent::performUpdate($query);
+    }
+
+    protected function performInsert(Builder $query)
+    {
+        if ($this->getAttribute('status') !== PermitApplicationStatus::Draft) {
+            PermitApplicationStatusMutation::assertPrivileged();
+        }
+
+        return parent::performInsert($query);
+    }
 
     /** @return BelongsTo<Business, $this> */
     public function business(): BelongsTo
@@ -135,7 +172,10 @@ class PermitApplication extends Model
         return $this->hasOne(ProvisionalUatPermitCompletion::class);
     }
 
-    /** @param Builder<PermitApplication> $query */
+    /**
+     * @param  Builder<PermitApplication>  $query
+     * @return Builder<PermitApplication>
+     */
     public function scopeVisibleToPortalOwner(Builder $query, User $citizen): Builder
     {
         return $query->whereHas(
@@ -154,6 +194,21 @@ class PermitApplication extends Model
     {
         return $this->status === PermitApplicationStatus::HistoricalEvidence
             && data_get($this->metadata, 'historical_semantics.operationally_eligible') === false;
+    }
+
+    private function requiresStatusMutationPrivilege(mixed $value): bool
+    {
+        $status = $value instanceof PermitApplicationStatus ? $value : PermitApplicationStatus::tryFrom((string) $value);
+
+        if ($status === null) {
+            return true;
+        }
+
+        if (! $this->exists) {
+            return $status !== PermitApplicationStatus::Draft;
+        }
+
+        return $this->getRawOriginal('status') !== $status->value;
     }
 
     /**

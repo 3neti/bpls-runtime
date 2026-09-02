@@ -35,7 +35,7 @@ test('annex c dnfbp exposes the legacy contract while refusing official rows and
 });
 
 test('annex c dnfbp does not manufacture an official row from a raw released status', function () {
-    PermitApplication::factory()->create([
+    PermitApplication::factory()->withStatus(PermitApplicationStatus::Released)->create([
         'application_number' => 'UNAUTHORIZED-PERMIT-NUMBER',
         'status' => PermitApplicationStatus::Released,
     ]);

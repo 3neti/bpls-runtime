@@ -45,7 +45,7 @@ function evaluationFixture(): array
     $actor = User::factory()->create();
     $business = Business::factory()->create();
     $retail = LineOfBusiness::factory()->create(['code' => 'RETAIL', 'name' => 'Retail']);
-    $application = PermitApplication::factory()->for($business)->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::Assessment)->for($business)->create([
         'submitted_by_id' => $actor->id,
         'status' => PermitApplicationStatus::Assessment,
         'submitted_at' => now(),

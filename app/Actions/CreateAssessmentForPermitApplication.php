@@ -30,6 +30,7 @@ class CreateAssessmentForPermitApplication
         private AssessmentCalculator $calculator,
         private ApplicableFeeRuleQuery $applicableFeeRuleQuery,
         private BusinessPermitEvaluationReadiness $evaluationReadiness,
+        private PermitApplicationStatusMutation $statusMutation,
     ) {}
 
     public function handle(PermitApplication $permitApplication, ?User $assessedBy = null): Assessment
@@ -97,8 +98,7 @@ class CreateAssessmentForPermitApplication
                 'total_amount_cents' => (int) $assessment->lines()->sum('amount_cents'),
             ]);
 
-            $permitApplication->update([
-                'status' => PermitApplicationStatus::Assessment,
+            $this->statusMutation->persistStatusConsequence($permitApplication, PermitApplicationStatus::Assessment, [
                 'assessed_at' => $assessment->assessed_at,
             ]);
 

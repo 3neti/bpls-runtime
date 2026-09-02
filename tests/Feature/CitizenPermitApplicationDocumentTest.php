@@ -160,7 +160,7 @@ test('citizens cannot add supporting evidence after municipal processing begins'
         UserPermission::ViewOwnPermitApplications,
         UserPermission::ViewOwnPermitApplicationDocuments,
     ], UserRole::Citizen);
-    $application = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->for($citizen, 'submittedBy')->create([
         'application_number' => 'APP-PROCESSED-DOCUMENT-001',
         'status' => PermitApplicationStatus::PendingPayment,
     ]);

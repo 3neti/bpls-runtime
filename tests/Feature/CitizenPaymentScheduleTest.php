@@ -51,6 +51,7 @@ test('citizens can inspect authoritative payment evidence for an owned applicati
         'trade_name' => 'Citizen Payment Shop',
     ]);
     $application = PermitApplication::factory()
+        ->withStatus(PermitApplicationStatus::PendingPayment)
         ->for($citizen, 'submittedBy')
         ->for($business)
         ->create([

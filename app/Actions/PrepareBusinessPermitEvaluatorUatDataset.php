@@ -41,6 +41,7 @@ class PrepareBusinessPermitEvaluatorUatDataset
         private readonly AssessmentSnapshotFingerprint $assessmentFingerprint,
         private readonly StakeholderPreviewSafety $previewSafety,
         private readonly RecordBploRoutingDetermination $recordBploRouting,
+        private readonly PermitApplicationStatusMutation $statusMutation,
     ) {}
 
     /**
@@ -238,7 +239,7 @@ class PrepareBusinessPermitEvaluatorUatDataset
         };
         $owner = BusinessOwner::query()->create(['name' => 'Synthetic Evaluator Owner '.str($key)->headline(), 'metadata' => ['uat_run_id' => $runId]]);
         $business = Business::query()->create(['business_owner_id' => $owner->id, 'name' => $fixtureLabel ?? 'Synthetic '.str($key)->headline().' Business', 'metadata' => ['uat_run_id' => $runId]]);
-        $application = PermitApplication::query()->create([
+        $application = $this->statusMutation->createProvisionalUatFixture([
             'business_id' => $business->id,
             'submitted_by_id' => $citizen->id,
             'application_number' => 'EVAL-UAT-'.str(hash('sha256', $runId.'-'.$key))->substr(0, 10)->upper(),
@@ -267,13 +268,13 @@ class PrepareBusinessPermitEvaluatorUatDataset
             $application,
             $this->bploRoutingActor,
             'Synthetic UAT BPLO situational determination; this fixture does not commission production routing rules.',
-            collect(['assessor', 'engineering', 'health', 'menro'])->map(fn (string $office): array => [
+            array_map(fn (string $office): array => [
                 'office_code' => $office,
                 'office_label' => str($office)->headline()->toString(),
                 'situational_reason' => 'Selected by BPLO for this bounded synthetic UAT circumstance.',
                 'required_work' => 'Determine applicable office work and any amount-bearing contribution.',
                 'permit_application_line_id' => null,
-            ])->all(),
+            ], ['assessor', 'engineering', 'health', 'menro']),
         );
 
         return $this->initialize->handle($application, $creator);

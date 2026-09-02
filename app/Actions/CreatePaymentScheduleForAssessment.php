@@ -18,7 +18,10 @@ use LogicException;
 
 class CreatePaymentScheduleForAssessment
 {
-    public function __construct(private readonly AssessmentSnapshotFingerprint $fingerprint) {}
+    public function __construct(
+        private readonly AssessmentSnapshotFingerprint $fingerprint,
+        private readonly PermitApplicationStatusMutation $statusMutation,
+    ) {}
 
     public function handle(Assessment $assessment, ?User $preparedBy = null): PaymentSchedule
     {
@@ -124,10 +127,9 @@ class CreatePaymentScheduleForAssessment
             ],
         ];
 
-        $permitApplication->forceFill([
-            'status' => PermitApplicationStatus::PendingPayment,
+        $this->statusMutation->persistStatusConsequence($permitApplication, PermitApplicationStatus::PendingPayment, [
             'metadata' => $metadata,
-        ])->save();
+        ]);
     }
 
     /**

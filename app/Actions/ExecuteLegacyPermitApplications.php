@@ -23,6 +23,7 @@ class ExecuteLegacyPermitApplications
     public function __construct(
         private LegacyPermitApplicationProjector $projector,
         private PlanLegacyPermitApplications $planner,
+        private PermitApplicationStatusMutation $statusMutation,
     ) {}
 
     /** @param list<int> $proposalIds */
@@ -210,7 +211,7 @@ class ExecuteLegacyPermitApplications
 
         $metadata = is_array($attributes['metadata'] ?? null) ? $attributes['metadata'] : [];
 
-        return PermitApplication::query()->create([
+        return $this->statusMutation->createHistoricalMigrationProjection([
             ...$attributes,
             'business_id' => $business->id,
             'metadata' => [

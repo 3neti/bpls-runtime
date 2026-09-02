@@ -92,7 +92,7 @@ test('business detail follows owner identity rather than submission actor and pr
     ]);
     $activities = collect(['Retail Trading', 'Food Service'])
         ->map(fn (string $name): LineOfBusiness => LineOfBusiness::factory()->create(['name' => $name]));
-    $application = PermitApplication::factory()->for($business)->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->for($business)->create([
         'submitted_by_id' => $submissionActor->id,
         'type' => PermitApplicationType::Renewal,
         'status' => PermitApplicationStatus::PendingPayment,

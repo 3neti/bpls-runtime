@@ -20,7 +20,7 @@ function httpEvaluationFixture(?User $submitter = null): array
     $submitter ??= User::factory()->create();
     $business = Business::factory()->create();
     $lineOfBusiness = LineOfBusiness::factory()->create(['name' => 'Retail']);
-    $application = PermitApplication::factory()->for($business)->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::Assessment)->for($business)->create([
         'submitted_by_id' => $submitter->id,
         'status' => PermitApplicationStatus::Assessment,
         'submitted_at' => now(),

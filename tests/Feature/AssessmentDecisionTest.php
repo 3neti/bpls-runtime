@@ -265,7 +265,7 @@ test('Treasurer decisions fail safely when the page snapshot is stale or the dec
 function preparedAssessmentFixture(string $applicationNumber = 'APP-ASSESSMENT-DECISION'): array
 {
     $assessmentOfficer = User::factory()->create(['name' => 'Preview Assessment Officer']);
-    $application = PermitApplication::factory()->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::Assessment)->create([
         'application_number' => $applicationNumber,
         'application_year' => 2026,
         'status' => PermitApplicationStatus::Assessment,

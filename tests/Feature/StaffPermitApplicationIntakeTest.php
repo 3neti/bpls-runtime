@@ -73,18 +73,18 @@ test('staff can search and filter the permit application queue using recorded fi
         UserPermission::AccessStaff,
         UserPermission::ViewPermitApplications,
     ]);
-    $matching = PermitApplication::factory()->create([
+    $matching = PermitApplication::factory()->withStatus(PermitApplicationStatus::Assessment)->create([
         'application_number' => 'APP-2026-IPIL-SEARCH',
         'tracking_reference' => 'TRACK-IPIL-SEARCH',
         'status' => PermitApplicationStatus::Assessment,
     ]);
     $matching->business->update(['name' => 'Ipil Search Hardware']);
-    $other = PermitApplication::factory()->create([
+    $other = PermitApplication::factory()->withStatus(PermitApplicationStatus::Assessment)->create([
         'application_number' => 'APP-2026-OTHER',
         'status' => PermitApplicationStatus::Assessment,
     ]);
     $other->business->update(['name' => 'Different Establishment']);
-    PermitApplication::factory()->create([
+    PermitApplication::factory()->withStatus(PermitApplicationStatus::Released)->create([
         'application_number' => 'APP-2026-IPIL-RELEASED',
         'status' => PermitApplicationStatus::Released,
     ])->business->update(['name' => 'Ipil Search Released']);
@@ -616,7 +616,7 @@ test('staff users with status permission can cancel a permit application', funct
         UserPermission::UpdatePermitApplicationStatus,
     ]);
 
-    $application = PermitApplication::factory()->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::Assessment)->create([
         'application_number' => 'APP-2026-CANCEL',
         'status' => PermitApplicationStatus::Assessment,
     ]);
@@ -645,7 +645,7 @@ test('permit release attempt records unresolved policy boundary without releasin
         UserPermission::UpdatePermitApplicationStatus,
     ]);
 
-    $application = PermitApplication::factory()->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->create([
         'application_number' => 'APP-2026-RELEASE-BLOCKED',
         'status' => PermitApplicationStatus::PendingPayment,
     ]);
@@ -745,7 +745,7 @@ test('staff users without status permission cannot attempt permit release', func
         UserPermission::AccessStaff,
         UserPermission::ViewPermitApplications,
     ]);
-    $application = PermitApplication::factory()->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->create([
         'status' => PermitApplicationStatus::PendingPayment,
     ]);
 
@@ -761,7 +761,7 @@ test('staff users without status permission cannot cancel a permit application',
         UserPermission::AccessStaff,
         UserPermission::ViewPermitApplications,
     ]);
-    $application = PermitApplication::factory()->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::Assessment)->create([
         'status' => PermitApplicationStatus::Assessment,
     ]);
 
@@ -782,7 +782,7 @@ test('cancelled permit applications expose terminal state and unavailable contin
         UserPermission::UpdatePermitApplicationStatus,
     ]);
 
-    $application = PermitApplication::factory()->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::Cancelled)->create([
         'application_number' => 'APP-2026-CANCELLED',
         'status' => PermitApplicationStatus::Cancelled,
         'metadata' => [
@@ -827,7 +827,7 @@ test('permit application review exposes release policy boundary evidence', funct
         UserPermission::UpdatePermitApplicationStatus,
     ]);
 
-    $application = PermitApplication::factory()->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->create([
         'application_number' => 'APP-2026-RELEASE-EVIDENCE',
         'status' => PermitApplicationStatus::PendingPayment,
         'metadata' => [
@@ -868,7 +868,7 @@ test('permit application review initializes and exposes clearance checklist evid
         UserPermission::CompletePermitClearances,
     ]);
 
-    $application = PermitApplication::factory()->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->create([
         'application_number' => 'APP-2026-CLEARANCE',
         'status' => PermitApplicationStatus::PendingPayment,
     ]);
@@ -916,7 +916,7 @@ test('staff users with clearance permission can complete a clearance without rel
         UserPermission::CompletePermitClearances,
     ]);
 
-    $application = PermitApplication::factory()->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->create([
         'application_number' => 'APP-2026-CLEARANCE-COMPLETE',
         'status' => PermitApplicationStatus::PendingPayment,
     ]);
@@ -946,7 +946,7 @@ test('staff users without clearance permission cannot complete clearances', func
         UserPermission::AccessStaff,
         UserPermission::ViewPermitApplications,
     ]);
-    $application = PermitApplication::factory()->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->create([
         'status' => PermitApplicationStatus::PendingPayment,
     ]);
     $clearance = PermitClearance::factory()->for($application, 'permitApplication')->create();

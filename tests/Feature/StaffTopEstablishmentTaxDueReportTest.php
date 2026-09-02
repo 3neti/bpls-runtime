@@ -210,6 +210,7 @@ function topTaxDueReportSchedule(array $attributes): PaymentSchedule
             'barangay' => $attributes['barangay'] ?? 'Poblacion',
         ]);
     $permitApplication = PermitApplication::factory()
+        ->withStatus(PermitApplicationStatus::PendingPayment)
         ->for($business)
         ->create([
             'application_number' => $attributes['application_number'],

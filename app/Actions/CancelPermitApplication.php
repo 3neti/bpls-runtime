@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 
 class CancelPermitApplication
 {
+    public function __construct(private readonly PermitApplicationStatusMutation $statusMutation) {}
+
     public function handle(PermitApplication $permitApplication, User $cancelledBy, string $reason): PermitApplication
     {
         return DB::transaction(function () use ($permitApplication, $cancelledBy, $reason): PermitApplication {
@@ -43,10 +45,9 @@ class CancelPermitApplication
                 'occurred_at' => now()->toIso8601String(),
             ];
 
-            $permitApplication->forceFill([
-                'status' => PermitApplicationStatus::Cancelled,
+            $this->statusMutation->persistStatusConsequence($permitApplication, PermitApplicationStatus::Cancelled, [
                 'metadata' => $metadata,
-            ])->save();
+            ]);
 
             return $permitApplication->refresh();
         });

@@ -26,7 +26,7 @@ test('citizens can view authoritative assessment and payment state for an owned 
         UserPermission::ViewOwnPermitApplications,
         UserPermission::ViewOwnPermitApplicationFinancials,
     ], UserRole::Citizen);
-    $application = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->for($citizen, 'submittedBy')->create([
         'application_number' => 'APP-CITIZEN-TRACKING-001',
         'status' => PermitApplicationStatus::PendingPayment,
     ]);
@@ -93,7 +93,7 @@ test('citizen financial state remains hidden without the explicit permission', f
         UserPermission::AccessCitizen,
         UserPermission::ViewOwnPermitApplications,
     ], UserRole::Citizen);
-    $application = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->for($citizen, 'submittedBy')->create([
         'status' => PermitApplicationStatus::PendingPayment,
     ]);
     linkPortalUserToApplicationOwner($citizen, $application);
@@ -125,7 +125,7 @@ test('citizen payment state is not paired with a superseded assessment schedule'
         UserPermission::ViewOwnPermitApplications,
         UserPermission::ViewOwnPermitApplicationFinancials,
     ], UserRole::Citizen);
-    $application = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->for($citizen, 'submittedBy')->create([
         'status' => PermitApplicationStatus::PendingPayment,
     ]);
     linkPortalUserToApplicationOwner($citizen, $application);
@@ -165,7 +165,7 @@ test('citizens can view collection receipt clearance and authority review eviden
         UserPermission::ViewOwnPermitApplications,
         UserPermission::ViewOwnPermitApplicationFinancials,
     ], UserRole::Citizen);
-    $application = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->for($citizen, 'submittedBy')->create([
         'application_number' => 'APP-CITIZEN-AUTHORITY-001',
         'status' => PermitApplicationStatus::PendingPayment,
     ]);
@@ -249,7 +249,7 @@ test('citizens cannot view another applicants processing or financial state', fu
         UserPermission::ViewOwnPermitApplicationFinancials,
     ], UserRole::Citizen);
     $otherCitizen = User::factory()->create(['role_id' => $citizen->role_id]);
-    $application = PermitApplication::factory()->for($otherCitizen, 'submittedBy')->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->for($otherCitizen, 'submittedBy')->create([
         'status' => PermitApplicationStatus::PendingPayment,
     ]);
 

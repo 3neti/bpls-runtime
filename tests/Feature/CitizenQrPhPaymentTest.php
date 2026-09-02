@@ -199,7 +199,7 @@ function qrPhScheduleFixture(bool $approved = true): array
         UserPermission::ViewOwnPermitApplications,
         UserPermission::ViewOwnPermitApplicationFinancials,
     ], UserRole::Citizen);
-    $application = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->for($citizen, 'submittedBy')->create([
         'status' => PermitApplicationStatus::PendingPayment,
         'application_year' => 2026,
     ]);

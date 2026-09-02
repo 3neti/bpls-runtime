@@ -2,6 +2,7 @@
 
 namespace App\Evaluation;
 
+use App\Actions\PermitApplicationStatusMutation;
 use App\Enums\PermitApplicationStatus;
 use App\Models\BusinessPermitEvaluation;
 use App\Models\BusinessPermitEvaluationVersion;
@@ -12,7 +13,10 @@ use LogicException;
 
 class BusinessPermitEvaluationVersioner
 {
-    public function __construct(private readonly BusinessPermitEvaluationResolver $resolver) {}
+    public function __construct(
+        private readonly BusinessPermitEvaluationResolver $resolver,
+        private readonly PermitApplicationStatusMutation $statusMutation,
+    ) {}
 
     /**
      * @param  callable(BusinessPermitEvaluationVersion): void  $recordChanges
@@ -64,7 +68,7 @@ class BusinessPermitEvaluationVersioner
                 ->update(['superseded_at' => now()]);
 
             if ($permitApplication->status === PermitApplicationStatus::Approval) {
-                $permitApplication->forceFill(['status' => PermitApplicationStatus::Assessment])->save();
+                $this->statusMutation->persistStatusConsequence($permitApplication, PermitApplicationStatus::Assessment);
             }
 
             return $version->fresh(['revisions', 'counterCheck']);

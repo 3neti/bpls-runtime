@@ -17,7 +17,10 @@ use Illuminate\Support\Str;
 
 class RecordAssessmentDecision
 {
-    public function __construct(private readonly AssessmentSnapshotFingerprint $fingerprint) {}
+    public function __construct(
+        private readonly AssessmentSnapshotFingerprint $fingerprint,
+        private readonly PermitApplicationStatusMutation $statusMutation,
+    ) {}
 
     public function handle(
         Assessment $assessment,
@@ -154,9 +157,8 @@ class RecordAssessmentDecision
             ],
         ];
 
-        $permitApplication->forceFill([
-            'status' => PermitApplicationStatus::Approval,
+        $this->statusMutation->persistStatusConsequence($permitApplication, PermitApplicationStatus::Approval, [
             'metadata' => $metadata,
-        ])->save();
+        ]);
     }
 }

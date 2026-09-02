@@ -35,7 +35,7 @@ test('cmci ldcs exposes the official contract while refusing generation and expo
 });
 
 test('cmci ldcs does not manufacture an official row from a raw released status', function () {
-    PermitApplication::factory()->create([
+    PermitApplication::factory()->withStatus(PermitApplicationStatus::Released)->create([
         'application_number' => 'UNAUTHORIZED-PERMIT-NUMBER',
         'status' => PermitApplicationStatus::Released,
     ]);

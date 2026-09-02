@@ -13,7 +13,10 @@ use Illuminate\Support\Str;
 
 class SubmitCitizenPermitApplication
 {
-    public function __construct(private readonly FreezePermitApplicationDeclaration $freezeDeclaration) {}
+    public function __construct(
+        private readonly FreezePermitApplicationDeclaration $freezeDeclaration,
+        private readonly PermitApplicationStatusMutation $statusMutation,
+    ) {}
 
     public function handle(PermitApplication $permitApplication, User $submittedBy): PermitApplication
     {
@@ -80,13 +83,12 @@ class SubmitCitizenPermitApplication
                 ],
             ];
 
-            $application->forceFill([
-                'status' => PermitApplicationStatus::Assessment,
+            $this->statusMutation->persistStatusConsequence($application, PermitApplicationStatus::Assessment, [
                 'submitted_at' => $occurredAt,
                 'application_number' => null,
                 'tracking_reference' => $trackingReference,
                 'metadata' => $metadata,
-            ])->save();
+            ]);
 
             $declaration = $this->freezeDeclaration->handle($application, $submittedBy);
             $metadata = $application->metadata ?? [];

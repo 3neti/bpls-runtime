@@ -37,7 +37,7 @@ test('plds exposes the legacy contract while refusing official rows and export',
 });
 
 test('plds does not manufacture an official row from a raw released status', function () {
-    PermitApplication::factory()->create([
+    PermitApplication::factory()->withStatus(PermitApplicationStatus::Released)->create([
         'application_number' => 'UNAUTHORIZED-PERMIT-NUMBER',
         'status' => PermitApplicationStatus::Released,
     ]);

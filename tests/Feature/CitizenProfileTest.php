@@ -47,7 +47,7 @@ test('Citizen Profile follows only the explicit owner link and projects multiple
         ->map(fn (string $name): LineOfBusiness => LineOfBusiness::factory()->create(['name' => $name]));
 
     $applications = $businesses->values()->map(function (Business $business, int $index) use ($activities, $unrelatedCitizen): PermitApplication {
-        $application = PermitApplication::factory()->create([
+        $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->create([
             'business_id' => $business->id,
             'submitted_by_id' => $unrelatedCitizen->id,
             'type' => $index === 0 ? PermitApplicationType::Renewal : PermitApplicationType::New,
@@ -140,7 +140,7 @@ test('Citizen Profile suppresses payable truth without Citizen financial visibil
 });
 
 test('Citizen Profile surface requires Citizen application visibility and returns the backend projection', function () {
-    $application = PermitApplication::factory()->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->create([
         'type' => PermitApplicationType::Renewal,
         'status' => PermitApplicationStatus::PendingPayment,
     ]);

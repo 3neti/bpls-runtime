@@ -422,7 +422,11 @@ test('citizen draft update refuses stale or municipally processed records withou
         UserPermission::ViewOwnPermitApplications,
     ], UserRole::Citizen);
     $lineOfBusiness = LineOfBusiness::factory()->create();
-    $application = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
+    $applicationFactory = PermitApplication::factory()->for($citizen, 'submittedBy');
+    if (($applicationOverrides['status'] ?? PermitApplicationStatus::Draft) !== PermitApplicationStatus::Draft) {
+        $applicationFactory = $applicationFactory->withStatus($applicationOverrides['status']);
+    }
+    $application = $applicationFactory->create([
         'application_number' => null,
         'status' => PermitApplicationStatus::Draft,
         'type' => PermitApplicationType::New,

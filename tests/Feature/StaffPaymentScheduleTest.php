@@ -23,7 +23,7 @@ test('staff users with prepare permission can prepare a payment schedule from an
         UserPermission::PreparePaymentSchedules,
     ]);
 
-    $application = PermitApplication::factory()->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::Assessment)->create([
         'application_number' => 'APP-PAY-001',
         'status' => PermitApplicationStatus::Assessment,
     ]);
@@ -86,7 +86,7 @@ test('preparing a payment schedule is idempotent for an assessment', function ()
         UserPermission::PreparePaymentSchedules,
     ]);
 
-    $application = PermitApplication::factory()->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::Assessment)->create([
         'status' => PermitApplicationStatus::Assessment,
     ]);
     $assessment = Assessment::factory()->for($application)->create([
@@ -308,7 +308,7 @@ test('permit application review exposes latest payment schedule state', function
         UserPermission::ViewPermitApplications,
     ]);
 
-    $application = PermitApplication::factory()->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->create([
         'application_number' => 'APP-PAY-003',
         'status' => PermitApplicationStatus::PendingPayment,
     ]);

@@ -29,7 +29,7 @@ beforeEach(function () {
 });
 
 test('each concerned office contributes only its own manually assessed charge to the canonical assessment snapshot', function () {
-    $application = PermitApplication::factory()->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::Assessment)->create([
         'status' => PermitApplicationStatus::Assessment,
         'application_year' => 2099,
     ]);
@@ -63,7 +63,7 @@ test('each concerned office contributes only its own manually assessed charge to
 });
 
 test('preview permit completion requires paid and cleared state while real release remains fail closed', function () {
-    $application = PermitApplication::factory()->create([
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->create([
         'status' => PermitApplicationStatus::PendingPayment,
         'application_year' => 2099,
     ]);
