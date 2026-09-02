@@ -13,6 +13,8 @@ use Illuminate\Support\Str;
 
 class SubmitCitizenPermitApplication
 {
+    public function __construct(private readonly FreezePermitApplicationDeclaration $freezeDeclaration) {}
+
     public function handle(PermitApplication $permitApplication, User $submittedBy): PermitApplication
     {
         return DB::transaction(function () use ($permitApplication, $submittedBy): PermitApplication {
@@ -85,6 +87,16 @@ class SubmitCitizenPermitApplication
                 'tracking_reference' => $trackingReference,
                 'metadata' => $metadata,
             ])->save();
+
+            $declaration = $this->freezeDeclaration->handle($application, $submittedBy);
+            $metadata = $application->metadata ?? [];
+            $metadata['applicant_declaration'] = [
+                'id' => $declaration->id,
+                'snapshot_hash' => $declaration->snapshot_hash,
+                'frozen_at' => $declaration->declared_at->toIso8601String(),
+                'immutable' => true,
+            ];
+            $application->forceFill(['metadata' => $metadata])->save();
 
             $submittedBy->notify(new PermitApplicationReceived(
                 permitApplicationId: $application->id,

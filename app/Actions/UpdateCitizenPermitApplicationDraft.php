@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 
 class UpdateCitizenPermitApplicationDraft
 {
+    public function __construct(private readonly BuildPermitApplicationDeclarationDraft $buildDeclarationDraft) {}
+
     /**
      * @param  array{
      *     owner_name: string,
@@ -89,8 +91,11 @@ class UpdateCitizenPermitApplicationDraft
                 $draft->lines()->create($line);
             }
 
+            $metadata = $draft->metadata ?? [];
+            $metadata['applicant_declaration_draft'] = $this->buildDeclarationDraft->handle($data);
             $draft->forceFill([
                 'application_year' => $data['application_year'],
+                'metadata' => $metadata,
             ])->save();
             $draft->touch();
 

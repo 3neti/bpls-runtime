@@ -18,6 +18,7 @@ use App\Models\OfficeChargeContribution;
 use App\Models\PaymentSchedule;
 use App\Models\PaymentScheduleLine;
 use App\Models\PermitApplication;
+use App\Models\PermitApplicationDeclaration;
 use App\Models\PermitApplicationLine;
 use App\Models\PermitClearance;
 use App\Models\ProvisionalUatPermitCompletion;
@@ -35,6 +36,7 @@ final class LifecycleScenarioSpecimenOwnership
         'business_owner_ids' => BusinessOwner::class,
         'business_ids' => Business::class,
         'permit_application_ids' => PermitApplication::class,
+        'permit_application_declaration_ids' => PermitApplicationDeclaration::class,
         'permit_application_line_ids' => PermitApplicationLine::class,
         'permit_clearance_ids' => PermitClearance::class,
         'office_charge_contribution_ids' => OfficeChargeContribution::class,

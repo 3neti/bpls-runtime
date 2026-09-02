@@ -98,6 +98,8 @@ final class BuildLifecycleLaboratory
                 'status' => $application->status->value,
                 'assessment_id' => $assessment?->id,
                 'payment_schedule_id' => $schedule?->id,
+                'document_url' => route('citizen.permit-applications.show', $application, absolute: false),
+                'declaration_frozen' => $application->declaration()->exists(),
             ],
             'actors' => $specimen === null ? [] : $this->authenticateActor->entries($specimen),
         ];

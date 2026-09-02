@@ -13,7 +13,7 @@ final class AuthenticateLifecycleScenarioActor
 {
     /** @var array<string, array{label: string, role_suffix: string, destination: string}> */
     private const array Actors = [
-        'citizen' => ['label' => 'Citizen', 'role_suffix' => 'citizen', 'destination' => 'citizen.businesses.show'],
+        'citizen' => ['label' => 'Citizen', 'role_suffix' => 'citizen', 'destination' => 'citizen.permit-applications.show'],
         'intake' => ['label' => 'BPLO Intake', 'role_suffix' => 'intake', 'destination' => 'staff.permit-applications.show'],
         'assessment_officer' => ['label' => 'Assessment Officer', 'role_suffix' => 'assessment-officer', 'destination' => 'staff.permit-applications.assessments.show'],
         'assessor' => ['label' => 'Municipal Assessor', 'role_suffix' => 'assessor', 'destination' => 'staff.permit-applications.evaluation.show'],
@@ -83,7 +83,6 @@ final class AuthenticateLifecycleScenarioActor
         $actor = self::Actors[$actorKey];
         $application = $specimen->permitApplication()->with(['business', 'assessments'])->firstOrFail();
         $parameter = match ($actor['destination']) {
-            'citizen.businesses.show' => $application->business_id,
             'staff.permit-applications.assessments.show' => $application->assessments()->whereNull('superseded_at')->sole()->id,
             default => $application->id,
         };

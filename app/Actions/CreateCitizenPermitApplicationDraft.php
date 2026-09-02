@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 
 class CreateCitizenPermitApplicationDraft
 {
+    public function __construct(private readonly BuildPermitApplicationDeclarationDraft $buildDeclarationDraft) {}
+
     /**
      * @param  array<string, mixed>  $data
      */
@@ -37,6 +39,15 @@ class CreateCitizenPermitApplicationDraft
                         'registry_owner_id' => $owner->id,
                         'saved_as_draft' => true,
                     ],
+                    'applicant_declaration_draft' => $this->buildDeclarationDraft->handle([
+                        'type' => PermitApplicationType::New->value,
+                        'date_of_application' => now()->toDateString(),
+                        'mode_of_payment' => 'annually',
+                        'undertaking_accepted' => true,
+                        'applicant_printed_name' => $data['owner_name'] ?? $submittedBy->name,
+                        'position_title' => 'Owner',
+                        ...$data,
+                    ]),
                 ],
             ]);
 
@@ -75,7 +86,7 @@ class CreateCitizenPermitApplicationDraft
     private function resolveBusiness(BusinessOwner $owner, array $data): Business
     {
         if (isset($data['business_id'])) {
-            $business = $owner->businesses()->find($data['business_id']);
+            $business = $owner->businesses()->whereKey($data['business_id'])->first();
 
             if ($business === null) {
                 throw new DomainException('The selected business does not belong to the citizen registry identity.');

@@ -130,6 +130,7 @@ final class ExecutePersistedLifecycleScenario
             'referenced_business_ids' => $reusesNewApplicationIdentity ? [$application->business_id] : [],
             'reference_line_of_business_ids' => $application->lines->pluck('line_of_business_id')->filter()->sort()->values()->all(),
             'permit_application_ids' => [$application->id],
+            'permit_application_declaration_ids' => $application->declaration()->pluck('id')->all(),
             'permit_application_line_ids' => $application->lines->pluck('id')->sort()->values()->all(),
             'permit_clearance_ids' => $application->clearances()->pluck('id')->sort()->values()->all(),
             'office_charge_contribution_ids' => $application->officeChargeContributions()->pluck('id')->sort()->values()->all(),

@@ -13,6 +13,8 @@ class CreateRenewalPermitApplicationForExistingBusiness
 {
     public function __construct(
         private readonly DescribeRenewalPolicyBoundary $describeRenewalPolicyBoundary,
+        private readonly BuildPermitApplicationDeclarationDraft $buildDeclarationDraft,
+        private readonly FreezePermitApplicationDeclaration $freezeDeclaration,
     ) {}
 
     /**
@@ -37,12 +39,39 @@ class CreateRenewalPermitApplicationForExistingBusiness
                 'submitted_at' => now(),
                 'metadata' => [
                     'renewal_policy_boundary' => $this->describeRenewalPolicyBoundary->handle(PermitApplicationType::Renewal),
+                    'applicant_declaration_draft' => $this->buildDeclarationDraft->handle([
+                        'application_year' => $applicationYear,
+                        'type' => PermitApplicationType::Renewal->value,
+                        'date_of_application' => now()->toDateString(),
+                        'owner_name' => $business->owner()->value('name'),
+                        'owner_email' => $business->owner()->value('email'),
+                        'owner_phone' => $business->owner()->value('phone'),
+                        'owner_address' => $business->owner()->value('address'),
+                        'business_name' => $business->name,
+                        'trade_name' => $business->trade_name,
+                        'registration_number' => $business->registration_number,
+                        'registered_on' => $business->registered_on?->toDateString(),
+                        'business_address' => $business->address,
+                        'barangay' => $business->barangay,
+                        'ownership_type' => $business->ownership_type,
+                        'property_index_number' => $business->property_index_number,
+                        'business_area_square_meters' => $business->business_area_square_meters,
+                        'male_employee_count' => $business->male_employee_count,
+                        'female_employee_count' => $business->female_employee_count,
+                        'business_contact_number' => $business->contact_number,
+                        'business_email' => $business->email,
+                        'applicant_printed_name' => $business->owner()->value('name'),
+                        'position_title' => 'Owner',
+                        'undertaking_accepted' => true,
+                    ]),
                 ],
             ]);
 
             foreach ($lines as $line) {
                 $permitApplication->lines()->create($line);
             }
+
+            $this->freezeDeclaration->handle($permitApplication, $submittedBy);
 
             return $permitApplication->load(['business.owner', 'lines.lineOfBusiness']);
         });

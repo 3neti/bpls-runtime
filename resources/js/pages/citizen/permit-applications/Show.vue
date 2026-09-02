@@ -30,6 +30,7 @@ import {
     store as storeDocument,
 } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationDocumentController';
 import InputError from '@/components/InputError.vue';
+import IpilExecutableDocument from '@/components/permit-applications/IpilExecutableDocument.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -215,6 +216,9 @@ type PermitApplication = {
 
 const props = defineProps<{
     permitApplication: PermitApplication;
+    executableDocument: InstanceType<
+        typeof IpilExecutableDocument
+    >['$props']['document'];
 }>();
 
 const documentForm = useForm({
@@ -371,6 +375,8 @@ function blockerLabel(blocker: string): string {
                     </p>
                 </div>
             </section>
+
+            <IpilExecutableDocument :document="executableDocument" />
 
             <WorkflowStageSummary
                 data-testid="citizen-lifecycle-summary"

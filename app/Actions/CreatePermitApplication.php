@@ -17,6 +17,8 @@ class CreatePermitApplication
         private readonly DescribeAmendmentPolicyBoundary $describeAmendmentPolicyBoundary,
         private readonly DescribeTransferPolicyBoundary $describeTransferPolicyBoundary,
         private readonly DescribeRetirementPolicyBoundary $describeRetirementPolicyBoundary,
+        private readonly BuildPermitApplicationDeclarationDraft $buildDeclarationDraft,
+        private readonly FreezePermitApplicationDeclaration $freezeDeclaration,
     ) {}
 
     /**
@@ -95,12 +97,17 @@ class CreatePermitApplication
                 'status' => PermitApplicationStatus::Draft,
                 'application_year' => $data['application_year'],
                 'submitted_at' => now(),
-                'metadata' => $this->metadataFor(PermitApplicationType::from($data['type'])),
+                'metadata' => [
+                    ...($this->metadataFor(PermitApplicationType::from($data['type'])) ?? []),
+                    'applicant_declaration_draft' => $this->buildDeclarationDraft->handle($data),
+                ],
             ]);
 
             foreach ($data['lines'] as $line) {
                 $permitApplication->lines()->create($line);
             }
+
+            $this->freezeDeclaration->handle($permitApplication, $submittedBy);
 
             return $permitApplication->load(['business.owner', 'lines.lineOfBusiness']);
         });

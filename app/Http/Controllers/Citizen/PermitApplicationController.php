@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Citizen;
 
+use App\Actions\BuildExecutablePermitApplicationDocument;
 use App\Actions\BuildLifecycleCleanroomIntake;
 use App\Actions\BuildPermitApplicationTimeline;
 use App\Actions\CaptureLifecycleCleanroomIntake;
@@ -33,6 +34,7 @@ class PermitApplicationController extends Controller
 {
     public function __construct(
         private readonly BuildPermitApplicationTimeline $buildPermitApplicationTimeline,
+        private readonly BuildExecutablePermitApplicationDocument $buildExecutableDocument,
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly DescribePaymentPolicyBoundary $describePaymentPolicyBoundary,
         private readonly DescribePermitArtifact $describePermitArtifact,
@@ -360,6 +362,7 @@ class PermitApplicationController extends Controller
                 'can_view_documents' => $canViewDocuments,
                 'can_view_financials' => $canViewFinancials,
             ],
+            'executableDocument' => $this->buildExecutableDocument->handle($application),
         ]);
     }
 
@@ -474,10 +477,13 @@ class PermitApplicationController extends Controller
             'registered_on' => $business->registered_on?->toDateString(),
             'application_year' => $permitApplication->application_year,
             'type' => $permitApplication->type->value,
+            'declaration' => data_get($permitApplication->metadata, 'applicant_declaration_draft'),
             'lines' => $permitApplication->lines->map(fn ($line): array => [
                 'id' => $line->id,
                 'line_of_business_id' => $line->line_of_business_id,
                 'declared_gross_sales_pesos' => $this->centsToPesos($line->declared_gross_sales_cents),
+                'essential_gross_sales_pesos' => $line->essential_gross_sales_cents === null ? null : $this->centsToPesos($line->essential_gross_sales_cents),
+                'non_essential_gross_sales_pesos' => $line->non_essential_gross_sales_cents === null ? null : $this->centsToPesos($line->non_essential_gross_sales_cents),
                 'capital_investment_pesos' => $this->centsToPesos($line->capital_investment_cents),
                 'quantity' => $line->quantity,
                 'started_on' => $line->started_on?->toDateString(),

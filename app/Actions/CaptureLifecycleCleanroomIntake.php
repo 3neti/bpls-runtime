@@ -61,6 +61,7 @@ class CaptureLifecycleCleanroomIntake
         $manifest['business_owner_ids'] = [$application->business->business_owner_id];
         $manifest['business_ids'] = [$application->business_id];
         $manifest['permit_application_ids'] = [$application->id];
+        $manifest['permit_application_declaration_ids'] = [];
         $manifest['permit_application_line_ids'] = $application->lines()->pluck('id')->sort()->values()->all();
         $manifest['reference_line_of_business_ids'] = $application->lines()->pluck('line_of_business_id')->filter()->sort()->values()->all();
         $lockedRun->update([

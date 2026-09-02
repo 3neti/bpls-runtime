@@ -127,7 +127,7 @@ test('open as actor authenticates only exact manifest owned scenario identities 
         ->sole();
     $application = $specimen->permitApplication;
     $cases = [
-        'citizen' => ['email' => 'scenario-citizen@example.test', 'destination' => route('citizen.businesses.show', $application->business_id)],
+        'citizen' => ['email' => 'scenario-citizen@example.test', 'destination' => route('citizen.permit-applications.show', $application)],
         'health' => ['email' => 'scenario-01-health@example.test', 'destination' => route('staff.permit-applications.evaluation.show', $application)],
         'treasury' => ['email' => 'scenario-01-treasury-counter-check@example.test', 'destination' => route('staff.permit-applications.evaluation.show', $application)],
         'municipal_treasurer' => ['email' => 'scenario-01-municipal-treasurer@example.test', 'destination' => route('staff.permit-applications.assessments.show', $application->assessments->sole())],
@@ -207,6 +207,7 @@ test('cleanroom citizen form uses canonical draft and submit actions before cano
         ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))
         ->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.index'));
     expect($application->fresh()->businessPermitEvaluation->items()->whereIn('key', collect(app(NewApplicationHappyPathDefinition::class)->responsibilities())->pluck('key'))->count())->toBe(6)
+        ->and($run->fresh()->owned_resource_manifest['permit_application_declaration_ids'])->toBe([$application->declaration()->sole()->id])
         ->and(PermitApplication::query()->count())->toBe(1);
 
     $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.close', $run));

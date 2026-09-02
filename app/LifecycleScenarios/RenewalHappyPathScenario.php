@@ -88,6 +88,8 @@ final class RenewalHappyPathScenario
                     $applicationLines[] = [
                         'line_of_business_id' => $linesOfBusiness[$line['code']]->id,
                         'declared_gross_sales_cents' => $line['declared_gross_sales_cents'],
+                        'essential_gross_sales_cents' => 0,
+                        'non_essential_gross_sales_cents' => $line['declared_gross_sales_cents'],
                         'capital_investment_cents' => $line['capital_investment_cents'],
                         'quantity' => 1,
                     ];

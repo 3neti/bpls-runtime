@@ -15,6 +15,8 @@ use Illuminate\Support\Carbon;
  * @property int $permit_application_id
  * @property int|null $line_of_business_id
  * @property int $declared_gross_sales_cents
+ * @property int|null $essential_gross_sales_cents
+ * @property int|null $non_essential_gross_sales_cents
  * @property int $capital_investment_cents
  * @property int $quantity
  * @property Carbon|null $started_on
@@ -23,7 +25,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read LineOfBusiness|null $lineOfBusiness
  */
-#[Fillable(['permit_application_id', 'line_of_business_id', 'declared_gross_sales_cents', 'capital_investment_cents', 'quantity', 'started_on', 'metadata'])]
+#[Fillable(['permit_application_id', 'line_of_business_id', 'declared_gross_sales_cents', 'essential_gross_sales_cents', 'non_essential_gross_sales_cents', 'capital_investment_cents', 'quantity', 'started_on', 'metadata'])]
 class PermitApplicationLine extends Model
 {
     /** @use HasFactory<PermitApplicationLineFactory> */

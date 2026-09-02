@@ -79,6 +79,7 @@ class StartLifecycleCleanroom
                     'business_owner_ids' => [],
                     'business_ids' => [],
                     'permit_application_ids' => [],
+                    'permit_application_declaration_ids' => [],
                     'semantic_classification' => 'synthetic_only',
                     'production_liability' => false,
                 ],

@@ -38,6 +38,7 @@ class AdvanceLifecycleCleanroom
             if ($run->status !== 'active') {
                 throw new LogicException('Only an active cleanroom can advance.');
             }
+            $this->syncDeclarationOwnership($run);
             $next = data_get($this->resolveState->handle($run), 'progress.next_step');
             if (! is_array($next) || $next['mode'] !== 'system_action') {
                 throw new LogicException('The next cleanroom step must be completed in its real product form.');
@@ -51,6 +52,27 @@ class AdvanceLifecycleCleanroom
 
             return $run->fresh();
         }, 3);
+    }
+
+    private function syncDeclarationOwnership(LifecycleCleanroomRun $run): void
+    {
+        $declarationIds = PermitApplication::query()
+            ->whereIn('id', $run->ownedPermitApplicationIds())
+            ->with('declaration')
+            ->get()
+            ->pluck('declaration.id')
+            ->filter()
+            ->map(fn (mixed $id): int => (int) $id)
+            ->sort()
+            ->values()
+            ->all();
+        $manifest = $run->owned_resource_manifest;
+        if (($manifest['permit_application_declaration_ids'] ?? []) === $declarationIds) {
+            return;
+        }
+
+        $manifest['permit_application_declaration_ids'] = $declarationIds;
+        $run->update(['owned_resource_manifest' => $manifest]);
     }
 
     private function initializeResponsibilities(PermitApplication $application, LifecycleCleanroomRun $run, string $scenarioId): void
@@ -131,6 +153,8 @@ class AdvanceLifecycleCleanroom
             $lines[] = [
                 'line_of_business_id' => $line->line_of_business_id,
                 'declared_gross_sales_cents' => $line->declared_gross_sales_cents,
+                'essential_gross_sales_cents' => $line->essential_gross_sales_cents ?? 0,
+                'non_essential_gross_sales_cents' => $line->non_essential_gross_sales_cents ?? $line->declared_gross_sales_cents,
                 'capital_investment_cents' => $line->capital_investment_cents,
                 'quantity' => $line->quantity,
             ];
@@ -151,6 +175,10 @@ class AdvanceLifecycleCleanroom
         $permitApplicationIds = array_values(array_unique([...$run->ownedPermitApplicationIds(), $renewal->id]));
         sort($permitApplicationIds);
         $manifest['permit_application_ids'] = $permitApplicationIds;
+        $manifest['permit_application_declaration_ids'] = array_values(array_unique([
+            ...($manifest['permit_application_declaration_ids'] ?? []),
+            ...$renewal->declaration()->pluck('id')->all(),
+        ]));
         $run->update(['renewal_application_id' => $renewal->id, 'owned_resource_manifest' => $manifest]);
     }
 
