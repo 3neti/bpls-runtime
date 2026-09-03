@@ -480,6 +480,22 @@ function submitBploRouting(): void {
     });
 }
 
+function applyRoutingDefaults(): void {
+    const hasSuggestedDefaults = suggestedRoutingWork.size > 0;
+
+    routingCandidates.forEach((candidate) => {
+        const draft = routingDrafts[candidate.key];
+        const suggestion = suggestedRoutingWork.get(candidate.key);
+
+        draft.selected = hasSuggestedDefaults ? suggestion !== undefined : true;
+
+        if (suggestion) {
+            draft.reason = suggestion.situational_reason;
+            draft.requiredWork = suggestion.required_work;
+        }
+    });
+}
+
 function submitResponsibility(
     item: EvaluationItem,
     draft: ResponsibilityDraft,
@@ -863,6 +879,26 @@ function submitPrepareAssessment(): void {
                             placeholder="Record the application circumstances BPLO considered."
                         />
                     </label>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            class="w-fit"
+                            data-testid="apply-routing-defaults"
+                            @click="applyRoutingDefaults"
+                        >
+                            <Check class="size-4" aria-hidden="true" />
+                            {{
+                                routingSuggestion
+                                    ? 'Reapply suggested defaults'
+                                    : 'Apply default office checks'
+                            }}
+                        </Button>
+                        <p class="text-xs text-muted-foreground">
+                            Updates this draft only. BPLO still records the
+                            situational reasons and confirms the routing.
+                        </p>
+                    </div>
                     <div class="grid gap-3 lg:grid-cols-2">
                         <fieldset
                             v-for="candidate in routingCandidates"
