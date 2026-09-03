@@ -19,6 +19,7 @@ use App\Models\Business;
 use App\Models\BusinessOwner;
 use App\Models\LifecycleCleanroomRun;
 use App\Models\LifecycleScenarioSpecimen;
+use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
@@ -179,6 +180,31 @@ test('management starts a non destructive cleanroom and run next opens the real 
             ->where('cleanroomIntake.run_id', $run->public_id)
             ->where('cleanroomIntake.lines.0.declared_gross_sales_pesos', '1200000')
             ->has('cleanroomIntake.lines', 2));
+});
+
+test('cleanroom citizen intake accepts an active municipal catalog activity offered by the form', function () {
+    $management = previewAccount(StakeholderPreviewPersona::Management);
+    $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'));
+    $run = LifecycleCleanroomRun::query()->sole();
+    $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run));
+    $intake = app(BuildLifecycleCleanroomIntake::class)->handle($run);
+    $municipalRetail = LineOfBusiness::query()
+        ->where('code', 'MRC-2A-02-B-WHOLESALE-RETAIL')
+        ->sole();
+    $intake['lines'] = [[
+        ...$intake['lines'][0],
+        'line_of_business_id' => $municipalRetail->id,
+    ]];
+
+    $this->post(route('citizen.permit-applications.store'), [
+        ...$intake,
+        'type' => 'new',
+    ])->assertSessionHasNoErrors();
+
+    $run->refresh();
+    $application = PermitApplication::query()->findOrFail($run->new_application_id);
+
+    expect($application->lines()->sole()->line_of_business_id)->toBe($municipalRetail->id);
 });
 
 test('cleanroom citizen form uses canonical draft and submit actions before canonical responsibility creation', function () {

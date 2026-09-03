@@ -43,7 +43,13 @@ class StorePermitApplicationRequest extends PermitApplicationIntakeRequest
             $rules['lines.*.line_of_business_id'] = [
                 'required',
                 'integer',
-                Rule::exists('line_of_businesses', 'id')->where(fn (Builder $query): Builder => $query->where('is_active', true)->whereIn('code', ['PRODUCT-LAB-RETAIL-TRADING', 'PRODUCT-LAB-FOOD-SERVICE'])),
+                Rule::exists('line_of_businesses', 'id')->where(
+                    fn (Builder $query): Builder => $query
+                        ->where('is_active', true)
+                        ->where(fn (Builder $lines): Builder => $lines
+                            ->whereNull('metadata->scenario_id')
+                            ->orWhereIn('code', ['PRODUCT-LAB-RETAIL-TRADING', 'PRODUCT-LAB-FOOD-SERVICE'])),
+                ),
             ];
         }
 
