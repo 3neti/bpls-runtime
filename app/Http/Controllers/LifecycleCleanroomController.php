@@ -29,6 +29,9 @@ class LifecycleCleanroomController extends Controller
         AuthenticateLifecycleCleanroomActor $authenticate,
     ): RedirectResponse {
         $state = $resolveState->handle($lifecycleCleanroomRun);
+        if (is_string($blocker = data_get($state, 'progress.blocker'))) {
+            return to_route('stakeholder-preview.lifecycle-laboratory.index')->withErrors(['cleanroom' => $blocker]);
+        }
         $next = data_get($state, 'progress.next_step');
         if (! is_array($next)) {
             return to_route('stakeholder-preview.lifecycle-laboratory.index')->with('success', 'The cleanroom chronology is complete.');
@@ -60,6 +63,9 @@ class LifecycleCleanroomController extends Controller
 
         for ($guard = 0; $guard < 22; $guard++) {
             $state = $resolveState->handle($lifecycleCleanroomRun->fresh());
+            if (is_string($blocker = data_get($state, 'progress.blocker'))) {
+                return to_route('stakeholder-preview.lifecycle-laboratory.index')->withErrors(['cleanroom' => $blocker]);
+            }
             $next = data_get($state, 'progress.next_step');
             if (! is_array($next)) {
                 return to_route('stakeholder-preview.lifecycle-laboratory.index')->with('success', 'The two-year cleanroom chronology is complete.');

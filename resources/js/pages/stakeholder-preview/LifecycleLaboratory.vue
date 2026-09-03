@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
 import {
+    AlertTriangle,
     ArrowRight,
     CalendarDays,
     Check,
@@ -85,6 +86,8 @@ type CleanroomState = {
         total_steps: number;
         percent: number;
         complete: boolean;
+        blocked: boolean;
+        blocker: string | null;
         next_step: CleanroomStep | null;
     };
     steps: CleanroomStep[];
@@ -416,6 +419,22 @@ function closeCleanroom(): void {
                         </div>
                     </div>
 
+                    <div
+                        v-if="cleanroom.active.progress.blocker"
+                        class="flex gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+                        role="alert"
+                    >
+                        <AlertTriangle class="mt-0.5 size-5 shrink-0" />
+                        <div>
+                            <p class="font-semibold">
+                                This cleanroom cannot advance safely
+                            </p>
+                            <p class="mt-1 text-sm leading-6">
+                                {{ cleanroom.active.progress.blocker }}
+                            </p>
+                        </div>
+                    </div>
+
                     <ol class="space-y-2">
                         <li
                             v-for="step in cleanroom.active.steps"
@@ -498,7 +517,8 @@ function closeCleanroom(): void {
                             type="button"
                             :disabled="
                                 working !== null ||
-                                cleanroom.active.progress.complete
+                                cleanroom.active.progress.complete ||
+                                cleanroom.active.progress.blocked
                             "
                             class="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-zinc-950 px-4 text-sm font-bold text-white disabled:opacity-50 dark:bg-amber-300 dark:text-amber-950"
                             @click="runCleanroomNext"
@@ -508,7 +528,9 @@ function closeCleanroom(): void {
                                     ? 'Opening…'
                                     : cleanroom.active.progress.complete
                                       ? 'Cleanroom complete'
-                                      : 'Run Next Step'
+                                      : cleanroom.active.progress.blocked
+                                        ? 'Cleanroom blocked'
+                                        : 'Run Next Step'
                             }}
                         </button>
                         <div class="space-y-2">
@@ -530,7 +552,10 @@ function closeCleanroom(): void {
                                 </option></select
                             ><button
                                 type="button"
-                                :disabled="working !== null"
+                                :disabled="
+                                    working !== null ||
+                                    cleanroom.active.progress.blocked
+                                "
                                 class="h-10 w-full rounded-lg border border-zinc-300 text-sm font-semibold dark:border-zinc-700"
                                 @click="runCleanroomMilestone"
                             >

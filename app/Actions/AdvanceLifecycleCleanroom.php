@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Enums\BusinessPermitEvaluationApplicability;
 use App\Enums\BusinessPermitEvaluationItemType;
 use App\Enums\BusinessPermitEvaluationSource;
+use App\LifecycleScenarios\LifecycleCleanroomApplicationContract;
 use App\LifecycleScenarios\LifecycleCleanroomDefinition;
 use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\LifecycleScenarios\RenewalHappyPathDefinition;
@@ -23,6 +24,7 @@ class AdvanceLifecycleCleanroom
     public function __construct(
         private readonly StakeholderPreviewSafety $safety,
         private readonly ResolveLifecycleCleanroomState $resolveState,
+        private readonly LifecycleCleanroomApplicationContract $applicationContract,
         private readonly NewApplicationHappyPathDefinition $definition,
         private readonly InitializeBusinessPermitEvaluation $initializeEvaluation,
         private readonly DefineBusinessPermitEvaluationItem $defineEvaluationItem,
@@ -77,6 +79,7 @@ class AdvanceLifecycleCleanroom
 
     private function initializeResponsibilities(PermitApplication $application, LifecycleCleanroomRun $run, string $scenarioId): void
     {
+        $this->applicationContract->assertCompatible($application);
         $routingDetermination = $application->bploRoutingDetermination()->first();
         if ($routingDetermination === null) {
             throw new LogicException('Concerned-office work cannot be initialized before BPLO routing is recorded.');

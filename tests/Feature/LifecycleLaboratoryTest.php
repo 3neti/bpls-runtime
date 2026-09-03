@@ -205,6 +205,39 @@ test('cleanroom citizen intake accepts an active municipal catalog activity offe
     $application = PermitApplication::query()->findOrFail($run->new_application_id);
 
     expect($application->lines()->sole()->line_of_business_id)->toBe($municipalRetail->id);
+
+    $this->post(route('citizen.permit-applications.submit', $application))->assertSessionHasNoErrors();
+    $actor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.intake.user_id'));
+    app(RecordBploRoutingDetermination::class)->handle(
+        $application->fresh(),
+        $actor,
+        'Explicit routing proves the incompatible declaration fails closed at responsibility initialization.',
+        collect([
+            'engineering' => 'Engineering',
+            'health' => 'Health',
+            'assessor' => 'Municipal Assessor',
+            'menro' => 'MENRO',
+        ])->map(fn (string $label, string $office): array => [
+            'office_code' => $office,
+            'office_label' => $label,
+            'permit_application_line_id' => $application->lines()->sole()->id,
+            'situational_reason' => 'Explicit cleanroom routing test.',
+            'required_work' => 'Review the lodged declaration.',
+        ])->all(),
+    );
+
+    $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+    expect(data_get($state, 'progress.blocked'))->toBeTrue()
+        ->and(data_get($state, 'progress.blocker'))->toContain('does not match the certified cleanroom activity set');
+
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))
+        ->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.index'))
+        ->assertSessionHasErrors('cleanroom');
+
+    expect(fn () => app(AdvanceLifecycleCleanroom::class)->handle($run->fresh()))
+        ->toThrow(LogicException::class, 'does not match the certified cleanroom activity set');
+    expect($application->fresh()->businessPermitEvaluation)->toBeNull();
 });
 
 test('cleanroom citizen form uses canonical draft and submit actions before canonical responsibility creation', function () {

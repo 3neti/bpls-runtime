@@ -4,6 +4,7 @@ namespace App\Actions;
 
 use App\Enums\AssessmentDecisionAction;
 use App\Evaluation\BusinessPermitEvaluationResolver;
+use App\LifecycleScenarios\LifecycleCleanroomApplicationContract;
 use App\LifecycleScenarios\LifecycleCleanroomDefinition;
 use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\Models\BusinessPermitEvaluation;
@@ -16,6 +17,7 @@ class ResolveLifecycleCleanroomState
 {
     public function __construct(
         private readonly LifecycleCleanroomDefinition $definition,
+        private readonly LifecycleCleanroomApplicationContract $applicationContract,
         private readonly NewApplicationHappyPathDefinition $scenarioDefinition,
         private readonly BusinessPermitEvaluationResolver $evaluationResolver,
     ) {}
@@ -60,6 +62,7 @@ class ResolveLifecycleCleanroomState
         })->values();
         $next = $steps->firstWhere('completed', false);
         $completedCount = $steps->where('completed', true)->count();
+        $blocker = $this->blocker($next, $newApplication, $renewalApplication);
 
         return [
             'run' => [
@@ -73,6 +76,8 @@ class ResolveLifecycleCleanroomState
                 'completed_steps' => $completedCount,
                 'total_steps' => $steps->count(),
                 'complete' => $next === null,
+                'blocked' => is_string($blocker),
+                'blocker' => $blocker,
                 'next_step' => $next,
                 'percent' => (int) round(($completedCount / max(1, $steps->count())) * 100),
             ],
@@ -95,6 +100,16 @@ class ResolveLifecycleCleanroomState
                 'execution_boundary' => 'System steps invoke canonical Actions; human steps open the real product form as the exact cleanroom actor.',
             ],
         ];
+    }
+
+    /** @param array<string, mixed>|null $next */
+    private function blocker(?array $next, ?PermitApplication $newApplication, ?PermitApplication $renewalApplication): ?string
+    {
+        return match ($next['key'] ?? null) {
+            'evaluation_initialized' => $this->applicationContract->blocker($newApplication),
+            'renewal_evaluation_initialized' => $this->applicationContract->blocker($renewalApplication),
+            default => null,
+        };
     }
 
     /** @return array<string, mixed>|null */
