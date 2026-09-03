@@ -13,7 +13,10 @@ use Illuminate\Support\Facades\DB;
 
 class CreateCitizenPermitApplicationDraft
 {
-    public function __construct(private readonly BuildPermitApplicationDeclarationDraft $buildDeclarationDraft) {}
+    public function __construct(
+        private readonly BuildPermitApplicationDeclarationDraft $buildDeclarationDraft,
+        private readonly BuildCitizenPermitApplicationLabFixture $buildLabFixture,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $data
@@ -25,6 +28,7 @@ class CreateCitizenPermitApplicationDraft
             $owner = $this->resolveOwner($citizen, $data);
             $submittedBy->forceFill(['business_owner_id' => $owner->id]);
             $business = $this->resolveBusiness($owner, $data);
+            $laboratoryReconciliation = $this->laboratoryReconciliation($data);
 
             $permitApplication = PermitApplication::query()->create([
                 'business_id' => $business->id,
@@ -48,6 +52,9 @@ class CreateCitizenPermitApplicationDraft
                         'position_title' => 'Owner',
                         ...$data,
                     ]),
+                    ...($laboratoryReconciliation === null ? [] : [
+                        'laboratory_assessment_reconciliation' => $laboratoryReconciliation,
+                    ]),
                 ],
             ]);
 
@@ -57,6 +64,39 @@ class CreateCitizenPermitApplicationDraft
 
             return $permitApplication->load(['business.owner', 'lines.lineOfBusiness']);
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|null
+     */
+    private function laboratoryReconciliation(array $data): ?array
+    {
+        $fixtureId = $data['lab_fixture_id'] ?? null;
+        if (! is_string($fixtureId) || trim($fixtureId) === '') {
+            return null;
+        }
+
+        $fixture = collect($this->buildLabFixture->pool())->firstWhere('fixture_id', $fixtureId);
+        if (! is_array($fixture)
+            || $fixture['classification'] !== 'authorized_legacy_source_lab_only'
+            || $fixture['source_kind'] !== 'immutable_production_backup'
+            || ! is_array($fixture['historical_assessment'])) {
+            throw new DomainException('The selected legacy laboratory assessment evidence is unavailable.');
+        }
+
+        return [
+            'schema_version' => 'bpls.laboratory-assessment-reconciliation.v1',
+            'fixture_id' => $fixture['fixture_id'],
+            'source_kind' => $fixture['source_kind'],
+            'source_reference' => $fixture['source_reference'],
+            'source_business_category' => $fixture['source_business_category'],
+            'semantic_classification' => 'observational_legacy_financial_evidence',
+            'historical_assessment' => $fixture['historical_assessment'],
+            'component_identity_mapping' => 'not_established',
+            'operational_authority' => false,
+            'production_liability' => false,
+        ];
     }
 
     /**

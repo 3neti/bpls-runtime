@@ -212,8 +212,112 @@ test('staff users with view permission can review a computed assessment', functi
             ->where('assessment.total_amount_cents', 25_000)
             ->where('assessment.lines.0.code', 'APPLICATION-FEE')
             ->where('assessment.lines.0.name', 'Application Fee')
+            ->where('assessmentReconciliation', null)
             ->where('can.view_assessment_documents', true)
             ->where('assessmentDocumentGaps.0', 'The generated assessment document shows the recorded assessment lines only; it does not recalculate fees or taxes.')
+        );
+});
+
+test('assessment review compares a bound legacy specimen with the immutable computed assessment', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+    ]);
+    $application = PermitApplication::factory()->create([
+        'metadata' => [
+            'laboratory_assessment_reconciliation' => laboratoryAssessmentReconciliationMetadata(765_432),
+        ],
+    ]);
+    $assessment = Assessment::factory()->for($application)->create([
+        'total_amount_cents' => 122_000,
+    ]);
+    AssessmentLine::factory()->for($assessment)->create([
+        'code' => 'BUSINESS-TAX',
+        'name' => 'Business Tax',
+        'category' => FeeRuleCategory::Tax,
+        'amount_cents' => 33_000,
+    ]);
+    AssessmentLine::factory()->for($assessment)->create([
+        'code' => 'APPLICATION-FEES',
+        'name' => 'Application-wide Fees',
+        'category' => FeeRuleCategory::Fee,
+        'amount_cents' => 89_000,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.assessments.show', $assessment))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Assessments/Show')
+            ->where('assessmentReconciliation.status', 'difference')
+            ->where('assessmentReconciliation.comparable', true)
+            ->where('assessmentReconciliation.source.total_amount_cents', 765_432)
+            ->where('assessmentReconciliation.source.component_total_amount_cents', 765_432)
+            ->where('assessmentReconciliation.source.internally_reconciles', true)
+            ->where('assessmentReconciliation.computed.total_amount_cents', 122_000)
+            ->where('assessmentReconciliation.computed.component_total_amount_cents', 122_000)
+            ->where('assessmentReconciliation.computed.internally_reconciles', true)
+            ->where('assessmentReconciliation.comparison.delta_amount_cents', -643_432)
+            ->where('assessmentReconciliation.comparison.absolute_delta_amount_cents', 643_432)
+            ->where('assessmentReconciliation.comparison.direction', 'legacy_source_higher')
+            ->where('assessmentReconciliation.comparison.component_identity_mapping', 'not_established')
+            ->where('assessmentReconciliation.operational_effect', false)
+            ->has('assessmentReconciliation.source.schedules.0.fees', 2)
+            ->has('assessmentReconciliation.computed.lines', 2)
+        );
+});
+
+test('assessment reconciliation refuses altered legacy source evidence', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+    ]);
+    $metadata = laboratoryAssessmentReconciliationMetadata(765_432);
+    $metadata['historical_assessment']['recorded_total_amount_cents'] = 1;
+    $application = PermitApplication::factory()->create([
+        'metadata' => ['laboratory_assessment_reconciliation' => $metadata],
+    ]);
+    $assessment = Assessment::factory()->for($application)->create([
+        'total_amount_cents' => 122_000,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.assessments.show', $assessment))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('assessmentReconciliation.status', 'source_evidence_invalid')
+            ->where('assessmentReconciliation.comparable', false)
+            ->where('assessmentReconciliation.operational_effect', false)
+            ->missing('assessmentReconciliation.source')
+            ->missing('assessmentReconciliation.computed')
+        );
+});
+
+test('assessment reconciliation identifies an exact total match without mapping fee identities', function () {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+    ]);
+    $application = PermitApplication::factory()->create([
+        'metadata' => [
+            'laboratory_assessment_reconciliation' => laboratoryAssessmentReconciliationMetadata(765_432),
+        ],
+    ]);
+    $assessment = Assessment::factory()->for($application)->create([
+        'total_amount_cents' => 765_432,
+    ]);
+    AssessmentLine::factory()->for($assessment)->create([
+        'amount_cents' => 765_432,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.assessments.show', $assessment))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('assessmentReconciliation.status', 'exact_match')
+            ->where('assessmentReconciliation.comparison.delta_amount_cents', 0)
+            ->where('assessmentReconciliation.comparison.direction', 'equal')
+            ->where('assessmentReconciliation.comparison.component_identity_mapping', 'not_established')
         );
 });
 
@@ -342,4 +446,70 @@ function assessmentPdfPageCount(string $pdf): int
     preg_match_all('/\/Type \/Page\b/', $pdf, $matches);
 
     return count($matches[0]);
+}
+
+/** @return array<string, mixed> */
+function laboratoryAssessmentReconciliationMetadata(int $recordedTotalAmountCents): array
+{
+    $historicalAssessment = [
+        'source_status' => 'Released',
+        'source_assessed_at' => '2025-02-10T08:00:00.000Z',
+        'recorded_total_amount_cents' => $recordedTotalAmountCents,
+        'component_total_amount_cents' => $recordedTotalAmountCents,
+        'source_internal_reconciles' => true,
+        'schedules' => [[
+            'section' => 1,
+            'status' => 'paid',
+            'total_amount_cents' => $recordedTotalAmountCents,
+            'paid_amount_cents' => $recordedTotalAmountCents,
+            'fee_total_amount_cents' => $recordedTotalAmountCents,
+            'surcharge_amount_cents' => 0,
+            'penalty_amount_cents' => 0,
+            'fees' => [
+                [
+                    'name' => "Mayor's Permit Fee",
+                    'category' => 'Regulatory Fee',
+                    'amount_cents' => 700_000,
+                ],
+                [
+                    'name' => 'Health Certificate',
+                    'category' => 'Regulatory Fee',
+                    'amount_cents' => $recordedTotalAmountCents - 700_000,
+                ],
+            ],
+        ]],
+    ];
+    $historicalAssessment['source_evidence_hash'] = hash(
+        'sha256',
+        json_encode(
+            laboratoryAssessmentEvidenceNormalize($historicalAssessment),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR,
+        ),
+    );
+
+    return [
+        'schema_version' => 'bpls.laboratory-assessment-reconciliation.v1',
+        'fixture_id' => 'legacy-ipil-fixture',
+        'source_kind' => 'immutable_production_backup',
+        'source_reference' => 'LEGACY-2025-0001',
+        'source_business_category' => 'REC- GROCERY',
+        'semantic_classification' => 'observational_legacy_financial_evidence',
+        'historical_assessment' => $historicalAssessment,
+        'component_identity_mapping' => 'not_established',
+        'operational_authority' => false,
+        'production_liability' => false,
+    ];
+}
+
+function laboratoryAssessmentEvidenceNormalize(mixed $value): mixed
+{
+    if (! is_array($value)) {
+        return $value;
+    }
+
+    if (! array_is_list($value)) {
+        ksort($value);
+    }
+
+    return array_map(fn (mixed $item): mixed => laboratoryAssessmentEvidenceNormalize($item), $value);
 }

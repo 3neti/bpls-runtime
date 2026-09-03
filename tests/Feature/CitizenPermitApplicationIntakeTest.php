@@ -531,6 +531,10 @@ test('citizen intake refuses official numbers and policy-sensitive application t
         ['application_year' => now()->year + 1],
         'application_year',
     ],
+    'unapproved laboratory fixture' => [
+        ['lab_fixture_id' => 'legacy-ipil-forged'],
+        'lab_fixture_id',
+    ],
 ]);
 
 /**

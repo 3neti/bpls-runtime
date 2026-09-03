@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests\Citizen;
 
+use App\Actions\BuildCitizenPermitApplicationLabFixture;
 use App\Actions\ResolveLifecycleCleanroomIntake;
 use App\Enums\PermitApplicationType;
+use App\Enums\StakeholderPreviewPersona;
 use App\Enums\UserPermission;
 use App\Http\Requests\PermitApplicationIntakeRequest;
+use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Validation\Rule;
 
@@ -25,6 +28,15 @@ class StorePermitApplicationRequest extends PermitApplicationIntakeRequest
         $usesExistingBusiness = $this->filled('business_id');
         $cleanroom = app(ResolveLifecycleCleanroomIntake::class)->handle($this);
         $applicationYears = $cleanroom === null ? [now()->year] : [2025];
+        $hasLaboratoryAccess = $cleanroom !== null
+            || app(StakeholderPreviewSafety::class)->personaFor($this->user()) === StakeholderPreviewPersona::Citizen;
+        $legacyFixtureIds = $hasLaboratoryAccess
+            ? collect(app(BuildCitizenPermitApplicationLabFixture::class)->pool())
+                ->where('source_kind', 'immutable_production_backup')
+                ->whereNotNull('historical_assessment')
+                ->pluck('fixture_id')
+                ->all()
+            : [];
 
         $rules = parent::rules();
         if ($cleanroom !== null) {
@@ -46,6 +58,9 @@ class StorePermitApplicationRequest extends PermitApplicationIntakeRequest
                 ),
             ],
             'business_name' => [Rule::requiredIf(! $usesExistingBusiness), 'nullable', 'string', 'max:255'],
+            'lab_fixture_id' => $hasLaboratoryAccess
+                ? ['nullable', 'string', Rule::in($legacyFixtureIds)]
+                : ['prohibited'],
             'application_number' => ['prohibited'],
             'type' => ['required', Rule::in([PermitApplicationType::New->value])],
             'application_year' => ['required', 'integer', Rule::in($applicationYears)],

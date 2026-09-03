@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Staff;
 
 use App\Actions\BuildComputationAssessmentSlip;
+use App\Actions\BuildLaboratoryAssessmentReconciliation;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\RenderAssessmentPdf;
 use App\Assessment\AssessmentSnapshotFingerprint;
@@ -114,6 +115,7 @@ class PermitApplicationAssessmentController extends Controller
         Assessment $assessment,
         AssessmentSnapshotFingerprint $fingerprint,
         BuildComputationAssessmentSlip $buildSlip,
+        BuildLaboratoryAssessmentReconciliation $buildReconciliation,
     ): Response {
         Gate::authorize(UserPermission::ViewPermitApplications->value);
 
@@ -145,6 +147,7 @@ class PermitApplicationAssessmentController extends Controller
 
         return Inertia::render('permit-applications/Assessments/Show', [
             'computationAssessmentSlip' => $buildSlip->handle($assessment),
+            'assessmentReconciliation' => $buildReconciliation->handle($assessment),
             'assessment' => [
                 'id' => $assessment->id,
                 'sequence' => $assessment->sequence,

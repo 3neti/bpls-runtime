@@ -86,6 +86,7 @@ class BuildCitizenPermitApplicationLabFixture
      *     source_reference: string,
      *     source_business_category: string|null,
      *     source_note: string,
+     *     historical_assessment: array<string, mixed>|null,
      *     reset_fields: list<string>,
      *     fields: array<string, bool|float|int|string|null>,
      *     lines: list<array{
@@ -113,6 +114,7 @@ class BuildCitizenPermitApplicationLabFixture
      *     source_reference: string,
      *     source_business_category: string|null,
      *     source_note: string,
+     *     historical_assessment: array<string, mixed>|null,
      *     reset_fields: list<string>,
      *     fields: array<string, bool|float|int|string|null>,
      *     lines: list<array{
@@ -150,6 +152,7 @@ class BuildCitizenPermitApplicationLabFixture
                 'source_reference' => $legacy['source_reference'],
                 'source_business_category' => $legacy['source_business_category'],
                 'source_note' => $legacy['source_note'],
+                'historical_assessment' => $legacy['historical_assessment'],
                 'reset_fields' => array_values(array_unique([
                     ...$fallback['reset_fields'],
                     ...array_keys($legacy['fields']),
@@ -172,6 +175,7 @@ class BuildCitizenPermitApplicationLabFixture
      *     source_reference: string,
      *     source_business_category: string|null,
      *     source_note: string,
+     *     historical_assessment: array<string, mixed>|null,
      *     reset_fields: list<string>,
      *     fields: array<string, bool|float|int|string|null>,
      *     lines: list<array{
@@ -283,6 +287,7 @@ class BuildCitizenPermitApplicationLabFixture
             'source_reference' => $this->requiredString($fixture, 'fixture_id'),
             'source_business_category' => null,
             'source_note' => $this->requiredString($fixture, 'source_note'),
+            'historical_assessment' => null,
             'reset_fields' => array_keys($fields),
             'fields' => $fields,
             'lines' => $resolvedActivities,

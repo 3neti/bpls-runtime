@@ -98,6 +98,7 @@ type LabIntakeFixture = {
     source_reference: string;
     source_business_category: string | null;
     source_note: string;
+    historical_assessment: Record<string, unknown> | null;
     reset_fields: string[];
     fields: Record<string, boolean | number | string | null>;
     lines: (Activity & { line_of_business_code: string })[];
@@ -156,6 +157,7 @@ const activities = ref<Activity[]>(
 );
 let nextKey = Math.max(0, ...activities.value.map((line) => line.key)) + 1;
 const helperFilled = ref(false);
+const loadedLabFixtureId = ref('');
 const selectedLabFixtureId = ref(
     props.labIntakeFixtures?.[0]?.fixture_id ?? '',
 );
@@ -429,6 +431,7 @@ async function loadSelectedSpecimen(event: MouseEvent): Promise<void> {
         key: nextKey++,
     }));
     await nextTick();
+    loadedLabFixtureId.value = fixture.fixture_id;
     helperFilled.value = true;
 }
 function clearHelperValues(): void {
@@ -529,6 +532,7 @@ function clearHelperValues(): void {
     filledControls = [];
     helperActivityState = [];
     replacedActivities = null;
+    loadedLabFixtureId.value = '';
     helperFilled.value = false;
 }
 function selectLabFixture(event: Event): void {
@@ -635,6 +639,12 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     :value="selectedType"
                 />
                 <input
+                    v-if="loadedLabFixtureId"
+                    type="hidden"
+                    name="lab_fixture_id"
+                    :value="loadedLabFixtureId"
+                />
+                <input
                     type="hidden"
                     name="application_year"
                     :value="
@@ -729,6 +739,15 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             Loading replaces the current business declaration,
                             but keeps the laboratory actor and leaves the
                             undertaking for you to accept.
+                        </p>
+                        <p
+                            v-if="labIntakeFixture?.historical_assessment"
+                            class="text-xs font-semibold"
+                            data-testid="legacy-assessment-reconciliation-notice"
+                        >
+                            Its recorded legacy Assessment evidence will be
+                            checksum-bound to this draft and compared after the
+                            new BPLS Assessment is prepared.
                         </p>
                     </div>
                     <div class="flex flex-wrap gap-2">

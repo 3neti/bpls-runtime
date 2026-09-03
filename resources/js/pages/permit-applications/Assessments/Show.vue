@@ -7,6 +7,7 @@ import {
     FileText,
     ReceiptText,
     RotateCcw,
+    Scale,
 } from '@lucide/vue';
 import {
     approve as approveAssessment,
@@ -128,8 +129,61 @@ type Assessment = {
     } | null;
 };
 
+type AssessmentReconciliation = {
+    status: 'exact_match' | 'difference' | 'source_evidence_invalid';
+    comparable: boolean;
+    source_reference: string | null;
+    source_business_category?: string | null;
+    source?: {
+        label: string;
+        status: string;
+        assessed_at: string;
+        total_amount_cents: number;
+        component_total_amount_cents: number;
+        internally_reconciles: boolean;
+        evidence_hash: string;
+        schedules: {
+            section: number;
+            status: string;
+            total_amount_cents: number;
+            paid_amount_cents: number;
+            fee_total_amount_cents: number;
+            surcharge_amount_cents: number;
+            penalty_amount_cents: number;
+            fees: {
+                name: string;
+                category: string;
+                amount_cents: number;
+            }[];
+        }[];
+    };
+    computed?: {
+        label: string;
+        assessment_id: number;
+        total_amount_cents: number;
+        component_total_amount_cents: number;
+        internally_reconciles: boolean;
+        snapshot_hash: string;
+        lines: {
+            code: string;
+            name: string;
+            category: string;
+            amount_cents: number;
+        }[];
+    };
+    comparison?: {
+        delta_amount_cents: number;
+        absolute_delta_amount_cents: number;
+        direction: 'new_bpls_higher' | 'legacy_source_higher' | 'equal';
+        component_identity_mapping: 'not_established';
+    };
+    statement: string;
+    operational_effect: false;
+};
+
 const props = defineProps<{
     assessment: Assessment;
+    assessmentReconciliation: AssessmentReconciliation | null;
     computationAssessmentSlip: {
         institution: {
             country: string;
@@ -228,6 +282,29 @@ function money(amountCents: number): string {
         style: 'currency',
         currency: 'PHP',
     }).format(amountCents / 100);
+}
+
+function reconciliationDifference(
+    reconciliation: AssessmentReconciliation,
+): string {
+    if (!reconciliation.comparison) {
+        return 'Unavailable';
+    }
+
+    if (reconciliation.comparison.direction === 'equal') {
+        return 'No difference';
+    }
+
+    const side =
+        reconciliation.comparison.direction === 'new_bpls_higher'
+            ? 'New BPLS higher'
+            : 'Legacy source higher';
+
+    return (
+        side +
+        ' by ' +
+        money(reconciliation.comparison.absolute_delta_amount_cents)
+    );
 }
 </script>
 
@@ -368,6 +445,370 @@ function money(amountCents: number): string {
                     </div>
                 </template>
             </WorkflowStageSummary>
+
+            <section
+                v-if="assessmentReconciliation"
+                data-testid="assessment-reconciliation"
+                class="overflow-hidden rounded-2xl border border-blue-300 bg-background shadow-xs dark:border-blue-800"
+                aria-labelledby="assessment-reconciliation-title"
+            >
+                <header
+                    class="flex flex-col gap-3 border-b border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-start sm:justify-between dark:border-blue-900 dark:bg-blue-950/30"
+                >
+                    <div class="flex items-start gap-3">
+                        <Scale
+                            class="mt-0.5 size-5 shrink-0 text-blue-700 dark:text-blue-300"
+                            aria-hidden="true"
+                        />
+                        <div>
+                            <p
+                                class="text-xs font-semibold tracking-wide text-blue-800 uppercase dark:text-blue-200"
+                            >
+                                Laboratory instant audit
+                            </p>
+                            <h2
+                                id="assessment-reconciliation-title"
+                                class="mt-1 text-lg font-semibold"
+                            >
+                                Assessment Reconciliation
+                            </h2>
+                            <p
+                                class="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground"
+                            >
+                                Read-only comparison of preserved legacy
+                                payment-schedule evidence with this immutable
+                                BPLS Assessment. It never changes either amount.
+                            </p>
+                        </div>
+                    </div>
+                    <Badge
+                        :variant="
+                            assessmentReconciliation.status === 'exact_match'
+                                ? 'secondary'
+                                : 'outline'
+                        "
+                        class="w-fit"
+                        data-testid="assessment-reconciliation-result"
+                    >
+                        {{
+                            assessmentReconciliation.status === 'exact_match'
+                                ? 'Exact total match'
+                                : assessmentReconciliation.status ===
+                                    'difference'
+                                  ? 'Difference found'
+                                  : 'Source evidence invalid'
+                        }}
+                    </Badge>
+                </header>
+
+                <div
+                    v-if="
+                        assessmentReconciliation.comparable &&
+                        assessmentReconciliation.source &&
+                        assessmentReconciliation.computed &&
+                        assessmentReconciliation.comparison
+                    "
+                    class="grid gap-4 p-4"
+                >
+                    <div class="grid gap-3 md:grid-cols-3">
+                        <article class="rounded-xl border p-4">
+                            <p class="text-xs text-muted-foreground uppercase">
+                                Legacy recorded total
+                            </p>
+                            <p
+                                class="mt-2 text-2xl font-semibold tabular-nums"
+                                data-testid="assessment-reconciliation-source-total"
+                            >
+                                {{
+                                    money(
+                                        assessmentReconciliation.source
+                                            .total_amount_cents,
+                                    )
+                                }}
+                            </p>
+                            <p class="mt-1 text-xs text-muted-foreground">
+                                {{ assessmentReconciliation.source.status }} ·
+                                {{
+                                    assessmentReconciliation.source.schedules
+                                        .length
+                                }}
+                                recorded schedule(s)
+                            </p>
+                            <p
+                                class="mt-1 text-xs"
+                                :class="
+                                    assessmentReconciliation.source
+                                        .internally_reconciles
+                                        ? 'text-emerald-700 dark:text-emerald-300'
+                                        : 'text-destructive'
+                                "
+                            >
+                                {{
+                                    assessmentReconciliation.source
+                                        .internally_reconciles
+                                        ? 'Stored source components reconcile'
+                                        : 'Stored source components differ'
+                                }}
+                            </p>
+                        </article>
+                        <article class="rounded-xl border p-4">
+                            <p class="text-xs text-muted-foreground uppercase">
+                                New BPLS total
+                            </p>
+                            <p
+                                class="mt-2 text-2xl font-semibold tabular-nums"
+                                data-testid="assessment-reconciliation-computed-total"
+                            >
+                                {{
+                                    money(
+                                        assessmentReconciliation.computed
+                                            .total_amount_cents,
+                                    )
+                                }}
+                            </p>
+                            <p class="mt-1 text-xs text-muted-foreground">
+                                Immutable Assessment #{{
+                                    assessmentReconciliation.computed
+                                        .assessment_id
+                                }}
+                            </p>
+                            <p
+                                class="mt-1 text-xs"
+                                :class="
+                                    assessmentReconciliation.computed
+                                        .internally_reconciles
+                                        ? 'text-emerald-700 dark:text-emerald-300'
+                                        : 'text-destructive'
+                                "
+                            >
+                                {{
+                                    assessmentReconciliation.computed
+                                        .internally_reconciles
+                                        ? 'BPLS lines reconcile'
+                                        : 'BPLS lines differ'
+                                }}
+                            </p>
+                        </article>
+                        <article
+                            class="rounded-xl border p-4"
+                            :class="
+                                assessmentReconciliation.status ===
+                                'exact_match'
+                                    ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30'
+                                    : 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30'
+                            "
+                        >
+                            <p class="text-xs uppercase opacity-75">
+                                Difference
+                            </p>
+                            <p
+                                class="mt-2 text-lg font-semibold"
+                                data-testid="assessment-reconciliation-delta"
+                            >
+                                {{
+                                    reconciliationDifference(
+                                        assessmentReconciliation,
+                                    )
+                                }}
+                            </p>
+                            <p class="mt-1 text-xs opacity-75">
+                                Audit signal only
+                            </p>
+                        </article>
+                    </div>
+
+                    <div class="grid gap-4 lg:grid-cols-2">
+                        <article class="overflow-hidden rounded-xl border">
+                            <header class="border-b bg-muted/30 p-3">
+                                <h3 class="font-semibold">
+                                    Legacy source components
+                                </h3>
+                                <p class="mt-1 text-xs text-muted-foreground">
+                                    Recorded section amounts; labels remain
+                                    historical evidence.
+                                </p>
+                            </header>
+                            <div
+                                v-for="schedule in assessmentReconciliation
+                                    .source.schedules"
+                                :key="schedule.section"
+                                class="divide-y"
+                            >
+                                <div
+                                    v-for="(fee, index) in schedule.fees"
+                                    :key="
+                                        [
+                                            schedule.section,
+                                            index,
+                                            fee.name,
+                                        ].join('-')
+                                    "
+                                    class="grid grid-cols-[1fr_auto] gap-3 p-3 text-sm"
+                                >
+                                    <div class="min-w-0">
+                                        <p class="font-medium break-words">
+                                            {{ fee.name }}
+                                        </p>
+                                        <p
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            {{ fee.category }} · Section
+                                            {{ schedule.section }}
+                                        </p>
+                                    </div>
+                                    <p class="font-medium tabular-nums">
+                                        {{ money(fee.amount_cents) }}
+                                    </p>
+                                </div>
+                                <div
+                                    v-if="schedule.surcharge_amount_cents > 0"
+                                    class="grid grid-cols-[1fr_auto] gap-3 p-3 text-sm"
+                                >
+                                    <div>
+                                        <p class="font-medium">Surcharge</p>
+                                        <p
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            Historical schedule evidence
+                                        </p>
+                                    </div>
+                                    <p class="font-medium tabular-nums">
+                                        {{
+                                            money(
+                                                schedule.surcharge_amount_cents,
+                                            )
+                                        }}
+                                    </p>
+                                </div>
+                                <div
+                                    v-if="schedule.penalty_amount_cents > 0"
+                                    class="grid grid-cols-[1fr_auto] gap-3 p-3 text-sm"
+                                >
+                                    <div>
+                                        <p class="font-medium">Penalty</p>
+                                        <p
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            Historical schedule evidence
+                                        </p>
+                                    </div>
+                                    <p class="font-medium tabular-nums">
+                                        {{
+                                            money(schedule.penalty_amount_cents)
+                                        }}
+                                    </p>
+                                </div>
+                            </div>
+                        </article>
+
+                        <article class="overflow-hidden rounded-xl border">
+                            <header class="border-b bg-muted/30 p-3">
+                                <h3 class="font-semibold">
+                                    New BPLS components
+                                </h3>
+                                <p class="mt-1 text-xs text-muted-foreground">
+                                    Canonical immutable Assessment lines.
+                                </p>
+                            </header>
+                            <div class="divide-y">
+                                <div
+                                    v-for="line in assessmentReconciliation
+                                        .computed.lines"
+                                    :key="line.code"
+                                    class="grid grid-cols-[1fr_auto] gap-3 p-3 text-sm"
+                                >
+                                    <div class="min-w-0">
+                                        <p class="font-medium break-words">
+                                            {{ line.name }}
+                                        </p>
+                                        <p
+                                            class="font-mono text-xs break-all text-muted-foreground"
+                                        >
+                                            {{ line.code }} ·
+                                            {{ line.category }}
+                                        </p>
+                                    </div>
+                                    <p class="font-medium tabular-nums">
+                                        {{ money(line.amount_cents) }}
+                                    </p>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+
+                    <div
+                        class="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+                    >
+                        <p>{{ assessmentReconciliation.statement }}</p>
+                        <p class="mt-1 text-xs opacity-80">
+                            Component identity mapping: not established · No
+                            operational or taxpayer-liability effect.
+                        </p>
+                    </div>
+
+                    <details class="border-t pt-3">
+                        <summary
+                            class="cursor-pointer text-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                        >
+                            Audit provenance
+                        </summary>
+                        <dl
+                            class="mt-3 grid gap-3 text-xs text-muted-foreground sm:grid-cols-2"
+                        >
+                            <div>
+                                <dt class="font-semibold text-foreground">
+                                    Legacy application
+                                </dt>
+                                <dd class="mt-1 break-all">
+                                    {{
+                                        assessmentReconciliation.source_reference
+                                    }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="font-semibold text-foreground">
+                                    Legacy activity
+                                </dt>
+                                <dd class="mt-1">
+                                    {{
+                                        assessmentReconciliation.source_business_category
+                                    }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="font-semibold text-foreground">
+                                    Source evidence hash
+                                </dt>
+                                <dd class="mt-1 font-mono break-all">
+                                    {{
+                                        assessmentReconciliation.source
+                                            .evidence_hash
+                                    }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="font-semibold text-foreground">
+                                    BPLS snapshot hash
+                                </dt>
+                                <dd class="mt-1 font-mono break-all">
+                                    {{
+                                        assessmentReconciliation.computed
+                                            .snapshot_hash
+                                    }}
+                                </dd>
+                            </div>
+                        </dl>
+                    </details>
+                </div>
+
+                <div
+                    v-else
+                    class="p-4 text-sm text-destructive"
+                    data-testid="assessment-reconciliation-invalid-source"
+                >
+                    {{ assessmentReconciliation.statement }}
+                </div>
+            </section>
 
             <section
                 v-if="assessment.business_permit_evaluation"

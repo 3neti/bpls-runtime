@@ -31,6 +31,7 @@ class ResolveLegacyCitizenPermitApplicationLabPool
      *     source_reference: string,
      *     source_business_category: string,
      *     source_note: string,
+     *     historical_assessment: array<string, mixed>,
      *     fields: array<string, bool|float|int|string|null>,
      *     activity: array{
      *         line_of_business_code: string,
@@ -56,6 +57,8 @@ class ResolveLegacyCitizenPermitApplicationLabPool
         $cities = $this->keyedRecords($tablesPath.'/cities.jsonl');
         $provinces = $this->keyedRecords($tablesPath.'/provinces.jsonl');
         $applications = $this->records($tablesPath.'/business_permit_applications.jsonl');
+        $paymentSchedules = collect($this->records($tablesPath.'/payment_schedules.jsonl'))
+            ->groupBy(fn (array $schedule): string => $this->text($schedule['applicationId'] ?? null));
 
         usort($applications, fn (array $left, array $right): int => [
             $this->number($right['_creationTime'] ?? null),
@@ -71,6 +74,7 @@ class ResolveLegacyCitizenPermitApplicationLabPool
         foreach (self::SourceBusinessCategories as $category) {
             foreach ($applications as $application) {
                 $businessId = $this->text($application['businessId'] ?? null);
+                $applicationId = $this->text($application['_id'] ?? null);
 
                 if ($businessId === '' || isset($selectedBusinessIds[$businessId])) {
                     continue;
@@ -84,6 +88,7 @@ class ResolveLegacyCitizenPermitApplicationLabPool
                     $barangays,
                     $cities,
                     $provinces,
+                    $paymentSchedules->get($applicationId, collect())->values()->all(),
                 );
 
                 if ($resolved === null) {
@@ -126,6 +131,7 @@ class ResolveLegacyCitizenPermitApplicationLabPool
      * @param  array<string, array<string, mixed>>  $barangays
      * @param  array<string, array<string, mixed>>  $cities
      * @param  array<string, array<string, mixed>>  $provinces
+     * @param  array<int, array<string, mixed>>  $paymentSchedules
      * @return array{
      *     fixture_id: string,
      *     label: string,
@@ -134,6 +140,7 @@ class ResolveLegacyCitizenPermitApplicationLabPool
      *     source_reference: string,
      *     source_business_category: string,
      *     source_note: string,
+     *     historical_assessment: array<string, mixed>,
      *     fields: array<string, bool|float|int|string|null>,
      *     activity: array{
      *         line_of_business_code: string,
@@ -153,6 +160,7 @@ class ResolveLegacyCitizenPermitApplicationLabPool
         array $barangays,
         array $cities,
         array $provinces,
+        array $paymentSchedules,
     ): ?array {
         if (($application['isDeleted'] ?? false) === true
             || $this->text($application['permitApplicationType'] ?? null) !== 'New') {
@@ -222,6 +230,7 @@ class ResolveLegacyCitizenPermitApplicationLabPool
         $ownerFirstName = $this->text($owner['firstName'] ?? null);
         $ownerLastName = $this->text($owner['lastName'] ?? null);
         $ownerAddress = $this->text($owner['address'] ?? null);
+        $historicalAssessment = $this->historicalAssessment($application, $paymentSchedules);
 
         if ($businessName === ''
             || $businessAddress === ''
@@ -229,7 +238,8 @@ class ResolveLegacyCitizenPermitApplicationLabPool
             || $capital === null
             || $ownerFirstName === ''
             || $ownerLastName === ''
-            || $ownerAddress === '') {
+            || $ownerAddress === ''
+            || $historicalAssessment === null) {
             return null;
         }
 
@@ -280,6 +290,7 @@ class ResolveLegacyCitizenPermitApplicationLabPool
             'source_reference' => $applicationNumber,
             'source_business_category' => $category,
             'source_note' => 'Taxpayer, owner address, business, registration, contact, workforce, and declaration values are copied from one exact owner-business-application chain in the immutable legacy Ipil backup. The synthetic Preview Citizen remains only the logged-in testing actor. The legacy retail category is provisionally translated to the current wholesale/retail catalog, and gross sales are placed in non-essential sales for Nelson to verify.',
+            'historical_assessment' => $historicalAssessment,
             'fields' => $fields,
             'activity' => [
                 'line_of_business_code' => self::CatalogCode,
@@ -289,6 +300,98 @@ class ResolveLegacyCitizenPermitApplicationLabPool
                 'non_essential_gross_sales_pesos' => $gross ?? '0.00',
                 'started_on' => $this->date($business['dateStarted'] ?? null),
             ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $application
+     * @param  array<int, array<string, mixed>>  $paymentSchedules
+     * @return array<string, mixed>|null
+     */
+    private function historicalAssessment(array $application, array $paymentSchedules): ?array
+    {
+        if ($paymentSchedules === [] || $this->text($application['assessedAt'] ?? null) === '') {
+            return null;
+        }
+
+        usort($paymentSchedules, fn (array $left, array $right): int => [
+            $this->number($left['sectionNumber'] ?? null),
+            $this->number($left['_creationTime'] ?? null),
+        ] <=> [
+            $this->number($right['sectionNumber'] ?? null),
+            $this->number($right['_creationTime'] ?? null),
+        ]);
+
+        $recordedTotalAmountCents = 0;
+        $componentTotalAmountCents = 0;
+        $scheduleEvidence = [];
+
+        foreach ($paymentSchedules as $schedule) {
+            $totalAmountCents = $this->cents($schedule['totalAmount'] ?? null);
+            $paidAmountCents = $this->cents($schedule['paidAmount'] ?? 0);
+            $surchargeAmountCents = $this->cents($schedule['surcharge'] ?? 0);
+            $penaltyAmountCents = $this->cents($schedule['penalty'] ?? 0);
+            $fees = $schedule['fees'] ?? null;
+
+            if ($totalAmountCents === null
+                || $paidAmountCents === null
+                || $surchargeAmountCents === null
+                || $penaltyAmountCents === null
+                || ! is_array($fees)
+                || ! array_is_list($fees)) {
+                return null;
+            }
+
+            $feeEvidence = [];
+            $feeTotalAmountCents = 0;
+
+            foreach ($fees as $fee) {
+                if (! is_array($fee) || array_is_list($fee)) {
+                    return null;
+                }
+
+                $name = $this->text($fee['feeName'] ?? null);
+                $category = $this->text($fee['feeCategory'] ?? null);
+                $amountCents = $this->cents($fee['sectionAmount'] ?? null);
+
+                if ($name === '' || $category === '' || $amountCents === null) {
+                    return null;
+                }
+
+                $feeEvidence[] = [
+                    'name' => $name,
+                    'category' => $category,
+                    'amount_cents' => $amountCents,
+                ];
+                $feeTotalAmountCents += $amountCents;
+            }
+
+            $recordedTotalAmountCents += $totalAmountCents;
+            $componentTotalAmountCents += $feeTotalAmountCents + $surchargeAmountCents + $penaltyAmountCents;
+            $scheduleEvidence[] = [
+                'section' => (int) $this->number($schedule['sectionNumber'] ?? null),
+                'status' => $this->text($schedule['status'] ?? null),
+                'total_amount_cents' => $totalAmountCents,
+                'paid_amount_cents' => $paidAmountCents,
+                'fee_total_amount_cents' => $feeTotalAmountCents,
+                'surcharge_amount_cents' => $surchargeAmountCents,
+                'penalty_amount_cents' => $penaltyAmountCents,
+                'fees' => $feeEvidence,
+            ];
+        }
+
+        $evidence = [
+            'source_status' => $this->text($application['status'] ?? null),
+            'source_assessed_at' => $this->text($application['assessedAt'] ?? null),
+            'recorded_total_amount_cents' => $recordedTotalAmountCents,
+            'component_total_amount_cents' => $componentTotalAmountCents,
+            'source_internal_reconciles' => $recordedTotalAmountCents === $componentTotalAmountCents,
+            'schedules' => $scheduleEvidence,
+        ];
+
+        return [
+            ...$evidence,
+            'source_evidence_hash' => $this->fingerprint($evidence),
         ];
     }
 
@@ -382,6 +485,44 @@ class ResolveLegacyCitizenPermitApplicationLabPool
         $normalized = str_replace([',', '₱', 'PHP', ' '], '', (string) $value);
 
         return is_numeric($normalized) ? $normalized : null;
+    }
+
+    private function cents(mixed $value): ?int
+    {
+        if (! is_string($value) && ! is_int($value) && ! is_float($value)) {
+            return null;
+        }
+
+        $normalized = trim((string) $value);
+        if (preg_match('/^\d+(?:\.\d{1,2})?$/', $normalized) !== 1) {
+            return null;
+        }
+
+        [$pesos, $centavos] = array_pad(explode('.', $normalized, 2), 2, '');
+
+        return ((int) $pesos * 100) + (int) str_pad($centavos, 2, '0');
+    }
+
+    /** @param array<string, mixed> $value */
+    private function fingerprint(array $value): string
+    {
+        return hash('sha256', json_encode(
+            $this->normalize($value),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR,
+        ));
+    }
+
+    private function normalize(mixed $value): mixed
+    {
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        if (! array_is_list($value)) {
+            ksort($value);
+        }
+
+        return array_map(fn (mixed $item): mixed => $this->normalize($item), $value);
     }
 
     private function number(mixed $value): float

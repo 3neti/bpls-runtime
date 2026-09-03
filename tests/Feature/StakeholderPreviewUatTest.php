@@ -157,12 +157,39 @@ test('authorized legacy tables produce a source-backed laboratory specimen pool 
         'businessId' => 'business-1',
         'businessOwnerId' => 'owner-1',
         'permitApplicationType' => 'New',
+        'status' => 'Released',
+        'assessedAt' => '2025-02-10T08:00:00.000Z',
         'isDeleted' => false,
         'linesOfBusiness' => [[
             'businessCategory' => 'REC- GROCERY',
             'capitalInvestment' => '125,000.00',
             'grossSales' => '480000.00',
         ]],
+    ]]);
+    $write('payment_schedules', [[
+        '_id' => 'schedule-1',
+        '_creationTime' => 2,
+        'applicationId' => 'application-1',
+        'sectionNumber' => 1,
+        'status' => 'paid',
+        'totalAmount' => 7654.32,
+        'paidAmount' => 7654.32,
+        'surcharge' => 0,
+        'penalty' => 0,
+        'fees' => [
+            [
+                'feeName' => "Mayor's Permit Fee",
+                'feeCategory' => 'Regulatory Fee',
+                'originalAmount' => 7000,
+                'sectionAmount' => 7000,
+            ],
+            [
+                'feeName' => 'Health Certificate',
+                'feeCategory' => 'Regulatory Fee',
+                'originalAmount' => 654.32,
+                'sectionAmount' => 654.32,
+            ],
+        ],
     ]]);
 
     $pool = app(BuildCitizenPermitApplicationLabFixture::class)->pool();
@@ -185,7 +212,60 @@ test('authorized legacy tables produce a source-backed laboratory specimen pool 
         ->and($pool[0]['fields']['owner_city_municipality'])->toBe('Ipil')
         ->and($pool[0]['fields']['owner_province'])->toBe('Zamboanga Sibugay')
         ->and($pool[0]['lines'][0]['capital_investment_pesos'])->toBe('125000.00')
-        ->and($pool[0]['lines'][0]['non_essential_gross_sales_pesos'])->toBe('480000.00');
+        ->and($pool[0]['lines'][0]['non_essential_gross_sales_pesos'])->toBe('480000.00')
+        ->and($pool[0]['historical_assessment']['recorded_total_amount_cents'])->toBe(765_432)
+        ->and($pool[0]['historical_assessment']['component_total_amount_cents'])->toBe(765_432)
+        ->and($pool[0]['historical_assessment']['source_internal_reconciles'])->toBeTrue()
+        ->and($pool[0]['historical_assessment']['schedules'])->toHaveCount(1)
+        ->and($pool[0]['historical_assessment']['schedules'][0]['fees'])->toHaveCount(2)
+        ->and($pool[0]['historical_assessment']['source_evidence_hash'])->toHaveLength(64);
+
+    $previewCitizen = User::query()
+        ->where('email', StakeholderPreviewPersona::Citizen->approvedEmail())
+        ->sole();
+    $line = $pool[0]['lines'][0];
+
+    $this->actingAs($previewCitizen)
+        ->post(route('citizen.permit-applications.store'), [
+            ...$pool[0]['fields'],
+            'lab_fixture_id' => $pool[0]['fixture_id'],
+            'owner_name' => $previewCitizen->name,
+            'owner_phone' => null,
+            'owner_address' => 'Poblacion, Ipil, Zamboanga Sibugay',
+            'type' => 'new',
+            'application_year' => now()->year,
+            'date_of_application' => now()->toDateString(),
+            'mode_of_payment' => 'annually',
+            'undertaking_accepted' => '1',
+            'applicant_printed_name' => $previewCitizen->name,
+            'position_title' => 'Owner',
+            'lines' => [[
+                'line_of_business_id' => $line['line_of_business_id'],
+                'quantity' => $line['quantity'],
+                'capital_investment_pesos' => $line['capital_investment_pesos'],
+                'essential_gross_sales_pesos' => $line['essential_gross_sales_pesos'],
+                'non_essential_gross_sales_pesos' => $line['non_essential_gross_sales_pesos'],
+                'started_on' => $line['started_on'],
+            ]],
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $application = PermitApplication::query()
+        ->whereBelongsTo($previewCitizen, 'submittedBy')
+        ->sole();
+    $reconciliation = $application->metadata['laboratory_assessment_reconciliation'];
+
+    expect($reconciliation)
+        ->schema_version->toBe('bpls.laboratory-assessment-reconciliation.v1')
+        ->semantic_classification->toBe('observational_legacy_financial_evidence')
+        ->component_identity_mapping->toBe('not_established')
+        ->operational_authority->toBeFalse()
+        ->production_liability->toBeFalse()
+        ->and($reconciliation['historical_assessment']['recorded_total_amount_cents'])->toBe(765_432)
+        ->and($reconciliation['historical_assessment']['source_evidence_hash'])->toBe(
+            $pool[0]['historical_assessment']['source_evidence_hash'],
+        );
 });
 
 test('the fallback YAML application helper produces a normally validated citizen draft without performing later lifecycle work', function () {
