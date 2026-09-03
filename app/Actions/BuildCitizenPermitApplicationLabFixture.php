@@ -150,7 +150,10 @@ class BuildCitizenPermitApplicationLabFixture
                 'source_reference' => $legacy['source_reference'],
                 'source_business_category' => $legacy['source_business_category'],
                 'source_note' => $legacy['source_note'],
-                'reset_fields' => $fallback['reset_fields'],
+                'reset_fields' => array_values(array_unique([
+                    ...$fallback['reset_fields'],
+                    ...array_keys($legacy['fields']),
+                ])),
                 'fields' => $legacy['fields'],
                 'lines' => [[
                     ...$fallbackLine,

@@ -51,6 +51,7 @@ class ResolveLegacyCitizenPermitApplicationLabPool
         }
 
         $businesses = $this->keyedRecords($tablesPath.'/businesses.jsonl');
+        $owners = $this->keyedRecords($tablesPath.'/business_owners.jsonl');
         $barangays = $this->keyedRecords($tablesPath.'/barangays.jsonl');
         $cities = $this->keyedRecords($tablesPath.'/cities.jsonl');
         $provinces = $this->keyedRecords($tablesPath.'/provinces.jsonl');
@@ -79,6 +80,7 @@ class ResolveLegacyCitizenPermitApplicationLabPool
                     $application,
                     $category,
                     $businesses,
+                    $owners,
                     $barangays,
                     $cities,
                     $provinces,
@@ -120,6 +122,7 @@ class ResolveLegacyCitizenPermitApplicationLabPool
     /**
      * @param  array<string, mixed>  $application
      * @param  array<string, array<string, mixed>>  $businesses
+     * @param  array<string, array<string, mixed>>  $owners
      * @param  array<string, array<string, mixed>>  $barangays
      * @param  array<string, array<string, mixed>>  $cities
      * @param  array<string, array<string, mixed>>  $provinces
@@ -146,6 +149,7 @@ class ResolveLegacyCitizenPermitApplicationLabPool
         array $application,
         string $category,
         array $businesses,
+        array $owners,
         array $barangays,
         array $cities,
         array $provinces,
@@ -177,9 +181,23 @@ class ResolveLegacyCitizenPermitApplicationLabPool
             return null;
         }
 
+        $businessOwnerId = $this->text($business['ownerId'] ?? null);
+        $applicationOwnerId = $this->text($application['businessOwnerId'] ?? null);
+        $owner = $owners[$businessOwnerId] ?? null;
+
+        if ($businessOwnerId === ''
+            || ($applicationOwnerId !== '' && $applicationOwnerId !== $businessOwnerId)
+            || ! is_array($owner)
+            || ($owner['isDeleted'] ?? false) === true) {
+            return null;
+        }
+
         $barangay = $barangays[$this->text($business['barangayId'] ?? null)] ?? null;
         $city = $cities[$this->text($business['cityId'] ?? null)] ?? null;
         $province = $provinces[$this->text($business['provinceId'] ?? null)] ?? null;
+        $ownerBarangay = $barangays[$this->text($owner['barangayId'] ?? null)] ?? null;
+        $ownerCity = $cities[$this->text($owner['cityId'] ?? null)] ?? null;
+        $ownerProvince = $provinces[$this->text($owner['provinceId'] ?? null)] ?? null;
 
         if (! is_array($barangay)
             || ! is_array($city)
@@ -187,7 +205,12 @@ class ResolveLegacyCitizenPermitApplicationLabPool
             || $this->text($barangay['cityId'] ?? null) !== $this->text($business['cityId'] ?? null)
             || $this->text($city['provinceId'] ?? null) !== $this->text($business['provinceId'] ?? null)
             || strcasecmp($this->text($city['name'] ?? null), 'Ipil') !== 0
-            || strcasecmp($this->text($province['name'] ?? null), 'Zamboanga Sibugay') !== 0) {
+            || strcasecmp($this->text($province['name'] ?? null), 'Zamboanga Sibugay') !== 0
+            || ! is_array($ownerBarangay)
+            || ! is_array($ownerCity)
+            || ! is_array($ownerProvince)
+            || $this->text($ownerBarangay['cityId'] ?? null) !== $this->text($owner['cityId'] ?? null)
+            || $this->text($ownerCity['provinceId'] ?? null) !== $this->text($owner['provinceId'] ?? null)) {
             return null;
         }
 
@@ -196,8 +219,17 @@ class ResolveLegacyCitizenPermitApplicationLabPool
         $applicationNumber = $this->text($application['applicationNumber'] ?? null);
         $capital = $this->money($sourceLine['capitalInvestment'] ?? null);
         $gross = $this->money($sourceLine['grossSales'] ?? null);
+        $ownerFirstName = $this->text($owner['firstName'] ?? null);
+        $ownerLastName = $this->text($owner['lastName'] ?? null);
+        $ownerAddress = $this->text($owner['address'] ?? null);
 
-        if ($businessName === '' || $businessAddress === '' || $applicationNumber === '' || $capital === null) {
+        if ($businessName === ''
+            || $businessAddress === ''
+            || $applicationNumber === ''
+            || $capital === null
+            || $ownerFirstName === ''
+            || $ownerLastName === ''
+            || $ownerAddress === '') {
             return null;
         }
 
@@ -229,6 +261,15 @@ class ResolveLegacyCitizenPermitApplicationLabPool
                 'owned' => 'owned',
                 'rented' => 'rented',
             ]),
+            'owner_last_name' => $ownerLastName,
+            'owner_first_name' => $ownerFirstName,
+            'owner_middle_name' => $this->nullableText($owner['middleName'] ?? null),
+            'owner_street' => $ownerAddress,
+            'owner_barangay' => $this->text($ownerBarangay['name'] ?? null),
+            'owner_city_municipality' => $this->text($ownerCity['name'] ?? null),
+            'owner_province' => $this->text($ownerProvince['name'] ?? null),
+            'owner_telephone' => $this->nullableText($owner['mobile'] ?? null),
+            'owner_email' => $this->nullableText($owner['email'] ?? null),
         ], fn (mixed $value): bool => $value !== null && $value !== '');
 
         return [
@@ -238,7 +279,7 @@ class ResolveLegacyCitizenPermitApplicationLabPool
             'source_kind' => 'immutable_production_backup',
             'source_reference' => $applicationNumber,
             'source_business_category' => $category,
-            'source_note' => 'Business, address, registration, contact, workforce, and declaration values are copied from one immutable legacy Ipil application. The synthetic Preview Citizen remains the testing actor. The legacy retail category is provisionally translated to the current wholesale/retail catalog, and gross sales are placed in non-essential sales for Nelson to verify.',
+            'source_note' => 'Taxpayer, owner address, business, registration, contact, workforce, and declaration values are copied from one exact owner-business-application chain in the immutable legacy Ipil backup. The synthetic Preview Citizen remains only the logged-in testing actor. The legacy retail category is provisionally translated to the current wholesale/retail catalog, and gross sales are placed in non-essential sales for Nelson to verify.',
             'fields' => $fields,
             'activity' => [
                 'line_of_business_code' => self::CatalogCode,

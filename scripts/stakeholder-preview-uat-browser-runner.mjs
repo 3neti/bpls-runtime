@@ -216,6 +216,12 @@ try {
                     'Tester-entered business remains unchanged',
             );
             await page.getByTestId('clear-permit-helper-values').click();
+            const baselineOwnerFirstName = await page
+                .locator('[name="owner_first_name"]:not([type="hidden"])')
+                .inputValue();
+            const baselineOwnerLastName = await page
+                .locator('[name="owner_last_name"]:not([type="hidden"])')
+                .inputValue();
             await specimenPool.selectOption({ index: 1 });
             await page.getByTestId('load-permit-legacy-specimen').click();
             check(
@@ -241,6 +247,38 @@ try {
                     (await page
                         .locator('[name="business_street"]')
                         .inputValue()) !== '',
+            );
+            check(
+                'citizen-permit-helper-loads-linked-taxpayer-and-owner-address',
+                (await page
+                    .locator('[name="owner_first_name"]:not([type="hidden"])')
+                    .inputValue()) !== '' &&
+                    (await page
+                        .locator(
+                            '[name="owner_last_name"]:not([type="hidden"])',
+                        )
+                        .inputValue()) !== '' &&
+                    (await page
+                        .locator('[name="owner_street"]:not([type="hidden"])')
+                        .inputValue()) !== '' &&
+                    (await page
+                        .locator('[name="owner_barangay"]:not([type="hidden"])')
+                        .inputValue()) !== '' &&
+                    (await page
+                        .locator(
+                            '[name="owner_city_municipality"]:not([type="hidden"])',
+                        )
+                        .inputValue()) !== '' &&
+                    (await page
+                        .locator('[name="owner_province"]:not([type="hidden"])')
+                        .inputValue()) !== '',
+            );
+            check(
+                'citizen-permit-form-renders-entered-values-in-blue-ink',
+                (await page
+                    .locator('[name="owner_first_name"]:not([type="hidden"])')
+                    .evaluate((element) => getComputedStyle(element).color)) ===
+                    'oklch(0.488 0.243 264.376)',
             );
             check(
                 'citizen-permit-helper-resolves-catalog-activity',
@@ -274,6 +312,16 @@ try {
                         .locator('[name="business_name"]')
                         .inputValue()) ===
                         'Tester-entered business remains unchanged' &&
+                    (await page
+                        .locator(
+                            '[name="owner_first_name"]:not([type="hidden"])',
+                        )
+                        .inputValue()) === baselineOwnerFirstName &&
+                    (await page
+                        .locator(
+                            '[name="owner_last_name"]:not([type="hidden"])',
+                        )
+                        .inputValue()) === baselineOwnerLastName &&
                     (await page
                         .locator('[name="lines[0][line_of_business_id]"]')
                         .inputValue()) === '' &&

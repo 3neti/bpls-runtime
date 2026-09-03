@@ -114,8 +114,22 @@ test('authorized legacy tables produce a source-backed laboratory specimen pool 
     $write('provinces', [['_id' => 'province-1', 'name' => 'Zamboanga Sibugay']]);
     $write('cities', [['_id' => 'city-1', 'provinceId' => 'province-1', 'name' => 'Ipil']]);
     $write('barangays', [['_id' => 'barangay-1', 'cityId' => 'city-1', 'name' => 'Poblacion']]);
+    $write('business_owners', [[
+        '_id' => 'owner-1',
+        'firstName' => 'Legacy',
+        'middleName' => 'Source',
+        'lastName' => 'Owner',
+        'address' => 'Owner Review Street',
+        'barangayId' => 'barangay-1',
+        'cityId' => 'city-1',
+        'provinceId' => 'province-1',
+        'mobile' => '000-OWNER-TEST',
+        'email' => 'legacy-owner@example.test',
+        'isDeleted' => false,
+    ]]);
     $write('businesses', [[
         '_id' => 'business-1',
+        'ownerId' => 'owner-1',
         'name' => 'Legacy Review Grocery',
         'address' => 'Rizal Avenue',
         'buildingName' => 'Legacy Review Building',
@@ -141,6 +155,7 @@ test('authorized legacy tables produce a source-backed laboratory specimen pool 
         '_creationTime' => 1,
         'applicationNumber' => 'LEGACY-2025-0001',
         'businessId' => 'business-1',
+        'businessOwnerId' => 'owner-1',
         'permitApplicationType' => 'New',
         'isDeleted' => false,
         'linesOfBusiness' => [[
@@ -162,6 +177,13 @@ test('authorized legacy tables produce a source-backed laboratory specimen pool 
         ->and($pool[0]['fields']['business_barangay'])->toBe('Poblacion')
         ->and($pool[0]['fields']['business_city_municipality'])->toBe('Ipil')
         ->and($pool[0]['fields']['business_province'])->toBe('Zamboanga Sibugay')
+        ->and($pool[0]['fields']['owner_first_name'])->toBe('Legacy')
+        ->and($pool[0]['fields']['owner_middle_name'])->toBe('Source')
+        ->and($pool[0]['fields']['owner_last_name'])->toBe('Owner')
+        ->and($pool[0]['fields']['owner_street'])->toBe('Owner Review Street')
+        ->and($pool[0]['fields']['owner_barangay'])->toBe('Poblacion')
+        ->and($pool[0]['fields']['owner_city_municipality'])->toBe('Ipil')
+        ->and($pool[0]['fields']['owner_province'])->toBe('Zamboanga Sibugay')
         ->and($pool[0]['lines'][0]['capital_investment_pesos'])->toBe('125000.00')
         ->and($pool[0]['lines'][0]['non_essential_gross_sales_pesos'])->toBe('480000.00');
 });

@@ -783,7 +783,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
 
                 <article
                     data-testid="ipil-executable-application-page-1"
-                    class="overflow-hidden border-2 border-stone-900 bg-white shadow-sm dark:border-stone-400 dark:bg-stone-900"
+                    class="overflow-hidden border-2 border-stone-900 bg-white shadow-sm dark:border-stone-400 dark:bg-stone-900 [&_input]:font-medium [&_input]:text-blue-700 dark:[&_input]:text-blue-300 [&_select]:font-medium [&_select]:text-blue-700 dark:[&_select]:text-blue-300 [&_textarea]:font-medium [&_textarea]:text-blue-700 dark:[&_textarea]:text-blue-300"
                 >
                     <header
                         class="grid gap-3 border-b-2 border-stone-900 p-4 sm:grid-cols-[1fr_auto] dark:border-stone-400"
