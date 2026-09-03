@@ -12,13 +12,13 @@ use App\Models\LifecycleCleanroomRun;
 use App\Models\PermitApplication;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use UnexpectedValueException;
 
 class ResolveLifecycleCleanroomState
 {
     public function __construct(
         private readonly LifecycleCleanroomDefinition $definition,
         private readonly LifecycleCleanroomApplicationContract $applicationContract,
-        private readonly NewApplicationHappyPathDefinition $scenarioDefinition,
         private readonly BusinessPermitEvaluationResolver $evaluationResolver,
     ) {}
 
@@ -49,15 +49,24 @@ class ResolveLifecycleCleanroomState
         $renewalApplication = $run->renewalApplication;
         $newProjection = $this->projection($newApplication);
         $renewalProjection = $this->projection($renewalApplication);
+        $newProfile = $this->profile($newApplication);
+        $renewalProfile = $this->profile($renewalApplication);
 
-        $steps = collect($this->definition->steps())->map(function (array $step) use ($newApplication, $newProjection, $renewalApplication, $renewalProjection): array {
+        $stepDefinitions = collect($this->definition->steps());
+        if (($newProfile['scope'] ?? null) === 'single_source_application') {
+            $payableIndex = $stepDefinitions->search(fn (array $step): bool => $step['key'] === 'payable_created');
+            $stepDefinitions = $stepDefinitions->take(is_int($payableIndex) ? $payableIndex + 1 : 0);
+        }
+
+        $steps = $stepDefinitions->map(function (array $step) use ($newApplication, $newProjection, $newProfile, $renewalApplication, $renewalProjection, $renewalProfile): array {
             $application = $step['year'] === 2025 ? $newApplication : $renewalApplication;
             $projection = $step['year'] === 2025 ? $newProjection : $renewalProjection;
+            $profile = $step['year'] === 2025 ? $newProfile : $renewalProfile;
 
             return [
-                ...$step,
-                'completed' => $this->stepCompleted($step['key'], $application, $projection),
-                'delta' => $this->delta($step['key']),
+                ...$this->stepPresentation($step, $profile),
+                'completed' => $this->stepCompleted($step['key'], $application, $projection, $profile),
+                'delta' => $this->delta($step['key'], $application, $profile),
             ];
         })->values();
         $next = $steps->firstWhere('completed', false);
@@ -78,6 +87,11 @@ class ResolveLifecycleCleanroomState
                 'complete' => $next === null,
                 'blocked' => is_string($blocker),
                 'blocker' => $blocker,
+                'profile_kind' => $newProfile['kind'] ?? 'pending_intake',
+                'profile_statement' => $newProfile['statement'] ?? null,
+                'completion_message' => ($newProfile['scope'] ?? null) === 'single_source_application'
+                    ? 'The source-backed 2025 registry specimen reached an approved Payable and its Assessment Reconciliation is ready for review.'
+                    : 'The 2025 New application and 2026 Renewal both reached approved Payable.',
                 'next_step' => $next,
                 'percent' => (int) round(($completedCount / max(1, $steps->count())) * 100),
             ],
@@ -86,8 +100,8 @@ class ResolveLifecycleCleanroomState
                 'status' => $step['completed'] ? 'completed' : (($next['key'] ?? null) === $step['key'] ? 'current' : 'pending'),
             ])->all(),
             'applications' => [
-                'new' => $this->applicationSummary($newApplication, $newProjection),
-                'renewal' => $this->applicationSummary($renewalApplication, $renewalProjection),
+                'new' => $this->applicationSummary($newApplication, $newProjection, $newProfile),
+                'renewal' => $this->applicationSummary($renewalApplication, $renewalProjection, $renewalProfile),
             ],
             'actors' => collect($run->actors())
                 ->map(fn (array $actor, string $key): array => ['key' => $key, 'label' => $actor['label']])
@@ -100,6 +114,20 @@ class ResolveLifecycleCleanroomState
                 'execution_boundary' => 'System steps invoke canonical Actions; human steps open the real product form as the exact cleanroom actor.',
             ],
         ];
+    }
+
+    /** @return array<string, mixed>|null */
+    private function profile(?PermitApplication $application): ?array
+    {
+        if (! $application instanceof PermitApplication) {
+            return null;
+        }
+
+        try {
+            return $this->applicationContract->profile($application);
+        } catch (UnexpectedValueException) {
+            return null;
+        }
     }
 
     /** @param array<string, mixed>|null $next */
@@ -122,8 +150,11 @@ class ResolveLifecycleCleanroomState
             : null;
     }
 
-    /** @param array<string, mixed>|null $projection */
-    private function stepCompleted(string $key, ?PermitApplication $application, ?array $projection): bool
+    /**
+     * @param  array<string, mixed>|null  $projection
+     * @param  array<string, mixed>|null  $profile
+     */
+    private function stepCompleted(string $key, ?PermitApplication $application, ?array $projection, ?array $profile): bool
     {
         if ($key === 'cleanroom_started') {
             return true;
@@ -135,11 +166,12 @@ class ResolveLifecycleCleanroomState
             'citizen_intake' => $application instanceof PermitApplication,
             'application_submitted', 'lodged' => $application?->submitted_at !== null,
             'bplo_routing' => $application?->bploRoutingDetermination !== null,
-            'evaluation_initialized' => $projection !== null && $this->responsibilityItems($projection)->count() === 6,
-            'assessor_responsibilities' => $this->officeResolved($projection, 'assessor', 2),
-            'engineering_responsibility' => $this->officeResolved($projection, 'engineering', 1),
-            'health_responsibilities' => $this->officeResolved($projection, 'health', 2),
-            'menro_responsibility' => $this->officeResolved($projection, 'menro', 1),
+            'evaluation_initialized' => $projection !== null
+                && $this->responsibilityItems($projection, $profile)->count() === $this->expectedResponsibilities($profile)->count(),
+            'assessor_responsibilities' => $this->officeResolved($projection, $profile, 'assessor'),
+            'engineering_responsibility' => $this->officeResolved($projection, $profile, 'engineering'),
+            'health_responsibilities' => $this->officeResolved($projection, $profile, 'health'),
+            'menro_responsibility' => $this->officeResolved($projection, $profile, 'menro'),
             'assessment_prepared' => $application?->assessments->whereNull('superseded_at')->isNotEmpty() ?? false,
             'treasury_counter_check' => $application?->assessments->whereNull('superseded_at')->first()?->treasuryCounterCheck !== null,
             'treasurer_approved' => $application?->assessments->whereNull('superseded_at')->first()?->decision?->action === AssessmentDecisionAction::Approved,
@@ -148,21 +180,26 @@ class ResolveLifecycleCleanroomState
         };
     }
 
-    /** @param array<string, mixed>|null $projection */
-    private function officeResolved(?array $projection, string $office, int $expected): bool
+    /**
+     * @param  array<string, mixed>|null  $projection
+     * @param  array<string, mixed>|null  $profile
+     */
+    private function officeResolved(?array $projection, ?array $profile, string $office): bool
     {
-        $items = $this->responsibilityItems($projection)->where('responsible_party', $office);
+        $expected = $this->expectedResponsibilities($profile)->where('department', $office)->count();
+        $items = $this->responsibilityItems($projection, $profile)->where('responsible_party', $office);
 
         return $items->count() === $expected && $items->every(fn (array $item): bool => $item['resolution'] === 'resolved');
     }
 
     /**
      * @param  array<string, mixed>|null  $projection
+     * @param  array<string, mixed>|null  $profile
      * @return Collection<int, array<string, mixed>>
      */
-    private function responsibilityItems(?array $projection): Collection
+    private function responsibilityItems(?array $projection, ?array $profile): Collection
     {
-        $keys = collect($this->scenarioDefinition->responsibilities())->pluck('key');
+        $keys = $this->expectedResponsibilities($profile)->pluck('key');
         $rawItems = $projection['items'] ?? null;
         if (! is_array($rawItems)) {
             return collect();
@@ -184,10 +221,38 @@ class ResolveLifecycleCleanroomState
     }
 
     /**
+     * @param  array<string, mixed>|null  $profile
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function expectedResponsibilities(?array $profile): Collection
+    {
+        $responsibilities = $profile['responsibilities'] ?? null;
+        if (! is_array($responsibilities)) {
+            return collect();
+        }
+        $normalized = [];
+        foreach ($responsibilities as $responsibility) {
+            if (! is_array($responsibility)) {
+                continue;
+            }
+            $item = [];
+            foreach ($responsibility as $key => $value) {
+                if (is_string($key)) {
+                    $item[$key] = $value;
+                }
+            }
+            $normalized[] = $item;
+        }
+
+        return collect($normalized);
+    }
+
+    /**
      * @param  array<string, mixed>|null  $projection
+     * @param  array<string, mixed>|null  $profile
      * @return array<string, mixed>|null
      */
-    private function applicationSummary(?PermitApplication $application, ?array $projection): ?array
+    private function applicationSummary(?PermitApplication $application, ?array $projection, ?array $profile): ?array
     {
         if (! $application instanceof PermitApplication) {
             return null;
@@ -208,7 +273,7 @@ class ResolveLifecycleCleanroomState
             'payment_schedule_id' => $application->paymentSchedules->first()?->id,
             'working_paper' => $workingPaper,
             'current_total_amount_cents' => $this->workingPaperTotal($workingPaper),
-            'target_total_amount_cents' => NewApplicationHappyPathDefinition::ExpectedGrandTotalCents,
+            'target_total_amount_cents' => $profile['expected_total_amount_cents'] ?? NewApplicationHappyPathDefinition::ExpectedGrandTotalCents,
         ];
     }
 
@@ -234,26 +299,69 @@ class ResolveLifecycleCleanroomState
         return $total;
     }
 
-    /** @return array<string, string> */
-    private function delta(string $key): array
+    /**
+     * @param  array<string, mixed>|null  $profile
+     * @return array<string, string>
+     */
+    private function delta(string $key, ?PermitApplication $application, ?array $profile): array
     {
         $baseKey = Str::startsWith($key, 'renewal_') ? Str::after($key, 'renewal_') : $key;
+        $responsibilities = $this->expectedResponsibilities($profile);
+        $isRegistryProfile = ($profile['kind'] ?? null) === 'registry_source_replay';
 
         return match ($baseKey) {
             'cleanroom_started' => ['Cleanroom actors' => '0 → 9'],
-            'citizen_intake' => ['Municipal Owners' => '0 → 1', 'Businesses' => '0 → 1', 'Drafts' => '0 → 1', 'Business activities' => '0 → 2'],
+            'citizen_intake' => ['Municipal Owners' => '0 → 1', 'Businesses' => '0 → 1', 'Drafts' => '0 → 1', 'Business activities' => '0 → '.($application?->lines->count() ?? 2)],
             'application_submitted', 'lodged' => ['Application' => 'Draft → Lodged'],
             'bplo_routing' => ['BPLO routing determination' => 'Pending → Recorded', 'Concerned offices' => '0 → BPLO selected'],
-            'evaluation_initialized' => ['Concerned offices' => '0 → 4', 'Responsibilities' => '0 → 6'],
-            'assessor_responsibilities' => ['Assessor contributions' => '₱0 → ₱550'],
-            'engineering_responsibility' => ['Engineering contributions' => '₱0 → ₱90'],
-            'health_responsibilities' => ['Health contributions' => '₱0 → ₱160'],
-            'menro_responsibility' => ['MENRO contributions' => '₱0 → ₱70'],
-            'assessment_prepared' => ['Assessment total' => '— → ₱1,220'],
+            'evaluation_initialized' => ['Concerned offices' => '0 → '.$responsibilities->pluck('department')->unique()->count(), 'Responsibilities' => '0 → '.$responsibilities->count()],
+            'assessor_responsibilities' => ['Assessor contributions' => '₱0 → '.$this->pesos((int) $responsibilities->where('department', 'assessor')->sum('amount_cents'))],
+            'engineering_responsibility' => ['Engineering contributions' => '₱0 → '.$this->pesos((int) $responsibilities->where('department', 'engineering')->sum('amount_cents'))],
+            'health_responsibilities' => ['Health contributions' => '₱0 → '.$this->pesos((int) $responsibilities->where('department', 'health')->sum('amount_cents'))],
+            'menro_responsibility' => ['MENRO contributions' => '₱0 → '.$this->pesos((int) $responsibilities->where('department', 'menro')->sum('amount_cents'))],
+            'assessment_prepared' => ['Assessment total' => $isRegistryProfile ? '— → source-backed instant audit' : '— → ₱1,220'],
             'treasury_counter_check' => ['Treasury result' => 'Pending → No correction'],
             'treasurer_approved' => ['Assessment decision' => 'Pending → Approved'],
-            'payable_created' => ['Payable balance' => '₱0 → ₱1,220'],
+            'payable_created' => ['Payable balance' => $isRegistryProfile ? '₱0 → reconciled Assessment' : '₱0 → ₱1,220'],
             default => [],
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $step
+     * @param  array<string, mixed>|null  $profile
+     * @return array<string, mixed>
+     */
+    private function stepPresentation(array $step, ?array $profile): array
+    {
+        if (($profile['kind'] ?? null) !== 'registry_source_replay') {
+            return $step;
+        }
+
+        $responsibilities = $this->expectedResponsibilities($profile);
+        $office = match (true) {
+            str_contains($step['key'], 'assessor_responsibilities') => 'assessor',
+            str_contains($step['key'], 'engineering_responsibility') => 'engineering',
+            str_contains($step['key'], 'health_responsibilities') => 'health',
+            str_contains($step['key'], 'menro_responsibility') => 'menro',
+            default => null,
+        };
+        if (is_string($office)) {
+            $count = $responsibilities->where('department', $office)->count();
+            $step['description'] = "The responsible office confirms {$count} checksum-bound source component(s) through the normal Evaluation and Paperless Payment Order form.";
+        }
+        if ($step['key'] === 'evaluation_initialized') {
+            $step['description'] = 'The canonical Evaluation action creates '.$responsibilities->count().' source-backed provisional responsibilities from the immutable specimen and explicit BPLO route.';
+        }
+        if ($step['key'] === 'assessment_prepared') {
+            $step['description'] = 'The Assessment Officer consolidates the confirmed source-backed components through the one canonical Assessment path, then exposes the instant audit comparison.';
+        }
+
+        return $step;
+    }
+
+    private function pesos(int $amountCents): string
+    {
+        return number_format($amountCents / 100, $amountCents % 100 === 0 ? 0 : 2);
     }
 }

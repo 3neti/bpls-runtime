@@ -25,7 +25,6 @@ class AdvanceLifecycleCleanroom
         private readonly StakeholderPreviewSafety $safety,
         private readonly ResolveLifecycleCleanroomState $resolveState,
         private readonly LifecycleCleanroomApplicationContract $applicationContract,
-        private readonly NewApplicationHappyPathDefinition $definition,
         private readonly InitializeBusinessPermitEvaluation $initializeEvaluation,
         private readonly DefineBusinessPermitEvaluationItem $defineEvaluationItem,
         private readonly CreateRenewalPermitApplicationForExistingBusiness $createRenewal,
@@ -80,21 +79,25 @@ class AdvanceLifecycleCleanroom
     private function initializeResponsibilities(PermitApplication $application, LifecycleCleanroomRun $run, string $scenarioId): void
     {
         $this->applicationContract->assertCompatible($application);
+        $profile = $this->applicationContract->profile($application);
+        $responsibilities = $profile['responsibilities'];
         $routingDetermination = $application->bploRoutingDetermination()->first();
         if ($routingDetermination === null) {
             throw new LogicException('Concerned-office work cannot be initialized before BPLO routing is recorded.');
         }
         $evaluation = $this->initializeEvaluation->handle($application, $this->actor($run, 'assessment_officer'));
-        if ($this->hasDeclaredResponsibilities($evaluation)) {
+        if ($this->hasDeclaredResponsibilities($evaluation, $responsibilities)) {
             return;
         }
-        $lines = LineOfBusiness::query()->whereIn('code', collect($this->definition->linesOfBusiness())->pluck('code'))->get()->keyBy('code');
-        foreach ($this->definition->responsibilities() as $responsibility) {
-            $lineOfBusiness = $lines->get($responsibility['line_of_business_code']);
+        $application->loadMissing('lines.lineOfBusiness');
+        foreach ($responsibilities as $responsibility) {
+            $applicationLine = $application->lines->first(
+                fn ($line): bool => $line->lineOfBusiness?->code === $responsibility['line_of_business_code'],
+            );
+            $lineOfBusiness = $applicationLine?->lineOfBusiness;
             if (! $lineOfBusiness instanceof LineOfBusiness) {
-                throw new LogicException('The certified cleanroom Line of Business catalog is incomplete.');
+                throw new LogicException('The cleanroom responsibility profile references an undeclared Line of Business.');
             }
-            $applicationLine = $application->lines()->where('line_of_business_id', $lineOfBusiness->id)->sole();
             $actor = $this->actor($run, $responsibility['department']);
             $routingWork = $routingDetermination->works()
                 ->where('office_code', $responsibility['department'])
@@ -126,6 +129,10 @@ class AdvanceLifecycleCleanroom
                     'department_selection_reason' => $responsibility['reason'],
                     'inspection_required' => $responsibility['inspection_required'],
                     'bplo_routing_work_id' => $routingWork->id,
+                    'lifecycle_cleanroom_responsibility' => true,
+                    'responsibility_profile_kind' => $profile['kind'],
+                    'responsibility_profile_version' => $profile['profile_version'],
+                    'source_component' => $responsibility['source_component'] ?? null,
                 ],
             );
         }
@@ -204,8 +211,21 @@ class AdvanceLifecycleCleanroom
         return User::query()->whereKey($actor['user_id'])->firstOrFail();
     }
 
-    private function hasDeclaredResponsibilities(BusinessPermitEvaluation $evaluation): bool
+    /** @param list<array<string, mixed>> $responsibilities */
+    private function hasDeclaredResponsibilities(BusinessPermitEvaluation $evaluation, array $responsibilities): bool
     {
-        return $evaluation->items()->whereIn('key', collect($this->definition->responsibilities())->pluck('key'))->exists();
+        $keys = collect($responsibilities)->pluck('key');
+        $declaredCount = $evaluation->items()->whereIn('key', $keys)->count();
+        $cleanroomCount = $evaluation->items()
+            ->where('metadata->lifecycle_cleanroom_responsibility', true)
+            ->count();
+        if ($declaredCount === 0 && $cleanroomCount === 0) {
+            return false;
+        }
+        if ($declaredCount !== $keys->count() || $cleanroomCount !== $keys->count()) {
+            throw new LogicException('The initialized cleanroom responsibilities no longer match the selected immutable profile.');
+        }
+
+        return true;
     }
 }

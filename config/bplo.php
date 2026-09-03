@@ -6,5 +6,6 @@ return [
         'review_minutes' => (int) env('BPLS_ROUTING_REVIEW_MINUTES', 15),
         'clock' => env('BPLS_ROUTING_CLOCK', 'elapsed'),
         'profile_path' => database_path('seeders/data/ipil_bplo_routing_profiles.yaml'),
+        'assessment_profile_path' => database_path('seeders/data/ipil_laboratory_assessment_profiles.yaml'),
     ],
 ];

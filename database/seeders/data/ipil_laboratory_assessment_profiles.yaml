@@ -1,0 +1,39 @@
+schema_version: 1
+profile_version: ipil-registry-source-replay-v1
+classification: provisional_uat_source_replay
+production_authority: false
+scope: single_source_application
+source_business_categories:
+  - REC- SARISARI STORE
+  - REC- GROCERY
+  - RNEC- DRY GOODS RETAILER
+  - REC- FOOD PRODUCTS
+  - REC- SCHOOL SUPPLIES
+  - RNEC- HARDWARE RETAILER
+line_of_business_codes:
+  - MRC-2A-02-B-WHOLESALE-RETAIL
+component_mappings:
+  Health Certificate:
+    office: health
+    inspection_required: true
+  Laminated ID:
+    office: health
+    inspection_required: true
+  Mayor's Permit Fee:
+    office: engineering
+    inspection_required: true
+  Occupation Fee:
+    office: health
+    inspection_required: true
+  Sanitary Permit Fee:
+    office: health
+    inspection_required: true
+  Solid Waste Management:
+    office: menro
+    inspection_required: true
+  Weight & Measure:
+    office: assessor
+    inspection_required: false
+  Business Tax:
+    office: assessor
+    inspection_required: false

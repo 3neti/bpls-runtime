@@ -94,7 +94,7 @@ class BuildLaboratoryAssessmentReconciliation
         ];
     }
 
-    private function sourceEvidenceValid(mixed $historicalAssessment): bool
+    public function sourceEvidenceValid(mixed $historicalAssessment): bool
     {
         if (! is_array($historicalAssessment)
             || ! is_int($historicalAssessment['recorded_total_amount_cents'] ?? null)

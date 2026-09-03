@@ -88,6 +88,10 @@ type CleanroomState = {
         complete: boolean;
         blocked: boolean;
         blocker: string | null;
+        profile_kind:
+            'pending_intake' | 'certified_two_year' | 'registry_source_replay';
+        profile_statement: string | null;
+        completion_message: string;
         next_step: CleanroomStep | null;
     };
     steps: CleanroomStep[];
@@ -343,8 +347,12 @@ function closeCleanroom(): void {
                         <h2
                             class="text-2xl font-semibold text-zinc-950 dark:text-white"
                         >
-                            Build a fresh two-year municipal history, one step
-                            at a time
+                            {{
+                                cleanroom.active?.progress.profile_kind ===
+                                'registry_source_replay'
+                                    ? 'Review a real Ipil registry specimen through one source-backed lifecycle'
+                                    : 'Build a fresh two-year municipal history, one step at a time'
+                            }}
                         </h2>
                         <p
                             class="text-sm leading-6 text-zinc-700 dark:text-zinc-300"
@@ -354,6 +362,12 @@ function closeCleanroom(): void {
                             actor and opens the real form you must complete. The
                             screen recognizes completion from persisted
                             municipal state.
+                        </p>
+                        <p
+                            v-if="cleanroom.active?.progress.profile_statement"
+                            class="text-sm leading-6 text-zinc-700 dark:text-zinc-300"
+                        >
+                            {{ cleanroom.active.progress.profile_statement }}
                         </p>
                     </div>
                     <button
@@ -393,7 +407,8 @@ function closeCleanroom(): void {
                                     {{
                                         cleanroom.active.progress.next_step
                                             ?.description ??
-                                        'The 2025 New application and 2026 Renewal both reached approved Payable.'
+                                        cleanroom.active.progress
+                                            .completion_message
                                     }}
                                 </p>
                             </div>

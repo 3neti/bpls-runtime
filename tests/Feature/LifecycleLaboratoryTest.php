@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\AdvanceLifecycleCleanroom;
+use App\Actions\BuildLaboratoryAssessmentReconciliation;
 use App\Actions\BuildLifecycleCleanroomIntake;
 use App\Actions\CompleteBusinessPermitEvaluationResponsibility;
 use App\Actions\CreateAssessmentForPermitApplication;
@@ -228,7 +229,7 @@ test('cleanroom citizen intake accepts an active municipal catalog activity offe
 
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     expect(data_get($state, 'progress.blocked'))->toBeTrue()
-        ->and(data_get($state, 'progress.blocker'))->toContain('does not match the certified cleanroom activity set');
+        ->and(data_get($state, 'progress.blocker'))->toContain('no complete certified or source-backed laboratory assessment profile');
 
     $this->actingAs($management)
         ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))
@@ -236,8 +237,123 @@ test('cleanroom citizen intake accepts an active municipal catalog activity offe
         ->assertSessionHasErrors('cleanroom');
 
     expect(fn () => app(AdvanceLifecycleCleanroom::class)->handle($run->fresh()))
-        ->toThrow(LogicException::class, 'does not match the certified cleanroom activity set');
+        ->toThrow(LogicException::class, 'no complete certified or source-backed laboratory assessment profile');
     expect($application->fresh()->businessPermitEvaluation)->toBeNull();
+});
+
+test('source backed registry specimen advances through canonical actions to an auditable single application payable', function () {
+    $management = previewAccount(StakeholderPreviewPersona::Management);
+    $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'));
+    $run = LifecycleCleanroomRun::query()->sole();
+    $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run));
+    $intake = app(BuildLifecycleCleanroomIntake::class)->handle($run);
+    $municipalRetail = LineOfBusiness::query()->where('code', 'MRC-2A-02-B-WHOLESALE-RETAIL')->sole();
+    $intake['lines'] = [[...$intake['lines'][0], 'line_of_business_id' => $municipalRetail->id]];
+    $this->post(route('citizen.permit-applications.store'), [...$intake, 'type' => 'new'])->assertSessionHasNoErrors();
+    $run->refresh();
+    $application = PermitApplication::query()->findOrFail($run->new_application_id);
+    $historicalAssessment = sourceBackedHistoricalAssessment();
+    $metadata = $application->metadata;
+    $metadata['laboratory_assessment_reconciliation'] = [
+        'schema_version' => 'bpls.laboratory-assessment-reconciliation.v1',
+        'fixture_id' => 'test-source-backed-registry-specimen',
+        'source_kind' => 'immutable_production_backup',
+        'source_reference' => 'TEST-SOURCE-REFERENCE',
+        'source_business_category' => 'REC- SARISARI STORE',
+        'semantic_classification' => 'observational_legacy_financial_evidence',
+        'historical_assessment' => $historicalAssessment,
+        'component_identity_mapping' => 'not_established',
+        'operational_authority' => false,
+        'production_liability' => false,
+    ];
+    $application->forceFill(['metadata' => $metadata])->save();
+    $this->post(route('citizen.permit-applications.submit', $application))->assertSessionHasNoErrors();
+
+    $work = collect([
+        'engineering' => 'Engineering',
+        'health' => 'Health',
+        'assessor' => 'Municipal Assessor',
+        'menro' => 'MENRO',
+    ])->map(fn (string $label, string $office): array => [
+        'office_code' => $office,
+        'office_label' => $label,
+        'permit_application_line_id' => $application->lines()->sole()->id,
+        'situational_reason' => 'Explicit source-backed cleanroom routing test.',
+        'required_work' => 'Review the mapped source-backed responsibilities.',
+    ])->values()->all();
+    app(RecordBploRoutingDetermination::class)->handle(
+        $application->fresh(),
+        User::query()->findOrFail(data_get($run->actor_manifest, 'actors.intake.user_id')),
+        'Source-backed registry specimen routing.',
+        $work,
+    );
+
+    $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+    expect(data_get($state, 'progress.blocked'))->toBeFalse()
+        ->and(data_get($state, 'progress.profile_kind'))->toBe('registry_source_replay')
+        ->and(data_get($state, 'progress.total_steps'))->toBe(13)
+        ->and(data_get($state, 'progress.next_step.key'))->toBe('evaluation_initialized');
+
+    app(AdvanceLifecycleCleanroom::class)->handle($run->fresh());
+    $evaluation = $application->fresh()->businessPermitEvaluation;
+    $responsibilities = $evaluation->items()
+        ->where('metadata->lifecycle_cleanroom_responsibility', true)
+        ->with('revisions')
+        ->get();
+    expect($responsibilities)->toHaveCount(8)
+        ->and($responsibilities->sum(fn ($item): int => (int) data_get($item->revisions->first()?->value, 'amount_cents')))->toBe(482_500);
+
+    foreach ($responsibilities as $responsibility) {
+        $evaluation->refresh();
+        $version = $evaluation->currentVersion;
+        $proposal = $responsibility->revisions()->oldest('id')->firstOrFail();
+        $actor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.'.$responsibility->responsible_party.'.user_id'));
+        app(CompleteBusinessPermitEvaluationResponsibility::class)->handle(
+            $responsibility,
+            $actor,
+            BusinessPermitEvaluationApplicability::Applicable,
+            [
+                'amount_cents' => data_get($proposal->value, 'amount_cents'),
+                'inspection' => [
+                    'required' => data_get($responsibility->metadata, 'inspection_required'),
+                    'mode' => data_get($responsibility->metadata, 'inspection_required') ? 'physical' : 'document_review',
+                    'completed' => true,
+                    'findings' => 'Source-backed cleanroom responsibility confirmed.',
+                ],
+            ],
+            BusinessPermitEvaluationSource::ProvisionalUat,
+            'Source-backed cleanroom responsibility confirmed.',
+            $version->sequence,
+            $version->fingerprint,
+            $run->public_id.':'.$responsibility->key,
+        );
+    }
+
+    $assessmentOfficer = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.assessment_officer.user_id'));
+    $assessment = app(CreateAssessmentForPermitApplication::class)->handle($application->fresh(), $assessmentOfficer);
+    expect($assessment->total_amount_cents)->toBe(517_500);
+    $reconciliation = app(BuildLaboratoryAssessmentReconciliation::class)->handle($assessment);
+    expect($reconciliation)
+        ->status->toBe('difference')
+        ->and($reconciliation['source']['total_amount_cents'])->toBe(482_500)
+        ->and($reconciliation['computed']['total_amount_cents'])->toBe(517_500)
+        ->and($reconciliation['comparison']['delta_amount_cents'])->toBe(35_000);
+
+    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle(
+        $assessment,
+        User::query()->findOrFail(data_get($run->actor_manifest, 'actors.treasury.user_id')),
+    );
+    app(RecordAssessmentDecision::class)->handle(
+        $assessment,
+        User::query()->findOrFail(data_get($run->actor_manifest, 'actors.municipal_treasurer.user_id')),
+        AssessmentDecisionAction::Approved,
+    );
+    app(CreatePaymentScheduleForAssessment::class)->handle($assessment, $assessmentOfficer);
+
+    $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+    expect(data_get($state, 'progress.complete'))->toBeTrue()
+        ->and(data_get($state, 'progress.completed_steps'))->toBe(13)
+        ->and($run->fresh()->renewal_application_id)->toBeNull();
 });
 
 test('cleanroom citizen form uses canonical draft and submit actions before canonical responsibility creation', function () {
@@ -382,4 +498,54 @@ function recordCleanroomRouting(LifecycleCleanroomRun $run, PermitApplication $a
         'Explicit test BPLO situational determination from the lodged Application and bounded cleanroom circumstances.',
         $work,
     );
+}
+
+/** @return array<string, mixed> */
+function sourceBackedHistoricalAssessment(): array
+{
+    $fees = [
+        ['name' => 'Health Certificate', 'category' => 'Regulatory Fee', 'amount_cents' => 10_000],
+        ['name' => 'Laminated ID', 'category' => 'Other Charges', 'amount_cents' => 2_500],
+        ['name' => "Mayor's Permit Fee", 'category' => 'Regulatory Fee', 'amount_cents' => 200_000],
+        ['name' => 'Occupation Fee', 'category' => 'Other Charges', 'amount_cents' => 10_000],
+        ['name' => 'Sanitary Permit Fee', 'category' => 'Regulatory Fee', 'amount_cents' => 0],
+        ['name' => 'Solid Waste Management', 'category' => 'Regulatory Fee', 'amount_cents' => 250_000],
+        ['name' => 'Weight & Measure', 'category' => 'Other Charges', 'amount_cents' => 10_000],
+        ['name' => 'Business Tax', 'category' => 'Tax', 'amount_cents' => 0],
+    ];
+    $evidence = [
+        'source_status' => 'Released',
+        'source_assessed_at' => '2025-01-15T08:00:00.000Z',
+        'recorded_total_amount_cents' => 482_500,
+        'component_total_amount_cents' => 482_500,
+        'source_internal_reconciles' => true,
+        'schedules' => [[
+            'section' => 1,
+            'status' => 'paid',
+            'total_amount_cents' => 482_500,
+            'paid_amount_cents' => 482_500,
+            'fee_total_amount_cents' => 482_500,
+            'surcharge_amount_cents' => 0,
+            'penalty_amount_cents' => 0,
+            'fees' => $fees,
+        ]],
+    ];
+    $normalize = function (mixed $value) use (&$normalize): mixed {
+        if (! is_array($value)) {
+            return $value;
+        }
+        if (! array_is_list($value)) {
+            ksort($value);
+        }
+
+        return array_map(fn (mixed $item): mixed => $normalize($item), $value);
+    };
+
+    return [
+        ...$evidence,
+        'source_evidence_hash' => hash('sha256', json_encode(
+            $normalize($evidence),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR,
+        )),
+    ];
 }

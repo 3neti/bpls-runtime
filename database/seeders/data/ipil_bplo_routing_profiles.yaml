@@ -6,6 +6,11 @@ profiles:
   sari_sari_store:
     source_business_categories:
       - REC- SARISARI STORE
+      - REC- GROCERY
+      - RNEC- DRY GOODS RETAILER
+      - REC- FOOD PRODUCTS
+      - REC- SCHOOL SUPPLIES
+      - RNEC- HARDWARE RETAILER
     line_of_business_codes:
       - MRC-2A-02-B-WHOLESALE-RETAIL
     offices:
