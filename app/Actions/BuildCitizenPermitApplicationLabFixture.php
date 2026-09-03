@@ -73,12 +73,20 @@ class BuildCitizenPermitApplicationLabFixture
         'emergency_contact_email',
     ];
 
+    public function __construct(
+        private readonly ResolveLegacyCitizenPermitApplicationLabPool $resolveLegacyPool,
+    ) {}
+
     /**
      * @return array{
      *     fixture_id: string,
      *     label: string,
      *     classification: string,
+     *     source_kind: string,
+     *     source_reference: string,
+     *     source_business_category: string|null,
      *     source_note: string,
+     *     reset_fields: list<string>,
      *     fields: array<string, bool|float|int|string|null>,
      *     lines: list<array{
      *         line_of_business_id: int,
@@ -92,6 +100,89 @@ class BuildCitizenPermitApplicationLabFixture
      * }
      */
     public function handle(): array
+    {
+        return $this->pool()[0];
+    }
+
+    /**
+     * @return list<array{
+     *     fixture_id: string,
+     *     label: string,
+     *     classification: string,
+     *     source_kind: string,
+     *     source_reference: string,
+     *     source_business_category: string|null,
+     *     source_note: string,
+     *     reset_fields: list<string>,
+     *     fields: array<string, bool|float|int|string|null>,
+     *     lines: list<array{
+     *         line_of_business_id: int,
+     *         line_of_business_code: string,
+     *         quantity: int,
+     *         capital_investment_pesos: string,
+     *         essential_gross_sales_pesos: string,
+     *         non_essential_gross_sales_pesos: string,
+     *         started_on: string|null
+     *     }>
+     * }>
+     */
+    public function pool(): array
+    {
+        $fallback = $this->buildSyntheticFixture();
+        $legacyPool = $this->resolveLegacyPool->handle();
+
+        if ($legacyPool === []) {
+            return [$fallback];
+        }
+
+        return array_map(function (array $legacy) use ($fallback): array {
+            $fallbackLine = $fallback['lines'][0];
+
+            if ($legacy['activity']['line_of_business_code'] !== $fallbackLine['line_of_business_code']) {
+                throw new UnexpectedValueException('The legacy laboratory specimen uses an unavailable catalog translation.');
+            }
+
+            return [
+                'fixture_id' => $legacy['fixture_id'],
+                'label' => $legacy['label'],
+                'classification' => $legacy['classification'],
+                'source_kind' => $legacy['source_kind'],
+                'source_reference' => $legacy['source_reference'],
+                'source_business_category' => $legacy['source_business_category'],
+                'source_note' => $legacy['source_note'],
+                'reset_fields' => $fallback['reset_fields'],
+                'fields' => $legacy['fields'],
+                'lines' => [[
+                    ...$fallbackLine,
+                    ...$legacy['activity'],
+                ]],
+            ];
+        }, $legacyPool);
+    }
+
+    /**
+     * @return array{
+     *     fixture_id: string,
+     *     label: string,
+     *     classification: string,
+     *     source_kind: string,
+     *     source_reference: string,
+     *     source_business_category: string|null,
+     *     source_note: string,
+     *     reset_fields: list<string>,
+     *     fields: array<string, bool|float|int|string|null>,
+     *     lines: list<array{
+     *         line_of_business_id: int,
+     *         line_of_business_code: string,
+     *         quantity: int,
+     *         capital_investment_pesos: string,
+     *         essential_gross_sales_pesos: string,
+     *         non_essential_gross_sales_pesos: string,
+     *         started_on: string|null
+     *     }>
+     * }
+     */
+    private function buildSyntheticFixture(): array
     {
         $fixture = Yaml::parseFile(
             database_path(self::FixturePath),
@@ -185,7 +276,11 @@ class BuildCitizenPermitApplicationLabFixture
             'fixture_id' => $this->requiredString($fixture, 'fixture_id'),
             'label' => $this->requiredString($fixture, 'label'),
             'classification' => 'synthetic_uat_only',
+            'source_kind' => 'synthetic_yaml_fallback',
+            'source_reference' => $this->requiredString($fixture, 'fixture_id'),
+            'source_business_category' => null,
             'source_note' => $this->requiredString($fixture, 'source_note'),
+            'reset_fields' => array_keys($fields),
             'fields' => $fields,
             'lines' => $resolvedActivities,
         ];

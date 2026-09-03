@@ -8,6 +8,7 @@ return [
     'production_migration_enabled' => (bool) env('STAKEHOLDER_PREVIEW_PRODUCTION_MIGRATION_ENABLED', true),
     'production_integrations' => env('STAKEHOLDER_PREVIEW_PRODUCTION_INTEGRATIONS'),
     'password' => env('STAKEHOLDER_PREVIEW_PASSWORD'),
+    'legacy_lab_snapshot_tables' => env('STAKEHOLDER_PREVIEW_LEGACY_SNAPSHOT_TABLES'),
     'accounts' => [
         'citizen' => env('STAKEHOLDER_PREVIEW_CITIZEN_EMAIL', 'stakeholder.preview.citizen@example.test'),
         'bplo' => env('STAKEHOLDER_PREVIEW_BPLO_EMAIL', 'stakeholder.preview.bplo@example.test'),

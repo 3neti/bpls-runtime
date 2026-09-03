@@ -199,6 +199,13 @@ try {
                 { waitUntil: 'networkidle' },
             );
             await page.getByTestId('permit-application-lab-helper').waitFor();
+            const specimenPool = page.getByTestId(
+                'permit-application-lab-specimen',
+            );
+            check(
+                'citizen-permit-helper-offers-legacy-specimen-pool',
+                (await specimenPool.locator('option').count()) >= 2,
+            );
             await page
                 .locator('[name="business_name"]')
                 .fill('Tester-entered business remains unchanged');
@@ -208,17 +215,32 @@ try {
                 (await page.locator('[name="business_name"]').inputValue()) ===
                     'Tester-entered business remains unchanged',
             );
+            await page.getByTestId('clear-permit-helper-values').click();
+            await specimenPool.selectOption({ index: 1 });
+            await page.getByTestId('load-permit-legacy-specimen').click();
+            check(
+                'citizen-permit-helper-loads-selected-legacy-business',
+                (await page.locator('[name="business_name"]').inputValue()) !==
+                    'Tester-entered business remains unchanged',
+            );
             check(
                 'citizen-permit-helper-fills-ipil-geography',
                 (await page
                     .locator('[name="business_barangay"]')
-                    .inputValue()) === 'Poblacion' &&
+                    .inputValue()) !== '' &&
+                    (
+                        await page
+                            .locator('[name="business_city_municipality"]')
+                            .inputValue()
+                    ).toLowerCase() === 'ipil' &&
+                    (
+                        await page
+                            .locator('[name="business_province"]')
+                            .inputValue()
+                    ).toLowerCase() === 'zamboanga sibugay' &&
                     (await page
-                        .locator('[name="business_city_municipality"]')
-                        .inputValue()) === 'Ipil' &&
-                    (await page
-                        .locator('[name="business_province"]')
-                        .inputValue()) === 'Zamboanga Sibugay',
+                        .locator('[name="business_street"]')
+                        .inputValue()) !== '',
             );
             check(
                 'citizen-permit-helper-resolves-catalog-activity',
@@ -231,7 +253,7 @@ try {
                                 '[name="lines[0][capital_investment_pesos]"]',
                             )
                             .inputValue(),
-                    ) === 250000,
+                    ) > 0,
             );
             check(
                 'citizen-permit-helper-leaves-undertaking-manual',
@@ -245,6 +267,9 @@ try {
                 (await page
                     .locator('[name="business_barangay"]')
                     .inputValue()) === '' &&
+                    (await page
+                        .locator('[name="business_street"]')
+                        .inputValue()) === '' &&
                     (await page
                         .locator('[name="business_name"]')
                         .inputValue()) ===

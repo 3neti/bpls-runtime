@@ -93,8 +93,12 @@ type CleanroomIntake = Record<string, unknown> & {
 type LabIntakeFixture = {
     fixture_id: string;
     label: string;
-    classification: 'synthetic_uat_only';
+    classification: 'authorized_legacy_source_lab_only' | 'synthetic_uat_only';
+    source_kind: 'immutable_production_backup' | 'synthetic_yaml_fallback';
+    source_reference: string;
+    source_business_category: string | null;
     source_note: string;
+    reset_fields: string[];
     fields: Record<string, boolean | number | string | null>;
     lines: (Activity & { line_of_business_code: string })[];
 };
@@ -116,7 +120,7 @@ const props = defineProps<{
     registry?: Registry;
     draft?: Draft;
     cleanroomIntake?: CleanroomIntake | null;
-    labIntakeFixture?: LabIntakeFixture | null;
+    labIntakeFixtures?: LabIntakeFixture[];
 }>();
 
 const isCitizen = computed(() => props.intakeAudience === 'citizen');
@@ -152,7 +156,17 @@ const activities = ref<Activity[]>(
 );
 let nextKey = Math.max(0, ...activities.value.map((line) => line.key)) + 1;
 const helperFilled = ref(false);
+const selectedLabFixtureId = ref(
+    props.labIntakeFixtures?.[0]?.fixture_id ?? '',
+);
+const labIntakeFixture = computed(
+    () =>
+        props.labIntakeFixtures?.find(
+            (fixture) => fixture.fixture_id === selectedLabFixtureId.value,
+        ) ?? null,
+);
 let filledControls: FilledControl[] = [];
+let replacedActivities: Activity[] | null = null;
 let helperActivityState: {
     assigned: Activity;
     key: number;
@@ -246,6 +260,40 @@ function fillEmptyControl(
     snapshot.assignedValue = control.value;
     filledControls.push(snapshot);
 }
+function replaceControl(
+    form: HTMLFormElement,
+    name: string,
+    value: boolean | number | string | null | undefined,
+): void {
+    const controls = namedControls(form, name);
+    const assignedValue =
+        value === null || value === undefined ? '' : String(value);
+
+    controls.forEach((control) => {
+        const snapshot: FilledControl = {
+            control,
+            assignedChecked:
+                control instanceof HTMLInputElement &&
+                control.type === 'radio' &&
+                control.value === assignedValue,
+            assignedValue,
+            previousChecked:
+                control instanceof HTMLInputElement && control.checked,
+            previousValue: control.value,
+        };
+
+        if (control instanceof HTMLInputElement && control.type === 'radio') {
+            control.checked = snapshot.assignedChecked;
+        } else {
+            control.value = assignedValue;
+        }
+
+        control.dispatchEvent(new Event('input', { bubbles: true }));
+        control.dispatchEvent(new Event('change', { bubbles: true }));
+        snapshot.assignedValue = control.value;
+        filledControls.push(snapshot);
+    });
+}
 function formFromEvent(event: MouseEvent): HTMLFormElement | null {
     return event.currentTarget instanceof HTMLElement
         ? event.currentTarget.closest('form')
@@ -253,7 +301,7 @@ function formFromEvent(event: MouseEvent): HTMLFormElement | null {
 }
 async function fillRemainingFields(event: MouseEvent): Promise<void> {
     const form = formFromEvent(event);
-    const fixture = props.labIntakeFixture;
+    const fixture = labIntakeFixture.value;
 
     if (!form || !fixture) {
         return;
@@ -261,6 +309,7 @@ async function fillRemainingFields(event: MouseEvent): Promise<void> {
 
     filledControls = [];
     helperActivityState = [];
+    replacedActivities = null;
 
     const activityTargets = fixture.lines.map((fixtureLine) => {
         let target = activities.value.find(
@@ -355,6 +404,33 @@ async function fillRemainingFields(event: MouseEvent): Promise<void> {
 
     helperFilled.value = filledControls.length > 0;
 }
+async function loadSelectedSpecimen(event: MouseEvent): Promise<void> {
+    const form = formFromEvent(event);
+    const fixture = labIntakeFixture.value;
+
+    if (!form || !fixture) {
+        return;
+    }
+
+    if (helperFilled.value) {
+        clearHelperValues();
+    }
+
+    filledControls = [];
+    helperActivityState = [];
+    replacedActivities = activities.value.map((activity) => ({ ...activity }));
+
+    fixture.reset_fields.forEach((name) => {
+        replaceControl(form, name, fixture.fields[name] ?? null);
+    });
+
+    activities.value = fixture.lines.map((line) => ({
+        ...line,
+        key: nextKey++,
+    }));
+    await nextTick();
+    helperFilled.value = true;
+}
 function clearHelperValues(): void {
     const unchangedActivityRows = new Map<number, boolean>();
     const unchangedActivitySelections = new Map<number, boolean>();
@@ -446,9 +522,25 @@ function clearHelperValues(): void {
         }
     });
 
+    if (replacedActivities !== null) {
+        activities.value = replacedActivities;
+    }
+
     filledControls = [];
     helperActivityState = [];
+    replacedActivities = null;
     helperFilled.value = false;
+}
+function selectLabFixture(event: Event): void {
+    if (!(event.currentTarget instanceof HTMLSelectElement)) {
+        return;
+    }
+
+    if (helperFilled.value) {
+        clearHelperValues();
+    }
+
+    selectedLabFixtureId.value = event.currentTarget.value;
 }
 function nested(path: string): unknown {
     return path.split('.').reduce<unknown>((value, key) => {
@@ -571,27 +663,95 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     draft; lodging freezes this declaration.
                 </section>
                 <section
-                    v-if="labIntakeFixture && !isEditing"
+                    v-if="labIntakeFixtures?.length && !isEditing"
                     data-testid="permit-application-lab-helper"
                     class="flex flex-wrap items-center justify-between gap-3 border border-blue-200 bg-blue-50 p-4 text-blue-950 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100"
                     aria-label="Permit application laboratory helper"
                 >
-                    <div class="max-w-3xl">
-                        <p class="text-sm font-black">Laboratory helper only</p>
+                    <div class="grid max-w-3xl gap-2">
+                        <p class="text-sm font-black">
+                            {{
+                                labIntakeFixture?.source_kind ===
+                                'immutable_production_backup'
+                                    ? 'Legacy Ipil specimen pool'
+                                    : 'Laboratory helper only'
+                            }}
+                        </p>
+                        <label
+                            for="lab-intake-fixture"
+                            class="text-xs font-bold tracking-wide uppercase"
+                        >
+                            Source specimen
+                        </label>
+                        <select
+                            id="lab-intake-fixture"
+                            data-testid="permit-application-lab-specimen"
+                            class="h-10 border border-blue-300 bg-white px-3 text-sm text-stone-950 dark:border-blue-700 dark:bg-stone-950 dark:text-stone-50"
+                            :value="selectedLabFixtureId"
+                            @change="selectLabFixture"
+                        >
+                            <option
+                                v-for="fixture in labIntakeFixtures"
+                                :key="fixture.fixture_id"
+                                :value="fixture.fixture_id"
+                            >
+                                {{ fixture.label }}
+                            </option>
+                        </select>
                         <p class="mt-1 text-sm font-semibold">
-                            Fill blank fields from the
-                            {{ labIntakeFixture.label }} seed. Anything you have
+                            Fill blank fields from
+                            {{ labIntakeFixture?.label }}. Anything you have
                             already entered stays unchanged.
                         </p>
+                        <p
+                            v-if="
+                                labIntakeFixture?.source_kind ===
+                                'immutable_production_backup'
+                            "
+                            class="font-mono text-xs"
+                        >
+                            Legacy application
+                            {{ labIntakeFixture.source_reference }} · Declared
+                            activity
+                            {{ labIntakeFixture.source_business_category }}
+                        </p>
                         <p class="mt-1 text-xs opacity-80">
-                            {{ labIntakeFixture.source_note }} Review the form
+                            {{ labIntakeFixture?.source_note }} Review the form
                             and accept the undertaking yourself before saving.
+                        </p>
+                        <p
+                            v-if="
+                                labIntakeFixture?.source_kind ===
+                                'immutable_production_backup'
+                            "
+                            class="text-xs font-semibold"
+                        >
+                            Loading replaces the current business declaration,
+                            but keeps the laboratory actor and leaves the
+                            undertaking for you to accept.
                         </p>
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <Button
+                            v-if="
+                                labIntakeFixture?.source_kind ===
+                                'immutable_production_backup'
+                            "
+                            data-testid="load-permit-legacy-specimen"
+                            type="button"
+                            @click="loadSelectedSpecimen"
+                        >
+                            <Sparkles />Load selected legacy specimen
+                        </Button>
+                        <Button
                             data-testid="fill-remaining-permit-fields"
                             type="button"
+                            :variant="
+                                labIntakeFixture?.source_kind ===
+                                'immutable_production_backup'
+                                    ? 'outline'
+                                    : 'default'
+                            "
                             @click="fillRemainingFields"
                         >
                             <Sparkles />Fill remaining fields

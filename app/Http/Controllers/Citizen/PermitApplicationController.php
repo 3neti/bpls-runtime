@@ -91,10 +91,10 @@ class PermitApplicationController extends Controller
             ],
             'registry' => $this->registryPayload($request),
             'cleanroomIntake' => $cleanroomIntake,
-            'labIntakeFixture' => $cleanroom !== null
+            'labIntakeFixtures' => $cleanroom !== null
                 || $previewSafety->personaFor($request->user()) === StakeholderPreviewPersona::Citizen
-                    ? $buildLabFixture->handle()
-                    : null,
+                    ? $buildLabFixture->pool()
+                    : [],
         ]);
     }
 

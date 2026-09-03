@@ -24,6 +24,7 @@ use Inertia\Testing\AssertableInertia as Assert;
 beforeEach(function () {
     $this->withoutVite();
     configureStakeholderPreviewSafety();
+    config(['stakeholder_preview.legacy_lab_snapshot_tables' => null]);
     Route::middleware('web')->group(base_path('routes/web.php'));
     Route::getRoutes()->refreshNameLookups();
     Route::getRoutes()->refreshActionLookups();
@@ -75,16 +76,18 @@ test('approved preview citizen receives the deterministic Ipil application helpe
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->component('permit-applications/Create')
-            ->where('labIntakeFixture.fixture_id', 'ipil-poblacion-retail-v1')
-            ->where('labIntakeFixture.classification', 'synthetic_uat_only')
-            ->where('labIntakeFixture.fields.business_barangay', 'Poblacion')
-            ->where('labIntakeFixture.fields.business_city_municipality', 'Ipil')
-            ->where('labIntakeFixture.fields.business_province', 'Zamboanga Sibugay')
-            ->where('labIntakeFixture.lines.0.line_of_business_id', $catalogLine->id)
-            ->where('labIntakeFixture.lines.0.line_of_business_code', $catalogLine->code)
-            ->missing('labIntakeFixture.fields.undertaking_accepted')
-            ->missing('labIntakeFixture.fields.business_id')
-            ->missing('labIntakeFixture.fields.application_number'));
+            ->has('labIntakeFixtures', 1)
+            ->where('labIntakeFixtures.0.fixture_id', 'ipil-poblacion-retail-v1')
+            ->where('labIntakeFixtures.0.classification', 'synthetic_uat_only')
+            ->where('labIntakeFixtures.0.source_kind', 'synthetic_yaml_fallback')
+            ->where('labIntakeFixtures.0.fields.business_barangay', 'Poblacion')
+            ->where('labIntakeFixtures.0.fields.business_city_municipality', 'Ipil')
+            ->where('labIntakeFixtures.0.fields.business_province', 'Zamboanga Sibugay')
+            ->where('labIntakeFixtures.0.lines.0.line_of_business_id', $catalogLine->id)
+            ->where('labIntakeFixtures.0.lines.0.line_of_business_code', $catalogLine->code)
+            ->missing('labIntakeFixtures.0.fields.undertaking_accepted')
+            ->missing('labIntakeFixtures.0.fields.business_id')
+            ->missing('labIntakeFixtures.0.fields.application_number'));
 
     $ordinaryCitizen = User::factory()->create([
         'role_id' => Role::query()->where('code', 'citizen')->sole()->id,
@@ -94,10 +97,76 @@ test('approved preview citizen receives the deterministic Ipil application helpe
         ->get(route('citizen.permit-applications.create'))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('labIntakeFixture', null));
+            ->has('labIntakeFixtures', 0));
 });
 
-test('the YAML application helper produces a normally validated citizen draft without performing later lifecycle work', function () {
+test('authorized legacy tables produce a source-backed laboratory specimen pool without entering Git', function () {
+    Artisan::call('bpls:install');
+    Storage::fake('local');
+    $tables = 'authorized-legacy-lab/tables';
+    config(['stakeholder_preview.legacy_lab_snapshot_tables' => Storage::disk('local')->path($tables)]);
+
+    $write = fn (string $table, array $records) => Storage::disk('local')->put(
+        "{$tables}/{$table}.jsonl",
+        collect($records)->map(fn (array $record): string => json_encode($record, JSON_THROW_ON_ERROR))->join("\n")."\n",
+    );
+
+    $write('provinces', [['_id' => 'province-1', 'name' => 'Zamboanga Sibugay']]);
+    $write('cities', [['_id' => 'city-1', 'provinceId' => 'province-1', 'name' => 'Ipil']]);
+    $write('barangays', [['_id' => 'barangay-1', 'cityId' => 'city-1', 'name' => 'Poblacion']]);
+    $write('businesses', [[
+        '_id' => 'business-1',
+        'name' => 'Legacy Review Grocery',
+        'address' => 'Rizal Avenue',
+        'buildingName' => 'Legacy Review Building',
+        'barangayId' => 'barangay-1',
+        'cityId' => 'city-1',
+        'provinceId' => 'province-1',
+        'registrationNumber' => 'LEGACY-DTI-001',
+        'registrationDate' => '2025-02-03',
+        'dateStarted' => '2025-02-01',
+        'ownershipType' => 'Sole Proprietorship',
+        'occupancy' => 'Rented',
+        'businessArea' => 42.5,
+        'numberOfEmployees' => 4,
+        'maleEmployeeCount' => 1,
+        'femaleEmployeeCount' => 3,
+        'contactNumber' => '000-TEST',
+        'email' => 'legacy-review@example.test',
+        'isDeleted' => false,
+        'isBlacklisted' => false,
+    ]]);
+    $write('business_permit_applications', [[
+        '_id' => 'application-1',
+        '_creationTime' => 1,
+        'applicationNumber' => 'LEGACY-2025-0001',
+        'businessId' => 'business-1',
+        'permitApplicationType' => 'New',
+        'isDeleted' => false,
+        'linesOfBusiness' => [[
+            'businessCategory' => 'REC- GROCERY',
+            'capitalInvestment' => '125,000.00',
+            'grossSales' => '480000.00',
+        ]],
+    ]]);
+
+    $pool = app(BuildCitizenPermitApplicationLabFixture::class)->pool();
+
+    expect($pool)->toHaveCount(1)
+        ->and($pool[0]['classification'])->toBe('authorized_legacy_source_lab_only')
+        ->and($pool[0]['source_kind'])->toBe('immutable_production_backup')
+        ->and($pool[0]['source_reference'])->toBe('LEGACY-2025-0001')
+        ->and($pool[0]['source_business_category'])->toBe('REC- GROCERY')
+        ->and($pool[0]['fields']['business_name'])->toBe('Legacy Review Grocery')
+        ->and($pool[0]['fields']['business_street'])->toBe('Rizal Avenue')
+        ->and($pool[0]['fields']['business_barangay'])->toBe('Poblacion')
+        ->and($pool[0]['fields']['business_city_municipality'])->toBe('Ipil')
+        ->and($pool[0]['fields']['business_province'])->toBe('Zamboanga Sibugay')
+        ->and($pool[0]['lines'][0]['capital_investment_pesos'])->toBe('125000.00')
+        ->and($pool[0]['lines'][0]['non_essential_gross_sales_pesos'])->toBe('480000.00');
+});
+
+test('the fallback YAML application helper produces a normally validated citizen draft without performing later lifecycle work', function () {
     Artisan::call('bpls:install');
     $citizen = User::query()
         ->where('email', StakeholderPreviewPersona::Citizen->approvedEmail())
