@@ -1,0 +1,60 @@
+schema_version: 1
+fixture_id: ipil-poblacion-retail-v1
+label: Ipil Poblacion retail sample
+classification: synthetic_uat_only
+source_note: Real Ipil geography and the installed municipal business catalog are combined with clearly synthetic applicant, registration, contact, and financial declarations.
+source_references:
+    geography: Philippine Statistics Authority PSGC municipality and barangay classifications
+    business_catalog: Municipality of Ipil Revenue Code foundation extract
+fields:
+    registration_number: SAMPLE-DTI-IPIL-2026-0001
+    reference_number: LAB-IPIL-POBLACION-001
+    registered_on: '2025-01-15'
+    ownership_type: sole-proprietorship
+    ctc_number: SAMPLE-CTC-2026-0001
+    tin: 000-000-000-000
+    tax_incentive_enjoyed: '0'
+    business_name: Ipil Poblacion Community Store (Sample)
+    trade_name: Ipil Community Store Demo
+    business_plate_number: SAMPLE-PLATE-001
+    business_house_building_number: '101'
+    business_street: Sample Municipal Road
+    business_barangay: Poblacion
+    business_city_municipality: Ipil
+    business_province: Zamboanga Sibugay
+    business_telephone: 000-000-0000
+    business_email: ipil.community.store@example.test
+    owner_house_building_number: '101'
+    owner_street: Sample Municipal Road
+    owner_barangay: Poblacion
+    owner_city_municipality: Ipil
+    owner_province: Zamboanga Sibugay
+    owner_telephone: 000-000-0000
+    property_index_number: SAMPLE-PIN-IPIL-001
+    business_area_square_meters: '84.50'
+    total_employee_count: '7'
+    employees_residing_in_lgu: '7'
+    male_employee_count: '3'
+    female_employee_count: '4'
+    occupancy: rented
+    monthly_rental_pesos: '12000.00'
+    lessor_last_name: SAMPLE LESSOR
+    lessor_first_name: IPIL
+    lessor_house_building_number: '202'
+    lessor_street: Sample Rental Road
+    lessor_barangay: Poblacion
+    lessor_city_municipality: Ipil
+    lessor_province: Zamboanga Sibugay
+    lessor_telephone: 000-000-0000
+    lessor_email: sample.lessor@example.test
+    emergency_contact_name: Ipil Sample Emergency Contact
+    emergency_contact_telephone: 000-000-0000
+    emergency_contact_mobile: 0999-000-0000
+    emergency_contact_email: sample.emergency@example.test
+activities:
+    - line_of_business_code: MRC-2A-02-B-WHOLESALE-RETAIL
+      quantity: 1
+      capital_investment_pesos: '250000.00'
+      essential_gross_sales_pesos: '0.00'
+      non_essential_gross_sales_pesos: '1200000.00'
+      started_on: '2025-01-15'

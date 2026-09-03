@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { Form, Head, Link, setLayoutProps } from '@inertiajs/vue3';
-import { ArrowLeft, FileCheck2, Plus, Save, Trash2 } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import {
+    ArrowLeft,
+    Eraser,
+    FileCheck2,
+    Plus,
+    Save,
+    Sparkles,
+    Trash2,
+} from '@lucide/vue';
+import { computed, nextTick, ref } from 'vue';
 import {
     index as citizenIndex,
     show as citizenShow,
@@ -82,6 +90,22 @@ type CleanroomIntake = Record<string, unknown> & {
     application_year: number;
     lines: Activity[];
 };
+type LabIntakeFixture = {
+    fixture_id: string;
+    label: string;
+    classification: 'synthetic_uat_only';
+    source_note: string;
+    fields: Record<string, boolean | number | string | null>;
+    lines: (Activity & { line_of_business_code: string })[];
+};
+type FormControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+type FilledControl = {
+    control: FormControl;
+    assignedChecked: boolean;
+    assignedValue: string;
+    previousChecked: boolean;
+    previousValue: string;
+};
 
 const props = defineProps<{
     intakeAudience: 'staff' | 'citizen';
@@ -92,6 +116,7 @@ const props = defineProps<{
     registry?: Registry;
     draft?: Draft;
     cleanroomIntake?: CleanroomIntake | null;
+    labIntakeFixture?: LabIntakeFixture | null;
 }>();
 
 const isCitizen = computed(() => props.intakeAudience === 'citizen');
@@ -126,6 +151,13 @@ const activities = ref<Activity[]>(
         })) ?? [{ key: 1, quantity: 1 }],
 );
 let nextKey = Math.max(0, ...activities.value.map((line) => line.key)) + 1;
+const helperFilled = ref(false);
+let filledControls: FilledControl[] = [];
+let helperActivityState: {
+    assigned: Activity;
+    key: number;
+    previous: Activity | null;
+}[] = [];
 
 function addActivity(): void {
     if (activities.value.length < 20) {
@@ -136,6 +168,287 @@ function removeActivity(key: number): void {
     if (activities.value.length > 1) {
         activities.value = activities.value.filter((line) => line.key !== key);
     }
+}
+function namedControls(form: HTMLFormElement, name: string): FormControl[] {
+    return Array.from(form.elements).filter(
+        (element): element is FormControl =>
+            (element instanceof HTMLInputElement ||
+                element instanceof HTMLSelectElement ||
+                element instanceof HTMLTextAreaElement) &&
+            element.name === name &&
+            !(element instanceof HTMLInputElement && element.type === 'hidden'),
+    );
+}
+function fillEmptyControl(
+    form: HTMLFormElement,
+    name: string,
+    value: boolean | number | string | null | undefined,
+): void {
+    if (value === null || value === undefined) {
+        return;
+    }
+
+    const controls = namedControls(form, name);
+
+    if (controls.length === 0) {
+        return;
+    }
+
+    const radios = controls.filter(
+        (control): control is HTMLInputElement =>
+            control instanceof HTMLInputElement && control.type === 'radio',
+    );
+
+    if (radios.length > 0) {
+        if (radios.some((control) => control.checked)) {
+            return;
+        }
+
+        const selected = radios.find(
+            (control) => control.value === String(value),
+        );
+
+        if (!selected) {
+            return;
+        }
+
+        filledControls.push({
+            control: selected,
+            assignedChecked: true,
+            assignedValue: selected.value,
+            previousChecked: selected.checked,
+            previousValue: selected.value,
+        });
+        selected.checked = true;
+        selected.dispatchEvent(new Event('change', { bubbles: true }));
+
+        return;
+    }
+
+    const control = controls[0];
+
+    if (control.value.trim() !== '') {
+        return;
+    }
+
+    const assignedValue = String(value);
+    const snapshot: FilledControl = {
+        control,
+        assignedChecked: control instanceof HTMLInputElement && control.checked,
+        assignedValue,
+        previousChecked: control instanceof HTMLInputElement && control.checked,
+        previousValue: control.value,
+    };
+
+    control.value = assignedValue;
+    control.dispatchEvent(new Event('input', { bubbles: true }));
+    control.dispatchEvent(new Event('change', { bubbles: true }));
+    snapshot.assignedValue = control.value;
+    filledControls.push(snapshot);
+}
+function formFromEvent(event: MouseEvent): HTMLFormElement | null {
+    return event.currentTarget instanceof HTMLElement
+        ? event.currentTarget.closest('form')
+        : null;
+}
+async function fillRemainingFields(event: MouseEvent): Promise<void> {
+    const form = formFromEvent(event);
+    const fixture = props.labIntakeFixture;
+
+    if (!form || !fixture) {
+        return;
+    }
+
+    filledControls = [];
+    helperActivityState = [];
+
+    const activityTargets = fixture.lines.map((fixtureLine) => {
+        let target = activities.value.find(
+            (activity) =>
+                activity.line_of_business_id ===
+                fixtureLine.line_of_business_id,
+        );
+        let previous: Activity | null = target ? { ...target } : null;
+
+        if (!target) {
+            target = activities.value.find(
+                (activity) => !activity.line_of_business_id,
+            );
+            previous = target ? { ...target } : null;
+        }
+
+        if (!target && activities.value.length < 20) {
+            target = { key: nextKey++ };
+            activities.value.push(target);
+        }
+
+        return target ? { fixtureLine, previous, target } : null;
+    });
+
+    await nextTick();
+
+    Object.entries(fixture.fields).forEach(([name, value]) => {
+        fillEmptyControl(form, name, value);
+    });
+
+    activityTargets.forEach((entry) => {
+        if (!entry) {
+            return;
+        }
+
+        const index = activities.value.findIndex(
+            (activity) => activity.key === entry.target.key,
+        );
+
+        if (index < 0) {
+            return;
+        }
+
+        const assigned: Activity = {
+            ...entry.fixtureLine,
+            key: entry.target.key,
+        };
+
+        if (!entry.target.line_of_business_id) {
+            entry.target.line_of_business_id =
+                entry.fixtureLine.line_of_business_id;
+        }
+
+        helperActivityState.push({
+            assigned,
+            key: entry.target.key,
+            previous: entry.previous,
+        });
+    });
+
+    await nextTick();
+
+    activityTargets.forEach((entry) => {
+        if (!entry) {
+            return;
+        }
+
+        const index = activities.value.findIndex(
+            (activity) => activity.key === entry.target.key,
+        );
+
+        if (index < 0) {
+            return;
+        }
+
+        const values = {
+            line_of_business_id: entry.fixtureLine.line_of_business_id,
+            quantity: entry.fixtureLine.quantity,
+            capital_investment_pesos:
+                entry.fixtureLine.capital_investment_pesos,
+            essential_gross_sales_pesos:
+                entry.fixtureLine.essential_gross_sales_pesos,
+            non_essential_gross_sales_pesos:
+                entry.fixtureLine.non_essential_gross_sales_pesos,
+            started_on: entry.fixtureLine.started_on,
+        };
+
+        Object.entries(values).forEach(([key, value]) => {
+            fillEmptyControl(form, `lines[${index}][${key}]`, value);
+        });
+    });
+
+    helperFilled.value = filledControls.length > 0;
+}
+function clearHelperValues(): void {
+    const unchangedActivityRows = new Map<number, boolean>();
+    const unchangedActivitySelections = new Map<number, boolean>();
+    const form = document.querySelector('form');
+
+    helperActivityState.forEach(({ assigned, key }) => {
+        const index = activities.value.findIndex(
+            (activity) => activity.key === key,
+        );
+
+        if (index < 0) {
+            return;
+        }
+
+        const controlValue = (field: string): string | null => {
+            const control = form
+                ? namedControls(form, `lines[${index}][${field}]`)[0]
+                : null;
+
+            return control?.value ?? null;
+        };
+        const selection = controlValue('line_of_business_id');
+
+        unchangedActivitySelections.set(
+            key,
+            selection === String(assigned.line_of_business_id),
+        );
+        unchangedActivityRows.set(
+            key,
+            Object.entries(assigned).every(([field, value]) => {
+                if (field === 'key' || field === 'line_of_business_code') {
+                    return true;
+                }
+
+                const current = controlValue(field);
+
+                return current === null || current === String(value ?? '');
+            }),
+        );
+    });
+
+    filledControls.forEach((snapshot) => {
+        const control = snapshot.control;
+
+        if (!control.isConnected) {
+            return;
+        }
+
+        if (control instanceof HTMLInputElement && control.type === 'radio') {
+            if (control.checked === snapshot.assignedChecked) {
+                control.checked = snapshot.previousChecked;
+                control.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            return;
+        }
+
+        if (control.value === snapshot.assignedValue) {
+            control.value = snapshot.previousValue;
+            control.dispatchEvent(new Event('input', { bubbles: true }));
+            control.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    });
+
+    helperActivityState.forEach(({ key, previous }) => {
+        const index = activities.value.findIndex(
+            (activity) => activity.key === key,
+        );
+
+        if (index < 0) {
+            return;
+        }
+
+        const activity = activities.value[index];
+        const unchanged = unchangedActivityRows.get(key) === true;
+        const selectionUnchanged =
+            unchangedActivitySelections.get(key) === true;
+
+        if (!previous && unchanged && activities.value.length > 1) {
+            activities.value.splice(index, 1);
+
+            return;
+        }
+
+        if (previous && selectionUnchanged) {
+            activity.line_of_business_id = previous.line_of_business_id;
+        } else if (!previous && selectionUnchanged) {
+            activity.line_of_business_id = undefined;
+        }
+    });
+
+    filledControls = [];
+    helperActivityState = [];
+    helperFilled.value = false;
 }
 function nested(path: string): unknown {
     return path.split('.').reduce<unknown>((value, key) => {
@@ -256,6 +569,43 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     >
                     - complete the real Ipil application form. Saving creates a
                     draft; lodging freezes this declaration.
+                </section>
+                <section
+                    v-if="labIntakeFixture && !isEditing"
+                    data-testid="permit-application-lab-helper"
+                    class="flex flex-wrap items-center justify-between gap-3 border border-blue-200 bg-blue-50 p-4 text-blue-950 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100"
+                    aria-label="Permit application laboratory helper"
+                >
+                    <div class="max-w-3xl">
+                        <p class="text-sm font-black">Laboratory helper only</p>
+                        <p class="mt-1 text-sm font-semibold">
+                            Fill blank fields from the
+                            {{ labIntakeFixture.label }} seed. Anything you have
+                            already entered stays unchanged.
+                        </p>
+                        <p class="mt-1 text-xs opacity-80">
+                            {{ labIntakeFixture.source_note }} Review the form
+                            and accept the undertaking yourself before saving.
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <Button
+                            data-testid="fill-remaining-permit-fields"
+                            type="button"
+                            @click="fillRemainingFields"
+                        >
+                            <Sparkles />Fill remaining fields
+                        </Button>
+                        <Button
+                            data-testid="clear-permit-helper-values"
+                            type="button"
+                            variant="outline"
+                            :disabled="!helperFilled"
+                            @click="clearHelperValues"
+                        >
+                            <Eraser />Clear helper values
+                        </Button>
+                    </div>
                 </section>
                 <section
                     data-testid="citizen-draft-boundary"
@@ -1220,7 +1570,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                     type="checkbox"
                                     value="1"
                                     :checked="
-                                        nested('undertaking.accepted') !== false
+                                        nested('undertaking.accepted') === true
                                     "
                                     required
                                     class="mt-1"

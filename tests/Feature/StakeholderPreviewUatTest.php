@@ -1,10 +1,12 @@
 <?php
 
+use App\Actions\BuildCitizenPermitApplicationLabFixture;
 use App\Enums\StakeholderPreviewPersona;
 use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\LifecycleScenarios\RenewalHappyPathDefinition;
 use App\Models\Assessment;
 use App\Models\LifecycleScenarioSpecimen;
+use App\Models\LineOfBusiness;
 use App\Models\OfficeChargeContribution;
 use App\Models\Permission;
 use App\Models\PermitApplication;
@@ -57,6 +59,92 @@ test('safe preview configuration registers an intentional launcher without crede
         ->and(Assessment::query()->count())->toBe(0)
         ->and(TreasuryCollection::query()->count())->toBe(0)
         ->and(Receipt::query()->count())->toBe(0);
+});
+
+test('approved preview citizen receives the deterministic Ipil application helper while ordinary citizens do not', function () {
+    Artisan::call('bpls:install');
+    $previewCitizen = User::query()
+        ->where('email', StakeholderPreviewPersona::Citizen->approvedEmail())
+        ->sole();
+    $catalogLine = LineOfBusiness::query()
+        ->where('code', 'MRC-2A-02-B-WHOLESALE-RETAIL')
+        ->sole();
+
+    $this->actingAs($previewCitizen)
+        ->get(route('citizen.permit-applications.create'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Create')
+            ->where('labIntakeFixture.fixture_id', 'ipil-poblacion-retail-v1')
+            ->where('labIntakeFixture.classification', 'synthetic_uat_only')
+            ->where('labIntakeFixture.fields.business_barangay', 'Poblacion')
+            ->where('labIntakeFixture.fields.business_city_municipality', 'Ipil')
+            ->where('labIntakeFixture.fields.business_province', 'Zamboanga Sibugay')
+            ->where('labIntakeFixture.lines.0.line_of_business_id', $catalogLine->id)
+            ->where('labIntakeFixture.lines.0.line_of_business_code', $catalogLine->code)
+            ->missing('labIntakeFixture.fields.undertaking_accepted')
+            ->missing('labIntakeFixture.fields.business_id')
+            ->missing('labIntakeFixture.fields.application_number'));
+
+    $ordinaryCitizen = User::factory()->create([
+        'role_id' => Role::query()->where('code', 'citizen')->sole()->id,
+    ]);
+
+    $this->actingAs($ordinaryCitizen)
+        ->get(route('citizen.permit-applications.create'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('labIntakeFixture', null));
+});
+
+test('the YAML application helper produces a normally validated citizen draft without performing later lifecycle work', function () {
+    Artisan::call('bpls:install');
+    $citizen = User::query()
+        ->where('email', StakeholderPreviewPersona::Citizen->approvedEmail())
+        ->sole();
+    $fixture = app(BuildCitizenPermitApplicationLabFixture::class)->handle();
+    $line = $fixture['lines'][0];
+
+    $this->actingAs($citizen)
+        ->post(route('citizen.permit-applications.store'), [
+            ...$fixture['fields'],
+            'owner_name' => $citizen->name,
+            'owner_last_name' => 'Citizen',
+            'owner_first_name' => 'Preview',
+            'owner_middle_name' => null,
+            'owner_email' => $citizen->email,
+            'owner_phone' => null,
+            'owner_address' => 'Poblacion, Ipil, Zamboanga Sibugay',
+            'type' => 'new',
+            'application_year' => now()->year,
+            'date_of_application' => now()->toDateString(),
+            'mode_of_payment' => 'annually',
+            'undertaking_accepted' => '1',
+            'applicant_printed_name' => $citizen->name,
+            'position_title' => 'Owner',
+            'lines' => [[
+                'line_of_business_id' => $line['line_of_business_id'],
+                'quantity' => $line['quantity'],
+                'capital_investment_pesos' => $line['capital_investment_pesos'],
+                'essential_gross_sales_pesos' => $line['essential_gross_sales_pesos'],
+                'non_essential_gross_sales_pesos' => $line['non_essential_gross_sales_pesos'],
+                'started_on' => $line['started_on'],
+            ]],
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect();
+
+    $application = PermitApplication::query()
+        ->whereBelongsTo($citizen, 'submittedBy')
+        ->sole();
+
+    expect($application->status->value)->toBe('draft')
+        ->and($application->submitted_at)->toBeNull()
+        ->and($application->application_number)->toBeNull()
+        ->and($application->assessments()->count())->toBe(0)
+        ->and($application->paymentSchedules()->count())->toBe(0)
+        ->and($application->business->name)->toBe('Ipil Poblacion Community Store (Sample)')
+        ->and($application->lines()->sole()->line_of_business_id)->toBe($line['line_of_business_id']);
 });
 
 test('launcher restores the exact Management operator after exploring a scenario actor', function () {

@@ -24,6 +24,8 @@ const personas = [
     'Releasing Officer',
 ];
 const workflowPersonas = new Set(personas.slice(4));
+const entryButtonName = (persona) =>
+    persona === 'Citizen' ? 'Open empty Citizen view' : `Enter as ${persona}`;
 const viewports = [
     { name: 'desktop', width: 1440, height: 900 },
     { name: 'mobile', width: 390, height: 844 },
@@ -121,21 +123,21 @@ try {
         for (const persona of personas) {
             await page.goto(baseUrl, { waitUntil: 'networkidle' });
             await page
-                .getByRole('button', { name: `Enter as ${persona}` })
+                .getByRole('button', { name: entryButtonName(persona) })
                 .click();
             await page.waitForURL('**/dashboard');
             await page
-                .getByText(
-                    'Preview Environment · Sample Data',
-                    { exact: true },
-                )
+                .getByText('Preview Environment · Sample Data', { exact: true })
                 .waitFor();
             await page.getByRole('heading', { name: 'What to try' }).waitFor();
 
             if (workflowPersonas.has(persona)) {
-                await page.goto(`${baseUrl.replace(/\/$/, '')}/stakeholder-preview/workflow`, {
-                    waitUntil: 'networkidle',
-                });
+                await page.goto(
+                    `${baseUrl.replace(/\/$/, '')}/stakeholder-preview/workflow`,
+                    {
+                        waitUntil: 'networkidle',
+                    },
+                );
                 await page
                     .getByRole('heading', { name: `${persona} Workspace` })
                     .waitFor();
@@ -189,9 +191,71 @@ try {
 
             await page.goto(baseUrl, { waitUntil: 'networkidle' });
             await page
-                .getByRole('button', { name: 'Enter as Citizen' })
+                .getByRole('button', { name: entryButtonName('Citizen') })
                 .click();
             await page.waitForURL('**/dashboard');
+            await page.goto(
+                `${baseUrl.replace(/\/$/, '')}/citizen/permit-applications/create`,
+                { waitUntil: 'networkidle' },
+            );
+            await page.getByTestId('permit-application-lab-helper').waitFor();
+            await page
+                .locator('[name="business_name"]')
+                .fill('Tester-entered business remains unchanged');
+            await page.getByTestId('fill-remaining-permit-fields').click();
+            check(
+                'citizen-permit-helper-preserves-entered-values',
+                (await page.locator('[name="business_name"]').inputValue()) ===
+                    'Tester-entered business remains unchanged',
+            );
+            check(
+                'citizen-permit-helper-fills-ipil-geography',
+                (await page
+                    .locator('[name="business_barangay"]')
+                    .inputValue()) === 'Poblacion' &&
+                    (await page
+                        .locator('[name="business_city_municipality"]')
+                        .inputValue()) === 'Ipil' &&
+                    (await page
+                        .locator('[name="business_province"]')
+                        .inputValue()) === 'Zamboanga Sibugay',
+            );
+            check(
+                'citizen-permit-helper-resolves-catalog-activity',
+                (await page
+                    .locator('[name="lines[0][line_of_business_id]"]')
+                    .inputValue()) !== '' &&
+                    Number(
+                        await page
+                            .locator(
+                                '[name="lines[0][capital_investment_pesos]"]',
+                            )
+                            .inputValue(),
+                    ) === 250000,
+            );
+            check(
+                'citizen-permit-helper-leaves-undertaking-manual',
+                !(await page
+                    .locator('[name="undertaking_accepted"]')
+                    .isChecked()),
+            );
+            await page.getByTestId('clear-permit-helper-values').click();
+            check(
+                'citizen-permit-helper-clears-only-helper-values',
+                (await page
+                    .locator('[name="business_barangay"]')
+                    .inputValue()) === '' &&
+                    (await page
+                        .locator('[name="business_name"]')
+                        .inputValue()) ===
+                        'Tester-entered business remains unchanged' &&
+                    (await page
+                        .locator('[name="lines[0][line_of_business_id]"]')
+                        .inputValue()) === '' &&
+                    (await page
+                        .locator('[name="lines[0][capital_investment_pesos]"]')
+                        .inputValue()) === '',
+            );
             const forbiddenResponse = await page.goto(
                 `${baseUrl}/staff/users`,
                 { waitUntil: 'networkidle' },
@@ -258,10 +322,12 @@ try {
         external_requests: externalRequests,
         artifacts: {
             screenshots: Object.fromEntries(
-                fs.readdirSync(screenshotsDirectory).map((filename) => [
-                    filename.replace(/\.png$/, ''),
-                    `browser/screenshots/${filename}`,
-                ]),
+                fs
+                    .readdirSync(screenshotsDirectory)
+                    .map((filename) => [
+                        filename.replace(/\.png$/, ''),
+                        `browser/screenshots/${filename}`,
+                    ]),
             ),
         },
     };

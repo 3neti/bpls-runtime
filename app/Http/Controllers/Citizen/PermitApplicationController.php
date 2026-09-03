@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Citizen;
 
+use App\Actions\BuildCitizenPermitApplicationLabFixture;
 use App\Actions\BuildExecutablePermitApplicationDocument;
 use App\Actions\BuildLifecycleCleanroomIntake;
 use App\Actions\BuildPermitApplicationTimeline;
@@ -16,6 +17,7 @@ use App\Actions\UpdateCitizenPermitApplicationDraft;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
 use App\Enums\PermitClearanceStatus;
+use App\Enums\StakeholderPreviewPersona;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Citizen\StorePermitApplicationRequest;
@@ -23,6 +25,7 @@ use App\Http\Requests\Citizen\SubmitPermitApplicationRequest;
 use App\Http\Requests\Citizen\UpdatePermitApplicationRequest;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
+use App\StakeholderPreview\StakeholderPreviewSafety;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -61,6 +64,8 @@ class PermitApplicationController extends Controller
         Request $request,
         ResolveLifecycleCleanroomIntake $resolveCleanroomIntake,
         BuildLifecycleCleanroomIntake $buildCleanroomIntake,
+        BuildCitizenPermitApplicationLabFixture $buildLabFixture,
+        StakeholderPreviewSafety $previewSafety,
     ): Response {
         Gate::authorize(UserPermission::CreateOwnPermitApplications->value);
         $cleanroom = $resolveCleanroomIntake->handle($request);
@@ -86,6 +91,10 @@ class PermitApplicationController extends Controller
             ],
             'registry' => $this->registryPayload($request),
             'cleanroomIntake' => $cleanroomIntake,
+            'labIntakeFixture' => $cleanroom !== null
+                || $previewSafety->personaFor($request->user()) === StakeholderPreviewPersona::Citizen
+                    ? $buildLabFixture->handle()
+                    : null,
         ]);
     }
 
