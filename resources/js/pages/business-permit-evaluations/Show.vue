@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage, usePoll } from '@inertiajs/vue3';
 import {
     AlertTriangle,
     ArrowRight,
@@ -19,7 +19,8 @@ import {
     ShieldCheck,
     UserRound,
 } from '@lucide/vue';
-import { computed, reactive, ref } from 'vue';
+import { useNow } from '@vueuse/core';
+import { computed, reactive, ref, watch } from 'vue';
 import { correctLinesOfBusiness as correctCitizenLinesOfBusiness } from '@/actions/App/Http/Controllers/Citizen/BusinessPermitEvaluationController';
 import { store as recordBploRouting } from '@/actions/App/Http/Controllers/Staff/BploRoutingDeterminationController';
 import {
@@ -67,6 +68,7 @@ const props = defineProps<{
     application: {
         id: number;
         application_number: string | null;
+        submitted_at: string | null;
         lines: {
             id: number;
             line_of_business_id: number;
@@ -78,6 +80,7 @@ const props = defineProps<{
         determined_by: string;
         determined_at: string;
         situational_context: string;
+        origin: string;
         works: {
             id: number;
             office_code: string;
@@ -101,13 +104,33 @@ const props = defineProps<{
             }[];
         }[];
     } | null;
+    routingSuggestion: {
+        id: number;
+        profile_version: string;
+        profile_keys: string[];
+        status: string;
+        situational_context: string;
+        suggested_work: {
+            office_code: string;
+            office_label: string;
+            situational_reason: string;
+            required_work: string;
+            permit_application_line_id: number;
+        }[];
+        lodged_at: string;
+        review_due_at: string;
+        resolved_at: string | null;
+        clock: string;
+        server_now: string;
+        production_authority: false;
+    } | null;
     routingOfficeOptions: { code: string; label: string }[];
     lineOfBusinesses: LineOfBusiness[];
     can: EvaluationCapabilities;
 }>();
 
 const pendingAction = ref<string | null>(null);
-const routingContext = ref('');
+const routingContext = ref(props.routingSuggestion?.situational_context ?? '');
 const routingCandidates = props.routingOfficeOptions.flatMap((office) =>
     props.application.lines.map((line) => ({
         key: `${office.code}-${line.id}`,
@@ -115,20 +138,78 @@ const routingCandidates = props.routingOfficeOptions.flatMap((office) =>
         line,
     })),
 );
+const suggestedRoutingWork = new Map(
+    (props.routingSuggestion?.suggested_work ?? []).map((work) => [
+        `${work.office_code}-${work.permit_application_line_id}`,
+        work,
+    ]),
+);
 const routingDrafts = reactive(
     Object.fromEntries(
-        routingCandidates.map((candidate) => [
-            candidate.key,
-            {
-                selected: false,
-                reason: '',
-                requiredWork: '',
-            },
-        ]),
+        routingCandidates.map((candidate) => {
+            const suggestion = suggestedRoutingWork.get(candidate.key);
+
+            return [
+                candidate.key,
+                {
+                    selected: suggestion !== undefined,
+                    reason: suggestion?.situational_reason ?? '',
+                    requiredWork: suggestion?.required_work ?? '',
+                },
+            ];
+        }),
     ) as Record<
         string,
         { selected: boolean; reason: string; requiredWork: string }
     >,
+);
+const routingClock = useNow({ interval: 1_000 });
+const routingSecondsRemaining = computed(() => {
+    if (!props.routingSuggestion || props.bploRouting) {
+        return null;
+    }
+
+    return Math.max(
+        0,
+        Math.ceil(
+            (new Date(props.routingSuggestion.review_due_at).getTime() -
+                routingClock.value.getTime()) /
+                1_000,
+        ),
+    );
+});
+const routingCountdown = computed(() => {
+    const remaining = routingSecondsRemaining.value;
+
+    if (remaining === null) {
+        return null;
+    }
+
+    if (remaining === 0) {
+        return 'Sentinel review window elapsed';
+    }
+
+    const minutes = Math.floor(remaining / 60);
+    const seconds = String(remaining % 60).padStart(2, '0');
+
+    return `${minutes}:${seconds} remaining`;
+});
+const { stop: stopRoutingPoll } = usePoll(
+    15_000,
+    { only: ['bploRouting', 'routingSuggestion'] },
+    {
+        autoStart:
+            props.routingSuggestion?.status === 'awaiting_confirmation' &&
+            props.bploRouting === null,
+    },
+);
+watch(
+    () => props.bploRouting,
+    (routing) => {
+        if (routing !== null) {
+            stopRoutingPoll();
+        }
+    },
 );
 
 const page = usePage();
@@ -587,15 +668,21 @@ function submitPrepareAssessment(): void {
                         BPLO situational routing determination
                     </h2>
                     <p class="mt-1 max-w-3xl text-sm text-white/80">
-                        Application facts and Lines of Business inform the
-                        decision. BPLO owns the selected concerned offices; no
-                        LOB-only rule decides this route.
+                        Application facts and Lines of Business produce a
+                        provisional laboratory suggestion. BPLO may confirm or
+                        change it before the sentinel review window closes.
                     </p>
                 </div>
 
                 <div v-if="bploRouting" class="grid gap-4 p-4 sm:p-5">
                     <div class="grid gap-1 text-sm sm:grid-cols-[180px_1fr]">
-                        <p class="font-semibold">Determined by BPLO</p>
+                        <p class="font-semibold">
+                            {{
+                                bploRouting.origin === 'system_defaulted'
+                                    ? 'Applied by sentinel'
+                                    : 'Determined by BPLO'
+                            }}
+                        </p>
                         <p>
                             {{ bploRouting.determined_by }} ·
                             {{ dateTime(bploRouting.determined_at) }}
@@ -604,6 +691,16 @@ function submitPrepareAssessment(): void {
                         <p class="text-muted-foreground">
                             {{ bploRouting.situational_context }}
                         </p>
+                    </div>
+
+                    <div
+                        v-if="bploRouting.origin === 'system_defaulted'"
+                        role="status"
+                        class="rounded-xl border border-blue-300 bg-blue-50 p-4 text-sm text-blue-950 dark:border-blue-800 dark:bg-blue-950/35 dark:text-blue-100"
+                    >
+                        The sentinel routed office work only. The timeout
+                        creates no approval, charge, clearance, assessment,
+                        payment, or financial authority.
                     </div>
 
                     <div class="grid gap-3 lg:grid-cols-2">
@@ -626,7 +723,14 @@ function submitPrepareAssessment(): void {
                                         }}
                                     </p>
                                 </div>
-                                <Badge variant="outline">BPLO selected</Badge>
+                                <Badge variant="outline">
+                                    {{
+                                        bploRouting.origin ===
+                                        'system_defaulted'
+                                            ? 'System defaulted'
+                                            : 'BPLO selected'
+                                    }}
+                                </Badge>
                             </div>
                             <p class="mt-3 text-sm">
                                 <strong>Required work:</strong>
@@ -694,6 +798,61 @@ function submitPrepareAssessment(): void {
                     class="grid gap-4 p-4 sm:p-5"
                     @submit.prevent="submitBploRouting"
                 >
+                    <div
+                        v-if="routingSuggestion"
+                        class="grid gap-3 rounded-xl border border-blue-300 bg-blue-50 p-4 text-blue-950 dark:border-blue-800 dark:bg-blue-950/35 dark:text-blue-100"
+                        data-testid="bplo-routing-sentinel"
+                    >
+                        <div
+                            class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+                        >
+                            <div class="flex items-start gap-3">
+                                <FileClock
+                                    class="mt-0.5 size-5 shrink-0"
+                                    aria-hidden="true"
+                                />
+                                <div>
+                                    <p class="font-bold">
+                                        Laboratory routing suggestion ready
+                                    </p>
+                                    <p class="mt-1 text-sm leading-6">
+                                        These checked offices are provisional.
+                                        BPLO may change them until the sentinel
+                                        applies the recorded default.
+                                    </p>
+                                </div>
+                            </div>
+                            <Badge
+                                variant="outline"
+                                class="w-fit border-blue-400 bg-white/70 font-mono dark:bg-blue-950"
+                            >
+                                {{ routingCountdown }}
+                            </Badge>
+                        </div>
+                        <dl class="grid gap-1 text-xs sm:grid-cols-2">
+                            <div>
+                                <dt class="font-semibold">Lodged</dt>
+                                <dd>
+                                    {{ dateTime(routingSuggestion.lodged_at) }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="font-semibold">Review deadline</dt>
+                                <dd>
+                                    {{
+                                        dateTime(
+                                            routingSuggestion.review_due_at,
+                                        )
+                                    }}
+                                </dd>
+                            </div>
+                        </dl>
+                        <p class="text-xs leading-5">
+                            Profile {{ routingSuggestion.profile_version }} ·
+                            elapsed clock · no approval, charge, clearance, or
+                            financial authority is created by timeout.
+                        </p>
+                    </div>
                     <label class="grid gap-1 text-sm font-semibold">
                         Situational context
                         <textarea
@@ -767,7 +926,7 @@ function submitPrepareAssessment(): void {
                         class="w-fit"
                         :disabled="pendingAction !== null"
                     >
-                        Record BPLO routing determination
+                        Confirm BPLO routing determination
                     </Button>
                 </form>
 

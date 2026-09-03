@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Staff;
 
+use App\Actions\ApplyDueBploRoutingSuggestions;
+use App\Actions\ArmBploRoutingSentinel;
 use App\Actions\CompleteBusinessPermitEvaluationResponsibility;
 use App\Actions\CorrectEvaluationLinesOfBusiness;
 use App\Actions\DescribeBusinessPermitEvaluation;
@@ -28,9 +30,15 @@ use LogicException;
 
 class BusinessPermitEvaluationController extends Controller
 {
-    public function show(PermitApplication $permitApplication, DescribeBusinessPermitEvaluation $describe): Response
-    {
+    public function show(
+        PermitApplication $permitApplication,
+        DescribeBusinessPermitEvaluation $describe,
+        ArmBploRoutingSentinel $armRoutingSentinel,
+        ApplyDueBploRoutingSuggestions $applyDueRoutingSuggestions,
+    ): Response {
         Gate::authorize(UserPermission::ViewBusinessPermitEvaluations->value);
+        $armRoutingSentinel->handle($permitApplication);
+        $applyDueRoutingSuggestions->handle();
         $evaluation = $permitApplication->businessPermitEvaluation()->first();
 
         return Inertia::render('business-permit-evaluations/Show', [
@@ -40,6 +48,7 @@ class BusinessPermitEvaluationController extends Controller
             'application' => [
                 'id' => $permitApplication->id,
                 'application_number' => $permitApplication->application_number,
+                'submitted_at' => $permitApplication->submitted_at?->toIso8601String(),
                 'lines' => $permitApplication->lines()->with('lineOfBusiness')->get()->map(fn ($line): array => [
                     'id' => $line->id,
                     'line_of_business_id' => $line->line_of_business_id,
@@ -47,6 +56,7 @@ class BusinessPermitEvaluationController extends Controller
                 ])->all(),
             ],
             'bploRouting' => $this->routingPayload($permitApplication),
+            'routingSuggestion' => $this->routingSuggestionPayload($permitApplication),
             'routingOfficeOptions' => [
                 ['code' => 'engineering', 'label' => 'Engineering'],
                 ['code' => 'health', 'label' => 'Health'],
@@ -233,6 +243,7 @@ class BusinessPermitEvaluationController extends Controller
             'determined_at' => $determination->determined_at->toIso8601String(),
             'situational_context' => $determination->situational_context,
             'application_facts_snapshot' => $determination->application_facts_snapshot,
+            'origin' => data_get($determination->application_facts_snapshot, 'routing_origin', 'bplo_confirmed'),
             'works' => $determination->works->map(fn ($work): array => [
                 'id' => $work->id,
                 'office_code' => $work->office_code,
@@ -255,6 +266,30 @@ class BusinessPermitEvaluationController extends Controller
                     ])->all(),
                 ])->all(),
             ])->all(),
+        ];
+    }
+
+    /** @return array<string, mixed>|null */
+    private function routingSuggestionPayload(PermitApplication $permitApplication): ?array
+    {
+        $suggestion = $permitApplication->bploRoutingSuggestion()->first();
+        if ($suggestion === null) {
+            return null;
+        }
+
+        return [
+            'id' => $suggestion->id,
+            'profile_version' => $suggestion->profile_version,
+            'profile_keys' => $suggestion->profile_keys,
+            'status' => $suggestion->status,
+            'situational_context' => $suggestion->situational_context,
+            'suggested_work' => $suggestion->suggested_work,
+            'lodged_at' => $suggestion->lodged_at->toIso8601String(),
+            'review_due_at' => $suggestion->review_due_at->toIso8601String(),
+            'resolved_at' => $suggestion->resolved_at?->toIso8601String(),
+            'clock' => 'elapsed',
+            'server_now' => now()->toIso8601String(),
+            'production_authority' => false,
         ];
     }
 

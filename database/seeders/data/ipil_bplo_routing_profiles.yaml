@@ -1,0 +1,57 @@
+schema_version: 1
+profile_version: ipil-laboratory-routing-v1
+classification: provisional_uat
+production_authority: false
+profiles:
+  sari_sari_store:
+    source_business_categories:
+      - REC- SARISARI STORE
+    line_of_business_codes:
+      - MRC-2A-02-B-WHOLESALE-RETAIL
+    offices:
+      - code: engineering
+        label: Engineering
+        reason: Premises and occupancy circumstances require Engineering review in this laboratory profile.
+        required_work: Review the declared premises and record the applicable Engineering determination.
+      - code: health
+        label: Health
+        reason: Sari-sari retail may include food and beverage handling that requires Health review.
+        required_work: Review the declared retail activity and record the applicable Health determination.
+      - code: assessor
+        label: Municipal Assessor
+        reason: Capital investment and sales declarations require review of the business-tax basis.
+        required_work: Review the declared financial basis and record the applicable Assessor determination.
+      - code: menro
+        label: MENRO
+        reason: Solid-waste applicability requires MENRO review for this laboratory profile.
+        required_work: Review the declared activity and record the applicable environmental determination.
+  cleanroom_retail:
+    source_business_categories: []
+    line_of_business_codes:
+      - PRODUCT-LAB-RETAIL-TRADING
+    offices:
+      - code: engineering
+        label: Engineering
+        reason: The clean-room retail premises require the bounded Engineering review.
+        required_work: Review the retail premises and record the provisional UAT office determination.
+      - code: assessor
+        label: Municipal Assessor
+        reason: The clean-room retail declaration requires the bounded Assessor review.
+        required_work: Review the retail financial basis and record the provisional UAT office determination.
+  cleanroom_food_service:
+    source_business_categories: []
+    line_of_business_codes:
+      - PRODUCT-LAB-FOOD-SERVICE
+    offices:
+      - code: assessor
+        label: Municipal Assessor
+        reason: The clean-room food-service declaration requires the bounded Assessor review.
+        required_work: Review the food-service financial basis and record the provisional UAT office determination.
+      - code: health
+        label: Health
+        reason: The clean-room food-service activity requires the bounded Health review.
+        required_work: Review health and sanitary applicability and record the provisional UAT office determination.
+      - code: menro
+        label: MENRO
+        reason: The clean-room food-service activity requires the bounded MENRO review.
+        required_work: Review solid-waste applicability and record the provisional UAT office determination.

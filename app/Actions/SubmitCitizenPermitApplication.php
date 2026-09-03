@@ -16,6 +16,7 @@ class SubmitCitizenPermitApplication
     public function __construct(
         private readonly FreezePermitApplicationDeclaration $freezeDeclaration,
         private readonly PermitApplicationStatusMutation $statusMutation,
+        private readonly ArmBploRoutingSentinel $armRoutingSentinel,
     ) {}
 
     public function handle(PermitApplication $permitApplication, User $submittedBy): PermitApplication
@@ -99,6 +100,8 @@ class SubmitCitizenPermitApplication
                 'immutable' => true,
             ];
             $application->forceFill(['metadata' => $metadata])->save();
+
+            $this->armRoutingSentinel->handle($application);
 
             $submittedBy->notify(new PermitApplicationReceived(
                 permitApplicationId: $application->id,
