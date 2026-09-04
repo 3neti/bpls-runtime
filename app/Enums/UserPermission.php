@@ -27,6 +27,7 @@ enum UserPermission: string
     case UpdatePermitApplicationStatus = 'permit_applications.status_update';
     case CompletePermitClearances = 'permit_clearances.complete';
     case ViewFeeRules = 'fee_rules.view';
+    case ManageFeeRules = 'fee_rules.manage';
     case ViewBillingGroups = 'billing_groups.view';
     case ManageBillingGroups = 'billing_groups.manage';
     case ViewBillingGroupRecords = 'billing_group_records.view';

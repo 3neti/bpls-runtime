@@ -156,8 +156,12 @@ class PermitApplicationAssessmentController extends Controller
                 'assessed_at' => $assessment->assessed_at?->toIso8601String(),
                 'assessed_by' => $assessment->assessedBy?->name,
                 'total_amount_cents' => $assessment->total_amount_cents,
+                'currency' => $assessment->currency,
                 'snapshot_hash' => $snapshotHash,
                 'source_snapshot' => $assessment->source_snapshot,
+                'assessment_price_input_fingerprint' => $assessment->assessment_price_input_fingerprint,
+                'price_report_fingerprint' => $assessment->price_report_fingerprint,
+                'price_report' => $assessment->price_report_snapshot,
                 'business_permit_evaluation' => $assessment->businessPermitEvaluationVersion === null ? null : [
                     'evaluation_id' => $assessment->businessPermitEvaluationVersion->business_permit_evaluation_id,
                     'version_id' => $assessment->businessPermitEvaluationVersion->id,

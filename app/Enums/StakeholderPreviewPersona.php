@@ -135,6 +135,7 @@ enum StakeholderPreviewPersona: string
                 UserPermission::AccessStaff,
                 UserPermission::ViewPermitApplications,
                 UserPermission::AssessPermitApplications,
+                UserPermission::ViewFeeRules,
                 UserPermission::ViewPaymentSchedules,
                 UserPermission::PreparePaymentSchedules,
                 UserPermission::ViewBusinessPermitEvaluations,
@@ -176,6 +177,7 @@ enum StakeholderPreviewPersona: string
                 UserPermission::ViewRoles,
                 UserPermission::ViewMunicipalityConfiguration,
                 UserPermission::ViewFeeRules,
+                UserPermission::ManageFeeRules,
                 UserPermission::ViewBillingGroups,
                 UserPermission::ViewBillingGroupRecords,
                 UserPermission::ViewBusinessPermitEvaluations,
@@ -190,6 +192,7 @@ enum StakeholderPreviewPersona: string
                 UserPermission::ViewPermitApplications,
                 UserPermission::ViewBusinessPermitEvaluations,
                 UserPermission::ContributeBusinessPermitEvaluations,
+                UserPermission::ViewFeeRules,
             ],
             self::MayorOffice,
             self::Releasing => [

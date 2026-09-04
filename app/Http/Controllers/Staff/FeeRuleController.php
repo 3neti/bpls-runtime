@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Staff;
 
 use App\Actions\AnalyzeRevenueCodeSchedule;
+use App\Actions\ProposeFeeRuleRevision;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleExecutionStatus;
@@ -11,10 +12,12 @@ use App\Enums\RevenueCodeProvisionStatus;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Models\FeeRule;
+use App\Models\FeeRuleAuditEvent;
 use App\Models\FeeRuleRange;
 use App\Models\RevenueCodeProvision;
 use App\Models\RevenueCodeProvisionClause;
 use App\Models\RevenueCodeProvisionRow;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -134,6 +137,8 @@ class FeeRuleController extends Controller
             'lineOfBusiness',
             'currentReconciliation',
             'ranges' => fn ($query) => $query->orderBy('min_basis_cents'),
+            'revisions.proposedBy',
+            'auditEvents.actor',
         ]);
 
         return Inertia::render('fee-rules/Show', [
@@ -146,9 +151,55 @@ class FeeRuleController extends Controller
                     'amount_cents' => $range->amount_cents,
                     'rate_basis_points' => $range->rate_basis_points,
                 ])->values()->all(),
+                'revisions' => $feeRule->revisions->sortByDesc('version')->map(fn ($revision): array => [
+                    'id' => $revision->id,
+                    'version' => $revision->version,
+                    'status' => $revision->status,
+                    'currency' => $revision->currency,
+                    'previous_amount_minor' => $revision->previous_amount_minor,
+                    'proposed_amount_minor' => $revision->proposed_amount_minor,
+                    'effective_from' => $revision->effective_from->toDateString(),
+                    'effective_until' => $revision->effective_until?->toDateString(),
+                    'reason' => $revision->reason,
+                    'authority' => $revision->authority,
+                    'proposed_by' => $revision->proposedBy?->name,
+                    'proposed_at' => $revision->proposed_at->toIso8601String(),
+                    'executable' => false,
+                ])->values()->all(),
+                'audit_events' => $feeRule->auditEvents->sortByDesc('occurred_at')->map(fn (FeeRuleAuditEvent $event): array => [
+                    'id' => $event->id,
+                    'event' => $event->event,
+                    'actor' => $event->actor?->name,
+                    'occurred_at' => $event->occurred_at->toIso8601String(),
+                    'snapshot' => $event->snapshot,
+                ])->values()->all(),
             ],
             'scopeNote' => 'This detail page is read-only evidence. A recorded ordinance extract is executable only when its current reconciliation explicitly authorizes deterministic execution.',
+            'canProposeRevision' => auth()->user()?->can(UserPermission::ManageFeeRules->value) ?? false,
         ]);
+    }
+
+    public function proposeRevision(Request $request, FeeRule $feeRule, ProposeFeeRuleRevision $propose): RedirectResponse
+    {
+        Gate::authorize(UserPermission::ManageFeeRules->value);
+        $data = $request->validate([
+            'proposed_amount_minor' => ['required', 'integer', 'min:0'],
+            'effective_from' => ['required', 'date'],
+            'effective_until' => ['nullable', 'date', 'after_or_equal:effective_from'],
+            'reason' => ['required', 'string', 'max:2000'],
+            'authority' => ['required', 'string', 'max:2000'],
+        ]);
+        $propose->handle(
+            $feeRule,
+            $data['proposed_amount_minor'],
+            $data['effective_from'],
+            $data['effective_until'] ?? null,
+            $data['reason'],
+            $data['authority'],
+            auth()->user(),
+        );
+
+        return back()->with('status', 'Fee revision recorded as Proposed — not executable.');
     }
 
     /**
@@ -162,6 +213,10 @@ class FeeRuleController extends Controller
             'name' => $feeRule->name,
             'category' => $feeRule->category->value,
             'scope' => $feeRule->scope->value,
+            'family' => $feeRule->scope === FeeRuleScope::Application ? 'application_wide' : 'line_of_business',
+            'family_label' => $feeRule->scope === FeeRuleScope::Application ? 'Application-wide Fee' : 'Line-of-Business Fee',
+            'currency' => 'PHP',
+            'responsible_office' => data_get($feeRule->metadata, 'responsible_office'),
             'calculation_type' => $feeRule->calculation_type->value,
             'basis' => $feeRule->basis,
             'amount_cents' => $feeRule->amount_cents,

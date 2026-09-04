@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ClipboardCheck } from '@lucide/vue';
-import { computed, reactive } from 'vue';
+import { ClipboardCheck, TableProperties } from '@lucide/vue';
+import { computed, reactive, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -58,11 +58,14 @@ function initialInspectionMode(): ResponsibilityDraft['inspectionMode'] {
 
 const draft = reactive<ResponsibilityDraft>({
     applicability: props.item.applicability,
+    determinationType:
+        props.item.default_value == null ? 'office_determination' : 'confirm',
     amount:
         pesosFromValue(props.item.resolved_value) ??
         pesosFromValue(props.item.default_value) ??
         '',
     reason: '',
+    authority: '',
     inspectionMode: initialInspectionMode(),
     inspectionCompleted: Boolean(inspectionValue('completed')),
     findings: String(inspectionValue('findings') ?? ''),
@@ -94,6 +97,47 @@ const isCharge = computed(() => props.item.item_type === 'charge');
 const amountRequired = computed(
     () => isCharge.value && draft.applicability === 'applicable',
 );
+
+watch(
+    () => draft.determinationType,
+    (type) => {
+        draft.applicability =
+            type === 'not_applicable' ? 'not_applicable' : 'applicable';
+
+        if (type === 'confirm' && proposalPesos.value !== null) {
+            draft.amount = proposalPesos.value;
+        }
+    },
+);
+
+const scheduledMinor = computed(() =>
+    amountFromValue(props.item.default_value),
+);
+const determinedMinor = computed(() => {
+    const parts = String(draft.amount)
+        .trim()
+        .match(/^(\d+)(?:\.(\d{1,2}))?$/);
+
+    return parts
+        ? Number(parts[1]) * 100 + Number((parts[2] ?? '').padEnd(2, '0'))
+        : null;
+});
+const varianceMinor = computed(() =>
+    scheduledMinor.value !== null && determinedMinor.value !== null
+        ? determinedMinor.value - scheduledMinor.value
+        : null,
+);
+
+function openFeeMatrix(): void {
+    window.dispatchEvent(
+        new CustomEvent('open-fee-matrix', {
+            detail: {
+                office: props.item.responsible_party,
+                lineOfBusinessId: props.item.line_of_business_id,
+            },
+        }),
+    );
+}
 </script>
 
 <template>
@@ -104,7 +148,65 @@ const amountRequired = computed(
                 determination
             </legend>
 
-            <div class="grid gap-2">
+            <Button
+                v-if="isCharge"
+                type="button"
+                variant="outline"
+                class="w-full sm:w-fit"
+                @click="openFeeMatrix"
+            >
+                <TableProperties aria-hidden="true" />
+                View Fee Matrix
+            </Button>
+
+            <div v-if="isCharge" class="grid gap-2">
+                <Label>Determination</Label>
+                <label
+                    v-if="proposalPesos !== null"
+                    class="flex items-center gap-2 rounded-lg border p-3 text-sm"
+                >
+                    <input
+                        v-model="draft.determinationType"
+                        type="radio"
+                        value="confirm"
+                    />
+                    Confirm ₱{{ proposalPesos }}
+                </label>
+                <label
+                    v-if="proposalPesos !== null"
+                    class="flex items-center gap-2 rounded-lg border p-3 text-sm"
+                >
+                    <input
+                        v-model="draft.determinationType"
+                        type="radio"
+                        value="override"
+                    />
+                    Override the scheduled amount
+                </label>
+                <label
+                    v-else
+                    class="flex items-center gap-2 rounded-lg border p-3 text-sm"
+                >
+                    <input
+                        v-model="draft.determinationType"
+                        type="radio"
+                        value="office_determination"
+                    />
+                    Enter office determination
+                </label>
+                <label
+                    class="flex items-center gap-2 rounded-lg border p-3 text-sm"
+                >
+                    <input
+                        v-model="draft.determinationType"
+                        type="radio"
+                        value="not_applicable"
+                    />
+                    Not Applicable
+                </label>
+            </div>
+
+            <div v-else class="grid gap-2">
                 <Label :for="`applicability-${item.id}`"
                     >Does this apply?</Label
                 >
@@ -151,6 +253,47 @@ const amountRequired = computed(
                         determines.
                     </template>
                 </p>
+                <dl
+                    v-if="draft.determinationType === 'override'"
+                    class="grid grid-cols-3 gap-2 rounded-lg bg-muted/40 p-3 text-xs"
+                >
+                    <div>
+                        <dt>Scheduled</dt>
+                        <dd class="font-semibold">₱{{ proposalPesos }}</dd>
+                    </div>
+                    <div>
+                        <dt>Determined</dt>
+                        <dd class="font-semibold">
+                            ₱{{ draft.amount || '—' }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Variance</dt>
+                        <dd class="font-semibold">
+                            {{
+                                varianceMinor === null
+                                    ? '—'
+                                    : `${varianceMinor < 0 ? '−' : '+'}₱${Math.abs(varianceMinor / 100).toFixed(2)}`
+                            }}
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+
+            <div
+                v-if="draft.determinationType === 'override'"
+                class="grid gap-2"
+            >
+                <Label :for="`authority-${item.id}`"
+                    >Authority / policy basis *</Label
+                >
+                <textarea
+                    :id="`authority-${item.id}`"
+                    v-model="draft.authority"
+                    required
+                    rows="2"
+                    class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                />
             </div>
 
             <div

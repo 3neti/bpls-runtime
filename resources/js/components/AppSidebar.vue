@@ -224,7 +224,7 @@ const staffSections = computed<NavSection[]>(() => {
 
     if (page.props.auth.can_view_fee_rules) {
         administrationItems.push({
-            title: 'Taxes & Fees',
+            title: 'Municipal Fees',
             href: feeRuleIndex(),
             icon: Coins,
         });

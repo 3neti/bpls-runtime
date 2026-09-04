@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft } from '@lucide/vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ArrowLeft, History, PencilLine } from '@lucide/vue';
+import { ref } from 'vue';
 import {
     index,
+    proposeRevision,
     show,
 } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
 import AdministrationScopePanel from '@/components/administration/AdministrationScopePanel.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
@@ -41,6 +45,10 @@ type FeeRule = {
     name: string;
     category: string;
     scope: string;
+    family: string;
+    family_label: string;
+    currency: 'PHP';
+    responsible_office: string | null;
     calculation_type: string;
     basis: string;
     amount_cents: number;
@@ -63,12 +71,54 @@ type FeeRule = {
     reconciliation_required: boolean;
     current_reconciliation: FeeRuleReconciliation | null;
     ranges: FeeRuleRange[];
+    revisions: {
+        id: number;
+        version: number;
+        status: string;
+        currency: 'PHP';
+        previous_amount_minor: number | null;
+        proposed_amount_minor: number | null;
+        effective_from: string;
+        effective_until: string | null;
+        reason: string;
+        authority: string;
+        proposed_by: string | null;
+        proposed_at: string;
+        executable: false;
+    }[];
+    audit_events: {
+        id: number;
+        event: string;
+        actor: string | null;
+        occurred_at: string;
+        snapshot: Record<string, unknown>;
+    }[];
 };
 
 const props = defineProps<{
     feeRule: FeeRule;
     scopeNote: string;
+    canProposeRevision: boolean;
 }>();
+
+const showRevisionForm = ref(false);
+const revisionForm = useForm({
+    proposed_amount_minor: props.feeRule.amount_cents,
+    effective_from: '',
+    effective_until: null as string | null,
+    reason: '',
+    authority: '',
+});
+
+function submitRevision(): void {
+    revisionForm.post(proposeRevision(props.feeRule.id).url, {
+        preserveScroll: true,
+        onSuccess: () => {
+            showRevisionForm.value = false;
+            revisionForm.reset();
+        },
+    });
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -167,6 +217,145 @@ function basisRange(range: FeeRuleRange): string {
                         Back to catalog
                     </Link>
                 </Button>
+                <Button
+                    v-if="canProposeRevision"
+                    data-testid="propose-fee-revision"
+                    @click="showRevisionForm = !showRevisionForm"
+                >
+                    <PencilLine />
+                    Propose Change
+                </Button>
+            </section>
+
+            <section
+                v-if="showRevisionForm"
+                class="rounded-xl border-2 border-primary/30 bg-card p-5"
+                data-testid="fee-revision-form"
+            >
+                <h2 class="font-semibold">Propose a new fee revision</h2>
+                <p class="mt-1 text-sm text-muted-foreground">
+                    This records an append-only proposal. It cannot affect an
+                    Assessment until a separately commissioned activation
+                    authority exists.
+                </p>
+                <form
+                    class="mt-4 grid gap-4 sm:grid-cols-2"
+                    @submit.prevent="submitRevision"
+                >
+                    <div class="grid gap-2">
+                        <Label for="proposed_amount_minor"
+                            >Proposed amount (minor units)</Label
+                        >
+                        <Input
+                            id="proposed_amount_minor"
+                            v-model="revisionForm.proposed_amount_minor"
+                            type="number"
+                            min="0"
+                            required
+                        />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="effective_from">Effective from</Label>
+                        <Input
+                            id="effective_from"
+                            v-model="revisionForm.effective_from"
+                            type="date"
+                            required
+                        />
+                    </div>
+                    <div class="grid gap-2 sm:col-span-2">
+                        <Label for="revision_reason">Reason</Label>
+                        <textarea
+                            id="revision_reason"
+                            v-model="revisionForm.reason"
+                            required
+                            rows="3"
+                            class="rounded-md border bg-background px-3 py-2 text-sm"
+                        />
+                    </div>
+                    <div class="grid gap-2 sm:col-span-2">
+                        <Label for="revision_authority"
+                            >Authority / legal basis</Label
+                        >
+                        <textarea
+                            id="revision_authority"
+                            v-model="revisionForm.authority"
+                            required
+                            rows="3"
+                            class="rounded-md border bg-background px-3 py-2 text-sm"
+                        />
+                    </div>
+                    <Button
+                        type="submit"
+                        class="sm:w-fit"
+                        :disabled="revisionForm.processing"
+                    >
+                        Record proposed revision
+                    </Button>
+                </form>
+            </section>
+
+            <section
+                class="rounded-xl border bg-card p-5"
+                data-testid="fee-policy-history"
+            >
+                <div class="flex items-center gap-2">
+                    <History class="size-5" aria-hidden="true" />
+                    <h2 class="font-semibold">Fee Policy History</h2>
+                </div>
+                <p
+                    v-if="!feeRule.revisions.length"
+                    class="mt-3 text-sm text-muted-foreground"
+                >
+                    No proposed revisions have been recorded. The current fee
+                    version remains unchanged.
+                </p>
+                <ol v-else class="mt-4 grid gap-3">
+                    <li
+                        v-for="revision in feeRule.revisions"
+                        :key="revision.id"
+                        class="rounded-lg border p-4"
+                    >
+                        <div
+                            class="flex flex-wrap items-start justify-between gap-2"
+                        >
+                            <p class="font-semibold">
+                                Version {{ revision.version }} ·
+                                {{ money(revision.previous_amount_minor ?? 0) }}
+                                →
+                                {{ money(revision.proposed_amount_minor ?? 0) }}
+                            </p>
+                            <Badge variant="outline"
+                                >Proposed — not executable</Badge
+                            >
+                        </div>
+                        <p class="mt-2 text-sm">{{ revision.reason }}</p>
+                        <dl
+                            class="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2"
+                        >
+                            <div>
+                                <dt>Authority</dt>
+                                <dd>{{ revision.authority }}</dd>
+                            </div>
+                            <div>
+                                <dt>Effective</dt>
+                                <dd>{{ revision.effective_from }}</dd>
+                            </div>
+                            <div>
+                                <dt>Proposed by</dt>
+                                <dd>
+                                    {{
+                                        revision.proposed_by ?? 'Recorded actor'
+                                    }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>Recorded</dt>
+                                <dd>{{ revision.proposed_at }}</dd>
+                            </div>
+                        </dl>
+                    </li>
+                </ol>
             </section>
 
             <AdministrationScopePanel
@@ -362,7 +551,17 @@ function basisRange(range: FeeRuleRange): string {
                                 Scope
                             </dt>
                             <dd class="mt-1">
-                                {{ label(feeRule.scope) }}
+                                {{ feeRule.family_label }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground uppercase">
+                                Responsible Office
+                            </dt>
+                            <dd class="mt-1">
+                                {{
+                                    feeRule.responsible_office ?? 'Municipality'
+                                }}
                             </dd>
                         </div>
                         <div>

@@ -40,8 +40,11 @@ const NOT_RECORDED = 'Not recorded';
  */
 export type ResponsibilityDraft = {
     applicability: EvaluationApplicability;
+    determinationType:
+        'confirm' | 'override' | 'not_applicable' | 'office_determination';
     amount: string;
     reason: string;
+    authority: string;
     inspectionMode: '' | 'physical' | 'virtual' | 'document_review';
     inspectionCompleted: boolean;
     findings: string;

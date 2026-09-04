@@ -2,35 +2,28 @@
 
 namespace App\Actions;
 
-use App\Assessment\ApplicableFeeRuleQuery;
-use App\Assessment\AssessmentCalculator;
+use App\Assessment\AssessmentPriceInputResolver;
+use App\Assessment\Price\CanonicalFinancialFingerprint;
+use App\Assessment\Price\Price;
 use App\Enums\AssessmentDecisionAction;
 use App\Enums\AssessmentStatus;
-use App\Enums\FeeRuleCalculationType;
-use App\Enums\FeeRuleCategory;
-use App\Enums\FeeRuleScope;
 use App\Enums\PermitApplicationStatus;
 use App\Evaluation\BusinessPermitEvaluationReadiness;
 use App\Exceptions\UnsupportedAssessmentPolicy;
 use App\Models\Assessment;
 use App\Models\BusinessPermitEvaluation;
-use App\Models\FeeRule;
-use App\Models\PaperlessPaymentOrder;
-use App\Models\PaperlessPaymentOrderLine;
 use App\Models\PermitApplication;
-use App\Models\PermitApplicationLine;
 use App\Models\User;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
 class CreateAssessmentForPermitApplication
 {
     public function __construct(
-        private AssessmentCalculator $calculator,
-        private ApplicableFeeRuleQuery $applicableFeeRuleQuery,
         private BusinessPermitEvaluationReadiness $evaluationReadiness,
         private PermitApplicationStatusMutation $statusMutation,
+        private AssessmentPriceInputResolver $priceInputResolver,
+        private CanonicalFinancialFingerprint $financialFingerprint,
     ) {}
 
     public function handle(PermitApplication $permitApplication, ?User $assessedBy = null): Assessment
@@ -75,6 +68,13 @@ class CreateAssessmentForPermitApplication
                 ->whereNull('superseded_at')
                 ->update(['superseded_at' => now()]);
 
+            $priceInput = $this->priceInputResolver->resolve($permitApplication, $evaluationProjection);
+            $inputSnapshot = $priceInput->toArray();
+            $inputFingerprint = $this->financialFingerprint->hash($inputSnapshot);
+            $resolvedPrice = Price::fromInput($priceInput)->resolve();
+            $reportSnapshot = Price::fromInput($priceInput)->report()->toArray();
+            $reportFingerprint = $this->financialFingerprint->hash($reportSnapshot);
+
             $assessment = $permitApplication->assessments()->create([
                 'business_permit_evaluation_version_id' => $evaluationProjection['version_id'] ?? null,
                 'business_permit_evaluation_fingerprint' => $evaluationProjection['current_fingerprint'] ?? null,
@@ -83,20 +83,20 @@ class CreateAssessmentForPermitApplication
                 'status' => AssessmentStatus::Computed,
                 'assessed_at' => now(),
                 'source_snapshot' => $this->sourceSnapshot($permitApplication, $evaluationProjection),
+                'total_amount_cents' => $resolvedPrice->totalMinor(),
+                'currency' => $resolvedPrice->currency,
+                'assessment_price_input_snapshot' => $inputSnapshot,
+                'assessment_price_input_fingerprint' => $inputFingerprint,
+                'price_report_snapshot' => $reportSnapshot,
+                'price_report_fingerprint' => $reportFingerprint,
             ]);
 
-            if (is_array($evaluationProjection)) {
-                $this->createEvaluationLines($assessment, $evaluationProjection);
-            } else {
-                $feeRules = $this->applicableFeeRuleQuery->forPermitApplication($permitApplication);
-                $this->createApplicationScopedLines($assessment, $feeRules);
-                $this->createLineOfBusinessScopedLines($assessment, $permitApplication, $feeRules);
-                $this->createOfficeChargeContributionLines($assessment, $permitApplication);
+            $this->persistResolvedPrice($assessment, $resolvedPrice->components);
+            $lineTotal = (int) $assessment->lines()->sum('amount_cents');
+            if ($lineTotal !== $resolvedPrice->totalMinor()
+                || data_get($reportSnapshot, 'total.minor') !== $resolvedPrice->totalMinor()) {
+                throw new LogicException('Assessment, lines, ResolvedPrice, and PriceReport totals must be identical.');
             }
-
-            $assessment->update([
-                'total_amount_cents' => (int) $assessment->lines()->sum('amount_cents'),
-            ]);
 
             $this->statusMutation->persistStatusConsequence($permitApplication, PermitApplicationStatus::Assessment, [
                 'assessed_at' => $assessment->assessed_at,
@@ -104,6 +104,41 @@ class CreateAssessmentForPermitApplication
 
             return $assessment->load('lines');
         });
+    }
+
+    /** @param list<array<string, mixed>> $components */
+    private function persistResolvedPrice(Assessment $assessment, array $components): void
+    {
+        foreach ($components as $component) {
+            $explanation = $component['explanation'];
+            $assessment->lines()->create([
+                'permit_application_line_id' => $component['permit_application_line_id'],
+                'fee_rule_id' => $explanation['fee_rule_id'] ?? null,
+                'business_permit_evaluation_item_id' => $explanation['business_permit_evaluation_item_id'] ?? null,
+                'paperless_payment_order_line_id' => $explanation['paperless_payment_order_line_id'] ?? null,
+                'line_of_business_id' => $component['line_of_business_id'],
+                'code' => $component['key'],
+                'name' => $component['label'],
+                'category' => $explanation['category'],
+                'calculation_type' => $explanation['calculation_type'],
+                'basis' => $explanation['basis'],
+                'basis_amount_cents' => $explanation['basis_amount_minor'],
+                'amount_cents' => $component['resolved_minor'],
+                'legal_basis' => $component['legal_basis'],
+                'rule_snapshot' => [
+                    ...$explanation['rule_snapshot'],
+                    'price_component' => [
+                        'schema_version' => 'bpls.price-component.v1',
+                        'currency' => $component['currency'],
+                        'scheduled_amount_minor' => $component['scheduled_minor'],
+                        'resolved_amount_minor' => $component['resolved_minor'],
+                        'exact_once_key' => $component['exact_once_key'],
+                        'source_version' => $component['source_version'],
+                        'applied_modifier_keys' => $component['applied_modifier_keys'],
+                    ],
+                ],
+            ]);
+        }
     }
 
     private function assertAssessmentMayBeComputed(PermitApplication $permitApplication): void
@@ -170,149 +205,6 @@ class CreateAssessmentForPermitApplication
         ];
     }
 
-    /** @param array<string, mixed> $projection */
-    private function createEvaluationLines(Assessment $assessment, array $projection): void
-    {
-        foreach ($projection['projected_charges'] as $expected) {
-            $feeRule = $expected['fee_rule'];
-            $applicationLine = $expected['application_line'];
-            $calculation = $this->calculator->calculate($feeRule, $applicationLine);
-
-            if ($calculation['amount_cents'] !== $expected['amount_cents']
-                || $calculation['basis_amount_cents'] !== $expected['basis_amount_cents']
-                || $calculation['rule_snapshot'] !== $expected['rule_snapshot']) {
-                throw new UnsupportedAssessmentPolicy("Evaluation and Assessment pricing parity failed for fee rule [{$feeRule->code}].");
-            }
-
-            $assessment->lines()->create([
-                'permit_application_line_id' => $expected['permit_application_line_id'],
-                'fee_rule_id' => $feeRule->id,
-                'line_of_business_id' => $expected['line_of_business_id'],
-                'code' => $expected['code'],
-                'name' => $expected['name'],
-                'category' => $expected['category'],
-                'calculation_type' => $expected['calculation_type'],
-                'basis' => $expected['basis'],
-                'basis_amount_cents' => $expected['basis_amount_cents'],
-                'amount_cents' => $expected['amount_cents'],
-                'legal_basis' => $expected['legal_basis'],
-                'rule_snapshot' => [
-                    ...$expected['rule_snapshot'],
-                    'evaluation_source_classification' => $expected['source_classification'],
-                ],
-            ]);
-        }
-
-        $this->createPaperlessPaymentOrderLines($assessment, $projection);
-    }
-
-    /** @param array<string, mixed> $projection */
-    private function createPaperlessPaymentOrderLines(Assessment $assessment, array $projection): void
-    {
-        $items = $projection['items'] ?? [];
-        if (! is_array($items)) {
-            throw new UnsupportedAssessmentPolicy('Evaluation item projection is invalid.');
-        }
-
-        $eligibleRevisionIds = collect($items)
-            ->filter(fn (array $item): bool => $item['item_type'] === 'charge'
-                && $item['applicability'] === 'applicable'
-                && $item['resolution'] === 'resolved')
-            ->pluck('revision_id')
-            ->filter()
-            ->values();
-
-        PaperlessPaymentOrder::query()
-            ->where('permit_application_id', $assessment->permit_application_id)
-            ->whereIn('business_permit_evaluation_item_revision_id', $eligibleRevisionIds)
-            ->where('status', 'issued')
-            ->whereNull('superseded_at')
-            ->with(['lines', 'routingWork', 'evaluationItemRevision'])
-            ->orderBy('id')
-            ->get()
-            ->each(function (PaperlessPaymentOrder $order) use ($assessment, $projection): void {
-                if ((int) $order->lines->sum('amount_cents') !== $order->total_amount_cents) {
-                    throw new UnsupportedAssessmentPolicy("Paperless Payment Order [{$order->id}] does not reconcile to its financial lines.");
-                }
-
-                $order->lines->each(function (PaperlessPaymentOrderLine $line) use ($assessment, $order, $projection): void {
-                    $assessment->lines()->create([
-                        'business_permit_evaluation_item_id' => $order->evaluationItemRevision?->business_permit_evaluation_item_id,
-                        'paperless_payment_order_line_id' => $line->id,
-                        'permit_application_line_id' => $line->permit_application_line_id,
-                        'line_of_business_id' => $line->line_of_business_id,
-                        'code' => $line->code,
-                        'name' => $line->name,
-                        'category' => FeeRuleCategory::Fee,
-                        'calculation_type' => FeeRuleCalculationType::Fixed,
-                        'basis' => 'paperless_payment_order',
-                        'basis_amount_cents' => $line->amount_cents,
-                        'amount_cents' => $line->amount_cents,
-                        'legal_basis' => null,
-                        'rule_snapshot' => [
-                            'source' => 'paperless_payment_order',
-                            'paperless_payment_order_id' => $order->id,
-                            'paperless_payment_order_line_id' => $line->id,
-                            'office_code' => $order->routingWork->office_code,
-                            'office_label' => $order->routingWork->office_label,
-                            'bplo_routing_work_id' => $order->bplo_routing_work_id,
-                            'evaluation_version_id' => $projection['version_id'],
-                            'evaluation_fingerprint' => $projection['current_fingerprint'],
-                            'issued_by_id' => $order->issued_by_id,
-                            'issued_at' => $order->issued_at->toIso8601String(),
-                            'source_snapshot' => $order->source_snapshot,
-                        ],
-                    ]);
-                });
-            });
-    }
-
-    /**
-     * @param  Collection<int, FeeRule>  $feeRules
-     */
-    private function createApplicationScopedLines(Assessment $assessment, Collection $feeRules): void
-    {
-        $feeRules
-            ->where('scope', FeeRuleScope::Application)
-            ->each(fn (FeeRule $feeRule) => $this->createAssessmentLine($assessment, $feeRule));
-    }
-
-    /**
-     * @param  Collection<int, FeeRule>  $feeRules
-     */
-    private function createLineOfBusinessScopedLines(Assessment $assessment, PermitApplication $permitApplication, Collection $feeRules): void
-    {
-        $lineRules = $feeRules->where('scope', FeeRuleScope::LineOfBusiness);
-
-        $permitApplication->lines->each(function (PermitApplicationLine $applicationLine) use ($assessment, $lineRules): void {
-            $lineRules
-                ->where('line_of_business_id', $applicationLine->line_of_business_id)
-                ->each(fn (FeeRule $feeRule) => $this->createAssessmentLine($assessment, $feeRule, $applicationLine));
-        });
-    }
-
-    private function createAssessmentLine(Assessment $assessment, FeeRule $feeRule, ?PermitApplicationLine $applicationLine = null): void
-    {
-        $calculation = $this->calculator->calculate($feeRule, $applicationLine);
-
-        $assessment->lines()->create([
-            'permit_application_line_id' => $applicationLine?->id,
-            'fee_rule_id' => $feeRule->id,
-            'line_of_business_id' => $applicationLine instanceof PermitApplicationLine
-                ? $applicationLine->line_of_business_id
-                : $feeRule->line_of_business_id,
-            'code' => $feeRule->code,
-            'name' => $feeRule->name,
-            'category' => $feeRule->category,
-            'calculation_type' => $feeRule->calculation_type,
-            'basis' => $feeRule->basis,
-            'basis_amount_cents' => $calculation['basis_amount_cents'],
-            'amount_cents' => $calculation['amount_cents'],
-            'legal_basis' => $feeRule->legal_basis,
-            'rule_snapshot' => $calculation['rule_snapshot'],
-        ]);
-    }
-
     private function assertProvisionalOfficeChargesReady(PermitApplication $permitApplication): void
     {
         $workflow = data_get($permitApplication->metadata, 'provisional_uat_workflow');
@@ -331,37 +223,6 @@ class CreateAssessmentForPermitApplication
         if ($missingOfficeCodes->isNotEmpty()) {
             throw new UnsupportedAssessmentPolicy('Assessment consolidation is waiting for these scenario office reviews: '.$missingOfficeCodes->implode(', ').'.');
         }
-    }
-
-    private function createOfficeChargeContributionLines(Assessment $assessment, PermitApplication $permitApplication): void
-    {
-        $permitApplication->officeChargeContributions()
-            ->where('status', 'approved')
-            ->where('is_applicable', true)
-            ->orderBy('office_code')
-            ->get()
-            ->each(function ($contribution) use ($assessment): void {
-                $assessment->lines()->create([
-                    'code' => 'UAT-OFFICE-'.str($contribution->office_code)->upper()->toString(),
-                    'name' => $contribution->office_label,
-                    'category' => FeeRuleCategory::Fee,
-                    'calculation_type' => FeeRuleCalculationType::Fixed,
-                    'basis' => 'manual_office_assessment',
-                    'basis_amount_cents' => $contribution->amount_cents ?? 0,
-                    'amount_cents' => $contribution->amount_cents ?? 0,
-                    'legal_basis' => null,
-                    'rule_snapshot' => [
-                        'semantic_classification' => 'provisional_uat',
-                        'source' => 'concerned_office_charge_contribution',
-                        'office_charge_contribution_id' => $contribution->id,
-                        'office_code' => $contribution->office_code,
-                        'submitted_by_id' => $contribution->submitted_by_id,
-                        'submitted_at' => $contribution->submitted_at?->toIso8601String(),
-                        'generalizes_municipal_policy' => false,
-                        'real_taxpayer_liability' => false,
-                    ],
-                ]);
-            });
     }
 
     private function evaluationMode(PermitApplication $permitApplication): string

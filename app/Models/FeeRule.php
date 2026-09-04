@@ -75,6 +75,18 @@ class FeeRule extends Model
         return $this->hasOne(FeeRuleReconciliation::class)->ofMany('version', 'max');
     }
 
+    /** @return HasMany<FeeRuleRevision, $this> */
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(FeeRuleRevision::class)->orderBy('version');
+    }
+
+    /** @return HasMany<FeeRuleAuditEvent, $this> */
+    public function auditEvents(): HasMany
+    {
+        return $this->hasMany(FeeRuleAuditEvent::class)->orderBy('occurred_at');
+    }
+
     /**
      * @return array<string, string>
      */

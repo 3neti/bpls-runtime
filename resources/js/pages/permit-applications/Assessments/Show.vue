@@ -79,7 +79,39 @@ type Assessment = {
     assessed_at: string | null;
     assessed_by: string | null;
     total_amount_cents: number;
+    currency: 'PHP';
     snapshot_hash: string;
+    assessment_price_input_fingerprint: string | null;
+    price_report_fingerprint: string | null;
+    price_report: {
+        schema_version: string;
+        currency: 'PHP';
+        groups: {
+            key: string;
+            label: string;
+            currency: 'PHP';
+            minor: number;
+        }[];
+        components: {
+            exact_once_key: string;
+            label: string;
+            responsible_office: string | null;
+            scheduled_minor: number;
+            resolved_minor: number;
+            applied_modifier_keys: string[];
+            source: { type: string; identity: string; version: string };
+        }[];
+        modifiers: {
+            key: string;
+            type: string;
+            amount_minor: number;
+            reason: string;
+            authority: string;
+            office: string;
+            occurred_at: string;
+        }[];
+        total: { currency: 'PHP'; minor: number };
+    } | null;
     business_permit_evaluation: {
         evaluation_id: number;
         version_id: number;
@@ -445,6 +477,98 @@ function reconciliationDifference(
                     </div>
                 </template>
             </WorkflowStageSummary>
+
+            <section
+                v-if="assessment.price_report"
+                class="overflow-hidden rounded-2xl border bg-card"
+                data-testid="price-report-provenance"
+            >
+                <header class="border-b bg-muted/30 p-4">
+                    <p
+                        class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                    >
+                        Frozen composition evidence
+                    </p>
+                    <h2 class="mt-1 text-lg font-semibold">
+                        Price Report & Provenance
+                    </h2>
+                    <p class="mt-1 text-sm text-muted-foreground">
+                        Reconstructed from this Assessment’s frozen report,
+                        never from current fee rules.
+                    </p>
+                </header>
+                <div class="grid gap-4 p-4 lg:grid-cols-[1fr_320px]">
+                    <div class="divide-y rounded-xl border">
+                        <article
+                            v-for="component in assessment.price_report
+                                .components"
+                            :key="component.exact_once_key"
+                            class="grid gap-2 p-4 sm:grid-cols-[1fr_auto]"
+                        >
+                            <div>
+                                <p class="font-semibold">
+                                    {{ component.label }}
+                                </p>
+                                <p class="text-xs text-muted-foreground">
+                                    {{ component.source.type }} ·
+                                    {{ component.source.version }}
+                                </p>
+                                <div
+                                    v-if="
+                                        component.applied_modifier_keys.length
+                                    "
+                                    class="mt-2 text-xs"
+                                >
+                                    Scheduled
+                                    {{ money(component.scheduled_minor) }} →
+                                    resolved
+                                    {{ money(component.resolved_minor) }}
+                                </div>
+                            </div>
+                            <p class="font-semibold tabular-nums">
+                                {{ money(component.resolved_minor) }}
+                            </p>
+                        </article>
+                    </div>
+                    <aside
+                        class="grid content-start gap-3 rounded-xl border p-4 text-sm"
+                    >
+                        <div>
+                            <p class="text-xs text-muted-foreground uppercase">
+                                Input fingerprint
+                            </p>
+                            <p class="mt-1 font-mono text-xs break-all">
+                                {{
+                                    assessment.assessment_price_input_fingerprint
+                                }}
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-muted-foreground uppercase">
+                                Report fingerprint
+                            </p>
+                            <p class="mt-1 font-mono text-xs break-all">
+                                {{ assessment.price_report_fingerprint }}
+                            </p>
+                        </div>
+                        <div
+                            v-for="modifier in assessment.price_report
+                                .modifiers"
+                            :key="modifier.key"
+                            class="rounded-lg bg-muted/40 p-3"
+                        >
+                            <p class="font-semibold">
+                                Case Override ·
+                                {{ money(modifier.amount_minor) }}
+                            </p>
+                            <p class="mt-1">{{ modifier.reason }}</p>
+                            <p class="mt-1 text-xs text-muted-foreground">
+                                {{ modifier.authority }} · {{ modifier.office }}
+                            </p>
+                        </div>
+                    </aside>
+                </div>
+            </section>
 
             <section
                 v-if="assessmentReconciliation"

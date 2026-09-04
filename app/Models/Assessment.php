@@ -24,7 +24,12 @@ use Illuminate\Support\Collection;
  * @property Carbon|null $assessed_at
  * @property Carbon|null $superseded_at
  * @property int $total_amount_cents
+ * @property string $currency
  * @property array<string, mixed> $source_snapshot
+ * @property array<string, mixed>|null $assessment_price_input_snapshot
+ * @property string|null $assessment_price_input_fingerprint
+ * @property array<string, mixed>|null $price_report_snapshot
+ * @property string|null $price_report_fingerprint
  * @property string|null $legacy_source_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -33,7 +38,7 @@ use Illuminate\Support\Collection;
  * @property-read BusinessPermitEvaluationCounterCheck|null $treasuryCounterCheck
  * @property-read BusinessPermitEvaluationVersion|null $businessPermitEvaluationVersion
  */
-#[Fillable(['permit_application_id', 'business_permit_evaluation_version_id', 'business_permit_evaluation_fingerprint', 'assessed_by_id', 'sequence', 'status', 'assessed_at', 'superseded_at', 'total_amount_cents', 'source_snapshot', 'legacy_source_id'])]
+#[Fillable(['permit_application_id', 'business_permit_evaluation_version_id', 'business_permit_evaluation_fingerprint', 'assessed_by_id', 'sequence', 'status', 'assessed_at', 'superseded_at', 'total_amount_cents', 'currency', 'source_snapshot', 'assessment_price_input_snapshot', 'assessment_price_input_fingerprint', 'price_report_snapshot', 'price_report_fingerprint', 'legacy_source_id'])]
 class Assessment extends Model
 {
     /** @use HasFactory<AssessmentFactory> */
@@ -42,6 +47,7 @@ class Assessment extends Model
     protected $attributes = [
         'status' => 'draft',
         'total_amount_cents' => 0,
+        'currency' => 'PHP',
     ];
 
     /** @return BelongsTo<PermitApplication, $this> */
@@ -96,6 +102,8 @@ class Assessment extends Model
             'assessed_at' => 'datetime',
             'superseded_at' => 'datetime',
             'source_snapshot' => 'array',
+            'assessment_price_input_snapshot' => 'array',
+            'price_report_snapshot' => 'array',
         ];
     }
 }

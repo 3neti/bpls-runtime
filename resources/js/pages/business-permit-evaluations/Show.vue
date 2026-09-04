@@ -526,15 +526,21 @@ function submitResponsibility(
     }
 
     runOnce(`item-${item.id}`, () => {
+        const match = amountText.match(/^(\d+)(?:\.(\d{1,2}))?$/);
         const amountCents =
-            amountText === '' ? null : Math.round(Number(amountText) * 100);
+            amountText === '' || !match
+                ? null
+                : Number(match[1]) * 100 +
+                  Number((match[2] ?? '').padEnd(2, '0'));
         const form = useForm({
             expected_version_sequence: props.evaluation!.version.sequence,
             expected_fingerprint: props.evaluation!.version.fingerprint,
             idempotency_key: crypto.randomUUID(),
             applicability: draft.applicability,
+            determination_type: draft.determinationType,
             amount_cents: amountCents,
             reason: draft.reason || null,
+            authority: draft.authority || null,
             inspection_mode: draft.inspectionMode || null,
             inspection_completed: draft.inspectionCompleted,
             findings: draft.findings || null,

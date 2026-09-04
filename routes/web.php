@@ -31,6 +31,7 @@ use App\Http\Controllers\Staff\CmciLdcsReportController;
 use App\Http\Controllers\Staff\CollectiblesReportController;
 use App\Http\Controllers\Staff\CollectionReceiptController;
 use App\Http\Controllers\Staff\DailyCollectionReportController;
+use App\Http\Controllers\Staff\FeeMatrixController;
 use App\Http\Controllers\Staff\FeeRuleController;
 use App\Http\Controllers\Staff\MunicipalityConfigurationController;
 use App\Http\Controllers\Staff\MunicipalServiceCatalogController;
@@ -191,8 +192,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.documents.download');
         Route::get('fee-rules', [FeeRuleController::class, 'index'])
             ->name('fee-rules.index');
+        Route::get('fee-matrix', FeeMatrixController::class)
+            ->name('fee-matrix.index');
         Route::get('fee-rules/{feeRule}', [FeeRuleController::class, 'show'])
             ->name('fee-rules.show');
+        Route::post('fee-rules/{feeRule}/revisions', [FeeRuleController::class, 'proposeRevision'])
+            ->name('fee-rules.revisions.store');
         Route::get('users', [UserDirectoryController::class, 'index'])
             ->name('users.index');
         Route::get('roles', [RolePermissionController::class, 'index'])

@@ -107,7 +107,9 @@ class BusinessPermitEvaluationController extends Controller
             'idempotency_key' => ['required', 'string', 'max:120'],
             'applicability' => ['required', Rule::enum(BusinessPermitEvaluationApplicability::class)],
             'amount_cents' => ['nullable', 'integer', 'min:0'],
+            'determination_type' => ['nullable', Rule::in(['confirm', 'override', 'not_applicable', 'office_determination'])],
             'reason' => ['nullable', 'string', 'max:2000'],
+            'authority' => ['nullable', 'string', 'max:2000', 'required_if:determination_type,override'],
             'inspection_mode' => ['nullable', Rule::in(['physical', 'virtual', 'document_review'])],
             'inspection_completed' => ['required', 'boolean'],
             'findings' => ['nullable', 'string', 'max:4000'],
@@ -140,6 +142,7 @@ class BusinessPermitEvaluationController extends Controller
             $data['expected_version_sequence'],
             $data['expected_fingerprint'],
             $data['idempotency_key'],
+            $data['authority'] ?? null,
         ));
     }
 

@@ -319,17 +319,17 @@ function decodePaginationLabel(value: string): string {
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbs">
-        <Head title="Fee and Rule Catalog" />
+        <Head title="Municipal Fees" />
 
         <main class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
             <section class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold text-foreground">
-                        Fee and Rule Catalog
+                        Municipal Fees
                     </h1>
                     <p class="text-sm text-muted-foreground">
-                        Review the fees and calculation rules currently recorded
-                        for business-permit assessment.
+                        Govern application-wide and Line-of-Business fees,
+                        effective versions, municipal authority, and history.
                     </p>
                 </div>
             </section>

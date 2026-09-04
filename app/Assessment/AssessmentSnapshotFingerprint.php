@@ -43,7 +43,12 @@ class AssessmentSnapshotFingerprint
             'assessed_at' => $assessment->assessed_at?->toIso8601String(),
             'superseded_at' => $assessment->superseded_at?->toIso8601String(),
             'total_amount_cents' => $this->integer($assessment->total_amount_cents),
+            'currency' => $assessment->currency,
             'source_snapshot' => $assessment->source_snapshot,
+            'assessment_price_input_snapshot' => $assessment->assessment_price_input_snapshot,
+            'assessment_price_input_fingerprint' => $assessment->assessment_price_input_fingerprint,
+            'price_report_snapshot' => $assessment->price_report_snapshot,
+            'price_report_fingerprint' => $assessment->price_report_fingerprint,
             'lines' => $assessment->lines
                 ->sortBy('id')
                 ->values()
