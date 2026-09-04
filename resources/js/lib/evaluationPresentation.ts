@@ -48,6 +48,17 @@ export type ResponsibilityDraft = {
     inspectionMode: '' | 'physical' | 'virtual' | 'document_review';
     inspectionCompleted: boolean;
     findings: string;
+    proForma: ProFormaDraft | null;
+};
+
+export type ProFormaDraft = {
+    unitAmountMinor: number;
+    quantity: number;
+    serviceLabel: string;
+    basis: string | null;
+    scheduleReference: string | null;
+    inputFingerprint: string;
+    reportFingerprint: string;
 };
 
 export function shouldStartChargeFromFeeSchedule(

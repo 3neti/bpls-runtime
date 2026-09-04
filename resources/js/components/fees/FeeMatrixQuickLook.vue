@@ -74,6 +74,7 @@ type Matrix = {
 };
 
 type FeeMatrixContext = {
+    evaluationItemId?: number;
     office?: string;
     lineOfBusinessId?: number;
     feeRuleId?: number | null;
@@ -107,6 +108,7 @@ const query = ref('');
 const view = ref<'schedule' | 'source'>('schedule');
 const category = ref('all');
 const contextOffice = ref<string | null>(null);
+const contextEvaluationItemId = ref<number | null>(null);
 const contextLineOfBusinessId = ref<number | null>(null);
 const contextFeeRuleId = ref<number | null>(null);
 const contextChargeCode = ref<string | null>(null);
@@ -335,6 +337,7 @@ async function load(): Promise<void> {
 }
 
 function clearContext(): void {
+    contextEvaluationItemId.value = null;
     contextOffice.value = null;
     contextLineOfBusinessId.value = null;
     contextFeeRuleId.value = null;
@@ -349,6 +352,7 @@ function clearContext(): void {
 function openFromContext(event: Event): void {
     const detail = (event as CustomEvent).detail as
         FeeMatrixContext | undefined;
+    contextEvaluationItemId.value = detail?.evaluationItemId ?? null;
     contextOffice.value = detail?.office ?? null;
     contextLineOfBusinessId.value = detail?.lineOfBusinessId ?? null;
     contextFeeRuleId.value = detail?.feeRuleId ?? null;
@@ -359,6 +363,25 @@ function openFromContext(event: Event): void {
     category.value = 'all';
     view.value = 'schedule';
     open.value = true;
+}
+
+function selectScheduleRow(row: ScheduleRow): void {
+    if (contextEvaluationItemId.value === null || row.amountMinor === null) {
+        return;
+    }
+
+    window.dispatchEvent(
+        new CustomEvent('fee-matrix-row-selected', {
+            detail: {
+                evaluationItemId: contextEvaluationItemId.value,
+                serviceLabel: row.service,
+                basis: row.basis,
+                scheduleReference: row.id,
+                unitAmountMinor: row.amountMinor,
+            },
+        }),
+    );
+    open.value = false;
 }
 
 watch(open, (isOpen) => {
@@ -497,6 +520,16 @@ onBeforeUnmount(() =>
                                         </p>
                                     </div>
                                     <Button
+                                        v-if="
+                                            contextEvaluationItemId !== null &&
+                                            row.amountMinor !== null
+                                        "
+                                        size="sm"
+                                        @click="selectScheduleRow(row)"
+                                    >
+                                        Select
+                                    </Button>
+                                    <Button
                                         v-if="canViewFeeRules"
                                         variant="outline"
                                         size="sm"
@@ -544,7 +577,10 @@ onBeforeUnmount(() =>
                                             Status
                                         </th>
                                         <th
-                                            v-if="canViewFeeRules"
+                                            v-if="
+                                                canViewFeeRules ||
+                                                contextEvaluationItemId !== null
+                                            "
                                             class="px-3 py-2 text-right font-medium"
                                         >
                                             Fee record
@@ -576,10 +612,25 @@ onBeforeUnmount(() =>
                                             {{ statusLabel(row.status) }}
                                         </td>
                                         <td
-                                            v-if="canViewFeeRules"
+                                            v-if="
+                                                canViewFeeRules ||
+                                                contextEvaluationItemId !== null
+                                            "
                                             class="px-3 py-2 text-right align-top"
                                         >
                                             <Button
+                                                v-if="
+                                                    contextEvaluationItemId !==
+                                                        null &&
+                                                    row.amountMinor !== null
+                                                "
+                                                size="sm"
+                                                @click="selectScheduleRow(row)"
+                                            >
+                                                Select
+                                            </Button>
+                                            <Button
+                                                v-if="canViewFeeRules"
                                                 variant="ghost"
                                                 size="sm"
                                                 as-child
@@ -661,3 +712,4 @@ onBeforeUnmount(() =>
         </DialogContent>
     </Dialog>
 </template>
+contextEvaluationItemId.value = detail?.evaluationItemId ?? null;

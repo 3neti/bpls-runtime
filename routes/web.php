@@ -175,6 +175,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.evaluation.refresh');
         Route::post('permit-applications/{permitApplication}/evaluation/items/{item}/confirm', [BusinessPermitEvaluationController::class, 'confirmResponsibility'])
             ->name('permit-applications.evaluation.items.confirm');
+        Route::get('permit-applications/{permitApplication}/evaluation/items/{item}/price-preview', [BusinessPermitEvaluationController::class, 'pricePreview'])
+            ->name('permit-applications.evaluation.items.price-preview');
         Route::post('permit-applications/{permitApplication}/evaluation/lines-of-business', [BusinessPermitEvaluationController::class, 'correctLinesOfBusiness'])
             ->name('permit-applications.evaluation.lines-of-business.correct');
         Route::post('permit-applications/{permitApplication}/evaluation/counter-check', [BusinessPermitEvaluationController::class, 'counterCheck'])

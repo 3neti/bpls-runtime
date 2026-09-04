@@ -325,7 +325,10 @@ test('source backed registry specimen advances through canonical actions to an a
             ->where('handoff.summary.assessment_created', false)
             ->where('handoff.summary.payment_order_count', 0)
             ->has('handoff.offices', 4)
-            ->where('handoff.offices.0.status', 'Awaiting determination')
+            ->where('handoff.offices.0.status', 'Not started')
+            ->where('handoff.offices.0.is_next', true)
+            ->where('handoff.offices.0.responsibility_count', 2)
+            ->where('handoff.offices.0.action_url', route('stakeholder-preview.lifecycle-laboratory.cleanrooms.enter-actor', [$run, 'assessor'], false))
             ->where('handoff.audit.production_liability', false));
 
     $assessor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.assessor.user_id'));

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Staff;
 
 use App\Actions\ApplyDueBploRoutingSuggestions;
 use App\Actions\ArmBploRoutingSentinel;
+use App\Actions\BuildBusinessPermitEvaluationPricePreview;
 use App\Actions\CompleteBusinessPermitEvaluationResponsibility;
 use App\Actions\CorrectEvaluationLinesOfBusiness;
 use App\Actions\DescribeBusinessPermitEvaluation;
@@ -20,6 +21,7 @@ use App\Models\BusinessPermitEvaluation;
 use App\Models\BusinessPermitEvaluationItem;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -103,6 +105,7 @@ class BusinessPermitEvaluationController extends Controller
         PermitApplication $permitApplication,
         BusinessPermitEvaluationItem $item,
         CompleteBusinessPermitEvaluationResponsibility $complete,
+        BuildBusinessPermitEvaluationPricePreview $buildPricePreview,
     ): RedirectResponse {
         Gate::authorize(UserPermission::ContributeBusinessPermitEvaluations->value);
         $evaluation = $this->evaluation($permitApplication);
@@ -119,6 +122,14 @@ class BusinessPermitEvaluationController extends Controller
             'inspection_mode' => ['nullable', Rule::in(['physical', 'virtual', 'document_review'])],
             'inspection_completed' => ['required', 'boolean'],
             'findings' => ['nullable', 'string', 'max:4000'],
+            'pro_forma' => ['nullable', 'array'],
+            'pro_forma.unit_amount_minor' => ['required_with:pro_forma', 'integer', 'min:0', 'max:100000000'],
+            'pro_forma.quantity' => ['required_with:pro_forma', 'integer', 'min:1', 'max:100'],
+            'pro_forma.service_label' => ['nullable', 'string', 'max:160'],
+            'pro_forma.basis' => ['nullable', 'string', 'max:500'],
+            'pro_forma.schedule_reference' => ['nullable', 'string', 'max:160'],
+            'pro_forma.input_fingerprint' => ['required_with:pro_forma', 'string', 'size:64'],
+            'pro_forma.report_fingerprint' => ['required_with:pro_forma', 'string', 'size:64'],
         ]);
         $latestSource = $item->revisions()->latest('id')->value('source_classification');
         $source = BusinessPermitEvaluationSource::tryFrom((string) data_get($item->metadata, 'correction_source_classification'))
@@ -137,6 +148,28 @@ class BusinessPermitEvaluationController extends Controller
         if (array_key_exists('amount_cents', $data) && $data['amount_cents'] !== null) {
             $value['amount_cents'] = $data['amount_cents'];
         }
+        if (is_array($data['pro_forma'] ?? null)) {
+            try {
+                $preview = $buildPricePreview->handle(
+                    $permitApplication,
+                    $item,
+                    auth()->user(),
+                    $data['pro_forma']['unit_amount_minor'],
+                    $data['pro_forma']['quantity'],
+                    $data['pro_forma']['service_label'] ?? null,
+                    $data['pro_forma']['basis'] ?? null,
+                    $data['pro_forma']['schedule_reference'] ?? null,
+                );
+            } catch (LogicException $exception) {
+                return back()->withErrors(['evaluation' => $exception->getMessage()]);
+            }
+            if ($preview['selection']['line_total_minor'] !== ($data['amount_cents'] ?? null)
+                || $preview['input_fingerprint'] !== $data['pro_forma']['input_fingerprint']
+                || $preview['report_fingerprint'] !== $data['pro_forma']['report_fingerprint']) {
+                return back()->withErrors(['evaluation' => 'The pro forma calculation changed. Recalculate it before recording the determination.']);
+            }
+            $value['pro_forma'] = $preview;
+        }
 
         return $this->attempt(fn () => $complete->handle(
             $item,
@@ -150,6 +183,39 @@ class BusinessPermitEvaluationController extends Controller
             $data['idempotency_key'],
             $data['authority'] ?? null,
         ));
+    }
+
+    public function pricePreview(
+        Request $request,
+        PermitApplication $permitApplication,
+        BusinessPermitEvaluationItem $item,
+        BuildBusinessPermitEvaluationPricePreview $build,
+    ): JsonResponse {
+        Gate::authorize(UserPermission::ContributeBusinessPermitEvaluations->value);
+        $evaluation = $this->evaluation($permitApplication);
+        abort_unless($item->business_permit_evaluation_id === $evaluation->id, 404);
+        $data = $request->validate([
+            'unit_amount_minor' => ['required', 'integer', 'min:0', 'max:100000000'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:100'],
+            'service_label' => ['nullable', 'string', 'max:160'],
+            'basis' => ['nullable', 'string', 'max:500'],
+            'schedule_reference' => ['nullable', 'string', 'max:160'],
+        ]);
+
+        try {
+            return response()->json($build->handle(
+                $permitApplication,
+                $item,
+                auth()->user(),
+                $data['unit_amount_minor'],
+                $data['quantity'],
+                $data['service_label'] ?? null,
+                $data['basis'] ?? null,
+                $data['schedule_reference'] ?? null,
+            ));
+        } catch (LogicException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
     }
 
     public function correctLinesOfBusiness(

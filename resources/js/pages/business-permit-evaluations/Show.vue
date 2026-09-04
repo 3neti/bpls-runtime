@@ -386,6 +386,55 @@ const myOpenWork = computed(() =>
     ),
 );
 
+const myWork = computed(() =>
+    (props.evaluation?.items ?? []).filter((item) => item.is_mine),
+);
+
+const officeWorkspace = computed(
+    () =>
+        !isCitizenLens.value &&
+        myWork.value.length > 0 &&
+        props.can.contribute &&
+        !props.can.prepare_assessment &&
+        !props.can.counter_check &&
+        !props.can.determine_routing,
+);
+
+const myFinancialComponents = computed(() => {
+    if (!workingPaper.value) {
+        return [];
+    }
+
+    return [
+        ...workingPaper.value.lineSections.flatMap(
+            (section) => section.charges,
+        ),
+        ...(workingPaper.value.applicationSection?.charges ?? []),
+    ].filter((component) => component.isMine);
+});
+
+const myOffice = computed(() =>
+    officeLabel(myWork.value[0]?.responsible_party),
+);
+
+const myRoutingWork = computed(() => {
+    const officeCode = myWork.value[0]?.responsible_party;
+
+    return (props.bploRouting?.works ?? []).filter(
+        (work) => work.office_code === officeCode,
+    );
+});
+
+const workspaceStatusLabel = computed(() => {
+    if (!officeWorkspace.value) {
+        return props.evaluation?.status_label ?? 'Awaiting Evaluation';
+    }
+
+    return myOpenWork.value.length > 0
+        ? `${myOffice.value} review in progress`
+        : `${myOffice.value} review complete`;
+});
+
 const nextStepTitle = computed(() => {
     if (props.evaluation === null) {
         return props.can.initialize
@@ -655,6 +704,17 @@ function submitResponsibility(
             inspection_mode: draft.inspectionMode || null,
             inspection_completed: draft.inspectionCompleted,
             findings: draft.findings || null,
+            pro_forma: draft.proForma
+                ? {
+                      unit_amount_minor: draft.proForma.unitAmountMinor,
+                      quantity: draft.proForma.quantity,
+                      service_label: draft.proForma.serviceLabel,
+                      basis: draft.proForma.basis,
+                      schedule_reference: draft.proForma.scheduleReference,
+                      input_fingerprint: draft.proForma.inputFingerprint,
+                      report_fingerprint: draft.proForma.reportFingerprint,
+                  }
+                : null,
         });
         form.post(confirmResponsibility([props.application.id, item.id]).url, {
             preserveScroll: true,
@@ -760,7 +820,7 @@ function submitPrepareAssessment(): void {
                     </p>
                 </div>
                 <Badge variant="outline" class="self-start px-3 py-1.5 text-sm">
-                    {{ evaluation?.status_label ?? 'Awaiting Evaluation' }}
+                    {{ workspaceStatusLabel }}
                 </Badge>
             </header>
 
@@ -850,6 +910,7 @@ function submitPrepareAssessment(): void {
             </section>
 
             <section
+                v-if="!officeWorkspace"
                 class="overflow-hidden rounded-2xl border-2 border-[#1f416b]/35 bg-card shadow-xs"
                 data-testid="bplo-routing-boundary"
                 aria-labelledby="bplo-routing-title"
@@ -1200,6 +1261,52 @@ function submitPrepareAssessment(): void {
             </section>
 
             <section
+                v-if="officeWorkspace && evaluation"
+                class="rounded-2xl border bg-card p-5 shadow-xs sm:p-6"
+                aria-labelledby="office-assignment-heading"
+                data-testid="office-evaluation-workspace"
+            >
+                <div
+                    class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+                >
+                    <div>
+                        <p
+                            class="text-xs font-semibold tracking-wide text-primary uppercase"
+                        >
+                            Your assigned office review
+                        </p>
+                        <h2
+                            id="office-assignment-heading"
+                            class="mt-1 text-xl font-semibold"
+                        >
+                            {{ myOffice }} determination
+                        </h2>
+                    </div>
+                    <Badge variant="outline" class="w-fit">
+                        {{ myOpenWork.length }} open of
+                        {{ myFinancialComponents.length }} assigned
+                    </Badge>
+                </div>
+                <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                    <article
+                        v-for="work in myRoutingWork"
+                        :key="work.id"
+                        class="rounded-xl bg-muted/40 p-4"
+                    >
+                        <p class="font-semibold">
+                            {{
+                                work.line_of_business_name ??
+                                'Whole application'
+                            }}
+                        </p>
+                        <p class="mt-1 text-sm leading-6 text-muted-foreground">
+                            {{ work.required_work }}
+                        </p>
+                    </article>
+                </div>
+            </section>
+
+            <section
                 v-if="!evaluation"
                 class="rounded-2xl border bg-card p-6 shadow-xs"
                 aria-labelledby="evaluation-empty-title"
@@ -1244,6 +1351,7 @@ function submitPrepareAssessment(): void {
             <template v-else-if="workingPaper">
                 <!-- What it currently costs, and how that was assembled -->
                 <EvaluationTotalPanel
+                    v-if="!officeWorkspace"
                     :working-paper="workingPaper"
                     :status-label="evaluation.status_label"
                     :financial-lock="evaluation.financial_lock"
@@ -1251,7 +1359,9 @@ function submitPrepareAssessment(): void {
 
                 <!-- 3. The viewer's own legitimate work -->
                 <section
-                    v-if="canRecordWork && myOpenWork.length"
+                    v-if="
+                        !officeWorkspace && canRecordWork && myOpenWork.length
+                    "
                     class="rounded-2xl border-2 border-primary/40 bg-primary/5 p-4 sm:p-5"
                     aria-labelledby="your-action-heading"
                 >
@@ -1304,8 +1414,61 @@ function submitPrepareAssessment(): void {
                     </div>
                 </section>
 
+                <section
+                    v-if="officeWorkspace"
+                    class="space-y-4"
+                    aria-labelledby="office-fees-heading"
+                >
+                    <div>
+                        <p
+                            class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                        >
+                            Office fees
+                        </p>
+                        <h2
+                            id="office-fees-heading"
+                            class="mt-1 text-lg font-semibold"
+                        >
+                            Complete your assigned determinations
+                        </h2>
+                    </div>
+                    <div class="grid gap-4">
+                        <EvaluationComponentRow
+                            v-for="component in myFinancialComponents"
+                            :key="component.key"
+                            :application-id="application.id"
+                            :application-type="application.type"
+                            :application-year="application.year"
+                            :component="component"
+                            :item="
+                                component.itemId === null
+                                    ? null
+                                    : (itemsById.get(component.itemId) ?? null)
+                            "
+                            :editable="
+                                canRecordWork &&
+                                component.isMine &&
+                                component.itemId !== null &&
+                                itemsById.get(component.itemId)?.resolution !==
+                                    'resolved'
+                            "
+                            :submitting="
+                                pendingAction === `item-${component.itemId}`
+                            "
+                            :can-view-fee-rules="canViewFeeRules"
+                            :can-view-fee-matrix="canViewFeeMatrix"
+                            :simplified="false"
+                            @submit="submitResponsibility"
+                        />
+                    </div>
+                </section>
+
                 <!-- 4. The financial build-up -->
-                <section class="space-y-4" aria-labelledby="build-up-heading">
+                <section
+                    v-if="!officeWorkspace"
+                    class="space-y-4"
+                    aria-labelledby="build-up-heading"
+                >
                     <div>
                         <p
                             class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
@@ -1375,6 +1538,9 @@ function submitPrepareAssessment(): void {
                                     v-for="component in section.charges"
                                     :key="component.key"
                                     :component="component"
+                                    :application-id="application.id"
+                                    :application-type="application.type"
+                                    :application-year="application.year"
                                     :item="
                                         component.itemId === null
                                             ? null
@@ -1383,7 +1549,11 @@ function submitPrepareAssessment(): void {
                                               ) ?? null)
                                     "
                                     :editable="
-                                        canRecordWork && component.isMine
+                                        canRecordWork &&
+                                        component.isMine &&
+                                        component.itemId !== null &&
+                                        itemsById.get(component.itemId)
+                                            ?.resolution !== 'resolved'
                                     "
                                     :submitting="
                                         pendingAction ===
@@ -1442,6 +1612,9 @@ function submitPrepareAssessment(): void {
                                         .applicationSection.charges"
                                     :key="component.key"
                                     :component="component"
+                                    :application-id="application.id"
+                                    :application-type="application.type"
+                                    :application-year="application.year"
                                     :item="
                                         component.itemId === null
                                             ? null
@@ -1450,7 +1623,11 @@ function submitPrepareAssessment(): void {
                                               ) ?? null)
                                     "
                                     :editable="
-                                        canRecordWork && component.isMine
+                                        canRecordWork &&
+                                        component.isMine &&
+                                        component.itemId !== null &&
+                                        itemsById.get(component.itemId)
+                                            ?.resolution !== 'resolved'
                                     "
                                     :submitting="
                                         pendingAction ===
@@ -1474,6 +1651,7 @@ function submitPrepareAssessment(): void {
 
                 <!-- 5. What is still open -->
                 <section
+                    v-if="!officeWorkspace"
                     :class="['rounded-xl border p-4', statusTone]"
                     aria-labelledby="open-work-heading"
                 >
@@ -1534,7 +1712,9 @@ function submitPrepareAssessment(): void {
                 <!-- 6. Canonical departmental responsibility evidence -->
                 <section
                     v-if="
-                        !isCitizenLens && departmentResponsibilities.length > 0
+                        !officeWorkspace &&
+                        !isCitizenLens &&
+                        departmentResponsibilities.length > 0
                     "
                     class="rounded-2xl border bg-card p-5 shadow-xs sm:p-6"
                     aria-labelledby="department-responsibilities-heading"
@@ -1669,6 +1849,7 @@ function submitPrepareAssessment(): void {
 
                 <!-- 7. Declaration versus municipal determination -->
                 <section
+                    v-if="!officeWorkspace"
                     class="rounded-2xl border bg-card p-5 shadow-xs sm:p-6"
                     aria-labelledby="declaration-heading"
                 >
@@ -1884,7 +2065,7 @@ function submitPrepareAssessment(): void {
 
                 <!-- 8. Non-monetary municipal work -->
                 <section
-                    v-if="responsibilityItems.length"
+                    v-if="!officeWorkspace && responsibilityItems.length"
                     class="space-y-4"
                     aria-labelledby="responsibilities-heading"
                 >
@@ -1910,7 +2091,11 @@ function submitPrepareAssessment(): void {
                             v-for="item in responsibilityItems"
                             :key="item.id"
                             :item="item"
-                            :editable="canRecordWork && item.is_mine"
+                            :editable="
+                                canRecordWork &&
+                                item.is_mine &&
+                                item.resolution !== 'resolved'
+                            "
                             :submitting="pendingAction === `item-${item.id}`"
                             @submit="submitResponsibility"
                         />
@@ -1918,7 +2103,10 @@ function submitPrepareAssessment(): void {
                 </section>
 
                 <!-- 9. Role context: Treasury, Assessment Officer, Municipal Treasurer -->
-                <div class="grid min-w-0 gap-4 xl:grid-cols-2">
+                <div
+                    v-if="!officeWorkspace"
+                    class="grid min-w-0 gap-4 xl:grid-cols-2"
+                >
                     <section
                         v-if="
                             can.counter_check &&

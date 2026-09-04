@@ -96,6 +96,7 @@ class IssuePaperlessPaymentOrder
                     'determination_type' => data_get($revision->value, 'determination.type', 'office_determination'),
                     'reason' => $revision->reason,
                     'authority' => data_get($revision->value, 'determination.authority'),
+                    'pro_forma' => data_get($revision->value, 'pro_forma'),
                     'determined_by_id' => $revision->actor_id,
                     'responsible_office' => $item->responsible_party,
                     'determined_at' => $revision->occurred_at->toIso8601String(),
@@ -121,6 +122,7 @@ class IssuePaperlessPaymentOrder
                     'determination_type' => data_get($revision->value, 'determination.type', 'office_determination'),
                     'reason' => $revision->reason,
                     'authority' => data_get($revision->value, 'determination.authority'),
+                    'pro_forma' => data_get($revision->value, 'pro_forma'),
                 ],
             ]);
 

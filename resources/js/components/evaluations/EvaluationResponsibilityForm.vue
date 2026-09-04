@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { ClipboardCheck, TableProperties } from '@lucide/vue';
-import { computed, reactive, watch } from 'vue';
+import {
+    computed,
+    onBeforeUnmount,
+    onMounted,
+    reactive,
+    ref,
+    watch,
+} from 'vue';
+import EvaluationPriceCalculator from '@/components/evaluations/EvaluationPriceCalculator.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +22,9 @@ import type { ResponsibilityDraft } from '@/lib/evaluationPresentation';
 import type { EvaluationItem } from '@/types';
 
 const props = defineProps<{
+    applicationId?: number;
+    applicationType?: string;
+    applicationYear?: number;
     item: EvaluationItem;
     submitting: boolean;
     canViewFeeMatrix?: boolean;
@@ -25,6 +36,15 @@ const props = defineProps<{
 const emit = defineEmits<{
     submit: [item: EvaluationItem, draft: ResponsibilityDraft];
 }>();
+
+type ScheduleSelection = {
+    serviceLabel: string;
+    basis: string | null;
+    scheduleReference: string | null;
+    unitAmountMinor: number;
+};
+
+const selectedSchedule = ref<ScheduleSelection | null>(null);
 
 function pesosFromValue(value: unknown): string | null {
     const amountCents = amountFromValue(value);
@@ -94,6 +114,7 @@ const draft = reactive<ResponsibilityDraft>({
     inspectionMode: initialInspectionMode(),
     inspectionCompleted: Boolean(inspectionValue('completed')),
     findings: String(inspectionValue('findings') ?? ''),
+    proForma: null,
 });
 
 const proposalPesos = computed(() => pesosFromValue(props.item.default_value));
@@ -146,6 +167,23 @@ watch(
         ) {
             draft.amount = proposalPesos.value;
         }
+
+        if (type === 'not_applicable') {
+            draft.proForma = null;
+        }
+    },
+);
+
+watch(
+    () => draft.amount,
+    () => {
+        if (
+            draft.proForma &&
+            determinedMinor.value !==
+                draft.proForma.unitAmountMinor * draft.proForma.quantity
+        ) {
+            draft.proForma = null;
+        }
     },
 );
 
@@ -171,6 +209,7 @@ function openFeeMatrix(): void {
     window.dispatchEvent(
         new CustomEvent('open-fee-matrix', {
             detail: {
+                evaluationItemId: props.item.id,
                 office: props.item.responsible_party,
                 lineOfBusinessId: props.item.line_of_business_id,
                 feeRuleId: props.feeRuleId,
@@ -183,6 +222,53 @@ function openFeeMatrix(): void {
         }),
     );
 }
+
+function selectSchedule(event: Event): void {
+    const detail = (event as CustomEvent).detail as
+        (ScheduleSelection & { evaluationItemId: number }) | undefined;
+
+    if (!detail || detail.evaluationItemId !== props.item.id) {
+        return;
+    }
+
+    selectedSchedule.value = {
+        serviceLabel: detail.serviceLabel,
+        basis: detail.basis,
+        scheduleReference: detail.scheduleReference,
+        unitAmountMinor: detail.unitAmountMinor,
+    };
+    draft.amount = (detail.unitAmountMinor / 100).toFixed(2);
+    draft.proForma = null;
+    draft.applicability = 'applicable';
+    draft.determinationType = referenceOnlyProposal.value
+        ? 'office_determination'
+        : proposalPesos.value !== null &&
+            Number(draft.amount) === Number(proposalPesos.value)
+          ? 'confirm'
+          : 'override';
+}
+
+function applyProForma(
+    amount: string,
+    proForma: NonNullable<ResponsibilityDraft['proForma']>,
+): void {
+    draft.amount = amount;
+    draft.proForma = proForma;
+    draft.applicability = 'applicable';
+    draft.determinationType = referenceOnlyProposal.value
+        ? 'office_determination'
+        : proposalPesos.value !== null &&
+            Number(amount) === Number(proposalPesos.value)
+          ? 'confirm'
+          : 'override';
+}
+
+onMounted(() =>
+    window.addEventListener('fee-matrix-row-selected', selectSchedule),
+);
+onBeforeUnmount(() =>
+    window.removeEventListener('fee-matrix-row-selected', selectSchedule),
+);
 </script>
 
 <template>
@@ -193,19 +279,48 @@ function openFeeMatrix(): void {
                 determination
             </legend>
 
-            <div v-if="isCharge && canViewFeeMatrix" class="grid gap-1.5">
-                <Button
-                    type="button"
-                    variant="outline"
-                    class="w-full sm:w-fit"
-                    @click="openFeeMatrix"
-                >
-                    <TableProperties aria-hidden="true" />
-                    View Schedule of Fees
-                </Button>
+            <div
+                v-if="
+                    isCharge &&
+                    canViewFeeMatrix &&
+                    applicationId &&
+                    applicationType &&
+                    applicationYear
+                "
+                class="grid gap-1.5"
+            >
+                <div class="flex flex-col gap-2 sm:flex-row">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        class="w-full sm:w-fit"
+                        @click="openFeeMatrix"
+                    >
+                        <TableProperties aria-hidden="true" />
+                        Choose from Schedule of Fees
+                    </Button>
+                    <EvaluationPriceCalculator
+                        :application-id="applicationId"
+                        :application-type="applicationType"
+                        :application-year="applicationYear"
+                        :item="item"
+                        :amount="draft.amount"
+                        :selection="selectedSchedule"
+                        @apply="applyProForma"
+                    />
+                </div>
                 <p class="text-xs leading-5 text-muted-foreground">
-                    Reference only. Opening the matrix does not select or change
-                    this case determination.
+                    Select a service, preview the Price report, then apply it to
+                    this determination.
+                </p>
+                <p
+                    v-if="selectedSchedule"
+                    class="rounded-lg bg-muted/50 px-3 py-2 text-sm"
+                >
+                    Selected:
+                    <strong>{{ selectedSchedule.serviceLabel }}</strong> · ₱{{
+                        (selectedSchedule.unitAmountMinor / 100).toFixed(2)
+                    }}
                 </p>
             </div>
 

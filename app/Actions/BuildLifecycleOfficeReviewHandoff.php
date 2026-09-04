@@ -47,6 +47,49 @@ class BuildLifecycleOfficeReviewHandoff
             ->filter(fn (array $item): bool => data_get($item, 'metadata.lifecycle_cleanroom_responsibility') === true)
             ->values();
         $resolvedCount = $responsibilities->where('resolution', 'resolved')->count();
+        $offices = $routing->works
+            ->groupBy('office_code')
+            ->map(function (Collection $works, string $officeCode) use ($responsibilities, $run): array {
+                $workIds = $works->pluck('id');
+                $officeResponsibilities = $responsibilities
+                    ->filter(fn (array $item): bool => $workIds->contains(data_get($item, 'metadata.bplo_routing_work_id')))
+                    ->values();
+                $resolvedCount = $officeResponsibilities->where('resolution', 'resolved')->count();
+                $firstWork = $works->first();
+
+                return [
+                    'code' => $officeCode,
+                    'label' => $firstWork->office_label,
+                    'activity' => $works->pluck('lineOfBusiness.name')->filter()->unique()->join(', '),
+                    'reason' => $works->pluck('situational_reason')->filter()->unique()->join(' '),
+                    'required_work' => $works->pluck('required_work')->filter()->unique()->join(' '),
+                    'status' => match (true) {
+                        $officeResponsibilities->isNotEmpty() && $resolvedCount === $officeResponsibilities->count() => 'Complete',
+                        $resolvedCount > 0 => 'In progress',
+                        default => 'Not started',
+                    },
+                    'responsibility_count' => $officeResponsibilities->count(),
+                    'resolved_count' => $resolvedCount,
+                    'action_url' => route('stakeholder-preview.lifecycle-laboratory.cleanrooms.enter-actor', [$run, $officeCode], false),
+                    'responsibilities' => $officeResponsibilities->map(fn (array $item): array => [
+                        'label' => data_get($item, 'metadata.label', str($item['key'])->headline()->toString()),
+                        'status' => $item['resolution'] === 'resolved' ? 'Determined' : 'Awaiting determination',
+                    ])->all(),
+                ];
+            })
+            ->sortBy(fn (array $office): int => match ($office['code']) {
+                'assessor' => 0,
+                'engineering' => 1,
+                'health' => 2,
+                'menro' => 3,
+                default => 4,
+            })
+            ->values();
+        $nextOfficeCode = data_get($offices->first(fn (array $office): bool => $office['status'] !== 'Complete'), 'code');
+        $offices = $offices->map(fn (array $office): array => [
+            ...$office,
+            'is_next' => $office['code'] === $nextOfficeCode,
+        ]);
 
         return [
             'run' => [
@@ -75,29 +118,7 @@ class BuildLifecycleOfficeReviewHandoff
                 'assessment_created' => $application->assessments()->exists(),
                 'payment_order_count' => $application->paperlessPaymentOrders()->whereNull('superseded_at')->count(),
             ],
-            'offices' => $routing->works->map(function ($work) use ($responsibilities): array {
-                $officeResponsibilities = $responsibilities
-                    ->filter(fn (array $item): bool => data_get($item, 'metadata.bplo_routing_work_id') === $work->id)
-                    ->values();
-                $resolvedCount = $officeResponsibilities->where('resolution', 'resolved')->count();
-
-                return [
-                    'code' => $work->office_code,
-                    'label' => $work->office_label,
-                    'activity' => $work->lineOfBusiness?->name,
-                    'reason' => $work->situational_reason,
-                    'required_work' => $work->required_work,
-                    'status' => match (true) {
-                        $officeResponsibilities->isNotEmpty() && $resolvedCount === $officeResponsibilities->count() => 'Complete',
-                        $resolvedCount > 0 => 'In progress',
-                        default => 'Awaiting determination',
-                    },
-                    'responsibilities' => $officeResponsibilities->map(fn (array $item): array => [
-                        'label' => data_get($item, 'metadata.label', str($item['key'])->headline()->toString()),
-                        'status' => $item['resolution'] === 'resolved' ? 'Determined' : 'Awaiting determination',
-                    ])->all(),
-                ];
-            })->all(),
+            'offices' => $offices->all(),
             'routing' => [
                 'situational_context' => $routing->situational_context,
                 'determined_by' => $routing->determinedBy->name,

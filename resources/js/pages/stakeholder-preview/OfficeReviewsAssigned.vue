@@ -13,6 +13,7 @@ import {
     LockKeyhole,
     ShieldCheck,
 } from '@lucide/vue';
+import { computed } from 'vue';
 import { runNext as runCleanroomNextRoute } from '@/actions/App/Http/Controllers/LifecycleCleanroomController';
 import { index as laboratoryIndex } from '@/actions/App/Http/Controllers/LifecycleLaboratoryController';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -48,6 +49,10 @@ type Handoff = {
         reason: string;
         required_work: string;
         status: string;
+        responsibility_count: number;
+        resolved_count: number;
+        action_url: string;
+        is_next: boolean;
         responsibilities: { label: string; status: string }[];
     }[];
     routing: {
@@ -67,6 +72,9 @@ type Handoff = {
 };
 
 const props = defineProps<{ handoff: Handoff }>();
+const nextOffice = computed(() =>
+    props.handoff.offices.find((office) => office.is_next),
+);
 
 const money = (amountCents: number): string =>
     new Intl.NumberFormat('en-PH', {
@@ -189,6 +197,7 @@ function continueOfficeReviews(): void {
             </section>
 
             <section
+                v-if="handoff.summary.payment_order_count === 0"
                 class="flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100"
             >
                 <ShieldCheck class="mt-0.5 size-6 shrink-0" />
@@ -202,13 +211,31 @@ function continueOfficeReviews(): void {
                 </div>
             </section>
 
+            <section v-else class="flex gap-3 rounded-2xl border bg-card p-5">
+                <ClipboardList class="mt-0.5 size-6 shrink-0" />
+                <div>
+                    <h2 class="font-semibold">Office reviews in progress</h2>
+                    <p class="mt-1 text-sm text-muted-foreground">
+                        {{ handoff.summary.payment_order_count }} amount-bearing
+                        office record{{
+                            handoff.summary.payment_order_count === 1 ? '' : 's'
+                        }}
+                        issued so far. No Assessment exists yet.
+                    </p>
+                </div>
+            </section>
+
             <section class="space-y-4">
                 <div>
                     <h2 class="text-xl font-semibold">Who acts next</h2>
                     <p class="mt-1 text-sm text-muted-foreground">
-                        The Laboratory signs you in as the correct concerned
-                        office and opens its assigned work. The Municipal
-                        Assessor goes first in this specimen.
+                        <template v-if="nextOffice">
+                            Continue with {{ nextOffice.label }}. Each office
+                            opens only its own assigned work.
+                        </template>
+                        <template v-else>
+                            All office determinations are complete.
+                        </template>
                     </p>
                 </div>
 
@@ -217,6 +244,11 @@ function continueOfficeReviews(): void {
                         v-for="office in handoff.offices"
                         :key="`${office.code}-${office.activity}`"
                         class="rounded-2xl border bg-card p-5 shadow-xs"
+                        :class="
+                            office.is_next
+                                ? 'border-primary/60 ring-2 ring-primary/10'
+                                : ''
+                        "
                     >
                         <div class="flex items-start justify-between gap-4">
                             <div class="flex min-w-0 gap-3">
@@ -238,7 +270,12 @@ function continueOfficeReviews(): void {
                                 </div>
                             </div>
                             <span
-                                class="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+                                class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold"
+                                :class="
+                                    office.status === 'Complete'
+                                        ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
+                                        : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200'
+                                "
                             >
                                 {{ office.status }}
                             </span>
@@ -295,6 +332,28 @@ function continueOfficeReviews(): void {
                                 {{ office.reason }}
                             </p>
                         </details>
+
+                        <Link
+                            v-if="office.status !== 'Complete'"
+                            :href="office.action_url"
+                            method="post"
+                            as="button"
+                            class="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground"
+                        >
+                            {{
+                                office.status === 'In progress'
+                                    ? `Continue ${office.label} review`
+                                    : `Open ${office.label} review`
+                            }}
+                            <ArrowRight class="size-4" />
+                        </Link>
+                        <p
+                            v-else
+                            class="mt-4 flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300"
+                        >
+                            <CheckCircle2 class="size-4" /> Office review
+                            complete
+                        </p>
                     </article>
                 </div>
             </section>
@@ -472,18 +531,14 @@ function continueOfficeReviews(): void {
                     <div class="flex flex-col gap-2 sm:items-end">
                         <button
                             v-if="
-                                handoff.summary.resolved_count <
+                                handoff.summary.resolved_count ===
                                 handoff.summary.responsibility_count
                             "
                             type="button"
                             class="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground"
                             @click="continueOfficeReviews"
                         >
-                            {{
-                                handoff.summary.resolved_count === 0
-                                    ? 'Start Municipal Assessor review'
-                                    : 'Continue office reviews'
-                            }}
+                            Continue to Assessment review
                             <ArrowRight class="size-4" />
                         </button>
                         <Link

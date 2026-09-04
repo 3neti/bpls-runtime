@@ -19,6 +19,9 @@ import type {
 import type { EvaluationItem } from '@/types';
 
 defineProps<{
+    applicationId: number;
+    applicationType: string;
+    applicationYear: number;
     component: FinancialComponent;
     /** The owning item, when this component is an office responsibility. */
     item: EvaluationItem | null;
@@ -168,6 +171,9 @@ const emit = defineEmits<{
             class="mt-4 rounded-lg border-2 border-dashed border-primary/40 p-3 sm:p-4"
         >
             <EvaluationResponsibilityForm
+                :application-id="applicationId"
+                :application-type="applicationType"
+                :application-year="applicationYear"
                 :item="item"
                 :submitting="submitting"
                 :can-view-fee-matrix="canViewFeeMatrix"

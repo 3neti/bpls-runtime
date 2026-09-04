@@ -171,6 +171,98 @@ it('lets the assigned concerned office complete only its own provisional respons
             ->has('permitApplications.data', 0));
 });
 
+it('previews an office determination through Price and preserves the applied report', function () {
+    $fixture = httpEvaluationFixture();
+    $health = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+        UserPermission::ViewBusinessPermitEvaluations,
+        UserPermission::ContributeBusinessPermitEvaluations,
+    ]);
+    $applicationLine = $fixture['application']->lines()->sole();
+    $item = app(DefineBusinessPermitEvaluationItem::class)->handle(
+        $fixture['evaluation'],
+        'health.pro-forma.charge',
+        BusinessPermitEvaluationItemType::Charge,
+        'health',
+        true,
+        true,
+        BusinessPermitEvaluationApplicability::Undetermined,
+        null,
+        BusinessPermitEvaluationSource::ProvisionalUat,
+        $fixture['submitter'],
+        metadata: [
+            'label' => 'Health service specimen',
+            'authorized_actor_id' => $health->id,
+            'permit_application_line_id' => $applicationLine->id,
+            'line_of_business_id' => $fixture['lineOfBusiness']->id,
+            'charge_scope' => 'line_of_business',
+        ],
+    );
+
+    $preview = $this->actingAs($health)
+        ->getJson(route('staff.permit-applications.evaluation.items.price-preview', [
+            $fixture['application'],
+            $item,
+            'unit_amount_minor' => 12_345,
+            'quantity' => 2,
+            'service_label' => 'Health service specimen',
+            'basis' => 'Two inspected units',
+            'schedule_reference' => 'ordinance-row-7',
+        ]))
+        ->assertOk()
+        ->assertJsonPath('official', false)
+        ->assertJsonPath('currency', 'PHP')
+        ->assertJsonPath('selection.line_total_minor', 24_690)
+        ->assertJsonCount(2, 'price_report.components')
+        ->json();
+
+    expect($preview['input_fingerprint'])->toHaveLength(64)
+        ->and($preview['report_fingerprint'])->toHaveLength(64)
+        ->and($preview['price_report']['total'])->toBe(['currency' => 'PHP', 'minor' => 24_690]);
+
+    $version = $fixture['evaluation']->fresh()->currentVersion;
+    $proFormaPayload = [
+        'unit_amount_minor' => 12_345,
+        'quantity' => 2,
+        'service_label' => 'Health service specimen',
+        'basis' => 'Two inspected units',
+        'schedule_reference' => 'ordinance-row-7',
+        'input_fingerprint' => $preview['input_fingerprint'],
+        'report_fingerprint' => $preview['report_fingerprint'],
+    ];
+    $this->post(route('staff.permit-applications.evaluation.items.confirm', [$fixture['application'], $item]), [
+        'expected_version_sequence' => $version->sequence,
+        'expected_fingerprint' => $version->fingerprint,
+        'idempotency_key' => 'health-pro-forma-tampered',
+        'applicability' => 'applicable',
+        'amount_cents' => 24_691,
+        'reason' => 'Tampered total.',
+        'inspection_completed' => true,
+        'pro_forma' => $proFormaPayload,
+    ])->assertSessionHasErrors('evaluation');
+    expect($item->revisions()->count())->toBe(1);
+
+    $this->post(route('staff.permit-applications.evaluation.items.confirm', [$fixture['application'], $item]), [
+        'expected_version_sequence' => $version->sequence,
+        'expected_fingerprint' => $version->fingerprint,
+        'idempotency_key' => 'health-pro-forma-applied',
+        'applicability' => 'applicable',
+        'determination_type' => 'office_determination',
+        'amount_cents' => 24_690,
+        'reason' => 'Selected the matching ordinance service for two inspected units.',
+        'inspection_completed' => true,
+        'pro_forma' => $proFormaPayload,
+    ])->assertSessionHasNoErrors();
+
+    $recorded = $item->revisions()->get()->last();
+    expect($recorded)->not->toBeNull();
+    expect(data_get($recorded->value, 'amount_cents'))->toBe(24_690)
+        ->and(data_get($recorded->value, 'pro_forma.official'))->toBeFalse()
+        ->and(data_get($recorded->value, 'pro_forma.input_fingerprint'))->toBe($preview['input_fingerprint'])
+        ->and(data_get($recorded->value, 'pro_forma.price_report.total.minor'))->toBe(24_690);
+});
+
 it('uses the same Evaluator surface for the owning Citizen and rejects another Citizen', function () {
     $citizen = userWithPermissions([
         UserPermission::AccessCitizen,

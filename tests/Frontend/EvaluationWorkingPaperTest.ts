@@ -313,6 +313,43 @@ test('the Vue working paper renders backend sections and contains no amount redu
     assert.equal(page.includes('.reduce('), false);
 });
 
+test('concerned offices receive a focused workspace and a server-backed Price calculator', () => {
+    const page = readFileSync(
+        new URL(
+            '../../resources/js/pages/business-permit-evaluations/Show.vue',
+            import.meta.url,
+        ),
+        'utf8',
+    );
+    const calculator = readFileSync(
+        new URL(
+            '../../resources/js/components/evaluations/EvaluationPriceCalculator.vue',
+            import.meta.url,
+        ),
+        'utf8',
+    );
+    const feeMatrix = readFileSync(
+        new URL(
+            '../../resources/js/components/fees/FeeMatrixQuickLook.vue',
+            import.meta.url,
+        ),
+        'utf8',
+    );
+
+    assert.equal(page.includes('office-evaluation-workspace'), true);
+    assert.equal(page.includes('myFinancialComponents'), true);
+    assert.equal(page.includes("?.resolution !== 'resolved'"), true);
+    assert.equal(calculator.includes('pricePreview'), true);
+    assert.equal(calculator.includes('price_report.total.minor'), true);
+    assert.equal(calculator.includes('.reduce('), false);
+    assert.equal(
+        feeMatrix.includes(
+            'contextEvaluationItemId.value = detail?.evaluationItemId ?? null',
+        ),
+        true,
+    );
+});
+
 test('amounts render as municipal pesos and tones stay distinguishable', () => {
     assert.equal(money(43_500), '₱435.00');
     assert.equal(money(0), '₱0.00');
