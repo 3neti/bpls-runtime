@@ -14,7 +14,10 @@ import {
     ShieldCheck,
 } from '@lucide/vue';
 import { computed } from 'vue';
-import { runNext as runCleanroomNextRoute } from '@/actions/App/Http/Controllers/LifecycleCleanroomController';
+import {
+    confirmRoutineOfficeDefaults,
+    runNext as runCleanroomNextRoute,
+} from '@/actions/App/Http/Controllers/LifecycleCleanroomController';
 import { index as laboratoryIndex } from '@/actions/App/Http/Controllers/LifecycleLaboratoryController';
 import AppLayout from '@/layouts/AppLayout.vue';
 
@@ -41,6 +44,8 @@ type Handoff = {
         resolved_count: number;
         assessment_created: boolean;
         payment_order_count: number;
+        routine_default_count: number;
+        manual_review_count: number;
     };
     offices: {
         code: string;
@@ -92,6 +97,17 @@ const dateTime = (value: string | null): string =>
 
 function continueOfficeReviews(): void {
     router.post(runCleanroomNextRoute(props.handoff.run.id).url);
+}
+
+function completeRoutineConfirmations(): void {
+    router.post(
+        confirmRoutineOfficeDefaults([
+            props.handoff.run.id,
+            props.handoff.application.year,
+        ]).url,
+        {},
+        { preserveScroll: true },
+    );
 }
 </script>
 
@@ -223,6 +239,32 @@ function continueOfficeReviews(): void {
                         issued so far. No Assessment exists yet.
                     </p>
                 </div>
+            </section>
+
+            <section
+                v-if="handoff.summary.routine_default_count > 0"
+                class="flex flex-col gap-4 rounded-2xl border border-primary/30 bg-primary/5 p-5 sm:flex-row sm:items-center sm:justify-between"
+            >
+                <div>
+                    <h2 class="font-semibold">Faster cleanroom test</h2>
+                    <p class="mt-1 text-sm text-muted-foreground">
+                        {{ handoff.summary.routine_default_count }} routine
+                        defaults can be confirmed now.
+                        <template v-if="handoff.summary.manual_review_count">
+                            {{ handoff.summary.manual_review_count }} inspection
+                            or exceptional determinations remain with their
+                            offices.
+                        </template>
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    class="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground"
+                    @click="completeRoutineConfirmations"
+                >
+                    <CheckCircle2 class="size-4" />
+                    Complete routine office confirmations
+                </button>
             </section>
 
             <section class="space-y-4">

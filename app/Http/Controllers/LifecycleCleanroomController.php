@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\AdvanceLifecycleCleanroom;
 use App\Actions\AuthenticateLifecycleCleanroomActor;
 use App\Actions\BuildLifecycleOfficeReviewHandoff;
+use App\Actions\ConfirmLifecycleRoutineOfficeDefaults;
 use App\Actions\ResolveLifecycleCleanroomState;
 use App\Actions\StartLifecycleCleanroom;
 use App\Http\Requests\RunLifecycleCleanroomMilestoneRequest;
@@ -40,6 +41,25 @@ class LifecycleCleanroomController extends Controller
         $start->handle($request->user());
 
         return to_route('stakeholder-preview.lifecycle-laboratory.index')->with('success', 'A cleanroom is ready. Run Next Step opens the first real product form.');
+    }
+
+    public function confirmRoutineOfficeDefaults(
+        LifecycleCleanroomRun $lifecycleCleanroomRun,
+        int $applicationYear,
+        ConfirmLifecycleRoutineOfficeDefaults $confirmDefaults,
+    ): RedirectResponse {
+        try {
+            $result = $confirmDefaults->handle($lifecycleCleanroomRun, $applicationYear);
+        } catch (LogicException $exception) {
+            return back()->withErrors(['cleanroom' => $exception->getMessage()]);
+        }
+
+        $message = $result['confirmed'].' routine default '.str('determination')->plural($result['confirmed']).' confirmed under the concerned-office identities.';
+        if ($result['manual'] > 0) {
+            $message .= ' '.$result['manual'].' '.str('determination')->plural($result['manual']).' still require office review.';
+        }
+
+        return back()->with('success', $message);
     }
 
     public function runNext(

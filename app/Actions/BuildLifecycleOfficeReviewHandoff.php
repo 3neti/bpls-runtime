@@ -47,6 +47,12 @@ class BuildLifecycleOfficeReviewHandoff
             ->filter(fn (array $item): bool => data_get($item, 'metadata.lifecycle_cleanroom_responsibility') === true)
             ->values();
         $resolvedCount = $responsibilities->where('resolution', 'resolved')->count();
+        $openResponsibilities = $responsibilities->where('resolution', '!=', 'resolved');
+        $routineDefaultCount = $openResponsibilities->filter(
+            fn (array $item): bool => $item['item_type'] === 'charge'
+                && is_int(data_get($item, 'default_value.amount_cents'))
+                && data_get($item, 'metadata.inspection_required', false) === false,
+        )->count();
         $offices = $routing->works
             ->groupBy('office_code')
             ->map(function (Collection $works, string $officeCode) use ($responsibilities, $run): array {
@@ -117,6 +123,8 @@ class BuildLifecycleOfficeReviewHandoff
                 'resolved_count' => $resolvedCount,
                 'assessment_created' => $application->assessments()->exists(),
                 'payment_order_count' => $application->paperlessPaymentOrders()->whereNull('superseded_at')->count(),
+                'routine_default_count' => $routineDefaultCount,
+                'manual_review_count' => $openResponsibilities->count() - $routineDefaultCount,
             ],
             'offices' => $offices->all(),
             'routing' => [

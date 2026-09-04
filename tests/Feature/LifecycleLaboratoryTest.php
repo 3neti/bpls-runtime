@@ -47,6 +47,7 @@ test('laboratory is fail closed to guests and arbitrary preview accounts', funct
     $this->actingAs($bplo)->post(route('stakeholder-preview.lifecycle-laboratory.run-next'))->assertNotFound();
     $this->actingAs($bplo)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'))->assertNotFound();
     $this->actingAs($bplo)->get('/stakeholder-preview/lifecycle-laboratory/cleanrooms/1/office-reviews-assigned/2025')->assertNotFound();
+    $this->actingAs($bplo)->post('/stakeholder-preview/lifecycle-laboratory/cleanrooms/1/office-reviews-assigned/2025/confirm-routine-defaults')->assertNotFound();
 
     expect(LifecycleScenarioSpecimen::query()->count())->toBe(0)
         ->and(PermitApplication::query()->count())->toBe(0);
@@ -310,6 +311,9 @@ test('source backed registry specimen advances through canonical actions to an a
         ->where('metadata->lifecycle_cleanroom_responsibility', true)
         ->with('revisions')
         ->get();
+    $routineDefaults = $responsibilities->filter(
+        fn ($item): bool => data_get($item->metadata, 'inspection_required', false) === false,
+    );
     expect($responsibilities)->toHaveCount(8)
         ->and($responsibilities->sum(fn ($item): int => (int) data_get($item->revisions->first()?->value, 'amount_cents')))->toBe(482_500);
 
@@ -324,6 +328,8 @@ test('source backed registry specimen advances through canonical actions to an a
             ->where('handoff.summary.resolved_count', 0)
             ->where('handoff.summary.assessment_created', false)
             ->where('handoff.summary.payment_order_count', 0)
+            ->where('handoff.summary.routine_default_count', $routineDefaults->count())
+            ->where('handoff.summary.manual_review_count', $responsibilities->count() - $routineDefaults->count())
             ->has('handoff.offices', 4)
             ->where('handoff.offices.0.status', 'Not started')
             ->where('handoff.offices.0.is_next', true)
@@ -331,13 +337,30 @@ test('source backed registry specimen advances through canonical actions to an a
             ->where('handoff.offices.0.action_url', route('stakeholder-preview.lifecycle-laboratory.cleanrooms.enter-actor', [$run, 'assessor'], false))
             ->where('handoff.audit.production_liability', false));
 
-    $assessor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.assessor.user_id'));
+    $this->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.office-reviews-assigned.confirm-routine-defaults', [$run, 2025]))
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+    $evaluation->refresh();
+    expect($evaluation->items()
+        ->where('metadata->lifecycle_cleanroom_responsibility', true)
+        ->whereHas('revisions', fn ($query) => $query->where('action', 'confirmation'))
+        ->count())->toBe($routineDefaults->count())
+        ->and($application->paperlessPaymentOrders()->whereNull('superseded_at')->count())->toBe($routineDefaults->count());
+
+    $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+    $nextActor = data_get($state, 'progress.next_step.actor');
+    expect($nextActor)->toBeString();
+    $expectedActor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.'.$nextActor.'.user_id'));
     $this->actingAs($management)
         ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))
         ->assertRedirect(route('staff.permit-applications.evaluation.show', $application));
-    $this->assertAuthenticatedAs($assessor);
+    $this->assertAuthenticatedAs($expectedActor);
 
     foreach ($responsibilities as $responsibility) {
+        if ($responsibility->revisions()->where('action', 'confirmation')->exists()) {
+            continue;
+        }
+
         $evaluation->refresh();
         $version = $evaluation->currentVersion;
         $proposal = $responsibility->revisions()->oldest('id')->firstOrFail();
