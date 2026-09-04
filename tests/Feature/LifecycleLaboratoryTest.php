@@ -189,6 +189,8 @@ test('cleanroom citizen intake accepts an active municipal catalog activity offe
     $run = LifecycleCleanroomRun::query()->sole();
     $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run));
     $intake = app(BuildLifecycleCleanroomIntake::class)->handle($run);
+
+    expect($intake['applicant_printed_name'])->toBe($intake['owner_name']);
     $municipalRetail = LineOfBusiness::query()
         ->where('code', 'MRC-2A-02-B-WHOLESALE-RETAIL')
         ->sole();
@@ -374,10 +376,12 @@ test('cleanroom citizen form uses canonical draft and submit actions before cano
     expect($application->status->value)->toBe('draft')
         ->and($application->submitted_at)->toBeNull()
         ->and($application->business->owner->name)->toStartWith('Cleanroom Synthetic Owner')
+        ->and(data_get($application->metadata, 'applicant_declaration_draft.undertaking.applicant_printed_name'))->toBe($application->business->owner->name)
         ->and(data_get($application->metadata, 'lifecycle_cleanroom.run_id'))->toBe($run->public_id);
 
     $this->post(route('citizen.permit-applications.submit', $application))->assertSessionHasNoErrors();
-    expect($application->fresh()->submitted_at)->not->toBeNull();
+    expect($application->fresh()->submitted_at)->not->toBeNull()
+        ->and(data_get($application->declaration()->sole()->snapshot, 'undertaking.applicant_printed_name'))->toBe($application->business->owner->name);
 
     $this->actingAs($management)
         ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))

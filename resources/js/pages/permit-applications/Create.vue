@@ -581,6 +581,14 @@ function splitOwnerName(): { first: string; middle: string; last: string } {
     };
 }
 const ownerName = splitOwnerName();
+const ownerPrintedName = computed(
+    () =>
+        props.draft?.owner_name ??
+        props.registry?.owner?.name ??
+        text(cleanroom('owner_name')) ??
+        props.applicant?.name ??
+        '',
+);
 const selectedType = computed(
     () => props.draft?.type ?? props.applicationTypes[0]?.value ?? 'new',
 );
@@ -888,7 +896,8 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                         Location</label
                                     >
                                     <span class="text-[10px] text-amber-700"
-                                        >Municipal semantics unresolved</span
+                                        >Not yet available — municipal procedure
+                                        requires confirmation</span
                                     >
                                 </fieldset>
                                 <fieldset class="grid content-start gap-2">
@@ -1771,11 +1780,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                     :value="
                                         initial(
                                             'undertaking.applicant_printed_name',
-                                            cleanroom(
-                                                'applicant_printed_name',
-                                            ) ??
-                                                applicant?.name ??
-                                                draft?.owner_name,
+                                            ownerPrintedName,
                                         )
                                     "
                                     :error="errors.applicant_printed_name"

@@ -13,6 +13,7 @@ class BuildLifecycleCleanroomIntake
     /** @return array<string, mixed> */
     public function handle(LifecycleCleanroomRun $run): array
     {
+        $ownerName = 'Cleanroom Synthetic Owner '.str($run->public_id)->substr(-6)->upper();
         $linesByCode = LineOfBusiness::query()
             ->whereIn('code', collect($this->definition->linesOfBusiness())->pluck('code'))
             ->get(['id', 'code'])
@@ -21,7 +22,7 @@ class BuildLifecycleCleanroomIntake
         return [
             'run_id' => $run->public_id,
             'application_year' => NewApplicationHappyPathDefinition::ApplicationYear,
-            'owner_name' => 'Cleanroom Synthetic Owner '.str($run->public_id)->substr(-6)->upper(),
+            'owner_name' => $ownerName,
             'owner_first_name' => 'Cleanroom',
             'owner_middle_name' => 'Synthetic',
             'owner_last_name' => 'Owner '.str($run->public_id)->substr(-6)->upper(),
@@ -47,7 +48,7 @@ class BuildLifecycleCleanroomIntake
             'monthly_rental_pesos' => '12000.00',
             'emergency_contact_name' => 'Cleanroom Emergency Contact',
             'emergency_contact_mobile' => '09990000000',
-            'applicant_printed_name' => 'Cleanroom Synthetic Owner',
+            'applicant_printed_name' => $ownerName,
             'position_title' => 'Owner',
             'undertaking_accepted' => true,
             'lines' => collect($this->definition->linesOfBusiness())->map(fn (array $line): array => [

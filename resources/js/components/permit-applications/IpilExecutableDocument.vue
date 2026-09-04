@@ -177,14 +177,16 @@ function date(value: string | null): string {
                         <dd class="text-stone-500">☐ Ownership</dd>
                         <dd class="text-stone-500">☐ Location</dd>
                         <dd class="text-[10px] text-amber-700">
-                            Municipal semantics unresolved
+                            Not yet available — municipal procedure requires
+                            confirmation
                         </dd>
                     </dl>
                     <dl class="grid gap-2">
                         <dt class="text-xs font-black uppercase">Amendment</dt>
                         <dd class="text-stone-500">No executable selection</dd>
                         <dd class="text-[10px] text-amber-700">
-                            Municipal semantics unresolved
+                            Not yet available — municipal procedure requires
+                            confirmation
                         </dd>
                     </dl>
                 </div>
