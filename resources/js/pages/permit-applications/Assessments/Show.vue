@@ -382,8 +382,9 @@ function reconciliationDifference(
                     </h2>
                     <p class="text-sm text-muted-foreground">
                         A separate executable document projected from this
-                        immutable Assessment. It does not populate the unused
-                        Assessment boxes on Application Page 2.
+                        immutable Assessment. The same total is reflected on
+                        Application Form Page 2 with the concerned-office
+                        determinations.
                     </p>
                 </div>
                 <ComputationAssessmentSlip :slip="computationAssessmentSlip" />

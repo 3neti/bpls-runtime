@@ -1,5 +1,41 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+
+type OfficeFeeDeterminationLine = {
+    evaluation_item_id: number;
+    name: string;
+    status:
+        | 'awaiting_determination'
+        | 'not_applicable'
+        | 'confirmed'
+        | 'changed'
+        | 'determined';
+    proposal_amount_cents: number | null;
+    determined_amount_cents: number | null;
+    display_amount_cents: number | null;
+    source_classification: string | null;
+    paperless_payment_order: {
+        id: number;
+        sequence: number;
+        issued_at: string;
+    } | null;
+};
+
+type OfficeFeeDetermination = {
+    code: string;
+    label: string;
+    status: 'certified' | 'in_progress' | 'awaiting_determination';
+    required_determination_count: number;
+    resolved_determination_count: number;
+    payment_order_count: number;
+    total_amount_cents: number;
+    certification: {
+        officer_name: string | null;
+        certified_at: string;
+        statement: string;
+    } | null;
+    lines: OfficeFeeDeterminationLine[];
+};
 
 type DocumentProjection = {
     identity: {
@@ -28,6 +64,9 @@ type DocumentProjection = {
         status: string;
         statement: string;
         populated_from_canonical_assessment: boolean;
+        emerging_total_amount_cents: number | null;
+        required_unresolved_charge_count: number;
+        offices: OfficeFeeDetermination[];
     };
     computation_assessment_slip: {
         assessment_id: number;
@@ -52,14 +91,19 @@ type DocumentProjection = {
         statement: string;
         mayor_signature_authority: string;
     };
-    post_payment_office_signatures: {
-        status: string;
-        statement: string;
-    };
 };
 
 const props = defineProps<{ document: DocumentProjection }>();
 const snapshot = computed(() => props.document.declaration.snapshot ?? {});
+const selectedOfficeCode = ref<string | null>(null);
+const selectedOffice = computed(
+    () =>
+        props.document.page_2_assessment.offices.find(
+            (office) => office.code === selectedOfficeCode.value,
+        ) ??
+        props.document.page_2_assessment.offices[0] ??
+        null,
+);
 
 function value(path: string): any {
     return path
@@ -95,6 +139,30 @@ function date(value: string | null): string {
               new Date(value),
           )
         : '—';
+}
+function dateTime(value: string | null): string {
+    return value
+        ? new Intl.DateTimeFormat('en-PH', {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+          }).format(new Date(value))
+        : '—';
+}
+function determinationStatus(value: OfficeFeeDeterminationLine['status']) {
+    return {
+        awaiting_determination: 'Awaiting determination',
+        not_applicable: 'Not Applicable',
+        confirmed: 'Confirmed',
+        changed: 'Changed',
+        determined: 'Determined',
+    }[value];
+}
+function officeStatus(value: OfficeFeeDetermination['status']) {
+    return {
+        certified: 'Certified',
+        in_progress: 'In progress',
+        awaiting_determination: 'Not started',
+    }[value];
 }
 </script>
 
@@ -511,30 +579,227 @@ function date(value: string | null): string {
             >
                 Assessments
             </h2>
-            <div class="grid gap-3 p-4">
+            <div class="grid gap-4 p-4 sm:p-5">
+                <div
+                    class="flex flex-col gap-2 border-b-2 border-stone-900 pb-3 sm:flex-row sm:items-end sm:justify-between dark:border-stone-400"
+                >
+                    <div>
+                        <h3 class="font-black uppercase">
+                            Office Fee Determinations
+                        </h3>
+                        <p class="mt-1 text-sm">
+                            {{ document.page_2_assessment.statement }}
+                        </p>
+                    </div>
+                    <div class="sm:text-right">
+                        <p class="text-[10px] font-black uppercase">
+                            Emerging total
+                        </p>
+                        <p class="text-xl font-black tabular-nums">
+                            {{
+                                money(
+                                    document.page_2_assessment
+                                        .emerging_total_amount_cents,
+                                )
+                            }}
+                        </p>
+                    </div>
+                </div>
+
                 <p
+                    v-if="document.page_2_assessment.offices.length === 0"
                     class="border-2 border-dashed border-stone-400 bg-stone-50 p-4 text-sm dark:bg-stone-800"
                 >
-                    <strong>Not used by Ipil.</strong>
-                    {{ document.page_2_assessment.statement }} It is
-                    deliberately not populated from the canonical Assessment.
+                    Awaiting the mandatory BPLO routing determination.
                 </p>
-                <p
-                    v-if="document.computation_assessment_slip"
-                    class="text-sm font-semibold"
+
+                <div
+                    v-else
+                    class="grid gap-4 lg:grid-cols-[minmax(190px,0.72fr)_minmax(0,1.6fr)]"
                 >
-                    {{ document.computation_assessment_slip.statement }} ·
-                    {{
-                        money(
-                            document.computation_assessment_slip
-                                .total_amount_cents,
-                        )
-                    }}
-                </p>
-                <p v-else class="text-sm text-stone-600">
-                    The separate Computation/Assessment Slip is not yet
-                    available.
-                </p>
+                    <div class="grid content-start gap-2">
+                        <p class="text-xs font-black uppercase">
+                            Concerned Offices
+                        </p>
+                        <button
+                            v-for="office in document.page_2_assessment.offices"
+                            :key="office.code"
+                            type="button"
+                            :aria-pressed="selectedOffice?.code === office.code"
+                            class="grid gap-1 border p-3 text-left outline-none hover:bg-stone-50 focus-visible:ring-2 focus-visible:ring-[#1f416b] aria-pressed:border-2 aria-pressed:border-[#1f416b] aria-pressed:bg-blue-50 dark:hover:bg-stone-800 dark:aria-pressed:bg-blue-950/30"
+                            @click="selectedOfficeCode = office.code"
+                        >
+                            <span
+                                class="flex items-start justify-between gap-3 text-sm font-black"
+                            >
+                                <span>{{ office.label }}</span>
+                                <span
+                                    :class="
+                                        office.status === 'certified'
+                                            ? 'text-emerald-700 dark:text-emerald-300'
+                                            : 'text-stone-500'
+                                    "
+                                    class="text-xs"
+                                >
+                                    {{ officeStatus(office.status) }}
+                                </span>
+                            </span>
+                            <span
+                                class="text-xs text-stone-600 dark:text-stone-400"
+                            >
+                                {{ money(office.total_amount_cents) }} ·
+                                {{ office.resolved_determination_count }} of
+                                {{ office.required_determination_count }}
+                                determined
+                            </span>
+                        </button>
+                    </div>
+
+                    <section
+                        v-if="selectedOffice"
+                        class="min-w-0 border-2 border-stone-900 dark:border-stone-400"
+                        data-testid="page-2-paperless-payment-orders"
+                    >
+                        <header
+                            class="flex flex-col gap-2 border-b border-stone-300 bg-stone-50 p-3 sm:flex-row sm:items-start sm:justify-between dark:bg-stone-800"
+                        >
+                            <div>
+                                <p class="text-xs font-black uppercase">
+                                    {{ selectedOffice.label }}
+                                </p>
+                                <h3 class="font-black">
+                                    Paperless Payment Orders
+                                </h3>
+                                <p class="text-xs text-stone-500">
+                                    {{ selectedOffice.payment_order_count }}
+                                    currently issued
+                                </p>
+                            </div>
+                            <strong
+                                class="text-lg font-black tabular-nums sm:text-right"
+                            >
+                                {{ money(selectedOffice.total_amount_cents) }}
+                            </strong>
+                        </header>
+
+                        <div
+                            v-for="line in selectedOffice.lines"
+                            :key="line.evaluation_item_id"
+                            class="grid gap-1 border-b border-stone-300 p-3 text-sm sm:grid-cols-[minmax(0,1fr)_150px_100px] sm:items-start"
+                        >
+                            <div>
+                                <strong>{{ line.name }}</strong>
+                                <p
+                                    v-if="line.paperless_payment_order"
+                                    class="text-[10px] text-stone-500"
+                                >
+                                    Paperless Payment Order #{{
+                                        line.paperless_payment_order.id
+                                    }}
+                                </p>
+                                <p
+                                    v-else-if="
+                                        line.display_amount_cents !== null
+                                    "
+                                    class="text-[10px] text-stone-500"
+                                >
+                                    Proposed amount
+                                </p>
+                            </div>
+                            <span class="font-semibold">
+                                {{ determinationStatus(line.status) }}
+                            </span>
+                            <strong class="tabular-nums sm:text-right">
+                                {{ money(line.display_amount_cents) }}
+                            </strong>
+                        </div>
+
+                        <div
+                            v-if="selectedOffice.lines.length === 0"
+                            class="p-4 text-sm text-stone-500"
+                        >
+                            No amount-bearing determination has been created for
+                            this office.
+                        </div>
+
+                        <div
+                            class="m-3 border-l-4 p-3 text-sm"
+                            :class="
+                                selectedOffice.certification
+                                    ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30'
+                                    : 'border-stone-400 bg-stone-50 dark:bg-stone-800'
+                            "
+                        >
+                            <template v-if="selectedOffice.certification">
+                                <strong>Electronically certified</strong>
+                                <p>
+                                    {{
+                                        selectedOffice.certification
+                                            .officer_name ?? 'Municipal officer'
+                                    }}
+                                    ·
+                                    {{
+                                        dateTime(
+                                            selectedOffice.certification
+                                                .certified_at,
+                                        )
+                                    }}
+                                </p>
+                            </template>
+                            <template v-else>
+                                <strong>Office certification pending</strong>
+                                <p>
+                                    Complete all required determinations for
+                                    this office.
+                                </p>
+                            </template>
+                        </div>
+                    </section>
+                </div>
+
+                <div
+                    class="flex flex-col gap-2 border-2 border-dashed border-stone-400 bg-stone-50 p-3 text-sm sm:flex-row sm:items-center sm:justify-between dark:bg-stone-800"
+                >
+                    <div>
+                        <strong>Consolidated Assessment</strong>
+                        <p class="text-xs text-stone-600 dark:text-stone-400">
+                            <template
+                                v-if="
+                                    document.page_2_assessment
+                                        .required_unresolved_charge_count > 0
+                                "
+                            >
+                                Waiting for
+                                {{
+                                    document.page_2_assessment
+                                        .required_unresolved_charge_count
+                                }}
+                                required determination(s).
+                            </template>
+                            <template
+                                v-else-if="document.computation_assessment_slip"
+                            >
+                                {{
+                                    document.computation_assessment_slip
+                                        .statement
+                                }}
+                            </template>
+                            <template v-else>
+                                Ready for Assessment preparation.
+                            </template>
+                        </p>
+                    </div>
+                    <strong class="text-lg tabular-nums">
+                        {{
+                            money(
+                                document.computation_assessment_slip
+                                    ?.total_amount_cents ??
+                                    document.page_2_assessment
+                                        .emerging_total_amount_cents,
+                            )
+                        }}
+                    </strong>
+                </div>
             </div>
 
             <h2
@@ -553,9 +818,6 @@ function date(value: string | null): string {
                     <p class="capitalize">{{ shown(item.status) }}</p>
                     <p>{{ item.date_issued ?? 'Not available' }}</p>
                 </div>
-                <p class="text-[10px] text-stone-500">
-                    {{ document.post_payment_office_signatures.statement }}
-                </p>
             </div>
 
             <div

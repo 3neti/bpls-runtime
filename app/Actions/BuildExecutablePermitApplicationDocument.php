@@ -3,11 +3,18 @@
 namespace App\Actions;
 
 use App\Enums\AssessmentDecisionAction;
+use App\Evaluation\BusinessPermitEvaluationResolver;
+use App\Models\BusinessPermitEvaluation;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationDeclaration;
+use Illuminate\Support\Collection;
 
 class BuildExecutablePermitApplicationDocument
 {
+    public function __construct(
+        private readonly BusinessPermitEvaluationResolver $evaluationResolver,
+    ) {}
+
     /** @return array<string, mixed> */
     public function handle(PermitApplication $permitApplication): array
     {
@@ -20,9 +27,13 @@ class BuildExecutablePermitApplicationDocument
             'assessments.lines.lineOfBusiness',
             'assessments.decision',
             'assessments.treasuryCounterCheck',
+            'bploRoutingDetermination.works.paymentOrders.issuedBy',
+            'bploRoutingDetermination.works.paymentOrders.lines',
+            'businessPermitEvaluation.currentVersion',
         ])->findOrFail($permitApplication->id);
         $declaration = $application->declaration;
         $assessment = $application->assessments->first();
+        $page2Assessment = $this->page2Assessment($application, $assessment !== null);
 
         return [
             'identity' => [
@@ -42,11 +53,7 @@ class BuildExecutablePermitApplicationDocument
                     : data_get($application->metadata, 'applicant_declaration_draft'),
             ],
             'verification' => $this->verification($application),
-            'page_2_assessment' => [
-                'status' => 'unused_by_ipil',
-                'statement' => 'Ipil does not use the Application Form Page 2 Assessment portion.',
-                'populated_from_canonical_assessment' => false,
-            ],
+            'page_2_assessment' => $page2Assessment,
             'computation_assessment_slip' => $assessment === null ? null : [
                 'assessment_id' => $assessment->id,
                 'sequence' => $assessment->sequence,
@@ -73,10 +80,132 @@ class BuildExecutablePermitApplicationDocument
                 'statement' => 'Permit not yet issued',
                 'mayor_signature_authority' => 'unresolved',
             ],
-            'post_payment_office_signatures' => [
-                'status' => 'not_implemented',
-                'statement' => 'Concerned-office verification and Page 2 signatures belong after payment; unavailable until that lifecycle is implemented.',
-            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function page2Assessment(PermitApplication $application, bool $assessmentPrepared): array
+    {
+        $routing = $application->bploRoutingDetermination;
+        $evaluation = $application->businessPermitEvaluation;
+
+        if ($routing === null) {
+            return [
+                'status' => 'awaiting_bplo_routing',
+                'statement' => 'Awaiting the mandatory BPLO routing determination.',
+                'populated_from_canonical_assessment' => false,
+                'emerging_total_amount_cents' => null,
+                'required_unresolved_charge_count' => 0,
+                'offices' => [],
+            ];
+        }
+
+        $projection = $evaluation instanceof BusinessPermitEvaluation
+            && $evaluation->currentVersion !== null
+                ? $this->evaluationResolver->resolve($evaluation)
+                : null;
+        $items = collect(is_array($projection) ? $projection['items'] : []);
+        $offices = $routing->works
+            ->groupBy('office_code')
+            ->map(function (Collection $works, string $officeCode) use ($items): array {
+                $workIds = $works->pluck('id');
+                $officeItems = $items
+                    ->filter(fn (array $item): bool => $item['item_type'] === 'charge'
+                        && $workIds->contains(data_get($item, 'metadata.bplo_routing_work_id')))
+                    ->values();
+                $activeOrders = $works
+                    ->flatMap(fn ($work) => $work->paymentOrders)
+                    ->filter(fn ($order): bool => $order->status === 'issued' && $order->superseded_at === null)
+                    ->values();
+                $ordersByRevision = $activeOrders->keyBy('business_permit_evaluation_item_revision_id');
+                $resolvedItems = $officeItems->where('resolution', 'resolved');
+                $allResolved = $officeItems->isNotEmpty() && $resolvedItems->count() === $officeItems->count();
+                $latestCertification = $allResolved
+                    ? $resolvedItems->sortByDesc('occurred_at')->first()
+                    : null;
+
+                return [
+                    'code' => $officeCode,
+                    'label' => match ($officeCode) {
+                        'assessor' => 'Municipal Assessor',
+                        'menro' => 'MENRO',
+                        default => $works->first()->office_label,
+                    },
+                    'status' => match (true) {
+                        $allResolved => 'certified',
+                        $resolvedItems->isNotEmpty() => 'in_progress',
+                        default => 'awaiting_determination',
+                    },
+                    'required_determination_count' => $officeItems->count(),
+                    'resolved_determination_count' => $resolvedItems->count(),
+                    'payment_order_count' => $activeOrders->count(),
+                    'total_amount_cents' => (int) $activeOrders->sum('total_amount_cents'),
+                    'certification' => $allResolved && is_array($latestCertification) ? [
+                        'officer_name' => $latestCertification['actor_name'],
+                        'certified_at' => $latestCertification['occurred_at'],
+                        'statement' => 'Electronically certified',
+                    ] : null,
+                    'lines' => $officeItems->map(function (array $item) use ($ordersByRevision): array {
+                        $order = $ordersByRevision->get($item['revision_id']);
+                        $proposal = data_get($item, 'default_value.amount_cents');
+                        $determined = data_get($item, 'value.amount_cents');
+                        $isApplicable = $item['applicability'] === 'applicable';
+
+                        return [
+                            'evaluation_item_id' => $item['id'],
+                            'name' => data_get($item, 'metadata.label', str($item['key'])->headline()->toString()),
+                            'status' => match (true) {
+                                $item['resolution'] !== 'resolved' => 'awaiting_determination',
+                                ! $isApplicable => 'not_applicable',
+                                $item['action'] === 'confirmation' => 'confirmed',
+                                $item['action'] === 'correction' => 'changed',
+                                default => 'determined',
+                            },
+                            'proposal_amount_cents' => is_int($proposal) ? $proposal : null,
+                            'determined_amount_cents' => $isApplicable && is_int($determined) ? $determined : null,
+                            'display_amount_cents' => $item['resolution'] === 'resolved' && $isApplicable && is_int($determined)
+                                ? $determined
+                                : (is_int($proposal) ? $proposal : null),
+                            'source_classification' => $item['resolution'] === 'resolved'
+                                ? $item['source_classification']
+                                : $item['default_source_classification'],
+                            'paperless_payment_order' => $order === null ? null : [
+                                'id' => $order->id,
+                                'sequence' => $order->sequence,
+                                'issued_at' => $order->issued_at->toIso8601String(),
+                            ],
+                        ];
+                    })->all(),
+                ];
+            })
+            ->sortBy(fn (array $office): int => match ($office['code']) {
+                'assessor' => 0,
+                'engineering' => 1,
+                'health' => 2,
+                'menro' => 3,
+                default => 4,
+            })
+            ->values();
+        $allCertified = $offices->isNotEmpty() && $offices->every(fn (array $office): bool => $office['status'] === 'certified');
+        $unresolvedCount = is_array($projection)
+            ? (int) data_get($projection, 'financial_working_paper.required_unresolved_charge_count', 0)
+            : 0;
+
+        return [
+            'status' => match (true) {
+                $assessmentPrepared => 'assessment_prepared',
+                $allCertified => 'office_determinations_complete',
+                default => 'office_determinations_in_progress',
+            },
+            'statement' => $assessmentPrepared
+                ? 'The canonical Assessment has been prepared from the completed municipal determinations.'
+                : ($allCertified
+                    ? 'All concerned offices have completed their determinations. The Application is ready for Assessment preparation.'
+                    : 'Concerned offices may complete their determinations asynchronously.'),
+            'populated_from_canonical_assessment' => $assessmentPrepared,
+            'emerging_total_amount_cents' => is_array($projection) ? $projection['total_amount_cents'] : null,
+            'required_unresolved_charge_count' => $unresolvedCount,
+            'offices' => $offices->all(),
         ];
     }
 

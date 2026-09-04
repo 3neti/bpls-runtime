@@ -2,6 +2,7 @@
 
 use App\Actions\BuildExecutablePermitApplicationDocument;
 use App\Actions\ExecutePersistedLifecycleScenario;
+use App\Actions\RenderApplicationFormPdf;
 use App\Enums\PermitApplicationType;
 use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\LifecycleScenarios\RenewalHappyPathDefinition;
@@ -48,23 +49,33 @@ test('the same executable document progressively projects immutable assessment t
     app(ExecutePersistedLifecycleScenario::class)->handle(NewApplicationHappyPathDefinition::Id);
     $application = PermitApplication::query()->where('type', PermitApplicationType::New)->sole();
     $document = app(BuildExecutablePermitApplicationDocument::class)->handle($application);
+    $pdf = app(RenderApplicationFormPdf::class)->handle($application);
+    $offices = collect(data_get($document, 'page_2_assessment.offices'));
 
     expect(data_get($document, 'declaration.state'))->toBe('frozen')
-        ->and(data_get($document, 'page_2_assessment'))->toBe([
-            'status' => 'unused_by_ipil',
-            'statement' => 'Ipil does not use the Application Form Page 2 Assessment portion.',
-            'populated_from_canonical_assessment' => false,
-        ])
+        ->and(data_get($document, 'page_2_assessment.status'))->toBe('assessment_prepared')
+        ->and(data_get($document, 'page_2_assessment.populated_from_canonical_assessment'))->toBeTrue()
+        ->and(data_get($document, 'page_2_assessment.emerging_total_amount_cents'))->toBe(122_000)
+        ->and(data_get($document, 'page_2_assessment.required_unresolved_charge_count'))->toBe(0)
+        ->and($offices->pluck('code')->all())->toBe(['assessor', 'engineering', 'health', 'menro'])
+        ->and($offices->sum('payment_order_count'))->toBe(6)
+        ->and($offices->sum('total_amount_cents'))->toBe(87_000)
+        ->and($offices->every(fn (array $office): bool => $office['status'] === 'certified'))->toBeTrue()
+        ->and($offices->every(fn (array $office): bool => data_get($office, 'certification.statement') === 'Electronically certified'))->toBeTrue()
         ->and(data_get($document, 'computation_assessment_slip.total_amount_cents'))->toBe(122_000)
         ->and(data_get($document, 'computation_assessment_slip.line_count'))->toBe(7)
-        ->and(data_get($document, 'post_payment_office_signatures.status'))->toBe('not_implemented')
         ->and(data_get($document, 'treasury_counter_check.statement'))->toBe('Counter-check completed - no correction')
         ->and(data_get($document, 'municipal_treasurer.exact_approval'))->toBeTrue()
         ->and(data_get($document, 'permit'))->toBe([
             'status' => 'not_issued',
             'statement' => 'Permit not yet issued',
             'mayor_signature_authority' => 'unresolved',
-        ]);
+        ])
+        ->and($pdf)->toContain('OFFICE FEE DETERMINATIONS')
+        ->and($pdf)->toContain('current Paperless Payment Orders')
+        ->and($pdf)->toContain('ELECTRONICALLY CERTIFIED BY')
+        ->and($pdf)->toContain('Scenario 01 Assessor')
+        ->and($pdf)->toContain('PHP 1,220.00');
 });
 
 test('new and renewal documents preserve one owner and business chronology with independent frozen declarations', function (): void {
@@ -95,7 +106,9 @@ test('the citizen document page receives the executable projection rather than r
         ->assertInertia(fn ($page) => $page
             ->component('citizen/permit-applications/Show')
             ->where('executableDocument.declaration.state', 'frozen')
-            ->where('executableDocument.page_2_assessment.populated_from_canonical_assessment', false)
+            ->where('executableDocument.page_2_assessment.populated_from_canonical_assessment', true)
+            ->where('executableDocument.page_2_assessment.offices.0.label', 'Municipal Assessor')
+            ->where('executableDocument.page_2_assessment.offices.0.certification.statement', 'Electronically certified')
             ->where('executableDocument.computation_assessment_slip.total_amount_cents', 122_000)
             ->where('executableDocument.treasury_counter_check.result', 'no_correction')
             ->where('executableDocument.municipal_treasurer.action', 'approved')
@@ -123,7 +136,21 @@ test('the executable html preserves the Ipil document nouns and mobile line gram
         ->and($create)->toContain('already entered stays unchanged')
         ->and($create)->not->toContain('eyebrow="Step 1"')
         ->and($document)->toContain('Verification of Documents')
+        ->and($document)->toContain('Office Fee Determinations')
+        ->and($document)->toContain('Paperless Payment Orders')
+        ->and($document)->toContain('Electronically certified')
+        ->and($document)->not->toContain('Not used by Ipil')
         ->and($document)->toContain('Permit not yet issued')
         ->and($document)->toContain('const snapshot = computed')
         ->and($document)->toContain('lg:hidden');
+});
+
+test('application page 2 waits visibly for the mandatory BPLO routing determination', function (): void {
+    $application = PermitApplication::factory()->create();
+    $document = app(BuildExecutablePermitApplicationDocument::class)->handle($application);
+
+    expect(data_get($document, 'page_2_assessment.status'))->toBe('awaiting_bplo_routing')
+        ->and(data_get($document, 'page_2_assessment.statement'))->toBe('Awaiting the mandatory BPLO routing determination.')
+        ->and(data_get($document, 'page_2_assessment.offices'))->toBe([])
+        ->and(data_get($document, 'page_2_assessment.populated_from_canonical_assessment'))->toBeFalse();
 });
