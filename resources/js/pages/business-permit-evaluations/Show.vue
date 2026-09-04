@@ -23,6 +23,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { correctLinesOfBusiness as correctCitizenLinesOfBusiness } from '@/actions/App/Http/Controllers/Citizen/BusinessPermitEvaluationController';
 import { store as recordBploRouting } from '@/actions/App/Http/Controllers/Staff/BploRoutingDeterminationController';
 import {
+    confirmOfficeDefaults,
     confirmResponsibility,
     correctLinesOfBusiness as correctStaffLinesOfBusiness,
     counterCheck,
@@ -41,6 +42,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import {
+    amountFromValue,
     applicationTypeLabel,
     applicabilityLabel,
     dateTime,
@@ -386,6 +388,15 @@ const myOpenWork = computed(() =>
     ),
 );
 
+const myConfirmableDefaults = computed(() =>
+    myOpenWork.value.filter(
+        (item) =>
+            item.item_type === 'charge' &&
+            amountFromValue(item.default_value) !== null &&
+            !item.inspection_required,
+    ),
+);
+
 const myWork = computed(() =>
     (props.evaluation?.items ?? []).filter((item) => item.is_mine),
 );
@@ -717,6 +728,34 @@ function submitResponsibility(
                 : null,
         });
         form.post(confirmResponsibility([props.application.id, item.id]).url, {
+            preserveScroll: true,
+            onFinish: () => {
+                pendingAction.value = null;
+            },
+        });
+    });
+}
+
+function confirmAllDefaults(): void {
+    if (!props.evaluation || myConfirmableDefaults.value.length === 0) {
+        return;
+    }
+
+    if (
+        !window.confirm(
+            `Confirm ${myConfirmableDefaults.value.length} default ${myConfirmableDefaults.value.length === 1 ? 'amount' : 'amounts'} for ${myOffice.value}?`,
+        )
+    ) {
+        return;
+    }
+
+    runOnce('office-defaults', () => {
+        useForm({
+            item_ids: myConfirmableDefaults.value.map((item) => item.id),
+            expected_version_sequence: props.evaluation!.version.sequence,
+            expected_fingerprint: props.evaluation!.version.fingerprint,
+            idempotency_key: crypto.randomUUID(),
+        }).post(confirmOfficeDefaults(props.application.id).url, {
             preserveScroll: true,
             onFinish: () => {
                 pendingAction.value = null;
@@ -1419,18 +1458,35 @@ function submitPrepareAssessment(): void {
                     class="space-y-4"
                     aria-labelledby="office-fees-heading"
                 >
-                    <div>
-                        <p
-                            class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                    <div
+                        class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
+                    >
+                        <div>
+                            <p
+                                class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                            >
+                                Office fees
+                            </p>
+                            <h2
+                                id="office-fees-heading"
+                                class="mt-1 text-lg font-semibold"
+                            >
+                                Complete your assigned determinations
+                            </h2>
+                        </div>
+                        <Button
+                            v-if="myConfirmableDefaults.length"
+                            type="button"
+                            :disabled="pendingAction !== null"
+                            @click="confirmAllDefaults"
                         >
-                            Office fees
-                        </p>
-                        <h2
-                            id="office-fees-heading"
-                            class="mt-1 text-lg font-semibold"
-                        >
-                            Complete your assigned determinations
-                        </h2>
+                            <Check aria-hidden="true" />
+                            {{
+                                pendingAction === 'office-defaults'
+                                    ? 'Confirming…'
+                                    : `Confirm all defaults (${myConfirmableDefaults.length})`
+                            }}
+                        </Button>
                     </div>
                     <div class="grid gap-4">
                         <EvaluationComponentRow

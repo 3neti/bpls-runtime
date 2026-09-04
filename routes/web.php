@@ -175,6 +175,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.evaluation.refresh');
         Route::post('permit-applications/{permitApplication}/evaluation/items/{item}/confirm', [BusinessPermitEvaluationController::class, 'confirmResponsibility'])
             ->name('permit-applications.evaluation.items.confirm');
+        Route::post('permit-applications/{permitApplication}/evaluation/office-defaults/confirm', [BusinessPermitEvaluationController::class, 'confirmOfficeDefaults'])
+            ->name('permit-applications.evaluation.office-defaults.confirm');
         Route::get('permit-applications/{permitApplication}/evaluation/items/{item}/price-preview', [BusinessPermitEvaluationController::class, 'pricePreview'])
             ->name('permit-applications.evaluation.items.price-preview');
         Route::post('permit-applications/{permitApplication}/evaluation/lines-of-business', [BusinessPermitEvaluationController::class, 'correctLinesOfBusiness'])

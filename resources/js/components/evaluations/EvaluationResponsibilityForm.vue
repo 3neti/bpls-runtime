@@ -16,7 +16,7 @@ import {
     amountFromValue,
     inspectionModeLabels,
     officeLabel,
-    shouldStartChargeFromFeeSchedule,
+    sourceLabel,
 } from '@/lib/evaluationPresentation';
 import type { ResponsibilityDraft } from '@/lib/evaluationPresentation';
 import type { EvaluationItem } from '@/types';
@@ -82,33 +82,14 @@ function initialInspectionMode(): ResponsibilityDraft['inspectionMode'] {
         : '';
 }
 
-function isReferenceOnlyProposal(): boolean {
-    return (
-        (props.sourceClassification ??
-            props.item.default_source_classification) === 'provisional_uat' &&
-        props.feeRuleId == null
-    );
-}
-
-function shouldStartFromSchedule(): boolean {
-    return shouldStartChargeFromFeeSchedule(
-        props.sourceClassification ?? props.item.default_source_classification,
-        props.feeRuleId,
-        props.item.action,
-    );
-}
-
 const draft = reactive<ResponsibilityDraft>({
     applicability: props.item.applicability,
     determinationType:
-        props.item.default_value == null || shouldStartFromSchedule()
-            ? 'office_determination'
-            : 'confirm',
-    amount: shouldStartFromSchedule()
-        ? ''
-        : (pesosFromValue(props.item.resolved_value) ??
-          pesosFromValue(props.item.default_value) ??
-          ''),
+        props.item.default_value == null ? 'office_determination' : 'confirm',
+    amount:
+        pesosFromValue(props.item.resolved_value) ??
+        pesosFromValue(props.item.default_value) ??
+        '',
     reason: '',
     authority: '',
     inspectionMode: initialInspectionMode(),
@@ -123,7 +104,14 @@ const isLaboratoryProposal = computed(
         (props.sourceClassification ??
             props.item.default_source_classification) === 'provisional_uat',
 );
-const referenceOnlyProposal = computed(isReferenceOnlyProposal);
+const defaultSourceDescription = computed(() =>
+    isLaboratoryProposal.value
+        ? 'Historical reference — office confirmation required'
+        : sourceLabel(
+              props.sourceClassification ??
+                  props.item.default_source_classification,
+          ),
+);
 
 /**
  * The Municipality requires a reason whenever the office departs from the
@@ -140,10 +128,6 @@ const reasonRequired = computed(() => {
 
     if (props.item.item_type !== 'charge' || proposalPesos.value === null) {
         return false;
-    }
-
-    if (referenceOnlyProposal.value) {
-        return true;
     }
 
     return Number(draft.amount) !== Number(proposalPesos.value);
@@ -163,7 +147,7 @@ watch(
         if (
             type === 'confirm' &&
             proposalPesos.value !== null &&
-            !referenceOnlyProposal.value
+            proposalPesos.value !== null
         ) {
             draft.amount = proposalPesos.value;
         }
@@ -240,12 +224,11 @@ function selectSchedule(event: Event): void {
     draft.amount = (detail.unitAmountMinor / 100).toFixed(2);
     draft.proForma = null;
     draft.applicability = 'applicable';
-    draft.determinationType = referenceOnlyProposal.value
-        ? 'office_determination'
-        : proposalPesos.value !== null &&
-            Number(draft.amount) === Number(proposalPesos.value)
-          ? 'confirm'
-          : 'override';
+    draft.determinationType =
+        proposalPesos.value !== null &&
+        Number(draft.amount) === Number(proposalPesos.value)
+            ? 'confirm'
+            : 'override';
 }
 
 function applyProForma(
@@ -255,12 +238,11 @@ function applyProForma(
     draft.amount = amount;
     draft.proForma = proForma;
     draft.applicability = 'applicable';
-    draft.determinationType = referenceOnlyProposal.value
-        ? 'office_determination'
-        : proposalPesos.value !== null &&
-            Number(amount) === Number(proposalPesos.value)
-          ? 'confirm'
-          : 'override';
+    draft.determinationType =
+        proposalPesos.value !== null &&
+        Number(amount) === Number(proposalPesos.value)
+            ? 'confirm'
+            : 'override';
 }
 
 onMounted(() =>
@@ -306,6 +288,8 @@ onBeforeUnmount(() =>
                         :item="item"
                         :amount="draft.amount"
                         :selection="selectedSchedule"
+                        :default-source="defaultSourceDescription"
+                        :default-reference="chargeCode"
                         @apply="applyProForma"
                     />
                 </div>
@@ -327,7 +311,7 @@ onBeforeUnmount(() =>
             <div v-if="isCharge" class="grid gap-2">
                 <Label>Determination</Label>
                 <label
-                    v-if="proposalPesos !== null && !referenceOnlyProposal"
+                    v-if="proposalPesos !== null"
                     class="flex items-center gap-2 rounded-lg border p-3 text-sm"
                 >
                     <input
@@ -335,16 +319,10 @@ onBeforeUnmount(() =>
                         type="radio"
                         value="confirm"
                     />
-                    Confirm
-                    {{
-                        isLaboratoryProposal
-                            ? 'laboratory proposal'
-                            : 'scheduled amount'
-                    }}
-                    — ₱{{ proposalPesos }}
+                    Confirm default — ₱{{ proposalPesos }}
                 </label>
                 <label
-                    v-if="proposalPesos !== null && !referenceOnlyProposal"
+                    v-if="proposalPesos !== null"
                     class="flex items-center gap-2 rounded-lg border p-3 text-sm"
                 >
                     <input
@@ -352,15 +330,10 @@ onBeforeUnmount(() =>
                         type="radio"
                         value="override"
                     />
-                    Override the
-                    {{
-                        isLaboratoryProposal
-                            ? 'laboratory proposal'
-                            : 'scheduled amount'
-                    }}
+                    Change the default amount
                 </label>
                 <label
-                    v-if="proposalPesos === null || referenceOnlyProposal"
+                    v-if="proposalPesos === null"
                     class="flex items-center gap-2 rounded-lg border p-3 text-sm"
                 >
                     <input
@@ -420,13 +393,9 @@ onBeforeUnmount(() =>
                     :id="`amount-help-${item.id}`"
                     class="text-xs text-muted-foreground"
                 >
-                    <template v-if="referenceOnlyProposal">
-                        Use the applicable row in the Schedule of Fees. The
-                        laboratory reference amount is not preselected.
-                    </template>
-                    <template v-else-if="proposalPesos !== null">
-                        Proposed for you: ₱{{ proposalPesos }}. Confirm it
-                        as-is, or change it and record why.
+                    <template v-if="proposalPesos !== null">
+                        Defaulted from {{ defaultSourceDescription }}. Confirm
+                        it as-is, or change it and record why.
                     </template>
                     <template v-else>
                         No amount was proposed. Record the amount your office
@@ -434,10 +403,7 @@ onBeforeUnmount(() =>
                     </template>
                 </p>
                 <dl
-                    v-if="
-                        draft.determinationType === 'override' &&
-                        !referenceOnlyProposal
-                    "
+                    v-if="draft.determinationType === 'override'"
                     class="grid grid-cols-3 gap-2 rounded-lg bg-muted/40 p-3 text-xs"
                 >
                     <div>
@@ -549,11 +515,8 @@ onBeforeUnmount(() =>
                     class="text-xs text-muted-foreground"
                 >
                     <template v-if="reasonRequired">
-                        {{
-                            referenceOnlyProposal
-                                ? 'Record the selected service, capacity or condition, and case evidence.'
-                                : 'A reason is required because you are changing the proposed municipal position.'
-                        }}
+                        A reason is required because you are changing the
+                        proposed municipal position.
                     </template>
                     <template v-else>
                         Optional when you confirm the proposal unchanged.

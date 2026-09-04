@@ -60,6 +60,8 @@ const props = defineProps<{
     item: EvaluationItem;
     amount: string;
     selection: ScheduleSelection | null;
+    defaultSource: string;
+    defaultReference?: string | null;
 }>();
 const emit = defineEmits<{
     apply: [amount: string, proForma: ProFormaDraft];
@@ -75,7 +77,7 @@ const serviceLabel = ref(props.selection?.serviceLabel ?? props.item.label);
 const basis = ref(props.selection?.basis ?? '');
 const scheduleReference = ref(props.selection?.scheduleReference ?? '');
 
-watch(open, (isOpen) => {
+watch(open, async (isOpen) => {
     if (!isOpen) {
         return;
     }
@@ -85,10 +87,15 @@ watch(open, (isOpen) => {
         : props.amount;
     serviceLabel.value = props.selection?.serviceLabel ?? props.item.label;
     basis.value = props.selection?.basis ?? '';
-    scheduleReference.value = props.selection?.scheduleReference ?? '';
+    scheduleReference.value =
+        props.selection?.scheduleReference ?? props.defaultReference ?? '';
     quantity.value = 1;
     preview.value = null;
     error.value = null;
+
+    if (unitAmount.value !== '') {
+        await calculate();
+    }
 });
 
 const unitAmountMinor = computed(() => {
@@ -208,6 +215,12 @@ function apply(): void {
                         {{ item.line_of_business_name ?? 'Whole application' }}
                     </dd>
                 </div>
+                <div class="sm:col-span-3">
+                    <dt class="text-xs text-muted-foreground">
+                        Default source
+                    </dt>
+                    <dd class="font-medium">{{ defaultSource }}</dd>
+                </div>
             </dl>
 
             <div class="grid gap-5">
@@ -252,7 +265,7 @@ function apply(): void {
                             :class="['size-4', loading ? 'animate-spin' : '']"
                             aria-hidden="true"
                         />
-                        {{ loading ? 'Calculating…' : 'Calculate pro forma' }}
+                        {{ loading ? 'Calculating…' : 'Recalculate pro forma' }}
                     </Button>
                 </div>
 

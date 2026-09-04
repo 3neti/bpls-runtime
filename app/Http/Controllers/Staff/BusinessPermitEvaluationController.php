@@ -6,6 +6,7 @@ use App\Actions\ApplyDueBploRoutingSuggestions;
 use App\Actions\ArmBploRoutingSentinel;
 use App\Actions\BuildBusinessPermitEvaluationPricePreview;
 use App\Actions\CompleteBusinessPermitEvaluationResponsibility;
+use App\Actions\ConfirmBusinessPermitEvaluationOfficeDefaults;
 use App\Actions\CorrectEvaluationLinesOfBusiness;
 use App\Actions\DescribeBusinessPermitEvaluation;
 use App\Actions\InitializeBusinessPermitEvaluation;
@@ -216,6 +217,30 @@ class BusinessPermitEvaluationController extends Controller
         } catch (LogicException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
         }
+    }
+
+    public function confirmOfficeDefaults(
+        Request $request,
+        PermitApplication $permitApplication,
+        ConfirmBusinessPermitEvaluationOfficeDefaults $confirmDefaults,
+    ): RedirectResponse {
+        Gate::authorize(UserPermission::ContributeBusinessPermitEvaluations->value);
+        $data = $request->validate([
+            'item_ids' => ['required', 'array', 'min:1'],
+            'item_ids.*' => ['required', 'integer', 'distinct'],
+            'expected_version_sequence' => ['required', 'integer', 'min:1'],
+            'expected_fingerprint' => ['required', 'string', 'size:64'],
+            'idempotency_key' => ['required', 'string', 'max:80'],
+        ]);
+
+        return $this->attempt(fn () => $confirmDefaults->handle(
+            $this->evaluation($permitApplication),
+            auth()->user(),
+            $data['item_ids'],
+            $data['expected_version_sequence'],
+            $data['expected_fingerprint'],
+            $data['idempotency_key'],
+        ));
     }
 
     public function correctLinesOfBusiness(

@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\CompleteBusinessPermitEvaluationResponsibility;
+use App\Actions\ConfirmBusinessPermitEvaluationOfficeDefaults;
 use App\Actions\CorrectEvaluationLinesOfBusiness;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
@@ -14,6 +15,7 @@ use App\Assessment\AssessmentSnapshotFingerprint;
 use App\Enums\AssessmentDecisionAction;
 use App\Enums\BusinessPermitEvaluationApplicability;
 use App\Enums\BusinessPermitEvaluationItemType;
+use App\Enums\BusinessPermitEvaluationRevisionAction;
 use App\Enums\BusinessPermitEvaluationSource;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRulePublicationSource;
@@ -32,6 +34,7 @@ use App\Models\BusinessPermitEvaluationItem;
 use App\Models\BusinessPermitEvaluationItemRevision;
 use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
+use App\Models\PaperlessPaymentOrder;
 use App\Models\PaymentSchedule;
 use App\Models\Permission;
 use App\Models\PermitApplication;
@@ -174,6 +177,66 @@ it('preserves default and resolved amounts with idempotent optimistic office con
         $current->fingerprint,
         'different-stale-command',
     ))->toThrow(LogicException::class, 'Evaluation changed');
+});
+
+it('confirms every eligible office default in one action without bypassing inspections', function () {
+    $fixture = evaluationFixture();
+    $routingWork = $fixture['application']->bploRoutingDetermination
+        ->works()
+        ->where('office_code', 'assessor')
+        ->firstOrFail();
+    $define = app(DefineBusinessPermitEvaluationItem::class);
+    $first = $define->handle(
+        $fixture['evaluation'],
+        'assessor.default-one',
+        BusinessPermitEvaluationItemType::Charge,
+        'assessor',
+        true,
+        true,
+        BusinessPermitEvaluationApplicability::Applicable,
+        ['amount_cents' => 10_000],
+        BusinessPermitEvaluationSource::ConfiguredMunicipalDefault,
+        $fixture['actor'],
+        metadata: [
+            'label' => 'First default',
+            'authorized_actor_id' => $fixture['actor']->id,
+            'bplo_routing_work_id' => $routingWork->id,
+        ],
+    );
+    $second = $define->handle(
+        $fixture['evaluation']->fresh(),
+        'assessor.default-two',
+        BusinessPermitEvaluationItemType::Charge,
+        'assessor',
+        true,
+        true,
+        BusinessPermitEvaluationApplicability::Applicable,
+        ['amount_cents' => 25_000],
+        BusinessPermitEvaluationSource::ConfiguredMunicipalDefault,
+        $fixture['actor'],
+        metadata: [
+            'label' => 'Second default',
+            'authorized_actor_id' => $fixture['actor']->id,
+            'bplo_routing_work_id' => $routingWork->id,
+        ],
+    );
+    $projection = app(BusinessPermitEvaluationResolver::class)->resolve($fixture['evaluation']->fresh());
+
+    $count = app(ConfirmBusinessPermitEvaluationOfficeDefaults::class)->handle(
+        $fixture['evaluation']->fresh(),
+        $fixture['actor'],
+        [$first->id, $second->id],
+        $projection['version_sequence'],
+        $projection['current_fingerprint'],
+        'confirm-office-defaults',
+    );
+    $resolved = app(BusinessPermitEvaluationResolver::class)->resolve($fixture['evaluation']->fresh());
+
+    expect($count)->toBe(2)
+        ->and(collect($resolved['items'])->firstWhere('id', $first->id)['value']['amount_cents'])->toBe(10_000)
+        ->and(collect($resolved['items'])->firstWhere('id', $second->id)['value']['amount_cents'])->toBe(25_000)
+        ->and($first->revisions()->where('action', BusinessPermitEvaluationRevisionAction::Confirmation)->exists())->toBeTrue()
+        ->and(PaperlessPaymentOrder::query()->where('bplo_routing_work_id', $routingWork->id)->count())->toBe(2);
 });
 
 it('records Treasury LOB determination as a new version and leaves the original declaration and Business untouched', function () {

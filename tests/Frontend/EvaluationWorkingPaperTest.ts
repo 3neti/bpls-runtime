@@ -6,7 +6,6 @@ import {
     latestChange,
     money,
     presentFinancialWorkingPaper,
-    shouldStartChargeFromFeeSchedule,
 } from '../../resources/js/lib/evaluationPresentation.ts';
 import type {
     EvaluationFinancialWorkingPaper,
@@ -221,23 +220,30 @@ test('fee-rule charges use the exact projected identity without inventing an ite
     assert.equal(governed.sourceLabel, 'Municipal fee rule');
 });
 
-test('an ungoverned laboratory proposal starts from the fee schedule', () => {
+test('every recorded proposal populates the determination and Price calculator', () => {
+    const form = readFileSync(
+        new URL(
+            '../../resources/js/components/evaluations/EvaluationResponsibilityForm.vue',
+            import.meta.url,
+        ),
+        'utf8',
+    );
+    const calculator = readFileSync(
+        new URL(
+            '../../resources/js/components/evaluations/EvaluationPriceCalculator.vue',
+            import.meta.url,
+        ),
+        'utf8',
+    );
+
+    assert.equal(form.includes('shouldStartChargeFromFeeSchedule'), false);
     assert.equal(
-        shouldStartChargeFromFeeSchedule('provisional_uat', null, 'proposal'),
+        form.includes('pesosFromValue(props.item.default_value)'),
         true,
     );
-    assert.equal(
-        shouldStartChargeFromFeeSchedule('governed_rule', 3, 'proposal'),
-        false,
-    );
-    assert.equal(
-        shouldStartChargeFromFeeSchedule(
-            'provisional_uat',
-            null,
-            'confirmation',
-        ),
-        false,
-    );
+    assert.equal(form.includes('Confirm default — ₱'), true);
+    assert.equal(calculator.includes('await calculate()'), true);
+    assert.equal(calculator.includes('Default source'), true);
 });
 
 test('Not Applicable and unresolved charges keep backend inclusion decisions', () => {
