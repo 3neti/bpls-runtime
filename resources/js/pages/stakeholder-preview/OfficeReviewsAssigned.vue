@@ -17,6 +17,7 @@ import { computed } from 'vue';
 import {
     confirmRoutineOfficeDefaults,
     runNext as runCleanroomNextRoute,
+    simulateOfficeReviews,
 } from '@/actions/App/Http/Controllers/LifecycleCleanroomController';
 import { index as laboratoryIndex } from '@/actions/App/Http/Controllers/LifecycleLaboratoryController';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -45,6 +46,7 @@ type Handoff = {
         assessment_created: boolean;
         payment_order_count: number;
         routine_default_count: number;
+        inspection_simulation_count: number;
         manual_review_count: number;
     };
     offices: {
@@ -58,7 +60,12 @@ type Handoff = {
         resolved_count: number;
         action_url: string;
         is_next: boolean;
-        responsibilities: { label: string; status: string }[];
+        responsibilities: {
+            label: string;
+            default_amount_cents: number | null;
+            inspection_required: boolean;
+            status: string;
+        }[];
     }[];
     routing: {
         situational_context: string;
@@ -102,6 +109,25 @@ function continueOfficeReviews(): void {
 function completeRoutineConfirmations(): void {
     router.post(
         confirmRoutineOfficeDefaults([
+            props.handoff.run.id,
+            props.handoff.application.year,
+        ]).url,
+        {},
+        { preserveScroll: true },
+    );
+}
+
+function simulateRemainingOfficeReviews(): void {
+    if (
+        !window.confirm(
+            'Simulate the remaining inspection-bearing office reviews? Every resulting audit record will state that no real inspection occurred.',
+        )
+    ) {
+        return;
+    }
+
+    router.post(
+        simulateOfficeReviews([
             props.handoff.run.id,
             props.handoff.application.year,
         ]).url,
@@ -246,13 +272,15 @@ function completeRoutineConfirmations(): void {
                 class="flex flex-col gap-4 rounded-2xl border border-primary/30 bg-primary/5 p-5 sm:flex-row sm:items-center sm:justify-between"
             >
                 <div>
-                    <h2 class="font-semibold">Faster cleanroom test</h2>
+                    <h2 class="font-semibold">
+                        Defaults not requiring inspection
+                    </h2>
                     <p class="mt-1 text-sm text-muted-foreground">
                         {{ handoff.summary.routine_default_count }} routine
                         defaults can be confirmed now.
                         <template v-if="handoff.summary.manual_review_count">
-                            {{ handoff.summary.manual_review_count }} inspection
-                            or exceptional determinations remain with their
+                            {{ handoff.summary.manual_review_count }}
+                            exceptional determinations remain with their
                             offices.
                         </template>
                     </p>
@@ -263,7 +291,32 @@ function completeRoutineConfirmations(): void {
                     @click="completeRoutineConfirmations"
                 >
                     <CheckCircle2 class="size-4" />
-                    Complete routine office confirmations
+                    Confirm defaults not requiring inspection
+                </button>
+            </section>
+
+            <section
+                v-if="handoff.summary.inspection_simulation_count > 0"
+                class="flex flex-col gap-4 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
+            >
+                <div>
+                    <h2 class="font-semibold">
+                        Laboratory inspection shortcut
+                    </h2>
+                    <p class="mt-1 text-sm">
+                        Complete
+                        {{ handoff.summary.inspection_simulation_count }}
+                        remaining reviews with explicitly synthetic inspection
+                        findings.
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    class="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-900 px-4 text-sm font-semibold text-white dark:bg-amber-200 dark:text-amber-950"
+                    @click="simulateRemainingOfficeReviews"
+                >
+                    <CheckCircle2 class="size-4" />
+                    Simulate remaining office reviews
                 </button>
             </section>
 
@@ -352,7 +405,23 @@ function completeRoutineConfirmations(): void {
                                         v-else
                                         class="mt-0.5 size-4 shrink-0 text-amber-600"
                                     />
-                                    {{ responsibility.label }}
+                                    <span>
+                                        <span>{{ responsibility.label }}</span>
+                                        <span
+                                            v-if="
+                                                responsibility.default_amount_cents !==
+                                                null
+                                            "
+                                            class="mt-0.5 block text-xs font-semibold text-muted-foreground tabular-nums"
+                                        >
+                                            Default
+                                            {{
+                                                money(
+                                                    responsibility.default_amount_cents,
+                                                )
+                                            }}
+                                        </span>
+                                    </span>
                                 </span>
                                 <span
                                     class="shrink-0 text-xs text-muted-foreground"

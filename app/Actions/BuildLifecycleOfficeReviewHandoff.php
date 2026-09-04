@@ -53,6 +53,11 @@ class BuildLifecycleOfficeReviewHandoff
                 && is_int(data_get($item, 'default_value.amount_cents'))
                 && data_get($item, 'metadata.inspection_required', false) === false,
         )->count();
+        $inspectionSimulationCount = $openResponsibilities->filter(
+            fn (array $item): bool => $item['item_type'] === 'charge'
+                && is_int(data_get($item, 'default_value.amount_cents'))
+                && data_get($item, 'metadata.inspection_required', false) === true,
+        )->count();
         $offices = $routing->works
             ->groupBy('office_code')
             ->map(function (Collection $works, string $officeCode) use ($responsibilities, $run): array {
@@ -79,7 +84,13 @@ class BuildLifecycleOfficeReviewHandoff
                     'action_url' => route('stakeholder-preview.lifecycle-laboratory.cleanrooms.enter-actor', [$run, $officeCode], false),
                     'responsibilities' => $officeResponsibilities->map(fn (array $item): array => [
                         'label' => data_get($item, 'metadata.label', str($item['key'])->headline()->toString()),
-                        'status' => $item['resolution'] === 'resolved' ? 'Determined' : 'Awaiting determination',
+                        'default_amount_cents' => data_get($item, 'default_value.amount_cents'),
+                        'inspection_required' => data_get($item, 'metadata.inspection_required', false),
+                        'status' => match (true) {
+                            $item['resolution'] === 'resolved' => 'Determined',
+                            data_get($item, 'metadata.inspection_required', false) === true => 'Inspection pending',
+                            default => 'Office confirmation pending',
+                        },
                     ])->all(),
                 ];
             })
@@ -124,7 +135,8 @@ class BuildLifecycleOfficeReviewHandoff
                 'assessment_created' => $application->assessments()->exists(),
                 'payment_order_count' => $application->paperlessPaymentOrders()->whereNull('superseded_at')->count(),
                 'routine_default_count' => $routineDefaultCount,
-                'manual_review_count' => $openResponsibilities->count() - $routineDefaultCount,
+                'inspection_simulation_count' => $inspectionSimulationCount,
+                'manual_review_count' => $openResponsibilities->count() - $routineDefaultCount - $inspectionSimulationCount,
             ],
             'offices' => $offices->all(),
             'routing' => [

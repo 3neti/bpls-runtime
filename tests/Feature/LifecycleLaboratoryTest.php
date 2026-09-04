@@ -48,6 +48,7 @@ test('laboratory is fail closed to guests and arbitrary preview accounts', funct
     $this->actingAs($bplo)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'))->assertNotFound();
     $this->actingAs($bplo)->get('/stakeholder-preview/lifecycle-laboratory/cleanrooms/1/office-reviews-assigned/2025')->assertNotFound();
     $this->actingAs($bplo)->post('/stakeholder-preview/lifecycle-laboratory/cleanrooms/1/office-reviews-assigned/2025/confirm-routine-defaults')->assertNotFound();
+    $this->actingAs($bplo)->post('/stakeholder-preview/lifecycle-laboratory/cleanrooms/1/office-reviews-assigned/2025/simulate-office-reviews')->assertNotFound();
 
     expect(LifecycleScenarioSpecimen::query()->count())->toBe(0)
         ->and(PermitApplication::query()->count())->toBe(0);
@@ -329,7 +330,8 @@ test('source backed registry specimen advances through canonical actions to an a
             ->where('handoff.summary.assessment_created', false)
             ->where('handoff.summary.payment_order_count', 0)
             ->where('handoff.summary.routine_default_count', $routineDefaults->count())
-            ->where('handoff.summary.manual_review_count', $responsibilities->count() - $routineDefaults->count())
+            ->where('handoff.summary.inspection_simulation_count', $responsibilities->count() - $routineDefaults->count())
+            ->where('handoff.summary.manual_review_count', 0)
             ->has('handoff.offices', 4)
             ->where('handoff.offices.0.status', 'Not started')
             ->where('handoff.offices.0.is_next', true)
@@ -346,6 +348,25 @@ test('source backed registry specimen advances through canonical actions to an a
         ->whereHas('revisions', fn ($query) => $query->where('action', 'confirmation'))
         ->count())->toBe($routineDefaults->count())
         ->and($application->paperlessPaymentOrders()->whereNull('superseded_at')->count())->toBe($routineDefaults->count());
+    $this->get(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.office-reviews-assigned', [$run, 2025]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('handoff.offices.1.label', 'Engineering')
+            ->where('handoff.offices.1.responsibilities.0.default_amount_cents', 200_000)
+            ->where('handoff.offices.1.responsibilities.0.status', 'Inspection pending'));
+
+    $this->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.office-reviews-assigned.simulate-office-reviews', [$run, 2025]))
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+    $evaluation->refresh();
+    expect($evaluation->items()
+        ->where('metadata->lifecycle_cleanroom_responsibility', true)
+        ->whereHas('revisions', fn ($query) => $query->where('action', 'confirmation'))
+        ->count())->toBe($responsibilities->count())
+        ->and($application->paperlessPaymentOrders()->whereNull('superseded_at')->count())->toBe($responsibilities->count())
+        ->and($evaluation->items()
+            ->where('metadata->lifecycle_cleanroom_responsibility', true)
+            ->whereHas('revisions', fn ($query) => $query->where('reason', 'like', 'Synthetic Lifecycle Laboratory inspection simulation%'))
+            ->count())->toBe($responsibilities->count() - $routineDefaults->count());
 
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     $nextActor = data_get($state, 'progress.next_step.actor');

@@ -7,6 +7,7 @@ use App\Actions\AuthenticateLifecycleCleanroomActor;
 use App\Actions\BuildLifecycleOfficeReviewHandoff;
 use App\Actions\ConfirmLifecycleRoutineOfficeDefaults;
 use App\Actions\ResolveLifecycleCleanroomState;
+use App\Actions\SimulateLifecycleOfficeReviews;
 use App\Actions\StartLifecycleCleanroom;
 use App\Http\Requests\RunLifecycleCleanroomMilestoneRequest;
 use App\Models\LifecycleCleanroomRun;
@@ -60,6 +61,20 @@ class LifecycleCleanroomController extends Controller
         }
 
         return back()->with('success', $message);
+    }
+
+    public function simulateOfficeReviews(
+        LifecycleCleanroomRun $lifecycleCleanroomRun,
+        int $applicationYear,
+        SimulateLifecycleOfficeReviews $simulateReviews,
+    ): RedirectResponse {
+        try {
+            $count = $simulateReviews->handle($lifecycleCleanroomRun, $applicationYear);
+        } catch (LogicException $exception) {
+            return back()->withErrors(['cleanroom' => $exception->getMessage()]);
+        }
+
+        return back()->with('success', $count.' synthetic office '.str('review')->plural($count).' completed. Each audit record states that no real inspection occurred.');
     }
 
     public function runNext(
