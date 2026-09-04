@@ -82,6 +82,9 @@ class AuthenticateLifecycleCleanroomActor
         if ($destination === 'citizen.permit-applications.create') {
             return [];
         }
+        if ($destination === 'stakeholder-preview.lifecycle-cleanroom-application.show') {
+            return $run->id;
+        }
 
         $application = $this->currentApplication($run);
         if ($destination === 'staff.permit-applications.assessments.show') {

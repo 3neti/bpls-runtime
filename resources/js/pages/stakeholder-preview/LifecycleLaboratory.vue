@@ -27,6 +27,7 @@ import {
     runNext,
     runToMilestone,
 } from '@/actions/App/Http/Controllers/LifecycleLaboratoryController';
+import ExecutableApplication from '@/components/permit-applications/ExecutableApplication.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 
 type Event = {
@@ -64,6 +65,7 @@ type Scenario = {
         assessment_id: number;
         payment_schedule_id: number;
     } | null;
+    application_data: any | null;
     actors: { key: string; label: string }[];
 };
 
@@ -101,6 +103,7 @@ type CleanroomState = {
         renewal: { current_total_amount_cents: number } | null;
     };
     actors: { key: string; label: string }[];
+    application_data: any | null;
 };
 
 const props = defineProps<{
@@ -145,6 +148,18 @@ const progressPercent = computed(
         (props.laboratory.progress.completed_scenarios /
             props.laboratory.progress.total_scenarios) *
         100,
+);
+const visibleApplicationScenario = computed(
+    () =>
+        [...props.laboratory.scenarios]
+            .reverse()
+            .find((scenario) => scenario.application_data !== null) ?? null,
+);
+const currentApplicationData = computed(
+    () =>
+        props.cleanroom.active?.application_data ??
+        visibleApplicationScenario.value?.application_data ??
+        null,
 );
 
 function pesos(amountCents: number | null): string {
@@ -275,14 +290,14 @@ function closeCleanroom(): void {
                         <h1
                             class="text-3xl font-semibold tracking-tight sm:text-4xl"
                         >
-                            Browser Lifecycle Laboratory
+                            Executable Application Laboratory
                         </h1>
                         <p
                             class="max-w-3xl text-sm leading-6 text-zinc-300 sm:text-base"
                         >
-                            Run the certified 2025 New Business Permit and 2026
-                            Renewal chronology through the same scenario driver
-                            used by CLI certification.
+                            Watch one familiar permit Application accumulate
+                            canonical municipal facts. The Laboratory conducts;
+                            the Application is the stage.
                         </p>
                     </div>
                     <div class="flex flex-wrap gap-2 text-xs font-semibold">
@@ -638,13 +653,64 @@ function closeCleanroom(): void {
         </section>
 
         <section
+            v-if="currentApplicationData"
+            class="space-y-4"
+            aria-label="Current executable application"
+        >
+            <div
+                class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
+            >
+                <div>
+                    <p
+                        class="text-xs font-black tracking-wider text-sky-700 uppercase dark:text-sky-300"
+                    >
+                        Current application stage
+                    </p>
+                    <h2 class="text-2xl font-black">
+                        The same Application after every canonical act
+                    </h2>
+                </div>
+                <div
+                    class="flex max-w-full gap-2 overflow-x-auto pb-1"
+                    aria-label="Open as actor"
+                >
+                    <button
+                        v-for="actor in cleanroom.active?.application_data
+                            ? cleanroom.active.actors
+                            : (visibleApplicationScenario?.actors ?? [])"
+                        :key="actor.key"
+                        type="button"
+                        :disabled="working !== null"
+                        class="shrink-0 rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-bold hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
+                        @click="
+                            cleanroom.active?.application_data
+                                ? openCleanroomActor(actor.key)
+                                : visibleApplicationScenario &&
+                                  openAsActor(
+                                      visibleApplicationScenario,
+                                      actor.key,
+                                  )
+                        "
+                    >
+                        {{ actor.label }}
+                        <ExternalLink class="ml-1 inline size-3" />
+                    </button>
+                </div>
+            </div>
+            <ExecutableApplication
+                :application="currentApplicationData"
+                mode="workspace"
+            />
+        </section>
+
+        <section
             class="grid gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:grid-cols-[1fr_auto] sm:items-end sm:p-5 dark:border-zinc-800 dark:bg-zinc-950"
         >
             <div class="space-y-2">
                 <p
                     class="text-xs font-bold tracking-wider text-zinc-500 uppercase"
                 >
-                    Certified reference specimens
+                    Laboratory conductor & certified reference specimens
                 </p>
                 <label
                     for="milestone"

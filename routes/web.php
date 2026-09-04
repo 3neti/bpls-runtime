@@ -106,6 +106,10 @@ if ($stakeholderPreviewSafety->isEnabled()) {
                 Route::post('stakeholder-preview/lifecycle-laboratory/cleanrooms/{lifecycleCleanroomRun}/close', [LifecycleCleanroomController::class, 'close'])
                     ->name('stakeholder-preview.lifecycle-laboratory.cleanrooms.close');
             });
+            Route::get('stakeholder-preview/lifecycle-laboratory/specimens/{lifecycleScenarioSpecimen}/application', [LifecycleLaboratoryController::class, 'showApplication'])
+                ->name('stakeholder-preview.lifecycle-application.show');
+            Route::get('stakeholder-preview/lifecycle-laboratory/cleanrooms/{lifecycleCleanroomRun}/application', [LifecycleCleanroomController::class, 'showApplication'])
+                ->name('stakeholder-preview.lifecycle-cleanroom-application.show');
             Route::get('stakeholder-preview/workflow', [StakeholderPreviewWorkflowController::class, 'index'])
                 ->name('stakeholder-preview.workflow');
             Route::post('stakeholder-preview/applications/{permitApplication}/office-charge', [StakeholderPreviewWorkflowController::class, 'storeOfficeCharge'])

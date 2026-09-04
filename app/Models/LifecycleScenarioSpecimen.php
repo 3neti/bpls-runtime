@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * @property int $permit_application_id
+ * @property string $scenario_id
+ * @property int $scenario_revision
  * @property string $semantic_result_hash
  * @property array<string, mixed> $owned_resource_manifest
  */

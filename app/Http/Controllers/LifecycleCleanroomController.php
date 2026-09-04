@@ -9,8 +9,10 @@ use App\Actions\ConfirmLifecycleRoutineOfficeDefaults;
 use App\Actions\ResolveLifecycleCleanroomState;
 use App\Actions\SimulateLifecycleOfficeReviews;
 use App\Actions\StartLifecycleCleanroom;
+use App\Data\Application\ApplicationDataResolver;
 use App\Http\Requests\RunLifecycleCleanroomMilestoneRequest;
 use App\Models\LifecycleCleanroomRun;
+use App\Models\PermitApplication;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -148,7 +150,31 @@ class LifecycleCleanroomController extends Controller
 
     public function enterActor(Request $request, LifecycleCleanroomRun $lifecycleCleanroomRun, string $actor, AuthenticateLifecycleCleanroomActor $authenticate): RedirectResponse
     {
-        return redirect()->to($authenticate->handle($request, $lifecycleCleanroomRun, $actor));
+        return redirect()->to($authenticate->handle($request, $lifecycleCleanroomRun, $actor, 'stakeholder-preview.lifecycle-cleanroom-application.show'));
+    }
+
+    public function showApplication(
+        Request $request,
+        LifecycleCleanroomRun $lifecycleCleanroomRun,
+        ApplicationDataResolver $resolver,
+    ): Response {
+        $actorIds = collect($lifecycleCleanroomRun->actors())->pluck('user_id')->filter()->all();
+        abort_unless(
+            $lifecycleCleanroomRun->status === 'active'
+            && data_get($lifecycleCleanroomRun->actor_manifest, 'semantic_classification') === 'synthetic_only'
+            && data_get($lifecycleCleanroomRun->actor_manifest, 'production_liability') === false
+            && in_array($request->user()?->id, $actorIds, true),
+            404,
+        );
+        $applicationId = $lifecycleCleanroomRun->renewal_application_id ?? $lifecycleCleanroomRun->new_application_id;
+        abort_unless(is_int($applicationId), 404);
+        $application = PermitApplication::query()->findOrFail($applicationId);
+
+        return Inertia::render('stakeholder-preview/LifecycleApplication', [
+            'application' => $resolver->resolve($application, $request->user())->toArray(),
+            'focus' => '',
+            'scenario' => ['id' => 'cleanroom', 'run_id' => $lifecycleCleanroomRun->public_id],
+        ]);
     }
 
     public function close(LifecycleCleanroomRun $lifecycleCleanroomRun): RedirectResponse

@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Data\Application\ApplicationDataResolver;
 use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\LifecycleScenarios\RenewalHappyPathDefinition;
 use App\Models\LifecycleScenarioSpecimen;
@@ -12,6 +13,7 @@ final class BuildLifecycleLaboratory
         private readonly NewApplicationHappyPathDefinition $newApplication,
         private readonly RenewalHappyPathDefinition $renewal,
         private readonly AuthenticateLifecycleScenarioActor $authenticateActor,
+        private readonly ApplicationDataResolver $applicationDataResolver,
     ) {}
 
     /** @return array<string, mixed> */
@@ -101,6 +103,7 @@ final class BuildLifecycleLaboratory
                 'document_url' => route('citizen.permit-applications.show', $application, absolute: false),
                 'declaration_frozen' => $application->declaration()->exists(),
             ],
+            'application_data' => $application === null ? null : $this->applicationDataResolver->resolve($application)->toArray(),
             'actors' => $specimen === null ? [] : $this->authenticateActor->entries($specimen),
         ];
     }

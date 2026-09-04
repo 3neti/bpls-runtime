@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Data\Application\ApplicationDataResolver;
+use App\Data\Application\EloquentApplicationDataResolver;
 use App\Enums\UserPermission;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -21,7 +23,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(ApplicationDataResolver::class, EloquentApplicationDataResolver::class);
     }
 
     /**

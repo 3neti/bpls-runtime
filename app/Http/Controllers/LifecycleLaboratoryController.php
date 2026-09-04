@@ -6,6 +6,7 @@ use App\Actions\AuthenticateLifecycleScenarioActor;
 use App\Actions\BuildLifecycleCleanroom;
 use App\Actions\BuildLifecycleLaboratory;
 use App\Actions\ExecutePersistedLifecycleScenario;
+use App\Data\Application\ApplicationDataResolver;
 use App\Http\Requests\RunLifecycleLaboratoryMilestoneRequest;
 use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\LifecycleScenarios\RenewalHappyPathDefinition;
@@ -67,6 +68,35 @@ final class LifecycleLaboratoryController extends Controller
         AuthenticateLifecycleScenarioActor $authenticate,
     ): RedirectResponse {
         return redirect()->to($authenticate->handle($request, $lifecycleScenarioSpecimen, $actor));
+    }
+
+    public function showApplication(
+        Request $request,
+        LifecycleScenarioSpecimen $lifecycleScenarioSpecimen,
+        ApplicationDataResolver $resolver,
+    ): Response {
+        $manifest = $lifecycleScenarioSpecimen->owned_resource_manifest;
+        $actorIdPayload = data_get($manifest, 'actor_user_ids', []);
+        $actorIds = is_array($actorIdPayload)
+            ? array_values(array_filter($actorIdPayload, fn (mixed $id): bool => is_int($id)))
+            : [];
+        abort_unless(
+            data_get($manifest, 'semantic_classification') === 'synthetic_only'
+            && data_get($manifest, 'production_liability') === false
+            && in_array($request->user()?->id, $actorIds, true),
+            404,
+        );
+
+        $application = $lifecycleScenarioSpecimen->permitApplication()->firstOrFail();
+
+        return Inertia::render('stakeholder-preview/LifecycleApplication', [
+            'application' => $resolver->resolve($application, $request->user())->toArray(),
+            'focus' => $request->string('focus')->toString(),
+            'scenario' => [
+                'id' => $lifecycleScenarioSpecimen->scenario_id,
+                'revision' => $lifecycleScenarioSpecimen->scenario_revision,
+            ],
+        ]);
     }
 
     private function executeAndRecord(ExecutePersistedLifecycleScenario $execute, string $scenarioId): void

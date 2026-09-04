@@ -41,7 +41,10 @@ final class AuthenticateLifecycleScenarioActor
         $user = $this->resolve($specimen, $actorKey);
         abort_unless($user instanceof User, 404);
 
-        $destination = $this->destination($specimen, $actorKey);
+        $destination = route('stakeholder-preview.lifecycle-application.show', [
+            'lifecycleScenarioSpecimen' => $specimen,
+            'focus' => $actorKey,
+        ], absolute: false);
 
         Auth::guard('web')->logout();
         $request->session()->invalidate();
@@ -76,18 +79,6 @@ final class AuthenticateLifecycleScenarioActor
                 ->whereKey($roleIds)
                 ->where('code', $prefix.'-'.$actor['role_suffix']))
             ->first();
-    }
-
-    private function destination(LifecycleScenarioSpecimen $specimen, string $actorKey): string
-    {
-        $actor = self::Actors[$actorKey];
-        $application = $specimen->permitApplication()->with(['business', 'assessments'])->firstOrFail();
-        $parameter = match ($actor['destination']) {
-            'staff.permit-applications.assessments.show' => $application->assessments()->whereNull('superseded_at')->sole()->id,
-            default => $application->id,
-        };
-
-        return route($actor['destination'], $parameter, absolute: false);
     }
 
     /** @return list<int> */

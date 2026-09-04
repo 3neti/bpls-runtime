@@ -134,17 +134,26 @@ test('open as actor authenticates only exact manifest owned scenario identities 
         ->sole();
     $application = $specimen->permitApplication;
     $cases = [
-        'citizen' => ['email' => 'scenario-citizen@example.test', 'destination' => route('citizen.permit-applications.show', $application)],
-        'health' => ['email' => 'scenario-01-health@example.test', 'destination' => route('staff.permit-applications.evaluation.show', $application)],
-        'treasury' => ['email' => 'scenario-01-treasury-counter-check@example.test', 'destination' => route('staff.permit-applications.evaluation.show', $application)],
-        'municipal_treasurer' => ['email' => 'scenario-01-municipal-treasurer@example.test', 'destination' => route('staff.permit-applications.assessments.show', $application->assessments->sole())],
+        'citizen' => ['email' => 'scenario-citizen@example.test'],
+        'health' => ['email' => 'scenario-01-health@example.test'],
+        'treasury' => ['email' => 'scenario-01-treasury-counter-check@example.test'],
+        'municipal_treasurer' => ['email' => 'scenario-01-municipal-treasurer@example.test'],
     ];
 
     foreach ($cases as $actor => $expectation) {
         $this->actingAs($management)
             ->post(route('stakeholder-preview.lifecycle-laboratory.enter-actor', [$specimen, $actor]))
-            ->assertRedirect($expectation['destination']);
+            ->assertRedirect(route('stakeholder-preview.lifecycle-application.show', [
+                'lifecycleScenarioSpecimen' => $specimen,
+                'focus' => $actor,
+            ]));
         $this->assertAuthenticatedAs(User::query()->where('email', $expectation['email'])->sole());
+        $this->get(route('stakeholder-preview.lifecycle-application.show', $specimen))
+            ->assertSuccessful()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('stakeholder-preview/LifecycleApplication')
+                ->where('application.schema_version', 'bpls.application-data.v1')
+                ->where('application.identity.application_id', $application->id));
     }
 
     $manifest = $specimen->owned_resource_manifest;
