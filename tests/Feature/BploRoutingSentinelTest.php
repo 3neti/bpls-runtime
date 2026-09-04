@@ -113,6 +113,11 @@ test('BPLO evaluator presents checked suggestions and the persisted countdown bo
         ->assertInertia(fn (Assert $page) => $page
             ->component('business-permit-evaluations/Show')
             ->where('application.submitted_at', $application->submitted_at->toIso8601String())
+            ->where('application.business_name', $application->business->name)
+            ->where('application.owner_name', $application->business->owner->name)
+            ->where('application.type', PermitApplicationType::New->value)
+            ->where('application.year', $application->application_year)
+            ->where('application.tracking_reference', $application->tracking_reference)
             ->where('bploRouting', null)
             ->where('routingSuggestion.id', $suggestion->id)
             ->where('routingSuggestion.status', BploRoutingSuggestion::AwaitingConfirmation)

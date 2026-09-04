@@ -10,7 +10,6 @@ import {
     CircleDashed,
     ClipboardCheck,
     FileClock,
-    FileSearch,
     History,
     Landmark,
     LockKeyhole,
@@ -68,6 +67,11 @@ const props = defineProps<{
     application: {
         id: number;
         application_number: string | null;
+        tracking_reference: string | null;
+        business_name: string;
+        owner_name: string;
+        type: string;
+        year: number;
         submitted_at: string | null;
         lines: {
             id: number;
@@ -273,6 +277,73 @@ const completedDepartmentResponsibilityCount = computed(
         ).length,
 );
 
+type RoutingWork = NonNullable<typeof props.bploRouting>['works'][number];
+
+const routingPaymentOrders = computed(() =>
+    (props.bploRouting?.works ?? []).flatMap((work) =>
+        work.payment_orders.map((order) => ({
+            ...order,
+            officeLabel: work.office_label,
+        })),
+    ),
+);
+
+function evaluationItemsForRoutingWork(work: RoutingWork): EvaluationItem[] {
+    return (props.evaluation?.items ?? []).filter(
+        (item) =>
+            item.responsible_party === work.office_code &&
+            (work.line_of_business_name === null ||
+                item.line_of_business_name === work.line_of_business_name),
+    );
+}
+
+function routingWorkComplete(work: RoutingWork): boolean {
+    const items = evaluationItemsForRoutingWork(work);
+
+    if (items.length > 0) {
+        return items.every((item) => item.resolution === 'resolved');
+    }
+
+    return work.payment_orders.some((order) => order.status !== 'superseded');
+}
+
+function routingWorkStatus(work: RoutingWork): string {
+    if (routingWorkComplete(work)) {
+        return 'Determination complete';
+    }
+
+    if (props.evaluation === null) {
+        return 'Evaluation not started';
+    }
+
+    return `Awaiting ${work.office_label}`;
+}
+
+const completedRoutingWorkCount = computed(
+    () =>
+        props.bploRouting?.works.filter((work) => routingWorkComplete(work))
+            .length ?? 0,
+);
+
+const applicationReference = computed(
+    () =>
+        props.application.application_number ??
+        props.application.tracking_reference ??
+        `Record #${props.application.id}`,
+);
+
+const applicationReferenceLabel = computed(() => {
+    if (props.application.application_number) {
+        return 'Official application number';
+    }
+
+    if (props.application.tracking_reference) {
+        return 'Submission tracking reference';
+    }
+
+    return 'Internal record';
+});
+
 function reviewStage(item: EvaluationItem): string {
     const value = item.resolved_value;
     const inspection =
@@ -314,6 +385,38 @@ const myOpenWork = computed(() =>
         (item) => item.is_mine && item.resolution !== 'resolved',
     ),
 );
+
+const nextStepTitle = computed(() => {
+    if (props.evaluation === null) {
+        return props.can.initialize
+            ? 'Start the fee evaluation'
+            : 'Waiting for the Assessment Officer';
+    }
+
+    if (myOpenWork.value.length > 0) {
+        return `Complete your ${officeLabel(myOpenWork.value[0].responsible_party)} ${myOpenWork.value.length === 1 ? 'determination' : 'determinations'}`;
+    }
+
+    if (readiness.value?.ready) {
+        return readiness.value.label;
+    }
+
+    return 'Waiting for concerned offices';
+});
+
+const nextStepNote = computed(() => {
+    if (props.evaluation === null) {
+        return props.can.initialize
+            ? 'Create the evaluation responsibilities and begin recording the required office decisions.'
+            : 'BPLO routing is recorded. An Assessment Officer must start the Evaluation before concerned offices can record fee determinations.';
+    }
+
+    if (myOpenWork.value.length > 0) {
+        return 'Use the assigned charge rows below to confirm the scheduled amount, record an override, or mark the charge not applicable.';
+    }
+
+    return readiness.value?.note ?? '';
+});
 
 const requiredResponsibilitiesComplete = computed(() =>
     (props.evaluation?.items ?? [])
@@ -633,10 +736,10 @@ function submitPrepareAssessment(): void {
                     <p
                         class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
                     >
-                        Municipal evaluation working paper
+                        Municipal evaluation workspace
                     </p>
                     <h1 class="text-2xl font-semibold tracking-tight">
-                        Business Permit Evaluator
+                        Application evaluation
                     </h1>
                     <p
                         class="max-w-3xl text-sm leading-6 text-muted-foreground"
@@ -644,16 +747,12 @@ function submitPrepareAssessment(): void {
                         {{
                             isCitizenLens
                                 ? 'What you declared, what the Municipality currently evaluates, and which municipal reviews are still open.'
-                                : 'How the municipal charges on this application build up, who owns each one, and what changed.'
+                                : 'Complete the required office determinations, review the emerging assessment, and preserve the decision trail.'
                         }}
                     </p>
                 </div>
-                <Badge
-                    v-if="evaluation"
-                    variant="outline"
-                    class="self-start px-3 py-1.5 text-sm"
-                >
-                    {{ evaluation.status_label }}
+                <Badge variant="outline" class="self-start px-3 py-1.5 text-sm">
+                    {{ evaluation?.status_label ?? 'Awaiting Evaluation' }}
                 </Badge>
             </header>
 
@@ -678,42 +777,129 @@ function submitPrepareAssessment(): void {
             </div>
 
             <section
+                class="grid gap-4 rounded-2xl border bg-card p-5 shadow-xs sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.65fr)]"
+                aria-labelledby="application-identity-heading"
+                data-testid="evaluation-application-summary"
+            >
+                <div class="flex min-w-0 items-start gap-3">
+                    <div
+                        class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
+                    >
+                        <BriefcaseBusiness class="size-5" aria-hidden="true" />
+                    </div>
+                    <div class="min-w-0">
+                        <p
+                            class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                        >
+                            Application being evaluated
+                        </p>
+                        <h2
+                            id="application-identity-heading"
+                            class="mt-1 text-xl font-semibold break-words"
+                        >
+                            {{ application.business_name }}
+                        </h2>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                            {{ application.owner_name }} ·
+                            {{ applicationTypeLabel(application.type) }} ·
+                            {{ application.year }}
+                        </p>
+                        <dl class="mt-3 text-xs text-muted-foreground">
+                            <dt>{{ applicationReferenceLabel }}</dt>
+                            <dd class="mt-0.5 font-mono break-all">
+                                {{ applicationReference }}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <div
+                    class="rounded-xl border border-primary/20 bg-primary/5 p-4"
+                    role="status"
+                >
+                    <p
+                        class="text-xs font-semibold tracking-wide text-primary uppercase"
+                    >
+                        Next step
+                    </p>
+                    <p class="mt-1 font-semibold">
+                        {{ nextStepTitle }}
+                    </p>
+                    <p class="mt-1 text-sm leading-6 text-muted-foreground">
+                        {{ nextStepNote }}
+                    </p>
+                    <Link
+                        v-if="!evaluation && can.initialize"
+                        :href="initialize(application.id)"
+                        method="post"
+                        as="button"
+                        class="mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-3 focus-visible:ring-ring/50"
+                    >
+                        <ClipboardCheck class="size-4" aria-hidden="true" />
+                        Start Evaluation
+                    </Link>
+                </div>
+            </section>
+
+            <section
                 class="overflow-hidden rounded-2xl border-2 border-[#1f416b]/35 bg-card shadow-xs"
                 data-testid="bplo-routing-boundary"
                 aria-labelledby="bplo-routing-title"
             >
                 <div class="bg-[#1f416b] px-5 py-4 text-white">
                     <p class="text-xs font-bold tracking-[0.18em] uppercase">
-                        After Application lodging
+                        BPLO routing record
                     </p>
                     <h2 id="bplo-routing-title" class="mt-1 text-xl font-black">
-                        BPLO situational routing determination
+                        Required office determinations
                     </h2>
                     <p class="mt-1 max-w-3xl text-sm text-white/80">
-                        Application facts and Lines of Business produce a
-                        provisional laboratory suggestion. BPLO may confirm or
-                        change it before the sentinel review window closes.
+                        BPLO identifies the offices that must review this
+                        application. Each office remains responsible for its own
+                        applicability and amount decision.
                     </p>
                 </div>
 
                 <div v-if="bploRouting" class="grid gap-4 p-4 sm:p-5">
-                    <div class="grid gap-1 text-sm sm:grid-cols-[180px_1fr]">
-                        <p class="font-semibold">
-                            {{
-                                bploRouting.origin === 'system_defaulted'
-                                    ? 'Applied by sentinel'
-                                    : 'Determined by BPLO'
-                            }}
-                        </p>
-                        <p>
-                            {{ bploRouting.determined_by }} ·
-                            {{ dateTime(bploRouting.determined_at) }}
-                        </p>
-                        <p class="font-semibold">Situational context</p>
-                        <p class="text-muted-foreground">
+                    <div
+                        class="flex flex-col gap-3 rounded-xl bg-muted/35 p-4 sm:flex-row sm:items-start sm:justify-between"
+                    >
+                        <div>
+                            <p class="font-semibold">
+                                {{
+                                    bploRouting.origin === 'system_defaulted'
+                                        ? 'Routing applied after the BPLO review window'
+                                        : 'Routing recorded by BPLO'
+                                }}
+                            </p>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                {{ bploRouting.determined_by }} ·
+                                {{ dateTime(bploRouting.determined_at) }}
+                            </p>
+                        </div>
+                        <Badge variant="outline" class="w-fit shrink-0">
+                            {{ completedRoutingWorkCount }} of
+                            {{ bploRouting.works.length }} office reviews
+                            complete
+                        </Badge>
+                    </div>
+
+                    <details class="group rounded-xl border bg-background">
+                        <summary
+                            class="flex cursor-pointer list-none items-center justify-between gap-3 p-3 text-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                        >
+                            View BPLO's recorded situational context
+                            <ChevronRight
+                                class="size-4 transition-transform group-open:rotate-90"
+                                aria-hidden="true"
+                            />
+                        </summary>
+                        <p
+                            class="border-t p-3 text-sm leading-6 text-muted-foreground"
+                        >
                             {{ bploRouting.situational_context }}
                         </p>
-                    </div>
+                    </details>
 
                     <div
                         v-if="bploRouting.origin === 'system_defaulted'"
@@ -745,74 +931,99 @@ function submitPrepareAssessment(): void {
                                         }}
                                     </p>
                                 </div>
-                                <Badge variant="outline">
-                                    {{
-                                        bploRouting.origin ===
-                                        'system_defaulted'
-                                            ? 'System defaulted'
-                                            : 'BPLO selected'
-                                    }}
+                                <Badge
+                                    :variant="
+                                        routingWorkComplete(work)
+                                            ? 'secondary'
+                                            : 'outline'
+                                    "
+                                >
+                                    {{ routingWorkStatus(work) }}
                                 </Badge>
                             </div>
                             <p class="mt-3 text-sm">
-                                <strong>Required work:</strong>
+                                <strong>Required determination:</strong>
                                 {{ work.required_work }}
                             </p>
-                            <p class="mt-1 text-sm text-muted-foreground">
-                                {{ work.situational_reason }}
-                            </p>
-
-                            <div class="mt-4 border-t pt-3">
-                                <p
-                                    class="text-xs font-bold tracking-wide uppercase"
+                            <details class="group mt-3 border-t pt-3">
+                                <summary
+                                    class="flex cursor-pointer list-none items-center justify-between gap-3 text-sm text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                                 >
-                                    Paperless Payment Orders
-                                </p>
+                                    Why this office was included
+                                    <ChevronRight
+                                        class="size-4 transition-transform group-open:rotate-90"
+                                        aria-hidden="true"
+                                    />
+                                </summary>
                                 <p
-                                    v-if="work.payment_orders.length === 0"
-                                    class="mt-2 text-sm text-amber-700 dark:text-amber-300"
+                                    class="mt-2 text-sm leading-6 text-muted-foreground"
                                 >
-                                    Awaiting the office's amount-bearing
-                                    determination.
+                                    {{ work.situational_reason }}
                                 </p>
-                                <div v-else class="mt-2 grid gap-2">
-                                    <div
-                                        v-for="order in work.payment_orders"
-                                        :key="order.id"
-                                        class="grid gap-1 rounded-lg bg-muted/55 p-3 text-sm sm:grid-cols-[1fr_auto]"
-                                        data-testid="paperless-payment-order"
-                                    >
-                                        <div>
-                                            <p class="font-semibold">
-                                                Issued by {{ order.issued_by }}
-                                            </p>
-                                            <p
-                                                class="text-xs text-muted-foreground"
-                                            >
-                                                Internal sequence
-                                                {{ order.sequence }} ·
-                                                {{ dateTime(order.issued_at) }}
-                                                · {{ order.status }}
-                                            </p>
-                                        </div>
-                                        <p class="font-black">
-                                            {{
-                                                money(order.total_amount_cents)
-                                            }}
-                                        </p>
-                                        <p
-                                            class="text-xs text-muted-foreground sm:col-span-2"
-                                        >
-                                            Included upstream of the
-                                            consolidated Assessment when current
-                                            and eligible. No official
-                                            payment-order number is invented.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
+                            </details>
                         </article>
                     </div>
+
+                    <section
+                        class="rounded-xl border bg-background p-4"
+                        aria-labelledby="payment-orders-heading"
+                    >
+                        <div
+                            class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
+                        >
+                            <div>
+                                <p
+                                    class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                                >
+                                    Amount-bearing office records
+                                </p>
+                                <h3
+                                    id="payment-orders-heading"
+                                    class="mt-1 font-semibold"
+                                >
+                                    Paperless Payment Orders
+                                </h3>
+                            </div>
+                            <Badge variant="outline" class="w-fit shrink-0">
+                                {{ routingPaymentOrders.length }} recorded
+                            </Badge>
+                        </div>
+
+                        <p
+                            v-if="routingPaymentOrders.length === 0"
+                            class="mt-3 rounded-lg bg-muted/40 p-3 text-sm leading-6 text-muted-foreground"
+                        >
+                            None generated yet. Payment Orders appear here as
+                            concerned offices complete amount-bearing
+                            determinations. Each eligible amount enters the
+                            Assessment exactly once.
+                        </p>
+                        <div v-else class="mt-3 grid gap-2">
+                            <div
+                                v-for="order in routingPaymentOrders"
+                                :key="order.id"
+                                class="grid gap-2 rounded-lg bg-muted/40 p-3 text-sm sm:grid-cols-[minmax(0,1fr)_auto]"
+                                data-testid="paperless-payment-order"
+                            >
+                                <div class="min-w-0">
+                                    <p class="font-semibold">
+                                        {{ order.officeLabel }} · Payment Order
+                                        {{ order.sequence }}
+                                    </p>
+                                    <p
+                                        class="mt-1 text-xs text-muted-foreground"
+                                    >
+                                        {{ order.issued_by }} ·
+                                        {{ dateTime(order.issued_at) }} ·
+                                        {{ order.status }}
+                                    </p>
+                                </div>
+                                <p class="font-semibold tabular-nums">
+                                    {{ money(order.total_amount_cents) }}
+                                </p>
+                            </div>
+                        </div>
+                    </section>
                 </div>
 
                 <form
@@ -835,12 +1046,13 @@ function submitPrepareAssessment(): void {
                                 />
                                 <div>
                                     <p class="font-bold">
-                                        Laboratory routing suggestion ready
+                                        Routing suggestion ready
                                     </p>
                                     <p class="mt-1 text-sm leading-6">
-                                        These checked offices are provisional.
-                                        BPLO may change them until the sentinel
-                                        applies the recorded default.
+                                        This preview-only suggestion comes from
+                                        the recorded application facts. BPLO
+                                        must review the selected offices and may
+                                        change them before recording the route.
                                     </p>
                                 </div>
                             </div>
@@ -870,9 +1082,10 @@ function submitPrepareAssessment(): void {
                             </div>
                         </dl>
                         <p class="text-xs leading-5">
-                            Profile {{ routingSuggestion.profile_version }} ·
-                            elapsed clock · no approval, charge, clearance, or
-                            financial authority is created by timeout.
+                            Suggestion profile
+                            {{ routingSuggestion.profile_version }} · no
+                            approval, charge, clearance, assessment, payment, or
+                            financial authority is created by this suggestion.
                         </p>
                     </div>
                     <label class="grid gap-1 text-sm font-semibold">
@@ -987,100 +1200,41 @@ function submitPrepareAssessment(): void {
                     <div
                         class="flex size-10 items-center justify-center rounded-full bg-muted"
                     >
-                        <FileSearch class="size-5" aria-hidden="true" />
+                        <History class="size-5" aria-hidden="true" />
                     </div>
                     <h2
                         id="evaluation-empty-title"
                         class="text-lg font-semibold"
                     >
-                        No Evaluation history yet
+                        Evaluation activity
                     </h2>
-                    <p class="text-sm leading-6 text-muted-foreground">
-                        This application predates, or has not yet entered, the
-                        Business Permit Evaluator. Existing Assessment and
-                        payment records remain authoritative; no synthetic
-                        history is created.
+                    <p class="font-medium">
+                        No fee determinations recorded yet
                     </p>
-                    <Link
-                        v-if="can.initialize"
-                        :href="initialize(application.id)"
-                        method="post"
-                        as="button"
-                        class="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-3 focus-visible:ring-ring/50"
+                    <p class="text-sm leading-6 text-muted-foreground">
+                        <template v-if="bploRouting">
+                            BPLO recorded the required office routing on
+                            {{ dateTime(bploRouting.determined_at) }}. The
+                            Evaluation has not started, so no concerned office
+                            has recorded a fee decision.
+                        </template>
+                        <template v-else>
+                            BPLO must record the required office routing before
+                            the fee Evaluation can begin.
+                        </template>
+                    </p>
+                    <p
+                        v-if="!can.initialize && bploRouting"
+                        class="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground"
                     >
-                        <ClipboardCheck class="size-4" aria-hidden="true" />
-                        Start Evaluation
-                    </Link>
+                        Waiting for an authorized Assessment Officer to start
+                        the Evaluation.
+                    </p>
                 </div>
             </section>
 
             <template v-else-if="workingPaper">
-                <!-- 1. Whose application this is -->
-                <section
-                    class="rounded-2xl border bg-card p-5 shadow-xs sm:p-6"
-                    aria-labelledby="application-identity-heading"
-                >
-                    <div class="flex items-start gap-3">
-                        <div
-                            class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
-                        >
-                            <BriefcaseBusiness
-                                class="size-5"
-                                aria-hidden="true"
-                            />
-                        </div>
-                        <div class="min-w-0">
-                            <h2
-                                id="application-identity-heading"
-                                class="text-xl font-semibold break-words"
-                            >
-                                {{ evaluation.application.business_name }}
-                            </h2>
-                            <p class="mt-1 text-sm text-muted-foreground">
-                                {{ evaluation.application.owner_name }} ·
-                                {{
-                                    applicationTypeLabel(
-                                        evaluation.application.type,
-                                    )
-                                }}
-                                · {{ evaluation.application.year }}
-                            </p>
-                            <p class="mt-2 text-xs text-muted-foreground">
-                                <template
-                                    v-if="
-                                        evaluation.application
-                                            .application_number
-                                    "
-                                >
-                                    Application
-                                    {{
-                                        evaluation.application
-                                            .application_number
-                                    }}
-                                </template>
-                                <template
-                                    v-else-if="
-                                        evaluation.application
-                                            .tracking_reference
-                                    "
-                                >
-                                    Tracking reference
-                                    {{
-                                        evaluation.application
-                                            .tracking_reference
-                                    }}
-                                </template>
-                                <template v-else>
-                                    Application record #{{
-                                        evaluation.application.id
-                                    }}
-                                </template>
-                            </p>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- 2. What it currently costs, and how that was assembled -->
+                <!-- What it currently costs, and how that was assembled -->
                 <EvaluationTotalPanel
                     :working-paper="workingPaper"
                     :status-label="evaluation.status_label"
@@ -1152,18 +1306,19 @@ function submitPrepareAssessment(): void {
                         <p
                             class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
                         >
-                            Computation / Assessment working paper
+                            Fee evaluation
                         </p>
                         <h2
                             id="build-up-heading"
                             class="mt-1 text-lg font-semibold"
                         >
-                            Charges by Line of Business
+                            Charges being assembled
                         </h2>
                         <p class="mt-1 text-sm leading-6 text-muted-foreground">
-                            The Municipality builds this Evaluation from each
-                            Line of Business, its applicable charges, and any
-                            charges that apply to the whole application.
+                            Review application-wide charges and each Line of
+                            Business charge. Concerned offices may confirm,
+                            override, or mark their assigned charge not
+                            applicable.
                         </p>
                     </div>
 

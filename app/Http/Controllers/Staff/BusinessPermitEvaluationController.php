@@ -39,6 +39,7 @@ class BusinessPermitEvaluationController extends Controller
         Gate::authorize(UserPermission::ViewBusinessPermitEvaluations->value);
         $armRoutingSentinel->handle($permitApplication);
         $applyDueRoutingSuggestions->handle();
+        $permitApplication->loadMissing('business.owner');
         $evaluation = $permitApplication->businessPermitEvaluation()->first();
 
         return Inertia::render('business-permit-evaluations/Show', [
@@ -48,6 +49,11 @@ class BusinessPermitEvaluationController extends Controller
             'application' => [
                 'id' => $permitApplication->id,
                 'application_number' => $permitApplication->application_number,
+                'tracking_reference' => $permitApplication->tracking_reference,
+                'business_name' => $permitApplication->business->name,
+                'owner_name' => $permitApplication->business->owner->name,
+                'type' => $permitApplication->type->value,
+                'year' => $permitApplication->application_year,
                 'submitted_at' => $permitApplication->submitted_at?->toIso8601String(),
                 'lines' => $permitApplication->lines()->with('lineOfBusiness')->get()->map(fn ($line): array => [
                     'id' => $line->id,

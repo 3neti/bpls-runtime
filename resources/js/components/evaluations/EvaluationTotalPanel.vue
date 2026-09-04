@@ -23,7 +23,11 @@ defineProps<{
                     id="evaluated-total-heading"
                     class="text-xs font-medium opacity-80"
                 >
-                    Grand Total
+                    {{
+                        workingPaper.grandTotalAvailable
+                            ? 'Evaluated total'
+                            : 'Provisional assessment'
+                    }}
                 </h2>
                 <p
                     class="mt-1 text-3xl font-semibold tabular-nums"
@@ -33,7 +37,7 @@ defineProps<{
                         workingPaper.grandTotalAvailable &&
                         workingPaper.grandTotalCents !== null
                             ? money(workingPaper.grandTotalCents)
-                            : 'Pending resolution'
+                            : 'Not ready'
                     }}
                 </p>
                 <p class="mt-2 text-xs leading-5 opacity-80">
@@ -43,10 +47,11 @@ defineProps<{
 
             <div class="min-w-0 space-y-3">
                 <div>
-                    <p class="font-medium">Canonical financial roll-up</p>
+                    <p class="font-medium">Charges assembled so far</p>
                     <p class="mt-1 text-sm leading-6 text-muted-foreground">
-                        These subtotals and the Grand Total come from the
-                        Evaluation. This page does not calculate or edit them.
+                        These amounts come from the canonical Evaluation. This
+                        panel reports them without recalculating or changing any
+                        determination.
                     </p>
                 </div>
 
@@ -87,13 +92,13 @@ defineProps<{
                     <Clock3 class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                     <span>
                         {{ workingPaper.requiredUnresolvedChargeCount }}
-                        required
+                        required office
                         {{
                             workingPaper.requiredUnresolvedChargeCount === 1
-                                ? 'charge remains'
-                                : 'charges remain'
-                        }}
-                        unresolved. A speculative Grand Total is withheld.
+                                ? 'determination remains'
+                                : 'determinations remain'
+                        }}. The Assessment total is withheld until they are
+                        complete.
                     </span>
                 </div>
 
