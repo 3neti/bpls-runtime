@@ -93,6 +93,62 @@ test('eligible citizen payment detail exposes the QR Ph action without partner i
             ->missing('paymentSchedule.online_payment_boundary.provider'));
 });
 
+test('staff payment schedule exposes the same eligible QR Ph request', function () {
+    [, $schedule] = qrPhScheduleFixture();
+    $staff = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPaymentSchedules,
+    ]);
+
+    $this->actingAs($staff)
+        ->get(route('staff.payment-schedules.show', $schedule))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('payment-schedules/Show')
+            ->where('paymentSchedule.online_payment_boundary.status', 'available')
+            ->where('paymentSchedule.online_payment_boundary.can_pay_online', true)
+            ->where('paymentSchedule.online_payment_boundary.attempt_status', null)
+            ->where('paymentSchedule.total_amount_cents', 12_550));
+});
+
+test('staff and citizen generate one shared QR Ph payable obligation', function () {
+    [$citizen, $schedule] = qrPhScheduleFixture();
+    $staff = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPaymentSchedules,
+    ]);
+    $png = base64_encode("\x89PNG\r\n\x1a\nshared");
+    fakeQrPhIssueAndAttempt($schedule, $png);
+
+    $this->actingAs($staff)
+        ->postJson(route('staff.payment-schedules.qr-ph.initiate', $schedule))
+        ->assertOk()
+        ->assertJsonPath('amount_cents', 12_550)
+        ->assertJsonPath('qr_data_url', 'data:image/png;base64,'.$png);
+
+    $this->actingAs($citizen)
+        ->postJson(route('citizen.payment-schedules.qr-ph.initiate', $schedule))
+        ->assertOk()
+        ->assertJsonPath('amount_cents', 12_550)
+        ->assertJsonPath('qr_data_url', 'data:image/png;base64,'.$png);
+
+    expect(XChangePayment::query()->count())->toBe(1)
+        ->and(XChangePaymentAttempt::query()->count())->toBe(1);
+});
+
+test('staff without payment schedule access cannot generate QR Ph', function () {
+    [, $schedule] = qrPhScheduleFixture();
+    $staff = userWithPermissions([UserPermission::AccessStaff]);
+    Http::preventStrayRequests();
+
+    $this->actingAs($staff)
+        ->postJson(route('staff.payment-schedules.qr-ph.initiate', $schedule))
+        ->assertForbidden();
+
+    expect(XChangePayment::query()->count())->toBe(0);
+    Http::assertNothingSent();
+});
+
 test('an expired QR receives a new attempt key against the same payable obligation', function () {
     [$citizen, $schedule] = qrPhScheduleFixture();
     fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfresh"));

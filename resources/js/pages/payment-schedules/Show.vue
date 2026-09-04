@@ -1,11 +1,22 @@
 <script setup lang="ts">
-import { Form, Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft, Banknote, ReceiptText } from '@lucide/vue';
-import { computed } from 'vue';
+import { Form, Head, Link, router, useHttp } from '@inertiajs/vue3';
+import {
+    ArrowLeft,
+    Banknote,
+    CheckCircle2,
+    QrCode,
+    ReceiptText,
+    RefreshCw,
+} from '@lucide/vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { store as receiptStore } from '@/actions/App/Http/Controllers/Staff/CollectionReceiptController';
 import { store as collectionStore } from '@/actions/App/Http/Controllers/Staff/PaymentScheduleCollectionController';
 import { show as assessmentShow } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
+import {
+    initiate as initiateQrPh,
+    status as qrPhStatus,
+} from '@/actions/App/Http/Controllers/Staff/QrPhPaymentController';
 import { show as receiptShow } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
@@ -89,6 +100,9 @@ type OnlinePaymentBoundary = {
     can_reconcile_online: boolean;
     payment_schedule_id: number;
     payment_schedule_status: string;
+    payment_status: string | null;
+    attempt_status: string | null;
+    attempt_expires_at: string | null;
     blocked_transitions: string[];
     software_knows: {
         payment_schedule_exists: boolean;
@@ -99,6 +113,20 @@ type OnlinePaymentBoundary = {
     };
     unresolved_policy: string[];
     artifact_statement: string;
+};
+
+type QrPhAttempt = {
+    amount_cents: number;
+    status: string;
+    expires_at: string;
+    qr_data_url: string;
+};
+
+type QrPhStatus = {
+    paid: boolean;
+    status: string;
+    collection_id: number | null;
+    receipt_id: number | null;
 };
 
 type TreasuryCollection = {
@@ -162,6 +190,38 @@ const balanceDueCents = computed(
         props.paymentSchedule.paid_amount_cents,
 );
 
+const initiateRequest = useHttp({});
+const statusRequest = useHttp({});
+const qrAttempt = ref<QrPhAttempt | null>(null);
+const qrMessage = ref<string | null>(null);
+const currentTime = ref(Date.now());
+let countdownTimer: ReturnType<typeof setInterval> | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+const secondsRemaining = computed(() => {
+    if (qrAttempt.value === null) {
+        return 0;
+    }
+
+    return Math.max(
+        0,
+        Math.floor(
+            (new Date(qrAttempt.value.expires_at).getTime() -
+                currentTime.value) /
+                1000,
+        ),
+    );
+});
+
+const countdown = computed(() => {
+    const minutes = Math.floor(secondsRemaining.value / 60)
+        .toString()
+        .padStart(2, '0');
+    const seconds = (secondsRemaining.value % 60).toString().padStart(2, '0');
+
+    return `${minutes}:${seconds}`;
+});
+
 function money(amountCents: number): string {
     return new Intl.NumberFormat('en-PH', {
         style: 'currency',
@@ -172,6 +232,85 @@ function money(amountCents: number): string {
 function label(value: string): string {
     return value.replaceAll('_', ' ');
 }
+
+function stopQrChecks(): void {
+    if (countdownTimer !== null) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+    }
+
+    if (pollTimer !== null) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+}
+
+async function checkQrPayment(): Promise<void> {
+    if (statusRequest.processing || qrAttempt.value === null) {
+        return;
+    }
+
+    try {
+        const result = (await statusRequest.submit(
+            qrPhStatus(props.paymentSchedule.id),
+        )) as QrPhStatus;
+
+        if (result.paid) {
+            stopQrChecks();
+            qrMessage.value =
+                'Payment confirmed. The municipal collection is now recorded.';
+            qrAttempt.value = null;
+            router.reload({ only: ['paymentSchedule'] });
+        } else if (result.status === 'expired') {
+            stopQrChecks();
+            qrMessage.value =
+                'This QR expired without payment. Generate a fresh QR to continue.';
+        }
+    } catch {
+        qrMessage.value =
+            'Payment confirmation is temporarily unavailable. No collection was recorded.';
+    }
+}
+
+function startQrChecks(): void {
+    stopQrChecks();
+    currentTime.value = Date.now();
+    countdownTimer = setInterval(() => {
+        currentTime.value = Date.now();
+
+        if (secondsRemaining.value === 0) {
+            stopQrChecks();
+            qrMessage.value =
+                'This QR expired without payment. Generate a fresh QR to continue.';
+        }
+    }, 1000);
+    pollTimer = setInterval(() => void checkQrPayment(), 4000);
+}
+
+async function generateQrPh(): Promise<void> {
+    qrMessage.value = null;
+
+    try {
+        const result = (await initiateRequest.submit(
+            initiateQrPh(props.paymentSchedule.id),
+        )) as QrPhAttempt;
+
+        if (result.amount_cents !== balanceDueCents.value) {
+            qrMessage.value =
+                'The returned amount does not match this Payment Schedule. Nothing was changed.';
+
+            return;
+        }
+
+        qrAttempt.value = result;
+        startQrChecks();
+    } catch {
+        qrMessage.value =
+            'QR Ph is temporarily unavailable. The Payment Schedule is unchanged.';
+    }
+}
+
+onBeforeUnmount(stopQrChecks);
 </script>
 
 <template>
@@ -490,104 +629,164 @@ function label(value: string): string {
             </section>
 
             <section
+                data-testid="staff-qr-ph-payment"
                 class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
             >
-                <div class="mb-4 flex items-center gap-2">
-                    <Banknote class="size-4 text-muted-foreground" />
-                    <div>
-                        <h2 class="text-sm font-semibold text-foreground">
-                            Online payment availability
-                        </h2>
-                        <p class="text-xs text-muted-foreground">
-                            Electronic payment is not active in this preview.
+                <div class="grid gap-5 md:grid-cols-[minmax(0,1fr)_auto]">
+                    <div class="grid content-start gap-4">
+                        <div class="flex items-start gap-3">
+                            <div
+                                class="rounded-full bg-primary/10 p-2 text-primary"
+                            >
+                                <CheckCircle2
+                                    v-if="paymentSchedule.status === 'paid'"
+                                    class="size-5"
+                                />
+                                <QrCode v-else class="size-5" />
+                            </div>
+                            <div>
+                                <p
+                                    class="text-xs font-medium tracking-wide text-primary uppercase"
+                                >
+                                    Online payment
+                                </p>
+                                <h2
+                                    class="text-lg font-semibold text-foreground"
+                                >
+                                    QR Ph payment request
+                                </h2>
+                                <p class="mt-1 text-sm text-muted-foreground">
+                                    One QR for the exact unpaid Payment
+                                    Schedule. Generating it does not record
+                                    payment or issue an Official Receipt.
+                                </p>
+                            </div>
+                        </div>
+
+                        <dl class="grid gap-3 text-sm sm:grid-cols-3">
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Amount
+                                </dt>
+                                <dd
+                                    data-testid="staff-qr-ph-amount"
+                                    :data-amount-cents="balanceDueCents"
+                                    class="font-semibold tabular-nums"
+                                >
+                                    {{ money(balanceDueCents) }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Request
+                                </dt>
+                                <dd class="capitalize">
+                                    {{
+                                        paymentSchedule.online_payment_boundary
+                                            .attempt_status
+                                            ? label(
+                                                  paymentSchedule
+                                                      .online_payment_boundary
+                                                      .attempt_status,
+                                              )
+                                            : paymentSchedule
+                                                    .online_payment_boundary
+                                                    .can_pay_online
+                                              ? 'Ready to generate'
+                                              : label(
+                                                    paymentSchedule
+                                                        .online_payment_boundary
+                                                        .status,
+                                                )
+                                    }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Collection
+                                </dt>
+                                <dd>
+                                    {{
+                                        paymentSchedule.status === 'paid'
+                                            ? 'Confirmed'
+                                            : 'Not yet recorded'
+                                    }}
+                                </dd>
+                            </div>
+                        </dl>
+
+                        <p
+                            v-if="qrMessage"
+                            data-testid="staff-qr-ph-message"
+                            class="rounded-md border border-border bg-muted/30 p-3 text-sm text-foreground"
+                        >
+                            {{ qrMessage }}
+                        </p>
+
+                        <div
+                            v-if="
+                                paymentSchedule.online_payment_boundary
+                                    .can_pay_online &&
+                                paymentSchedule.status !== 'paid'
+                            "
+                            class="flex flex-wrap items-center gap-3"
+                        >
+                            <Button
+                                v-if="
+                                    qrAttempt === null || secondsRemaining === 0
+                                "
+                                type="button"
+                                :disabled="initiateRequest.processing"
+                                data-testid="staff-qr-ph-generate"
+                                @click="generateQrPh"
+                            >
+                                <RefreshCw
+                                    v-if="qrAttempt && secondsRemaining === 0"
+                                />
+                                <QrCode v-else />
+                                {{
+                                    initiateRequest.processing
+                                        ? 'Preparing QR…'
+                                        : qrAttempt && secondsRemaining === 0
+                                          ? 'Generate fresh QR'
+                                          : 'Generate QR Ph'
+                                }}
+                            </Button>
+                            <span class="text-xs text-muted-foreground">
+                                Citizen and staff use the same payment request.
+                            </span>
+                        </div>
+
+                        <p
+                            v-else-if="paymentSchedule.status !== 'paid'"
+                            class="text-sm text-muted-foreground"
+                        >
+                            {{
+                                paymentSchedule.online_payment_boundary
+                                    .artifact_statement
+                            }}
+                        </p>
+                    </div>
+
+                    <div
+                        v-if="qrAttempt"
+                        class="grid w-full justify-items-center gap-2 rounded-lg border bg-white p-3 md:w-72"
+                    >
+                        <img
+                            data-testid="staff-qr-ph-image"
+                            :src="qrAttempt.qr_data_url"
+                            alt="QR Ph payment code"
+                            class="aspect-square w-full object-contain"
+                        />
+                        <p class="text-sm font-medium text-slate-900">
+                            Expires in
+                            <span class="tabular-nums">{{ countdown }}</span>
+                        </p>
+                        <p class="text-center text-xs text-slate-600">
+                            Waiting for authoritative payment confirmation
                         </p>
                     </div>
                 </div>
-                <dl class="grid gap-3 text-sm md:grid-cols-4">
-                    <div>
-                        <dt class="text-xs text-muted-foreground">Status</dt>
-                        <dd class="capitalize">
-                            {{
-                                paymentSchedule.online_payment_boundary
-                                    .status === 'blocked'
-                                    ? 'Not available in this preview'
-                                    : paymentSchedule.online_payment_boundary.status.replace(
-                                          '_',
-                                          ' ',
-                                      )
-                            }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">
-                            Online payment in this preview
-                        </dt>
-                        <dd>
-                            {{
-                                paymentSchedule.online_payment_boundary
-                                    .can_pay_online
-                                    ? 'Available'
-                                    : 'Not available'
-                            }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">
-                            Online payment matching
-                        </dt>
-                        <dd>
-                            {{
-                                paymentSchedule.online_payment_boundary
-                                    .can_reconcile_online
-                                    ? 'Available'
-                                    : 'Not available'
-                            }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">
-                            Payment service
-                        </dt>
-                        <dd>Not configured</dd>
-                    </div>
-                    <div class="md:col-span-2">
-                        <dt class="text-xs text-muted-foreground">
-                            Actions not active
-                        </dt>
-                        <dd class="mt-2 flex flex-wrap gap-2">
-                            <Badge
-                                v-for="transition in paymentSchedule
-                                    .online_payment_boundary
-                                    .blocked_transitions"
-                                :key="transition"
-                                variant="secondary"
-                                class="capitalize"
-                            >
-                                {{ label(transition) }}
-                            </Badge>
-                        </dd>
-                    </div>
-                    <div class="md:col-span-2">
-                        <dt class="text-xs text-muted-foreground">
-                            Needs municipal confirmation
-                        </dt>
-                        <dd class="mt-2">
-                            <ul class="grid gap-1">
-                                <li
-                                    v-for="gap in paymentSchedule
-                                        .online_payment_boundary
-                                        .unresolved_policy"
-                                    :key="gap"
-                                >
-                                    {{ gap }}
-                                </li>
-                            </ul>
-                        </dd>
-                    </div>
-                </dl>
-                <p class="mt-3 text-sm text-muted-foreground">
-                    No online payment is accepted or recorded by this preview.
-                </p>
             </section>
 
             <section

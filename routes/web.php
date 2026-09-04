@@ -42,6 +42,7 @@ use App\Http\Controllers\Staff\PermitApplicationAssessmentController;
 use App\Http\Controllers\Staff\PermitApplicationController;
 use App\Http\Controllers\Staff\PermitApplicationDocumentController;
 use App\Http\Controllers\Staff\PldsReportController;
+use App\Http\Controllers\Staff\QrPhPaymentController as StaffQrPhPaymentController;
 use App\Http\Controllers\Staff\ReceiptController;
 use App\Http\Controllers\Staff\ReportCatalogController;
 use App\Http\Controllers\Staff\RevenueSourceReportController;
@@ -239,6 +240,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('payment-schedules.index');
         Route::get('payment-schedules/{paymentSchedule}', [AssessmentPaymentScheduleController::class, 'show'])
             ->name('payment-schedules.show');
+        Route::post('payment-schedules/{paymentSchedule}/qr-ph', [StaffQrPhPaymentController::class, 'initiate'])
+            ->middleware('throttle:10,1')
+            ->name('payment-schedules.qr-ph.initiate');
+        Route::get('payment-schedules/{paymentSchedule}/qr-ph/status', [StaffQrPhPaymentController::class, 'status'])
+            ->middleware('throttle:30,1')
+            ->name('payment-schedules.qr-ph.status');
         Route::post('payment-schedules/{paymentSchedule}/collections', [PaymentScheduleCollectionController::class, 'store'])
             ->name('payment-schedules.collections.store');
         Route::post('collections/{collection}/receipt', [CollectionReceiptController::class, 'store'])
