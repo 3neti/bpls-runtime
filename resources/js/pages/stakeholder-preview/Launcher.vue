@@ -209,7 +209,7 @@ function openLifecycleLaboratory(): void {
                         <p
                             class="text-xs font-bold tracking-widest text-amber-300 uppercase"
                         >
-                            Guided scenario
+                            Interactive cleanroom
                         </p>
                         <h2
                             id="lifecycle-laboratory-title"
@@ -218,14 +218,14 @@ function openLifecycleLaboratory(): void {
                             Lifecycle Laboratory
                         </h2>
                         <p class="max-w-3xl text-sm leading-6 text-zinc-300">
-                            Run the certified 2025 New Business and 2026 Renewal
-                            chronology step by step, then open the real product
-                            as each scenario actor.
+                            Start with a real application form, then work one
+                            source-backed Application through the municipal
+                            lifecycle as each responsible actor.
                         </p>
                         <p class="text-xs leading-5 text-zinc-400">
-                            Returning here after opening an actor restores the
-                            exact Management operator required by the
-                            Laboratory.
+                            Certified New and Renewal specimens remain available
+                            inside the Laboratory as separate regression
+                            evidence.
                         </p>
                     </div>
                 </div>

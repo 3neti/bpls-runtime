@@ -65,7 +65,6 @@ type Scenario = {
         assessment_id: number;
         payment_schedule_id: number;
     } | null;
-    application_data: any | null;
     actors: { key: string; label: string }[];
 };
 
@@ -143,23 +142,8 @@ const selectedMilestone = ref(
 const selectedCleanroomMilestone = ref(
     props.cleanroom.active?.progress.next_step?.key ?? 'payable_created',
 );
-const progressPercent = computed(
-    () =>
-        (props.laboratory.progress.completed_scenarios /
-            props.laboratory.progress.total_scenarios) *
-        100,
-);
-const visibleApplicationScenario = computed(
-    () =>
-        [...props.laboratory.scenarios]
-            .reverse()
-            .find((scenario) => scenario.application_data !== null) ?? null,
-);
 const currentApplicationData = computed(
-    () =>
-        props.cleanroom.active?.application_data ??
-        visibleApplicationScenario.value?.application_data ??
-        null,
+    () => props.cleanroom.active?.application_data ?? null,
 );
 
 function pesos(amountCents: number | null): string {
@@ -322,12 +306,14 @@ function closeCleanroom(): void {
                     <div
                         class="flex items-center justify-between gap-3 text-sm"
                     >
-                        <span class="font-semibold">Two-year chronology</span>
-                        <span
-                            >{{ laboratory.progress.completed_scenarios }}/{{
-                                laboratory.progress.total_scenarios
-                            }}</span
+                        <span class="font-semibold"
+                            >Interactive laboratory</span
                         >
+                        <span
+                            class="rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold"
+                        >
+                            {{ cleanroom.active ? 'Active' : 'Ready to start' }}
+                        </span>
                     </div>
                     <div
                         class="h-2 overflow-hidden rounded-full bg-white/10"
@@ -335,18 +321,26 @@ function closeCleanroom(): void {
                     >
                         <div
                             class="h-full rounded-full bg-amber-300 transition-all"
-                            :style="{ width: `${progressPercent}%` }"
+                            :style="{
+                                width: `${cleanroom.active?.progress.percent ?? 0}%`,
+                            }"
                         />
                     </div>
                     <p class="text-xs leading-5 text-zinc-400">
-                        {{ laboratory.safety.execution_boundary }}
+                        {{
+                            cleanroom.active
+                                ? `${cleanroom.active.progress.completed_steps}/${cleanroom.active.progress.total_steps} canonical steps completed.`
+                                : 'Start empty, submit the real application form, and work one Application actor by actor.'
+                        }}
                     </p>
                 </div>
             </div>
         </header>
 
         <section
+            data-testid="interactive-laboratory"
             class="overflow-hidden rounded-2xl border-2 border-amber-300 bg-white shadow-sm dark:border-amber-700 dark:bg-zinc-950"
+            aria-label="Interactive Laboratory"
         >
             <div
                 class="border-b border-amber-200 bg-amber-50 p-5 sm:p-6 dark:border-amber-800 dark:bg-amber-950/30"
@@ -358,7 +352,7 @@ function closeCleanroom(): void {
                         <div
                             class="text-xs font-bold tracking-wider text-amber-700 uppercase dark:text-amber-300"
                         >
-                            Guided cleanroom · real product forms
+                            Interactive laboratory · real product forms
                         </div>
                         <h2
                             class="text-2xl font-semibold text-zinc-950 dark:text-white"
@@ -366,8 +360,8 @@ function closeCleanroom(): void {
                             {{
                                 cleanroom.active?.progress.profile_kind ===
                                 'registry_source_replay'
-                                    ? 'Review a real Ipil registry specimen through one source-backed lifecycle'
-                                    : 'Build a fresh two-year municipal history, one step at a time'
+                                    ? 'Work one source-backed Application through its real lifecycle'
+                                    : 'Build one Application from its first submitted form'
                             }}
                         </h2>
                         <p
@@ -393,7 +387,8 @@ function closeCleanroom(): void {
                         class="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-zinc-950 px-5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-amber-300 dark:text-amber-950"
                         @click="startCleanroom"
                     >
-                        <FlaskConical class="size-4" /> Start cleanroom
+                        <FlaskConical class="size-4" /> Start Interactive
+                        Laboratory
                     </button>
                 </div>
             </div>
@@ -654,6 +649,7 @@ function closeCleanroom(): void {
 
         <section
             v-if="currentApplicationData"
+            data-testid="interactive-application-stage"
             class="space-y-4"
             aria-label="Current executable application"
         >
@@ -664,7 +660,7 @@ function closeCleanroom(): void {
                     <p
                         class="text-xs font-black tracking-wider text-sky-700 uppercase dark:text-sky-300"
                     >
-                        Current application stage
+                        Interactive application stage
                     </p>
                     <h2 class="text-2xl font-black">
                         The same Application after every canonical act
@@ -675,22 +671,12 @@ function closeCleanroom(): void {
                     aria-label="Open as actor"
                 >
                     <button
-                        v-for="actor in cleanroom.active?.application_data
-                            ? cleanroom.active.actors
-                            : (visibleApplicationScenario?.actors ?? [])"
+                        v-for="actor in cleanroom.active?.actors ?? []"
                         :key="actor.key"
                         type="button"
                         :disabled="working !== null"
                         class="shrink-0 rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-bold hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
-                        @click="
-                            cleanroom.active?.application_data
-                                ? openCleanroomActor(actor.key)
-                                : visibleApplicationScenario &&
-                                  openAsActor(
-                                      visibleApplicationScenario,
-                                      actor.key,
-                                  )
-                        "
+                        @click="openCleanroomActor(actor.key)"
                     >
                         {{ actor.label }}
                         <ExternalLink class="ml-1 inline size-3" />
@@ -703,302 +689,370 @@ function closeCleanroom(): void {
             />
         </section>
 
-        <section
-            class="grid gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:grid-cols-[1fr_auto] sm:items-end sm:p-5 dark:border-zinc-800 dark:bg-zinc-950"
+        <details
+            data-testid="certified-regression-evidence"
+            class="group overflow-hidden rounded-2xl border border-zinc-300 bg-zinc-50 shadow-sm dark:border-zinc-700 dark:bg-zinc-950"
         >
-            <div class="space-y-2">
-                <p
-                    class="text-xs font-bold tracking-wider text-zinc-500 uppercase"
-                >
-                    Laboratory conductor & certified reference specimens
-                </p>
-                <label
-                    for="milestone"
-                    class="text-sm font-semibold text-zinc-900 dark:text-zinc-100"
-                    >Run to milestone</label
-                >
-                <select
-                    id="milestone"
-                    v-model="selectedMilestone"
-                    :disabled="working !== null"
-                    class="h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus-visible:ring-2 focus-visible:ring-amber-500 sm:max-w-md dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-                >
-                    <option
-                        v-for="scenario in laboratory.scenarios"
-                        :key="scenario.id"
-                        :value="scenario.id"
-                    >
-                        {{ scenario.application_year }} ·
-                        {{ scenario.milestone }}
-                    </option>
-                </select>
-            </div>
-            <div class="flex flex-col gap-2 sm:flex-row">
-                <button
-                    type="button"
-                    :disabled="working !== null || laboratory.progress.complete"
-                    class="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-zinc-950 px-4 text-sm font-semibold text-white outline-none hover:bg-zinc-800 focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-amber-300 dark:text-amber-950 dark:hover:bg-amber-200"
-                    @click="runNextStep"
-                >
-                    <Play class="size-4" aria-hidden="true" />
-                    {{
-                        working === 'next'
-                            ? 'Running…'
-                            : laboratory.progress.complete
-                              ? 'Chronology complete'
-                              : 'Run Next Step'
-                    }}
-                </button>
-                <button
-                    type="button"
-                    :disabled="working !== null"
-                    class="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-zinc-300 px-4 text-sm font-semibold text-zinc-900 outline-none hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-wait disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-900"
-                    @click="runToSelectedMilestone"
-                >
-                    <ArrowRight class="size-4" aria-hidden="true" />
-                    {{
-                        working === 'milestone'
-                            ? 'Running…'
-                            : 'Run to Milestone'
-                    }}
-                </button>
-            </div>
-        </section>
-
-        <section
-            class="space-y-6"
-            aria-label="Continuous two-year municipal timeline"
-        >
-            <article
-                v-for="scenario in laboratory.scenarios"
-                :key="scenario.id"
-                :data-scenario-id="scenario.id"
-                class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+            <summary
+                class="flex cursor-pointer list-none flex-col items-start justify-between gap-4 p-5 outline-none marker:hidden focus-visible:ring-2 focus-visible:ring-amber-500 sm:flex-row sm:items-center sm:p-6"
             >
-                <div
-                    class="grid gap-5 border-b border-zinc-200 p-5 sm:grid-cols-[1fr_auto] sm:items-start sm:p-6 dark:border-zinc-800"
+                <span class="min-w-0">
+                    <span
+                        class="block text-xs font-black tracking-wider text-zinc-500 uppercase"
+                        >Automated reference evidence</span
+                    >
+                    <span
+                        class="mt-1 block text-xl font-black text-zinc-950 dark:text-white"
+                        >Certified Regression Evidence</span
+                    >
+                    <span
+                        class="mt-1 block max-w-3xl text-sm leading-6 text-zinc-600 dark:text-zinc-400"
+                    >
+                        Scenario 01 and Scenario 02 are deterministic
+                        certification specimens—not the interactive Laboratory.
+                        Expand only to generate or inspect reference evidence.
+                    </span>
+                </span>
+                <span
+                    class="shrink-0 rounded-full bg-zinc-200 px-3 py-1.5 text-xs font-bold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                >
+                    {{ laboratory.progress.completed_scenarios }}/{{
+                        laboratory.progress.total_scenarios
+                    }}
+                    certified
+                </span>
+            </summary>
+
+            <div
+                class="space-y-6 border-t border-zinc-200 p-4 sm:p-6 dark:border-zinc-800"
+            >
+                <section
+                    class="grid gap-4 rounded-xl border border-zinc-200 bg-white p-4 sm:grid-cols-[1fr_auto] sm:items-end dark:border-zinc-800 dark:bg-zinc-950"
+                    aria-label="Generate certified reference evidence"
                 >
                     <div class="space-y-2">
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span
-                                class="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-                            >
-                                <CalendarDays
-                                    class="size-3.5"
-                                    aria-hidden="true"
-                                />{{ scenario.effective_date }}
-                            </span>
-                            <span
-                                :class="
-                                    scenario.status === 'completed'
-                                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-300'
-                                        : 'bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300'
-                                "
-                                class="rounded-full px-2.5 py-1 text-xs font-semibold"
-                            >
-                                {{
-                                    scenario.status === 'completed'
-                                        ? 'Certified & persisted'
-                                        : 'Ready to run'
-                                }}
-                            </span>
-                        </div>
-                        <h2
-                            class="text-xl font-semibold text-zinc-950 dark:text-white"
-                        >
-                            {{ scenario.label }}
-                        </h2>
                         <p
-                            class="text-sm leading-6 text-zinc-600 dark:text-zinc-400"
+                            class="text-xs font-bold tracking-wider text-zinc-500 uppercase"
                         >
-                            {{ scenario.summary }}
+                            Automated certification runner
                         </p>
+                        <label
+                            for="milestone"
+                            class="text-sm font-semibold text-zinc-900 dark:text-zinc-100"
+                            >Generate through reference</label
+                        >
+                        <select
+                            id="milestone"
+                            v-model="selectedMilestone"
+                            :disabled="working !== null"
+                            class="h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus-visible:ring-2 focus-visible:ring-amber-500 sm:max-w-md dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                        >
+                            <option
+                                v-for="scenario in laboratory.scenarios"
+                                :key="scenario.id"
+                                :value="scenario.id"
+                            >
+                                {{ scenario.application_year }} ·
+                                {{ scenario.milestone }}
+                            </option>
+                        </select>
                     </div>
-                    <div
-                        v-if="scenario.application"
-                        class="rounded-xl bg-zinc-50 px-4 py-3 text-sm dark:bg-zinc-900"
-                    >
-                        <p class="font-semibold text-zinc-950 dark:text-white">
-                            {{ scenario.application.business_name }}
-                        </p>
-                        <p class="mt-1 text-zinc-600 dark:text-zinc-400">
-                            {{ scenario.application.owner_name }} ·
-                            {{ scenario.application.status.replace('_', ' ') }}
-                        </p>
+                    <div class="flex flex-col gap-2 sm:flex-row">
+                        <button
+                            type="button"
+                            :disabled="
+                                working !== null || laboratory.progress.complete
+                            "
+                            class="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-zinc-950 px-4 text-sm font-semibold text-white outline-none hover:bg-zinc-800 focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-amber-300 dark:text-amber-950 dark:hover:bg-amber-200"
+                            @click="runNextStep"
+                        >
+                            <Play class="size-4" aria-hidden="true" />
+                            {{
+                                working === 'next'
+                                    ? 'Running…'
+                                    : laboratory.progress.complete
+                                      ? 'References complete'
+                                      : 'Generate next certification'
+                            }}
+                        </button>
+                        <button
+                            type="button"
+                            :disabled="working !== null"
+                            class="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-zinc-300 px-4 text-sm font-semibold text-zinc-900 outline-none hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-wait disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                            @click="runToSelectedMilestone"
+                        >
+                            <ArrowRight class="size-4" aria-hidden="true" />
+                            {{
+                                working === 'milestone'
+                                    ? 'Running…'
+                                    : 'Generate selected references'
+                            }}
+                        </button>
                     </div>
-                </div>
+                </section>
 
-                <div
-                    class="grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_21rem]"
+                <section
+                    class="space-y-6"
+                    aria-label="Automated certified reference scenarios"
                 >
-                    <ol class="space-y-0">
-                        <li
-                            v-for="event in scenario.events"
-                            :key="event.key"
-                            class="grid grid-cols-[2rem_minmax(0,1fr)] gap-3"
+                    <article
+                        v-for="scenario in laboratory.scenarios"
+                        :key="scenario.id"
+                        :data-scenario-id="scenario.id"
+                        data-classification="automated-certification-specimen"
+                        class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+                    >
+                        <div
+                            class="grid gap-5 border-b border-zinc-200 p-5 sm:grid-cols-[1fr_auto] sm:items-start sm:p-6 dark:border-zinc-800"
                         >
-                            <div class="flex flex-col items-center">
-                                <span
-                                    :class="
-                                        event.status === 'completed'
-                                            ? 'bg-emerald-600 text-white'
-                                            : 'border border-zinc-300 bg-white text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950'
-                                    "
-                                    class="flex size-7 shrink-0 items-center justify-center rounded-full"
+                            <div class="space-y-2">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span
+                                        class="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                                    >
+                                        <CalendarDays
+                                            class="size-3.5"
+                                            aria-hidden="true"
+                                        />{{ scenario.effective_date }}
+                                    </span>
+                                    <span
+                                        class="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-800 dark:bg-sky-400/15 dark:text-sky-300"
+                                    >
+                                        Automated certification specimen
+                                    </span>
+                                    <span
+                                        :class="
+                                            scenario.status === 'completed'
+                                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-300'
+                                                : 'bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300'
+                                        "
+                                        class="rounded-full px-2.5 py-1 text-xs font-semibold"
+                                    >
+                                        {{
+                                            scenario.status === 'completed'
+                                                ? 'Certified & persisted'
+                                                : 'Ready to run'
+                                        }}
+                                    </span>
+                                </div>
+                                <h2
+                                    class="text-xl font-semibold text-zinc-950 dark:text-white"
                                 >
-                                    <Check
-                                        v-if="event.status === 'completed'"
-                                        class="size-4"
-                                        aria-hidden="true"
-                                    />
-                                    <Circle
-                                        v-else
-                                        class="size-3"
-                                        aria-hidden="true"
-                                    />
-                                </span>
-                                <span
-                                    class="h-full min-h-5 w-px bg-zinc-200 last:hidden dark:bg-zinc-800"
-                                    aria-hidden="true"
-                                />
-                            </div>
-                            <div class="min-w-0 pb-5">
-                                <h3
-                                    class="text-sm font-semibold text-zinc-950 dark:text-white"
-                                >
-                                    {{ event.label }}
-                                </h3>
+                                    {{ scenario.label }}
+                                </h2>
                                 <p
-                                    class="mt-1 text-sm leading-5 text-zinc-600 dark:text-zinc-400"
+                                    class="text-sm leading-6 text-zinc-600 dark:text-zinc-400"
                                 >
-                                    {{ event.description }}
+                                    {{ scenario.summary }}
                                 </p>
-                                <dl class="mt-2 flex flex-wrap gap-2">
-                                    <div
-                                        v-for="(value, label) in event.delta"
-                                        :key="label"
-                                        class="min-w-0 rounded-md bg-zinc-100 px-2.5 py-1.5 text-xs dark:bg-zinc-900"
-                                    >
-                                        <dt
-                                            class="inline font-medium text-zinc-600 dark:text-zinc-400"
+                            </div>
+                            <div
+                                v-if="scenario.application"
+                                class="rounded-xl bg-zinc-50 px-4 py-3 text-sm dark:bg-zinc-900"
+                            >
+                                <p
+                                    class="font-semibold text-zinc-950 dark:text-white"
+                                >
+                                    {{ scenario.application.business_name }}
+                                </p>
+                                <p
+                                    class="mt-1 text-zinc-600 dark:text-zinc-400"
+                                >
+                                    {{ scenario.application.owner_name }} ·
+                                    {{
+                                        scenario.application.status.replace(
+                                            '_',
+                                            ' ',
+                                        )
+                                    }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div
+                            class="grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_21rem]"
+                        >
+                            <ol class="space-y-0">
+                                <li
+                                    v-for="event in scenario.events"
+                                    :key="event.key"
+                                    class="grid grid-cols-[2rem_minmax(0,1fr)] gap-3"
+                                >
+                                    <div class="flex flex-col items-center">
+                                        <span
+                                            :class="
+                                                event.status === 'completed'
+                                                    ? 'bg-emerald-600 text-white'
+                                                    : 'border border-zinc-300 bg-white text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950'
+                                            "
+                                            class="flex size-7 shrink-0 items-center justify-center rounded-full"
                                         >
-                                            {{ label }}
-                                        </dt>
-                                        <dd
-                                            class="inline font-semibold text-zinc-950 dark:text-white"
-                                        >
-                                            {{ value }}
-                                        </dd>
+                                            <Check
+                                                v-if="
+                                                    event.status === 'completed'
+                                                "
+                                                class="size-4"
+                                                aria-hidden="true"
+                                            />
+                                            <Circle
+                                                v-else
+                                                class="size-3"
+                                                aria-hidden="true"
+                                            />
+                                        </span>
+                                        <span
+                                            class="h-full min-h-5 w-px bg-zinc-200 last:hidden dark:bg-zinc-800"
+                                            aria-hidden="true"
+                                        />
                                     </div>
-                                </dl>
-                            </div>
-                        </li>
-                    </ol>
+                                    <div class="min-w-0 pb-5">
+                                        <h3
+                                            class="text-sm font-semibold text-zinc-950 dark:text-white"
+                                        >
+                                            {{ event.label }}
+                                        </h3>
+                                        <p
+                                            class="mt-1 text-sm leading-5 text-zinc-600 dark:text-zinc-400"
+                                        >
+                                            {{ event.description }}
+                                        </p>
+                                        <dl class="mt-2 flex flex-wrap gap-2">
+                                            <div
+                                                v-for="(
+                                                    value, label
+                                                ) in event.delta"
+                                                :key="label"
+                                                class="min-w-0 rounded-md bg-zinc-100 px-2.5 py-1.5 text-xs dark:bg-zinc-900"
+                                            >
+                                                <dt
+                                                    class="inline font-medium text-zinc-600 dark:text-zinc-400"
+                                                >
+                                                    {{ label }}
+                                                </dt>
+                                                <dd
+                                                    class="inline font-semibold text-zinc-950 dark:text-white"
+                                                >
+                                                    {{ value }}
+                                                </dd>
+                                            </div>
+                                        </dl>
+                                    </div>
+                                </li>
+                            </ol>
 
-                    <aside class="space-y-4">
-                        <div
-                            class="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800"
-                        >
-                            <div class="flex items-center gap-2">
-                                <WalletCards
-                                    class="size-5 text-amber-600"
-                                    aria-hidden="true"
-                                />
-                                <h3
-                                    class="font-semibold text-zinc-950 dark:text-white"
-                                >
-                                    Financial working paper
-                                </h3>
-                            </div>
-                            <dl class="mt-4 space-y-2 text-sm">
+                            <aside class="space-y-4">
                                 <div
-                                    v-for="line in scenario
-                                        .financial_working_paper.lines"
-                                    :key="line.label"
-                                    class="flex justify-between gap-3"
+                                    class="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800"
                                 >
-                                    <dt
-                                        class="text-zinc-600 dark:text-zinc-400"
-                                    >
-                                        {{ line.label }}
-                                    </dt>
-                                    <dd
-                                        class="font-medium text-zinc-950 dark:text-white"
-                                    >
-                                        {{ pesos(line.amount_cents) }}
-                                    </dd>
+                                    <div class="flex items-center gap-2">
+                                        <WalletCards
+                                            class="size-5 text-amber-600"
+                                            aria-hidden="true"
+                                        />
+                                        <h3
+                                            class="font-semibold text-zinc-950 dark:text-white"
+                                        >
+                                            Financial working paper
+                                        </h3>
+                                    </div>
+                                    <dl class="mt-4 space-y-2 text-sm">
+                                        <div
+                                            v-for="line in scenario
+                                                .financial_working_paper.lines"
+                                            :key="line.label"
+                                            class="flex justify-between gap-3"
+                                        >
+                                            <dt
+                                                class="text-zinc-600 dark:text-zinc-400"
+                                            >
+                                                {{ line.label }}
+                                            </dt>
+                                            <dd
+                                                class="font-medium text-zinc-950 dark:text-white"
+                                            >
+                                                {{ pesos(line.amount_cents) }}
+                                            </dd>
+                                        </div>
+                                        <div
+                                            class="flex justify-between gap-3 border-t border-zinc-200 pt-2 font-semibold dark:border-zinc-800"
+                                        >
+                                            <dt>Total assessed</dt>
+                                            <dd>
+                                                {{
+                                                    pesos(
+                                                        scenario
+                                                            .financial_working_paper
+                                                            .total_amount_cents,
+                                                    )
+                                                }}
+                                            </dd>
+                                        </div>
+                                        <div
+                                            class="flex justify-between gap-3 text-amber-700 dark:text-amber-300"
+                                        >
+                                            <dt>Payable balance</dt>
+                                            <dd class="font-semibold">
+                                                {{
+                                                    pesos(
+                                                        scenario
+                                                            .financial_working_paper
+                                                            .payable_balance_cents,
+                                                    )
+                                                }}
+                                            </dd>
+                                        </div>
+                                    </dl>
                                 </div>
-                                <div
-                                    class="flex justify-between gap-3 border-t border-zinc-200 pt-2 font-semibold dark:border-zinc-800"
-                                >
-                                    <dt>Total assessed</dt>
-                                    <dd>
-                                        {{
-                                            pesos(
-                                                scenario.financial_working_paper
-                                                    .total_amount_cents,
-                                            )
-                                        }}
-                                    </dd>
-                                </div>
-                                <div
-                                    class="flex justify-between gap-3 text-amber-700 dark:text-amber-300"
-                                >
-                                    <dt>Payable balance</dt>
-                                    <dd class="font-semibold">
-                                        {{
-                                            pesos(
-                                                scenario.financial_working_paper
-                                                    .payable_balance_cents,
-                                            )
-                                        }}
-                                    </dd>
-                                </div>
-                            </dl>
-                        </div>
 
-                        <div
-                            v-if="scenario.actors.length > 0"
-                            class="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800"
-                        >
-                            <div class="flex items-center gap-2">
-                                <Landmark
-                                    class="size-5 text-amber-600"
-                                    aria-hidden="true"
-                                />
-                                <h3
-                                    class="font-semibold text-zinc-950 dark:text-white"
+                                <div
+                                    v-if="scenario.actors.length > 0"
+                                    class="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800"
                                 >
-                                    Open as exact scenario actor
-                                </h3>
-                            </div>
-                            <p class="mt-2 text-xs leading-5 text-zinc-500">
-                                These are manifest-owned scenario identities,
-                                separate from generic Preview personas.
-                            </p>
-                            <div class="mt-3 grid gap-2">
-                                <button
-                                    v-for="actor in scenario.actors"
-                                    :key="actor.key"
-                                    type="button"
-                                    :disabled="working !== null"
-                                    class="inline-flex min-w-0 items-center justify-between gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-left text-sm font-medium text-zinc-800 outline-none hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                                    @click="openAsActor(scenario, actor.key)"
-                                >
-                                    <span class="truncate">{{
-                                        actor.label
-                                    }}</span>
-                                    <ExternalLink
-                                        class="size-4 shrink-0"
-                                        aria-hidden="true"
-                                    />
-                                </button>
-                            </div>
+                                    <div class="flex items-center gap-2">
+                                        <Landmark
+                                            class="size-5 text-amber-600"
+                                            aria-hidden="true"
+                                        />
+                                        <h3
+                                            class="font-semibold text-zinc-950 dark:text-white"
+                                        >
+                                            Inspect reference as actor
+                                        </h3>
+                                    </div>
+                                    <p
+                                        class="mt-2 text-xs leading-5 text-zinc-500"
+                                    >
+                                        Reference-only inspection using
+                                        manifest-owned scenario identities. This
+                                        is not interactive Laboratory work.
+                                    </p>
+                                    <div class="mt-3 grid gap-2">
+                                        <button
+                                            v-for="actor in scenario.actors"
+                                            :key="actor.key"
+                                            type="button"
+                                            :disabled="working !== null"
+                                            class="inline-flex min-w-0 items-center justify-between gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-left text-sm font-medium text-zinc-800 outline-none hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                                            @click="
+                                                openAsActor(scenario, actor.key)
+                                            "
+                                        >
+                                            <span class="truncate">{{
+                                                actor.label
+                                            }}</span>
+                                            <ExternalLink
+                                                class="size-4 shrink-0"
+                                                aria-hidden="true"
+                                            />
+                                        </button>
+                                    </div>
+                                </div>
+                            </aside>
                         </div>
-                    </aside>
-                </div>
-            </article>
-        </section>
+                    </article>
+                </section>
+            </div>
+        </details>
 
         <aside
             class="grid gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-950 sm:grid-cols-[auto_1fr] dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200"

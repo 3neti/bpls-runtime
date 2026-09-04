@@ -67,9 +67,30 @@ test('management sees the ordered certified chronology with bounded controls and
             ->where('laboratory.scenarios.0.effective_date', '2025-01-15')
             ->where('laboratory.scenarios.0.events.0.label', 'Citizen created')
             ->where('laboratory.scenarios.0.events.3.label', '2025 New Business Permit lodged')
+            ->missing('laboratory.scenarios.0.application_data')
             ->where('laboratory.scenarios.1.effective_date', '2026-01-15')
             ->where('laboratory.scenarios.1.events.0.label', '2026 Renewal lodged')
+            ->missing('laboratory.scenarios.1.application_data')
             ->where('laboratory.scenarios.1.financial_working_paper.total_amount_cents', 122_000));
+});
+
+test('laboratory segregates interactive work from collapsed automated reference evidence', function () {
+    $component = file_get_contents(resource_path('js/pages/stakeholder-preview/LifecycleLaboratory.vue'));
+
+    expect($component)
+        ->toContain('data-testid="interactive-laboratory"')
+        ->toContain('Start Interactive')
+        ->toContain('data-testid="interactive-application-stage"')
+        ->toContain('() => props.cleanroom.active?.application_data ?? null')
+        ->not->toContain('visibleApplicationScenario')
+        ->toContain('<details')
+        ->toContain('data-testid="certified-regression-evidence"')
+        ->not->toContain('<details open')
+        ->toContain('Certified Regression Evidence')
+        ->toContain('Automated certification specimen')
+        ->toContain('data-classification="automated-certification-specimen"')
+        ->toContain('Inspect reference as actor')
+        ->toContain('Generate next certification');
 });
 
 test('run next uses the certified persisted driver for one continuous two year chronology', function () {
