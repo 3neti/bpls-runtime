@@ -15,6 +15,7 @@ import type { EvaluationItem } from '@/types';
 const props = defineProps<{
     item: EvaluationItem;
     submitting: boolean;
+    canViewFeeMatrix?: boolean;
 }>();
 const emit = defineEmits<{
     submit: [item: EvaluationItem, draft: ResponsibilityDraft];
@@ -148,16 +149,21 @@ function openFeeMatrix(): void {
                 determination
             </legend>
 
-            <Button
-                v-if="isCharge"
-                type="button"
-                variant="outline"
-                class="w-full sm:w-fit"
-                @click="openFeeMatrix"
-            >
-                <TableProperties aria-hidden="true" />
-                View Fee Matrix
-            </Button>
+            <div v-if="isCharge && canViewFeeMatrix" class="grid gap-1.5">
+                <Button
+                    type="button"
+                    variant="outline"
+                    class="w-full sm:w-fit"
+                    @click="openFeeMatrix"
+                >
+                    <TableProperties aria-hidden="true" />
+                    Check current Fee Matrix
+                </Button>
+                <p class="text-xs leading-5 text-muted-foreground">
+                    Reference only. Opening the matrix does not select or change
+                    this case determination.
+                </p>
+            </div>
 
             <div v-if="isCharge" class="grid gap-2">
                 <Label>Determination</Label>
@@ -170,7 +176,7 @@ function openFeeMatrix(): void {
                         type="radio"
                         value="confirm"
                     />
-                    Confirm ₱{{ proposalPesos }}
+                    Confirm scheduled amount — ₱{{ proposalPesos }}
                 </label>
                 <label
                     v-if="proposalPesos !== null"

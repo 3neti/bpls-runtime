@@ -66,6 +66,10 @@ class HandleInertiaRequests extends Middleware
                 'can_view_billing_groups' => $user?->can('billing_groups.view') ?? false,
                 'can_view_reports' => $user?->can('reports.view') ?? false,
                 'can_view_fee_rules' => $user?->can('fee_rules.view') ?? false,
+                'can_view_fee_matrix' => $user?->canAny([
+                    'fee_rules.view',
+                    'business_permit_evaluations.contribute',
+                ]) ?? false,
                 'can_manage_fee_rules' => $user?->can('fee_rules.manage') ?? false,
                 'can_view_users' => $user?->can('users.view') ?? false,
                 'can_view_roles' => $user?->can('roles.view') ?? false,

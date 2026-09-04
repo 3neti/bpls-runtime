@@ -11,6 +11,7 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { officeLabel } from '@/lib/evaluationPresentation';
 import { index as feeMatrixIndex } from '@/routes/staff/fee-matrix';
 
 type Fee = {
@@ -41,6 +42,7 @@ type Matrix = {
 const open = ref(false);
 const loading = ref(false);
 const matrix = ref<Matrix | null>(null);
+const loadFailed = ref(false);
 const query = ref('');
 const lens = ref<'all' | 'application_wide' | 'line_of_business'>('all');
 const contextOffice = ref<string | null>(null);
@@ -91,6 +93,7 @@ const lineGroups = computed(() =>
 
 async function load(): Promise<void> {
     loading.value = true;
+    loadFailed.value = false;
     const params = new URLSearchParams();
 
     if (contextOffice.value) {
@@ -104,14 +107,21 @@ async function load(): Promise<void> {
         );
     }
 
-    const response = await fetch(
-        `${feeMatrixIndex().url}?${params.toString()}`,
-        {
-            headers: { Accept: 'application/json' },
-        },
-    );
-    matrix.value = response.ok ? ((await response.json()) as Matrix) : null;
-    loading.value = false;
+    try {
+        const response = await fetch(
+            `${feeMatrixIndex().url}?${params.toString()}`,
+            {
+                headers: { Accept: 'application/json' },
+            },
+        );
+        matrix.value = response.ok ? ((await response.json()) as Matrix) : null;
+        loadFailed.value = !response.ok;
+    } catch {
+        matrix.value = null;
+        loadFailed.value = true;
+    } finally {
+        loading.value = false;
+    }
 }
 
 function openFromContext(event: Event): void {
@@ -119,6 +129,8 @@ function openFromContext(event: Event): void {
         { office?: string; lineOfBusinessId?: number } | undefined;
     contextOffice.value = detail?.office ?? null;
     contextLineOfBusinessId.value = detail?.lineOfBusinessId ?? null;
+    query.value = '';
+    lens.value = 'all';
     open.value = true;
 }
 
@@ -154,6 +166,17 @@ onBeforeUnmount(() =>
                     Read-only current municipal pricing knowledge. Proposed and
                     uncommissioned entries never execute.
                 </DialogDescription>
+                <p
+                    v-if="contextOffice"
+                    class="mt-2 rounded-lg bg-muted/60 p-3 text-sm leading-5"
+                >
+                    Showing entries relevant to
+                    <strong>{{ officeLabel(contextOffice) }}</strong>
+                    <template v-if="contextLineOfBusinessId">
+                        and this Line of Business</template
+                    >. Use these as reference; closing this sheet leaves the
+                    case determination unchanged.
+                </p>
                 <div class="relative mt-2">
                     <Search
                         class="absolute top-2.5 left-3 size-4 text-muted-foreground"
@@ -185,6 +208,14 @@ onBeforeUnmount(() =>
             <div class="grid gap-6 p-5">
                 <p v-if="loading" class="text-sm text-muted-foreground">
                     Loading current fee matrix…
+                </p>
+                <p
+                    v-else-if="loadFailed"
+                    class="rounded-lg border border-destructive/30 bg-destructive/5 p-5 text-sm"
+                >
+                    The current Fee Matrix could not be loaded. Your case
+                    determination has not been changed. Close this sheet and try
+                    again.
                 </p>
                 <template v-else-if="matrix">
                     <section v-if="applicationFees.length" class="grid gap-2">
@@ -240,7 +271,10 @@ onBeforeUnmount(() =>
                         v-if="!applicationFees.length && !lineGroups.length"
                         class="rounded-lg border border-dashed p-5 text-sm text-muted-foreground"
                     >
-                        No fee entries match this view.
+                        No current fee entry matches this office, Line of
+                        Business, and search. The case amount must still be
+                        supported by the office's evidence and recorded reason;
+                        this empty result does not set the amount to zero.
                     </p>
                 </template>
             </div>

@@ -436,6 +436,14 @@ const canViewFeeRules = computed(
         ) && props.evaluation?.lens === 'internal',
 );
 
+const canViewFeeMatrix = computed(
+    () =>
+        Boolean(
+            (page.props.auth as { can_view_fee_matrix?: boolean } | undefined)
+                ?.can_view_fee_matrix,
+        ) && props.evaluation?.lens === 'internal',
+);
+
 const latestAssessment = computed(() => props.evaluation?.latest_assessment);
 const currentAssessmentExists = computed(
     () =>
@@ -1273,7 +1281,7 @@ function submitPrepareAssessment(): void {
                                 }}
                                 on this application
                             </h2>
-                            <ul class="mt-2 grid gap-1 text-sm">
+                            <ul class="mt-3 grid gap-2 text-sm">
                                 <li
                                     v-for="item in myOpenWork"
                                     :key="item.id"
@@ -1283,17 +1291,13 @@ function submitPrepareAssessment(): void {
                                         class="mt-0.5 size-4 shrink-0"
                                         aria-hidden="true"
                                     />
-                                    <span>
+                                    <a
+                                        :href="`#evaluation-component-${item.key}`"
+                                        class="font-medium text-primary underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                                    >
                                         {{ item.label }}
-                                        <span class="text-muted-foreground">
-                                            —
-                                            {{
-                                                item.item_type === 'charge'
-                                                    ? 'confirm or change the proposed amount below'
-                                                    : 'record your determination below'
-                                            }}
-                                        </span>
-                                    </span>
+                                        — open determination
+                                    </a>
                                 </li>
                             </ul>
                         </div>
@@ -1386,6 +1390,7 @@ function submitPrepareAssessment(): void {
                                         `item-${component.itemId}`
                                     "
                                     :can-view-fee-rules="canViewFeeRules"
+                                    :can-view-fee-matrix="canViewFeeMatrix"
                                     :simplified="isCitizenLens"
                                     @submit="submitResponsibility"
                                 />
@@ -1452,6 +1457,7 @@ function submitPrepareAssessment(): void {
                                         `item-${component.itemId}`
                                     "
                                     :can-view-fee-rules="canViewFeeRules"
+                                    :can-view-fee-matrix="canViewFeeMatrix"
                                     :simplified="isCitizenLens"
                                     @submit="submitResponsibility"
                                 />

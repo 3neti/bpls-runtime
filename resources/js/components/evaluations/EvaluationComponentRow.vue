@@ -26,6 +26,7 @@ defineProps<{
     editable: boolean;
     submitting: boolean;
     canViewFeeRules: boolean;
+    canViewFeeMatrix: boolean;
     simplified: boolean;
 }>();
 const emit = defineEmits<{
@@ -35,6 +36,7 @@ const emit = defineEmits<{
 
 <template>
     <article
+        :id="`evaluation-component-${component.key}`"
         class="rounded-xl border bg-card p-4 shadow-xs sm:p-5"
         :class="component.isMine ? 'border-primary/50 bg-primary/5' : ''"
         :data-testid="`evaluation-component-${component.key}`"
@@ -165,6 +167,7 @@ const emit = defineEmits<{
             <EvaluationResponsibilityForm
                 :item="item"
                 :submitting="submitting"
+                :can-view-fee-matrix="canViewFeeMatrix"
                 @submit="(payload, draft) => emit('submit', payload, draft)"
             />
         </div>

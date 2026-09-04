@@ -230,6 +230,41 @@ it('keeps the citizen catalog restricted while staff quick look shares the gover
         ->assertDontSee('88800');
 });
 
+it('lets a concerned-office evaluator use only the read-only Fee Matrix', function (): void {
+    $rule = FeeRule::factory()->create([
+        'code' => 'ASSESSOR-REFERENCE',
+        'amount_cents' => 12_300,
+        'effective_from' => '2026-01-01',
+    ]);
+    FeeRule::factory()->create([
+        'code' => 'HEALTH-ONLY-REFERENCE',
+        'effective_from' => '2026-01-01',
+        'metadata' => ['responsible_office' => 'health'],
+    ]);
+    $assessor = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewBusinessPermitEvaluations,
+        UserPermission::ContributeBusinessPermitEvaluations,
+    ]);
+
+    $this->actingAs($assessor)
+        ->getJson(route('staff.fee-matrix.index', ['office' => 'assessor']))
+        ->assertOk()
+        ->assertJsonCount(1, 'application_wide')
+        ->assertJsonPath('application_wide.0.id', $rule->id);
+
+    $this->actingAs($assessor)
+        ->get(route('staff.fee-rules.index'))
+        ->assertForbidden();
+
+    $this->actingAs($assessor)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('auth.can_view_fee_matrix', true)
+            ->where('auth.can_view_fee_rules', false));
+});
+
 it('freezes input and report fingerprints with Assessment line and resolved total parity', function (): void {
     $rule = FeeRule::factory()->create([
         'code' => 'PARITY-FEE',

@@ -25,7 +25,9 @@ final class BuildFeeMatrixQuickLook
                 ->where('code', 'like', "%{$value}%")
                 ->orWhere('name', 'like', "%{$value}%")
                 ->orWhereHas('lineOfBusiness', fn ($query) => $query->where('name', 'like', "%{$value}%"))))
-            ->when($office, fn ($query, string $value) => $query->where('metadata->responsible_office', $value))
+            ->when($office, fn ($query, string $value) => $query->where(fn ($query) => $query
+                ->where('metadata->responsible_office', $value)
+                ->orWhereNull('metadata->responsible_office')))
             ->when($lineOfBusinessId, fn ($query, int $value) => $query->where('line_of_business_id', $value))
             ->orderBy('scope')->orderBy('code')->get()
             ->filter(fn (FeeRule $rule): bool => ! in_array(data_get($rule->metadata, 'semantic_classification'), [

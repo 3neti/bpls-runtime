@@ -29,6 +29,6 @@ const page = usePage();
             <slot />
         </AppContent>
         <Toaster />
-        <FeeMatrixQuickLook v-if="page.props.auth.can_view_fee_rules" />
+        <FeeMatrixQuickLook v-if="page.props.auth.can_view_fee_matrix" />
     </AppShell>
 </template>

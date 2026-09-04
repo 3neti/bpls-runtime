@@ -13,7 +13,10 @@ final class FeeMatrixController extends Controller
 {
     public function __invoke(Request $request, BuildFeeMatrixQuickLook $build): JsonResponse
     {
-        Gate::authorize(UserPermission::ViewFeeRules->value);
+        abort_unless(Gate::any([
+            UserPermission::ViewFeeRules->value,
+            UserPermission::ContributeBusinessPermitEvaluations->value,
+        ]), 403);
         $filters = $request->validate([
             'q' => ['nullable', 'string', 'max:120'],
             'office' => ['nullable', 'string', 'max:80'],

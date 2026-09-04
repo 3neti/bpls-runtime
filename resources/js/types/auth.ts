@@ -28,6 +28,7 @@ export type Auth = {
     can_view_billing_groups: boolean;
     can_view_reports: boolean;
     can_view_fee_rules: boolean;
+    can_view_fee_matrix: boolean;
     can_manage_fee_rules: boolean;
     can_view_users: boolean;
     can_view_roles: boolean;
