@@ -6,6 +6,7 @@ import {
     latestChange,
     money,
     presentFinancialWorkingPaper,
+    shouldStartChargeFromFeeSchedule,
 } from '../../resources/js/lib/evaluationPresentation.ts';
 import type {
     EvaluationFinancialWorkingPaper,
@@ -218,6 +219,25 @@ test('fee-rule charges use the exact projected identity without inventing an ite
     assert.equal(governed.itemId, null);
     assert.equal(governed.owner, 'Municipal system');
     assert.equal(governed.sourceLabel, 'Municipal fee rule');
+});
+
+test('an ungoverned laboratory proposal starts from the fee schedule', () => {
+    assert.equal(
+        shouldStartChargeFromFeeSchedule('provisional_uat', null, 'proposal'),
+        true,
+    );
+    assert.equal(
+        shouldStartChargeFromFeeSchedule('governed_rule', 3, 'proposal'),
+        false,
+    );
+    assert.equal(
+        shouldStartChargeFromFeeSchedule(
+            'provisional_uat',
+            null,
+            'confirmation',
+        ),
+        false,
+    );
 });
 
 test('Not Applicable and unresolved charges keep backend inclusion decisions', () => {

@@ -278,9 +278,11 @@ it('separates the complete ordinance fee register from executable FeeRules', fun
     $ordinanceCodes = collect($matrix['ordinance_register'])->pluck('code');
     $weightsAndMeasures = collect($matrix['ordinance_register'])
         ->firstWhere('code', 'MRC-3H-03-FEES');
+    $generalPermitSchedule = collect($matrix['ordinance_register'])
+        ->firstWhere('code', 'MRC-3A-02-A-01-06-GENERAL-PERMIT-FEES');
 
     expect($matrix)
-        ->schema_version->toBe('bpls.municipal-fee-matrix.v2')
+        ->schema_version->toBe('bpls.municipal-fee-matrix.v3')
         ->context->charge_label->toBe('Weight & Measure')
         ->context->source_classification->toBe('provisional_uat')
         ->context->has_direct_fee_rule->toBeFalse()
@@ -299,7 +301,24 @@ it('separates the complete ordinance fee register from executable FeeRules', fun
         ->and($weightsAndMeasures)->not->toBeNull()
         ->and($weightsAndMeasures['reconciliation_status'])->toBe('reconciliation_required')
         ->and($weightsAndMeasures['linked_fee_rule'])->toBeNull()
-        ->and($weightsAndMeasures['entries'])->toHaveCount(17);
+        ->and($weightsAndMeasures['service_category'])->toBe([
+            'key' => 'weights_measures',
+            'label' => 'Weights, Measures & Fuel Pumps',
+        ])
+        ->and($weightsAndMeasures['entries'])->toHaveCount(17)
+        ->and(collect($weightsAndMeasures['entries'])->whereNotNull('amount_minor'))->toHaveCount(16)
+        ->and(collect($weightsAndMeasures['entries'])->firstWhere('code', 'MRC-3H-03-PLATFORM-OVER-25-TO-100KG'))
+        ->toMatchArray([
+            'service_label' => 'Platform Scale',
+            'basis_label' => 'Over 25 kg to 100 kg',
+            'unit_label' => 'Per instrument',
+            'amount_minor' => 10_000,
+        ])
+        ->and($generalPermitSchedule['entries'][0])->toMatchArray([
+            'service_label' => 'Manufacturers/Importers/Producers',
+            'basis_label' => 'Micro-Industry',
+            'amount_minor' => 30_000,
+        ]);
 });
 
 it('uses an exact FeeRule identity when a contextual matrix link is available', function (): void {
@@ -320,7 +339,23 @@ it('uses an exact FeeRule identity when a contextual matrix link is available', 
 
     expect($matrix['context']['has_direct_fee_rule'])->toBeTrue()
         ->and(collect($matrix['application_wide'])->pluck('id')->all())->toEqual([$directRule->id])
+        ->and($matrix['application_wide'][0]['management_url'])->toBe(route('staff.fee-rules.show', $directRule, false))
         ->and($matrix['line_of_businesses'])->toBeEmpty();
+});
+
+it('presents the quick look as a compact fee schedule with governed maintenance links', function (): void {
+    $quickLook = file_get_contents(resource_path('js/components/fees/FeeMatrixQuickLook.vue'));
+    $feeCatalog = file_get_contents(resource_path('js/pages/fee-rules/Index.vue'));
+
+    expect($quickLook)
+        ->toContain('Municipal Schedule of Fees')
+        ->toContain('Basis / condition')
+        ->toContain('Fee / rate')
+        ->toContain('Manage fee')
+        ->toContain('Ordinance Source')
+        ->not->toContain('All provisions recorded')
+        ->not->toContain('Ordinance evidence—not a price list')
+        ->and($feeCatalog)->toContain("'revenue-code-provision-' +");
 });
 
 it('freezes input and report fingerprints with Assessment line and resolved total parity', function (): void {

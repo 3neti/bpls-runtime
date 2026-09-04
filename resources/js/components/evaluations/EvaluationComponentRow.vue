@@ -96,7 +96,10 @@ const emit = defineEmits<{
                     {{
                         component.sourceType === 'fee_rule'
                             ? 'Municipal pricing'
-                            : 'Proposed to the office'
+                            : component.sourceClassification ===
+                                'provisional_uat'
+                              ? 'Historical laboratory reference'
+                              : 'Proposed to the office'
                     }}
                 </dt>
                 <dd class="mt-1 font-medium tabular-nums">

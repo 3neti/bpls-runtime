@@ -1,12 +1,7 @@
 <script setup lang="ts">
-import {
-    AlertTriangle,
-    BookOpenText,
-    Search,
-    TableProperties,
-} from '@lucide/vue';
+import { Link, usePage } from '@inertiajs/vue3';
+import { BookOpenText, Search, Settings, TableProperties } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -17,26 +12,36 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { officeLabel, sourceLabel } from '@/lib/evaluationPresentation';
+import { officeLabel } from '@/lib/evaluationPresentation';
 import { index as feeMatrixIndex } from '@/routes/staff/fee-matrix';
+
+type ServiceCategory = {
+    key: string;
+    label: string;
+};
 
 type Fee = {
     id: number;
     code: string;
     name: string;
     family: 'application_wide' | 'line_of_business';
-    line_of_business_id: number | null;
     line_of_business_name: string | null;
     responsible_office: string | null;
     amount_minor: number | null;
     status: string;
-    legal_basis: string | null;
+    service_category: ServiceCategory;
+    management_url: string;
 };
 
 type OrdinanceEntry = {
     id: string;
-    label: string;
+    code: string;
+    service_label: string;
+    basis_label: string;
+    unit_label: string | null;
     source_text: string;
+    amount_minor: number | null;
+    rate_basis_points: string | null;
     is_ceiling: boolean;
 };
 
@@ -45,14 +50,16 @@ type OrdinanceProvision = {
     code: string;
     section_reference: string;
     title: string;
-    provision_type: string;
     evidence_summary: string;
     reconciliation_status: string;
     reconciliation_notes: string | null;
-    known_ambiguities: string[];
+    service_category: ServiceCategory;
+    governance_url: string;
     linked_fee_rule: {
+        id: number;
         code: string;
         execution_status: string | null;
+        management_url: string;
     } | null;
     entries: OrdinanceEntry[];
 };
@@ -60,14 +67,6 @@ type OrdinanceProvision = {
 type Matrix = {
     context: {
         has_direct_fee_rule: boolean;
-    };
-    summary: {
-        fee_rules: number;
-        executable_fee_rules: number;
-        ordinance_fee_provisions: number;
-        ordinance_provisions: number;
-        ordinance_schedule_rows: number;
-        ordinance_policy_clauses: number;
     };
     application_wide: Fee[];
     line_of_businesses: { id: number; name: string; fees: Fee[] }[];
@@ -83,13 +82,30 @@ type FeeMatrixContext = {
     sourceClassification?: string | null;
 };
 
+type ScheduleRow = {
+    id: string;
+    category: ServiceCategory;
+    service: string;
+    basis: string;
+    provisionTitle: string;
+    code: string;
+    amountMinor: number | null;
+    rateBasisPoints: string | null;
+    isCeiling: boolean;
+    status: 'available' | 'for_confirmation' | 'needs_determination';
+    managementUrl: string | null;
+    governanceUrl: string | null;
+    sourceText: string;
+};
+
+const page = usePage();
 const open = ref(false);
 const loading = ref(false);
-const matrix = ref<Matrix | null>(null);
 const loadFailed = ref(false);
+const matrix = ref<Matrix | null>(null);
 const query = ref('');
-const view = ref<'current' | 'ordinance'>('current');
-const lens = ref<'all' | 'application_wide' | 'line_of_business'>('all');
+const view = ref<'schedule' | 'source'>('schedule');
+const category = ref('all');
 const contextOffice = ref<string | null>(null);
 const contextLineOfBusinessId = ref<number | null>(null);
 const contextFeeRuleId = ref<number | null>(null);
@@ -97,32 +113,41 @@ const contextChargeCode = ref<string | null>(null);
 const contextChargeLabel = ref<string | null>(null);
 const contextSourceClassification = ref<string | null>(null);
 
-const statusLabels: Record<string, string> = {
-    in_force: 'In Force',
-    municipal_confirmation_required:
-        'Recorded — Municipal Confirmation Required',
-    concerned_office_determined: 'Concerned-office Determined',
-    not_commissioned: 'Not Commissioned',
-};
-const ordinanceStatusLabels: Record<string, string> = {
-    recorded: 'Recorded evidence',
-    reconciliation_required: 'Municipal reconciliation required',
-    reconciled: 'Reconciled',
-};
-const provisionTypeLabels: Record<string, string> = {
-    fixed_fee: 'Fixed fee provision',
-    tax_schedule: 'Tax schedule',
-    percentage_rate: 'Percentage rate',
-    presumptive_income_schedule: 'Presumptive income schedule',
-};
+const canViewFeeRules = computed(() =>
+    Boolean(
+        (page.props.auth as { can_view_fee_rules?: boolean } | undefined)
+            ?.can_view_fee_rules,
+    ),
+);
+const canManageFeeRules = computed(() =>
+    Boolean(
+        (page.props.auth as { can_manage_fee_rules?: boolean } | undefined)
+            ?.can_manage_fee_rules,
+    ),
+);
 
-const money = (minor: number | null): string =>
-    minor === null
-        ? 'Exact amount not commissioned'
-        : new Intl.NumberFormat('en-PH', {
-              style: 'currency',
-              currency: 'PHP',
-          }).format(minor / 100);
+const money = (minor: number): string =>
+    new Intl.NumberFormat('en-PH', {
+        style: 'currency',
+        currency: 'PHP',
+    }).format(minor / 100);
+
+function rateLabel(rateBasisPoints: string | null): string | null {
+    if (rateBasisPoints === null) {
+        return null;
+    }
+
+    return `${Number(rateBasisPoints) / 100}%`;
+}
+
+function rowAmount(row: ScheduleRow): string {
+    const value =
+        row.amountMinor === null
+            ? rateLabel(row.rateBasisPoints)
+            : money(row.amountMinor);
+
+    return row.isCeiling && value ? `Up to ${value}` : (value ?? 'Case-based');
+}
 
 function searchTokens(value: string): string[] {
     return value
@@ -133,7 +158,7 @@ function searchTokens(value: string): string[] {
         .filter((token) => token.length > 2 && token !== 'and');
 }
 
-function matchesQuery(values: Array<string | null | undefined>): boolean {
+function matches(values: Array<string | null | undefined>): boolean {
     const tokens = searchTokens(query.value);
     const haystack = values.filter(Boolean).join(' ').toLowerCase();
 
@@ -142,44 +167,133 @@ function matchesQuery(values: Array<string | null | undefined>): boolean {
     );
 }
 
-const includesFeeQuery = (fee: Fee): boolean =>
-    matchesQuery([
-        fee.name,
-        fee.code,
-        fee.line_of_business_name,
-        fee.responsible_office,
-        fee.legal_basis,
-    ]);
-const applicationFees = computed(() =>
-    lens.value === 'line_of_business'
-        ? []
-        : (matrix.value?.application_wide ?? []).filter(includesFeeQuery),
-);
-const lineGroups = computed(() =>
-    lens.value === 'application_wide'
-        ? []
-        : (matrix.value?.line_of_businesses ?? [])
-              .map((group) => ({
-                  ...group,
-                  fees: group.fees.filter(includesFeeQuery),
-              }))
-              .filter((group) => group.fees.length > 0),
-);
-const ordinanceProvisions = computed(() =>
+const currentFees = computed(() => [
+    ...(matrix.value?.application_wide ?? []),
+    ...(matrix.value?.line_of_businesses ?? []).flatMap((group) => group.fees),
+]);
+
+const scheduleRows = computed<ScheduleRow[]>(() => {
+    const rules = currentFees.value
+        .filter((fee) => fee.amount_minor !== null)
+        .map((fee): ScheduleRow => ({
+            id: `rule-${fee.id}`,
+            category: fee.service_category,
+            service: fee.name,
+            basis:
+                fee.family === 'application_wide'
+                    ? 'Whole application'
+                    : (fee.line_of_business_name ?? 'Line of Business'),
+            provisionTitle: fee.name,
+            code: fee.code,
+            amountMinor: fee.amount_minor,
+            rateBasisPoints: null,
+            isCeiling: false,
+            status:
+                fee.status === 'in_force' ? 'available' : 'for_confirmation',
+            managementUrl: fee.management_url,
+            governanceUrl: null,
+            sourceText: '',
+        }));
+
+    const ordinance = (matrix.value?.ordinance_register ?? []).flatMap(
+        (provision) =>
+            provision.entries
+                .filter(
+                    () =>
+                        contextFeeRuleId.value === null ||
+                        provision.linked_fee_rule?.id ===
+                            contextFeeRuleId.value,
+                )
+                .filter(
+                    (entry) =>
+                        entry.amount_minor !== null ||
+                        entry.rate_basis_points !== null,
+                )
+                .filter(
+                    (entry) =>
+                        !rules.some(
+                            (rule) =>
+                                rule.managementUrl ===
+                                    provision.linked_fee_rule?.management_url &&
+                                rule.amountMinor === entry.amount_minor,
+                        ),
+                )
+                .map((entry): ScheduleRow => ({
+                    id: `${provision.code}-${entry.id}`,
+                    category: provision.service_category,
+                    service: entry.service_label,
+                    basis: [entry.basis_label, entry.unit_label]
+                        .filter(Boolean)
+                        .join(' · '),
+                    provisionTitle: provision.title,
+                    code: entry.code,
+                    amountMinor: entry.amount_minor,
+                    rateBasisPoints: entry.rate_basis_points,
+                    isCeiling: entry.is_ceiling,
+                    status: entry.is_ceiling
+                        ? 'needs_determination'
+                        : 'for_confirmation',
+                    managementUrl:
+                        provision.linked_fee_rule?.management_url ?? null,
+                    governanceUrl: provision.governance_url,
+                    sourceText: entry.source_text,
+                })),
+    );
+
+    return [...rules, ...ordinance].filter(
+        (row) =>
+            (category.value === 'all' || row.category.key === category.value) &&
+            matches([row.service, row.basis, row.provisionTitle, row.code]),
+    );
+});
+
+const availableCategories = computed(() => {
+    const values = new Map<string, ServiceCategory>();
+
+    for (const fee of currentFees.value) {
+        values.set(fee.service_category.key, fee.service_category);
+    }
+
+    for (const provision of matrix.value?.ordinance_register ?? []) {
+        values.set(provision.service_category.key, provision.service_category);
+    }
+
+    return [...values.values()];
+});
+
+const scheduleGroups = computed(() => {
+    const values = new Map<string, ServiceCategory>();
+
+    for (const row of scheduleRows.value) {
+        values.set(row.category.key, row.category);
+    }
+
+    return [...values.values()].map((group) => ({
+        ...group,
+        rows: scheduleRows.value.filter(
+            (row) => row.category.key === group.key,
+        ),
+    }));
+});
+
+const sourceProvisions = computed(() =>
     (matrix.value?.ordinance_register ?? []).filter((provision) =>
-        matchesQuery([
+        matches([
             provision.code,
             provision.section_reference,
             provision.title,
             provision.evidence_summary,
-            provision.reconciliation_notes,
-            ...provision.entries.flatMap((entry) => [
-                entry.label,
-                entry.source_text,
-            ]),
+            ...provision.entries.map((entry) => entry.source_text),
         ]),
     ),
 );
+
+const statusLabel = (status: ScheduleRow['status']): string =>
+    ({
+        available: 'Available',
+        for_confirmation: 'For confirmation',
+        needs_determination: 'Needs determination',
+    })[status];
 
 function contextParams(): URLSearchParams {
     const params = new URLSearchParams();
@@ -228,8 +342,8 @@ function clearContext(): void {
     contextChargeLabel.value = null;
     contextSourceClassification.value = null;
     query.value = '';
-    view.value = 'current';
-    lens.value = 'all';
+    category.value = 'all';
+    view.value = 'schedule';
 }
 
 function openFromContext(event: Event): void {
@@ -242,8 +356,8 @@ function openFromContext(event: Event): void {
     contextChargeLabel.value = detail?.chargeLabel ?? null;
     contextSourceClassification.value = detail?.sourceClassification ?? null;
     query.value = detail?.feeRuleId ? '' : (detail?.chargeLabel ?? '');
-    view.value = detail?.feeRuleId ? 'current' : 'ordinance';
-    lens.value = 'all';
+    category.value = 'all';
+    view.value = 'schedule';
     open.value = true;
 }
 
@@ -252,6 +366,7 @@ watch(open, (isOpen) => {
         void load();
     }
 });
+
 onMounted(() => window.addEventListener('open-fee-matrix', openFromContext));
 onBeforeUnmount(() =>
     window.removeEventListener('open-fee-matrix', openFromContext),
@@ -271,412 +386,276 @@ onBeforeUnmount(() =>
             </Button>
         </DialogTrigger>
         <DialogContent
-            class="h-[100dvh] w-screen max-w-none overflow-y-auto rounded-none p-0 sm:h-auto sm:max-h-[88vh] sm:w-[min(960px,calc(100vw-3rem))] sm:rounded-xl"
+            class="h-[100dvh] w-screen max-w-none overflow-y-auto rounded-none p-0 sm:h-auto sm:max-h-[88vh] sm:w-[min(1040px,calc(100vw-3rem))] sm:max-w-[1040px] sm:rounded-xl"
             data-testid="fee-matrix-dialog"
         >
             <DialogHeader class="sticky top-0 z-10 border-b bg-background p-5">
-                <DialogTitle>Municipal Fees and Ordinance Register</DialogTitle>
+                <DialogTitle>Municipal Schedule of Fees</DialogTitle>
                 <DialogDescription>
-                    Current calculation rules and the broader ordinance record
-                    are shown separately. Recorded evidence does not become an
-                    executable charge merely because it is visible here.
+                    Services, applicable conditions, and ordinance rates.
                 </DialogDescription>
-
-                <div
+                <p
                     v-if="contextChargeLabel"
-                    class="mt-2 grid gap-1 rounded-lg border bg-muted/40 p-3 text-sm leading-5"
+                    class="rounded-lg bg-muted/60 px-3 py-2 text-sm"
                 >
-                    <p>
-                        Reviewing evidence for
-                        <strong>{{ contextChargeLabel }}</strong>
-                        <template v-if="contextOffice">
-                            · {{ officeLabel(contextOffice) }}</template
-                        >
-                    </p>
-                    <p class="text-xs text-muted-foreground">
-                        Case source:
-                        {{ sourceLabel(contextSourceClassification) }}.
-                        <template v-if="matrix?.context.has_direct_fee_rule">
-                            This charge has a direct governed FeeRule link.
-                        </template>
-                        <template v-else>
-                            No direct governed FeeRule backs this case proposal.
-                            Matching ordinance results below are evidence for
-                            review, not an automatic price.
-                        </template>
-                    </p>
-                </div>
-
-                <div
-                    class="mt-3 grid grid-cols-2 gap-2"
-                    aria-label="Fee evidence view"
-                >
+                    <strong>{{ contextChargeLabel }}</strong>
+                    <template v-if="contextOffice">
+                        · {{ officeLabel(contextOffice) }}</template
+                    >
+                    <span class="text-muted-foreground">
+                        — select the applicable row before recording an amount.
+                    </span>
+                </p>
+                <div class="grid grid-cols-2 gap-2" aria-label="Fee view">
                     <Button
-                        :variant="view === 'current' ? 'default' : 'outline'"
-                        @click="view = 'current'"
+                        :variant="view === 'schedule' ? 'default' : 'outline'"
+                        @click="view = 'schedule'"
                     >
                         <TableProperties aria-hidden="true" />
-                        Current Fee Rules
+                        Schedule of Fees
                     </Button>
                     <Button
-                        :variant="view === 'ordinance' ? 'default' : 'outline'"
-                        @click="view = 'ordinance'"
+                        :variant="view === 'source' ? 'default' : 'outline'"
+                        @click="view = 'source'"
                     >
                         <BookOpenText aria-hidden="true" />
-                        Ordinance Register
+                        Ordinance Source
                     </Button>
                 </div>
-
-                <div class="relative mt-2">
-                    <Search
-                        class="absolute top-2.5 left-3 size-4 text-muted-foreground"
-                        aria-hidden="true"
-                    />
-                    <Input
-                        v-model="query"
-                        class="pl-9"
-                        :placeholder="
-                            view === 'current'
-                                ? 'Search current fee, office, or Line of Business'
-                                : 'Search ordinance section, fee, tax, or activity'
-                        "
-                    />
-                </div>
-                <div
-                    v-if="view === 'current'"
-                    class="flex flex-wrap gap-2 pt-2"
-                    aria-label="Fee family"
-                >
-                    <Button
-                        v-for="option in [
-                            ['all', 'All'],
-                            ['application_wide', 'Application-wide'],
-                            ['line_of_business', 'By LOB'],
-                        ] as const"
-                        :key="option[0]"
-                        size="sm"
-                        :variant="lens === option[0] ? 'default' : 'outline'"
-                        @click="lens = option[0]"
+                <div class="grid gap-2 sm:grid-cols-[1fr_220px]">
+                    <div class="relative">
+                        <Search
+                            class="absolute top-2.5 left-3 size-4 text-muted-foreground"
+                            aria-hidden="true"
+                        />
+                        <Input
+                            v-model="query"
+                            class="pl-9"
+                            placeholder="Search service, instrument, or activity"
+                        />
+                    </div>
+                    <select
+                        v-if="view === 'schedule' && !contextChargeLabel"
+                        v-model="category"
+                        aria-label="Service category"
+                        class="h-9 rounded-md border border-input bg-background px-3 text-sm"
                     >
-                        {{ option[1] }}
-                    </Button>
+                        <option value="all">All service categories</option>
+                        <option
+                            v-for="option in availableCategories"
+                            :key="option.key"
+                            :value="option.key"
+                        >
+                            {{ option.label }}
+                        </option>
+                    </select>
                 </div>
             </DialogHeader>
 
-            <div class="grid gap-6 p-5">
+            <div class="grid gap-5 p-5">
                 <p v-if="loading" class="text-sm text-muted-foreground">
-                    Loading municipal fee evidence…
+                    Loading schedule…
                 </p>
                 <p
                     v-else-if="loadFailed"
-                    class="rounded-lg border border-destructive/30 bg-destructive/5 p-5 text-sm"
+                    class="rounded-lg border border-destructive/30 p-4 text-sm"
                 >
-                    Municipal fee evidence could not be loaded. Your case
-                    determination has not been changed. Close this sheet and try
-                    again.
+                    The schedule could not be loaded. No case value was changed.
                 </p>
-                <template v-else-if="matrix">
-                    <dl class="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-                        <div class="rounded-lg bg-muted/50 p-3">
-                            <dt class="text-xs text-muted-foreground">
-                                Current Fee Rules
-                            </dt>
-                            <dd class="mt-1 font-semibold">
-                                {{ matrix.summary.fee_rules }}
-                            </dd>
-                        </div>
-                        <div class="rounded-lg bg-muted/50 p-3">
-                            <dt class="text-xs text-muted-foreground">
-                                Executable now
-                            </dt>
-                            <dd class="mt-1 font-semibold">
-                                {{ matrix.summary.executable_fee_rules }}
-                            </dd>
-                        </div>
-                        <div class="rounded-lg bg-muted/50 p-3">
-                            <dt class="text-xs text-muted-foreground">
-                                Fee/rate provisions
-                            </dt>
-                            <dd class="mt-1 font-semibold">
-                                {{ matrix.summary.ordinance_fee_provisions }}
-                            </dd>
-                        </div>
-                        <div class="rounded-lg bg-muted/50 p-3">
-                            <dt class="text-xs text-muted-foreground">
-                                All provisions recorded
-                            </dt>
-                            <dd class="mt-1 font-semibold">
-                                {{ matrix.summary.ordinance_provisions }}
-                            </dd>
-                        </div>
-                    </dl>
 
-                    <template v-if="view === 'current'">
-                        <section
-                            class="rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100"
-                        >
-                            <h3 class="font-semibold">
-                                Rules eligible for the pricing boundary
-                            </h3>
-                            <p class="mt-1 leading-5">
-                                Status and exact-amount availability determine
-                                whether a rule may participate in computation.
-                                Ordinance evidence is never promoted by itself.
-                            </p>
-                        </section>
-                        <section
-                            v-if="applicationFees.length"
-                            class="grid gap-2"
-                        >
-                            <h3
-                                class="text-sm font-bold tracking-wide uppercase"
-                            >
-                                Application-wide Fees
-                            </h3>
-                            <article
-                                v-for="fee in applicationFees"
-                                :key="fee.id"
-                                class="grid gap-1 rounded-lg border p-3 sm:grid-cols-[1fr_auto]"
-                            >
-                                <div>
-                                    <p class="font-semibold">
-                                        {{ fee.name }}
-                                    </p>
-                                    <p class="text-xs text-muted-foreground">
-                                        {{ fee.code }} ·
-                                        {{ statusLabels[fee.status] }}
-                                    </p>
-                                </div>
-                                <p class="font-semibold tabular-nums">
-                                    {{ money(fee.amount_minor) }}
-                                </p>
-                            </article>
-                        </section>
-                        <section
-                            v-for="group in lineGroups"
-                            :key="group.id"
-                            class="grid gap-2"
-                        >
-                            <h3
-                                class="text-sm font-bold tracking-wide uppercase"
-                            >
-                                {{ group.name }}
-                            </h3>
-                            <article
-                                v-for="fee in group.fees"
-                                :key="fee.id"
-                                class="grid gap-1 rounded-lg border p-3 sm:grid-cols-[1fr_auto]"
-                            >
-                                <div>
-                                    <p class="font-semibold">
-                                        {{ fee.name }}
-                                    </p>
-                                    <p class="text-xs text-muted-foreground">
-                                        {{
-                                            fee.responsible_office ??
-                                            'Municipality'
-                                        }}
-                                        · {{ statusLabels[fee.status] }}
-                                    </p>
-                                </div>
-                                <p class="font-semibold tabular-nums">
-                                    {{ money(fee.amount_minor) }}
-                                </p>
-                            </article>
-                        </section>
-                        <p
-                            v-if="!applicationFees.length && !lineGroups.length"
-                            class="rounded-lg border border-dashed p-5 text-sm text-muted-foreground"
-                        >
-                            No current FeeRule matches this context and search.
-                            This empty result does not set the case amount to
-                            zero.
-                        </p>
-                    </template>
+                <template v-else-if="matrix && view === 'schedule'">
+                    <section
+                        v-for="group in scheduleGroups"
+                        :key="group.key"
+                        class="grid gap-2"
+                    >
+                        <h3 class="text-sm font-semibold">{{ group.label }}</h3>
 
-                    <template v-else>
-                        <section
-                            class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
-                        >
-                            <div class="flex items-start gap-3">
-                                <AlertTriangle
-                                    class="mt-0.5 size-5 shrink-0"
-                                    aria-hidden="true"
-                                />
+                        <div class="grid gap-2 sm:hidden">
+                            <article
+                                v-for="row in group.rows"
+                                :key="row.id"
+                                class="grid gap-2 rounded-lg border p-3"
+                            >
                                 <div>
-                                    <h3 class="font-semibold">
-                                        Ordinance evidence—not a price list
-                                    </h3>
-                                    <p class="mt-1 leading-5">
-                                        Every extracted fee, tax, rate, and
-                                        presumptive-income provision is visible
-                                        here. Most require municipal
-                                        reconciliation and cannot calculate an
-                                        Assessment.
-                                    </p>
-                                    <p class="mt-1 text-xs">
-                                        {{
-                                            matrix.summary
-                                                .ordinance_schedule_rows
-                                        }}
-                                        schedule rows and
-                                        {{
-                                            matrix.summary
-                                                .ordinance_policy_clauses
-                                        }}
-                                        policy clauses are retained behind these
-                                        provisions.
+                                    <p class="font-medium">{{ row.service }}</p>
+                                    <p class="text-xs text-muted-foreground">
+                                        {{ row.basis }}
                                     </p>
                                 </div>
-                            </div>
-                        </section>
-                        <div class="grid gap-3">
-                            <article
-                                v-for="provision in ordinanceProvisions"
-                                :key="provision.id"
-                                class="rounded-xl border bg-card p-4"
-                                :data-testid="
-                                    'ordinance-provision-' + provision.code
-                                "
-                            >
                                 <div
-                                    class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
+                                    class="flex items-center justify-between gap-3"
                                 >
-                                    <div class="min-w-0">
-                                        <p
-                                            class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
-                                        >
-                                            {{ provision.section_reference }} ·
-                                            {{
-                                                provisionTypeLabels[
-                                                    provision.provision_type
-                                                ] ?? provision.provision_type
-                                            }}
+                                    <div>
+                                        <p class="font-semibold tabular-nums">
+                                            {{ rowAmount(row) }}
                                         </p>
-                                        <h3
-                                            class="mt-1 font-semibold break-words"
-                                        >
-                                            {{ provision.title }}
-                                        </h3>
                                         <p
-                                            class="mt-1 text-xs text-muted-foreground"
+                                            class="text-xs text-muted-foreground"
                                         >
-                                            {{ provision.code }}
+                                            {{ statusLabel(row.status) }}
                                         </p>
                                     </div>
-                                    <Badge
-                                        :variant="
-                                            provision.reconciliation_status ===
-                                            'reconciled'
-                                                ? 'secondary'
-                                                : 'outline'
-                                        "
-                                        class="w-fit shrink-0"
+                                    <Button
+                                        v-if="canViewFeeRules"
+                                        variant="outline"
+                                        size="sm"
+                                        as-child
                                     >
-                                        {{
-                                            ordinanceStatusLabels[
-                                                provision.reconciliation_status
-                                            ]
-                                        }}
-                                    </Badge>
+                                        <Link
+                                            :href="
+                                                row.managementUrl ??
+                                                row.governanceUrl ??
+                                                '#'
+                                            "
+                                        >
+                                            <Settings aria-hidden="true" />
+                                            {{
+                                                row.managementUrl
+                                                    ? canManageFeeRules
+                                                        ? 'Manage'
+                                                        : 'View'
+                                                    : 'Review'
+                                            }}
+                                        </Link>
+                                    </Button>
                                 </div>
-                                <p class="mt-3 text-sm leading-6">
-                                    {{ provision.evidence_summary }}
+                            </article>
+                        </div>
+
+                        <div
+                            class="hidden overflow-x-auto rounded-lg border sm:block"
+                        >
+                            <table class="w-full min-w-[760px] text-sm">
+                                <thead class="border-b bg-muted/50 text-left">
+                                    <tr>
+                                        <th class="px-3 py-2 font-medium">
+                                            Service
+                                        </th>
+                                        <th class="px-3 py-2 font-medium">
+                                            Basis / condition
+                                        </th>
+                                        <th
+                                            class="px-3 py-2 text-right font-medium"
+                                        >
+                                            Fee / rate
+                                        </th>
+                                        <th class="px-3 py-2 font-medium">
+                                            Status
+                                        </th>
+                                        <th
+                                            v-if="canViewFeeRules"
+                                            class="px-3 py-2 text-right font-medium"
+                                        >
+                                            Fee record
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr
+                                        v-for="row in group.rows"
+                                        :key="row.id"
+                                        class="border-b last:border-0"
+                                    >
+                                        <td
+                                            class="px-3 py-3 align-top font-medium"
+                                        >
+                                            {{ row.service }}
+                                        </td>
+                                        <td
+                                            class="px-3 py-3 align-top text-muted-foreground"
+                                        >
+                                            {{ row.basis }}
+                                        </td>
+                                        <td
+                                            class="px-3 py-3 text-right align-top font-semibold tabular-nums"
+                                        >
+                                            {{ rowAmount(row) }}
+                                        </td>
+                                        <td class="px-3 py-3 align-top">
+                                            {{ statusLabel(row.status) }}
+                                        </td>
+                                        <td
+                                            v-if="canViewFeeRules"
+                                            class="px-3 py-2 text-right align-top"
+                                        >
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                as-child
+                                            >
+                                                <Link
+                                                    :href="
+                                                        row.managementUrl ??
+                                                        row.governanceUrl ??
+                                                        '#'
+                                                    "
+                                                >
+                                                    {{
+                                                        row.managementUrl
+                                                            ? canManageFeeRules
+                                                                ? 'Manage fee'
+                                                                : 'View fee'
+                                                            : 'Review source'
+                                                    }}
+                                                </Link>
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <p
+                        v-if="scheduleGroups.length === 0"
+                        class="rounded-lg border border-dashed p-5 text-sm text-muted-foreground"
+                    >
+                        No fee or rate matches this search.
+                    </p>
+                    <p class="text-xs text-muted-foreground">
+                        “For confirmation” rows reproduce ordinance values but
+                        do not calculate an Assessment until commissioned.
+                    </p>
+                </template>
+
+                <template v-else-if="matrix">
+                    <article
+                        v-for="provision in sourceProvisions"
+                        :key="provision.id"
+                        class="rounded-lg border p-4"
+                    >
+                        <p class="text-xs text-muted-foreground">
+                            {{ provision.section_reference }} ·
+                            {{ provision.code }}
+                        </p>
+                        <h3 class="mt-1 font-semibold">
+                            {{ provision.title }}
+                        </h3>
+                        <p class="mt-2 text-sm text-muted-foreground">
+                            {{ provision.evidence_summary }}
+                        </p>
+                        <details class="mt-3 border-t pt-3">
+                            <summary class="cursor-pointer text-sm font-medium">
+                                View ordinance text and policy notes
+                            </summary>
+                            <div class="mt-3 grid gap-2 text-xs">
+                                <p
+                                    v-for="entry in provision.entries"
+                                    :key="entry.id"
+                                    class="rounded-md bg-muted/50 p-3 leading-5"
+                                >
+                                    {{ entry.source_text }}
                                 </p>
                                 <p
-                                    v-if="provision.linked_fee_rule"
-                                    class="mt-3 rounded-lg bg-muted/50 p-3 text-xs"
+                                    v-if="provision.reconciliation_notes"
+                                    class="text-muted-foreground"
                                 >
-                                    Linked FeeRule:
-                                    <strong>{{
-                                        provision.linked_fee_rule.code
-                                    }}</strong>
-                                    ·
-                                    {{
-                                        provision.linked_fee_rule
-                                            .execution_status ??
-                                        'No execution decision'
-                                    }}
+                                    {{ provision.reconciliation_notes }}
                                 </p>
-                                <details
-                                    v-if="provision.entries.length"
-                                    class="mt-3 border-t pt-3"
-                                >
-                                    <summary
-                                        class="cursor-pointer text-sm font-medium"
-                                    >
-                                        Source clauses, amounts, and rates ({{
-                                            provision.entries.length
-                                        }})
-                                    </summary>
-                                    <div class="mt-3 grid gap-2">
-                                        <div
-                                            v-for="entry in provision.entries"
-                                            :key="entry.id"
-                                            class="rounded-lg bg-muted/40 p-3 text-xs"
-                                        >
-                                            <p class="font-medium">
-                                                {{ entry.label }}
-                                            </p>
-                                            <p
-                                                class="mt-1 leading-5 text-muted-foreground"
-                                            >
-                                                {{ entry.source_text }}
-                                            </p>
-                                            <p
-                                                v-if="entry.is_ceiling"
-                                                class="mt-1 font-medium text-amber-700 dark:text-amber-300"
-                                            >
-                                                Ceiling—not an exact price
-                                            </p>
-                                        </div>
-                                    </div>
-                                </details>
-                                <details
-                                    v-if="
-                                        provision.reconciliation_notes ||
-                                        provision.known_ambiguities.length
-                                    "
-                                    class="mt-3 border-t pt-3"
-                                >
-                                    <summary
-                                        class="cursor-pointer text-sm font-medium"
-                                    >
-                                        Why execution is restricted
-                                    </summary>
-                                    <p
-                                        v-if="provision.reconciliation_notes"
-                                        class="mt-2 text-xs leading-5 text-muted-foreground"
-                                    >
-                                        {{ provision.reconciliation_notes }}
-                                    </p>
-                                    <p
-                                        v-if="
-                                            provision.known_ambiguities.length
-                                        "
-                                        class="mt-2 text-xs text-muted-foreground"
-                                    >
-                                        {{ provision.known_ambiguities.length }}
-                                        recorded policy
-                                        {{
-                                            provision.known_ambiguities
-                                                .length === 1
-                                                ? 'question'
-                                                : 'questions'
-                                        }}.
-                                    </p>
-                                </details>
-                            </article>
-                        </div>
-                        <p
-                            v-if="!ordinanceProvisions.length"
-                            class="rounded-lg border border-dashed p-5 text-sm text-muted-foreground"
-                        >
-                            No ordinance fee or rate provision matches this
-                            search. Clear the search to browse the full fee
-                            register.
-                        </p>
-                    </template>
+                            </div>
+                        </details>
+                    </article>
                 </template>
             </div>
         </DialogContent>

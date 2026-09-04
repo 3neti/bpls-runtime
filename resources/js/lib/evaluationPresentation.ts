@@ -50,6 +50,18 @@ export type ResponsibilityDraft = {
     findings: string;
 };
 
+export function shouldStartChargeFromFeeSchedule(
+    sourceClassification: string | null | undefined,
+    feeRuleId: number | null | undefined,
+    action: string | null | undefined,
+): boolean {
+    return (
+        sourceClassification === 'provisional_uat' &&
+        feeRuleId == null &&
+        action === 'proposal'
+    );
+}
+
 /** The minimal item shape this module needs from the typed contract. */
 export type PresentableEvaluationItem = {
     key: string;

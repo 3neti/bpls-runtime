@@ -604,6 +604,10 @@ function decodePaginationLabel(value: string): string {
                                     <tr
                                         v-for="provision in revenueCodeProvisions"
                                         :key="provision.id"
+                                        :id="
+                                            'revenue-code-provision-' +
+                                            provision.code
+                                        "
                                         class="border-b last:border-0"
                                         :data-provision-code="provision.code"
                                     >

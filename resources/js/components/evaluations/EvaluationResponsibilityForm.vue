@@ -8,6 +8,7 @@ import {
     amountFromValue,
     inspectionModeLabels,
     officeLabel,
+    shouldStartChargeFromFeeSchedule,
 } from '@/lib/evaluationPresentation';
 import type { ResponsibilityDraft } from '@/lib/evaluationPresentation';
 import type { EvaluationItem } from '@/types';
@@ -61,14 +62,33 @@ function initialInspectionMode(): ResponsibilityDraft['inspectionMode'] {
         : '';
 }
 
+function isReferenceOnlyProposal(): boolean {
+    return (
+        (props.sourceClassification ??
+            props.item.default_source_classification) === 'provisional_uat' &&
+        props.feeRuleId == null
+    );
+}
+
+function shouldStartFromSchedule(): boolean {
+    return shouldStartChargeFromFeeSchedule(
+        props.sourceClassification ?? props.item.default_source_classification,
+        props.feeRuleId,
+        props.item.action,
+    );
+}
+
 const draft = reactive<ResponsibilityDraft>({
     applicability: props.item.applicability,
     determinationType:
-        props.item.default_value == null ? 'office_determination' : 'confirm',
-    amount:
-        pesosFromValue(props.item.resolved_value) ??
-        pesosFromValue(props.item.default_value) ??
-        '',
+        props.item.default_value == null || shouldStartFromSchedule()
+            ? 'office_determination'
+            : 'confirm',
+    amount: shouldStartFromSchedule()
+        ? ''
+        : (pesosFromValue(props.item.resolved_value) ??
+          pesosFromValue(props.item.default_value) ??
+          ''),
     reason: '',
     authority: '',
     inspectionMode: initialInspectionMode(),
@@ -82,6 +102,7 @@ const isLaboratoryProposal = computed(
         (props.sourceClassification ??
             props.item.default_source_classification) === 'provisional_uat',
 );
+const referenceOnlyProposal = computed(isReferenceOnlyProposal);
 
 /**
  * The Municipality requires a reason whenever the office departs from the
@@ -100,6 +121,10 @@ const reasonRequired = computed(() => {
         return false;
     }
 
+    if (referenceOnlyProposal.value) {
+        return true;
+    }
+
     return Number(draft.amount) !== Number(proposalPesos.value);
 });
 
@@ -114,7 +139,11 @@ watch(
         draft.applicability =
             type === 'not_applicable' ? 'not_applicable' : 'applicable';
 
-        if (type === 'confirm' && proposalPesos.value !== null) {
+        if (
+            type === 'confirm' &&
+            proposalPesos.value !== null &&
+            !referenceOnlyProposal.value
+        ) {
             draft.amount = proposalPesos.value;
         }
     },
@@ -172,7 +201,7 @@ function openFeeMatrix(): void {
                     @click="openFeeMatrix"
                 >
                     <TableProperties aria-hidden="true" />
-                    Check current Fee Matrix
+                    View Schedule of Fees
                 </Button>
                 <p class="text-xs leading-5 text-muted-foreground">
                     Reference only. Opening the matrix does not select or change
@@ -183,7 +212,7 @@ function openFeeMatrix(): void {
             <div v-if="isCharge" class="grid gap-2">
                 <Label>Determination</Label>
                 <label
-                    v-if="proposalPesos !== null"
+                    v-if="proposalPesos !== null && !referenceOnlyProposal"
                     class="flex items-center gap-2 rounded-lg border p-3 text-sm"
                 >
                     <input
@@ -200,7 +229,7 @@ function openFeeMatrix(): void {
                     — ₱{{ proposalPesos }}
                 </label>
                 <label
-                    v-if="proposalPesos !== null"
+                    v-if="proposalPesos !== null && !referenceOnlyProposal"
                     class="flex items-center gap-2 rounded-lg border p-3 text-sm"
                 >
                     <input
@@ -216,7 +245,7 @@ function openFeeMatrix(): void {
                     }}
                 </label>
                 <label
-                    v-else
+                    v-if="proposalPesos === null || referenceOnlyProposal"
                     class="flex items-center gap-2 rounded-lg border p-3 text-sm"
                 >
                     <input
@@ -224,7 +253,7 @@ function openFeeMatrix(): void {
                         type="radio"
                         value="office_determination"
                     />
-                    Enter office determination
+                    Select the applicable service and enter the amount
                 </label>
                 <label
                     class="flex items-center gap-2 rounded-lg border p-3 text-sm"
@@ -276,16 +305,13 @@ function openFeeMatrix(): void {
                     :id="`amount-help-${item.id}`"
                     class="text-xs text-muted-foreground"
                 >
-                    <template v-if="proposalPesos !== null">
-                        <template v-if="isLaboratoryProposal">
-                            Laboratory proposal: ₱{{ proposalPesos }}. It is not
-                            a commissioned FeeRule; your determination must
-                            stand on the office's case evidence.
-                        </template>
-                        <template v-else>
-                            Proposed for you: ₱{{ proposalPesos }}. Confirm it
-                            as-is, or change it and record why.
-                        </template>
+                    <template v-if="referenceOnlyProposal">
+                        Use the applicable row in the Schedule of Fees. The
+                        laboratory reference amount is not preselected.
+                    </template>
+                    <template v-else-if="proposalPesos !== null">
+                        Proposed for you: ₱{{ proposalPesos }}. Confirm it
+                        as-is, or change it and record why.
                     </template>
                     <template v-else>
                         No amount was proposed. Record the amount your office
@@ -293,7 +319,10 @@ function openFeeMatrix(): void {
                     </template>
                 </p>
                 <dl
-                    v-if="draft.determinationType === 'override'"
+                    v-if="
+                        draft.determinationType === 'override' &&
+                        !referenceOnlyProposal
+                    "
                     class="grid grid-cols-3 gap-2 rounded-lg bg-muted/40 p-3 text-xs"
                 >
                     <div>
@@ -405,8 +434,11 @@ function openFeeMatrix(): void {
                     class="text-xs text-muted-foreground"
                 >
                     <template v-if="reasonRequired">
-                        A reason is required because you are changing the
-                        proposed municipal position.
+                        {{
+                            referenceOnlyProposal
+                                ? 'Record the selected service, capacity or condition, and case evidence.'
+                                : 'A reason is required because you are changing the proposed municipal position.'
+                        }}
                     </template>
                     <template v-else>
                         Optional when you confirm the proposal unchanged.
