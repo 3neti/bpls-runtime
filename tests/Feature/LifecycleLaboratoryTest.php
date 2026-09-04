@@ -328,6 +328,12 @@ test('source backed registry specimen advances through canonical actions to an a
             ->where('handoff.offices.0.status', 'Awaiting determination')
             ->where('handoff.audit.production_liability', false));
 
+    $assessor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.assessor.user_id'));
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))
+        ->assertRedirect(route('staff.permit-applications.evaluation.show', $application));
+    $this->assertAuthenticatedAs($assessor);
+
     foreach ($responsibilities as $responsibility) {
         $evaluation->refresh();
         $version = $evaluation->currentVersion;

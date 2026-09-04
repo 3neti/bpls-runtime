@@ -535,7 +535,8 @@ function fileSize(sizeBytes: number): string {
                         <Link
                             v-if="
                                 can.assess_permit_applications &&
-                                permitApplication.can_continue
+                                permitApplication.can_continue &&
+                                !permitApplication.has_business_permit_evaluation
                             "
                             :href="assess(permitApplication.id)"
                             method="post"

@@ -13,7 +13,7 @@ import {
     LockKeyhole,
     ShieldCheck,
 } from '@lucide/vue';
-import { enterActor } from '@/actions/App/Http/Controllers/LifecycleCleanroomController';
+import { runNext as runCleanroomNextRoute } from '@/actions/App/Http/Controllers/LifecycleCleanroomController';
 import { index as laboratoryIndex } from '@/actions/App/Http/Controllers/LifecycleLaboratoryController';
 import AppLayout from '@/layouts/AppLayout.vue';
 
@@ -82,8 +82,8 @@ const dateTime = (value: string | null): string =>
           }).format(new Date(value))
         : 'Not recorded';
 
-function openEvaluationWorkspace(): void {
-    router.post(enterActor([props.handoff.run.id, 'assessment_officer']).url);
+function continueOfficeReviews(): void {
+    router.post(runCleanroomNextRoute(props.handoff.run.id).url);
 }
 </script>
 
@@ -206,8 +206,9 @@ function openEvaluationWorkspace(): void {
                 <div>
                     <h2 class="text-xl font-semibold">Who acts next</h2>
                     <p class="mt-1 text-sm text-muted-foreground">
-                        Each office reviews its assigned responsibilities in the
-                        existing Application evaluation workspace.
+                        The Laboratory signs you in as the correct concerned
+                        office and opens its assigned work. The Municipal
+                        Assessor goes first in this specimen.
                     </p>
                 </div>
 
@@ -463,16 +464,26 @@ function openEvaluationWorkspace(): void {
                         <p class="mt-1 text-sm leading-6 text-muted-foreground">
                             Offices record Confirm, Override, or Not Applicable.
                             Only completed amount-bearing determinations can
-                            proceed toward the provisional Assessment.
+                            proceed toward the provisional Assessment. The
+                            Assessment Officer returns after every concerned
+                            office has finished.
                         </p>
                     </div>
                     <div class="flex flex-col gap-2 sm:items-end">
                         <button
+                            v-if="
+                                handoff.summary.resolved_count <
+                                handoff.summary.responsibility_count
+                            "
                             type="button"
                             class="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground"
-                            @click="openEvaluationWorkspace"
+                            @click="continueOfficeReviews"
                         >
-                            Open evaluation workspace
+                            {{
+                                handoff.summary.resolved_count === 0
+                                    ? 'Start Municipal Assessor review'
+                                    : 'Continue office reviews'
+                            }}
                             <ArrowRight class="size-4" />
                         </button>
                         <Link
