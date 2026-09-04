@@ -168,6 +168,10 @@ const emit = defineEmits<{
                 :item="item"
                 :submitting="submitting"
                 :can-view-fee-matrix="canViewFeeMatrix"
+                :fee-rule-id="component.feeRuleId"
+                :charge-code="component.reference"
+                :charge-label="component.label"
+                :source-classification="component.sourceClassification"
                 @submit="(payload, draft) => emit('submit', payload, draft)"
             />
         </div>

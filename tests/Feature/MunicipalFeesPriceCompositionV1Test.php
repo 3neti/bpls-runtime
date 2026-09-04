@@ -22,6 +22,7 @@ use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use Brick\Money\Money;
+use Database\Seeders\RevenueCodeFeeCatalogSeeder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -263,6 +264,63 @@ it('lets a concerned-office evaluator use only the read-only Fee Matrix', functi
         ->assertInertia(fn ($page) => $page
             ->where('auth.can_view_fee_matrix', true)
             ->where('auth.can_view_fee_rules', false));
+});
+
+it('separates the complete ordinance fee register from executable FeeRules', function (): void {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+
+    $matrix = app(BuildFeeMatrixQuickLook::class)->handle(
+        office: 'assessor',
+        chargeCode: 'LAB-WEIGHT-MEASURE',
+        chargeLabel: 'Weight & Measure',
+        sourceClassification: 'provisional_uat',
+    );
+    $ordinanceCodes = collect($matrix['ordinance_register'])->pluck('code');
+    $weightsAndMeasures = collect($matrix['ordinance_register'])
+        ->firstWhere('code', 'MRC-3H-03-FEES');
+
+    expect($matrix)
+        ->schema_version->toBe('bpls.municipal-fee-matrix.v2')
+        ->context->charge_label->toBe('Weight & Measure')
+        ->context->source_classification->toBe('provisional_uat')
+        ->context->has_direct_fee_rule->toBeFalse()
+        ->summary->fee_rules->toBe(4)
+        ->summary->executable_fee_rules->toBe(1)
+        ->summary->ordinance_fee_provisions->toBe(31)
+        ->summary->ordinance_provisions->toBe(108)
+        ->summary->ordinance_schedule_rows->toBe(82)
+        ->summary->ordinance_policy_clauses->toBe(593)
+        ->and($ordinanceCodes)->toContain(
+            'MRC-2A-02-B-WHOLESALERS',
+            'MRC-3A-04-INSPECTION',
+            'MRC-3H-03-FEES',
+            'MRC-3G-01-EXCAVATION-FEES',
+        )
+        ->and($weightsAndMeasures)->not->toBeNull()
+        ->and($weightsAndMeasures['reconciliation_status'])->toBe('reconciliation_required')
+        ->and($weightsAndMeasures['linked_fee_rule'])->toBeNull()
+        ->and($weightsAndMeasures['entries'])->toHaveCount(17);
+});
+
+it('uses an exact FeeRule identity when a contextual matrix link is available', function (): void {
+    $directRule = FeeRule::factory()->create([
+        'code' => 'DIRECT-CONTEXT-RULE',
+        'effective_from' => '2026-01-01',
+    ]);
+    FeeRule::factory()->create([
+        'code' => 'UNRELATED-RULE',
+        'effective_from' => '2026-01-01',
+    ]);
+
+    $matrix = app(BuildFeeMatrixQuickLook::class)->handle(
+        feeRuleId: $directRule->id,
+        chargeCode: $directRule->code,
+        chargeLabel: $directRule->name,
+    );
+
+    expect($matrix['context']['has_direct_fee_rule'])->toBeTrue()
+        ->and(collect($matrix['application_wide'])->pluck('id')->all())->toEqual([$directRule->id])
+        ->and($matrix['line_of_businesses'])->toBeEmpty();
 });
 
 it('freezes input and report fingerprints with Assessment line and resolved total parity', function (): void {

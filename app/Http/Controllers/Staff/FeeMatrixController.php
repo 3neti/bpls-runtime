@@ -21,12 +21,20 @@ final class FeeMatrixController extends Controller
             'q' => ['nullable', 'string', 'max:120'],
             'office' => ['nullable', 'string', 'max:80'],
             'line_of_business_id' => ['nullable', 'integer'],
+            'fee_rule_id' => ['nullable', 'integer'],
+            'charge_code' => ['nullable', 'string', 'max:120'],
+            'charge_label' => ['nullable', 'string', 'max:160'],
+            'source_classification' => ['nullable', 'string', 'max:80'],
         ]);
 
         return response()->json($build->handle(
             $filters['q'] ?? null,
             $filters['office'] ?? null,
             $filters['line_of_business_id'] ?? null,
+            $filters['fee_rule_id'] ?? null,
+            $filters['charge_code'] ?? null,
+            $filters['charge_label'] ?? null,
+            $filters['source_classification'] ?? null,
         ));
     }
 }

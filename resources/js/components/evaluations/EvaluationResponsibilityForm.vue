@@ -16,6 +16,10 @@ const props = defineProps<{
     item: EvaluationItem;
     submitting: boolean;
     canViewFeeMatrix?: boolean;
+    feeRuleId?: number | null;
+    chargeCode?: string | null;
+    chargeLabel?: string | null;
+    sourceClassification?: string | null;
 }>();
 const emit = defineEmits<{
     submit: [item: EvaluationItem, draft: ResponsibilityDraft];
@@ -73,6 +77,11 @@ const draft = reactive<ResponsibilityDraft>({
 });
 
 const proposalPesos = computed(() => pesosFromValue(props.item.default_value));
+const isLaboratoryProposal = computed(
+    () =>
+        (props.sourceClassification ??
+            props.item.default_source_classification) === 'provisional_uat',
+);
 
 /**
  * The Municipality requires a reason whenever the office departs from the
@@ -135,6 +144,12 @@ function openFeeMatrix(): void {
             detail: {
                 office: props.item.responsible_party,
                 lineOfBusinessId: props.item.line_of_business_id,
+                feeRuleId: props.feeRuleId,
+                chargeCode: props.chargeCode,
+                chargeLabel: props.chargeLabel ?? props.item.label,
+                sourceClassification:
+                    props.sourceClassification ??
+                    props.item.default_source_classification,
             },
         }),
     );
@@ -176,7 +191,13 @@ function openFeeMatrix(): void {
                         type="radio"
                         value="confirm"
                     />
-                    Confirm scheduled amount — ₱{{ proposalPesos }}
+                    Confirm
+                    {{
+                        isLaboratoryProposal
+                            ? 'laboratory proposal'
+                            : 'scheduled amount'
+                    }}
+                    — ₱{{ proposalPesos }}
                 </label>
                 <label
                     v-if="proposalPesos !== null"
@@ -187,7 +208,12 @@ function openFeeMatrix(): void {
                         type="radio"
                         value="override"
                     />
-                    Override the scheduled amount
+                    Override the
+                    {{
+                        isLaboratoryProposal
+                            ? 'laboratory proposal'
+                            : 'scheduled amount'
+                    }}
                 </label>
                 <label
                     v-else
@@ -251,8 +277,15 @@ function openFeeMatrix(): void {
                     class="text-xs text-muted-foreground"
                 >
                     <template v-if="proposalPesos !== null">
-                        Proposed for you: ₱{{ proposalPesos }}. Confirm it
-                        as-is, or change it and record why.
+                        <template v-if="isLaboratoryProposal">
+                            Laboratory proposal: ₱{{ proposalPesos }}. It is not
+                            a commissioned FeeRule; your determination must
+                            stand on the office's case evidence.
+                        </template>
+                        <template v-else>
+                            Proposed for you: ₱{{ proposalPesos }}. Confirm it
+                            as-is, or change it and record why.
+                        </template>
                     </template>
                     <template v-else>
                         No amount was proposed. Record the amount your office
@@ -264,7 +297,13 @@ function openFeeMatrix(): void {
                     class="grid grid-cols-3 gap-2 rounded-lg bg-muted/40 p-3 text-xs"
                 >
                     <div>
-                        <dt>Scheduled</dt>
+                        <dt>
+                            {{
+                                isLaboratoryProposal
+                                    ? 'Laboratory proposal'
+                                    : 'Scheduled'
+                            }}
+                        </dt>
                         <dd class="font-semibold">₱{{ proposalPesos }}</dd>
                     </div>
                     <div>

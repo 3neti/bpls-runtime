@@ -531,6 +531,7 @@ export type FinancialComponent = {
     includedInGrandTotal: boolean;
     status: ComponentStatus;
     sourceLabel: string;
+    sourceClassification: string | null;
     feeRuleId: number | null;
     itemId: number | null;
     isMine: boolean;
@@ -710,6 +711,7 @@ export function presentWorkingPaperCharge(
         includedInGrandTotal: charge.included_in_grand_total,
         status: workingPaperChargeStatus(charge),
         sourceLabel: sourceLabel(charge.source_classification),
+        sourceClassification: charge.source_classification,
         feeRuleId: charge.fee_rule_id,
         itemId: charge.evaluation_item_id,
         isMine: item?.is_mine ?? false,
