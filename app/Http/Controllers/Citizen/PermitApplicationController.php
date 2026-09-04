@@ -201,23 +201,27 @@ class PermitApplicationController extends Controller
             $latestPaymentSchedule?->status->value === 'paid' => 'municipal_review_in_progress',
             default => $application->status->value,
         };
+        $declaration = data_get($application->metadata, 'applicant_declaration_draft');
+        $declaration = is_array($declaration) ? $declaration : [];
+        $declaredOwnerAddress = $this->declaredAddress($declaration, 'owner_address');
+        $declaredBusinessAddress = $this->declaredAddress($declaration, 'business_address');
 
         return Inertia::render('citizen/permit-applications/Show', [
             'permitApplication' => [
                 ...$this->summaryPayload($application),
                 'application_year' => $application->application_year,
                 'owner' => [
-                    'name' => $application->business->owner->name,
-                    'email' => $application->business->owner->email,
-                    'phone' => $application->business->owner->phone,
-                    'address' => $application->business->owner->address,
+                    'name' => $this->declaredOwnerName($declaration) ?? $application->business->owner->name,
+                    'email' => data_get($declaration, 'owner_address.email') ?? $application->business->owner->email,
+                    'phone' => data_get($declaration, 'owner_address.telephone') ?? $application->business->owner->phone,
+                    'address' => $declaredOwnerAddress ?? $application->business->owner->address,
                 ],
                 'business' => [
-                    'name' => $application->business->name,
-                    'trade_name' => $application->business->trade_name,
-                    'registration_number' => $application->business->registration_number,
-                    'address' => $application->business->address,
-                    'barangay' => $application->business->barangay,
+                    'name' => data_get($declaration, 'business.name') ?? $application->business->name,
+                    'trade_name' => data_get($declaration, 'business.trade_name') ?? $application->business->trade_name,
+                    'registration_number' => data_get($declaration, 'registration.number') ?? $application->business->registration_number,
+                    'address' => $declaredBusinessAddress ?? $application->business->address,
+                    'barangay' => $declaredBusinessAddress === null ? $application->business->barangay : null,
                 ],
                 'business_permit_evaluation_url' => $application->businessPermitEvaluation !== null
                     && $request->user()->can(UserPermission::ViewOwnBusinessPermitEvaluations->value)
@@ -532,6 +536,45 @@ class PermitApplicationController extends Controller
     private function centsToPesos(int $amountCents): string
     {
         return number_format($amountCents / 100, 2, '.', '');
+    }
+
+    /** @param array<string, mixed> $declaration */
+    private function declaredOwnerName(array $declaration): ?string
+    {
+        $name = collect([
+            data_get($declaration, 'taxpayer.first_name'),
+            data_get($declaration, 'taxpayer.middle_name'),
+            data_get($declaration, 'taxpayer.last_name'),
+        ])->filter(fn (mixed $part): bool => is_string($part) && trim($part) !== '')
+            ->map(fn (string $part): string => trim($part))
+            ->join(' ');
+
+        return $name === '' ? null : $name;
+    }
+
+    /** @param array<string, mixed> $declaration */
+    private function declaredAddress(array $declaration, string $path): ?string
+    {
+        $address = data_get($declaration, $path);
+        if (! is_array($address)) {
+            return null;
+        }
+
+        $value = collect([
+            $address['house_or_building_number'] ?? null,
+            $address['building_name'] ?? null,
+            $address['unit_number'] ?? null,
+            $address['street'] ?? null,
+            $address['subdivision'] ?? null,
+            $address['barangay'] ?? null,
+            $address['city_municipality'] ?? null,
+            $address['province'] ?? null,
+        ])->filter(fn (mixed $part): bool => is_string($part) && trim($part) !== '')
+            ->map(fn (string $part): string => trim($part))
+            ->unique(fn (string $part): string => mb_strtolower($part))
+            ->join(', ');
+
+        return $value === '' ? null : $value;
     }
 
     /**

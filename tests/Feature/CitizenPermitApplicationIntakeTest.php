@@ -100,6 +100,16 @@ test('citizens can save an owned new permit draft with multiple activities', fun
 
     $response = $this->actingAs($citizen)
         ->post(route('citizen.permit-applications.store'), citizenPermitDraftPayload([
+            'owner_address' => null,
+            'owner_street' => 'Owner Review Street',
+            'owner_barangay' => 'Poblacion',
+            'owner_city_municipality' => 'Ipil',
+            'owner_province' => 'Zamboanga Sibugay',
+            'business_address' => null,
+            'business_street' => 'Rizal Avenue',
+            'business_barangay' => 'Poblacion',
+            'business_city_municipality' => 'Ipil',
+            'business_province' => 'Zamboanga Sibugay',
             'lines' => [
                 [
                     'line_of_business_id' => $retail->id,
@@ -149,6 +159,9 @@ test('citizens can save an owned new permit draft with multiple activities', fun
             ->where('permitApplication.draft_boundary.is_draft', true)
             ->where('permitApplication.draft_boundary.assessment_started', false)
             ->where('permitApplication.draft_boundary.official_application_number_assigned', false)
+            ->where('permitApplication.owner.address', 'Owner Review Street, Poblacion, Ipil, Zamboanga Sibugay')
+            ->where('permitApplication.business.address', 'Rizal Avenue, Poblacion, Ipil, Zamboanga Sibugay')
+            ->where('permitApplication.business.barangay', null)
             ->has('permitApplication.lines', 2)
             ->where('permitApplication.lines.0.line_of_business.code', 'CITIZEN-MULTI-RETAIL')
             ->where('permitApplication.lines.1.line_of_business.code', 'CITIZEN-MULTI-REPAIR')

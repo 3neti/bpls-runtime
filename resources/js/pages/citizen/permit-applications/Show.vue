@@ -8,7 +8,6 @@ import {
     Download,
     ExternalLink,
     FilePenLine,
-    FilePlus2,
     History,
     Paperclip,
     ReceiptText,
@@ -16,10 +15,9 @@ import {
     ShieldCheck,
     Upload,
 } from '@lucide/vue';
-import { watch } from 'vue';
+import { computed, watch } from 'vue';
 import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Citizen/PaymentScheduleController';
 import {
-    create,
     edit,
     index,
     show,
@@ -227,6 +225,7 @@ const documentForm = useForm({
     remarks: '',
 });
 const submissionForm = useForm({});
+const isDraft = computed(() => props.permitApplication.draft_boundary.is_draft);
 
 watch(
     () => props.permitApplication.display_reference,
@@ -355,7 +354,11 @@ function blockerLabel(blocker: string): string {
                 <div>
                     <div class="flex flex-wrap items-center gap-2">
                         <h1 class="text-xl font-semibold text-foreground">
-                            {{ permitApplication.display_reference }}
+                            {{
+                                isDraft
+                                    ? permitApplication.business.name
+                                    : permitApplication.display_reference
+                            }}
                         </h1>
                         <Badge variant="secondary" class="capitalize">
                             {{
@@ -365,20 +368,119 @@ function blockerLabel(blocker: string): string {
                             }}
                         </Badge>
                     </div>
-                    <p class="text-xs text-muted-foreground">
+                    <p v-if="!isDraft" class="text-xs text-muted-foreground">
                         {{ referenceLabel(permitApplication) }}
                     </p>
                     <p class="text-sm text-muted-foreground">
-                        {{ permitApplication.business.name }} ·
-                        {{ permitApplication.application_year }}
-                        {{ applicationTypeLabel(permitApplication.type) }}
+                        <template v-if="isDraft">
+                            {{ applicationTypeLabel(permitApplication.type) }}
+                            business permit application ·
+                            {{ permitApplication.application_year }}
+                        </template>
+                        <template v-else>
+                            {{ permitApplication.business.name }} ·
+                            {{ permitApplication.application_year }}
+                            {{ applicationTypeLabel(permitApplication.type) }}
+                        </template>
                     </p>
                 </div>
             </section>
 
-            <IpilExecutableDocument :document="executableDocument" />
+            <IpilExecutableDocument
+                v-if="!isDraft"
+                :document="executableDocument"
+            />
+
+            <section
+                v-if="isDraft"
+                data-testid="citizen-draft-boundary"
+                :data-application-status="permitApplication.status"
+                class="grid gap-4 rounded-lg border border-amber-200 bg-amber-50/70 p-4 dark:border-amber-900 dark:bg-amber-950/20"
+            >
+                <div>
+                    <h2 class="font-semibold text-foreground">
+                        Saved, but not submitted
+                    </h2>
+                    <p class="mt-1 text-sm text-muted-foreground">
+                        This application remains editable and has not entered
+                        municipal review.
+                    </p>
+                </div>
+
+                <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                    <Button
+                        v-if="permitApplication.can_submit"
+                        type="button"
+                        data-testid="citizen-submit-application"
+                        :disabled="submissionForm.processing"
+                        @click="submitApplication"
+                    >
+                        <Send />
+                        Submit Application
+                    </Button>
+                    <Button
+                        v-if="permitApplication.can_edit"
+                        as-child
+                        variant="outline"
+                    >
+                        <Link :href="edit(permitApplication.id)">
+                            <FilePenLine />
+                            Edit Draft
+                        </Link>
+                    </Button>
+                    <Button as-child variant="outline">
+                        <Link :href="index()">
+                            <ArrowLeft />
+                            Back
+                        </Link>
+                    </Button>
+                </div>
+
+                <InputError :message="submissionBoundaryError()" />
+
+                <dl
+                    class="grid gap-3 border-t border-amber-200 pt-4 text-sm sm:grid-cols-3 dark:border-amber-900"
+                >
+                    <div>
+                        <dt class="text-xs text-muted-foreground">Owner</dt>
+                        <dd class="font-medium">
+                            {{ permitApplication.owner.name }}
+                        </dd>
+                        <dd class="text-xs text-muted-foreground">
+                            {{
+                                permitApplication.owner.email ||
+                                permitApplication.owner.phone ||
+                                'Contact not recorded'
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">
+                            Assessment
+                        </dt>
+                        <dd class="font-medium">Not prepared</dd>
+                        <dd class="text-xs text-muted-foreground">
+                            Assessment begins after formal submission.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground">Saved</dt>
+                        <dd class="font-medium">
+                            {{
+                                permitApplication.saved_at
+                                    ? dateTime(permitApplication.saved_at)
+                                    : 'Time not recorded'
+                            }}
+                        </dd>
+                        <dd class="text-xs text-muted-foreground">
+                            {{ permitApplication.display_reference }}
+                        </dd>
+                    </div>
+                </dl>
+            </section>
 
             <WorkflowStageSummary
+                v-if="!isDraft"
                 data-testid="citizen-lifecycle-summary"
                 eyebrow="Your permit application"
                 :title="
@@ -488,17 +590,12 @@ function blockerLabel(blocker: string): string {
                                 Back
                             </Link>
                         </Button>
-                        <Button as-child>
-                            <Link :href="create()">
-                                <FilePlus2 />
-                                New Draft
-                            </Link>
-                        </Button>
                     </div>
                 </template>
             </WorkflowStageSummary>
 
             <section
+                v-if="!isDraft"
                 data-testid="citizen-draft-boundary"
                 :data-application-status="permitApplication.status"
                 class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
@@ -1186,7 +1283,7 @@ function blockerLabel(blocker: string): string {
             </section>
 
             <section
-                v-if="permitApplication.timeline.length > 0"
+                v-if="!isDraft && permitApplication.timeline.length > 0"
                 data-testid="citizen-application-timeline"
                 class="border-y border-sidebar-border/70 bg-background py-4 dark:border-sidebar-border"
             >
@@ -1246,7 +1343,7 @@ function blockerLabel(blocker: string): string {
                 </ol>
             </section>
 
-            <section class="grid gap-4 md:grid-cols-2">
+            <section v-if="!isDraft" class="grid gap-4 md:grid-cols-2">
                 <div class="grid content-start gap-3 border-t pt-4">
                     <h2 class="text-sm font-semibold text-foreground">Owner</h2>
                     <dl class="grid gap-2 text-sm">
@@ -1334,13 +1431,31 @@ function blockerLabel(blocker: string): string {
                 </div>
             </section>
 
-            <section class="grid gap-3 border-t pt-4">
+            <section
+                class="grid gap-3 border-t pt-4"
+                :aria-labelledby="
+                    isDraft ? 'draft-activities-heading' : undefined
+                "
+            >
                 <div>
-                    <h2 class="text-sm font-semibold text-foreground">
-                        Business activities
+                    <h2
+                        :id="isDraft ? 'draft-activities-heading' : undefined"
+                        class="text-sm font-semibold text-foreground"
+                    >
+                        {{
+                            isDraft
+                                ? 'Declared business activity'
+                                : 'Business activities'
+                        }}
                     </h2>
                     <p class="text-xs text-muted-foreground">
-                        Declared values retained with this application.
+                        <template v-if="isDraft">
+                            Review the financial declarations that will enter
+                            municipal processing when submitted.
+                        </template>
+                        <template v-else>
+                            Declared values retained with this application.
+                        </template>
                     </p>
                 </div>
                 <div class="grid gap-3 md:hidden">
@@ -1471,6 +1586,33 @@ function blockerLabel(blocker: string): string {
                 </div>
             </section>
 
+            <details
+                v-if="isDraft"
+                data-testid="citizen-full-application-review"
+                class="group border-y border-border py-4"
+            >
+                <summary
+                    class="flex cursor-pointer list-none items-center justify-between gap-3 font-medium text-foreground"
+                >
+                    <span>
+                        Review full application
+                        <span
+                            class="mt-1 block text-xs font-normal text-muted-foreground"
+                        >
+                            Open the complete declaration saved in this draft.
+                        </span>
+                    </span>
+                    <span
+                        aria-hidden="true"
+                        class="text-muted-foreground transition-transform group-open:rotate-180"
+                        >⌄</span
+                    >
+                </summary>
+                <div class="mt-4">
+                    <IpilExecutableDocument :document="executableDocument" />
+                </div>
+            </details>
+
             <section
                 v-if="permitApplication.can_view_documents"
                 data-testid="citizen-supporting-documents"
@@ -1486,7 +1628,7 @@ function blockerLabel(blocker: string): string {
                                 Supporting documents
                             </h2>
                             <p class="text-xs text-muted-foreground">
-                                Supporting evidence retained with this
+                                Add supporting evidence while preparing this
                                 application.
                             </p>
                         </div>
@@ -1508,9 +1650,11 @@ function blockerLabel(blocker: string): string {
                     "
                     class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
                 >
-                    <p class="font-medium">Documents for submission</p>
+                    <p class="font-medium">Document preparation</p>
                     <p class="mt-1">
-                        {{ permitApplication.documentary_readiness.statement }}
+                        Documents added here remain with this application. The
+                        municipality determines required documents and their
+                        sufficiency separately.
                     </p>
                 </div>
 
