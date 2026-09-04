@@ -207,6 +207,8 @@ test('authorized legacy tables produce a source-backed laboratory specimen pool 
         ->and($pool[0]['fields']['owner_first_name'])->toBe('Legacy')
         ->and($pool[0]['fields']['owner_middle_name'])->toBe('Source')
         ->and($pool[0]['fields']['owner_last_name'])->toBe('Owner')
+        ->and($pool[0]['fields']['applicant_printed_name'])->toBe('Legacy Source Owner')
+        ->and($pool[0]['reset_fields'])->toContain('applicant_printed_name')
         ->and($pool[0]['fields']['owner_street'])->toBe('Owner Review Street')
         ->and($pool[0]['fields']['owner_barangay'])->toBe('Poblacion')
         ->and($pool[0]['fields']['owner_city_municipality'])->toBe('Ipil')

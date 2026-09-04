@@ -228,6 +228,7 @@ class ResolveLegacyCitizenPermitApplicationLabPool
         $capital = $this->money($sourceLine['capitalInvestment'] ?? null);
         $gross = $this->money($sourceLine['grossSales'] ?? null);
         $ownerFirstName = $this->text($owner['firstName'] ?? null);
+        $ownerMiddleName = $this->nullableText($owner['middleName'] ?? null);
         $ownerLastName = $this->text($owner['lastName'] ?? null);
         $ownerAddress = $this->text($owner['address'] ?? null);
         $historicalAssessment = $this->historicalAssessment($application, $paymentSchedules);
@@ -273,13 +274,18 @@ class ResolveLegacyCitizenPermitApplicationLabPool
             ]),
             'owner_last_name' => $ownerLastName,
             'owner_first_name' => $ownerFirstName,
-            'owner_middle_name' => $this->nullableText($owner['middleName'] ?? null),
+            'owner_middle_name' => $ownerMiddleName,
             'owner_street' => $ownerAddress,
             'owner_barangay' => $this->text($ownerBarangay['name'] ?? null),
             'owner_city_municipality' => $this->text($ownerCity['name'] ?? null),
             'owner_province' => $this->text($ownerProvince['name'] ?? null),
             'owner_telephone' => $this->nullableText($owner['mobile'] ?? null),
             'owner_email' => $this->nullableText($owner['email'] ?? null),
+            'applicant_printed_name' => implode(' ', array_filter([
+                $ownerFirstName,
+                $ownerMiddleName,
+                $ownerLastName,
+            ])),
         ], fn (mixed $value): bool => $value !== null && $value !== '');
 
         return [

@@ -71,6 +71,7 @@ class BuildCitizenPermitApplicationLabFixture
         'emergency_contact_telephone',
         'emergency_contact_mobile',
         'emergency_contact_email',
+        'applicant_printed_name',
     ];
 
     public function __construct(
