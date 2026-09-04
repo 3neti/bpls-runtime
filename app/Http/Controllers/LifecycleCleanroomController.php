@@ -4,16 +4,37 @@ namespace App\Http\Controllers;
 
 use App\Actions\AdvanceLifecycleCleanroom;
 use App\Actions\AuthenticateLifecycleCleanroomActor;
+use App\Actions\BuildLifecycleOfficeReviewHandoff;
 use App\Actions\ResolveLifecycleCleanroomState;
 use App\Actions\StartLifecycleCleanroom;
 use App\Http\Requests\RunLifecycleCleanroomMilestoneRequest;
 use App\Models\LifecycleCleanroomRun;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
 use LogicException;
 
 class LifecycleCleanroomController extends Controller
 {
+    public function officeReviewsAssigned(
+        LifecycleCleanroomRun $lifecycleCleanroomRun,
+        int $applicationYear,
+        BuildLifecycleOfficeReviewHandoff $buildHandoff,
+    ): Response {
+        abort_unless(in_array($applicationYear, [2025, 2026], true), 404);
+
+        try {
+            $handoff = $buildHandoff->handle($lifecycleCleanroomRun, $applicationYear);
+        } catch (LogicException) {
+            abort(404);
+        }
+
+        return Inertia::render('stakeholder-preview/OfficeReviewsAssigned', [
+            'handoff' => $handoff,
+        ]);
+    }
+
     public function start(Request $request, StartLifecycleCleanroom $start): RedirectResponse
     {
         $start->handle($request->user());
@@ -38,6 +59,13 @@ class LifecycleCleanroomController extends Controller
         }
         if ($next['mode'] === 'system_action') {
             $advance->handle($lifecycleCleanroomRun);
+
+            if (in_array($next['key'], ['evaluation_initialized', 'renewal_evaluation_initialized'], true)) {
+                return to_route('stakeholder-preview.lifecycle-laboratory.cleanrooms.office-reviews-assigned', [
+                    $lifecycleCleanroomRun,
+                    $next['year'],
+                ])->with('success', 'Office evaluation work created. No amount became payable and no Assessment was created.');
+            }
 
             return to_route('stakeholder-preview.lifecycle-laboratory.index')->with('success', $next['label'].' completed through the canonical action boundary.');
         }

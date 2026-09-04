@@ -40,11 +40,13 @@ beforeEach(function () {
 
 test('laboratory is fail closed to guests and arbitrary preview accounts', function () {
     $this->get(route('stakeholder-preview.lifecycle-laboratory.index'))->assertRedirect(route('login'));
+    $this->get('/stakeholder-preview/lifecycle-laboratory/cleanrooms/1/office-reviews-assigned/2025')->assertRedirect(route('login'));
 
     $bplo = previewAccount(StakeholderPreviewPersona::Bplo);
     $this->actingAs($bplo)->get(route('stakeholder-preview.lifecycle-laboratory.index'))->assertNotFound();
     $this->actingAs($bplo)->post(route('stakeholder-preview.lifecycle-laboratory.run-next'))->assertNotFound();
     $this->actingAs($bplo)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'))->assertNotFound();
+    $this->actingAs($bplo)->get('/stakeholder-preview/lifecycle-laboratory/cleanrooms/1/office-reviews-assigned/2025')->assertNotFound();
 
     expect(LifecycleScenarioSpecimen::query()->count())->toBe(0)
         ->and(PermitApplication::query()->count())->toBe(0);
@@ -300,7 +302,9 @@ test('source backed registry specimen advances through canonical actions to an a
         ->and(data_get($state, 'progress.total_steps'))->toBe(13)
         ->and(data_get($state, 'progress.next_step.key'))->toBe('evaluation_initialized');
 
-    app(AdvanceLifecycleCleanroom::class)->handle($run->fresh());
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))
+        ->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.office-reviews-assigned', [$run, 2025]));
     $evaluation = $application->fresh()->businessPermitEvaluation;
     $responsibilities = $evaluation->items()
         ->where('metadata->lifecycle_cleanroom_responsibility', true)
@@ -308,6 +312,21 @@ test('source backed registry specimen advances through canonical actions to an a
         ->get();
     expect($responsibilities)->toHaveCount(8)
         ->and($responsibilities->sum(fn ($item): int => (int) data_get($item->revisions->first()?->value, 'amount_cents')))->toBe(482_500);
+
+    $this->get(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.office-reviews-assigned', [$run, 2025]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('stakeholder-preview/OfficeReviewsAssigned')
+            ->where('handoff.application.id', $application->id)
+            ->where('handoff.application.year', 2025)
+            ->where('handoff.summary.office_count', 4)
+            ->where('handoff.summary.responsibility_count', 8)
+            ->where('handoff.summary.resolved_count', 0)
+            ->where('handoff.summary.assessment_created', false)
+            ->where('handoff.summary.payment_order_count', 0)
+            ->has('handoff.offices', 4)
+            ->where('handoff.offices.0.status', 'Awaiting determination')
+            ->where('handoff.audit.production_liability', false));
 
     foreach ($responsibilities as $responsibility) {
         $evaluation->refresh();
@@ -395,7 +414,7 @@ test('cleanroom citizen form uses canonical draft and submit actions before cano
     recordCleanroomRouting($run, $application);
     $this->actingAs($management)
         ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))
-        ->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.index'));
+        ->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.office-reviews-assigned', [$run, 2025]));
     expect($application->fresh()->businessPermitEvaluation->items()->whereIn('key', collect(app(NewApplicationHappyPathDefinition::class)->responsibilities())->pluck('key'))->count())->toBe(6)
         ->and($run->fresh()->owned_resource_manifest['permit_application_declaration_ids'])->toBe([$application->declaration()->sole()->id])
         ->and(PermitApplication::query()->count())->toBe(1);

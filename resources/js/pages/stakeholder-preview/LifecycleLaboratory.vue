@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import {
     AlertTriangle,
     ArrowRight,
@@ -17,6 +17,7 @@ import { computed, ref } from 'vue';
 import {
     close as closeCleanroomRoute,
     enterActor as enterCleanroomActorRoute,
+    officeReviewsAssigned,
     runNext as runCleanroomNextRoute,
     runToMilestone as runCleanroomMilestoneRoute,
     start as startCleanroomRoute,
@@ -518,6 +519,25 @@ function closeCleanroom(): void {
                                             ><strong>{{ value }}</strong></span
                                         >
                                     </div>
+                                    <Link
+                                        v-if="
+                                            step.completed &&
+                                            (step.key ===
+                                                'evaluation_initialized' ||
+                                                step.key ===
+                                                    'renewal_evaluation_initialized')
+                                        "
+                                        :href="
+                                            officeReviewsAssigned([
+                                                cleanroom.active.run.id,
+                                                step.year,
+                                            ])
+                                        "
+                                        class="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-amber-800 underline decoration-amber-300 underline-offset-4 hover:text-amber-950 dark:text-amber-300 dark:hover:text-amber-200"
+                                    >
+                                        Review office handoff
+                                        <ArrowRight class="size-4" />
+                                    </Link>
                                 </div>
                             </div>
                         </li>

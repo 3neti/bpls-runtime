@@ -351,7 +351,7 @@ class ResolveLifecycleCleanroomState
             $step['description'] = "The responsible office confirms {$count} checksum-bound source component(s) through the normal Evaluation and Paperless Payment Order form.";
         }
         if ($step['key'] === 'evaluation_initialized') {
-            $step['description'] = 'The canonical Evaluation action creates '.$responsibilities->count().' source-backed provisional responsibilities from the immutable specimen and explicit BPLO route.';
+            $step['description'] = $responsibilities->count().' fee responsibilities are assigned to the offices selected by BPLO. Each office must still determine applicability and any amount; no charge becomes payable and no Assessment is created here.';
         }
         if ($step['key'] === 'assessment_prepared') {
             $step['description'] = 'The Assessment Officer consolidates the confirmed source-backed components through the one canonical Assessment path, then exposes the instant audit comparison.';
