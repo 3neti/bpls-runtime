@@ -162,7 +162,11 @@ class PermitApplicationController extends Controller
         $application = $this->ownedApplication($request, $permitApplication);
 
         try {
-            $application = $submitApplication->handle($application, $request->user());
+            $application = $submitApplication->handle(
+                $application,
+                $request->user(),
+                $request->boolean('undertaking_accepted'),
+            );
         } catch (DomainException $exception) {
             return back()->withErrors(['submission' => $exception->getMessage()]);
         }
@@ -199,6 +203,9 @@ class PermitApplicationController extends Controller
             (bool) ($authorityReview['ready_for_authority_review'] ?? false) => 'ready_for_authority_review',
             $latestReceipt?->status->value === 'issued' => 'municipal_review_in_progress',
             $latestPaymentSchedule?->status->value === 'paid' => 'municipal_review_in_progress',
+            $application->status === PermitApplicationStatus::Assessment
+                && $latestAssessment === null
+                && data_get($application->metadata, 'citizen_submission.submitted_at') !== null => 'submitted_awaiting_municipal_intake',
             default => $application->status->value,
         };
         $declaration = data_get($application->metadata, 'applicant_declaration_draft');
@@ -269,6 +276,7 @@ class PermitApplicationController extends Controller
                 'submission_boundary' => [
                     'citizen_submitted_at' => data_get($application->metadata, 'citizen_submission.submitted_at'),
                     'municipality_received_at' => data_get($application->metadata, 'municipal_receipt.received_at'),
+                    'undertaking_confirmed_at' => data_get($application->metadata, 'undertaking_confirmation.accepted_at'),
                     'documentary_sufficiency_determined' => (bool) data_get($application->metadata, 'submission_policy_boundary.documentary_sufficiency_determined', false),
                     'statement' => match (true) {
                         $isDraft => 'Formal submission places this draft in the municipal processing queue. It does not confirm documentary sufficiency, approval, assessment acceptance, payment, or permit issuance.',
@@ -282,9 +290,11 @@ class PermitApplicationController extends Controller
                         || $assessmentStarted,
                     'application_status' => $application->status->value,
                     'current_stage' => $currentProcessingStage,
-                    'statement' => $latestPaymentSchedule?->status->value === 'pending'
-                        ? 'Municipal evaluation is complete, the Assessment is approved, and payment is pending.'
-                        : 'This view reports the municipality’s current processing record and payment state.',
+                    'statement' => match (true) {
+                        $latestPaymentSchedule?->status->value === 'pending' => 'Municipal evaluation is complete, the Assessment is approved, and payment is pending.',
+                        $currentProcessingStage === 'submitted_awaiting_municipal_intake' => 'Your submission was received. Municipal intake, official numbering, and assessment preparation are still pending.',
+                        default => 'This view reports the municipality’s current processing record and payment state.',
+                    },
                     'assessment' => $latestAssessment === null ? null : [
                         'id' => $latestAssessment->id,
                         'sequence' => $latestAssessment->sequence,

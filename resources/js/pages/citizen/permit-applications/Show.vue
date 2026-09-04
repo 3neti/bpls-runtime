@@ -97,6 +97,7 @@ type PermitApplication = {
     submission_boundary: {
         citizen_submitted_at: string | null;
         municipality_received_at: string | null;
+        undertaking_confirmed_at: string | null;
         documentary_sufficiency_determined: boolean;
         statement: string;
     };
@@ -224,7 +225,9 @@ const documentForm = useForm({
     file: null as File | null,
     remarks: '',
 });
-const submissionForm = useForm({});
+const submissionForm = useForm({
+    undertaking_accepted: false,
+});
 const isDraft = computed(() => props.permitApplication.draft_boundary.is_draft);
 
 watch(
@@ -286,6 +289,10 @@ function documentBoundaryError(): string | undefined {
 }
 
 function submitApplication(): void {
+    if (!submissionForm.undertaking_accepted) {
+        return;
+    }
+
     submissionForm.post(submit.url(props.permitApplication.id), {
         preserveScroll: true,
     });
@@ -320,6 +327,8 @@ function statusLabel(status: string): string {
         needs_municipal_confirmation: 'Needs municipal confirmation',
         policy_boundary: 'Needs municipal confirmation',
         municipal_review_in_progress: 'Municipal review in progress',
+        submitted_awaiting_municipal_intake:
+            'Submitted — awaiting municipal intake',
         pending_payment: 'Awaiting payment',
         ready_for_authority_review: 'Ready for authority review',
     };
@@ -407,12 +416,38 @@ function blockerLabel(blocker: string): string {
                     </p>
                 </div>
 
+                <label
+                    v-if="permitApplication.can_submit"
+                    class="flex items-start gap-3 rounded-md border border-amber-300 bg-background/80 p-3 text-sm dark:border-amber-800"
+                >
+                    <input
+                        v-model="submissionForm.undertaking_accepted"
+                        name="undertaking_accepted"
+                        type="checkbox"
+                        class="mt-0.5 size-4 rounded border-input"
+                    />
+                    <span>
+                        <strong class="block text-foreground">
+                            Confirm the Oath of Undertaking
+                        </strong>
+                        I confirm this application and its undertaking before
+                        formal submission. This confirmation will be recorded
+                        with my identity and submission time.
+                    </span>
+                </label>
+                <InputError
+                    :message="submissionForm.errors.undertaking_accepted"
+                />
+
                 <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                     <Button
                         v-if="permitApplication.can_submit"
                         type="button"
                         data-testid="citizen-submit-application"
-                        :disabled="submissionForm.processing"
+                        :disabled="
+                            submissionForm.processing ||
+                            !submissionForm.undertaking_accepted
+                        "
                         @click="submitApplication"
                     >
                         <Send />
@@ -488,10 +523,13 @@ function blockerLabel(blocker: string): string {
                     permitApplication.processing.payment_schedule
                         .balance_amount_cents > 0
                         ? `${applicationTypeLabel(permitApplication.type)} ready for payment`
-                        : permitApplication.processing
-                                .has_entered_municipal_processing
-                          ? `${applicationTypeLabel(permitApplication.type)} under municipal review`
-                          : `${applicationTypeLabel(permitApplication.type)} draft`
+                        : permitApplication.processing.current_stage ===
+                            'submitted_awaiting_municipal_intake'
+                          ? 'Submitted — awaiting municipal intake'
+                          : permitApplication.processing
+                                  .has_entered_municipal_processing
+                            ? `${applicationTypeLabel(permitApplication.type)} under municipal review`
+                            : `${applicationTypeLabel(permitApplication.type)} draft`
                 "
                 :description="
                     permitApplication.processing
@@ -528,7 +566,10 @@ function blockerLabel(blocker: string): string {
                         detail: permitApplication.processing.assessment
                             ?.treasurer_decision
                             ? `Municipal Treasurer ${statusLabel(permitApplication.processing.assessment.treasurer_decision.action)}`
-                            : 'Municipal decision pending',
+                            : permitApplication.processing.current_stage ===
+                                'submitted_awaiting_municipal_intake'
+                              ? 'Municipal intake pending'
+                              : 'Municipal decision pending',
                     },
                     {
                         label: 'Amount due',
@@ -602,10 +643,13 @@ function blockerLabel(blocker: string): string {
             >
                 <p class="font-medium">
                     {{
-                        permitApplication.processing
-                            .has_entered_municipal_processing
-                            ? 'Municipal processing record'
-                            : 'Saved citizen draft'
+                        permitApplication.processing.current_stage ===
+                        'submitted_awaiting_municipal_intake'
+                            ? 'Submitted application'
+                            : permitApplication.processing
+                                    .has_entered_municipal_processing
+                              ? 'Municipal processing record'
+                              : 'Saved citizen draft'
                     }}
                 </p>
                 <p class="mt-1">
@@ -622,7 +666,7 @@ function blockerLabel(blocker: string): string {
                             .citizen_submitted_at
                     "
                     data-testid="citizen-submission-evidence"
-                    class="mt-2 grid gap-2 text-xs sm:grid-cols-2"
+                    class="mt-2 grid gap-2 text-xs sm:grid-cols-3"
                 >
                     <div>
                         <dt class="font-medium">Citizen submitted</dt>
@@ -646,6 +690,22 @@ function blockerLabel(blocker: string): string {
                                               .municipality_received_at,
                                       )
                                     : 'Pending'
+                            }}
+                        </dd>
+                    </div>
+                    <div
+                        v-if="
+                            permitApplication.submission_boundary
+                                .undertaking_confirmed_at
+                        "
+                    >
+                        <dt class="font-medium">Undertaking confirmed</dt>
+                        <dd>
+                            {{
+                                dateTime(
+                                    permitApplication.submission_boundary
+                                        .undertaking_confirmed_at,
+                                )
                             }}
                         </dd>
                     </div>

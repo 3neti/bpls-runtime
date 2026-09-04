@@ -122,7 +122,7 @@ final class NewApplicationHappyPathScenario
                 $this->assert($citizen->fresh()->business_owner_id === $draft->business->business_owner_id, 'Citizen was not linked to the newly established BusinessOwner.');
                 $this->assert($draft->business->owner->businesses()->count() === 1, 'Empty-to-first-business transition did not create exactly one Business.');
 
-                $application = $this->submitCitizenApplication->handle($draft, $citizen);
+                $application = $this->submitCitizenApplication->handle($draft, $citizen, true);
 
                 $metadata = $application->metadata ?? [];
                 $metadata['lifecycle_scenario'] = [

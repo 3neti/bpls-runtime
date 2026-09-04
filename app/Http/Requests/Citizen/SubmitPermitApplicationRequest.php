@@ -22,6 +22,8 @@ class SubmitPermitApplicationRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [];
+        return [
+            'undertaking_accepted' => ['required', 'accepted'],
+        ];
     }
 }

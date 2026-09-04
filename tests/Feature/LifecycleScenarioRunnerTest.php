@@ -787,7 +787,7 @@ test('citizen formal submission scenario audits the browser transition against c
         ->and($application->application_number)->toBeNull()
         ->and($citizen->business_owner_id)->toBe($application->business->business_owner_id);
 
-    app(SubmitCitizenPermitApplication::class)->handle($application, $citizen);
+    app(SubmitCitizenPermitApplication::class)->handle($application, $citizen, true);
     $application->refresh();
     $artifactStore->putJson('browser/report.json', [
         'result' => ['passed' => true],

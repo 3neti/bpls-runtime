@@ -19,9 +19,16 @@ class SubmitCitizenPermitApplication
         private readonly ArmBploRoutingSentinel $armRoutingSentinel,
     ) {}
 
-    public function handle(PermitApplication $permitApplication, User $submittedBy): PermitApplication
-    {
-        return DB::transaction(function () use ($permitApplication, $submittedBy): PermitApplication {
+    public function handle(
+        PermitApplication $permitApplication,
+        User $submittedBy,
+        bool $undertakingAccepted,
+    ): PermitApplication {
+        return DB::transaction(function () use ($permitApplication, $submittedBy, $undertakingAccepted): PermitApplication {
+            if (! $undertakingAccepted) {
+                throw new DomainException('Confirm the Oath of Undertaking before submitting this application.');
+            }
+
             $application = PermitApplication::query()
                 ->with('business')
                 ->lockForUpdate()
@@ -62,6 +69,14 @@ class SubmitCitizenPermitApplication
                 'submitted_at' => $occurredAt->toIso8601String(),
                 'meaning' => 'Citizen formally submitted the draft to the municipal processing queue.',
             ];
+            $metadata['undertaking_confirmation'] = [
+                'schema_version' => 'bpls.undertaking-confirmation.v1',
+                'accepted' => true,
+                'actor_id' => $submittedBy->id,
+                'accepted_at' => $occurredAt->toIso8601String(),
+                'applicant_printed_name' => data_get($metadata, 'applicant_declaration_draft.undertaking.applicant_printed_name'),
+                'position_title' => data_get($metadata, 'applicant_declaration_draft.undertaking.position_title'),
+            ];
             $metadata['municipal_receipt'] = [
                 'received_at' => $occurredAt->toIso8601String(),
                 'processing_status' => PermitApplicationStatus::Assessment->value,
@@ -99,6 +114,9 @@ class SubmitCitizenPermitApplication
                 'frozen_at' => $declaration->declared_at->toIso8601String(),
                 'immutable' => true,
             ];
+            $metadata['undertaking_confirmation']['declaration_snapshot_hash'] = $declaration->snapshot_hash;
+            $metadata['undertaking_confirmation']['applicant_printed_name'] = data_get($declaration->snapshot, 'undertaking.applicant_printed_name');
+            $metadata['undertaking_confirmation']['position_title'] = data_get($declaration->snapshot, 'undertaking.position_title');
             $application->forceFill(['metadata' => $metadata])->save();
 
             $this->armRoutingSentinel->handle($application);

@@ -565,6 +565,7 @@ function citizenPermitDraftPayload(array $overrides = []): array
         'trade_name' => 'Citizen Store',
         'business_address' => 'Market Road',
         'barangay' => 'Poblacion',
+        'undertaking_accepted' => '1',
         'type' => PermitApplicationType::New->value,
         'application_year' => now()->year,
         ...$overrides,

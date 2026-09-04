@@ -2608,6 +2608,11 @@ async function submitCitizenPermitApplication(targetPage, targetBaseUrl) {
                 { permit_application_id: manifest.resources.record_id },
             ),
         );
+        await targetPage
+            .getByRole('checkbox', {
+                name: /Confirm the Oath of Undertaking/i,
+            })
+            .check();
         await submitButton.click();
     } else {
         if (fs.existsSync(path.join(runDirectory, beforeScreenshot))) {

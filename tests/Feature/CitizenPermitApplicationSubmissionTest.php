@@ -21,7 +21,9 @@ test('formal citizen submission records separate submitted and received facts wi
     [$citizen, $application] = citizenSubmissionDraft();
 
     $response = $this->actingAs($citizen)
-        ->post(route('citizen.permit-applications.submit', $application));
+        ->post(route('citizen.permit-applications.submit', $application), [
+            'undertaking_accepted' => '1',
+        ]);
 
     $application->refresh();
 
@@ -33,6 +35,10 @@ test('formal citizen submission records separate submitted and received facts wi
         ->and(data_get($application->metadata, 'citizen_submission.actor_id'))->toBe($citizen->id)
         ->and(data_get($application->metadata, 'citizen_submission.submitted_at'))->toBe($application->submitted_at->toIso8601String())
         ->and(data_get($application->metadata, 'municipal_receipt.received_at'))->toBe($application->submitted_at->toIso8601String())
+        ->and(data_get($application->metadata, 'undertaking_confirmation.accepted'))->toBeTrue()
+        ->and(data_get($application->metadata, 'undertaking_confirmation.actor_id'))->toBe($citizen->id)
+        ->and(data_get($application->metadata, 'undertaking_confirmation.accepted_at'))->toBe($application->submitted_at->toIso8601String())
+        ->and(data_get($application->metadata, 'undertaking_confirmation.declaration_snapshot_hash'))->toBe($application->declaration()->sole()->snapshot_hash)
         ->and(data_get($application->metadata, 'submission_policy_boundary.official_application_number_assigned'))->toBeFalse()
         ->and(data_get($application->metadata, 'submission_policy_boundary.tracking_reference_is_official_number'))->toBeFalse()
         ->and(data_get($application->metadata, 'submission_policy_boundary.documentary_sufficiency_determined'))->toBeFalse()
@@ -52,10 +58,10 @@ test('formal citizen submission is idempotent for the same application', functio
     [$citizen, $application] = citizenSubmissionDraft();
     $submit = app(SubmitCitizenPermitApplication::class);
 
-    $first = $submit->handle($application, $citizen);
+    $first = $submit->handle($application, $citizen, true);
     $firstSubmittedAt = $first->submitted_at?->toIso8601String();
     $firstTrackingReference = $first->tracking_reference;
-    $second = $submit->handle($application, $citizen);
+    $second = $submit->handle($application, $citizen, true);
 
     expect($second->submitted_at?->toIso8601String())->toBe($firstSubmittedAt)
         ->and($second->tracking_reference)->toBe($firstTrackingReference)
@@ -73,7 +79,7 @@ test('citizen submission requires explicit permission and an owned registry-link
         ->detach();
 
     $this->actingAs($citizen)
-        ->post(route('citizen.permit-applications.submit', $application))
+        ->post(route('citizen.permit-applications.submit', $application), ['undertaking_accepted' => '1'])
         ->assertForbidden();
 
     $otherRole = Role::factory()->create(['code' => 'citizen-submission-other']);
@@ -86,7 +92,7 @@ test('citizen submission requires explicit permission and an owned registry-link
     $otherCitizen = User::factory()->create(['role_id' => $otherRole->id]);
 
     $this->actingAs($otherCitizen)
-        ->post(route('citizen.permit-applications.submit', $application))
+        ->post(route('citizen.permit-applications.submit', $application), ['undertaking_accepted' => '1'])
         ->assertNotFound();
 
     expect($application->refresh()->status)->toBe(PermitApplicationStatus::Draft)
@@ -100,7 +106,7 @@ test('citizen submission rejects a draft whose business is not linked to the cit
     $citizen->forceFill(['business_owner_id' => BusinessOwner::factory()->create()->id])->save();
 
     $this->actingAs($citizen)
-        ->post(route('citizen.permit-applications.submit', $application))
+        ->post(route('citizen.permit-applications.submit', $application), ['undertaking_accepted' => '1'])
         ->assertNotFound();
 
     expect($application->refresh()->status)->toBe(PermitApplicationStatus::Draft)
@@ -120,7 +126,7 @@ test('citizen detail exposes the formal submission boundary before and after rec
             ->where('permitApplication.submission_boundary.documentary_sufficiency_determined', false)
         );
 
-    app(SubmitCitizenPermitApplication::class)->handle($application, $citizen);
+    app(SubmitCitizenPermitApplication::class)->handle($application, $citizen, true);
 
     $this->actingAs($citizen)
         ->get(route('citizen.permit-applications.show', $application))
@@ -130,11 +136,28 @@ test('citizen detail exposes the formal submission boundary before and after rec
             ->where('permitApplication.status', PermitApplicationStatus::Assessment->value)
             ->where('permitApplication.submission_boundary.citizen_submitted_at', $application->refresh()->submitted_at?->toIso8601String())
             ->where('permitApplication.submission_boundary.municipality_received_at', $application->submitted_at?->toIso8601String())
+            ->where('permitApplication.submission_boundary.undertaking_confirmed_at', $application->submitted_at?->toIso8601String())
             ->where('permitApplication.processing.has_entered_municipal_processing', true)
+            ->where('permitApplication.processing.current_stage', 'submitted_awaiting_municipal_intake')
             ->where('permitApplication.application_number', null)
             ->where('permitApplication.display_reference', $application->tracking_reference)
         );
 });
+
+test('citizen submission requires a fresh explicit undertaking confirmation', function (array $payload) {
+    [$citizen, $application] = citizenSubmissionDraft();
+
+    $this->actingAs($citizen)
+        ->post(route('citizen.permit-applications.submit', $application), $payload)
+        ->assertSessionHasErrors('undertaking_accepted');
+
+    expect($application->refresh()->status)->toBe(PermitApplicationStatus::Draft)
+        ->and($application->submitted_at)->toBeNull()
+        ->and(data_get($application->metadata, 'undertaking_confirmation'))->toBeNull();
+})->with([
+    'missing confirmation' => [[]],
+    'declined confirmation' => [['undertaking_accepted' => '0']],
+]);
 
 /**
  * @return array{User, PermitApplication}

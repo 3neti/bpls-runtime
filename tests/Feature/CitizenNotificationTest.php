@@ -14,7 +14,7 @@ use Inertia\Testing\AssertableInertia as Assert;
 test('formal submission records one factual in-app receipt notice', function () {
     [$citizen, $application] = citizenNotificationDraft();
 
-    app(SubmitCitizenPermitApplication::class)->handle($application, $citizen);
+    app(SubmitCitizenPermitApplication::class)->handle($application, $citizen, true);
     $application->refresh();
     $notification = $citizen->notifications()->sole();
 
@@ -26,7 +26,7 @@ test('formal submission records one factual in-app receipt notice', function () 
         ->and($notification->data['message'])->toContain('does not mean')
         ->and($notification->read_at)->toBeNull();
 
-    app(SubmitCitizenPermitApplication::class)->handle($application, $citizen);
+    app(SubmitCitizenPermitApplication::class)->handle($application, $citizen, true);
 
     expect($citizen->notifications()->count())->toBe(1);
 });
@@ -35,8 +35,8 @@ test('citizen sees only owned notices and may mark an owned notice as read', fun
     [$citizen, $application] = citizenNotificationDraft();
     $otherCitizen = User::factory()->create(['role_id' => $citizen->role_id]);
     [$otherCitizen, $otherApplication] = citizenNotificationDraft($otherCitizen);
-    app(SubmitCitizenPermitApplication::class)->handle($application, $citizen);
-    app(SubmitCitizenPermitApplication::class)->handle($otherApplication, $otherCitizen);
+    app(SubmitCitizenPermitApplication::class)->handle($application, $citizen, true);
+    app(SubmitCitizenPermitApplication::class)->handle($otherApplication, $otherCitizen, true);
     $application->refresh();
 
     $notification = $citizen->notifications()->sole();
@@ -65,7 +65,7 @@ test('citizen cannot read or update another users notice', function () {
     [$citizen] = citizenNotificationDraft();
     $otherCitizen = User::factory()->create(['role_id' => $citizen->role_id]);
     [$otherCitizen, $otherApplication] = citizenNotificationDraft($otherCitizen);
-    app(SubmitCitizenPermitApplication::class)->handle($otherApplication, $otherCitizen);
+    app(SubmitCitizenPermitApplication::class)->handle($otherApplication, $otherCitizen, true);
     $otherNotification = $otherCitizen->notifications()->sole();
 
     $this->actingAs($citizen)

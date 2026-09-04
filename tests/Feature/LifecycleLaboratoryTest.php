@@ -209,7 +209,9 @@ test('cleanroom citizen intake accepts an active municipal catalog activity offe
 
     expect($application->lines()->sole()->line_of_business_id)->toBe($municipalRetail->id);
 
-    $this->post(route('citizen.permit-applications.submit', $application))->assertSessionHasNoErrors();
+    $this->post(route('citizen.permit-applications.submit', $application), [
+        'undertaking_accepted' => '1',
+    ])->assertSessionHasNoErrors();
     $actor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.intake.user_id'));
     app(RecordBploRoutingDetermination::class)->handle(
         $application->fresh(),
@@ -269,7 +271,9 @@ test('source backed registry specimen advances through canonical actions to an a
         'production_liability' => false,
     ];
     $application->forceFill(['metadata' => $metadata])->save();
-    $this->post(route('citizen.permit-applications.submit', $application))->assertSessionHasNoErrors();
+    $this->post(route('citizen.permit-applications.submit', $application), [
+        'undertaking_accepted' => '1',
+    ])->assertSessionHasNoErrors();
 
     $work = collect([
         'engineering' => 'Engineering',
@@ -379,7 +383,9 @@ test('cleanroom citizen form uses canonical draft and submit actions before cano
         ->and(data_get($application->metadata, 'applicant_declaration_draft.undertaking.applicant_printed_name'))->toBe($application->business->owner->name)
         ->and(data_get($application->metadata, 'lifecycle_cleanroom.run_id'))->toBe($run->public_id);
 
-    $this->post(route('citizen.permit-applications.submit', $application))->assertSessionHasNoErrors();
+    $this->post(route('citizen.permit-applications.submit', $application), [
+        'undertaking_accepted' => '1',
+    ])->assertSessionHasNoErrors();
     expect($application->fresh()->submitted_at)->not->toBeNull()
         ->and(data_get($application->declaration()->sole()->snapshot, 'undertaking.applicant_printed_name'))->toBe($application->business->owner->name);
 
@@ -407,7 +413,9 @@ test('cleanroom remains compatible with the canonical two year action semantics 
     $intake = app(BuildLifecycleCleanroomIntake::class)->handle($run);
     $this->post(route('citizen.permit-applications.store'), [...$intake, 'type' => 'new'])->assertSessionHasNoErrors();
     $run->refresh();
-    $this->post(route('citizen.permit-applications.submit', $run->new_application_id))->assertSessionHasNoErrors();
+    $this->post(route('citizen.permit-applications.submit', $run->new_application_id), [
+        'undertaking_accepted' => '1',
+    ])->assertSessionHasNoErrors();
 
     foreach (['new_application_id', 'renewal_application_id'] as $applicationKey) {
         if ($applicationKey === 'renewal_application_id') {

@@ -119,18 +119,24 @@ function date(value: string | null): string {
                     </p>
                 </div>
                 <div
-                    class="border-2 border-stone-900 p-2 text-xs dark:border-stone-400"
+                    class="grid min-w-56 gap-2 border-2 border-stone-900 p-2 text-xs dark:border-stone-400"
                 >
-                    <span class="block">Application No.</span
-                    ><strong>{{
-                        document.identity.application_number ??
-                        'Not yet assigned'
-                    }}</strong
-                    ><span
+                    <div>
+                        <span class="block">Official application number</span>
+                        <strong>{{
+                            document.identity.application_number ??
+                            'Pending municipal assignment'
+                        }}</strong>
+                    </div>
+                    <div
                         v-if="document.identity.tracking_reference"
-                        class="mt-1 block font-mono"
-                        >{{ document.identity.tracking_reference }}</span
+                        class="border-t border-stone-300 pt-2 dark:border-stone-600"
                     >
+                        <span class="block">Submission tracking reference</span>
+                        <strong class="block font-mono break-all">{{
+                            document.identity.tracking_reference
+                        }}</strong>
+                    </div>
                 </div>
             </header>
             <div class="grid gap-4 p-4 text-sm sm:p-5">

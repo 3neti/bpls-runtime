@@ -47,7 +47,6 @@ class CreateCitizenPermitApplicationDraft
                         'type' => PermitApplicationType::New->value,
                         'date_of_application' => now()->toDateString(),
                         'mode_of_payment' => 'annually',
-                        'undertaking_accepted' => true,
                         'applicant_printed_name' => $data['owner_name'] ?? $submittedBy->name,
                         'position_title' => 'Owner',
                         ...$data,

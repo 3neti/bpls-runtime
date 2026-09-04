@@ -93,7 +93,7 @@ test('canonical citizen lodging automatically arms the routing sentinel', functi
             ->id,
     ]);
 
-    $submitted = app(SubmitCitizenPermitApplication::class)->handle($application, $citizen);
+    $submitted = app(SubmitCitizenPermitApplication::class)->handle($application, $citizen, true);
     $suggestion = $submitted->bploRoutingSuggestion()->sole();
 
     expect($suggestion->lodged_at->toIso8601String())->toBe($submitted->submitted_at?->toIso8601String())

@@ -190,7 +190,7 @@ final class ManualCollectionReceiptVisibilityScenario
             if ($isWeekendPreview) {
                 $this->storeWeekendScenarioDocuments($permitApplication, $applicant, $runId, citizen: true);
             }
-            $permitApplication = $this->submitCitizenPermitApplication->handle($permitApplication, $applicant);
+            $permitApplication = $this->submitCitizenPermitApplication->handle($permitApplication, $applicant, true);
         } else {
             $permitApplication = $this->createPermitApplication->handle([
                 ...$applicationData,
@@ -1372,7 +1372,7 @@ final class ManualCollectionReceiptVisibilityScenario
             'generalizes_municipal_policy' => false,
         ];
         $permitApplication->update(['metadata' => $metadata]);
-        $permitApplication = $this->submitCitizenPermitApplication->handle($permitApplication, $applicant);
+        $permitApplication = $this->submitCitizenPermitApplication->handle($permitApplication, $applicant, true);
 
         foreach (config('stakeholder_preview.weekend_hypothesis.office_charges', []) as $officeCode => $office) {
             $officeActor = $actors[$officeCode] ?? throw new RuntimeException("Scenario office actor [{$officeCode}] was not resolved.");
