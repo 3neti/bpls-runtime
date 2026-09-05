@@ -141,8 +141,9 @@ const props = withDefaults(
     defineProps<{
         document: DocumentProjection;
         page?: 'all' | 'page_1' | 'page_2';
+        recentCertificationOffice?: string | null;
     }>(),
-    { page: 'all' },
+    { page: 'all', recentCertificationOffice: null },
 );
 const snapshot = computed(() => props.document.declaration.snapshot ?? {});
 
@@ -584,6 +585,7 @@ function money(cents: number | null | undefined): string {
         <IpilMunicipalProcessingSheet
             v-if="page === 'all' || page === 'page_2'"
             :document="document"
+            :recent-certification-office="recentCertificationOffice"
         />
     </article>
 </template>

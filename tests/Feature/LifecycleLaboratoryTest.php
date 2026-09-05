@@ -574,7 +574,24 @@ test('source backed registry specimen advances through the complete synthetic pe
         ])
         ->assertRedirect(route('stakeholder-preview.lifecycle-cleanroom-application.show', $run).'?tab=processing');
 
+    $assessorCertification = $application->fresh()->postPaymentOfficeCertifications->firstWhere('office_code', 'assessor');
+    $focusedCertificationUrl = route('stakeholder-preview.lifecycle-cleanroom-application.show', $run).'?tab=processing&certified_office=assessor';
+    $this->post(route('stakeholder-preview.lifecycle-cleanroom.post-payment-certifications.store', [$run, $assessorCertification]))
+        ->assertRedirect($focusedCertificationUrl)
+        ->assertSessionHasNoErrors();
+    $this->get($focusedCertificationUrl)
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('initialTab', 'processing')
+            ->where('recentCertificationOffice', 'assessor')
+            ->where('application.attachments.5.state', '1_of_4_certified')
+            ->where('application.attachments.5.available', true));
+
     foreach ($application->fresh()->postPaymentOfficeCertifications as $certification) {
+        if ($certification->status === 'completed') {
+            continue;
+        }
+
         app(RecordPostPaymentOfficeCertification::class)->handle(
             $certification,
             User::query()->findOrFail(data_get($run->actor_manifest, 'actors.'.$certification->office_code.'.user_id')),

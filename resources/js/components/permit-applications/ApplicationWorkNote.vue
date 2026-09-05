@@ -115,6 +115,12 @@ function completedDate(value: string | null): string | null {
         </div>
 
         <div class="mt-4 border-t border-slate-950/15 pt-3">
+            <p
+                v-if="note.state === 'completed'"
+                class="mb-2 inline-flex rotate-[-1deg] items-center gap-1 rounded-sm border-2 border-emerald-800 px-2 py-1 text-[10px] font-black tracking-[0.14em] text-emerald-900 uppercase"
+            >
+                <Check class="size-3" aria-hidden="true" /> Completed & recorded
+            </p>
             <p class="text-xs leading-5 font-bold">
                 {{ note.state_label }}
                 <span

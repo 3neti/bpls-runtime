@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, nextTick, onMounted } from 'vue';
 
 type OfficeLine = {
     evaluation_item_id: number;
@@ -129,7 +129,42 @@ type DetailRow = {
     certification: string;
 };
 
-const props = defineProps<{ document: DocumentProjection }>();
+const props = withDefaults(
+    defineProps<{
+        document: DocumentProjection;
+        recentCertificationOffice?: string | null;
+    }>(),
+    { recentCertificationOffice: null },
+);
+
+const completedCertifications = computed(() =>
+    props.document.verification.filter(
+        (item) => item.status === 'completed' && item.result === 'certified',
+    ),
+);
+const pendingCertifications = computed(() =>
+    props.document.verification.filter(
+        (item) => item.status !== 'completed' || item.result !== 'certified',
+    ),
+);
+const recentCertification = computed(() =>
+    props.document.verification.find(
+        (item) => item.issuing_office === props.recentCertificationOffice,
+    ),
+);
+
+onMounted(async () => {
+    if (!props.recentCertificationOffice) {
+        return;
+    }
+
+    await nextTick();
+    const row = window.document.getElementById(
+        `post-payment-certification-${props.recentCertificationOffice}`,
+    );
+    row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row?.focus({ preventScroll: true });
+});
 
 const detailRows = computed<DetailRow[]>(() =>
     props.document.page_2_assessment.offices.flatMap((office) =>
@@ -577,6 +612,40 @@ function continuationLabel(index: number): string {
                     <h3 class="paper-section-title">
                         F. Post-payment Certifications
                     </h3>
+                    <div
+                        v-if="document.verification.length > 0"
+                        data-testid="post-payment-certification-summary"
+                        aria-live="polite"
+                        class="mb-2 grid gap-2 border-2 border-stone-900 bg-stone-50 p-3 text-xs sm:grid-cols-[auto_1fr] sm:items-center dark:border-stone-300 dark:bg-stone-800"
+                    >
+                        <strong class="text-sm font-black uppercase">
+                            {{ completedCertifications.length }} of
+                            {{ document.verification.length }} offices certified
+                        </strong>
+                        <span class="sm:text-right">
+                            <template v-if="pendingCertifications.length > 0">
+                                <strong>Still required:</strong>
+                                {{
+                                    pendingCertifications
+                                        .map((item) => item.description)
+                                        .join(', ')
+                                }}
+                            </template>
+                            <template v-else>
+                                All routing-derived offices complete.
+                            </template>
+                        </span>
+                        <p
+                            v-if="recentCertification"
+                            data-testid="recent-certification-confirmation"
+                            class="border-t border-emerald-700 pt-2 font-black text-emerald-900 sm:col-span-2 dark:text-emerald-200"
+                        >
+                            ✓ Certification recorded in this Application:
+                            {{ recentCertification.description }} · OR
+                            {{ recentCertification.receipt_number }} ·
+                            {{ date(recentCertification.date_issued) }}
+                        </p>
+                    </div>
                     <div class="paper-table">
                         <div
                             class="paper-row paper-table-head grid-cols-1 sm:grid-cols-[1.1fr_0.75fr_0.8fr_0.8fr_1fr_0.8fr]"
@@ -589,10 +658,32 @@ function continuationLabel(index: number): string {
                         <div
                             v-for="item in document.verification"
                             :key="item.description"
+                            :id="`post-payment-certification-${item.issuing_office}`"
+                            tabindex="-1"
+                            :data-certification-office="item.issuing_office"
+                            :data-certification-status="item.status"
+                            :class="[
+                                item.status === 'completed' &&
+                                item.result === 'certified'
+                                    ? 'bg-emerald-50 dark:bg-emerald-950/30'
+                                    : 'bg-amber-50/70 dark:bg-amber-950/20',
+                                item.issuing_office ===
+                                recentCertificationOffice
+                                    ? 'ring-4 ring-emerald-500 ring-inset'
+                                    : '',
+                            ]"
                             class="paper-row grid-cols-1 sm:grid-cols-[1.1fr_0.75fr_0.8fr_0.8fr_1fr_0.8fr]"
                         >
                             <span
                                 ><strong>{{ item.description }}</strong
+                                ><span
+                                    v-if="
+                                        item.status === 'completed' &&
+                                        item.result === 'certified'
+                                    "
+                                    class="mt-1 block w-fit rotate-[-1deg] border-2 border-emerald-800 px-1.5 py-0.5 text-[9px] font-black tracking-wider text-emerald-900 uppercase"
+                                    >✓ Certified & recorded</span
+                                >
                                 ><small class="block uppercase"
                                     >{{ label(item.semantic_classification) }} ·
                                     production authority: no</small

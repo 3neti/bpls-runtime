@@ -85,6 +85,7 @@ const props = withDefaults(
             'workspace' | 'palette' | 'mobile' | 'print' | 'processing-print';
         initialTab?: string;
         initialTask?: string;
+        recentCertificationOffice?: string | null;
         routingTask?: any | null;
         interactiveTaskRouting?: boolean;
     }>(),
@@ -92,6 +93,7 @@ const props = withDefaults(
         mode: 'workspace',
         initialTab: 'application',
         initialTask: '',
+        recentCertificationOffice: null,
         routingTask: null,
         interactiveTaskRouting: false,
     },
@@ -354,6 +356,30 @@ function label(value: unknown): string {
 
     return String(value).replaceAll('_', ' ');
 }
+
+function permitBlockerLabel(blocker: string): string {
+    if (blocker !== 'all_required_post_payment_certifications') {
+        return label(blocker);
+    }
+
+    const readiness = props.application.post_payment?.readiness ?? {};
+    const required = Array.isArray(readiness.required_offices)
+        ? readiness.required_offices
+        : [];
+    const certified = Array.isArray(readiness.certified_offices)
+        ? readiness.certified_offices
+        : [];
+    const pending = required.filter(
+        (office: string) => !certified.includes(office),
+    );
+    const officeLabels = pending.map(
+        (code: string) =>
+            props.application.offices.find((office) => office.code === code)
+                ?.label ?? label(code),
+    );
+
+    return `Post-payment certifications incomplete — ${certified.length}/${required.length}. Still required: ${officeLabels.join(', ') || 'none'}`;
+}
 </script>
 
 <template>
@@ -591,6 +617,7 @@ function label(value: unknown): string {
                         v-if="document"
                         :document="document"
                         page="page_2"
+                        :recent-certification-office="recentCertificationOffice"
                     />
                     <div v-else class="space-y-5">
                         <div
@@ -993,7 +1020,7 @@ function label(value: unknown): string {
                                 v-for="blocker in application.permit.blockers"
                                 :key="blocker"
                             >
-                                {{ label(blocker) }}
+                                {{ permitBlockerLabel(blocker) }}
                             </li>
                         </ul>
                     </div>

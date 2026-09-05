@@ -244,6 +244,22 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             ->sum(fn ($work): int => $work->paymentOrders->count()) ?? 0;
         $schedule = $application->paymentSchedules->sortByDesc('sequence')->first();
         $paymentRequest = $schedule?->xChangePayment;
+        $requiredCertificationCount = $application->bploRoutingDetermination?->works->pluck('office_code')->unique()->count() ?? 0;
+        $certifiedCertificationCount = $application->postPaymentOfficeCertifications
+            ->where('status', 'completed')
+            ->where('result', 'certified')
+            ->pluck('office_code')
+            ->unique()
+            ->count();
+        $permitAttachmentState = $permit->released
+            ? 'released_synthetic'
+            : ($permit->issued
+                ? 'issued_synthetic'
+                : ($permit->ready
+                    ? 'ready'
+                    : ($requiredCertificationCount > 0
+                        ? $certifiedCertificationCount.'_of_'.$requiredCertificationCount.'_certified'
+                        : 'pending')));
 
         return [
             $this->attachment('schedule_of_fees', 1, 'Municipal Schedule of Fees', 'Schedule of Fees', 'price_list', 'assessment', 'schedule_of_fees', 'attached', true, 'amber'),
@@ -251,7 +267,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             $this->attachment('assessment', 3, 'Computation / Assessment Slip', 'Assessment', 'frozen_financial_artifact', 'assessment', 'assessment', $assessment instanceof Assessment ? 'frozen' : 'pending', $assessment instanceof Assessment, 'violet'),
             $this->attachment('qr_ph', 4, 'QR Ph Payment Slip', 'QR Ph', 'payment_instrument', 'payment', 'payment', filled($paymentRequest?->pay_code) ? 'generated' : 'pending', filled($paymentRequest?->pay_code), 'emerald'),
             $this->attachment('official_receipt', 5, 'Official Receipt · AF No. 51', 'Official Receipt', 'accountable_form', 'payment', 'payment', $receipts === [] ? 'pending' : 'issued', $receipts !== [], 'rose'),
-            $this->attachment('permit', 6, 'Business Permit', 'Permit', 'final_authority_artifact', 'permit', 'permit', $permit->released ? 'released_synthetic' : ($permit->issued ? 'issued_synthetic' : 'pending'), $permit->issued, 'stone'),
+            $this->attachment('permit', 6, 'Business Permit', 'Permit', 'final_authority_artifact', 'permit', 'permit', $permitAttachmentState, $receipts !== [] || $permit->issued, 'stone'),
         ];
     }
 

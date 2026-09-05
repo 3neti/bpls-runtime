@@ -204,7 +204,10 @@ class LifecycleCleanroomController extends Controller
             'Synthetic Lifecycle Laboratory certification; exact Ipil per-office production evidence remains unresolved.',
         );
 
-        return back()->with('success', 'Post-payment office certification recorded as synthetic-only evidence.');
+        return redirect()->to(route('stakeholder-preview.lifecycle-cleanroom-application.show', $lifecycleCleanroomRun, false).'?'.http_build_query([
+            'tab' => 'processing',
+            'certified_office' => $postPaymentOfficeCertification->office_code,
+        ]))->with('success', 'Post-payment office certification recorded in Page 2 as synthetic-only evidence.');
     }
 
     public function issuePermit(
@@ -246,6 +249,13 @@ class LifecycleCleanroomController extends Controller
         abort_unless(is_int($applicationId), 404);
         $application = PermitApplication::query()->findOrFail($applicationId);
         $viewer = $request->user();
+        $recentCertificationOffice = $request->string('certified_office')->toString();
+        if (! $application->postPaymentOfficeCertifications()
+            ->where('office_code', $recentCertificationOffice)
+            ->where('status', 'completed')
+            ->exists()) {
+            $recentCertificationOffice = '';
+        }
         $requestedTask = $request->string('task')->toString();
         $routingTask = $requestedTask === 'bplo-routing'
             && $viewer->can(UserPermission::DetermineBploRouting->value)
@@ -265,6 +275,7 @@ class LifecycleCleanroomController extends Controller
             'document' => $buildDocument->handle($application, $request->user()),
             'focus' => $routingTask === null ? '' : 'bplo-routing',
             'initialTab' => $initialTab,
+            'recentCertificationOffice' => $recentCertificationOffice === '' ? null : $recentCertificationOffice,
             'routingTask' => $routingTask,
             'scenario' => ['id' => 'cleanroom', 'run_id' => $lifecycleCleanroomRun->public_id],
         ]);

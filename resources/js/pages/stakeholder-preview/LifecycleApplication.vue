@@ -8,6 +8,7 @@ defineProps<{
     document: any;
     focus: string;
     initialTab: string;
+    recentCertificationOffice: string | null;
     routingTask: any | null;
     scenario: { id: string; run_id: string };
 }>();
@@ -36,6 +37,7 @@ defineOptions({ layout: AppLayout });
             mode="workspace"
             :initial-tab="initialTab"
             :initial-task="focus"
+            :recent-certification-office="recentCertificationOffice"
             :routing-task="routingTask"
             interactive-task-routing
         />
