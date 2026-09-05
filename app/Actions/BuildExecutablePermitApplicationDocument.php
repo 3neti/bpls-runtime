@@ -18,6 +18,12 @@ final class BuildExecutablePermitApplicationDocument
         $assessment = data_get($application, 'financial.assessment');
         $counterCheck = data_get($application, 'financial.treasury_counter_check');
         $decision = data_get($application, 'financial.treasurer_decision');
+        $payment = data_get($application, 'payment', []);
+        $collections = data_get($payment, 'collections', []);
+        $collections = is_array($collections) ? $collections : [];
+        $receipts = data_get($application, 'official_receipts', []);
+        $receipts = is_array($receipts) ? $receipts : [];
+        $permit = data_get($application, 'permit', []);
         $offices = [];
         $officePayloads = is_array($application['offices'] ?? null) ? $application['offices'] : [];
         foreach ($officePayloads as $office) {
@@ -101,6 +107,21 @@ final class BuildExecutablePermitApplicationDocument
             ],
             'treasury_counter_check' => $counterCheck,
             'municipal_treasurer' => $decision === null ? null : [...$decision, 'exact_approval' => $decision['action'] === 'approved'],
+            'payment_reference' => [
+                'state' => data_get($payment, 'state'),
+                'payable' => data_get($payment, 'payable'),
+                'collection_count' => count($collections),
+                'latest_collection' => $collections === [] ? null : $collections[array_key_last($collections)],
+            ],
+            'official_receipt_reference' => $receipts === [] ? null : $receipts[array_key_last($receipts)],
+            'permit_reference' => [
+                'state' => data_get($permit, 'state'),
+                'permit_number' => data_get($permit, 'permit_number'),
+                'issued_on' => data_get($permit, 'issued_on'),
+                'valid_until' => data_get($permit, 'valid_until'),
+                'official_receipt_number' => data_get($permit, 'official_receipt_number'),
+                'verification_reference' => data_get($permit, 'verification.reference'),
+            ],
             'permit' => [
                 'status' => 'not_issued',
                 'statement' => 'Permit not yet issued',

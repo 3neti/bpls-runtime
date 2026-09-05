@@ -153,6 +153,7 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
     $note = file_get_contents(resource_path('js/components/permit-applications/ApplicationWorkNote.vue'));
     $routingTask = file_get_contents(resource_path('js/components/permit-applications/BploRoutingTaskSheet.vue'));
     $document = file_get_contents(resource_path('js/components/permit-applications/IpilExecutableDocument.vue'));
+    $processingSheet = file_get_contents(resource_path('js/components/permit-applications/IpilMunicipalProcessingSheet.vue'));
     $navigator = file_get_contents(resource_path('js/components/permit-applications/ApplicationDocumentNavigator.vue'));
 
     expect($component)->toContain('role="tablist"')
@@ -186,10 +187,11 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
         ->and($navigator)->toContain('Municipal Processing')
         ->and($navigator)->toContain('Emerging total')
         ->and($navigator)->toContain('sticky top-0')
-        ->and($document)->toContain('data-testid="page-2-bplo-routing-recorded"')
-        ->and($document)->toContain('BPLO routing recorded')
-        ->and($document)->toContain('Page 1')
-        ->and($document)->toContain('unchanged');
+        ->and($document)->toContain('IpilMunicipalProcessingSheet')
+        ->and($processingSheet)->toContain('data-testid="page-2-bplo-routing-recorded"')
+        ->and($processingSheet)->toContain('Municipal Processing Continuation Sheet')
+        ->and($processingSheet)->toContain('Blank routing row')
+        ->and($processingSheet)->toContain('Assessment Reference');
 });
 
 function configureApplicationDataPreview(): void

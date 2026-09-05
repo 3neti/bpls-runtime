@@ -1008,9 +1008,10 @@ test('staff users with view permission can open an application form pdf artifact
         ->toContain('Application form artifact renders currently captured intake facts')
         ->toContain('Supporting documents are tracked separately; documentary checklist and sufficiency')
         ->toContain('semantics remain unresolved.')
-        ->toContain('ASSESSMENTS')
-        ->toContain('OFFICE FEE DETERMINATIONS')
-        ->toContain('Awaiting the mandatory BPLO routing determination.')
+        ->toContain('MUNICIPAL PROCESSING CONTINUATION SHEET')
+        ->toContain('A. BPLO ROUTING')
+        ->toContain('B. OFFICE DETERMINATIONS AND PAYMENT ORDERS')
+        ->toContain('C. ASSESSMENT REFERENCE')
         ->and(permitPdfPageCount($pdf))->toBe(2);
 });
 

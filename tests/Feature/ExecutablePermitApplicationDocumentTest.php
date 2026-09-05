@@ -66,15 +66,20 @@ test('the same executable document progressively projects immutable assessment t
         ->and(data_get($document, 'computation_assessment_slip.line_count'))->toBe(7)
         ->and(data_get($document, 'treasury_counter_check.statement'))->toBe('Counter-check completed - no correction')
         ->and(data_get($document, 'municipal_treasurer.exact_approval'))->toBeTrue()
+        ->and(data_get($document, 'payment_reference.payable.total_amount_cents'))->toBe(122_000)
+        ->and(data_get($document, 'official_receipt_reference'))->toBeNull()
+        ->and(data_get($document, 'permit_reference.permit_number'))->toBeNull()
         ->and(data_get($document, 'permit'))->toBe([
             'status' => 'not_issued',
             'statement' => 'Permit not yet issued',
             'mayor_signature_authority' => 'unresolved',
         ])
-        ->and($pdf)->toContain('OFFICE FEE DETERMINATIONS')
-        ->and($pdf)->toContain('current Paperless Payment Orders')
-        ->and($pdf)->toContain('ELECTRONICALLY CERTIFIED BY')
-        ->and($pdf)->toContain('Scenario 01 Assessor')
+        ->and($pdf)->toContain('MUNICIPAL PROCESSING CONTINUATION SHEET')
+        ->and($pdf)->toContain('OFFICE DETERMINATIONS AND PAYMENT ORDERS')
+        ->and($pdf)->toContain('WORKING TOTAL PHP 1,220.00')
+        ->and($pdf)->toContain('ASSESSMENT REFERENCE')
+        ->and($pdf)->toContain('ASSESSED AMOUNT')
+        ->and($pdf)->toContain('PAGE 2-A')
         ->and($pdf)->toContain('PHP 1,220.00');
 });
 
@@ -118,6 +123,7 @@ test('the citizen document page receives the executable projection rather than r
 test('the executable html preserves the Ipil document nouns and mobile line grammar', function (): void {
     $create = file_get_contents(resource_path('js/pages/permit-applications/Create.vue'));
     $document = file_get_contents(resource_path('js/components/permit-applications/IpilExecutableDocument.vue'));
+    $processingSheet = file_get_contents(resource_path('js/components/permit-applications/IpilMunicipalProcessingSheet.vue'));
 
     expect($create)->toContain('Application Form for Business Permit')
         ->and($create)->toContain('owner_last_name')
@@ -135,14 +141,19 @@ test('the executable html preserves the Ipil document nouns and mobile line gram
         ->and($create)->toContain('Anything you have')
         ->and($create)->toContain('already entered stays unchanged')
         ->and($create)->not->toContain('eyebrow="Step 1"')
-        ->and($document)->toContain('Verification of Documents')
-        ->and($document)->toContain('Office Fee Determinations')
-        ->and($document)->toContain('Paperless Payment Orders')
-        ->and($document)->toContain('Electronically certified')
+        ->and($document)->toContain('IpilMunicipalProcessingSheet')
         ->and($document)->not->toContain('Not used by Ipil')
-        ->and($document)->toContain('Permit not yet issued')
         ->and($document)->toContain('const snapshot = computed')
-        ->and($document)->toContain('lg:hidden');
+        ->and($document)->toContain('lg:hidden')
+        ->and($processingSheet)->toContain('Municipal Processing Continuation Sheet')
+        ->and($processingSheet)->toContain('Office Determinations and Payment Orders')
+        ->and($processingSheet)->toContain('Processing working total')
+        ->and($processingSheet)->toContain('Assessment Reference')
+        ->and($processingSheet)->toContain('BPLS system-generated municipal processing record')
+        ->and($processingSheet)->toContain('index += 8')
+        ->and($processingSheet)->toContain('Page 2-')
+        ->and($processingSheet)->not->toContain('Ready for Assessment preparation')
+        ->and($processingSheet)->not->toContain('Awaiting the mandatory BPLO routing determination.');
 });
 
 test('application page 2 waits visibly for the mandatory BPLO routing determination', function (): void {
@@ -152,5 +163,7 @@ test('application page 2 waits visibly for the mandatory BPLO routing determinat
     expect(data_get($document, 'page_2_assessment.status'))->toBe('awaiting_bplo_routing')
         ->and(data_get($document, 'page_2_assessment.statement'))->toBe('Awaiting the mandatory BPLO routing determination.')
         ->and(data_get($document, 'page_2_assessment.offices'))->toBe([])
-        ->and(data_get($document, 'page_2_assessment.populated_from_canonical_assessment'))->toBeFalse();
+        ->and(data_get($document, 'page_2_assessment.populated_from_canonical_assessment'))->toBeFalse()
+        ->and(data_get($document, 'official_receipt_reference'))->toBeNull()
+        ->and(data_get($document, 'permit_reference.permit_number'))->toBeNull();
 });

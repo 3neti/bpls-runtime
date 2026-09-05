@@ -77,149 +77,216 @@ final class RenderApplicationFormPdf
             'Lifecycle scope' => 'Renewal, amendment, transfer, retirement, and PIL-specific fields remain unresolved where not already characterized.',
         ]);
         $projection = $this->buildExecutableDocument->handle($permitApplication);
-        $this->page2Assessments($document, $projection['page_2_assessment'], $projection['computation_assessment_slip']);
+        $this->page2Continuation($document, $projection);
 
         return $document->render();
     }
 
-    /**
-     * @param  array<string, mixed>  $page2
-     * @param  array<string, mixed>|null  $assessmentSlip
-     */
-    private function page2Assessments(SimplePdfDocument $document, array $page2, ?array $assessmentSlip): void
+    /** @param array<string, mixed> $projection */
+    private function page2Continuation(SimplePdfDocument $document, array $projection): void
     {
-        $page = $document->addPage('Assessments');
+        $page = $document->addPage('Page 2 - Municipal Processing');
         $y = SimplePdfDocument::ContentTop;
+        $identity = data_get($projection, 'identity', []);
+        $routing = data_get($projection, 'routing', []);
+        $page2 = data_get($projection, 'page_2_assessment', []);
+        $assessment = data_get($projection, 'computation_assessment_slip');
+        $payment = data_get($projection, 'payment_reference', []);
+        $receipt = data_get($projection, 'official_receipt_reference');
+        $permit = data_get($projection, 'permit_reference', []);
 
-        $document->text($page, 'ASSESSMENTS', 42, $y, 14, true);
-        $y -= 24;
-        $document->text($page, 'OFFICE FEE DETERMINATIONS', 42, $y, 9, true);
-        $document->text(
-            $page,
-            'Emerging total: '.$this->optionalMoney(data_get($page2, 'emerging_total_amount_cents')),
-            553,
-            $y,
-            9,
-            true,
-            'right',
-        );
-        $y = $document->wrappedText($page, (string) data_get($page2, 'statement'), 42, $y - 16, 511, 8, 10);
-        $y -= 12;
+        $document->text($page, 'APPLICATION FORM FOR BUSINESS PERMIT', 42, $y, 13, true);
+        $document->text($page, 'PAGE 2', 553, $y, 9, true, 'right');
+        $document->text($page, 'MUNICIPAL PROCESSING CONTINUATION SHEET', 42, $y - 18, 9, true);
+        $document->line($page, 42, $y - 27, 553, $y - 27, 1.2, 0.08);
+        $y -= 43;
 
+        $this->processingFieldBand($document, $page, $y, [
+            'OFFICIAL APPLICATION NO.' => (string) data_get($identity, 'application_number', ''),
+            'TRACKING REFERENCE' => (string) data_get($identity, 'tracking_reference', ''),
+            'TAX YEAR' => (string) data_get($identity, 'tax_year', ''),
+            'TRANSACTION' => strtoupper($this->label((string) data_get($identity, 'type', ''))),
+        ]);
+        $y -= 48;
+
+        $document->text($page, 'A. BPLO ROUTING', 42, $y, 8, true);
+        $y -= 14;
+        $this->processingTableHeader($document, $page, $y, ['CONCERNED OFFICE', 'BUSINESS CONTEXT', 'REQUIRED REVIEW']);
+        $y -= 18;
+        $works = data_get($routing, 'works', []);
+        $visibleWorks = is_array($works) ? array_slice($works, 0, 4) : [];
+        foreach ($visibleWorks as $work) {
+            $this->processingTableRow($document, $page, $y, [
+                (string) data_get($work, 'office_label', ''),
+                (string) data_get($work, 'line_of_business_name', ''),
+                (string) data_get($work, 'required_work', ''),
+            ], 29);
+            $y -= 29;
+        }
+        for ($blank = count($visibleWorks); $blank < 4; $blank++) {
+            $this->processingTableRow($document, $page, $y, ['', '', ''], 29);
+            $y -= 29;
+        }
+        $this->processingFieldBand($document, $page, $y, [
+            'STATUS' => strtoupper($this->label((string) data_get($routing, 'status', ''))),
+            'RECORDED BY' => (string) data_get($routing, 'determined_by', ''),
+            'DATE' => (string) data_get($routing, 'determined_at', ''),
+            'PAGE 1 DECLARATION' => data_get($projection, 'declaration.snapshot_hash') === null ? '' : 'FROZEN',
+        ], 35);
+        $y -= 49;
+
+        $document->text($page, 'B. OFFICE DETERMINATIONS AND PAYMENT ORDERS', 42, $y, 8, true);
+        $document->text($page, 'WORKING TOTAL '.$this->blankMoney(data_get($page2, 'emerging_total_amount_cents')), 553, $y, 8, true, 'right');
+        $y -= 14;
+        $this->processingTableHeader($document, $page, $y, ['OFFICE', 'DETERMINATIONS', 'PPOS']);
+        $y -= 18;
         $offices = data_get($page2, 'offices', []);
-        if (! is_array($offices) || $offices === []) {
-            $document->rectangle($page, 42, $y - 42, 511, 42, 0.96);
-            $document->wrappedText($page, 'Awaiting the mandatory BPLO routing determination.', 54, $y - 17, 487, 9, 11, true);
-            $y -= 60;
-        } else {
-            foreach ($offices as $office) {
-                if (! is_array($office)) {
-                    continue;
-                }
-                $lines = data_get($office, 'lines', []);
-                $lineCount = is_array($lines) ? count($lines) : 0;
-                $height = 55 + ($lineCount * 27) + (is_array(data_get($office, 'certification')) ? 30 : 22);
-                if ($y - $height < SimplePdfDocument::ContentBottom) {
-                    $page = $document->addPage('Office Fee Determinations continued');
-                    $y = SimplePdfDocument::ContentTop;
-                }
+        $visibleOffices = is_array($offices) ? array_slice($offices, 0, 4) : [];
+        foreach ($visibleOffices as $office) {
+            $this->processingTableRow($document, $page, $y, [
+                (string) data_get($office, 'label', ''),
+                data_get($office, 'resolved_determination_count', 0).'/'.data_get($office, 'required_determination_count', 0),
+                (string) data_get($office, 'payment_order_count', ''),
+            ], 22);
+            $document->text($page, $this->blankMoney(data_get($office, 'total_amount_cents')), 541, $y - 14, 7, true, 'right');
+            $y -= 22;
+        }
+        for ($blank = count($visibleOffices); $blank < 4; $blank++) {
+            $this->processingTableRow($document, $page, $y, ['', '', ''], 22);
+            $y -= 22;
+        }
+        $y -= 10;
 
-                $document->rectangle($page, 42, $y - $height, 511, $height, 0.98);
-                $document->text($page, strtoupper((string) data_get($office, 'label')), 54, $y - 17, 9, true);
-                $document->text(
-                    $page,
-                    strtoupper($this->label((string) data_get($office, 'status'))),
-                    350,
-                    $y - 17,
-                    6.5,
-                    true,
-                );
-                $document->text(
-                    $page,
-                    $this->money((int) data_get($office, 'total_amount_cents', 0)),
-                    541,
-                    $y - 17,
-                    9,
-                    true,
-                    'right',
-                );
-                $document->text(
-                    $page,
-                    $this->paymentOrderCountLabel((int) data_get($office, 'payment_order_count', 0)),
-                    54,
-                    $y - 33,
-                    7,
-                );
-                $lineY = $y - 52;
-                foreach (is_array($lines) ? $lines : [] as $line) {
-                    if (! is_array($line)) {
-                        continue;
-                    }
-                    $document->wrappedText($page, (string) data_get($line, 'name'), 54, $lineY, 230, 7.5, 9, true);
-                    $document->text($page, $this->label((string) data_get($line, 'status')), 300, $lineY, 7.5);
-                    $document->text(
-                        $page,
-                        $this->optionalMoney(data_get($line, 'display_amount_cents')),
-                        541,
-                        $lineY,
-                        7.5,
-                        true,
-                        'right',
-                    );
-                    $orderId = data_get($line, 'paperless_payment_order.id');
-                    if (is_int($orderId)) {
-                        $document->text($page, 'Paperless Payment Order #'.$orderId, 54, $lineY - 10, 6.5);
-                    } elseif (data_get($line, 'display_amount_cents') !== null) {
-                        $document->text($page, 'Proposed amount', 54, $lineY - 10, 6.5);
-                    }
-                    $lineY -= 27;
-                }
+        $document->text($page, 'C. ASSESSMENT REFERENCE', 42, $y, 8, true);
+        $y -= 10;
+        $this->processingFieldBand($document, $page, $y, [
+            'ASSESSMENT NO.' => is_array($assessment) ? (string) data_get($assessment, 'sequence', '') : '',
+            'STATUS' => is_array($assessment) ? strtoupper($this->label((string) data_get($assessment, 'status', ''))) : '',
+            'ASSESSED AMOUNT' => is_array($assessment) ? $this->blankMoney(data_get($assessment, 'total_amount_cents')) : '',
+            'UNRESOLVED CHARGES' => (int) data_get($page2, 'required_unresolved_charge_count', 0) > 0
+                ? (string) data_get($page2, 'required_unresolved_charge_count')
+                : '',
+        ], 37);
+        $y -= 51;
 
-                $certification = data_get($office, 'certification');
-                if (is_array($certification)) {
-                    $document->text($page, 'ELECTRONICALLY CERTIFIED BY', 54, $lineY, 6.5, true);
-                    $document->wrappedText(
-                        $page,
-                        (string) data_get($certification, 'officer_name', 'Municipal officer').' - '.
-                            (string) data_get($certification, 'certified_at'),
-                        190,
-                        $lineY,
-                        351,
-                        7,
-                        9,
-                    );
-                } else {
-                    $document->text($page, 'Office certification pending', 54, $lineY, 7, true);
-                }
-                $y -= $height + 10;
+        $document->text($page, 'D. TREASURY VERIFICATION', 42, $y, 8, true);
+        $y -= 10;
+        $this->processingFieldBand($document, $page, $y, [
+            'COUNTER-CHECK' => strtoupper($this->label((string) data_get($projection, 'treasury_counter_check.result', ''))),
+            'DATE CHECKED' => (string) data_get($projection, 'treasury_counter_check.checked_at', ''),
+            'TREASURER ACTION' => strtoupper($this->label((string) data_get($projection, 'municipal_treasurer.action', ''))),
+            'DATE ACTED' => (string) data_get($projection, 'municipal_treasurer.decided_at', ''),
+        ], 37);
+        $y -= 51;
+
+        $document->text($page, 'E. PAYMENT AND OFFICIAL RECEIPT REFERENCE', 42, $y, 8, true);
+        $y -= 10;
+        $this->processingFieldBand($document, $page, $y, [
+            'PAYABLE STATUS' => strtoupper($this->label((string) data_get($payment, 'payable.status', ''))),
+            'BALANCE' => $this->blankMoney(data_get($payment, 'payable.balance_amount_cents')),
+            'OFFICIAL RECEIPT NO.' => is_array($receipt) ? (string) data_get($receipt, 'receipt_number', '') : '',
+            'SERIES / DATE' => is_array($receipt)
+                ? trim((string) data_get($receipt, 'series', '').' / '.(string) data_get($receipt, 'issued_on', ''), ' /')
+                : '',
+        ], 37);
+        $y -= 51;
+
+        $document->text($page, 'F. POST-PAYMENT CERTIFICATIONS', 42, $y, 8, true);
+        $document->text($page, 'G. PERMIT PROCESSING REFERENCE', 300, $y, 8, true);
+        $y -= 10;
+        $certifications = data_get($projection, 'verification', []);
+        $this->processingFieldBand($document, $page, $y, [
+            'CERTIFICATIONS' => is_array($certifications) && $certifications !== [] ? (string) count($certifications) : '',
+            'COMPLETED' => is_array($certifications)
+                ? (string) collect($certifications)->where('status', 'completed')->count()
+                : '',
+            'PERMIT NO.' => (string) data_get($permit, 'permit_number', ''),
+            'OR BINDING' => (string) data_get($permit, 'official_receipt_number', ''),
+        ], 37);
+
+        $detailRows = collect(is_array($offices) ? $offices : [])->flatMap(function (mixed $office): array {
+            if (! is_array($office)) {
+                return [];
+            }
+
+            $lines = data_get($office, 'lines', []);
+
+            return collect(is_array($lines) ? $lines : [])->map(fn (mixed $line): array => [
+                'office' => (string) data_get($office, 'label', ''),
+                'responsibility' => (string) data_get($line, 'name', ''),
+                'determination' => strtoupper($this->label((string) data_get($line, 'status', ''))),
+                'ppo' => is_int(data_get($line, 'paperless_payment_order.id'))
+                    ? '#'.data_get($line, 'paperless_payment_order.id')
+                    : '',
+                'amount' => $this->blankMoney(data_get($line, 'display_amount_cents')),
+            ])->all();
+        })->values();
+
+        foreach ($detailRows->chunk(8) as $sheetIndex => $rows) {
+            $page = $document->addPage('Page 2-'.chr(65 + $sheetIndex));
+            $y = SimplePdfDocument::ContentTop;
+            $document->text($page, 'OFFICE DETERMINATION AND PPO REGISTER', 42, $y, 12, true);
+            $document->text($page, 'PAGE 2-'.chr(65 + $sheetIndex), 553, $y, 9, true, 'right');
+            $document->text($page, (string) data_get($identity, 'tracking_reference', ''), 42, $y - 17, 7, monospace: true);
+            $y -= 36;
+            $this->processingTableHeader($document, $page, $y, ['OFFICE', 'RESPONSIBILITY', 'DETERMINATION']);
+            $document->text($page, 'PPO', 438, $y - 12, 6, true);
+            $document->text($page, 'AMOUNT', 541, $y - 12, 6, true, 'right');
+            $y -= 18;
+            foreach ($rows as $row) {
+                $this->processingTableRow($document, $page, $y, [
+                    (string) data_get($row, 'office', ''),
+                    (string) data_get($row, 'responsibility', ''),
+                    (string) data_get($row, 'determination', ''),
+                ], 58);
+                $document->text($page, (string) data_get($row, 'ppo', ''), 438, $y - 18, 7);
+                $document->text($page, (string) data_get($row, 'amount', ''), 541, $y - 18, 7, true, 'right');
+                $y -= 58;
+            }
+            for ($blank = $rows->count(); $blank < 8; $blank++) {
+                $this->processingTableRow($document, $page, $y, ['', '', ''], 58);
+                $y -= 58;
             }
         }
+    }
 
-        if ($y < SimplePdfDocument::ContentBottom + 55) {
-            $page = $document->addPage('Consolidated Assessment');
-            $y = SimplePdfDocument::ContentTop;
+    /** @param array<string, string> $fields */
+    private function processingFieldBand(SimplePdfDocument $document, int $page, float $y, array $fields, float $height = 42): void
+    {
+        $width = 511 / max(1, count($fields));
+        foreach (array_values($fields) as $index => $value) {
+            $x = 42 + ($width * $index);
+            $document->rectangle($page, $x, $y - $height, $width, $height, 0.2, false);
+            $document->text($page, (string) array_keys($fields)[$index], $x + 6, $y - 11, 5.5, true);
+            $document->wrappedText($page, $value, $x + 6, $y - 24, $width - 12, 7, 8, true);
         }
-        $document->rectangle($page, 42, $y - 42, 511, 42, 0.94);
-        $document->text($page, 'CONSOLIDATED ASSESSMENT', 54, $y - 17, 8, true);
-        $document->text(
-            $page,
-            $this->optionalMoney(data_get($assessmentSlip, 'total_amount_cents', data_get($page2, 'emerging_total_amount_cents'))),
-            541,
-            $y - 17,
-            10,
-            true,
-            'right',
-        );
-        $unresolved = (int) data_get($page2, 'required_unresolved_charge_count', 0);
-        $document->text(
-            $page,
-            $unresolved > 0
-                ? "Waiting for {$unresolved} required determination(s)."
-                : ($assessmentSlip === null ? 'Ready for Assessment preparation.' : (string) data_get($assessmentSlip, 'statement')),
-            54,
-            $y - 32,
-            7,
-        );
+    }
+
+    /** @param list<string> $labels */
+    private function processingTableHeader(SimplePdfDocument $document, int $page, float $y, array $labels): void
+    {
+        $this->processingTableRow($document, $page, $y, $labels, 18, true);
+    }
+
+    /** @param list<string> $values */
+    private function processingTableRow(SimplePdfDocument $document, int $page, float $y, array $values, float $height, bool $header = false): void
+    {
+        $widths = [150, 190, 171];
+        $x = 42;
+        foreach ($values as $index => $value) {
+            $width = $widths[$index] ?? 171;
+            $document->rectangle($page, $x, $y - $height, $width, $height, $header ? 0.91 : 0.2, $header);
+            if (! $header) {
+                $document->rectangle($page, $x, $y - $height, $width, $height, 0.2, false);
+            }
+            $document->wrappedText($page, $value, $x + 6, $y - ($header ? 12 : 14), $width - 12, $header ? 6 : 7, $header ? 7 : 8, $header);
+            $x += $width;
+        }
+    }
+
+    private function blankMoney(mixed $amountCents): string
+    {
+        return is_int($amountCents) ? $this->money($amountCents) : '';
     }
 
     /**
@@ -297,16 +364,6 @@ final class RenderApplicationFormPdf
     private function money(int $amountCents): string
     {
         return 'PHP '.number_format($amountCents / 100, 2);
-    }
-
-    private function optionalMoney(mixed $amountCents): string
-    {
-        return is_int($amountCents) ? $this->money($amountCents) : 'Not yet available';
-    }
-
-    private function paymentOrderCountLabel(int $count): string
-    {
-        return $count.' current Paperless Payment '.($count === 1 ? 'Order' : 'Orders');
     }
 
     private function label(string $value): string
