@@ -14,23 +14,15 @@ import {
 import { Input } from '@/components/ui/input';
 import { officeLabel } from '@/lib/evaluationPresentation';
 import { index as feeMatrixIndex } from '@/routes/staff/fee-matrix';
+import type {
+    MunicipalFeeScheduleCategory,
+    MunicipalFeeScheduleRow,
+    MunicipalScheduleOfFees,
+} from '@/types/municipal-schedule-of-fees';
 
 type ServiceCategory = {
     key: string;
     label: string;
-};
-
-type Fee = {
-    id: number;
-    code: string;
-    name: string;
-    family: 'application_wide' | 'line_of_business';
-    line_of_business_name: string | null;
-    responsible_office: string | null;
-    amount_minor: number | null;
-    status: string;
-    service_category: ServiceCategory;
-    management_url: string;
 };
 
 type OrdinanceEntry = {
@@ -68,9 +60,8 @@ type Matrix = {
     context: {
         has_direct_fee_rule: boolean;
     };
-    application_wide: Fee[];
-    line_of_businesses: { id: number; name: string; fees: Fee[] }[];
     ordinance_register: OrdinanceProvision[];
+    schedule: MunicipalScheduleOfFees;
 };
 
 type FeeMatrixContext = {
@@ -81,22 +72,6 @@ type FeeMatrixContext = {
     chargeCode?: string | null;
     chargeLabel?: string | null;
     sourceClassification?: string | null;
-};
-
-type ScheduleRow = {
-    id: string;
-    category: ServiceCategory;
-    service: string;
-    basis: string;
-    provisionTitle: string;
-    code: string;
-    amountMinor: number | null;
-    rateBasisPoints: string | null;
-    isCeiling: boolean;
-    status: 'available' | 'for_confirmation' | 'needs_determination';
-    managementUrl: string | null;
-    governanceUrl: string | null;
-    sourceText: string;
 };
 
 withDefaults(defineProps<{ showTrigger?: boolean }>(), {
@@ -138,7 +113,7 @@ const money = (minor: number): string =>
         currency: 'PHP',
     }).format(minor / 100);
 
-function rateLabel(rateBasisPoints: string | null): string | null {
+function rateLabel(rateBasisPoints: string | number | null): string | null {
     if (rateBasisPoints === null) {
         return null;
     }
@@ -146,13 +121,13 @@ function rateLabel(rateBasisPoints: string | null): string | null {
     return `${Number(rateBasisPoints) / 100}%`;
 }
 
-function rowAmount(row: ScheduleRow): string {
+function rowAmount(row: MunicipalFeeScheduleRow): string {
     const value =
-        row.amountMinor === null
-            ? rateLabel(row.rateBasisPoints)
-            : money(row.amountMinor);
+        row.amount_minor === null
+            ? rateLabel(row.rate_basis_points)
+            : money(row.amount_minor);
 
-    return row.isCeiling && value ? `Up to ${value}` : (value ?? 'Case-based');
+    return row.is_ceiling && value ? `Up to ${value}` : (value ?? 'Case-based');
 }
 
 function searchTokens(value: string): string[] {
@@ -173,112 +148,40 @@ function matches(values: Array<string | null | undefined>): boolean {
     );
 }
 
-const currentFees = computed(() => [
-    ...(matrix.value?.application_wide ?? []),
-    ...(matrix.value?.line_of_businesses ?? []).flatMap((group) => group.fees),
-]);
+const scheduleRows = computed<MunicipalFeeScheduleRow[]>(() =>
+    (matrix.value?.schedule.categories ?? [])
+        .flatMap((group) => group.rows)
+        .filter(
+            (row) =>
+                (category.value === 'all' ||
+                    matrix.value?.schedule.categories.some(
+                        (group) =>
+                            group.key === category.value &&
+                            group.rows.some(
+                                (candidate) => candidate.id === row.id,
+                            ),
+                    )) &&
+                matches([row.service, row.basis, row.code]),
+        ),
+);
 
-const scheduleRows = computed<ScheduleRow[]>(() => {
-    const rules = currentFees.value
-        .filter((fee) => fee.amount_minor !== null)
-        .map((fee): ScheduleRow => ({
-            id: `rule-${fee.id}`,
-            category: fee.service_category,
-            service: fee.name,
-            basis:
-                fee.family === 'application_wide'
-                    ? 'Whole application'
-                    : (fee.line_of_business_name ?? 'Line of Business'),
-            provisionTitle: fee.name,
-            code: fee.code,
-            amountMinor: fee.amount_minor,
-            rateBasisPoints: null,
-            isCeiling: false,
-            status:
-                fee.status === 'in_force' ? 'available' : 'for_confirmation',
-            managementUrl: fee.management_url,
-            governanceUrl: null,
-            sourceText: '',
-        }));
-
-    const ordinance = (matrix.value?.ordinance_register ?? []).flatMap(
-        (provision) =>
-            provision.entries
-                .filter(
-                    () =>
-                        contextFeeRuleId.value === null ||
-                        provision.linked_fee_rule?.id ===
-                            contextFeeRuleId.value,
-                )
-                .filter(
-                    (entry) =>
-                        entry.amount_minor !== null ||
-                        entry.rate_basis_points !== null,
-                )
-                .filter(
-                    (entry) =>
-                        !rules.some(
-                            (rule) =>
-                                rule.managementUrl ===
-                                    provision.linked_fee_rule?.management_url &&
-                                rule.amountMinor === entry.amount_minor,
-                        ),
-                )
-                .map((entry): ScheduleRow => ({
-                    id: `${provision.code}-${entry.id}`,
-                    category: provision.service_category,
-                    service: entry.service_label,
-                    basis: [entry.basis_label, entry.unit_label]
-                        .filter(Boolean)
-                        .join(' · '),
-                    provisionTitle: provision.title,
-                    code: entry.code,
-                    amountMinor: entry.amount_minor,
-                    rateBasisPoints: entry.rate_basis_points,
-                    isCeiling: entry.is_ceiling,
-                    status: entry.is_ceiling
-                        ? 'needs_determination'
-                        : 'for_confirmation',
-                    managementUrl:
-                        provision.linked_fee_rule?.management_url ?? null,
-                    governanceUrl: provision.governance_url,
-                    sourceText: entry.source_text,
-                })),
-    );
-
-    return [...rules, ...ordinance].filter(
-        (row) =>
-            (category.value === 'all' || row.category.key === category.value) &&
-            matches([row.service, row.basis, row.provisionTitle, row.code]),
-    );
-});
-
-const availableCategories = computed(() => {
-    const values = new Map<string, ServiceCategory>();
-
-    for (const fee of currentFees.value) {
-        values.set(fee.service_category.key, fee.service_category);
-    }
-
-    for (const provision of matrix.value?.ordinance_register ?? []) {
-        values.set(provision.service_category.key, provision.service_category);
-    }
-
-    return [...values.values()];
-});
+const availableCategories = computed(
+    () => matrix.value?.schedule.categories ?? [],
+);
 
 const scheduleGroups = computed(() => {
-    const values = new Map<string, ServiceCategory>();
+    const values = new Map<string, MunicipalFeeScheduleCategory>();
 
-    for (const row of scheduleRows.value) {
-        values.set(row.category.key, row.category);
+    for (const group of matrix.value?.schedule.categories ?? []) {
+        if (group.rows.some((row) => scheduleRows.value.includes(row))) {
+            values.set(group.key, group);
+        }
     }
 
     return [...values.values()].map((group) => ({
-        ...group,
-        rows: scheduleRows.value.filter(
-            (row) => row.category.key === group.key,
-        ),
+        key: group.key,
+        label: group.label,
+        rows: group.rows.filter((row) => scheduleRows.value.includes(row)),
     }));
 });
 
@@ -294,7 +197,7 @@ const sourceProvisions = computed(() =>
     ),
 );
 
-const statusLabel = (status: ScheduleRow['status']): string =>
+const statusLabel = (status: MunicipalFeeScheduleRow['status']): string =>
     ({
         available: 'Available',
         for_confirmation: 'For confirmation',
@@ -369,8 +272,8 @@ function openFromContext(event: Event): void {
     open.value = true;
 }
 
-function selectScheduleRow(row: ScheduleRow): void {
-    if (contextEvaluationItemId.value === null || row.amountMinor === null) {
+function selectScheduleRow(row: MunicipalFeeScheduleRow): void {
+    if (contextEvaluationItemId.value === null || row.amount_minor === null) {
         return;
     }
 
@@ -381,7 +284,7 @@ function selectScheduleRow(row: ScheduleRow): void {
                 serviceLabel: row.service,
                 basis: row.basis,
                 scheduleReference: row.id,
-                unitAmountMinor: row.amountMinor,
+                unitAmountMinor: row.amount_minor,
             },
         }),
     );
@@ -526,7 +429,7 @@ onBeforeUnmount(() =>
                                     <Button
                                         v-if="
                                             contextEvaluationItemId !== null &&
-                                            row.amountMinor !== null
+                                            row.amount_minor !== null
                                         "
                                         size="sm"
                                         @click="selectScheduleRow(row)"
@@ -541,14 +444,14 @@ onBeforeUnmount(() =>
                                     >
                                         <Link
                                             :href="
-                                                row.managementUrl ??
-                                                row.governanceUrl ??
+                                                row.management_url ??
+                                                row.governance_url ??
                                                 '#'
                                             "
                                         >
                                             <Settings aria-hidden="true" />
                                             {{
-                                                row.managementUrl
+                                                row.management_url
                                                     ? canManageFeeRules
                                                         ? 'Manage'
                                                         : 'View'
@@ -626,7 +529,7 @@ onBeforeUnmount(() =>
                                                 v-if="
                                                     contextEvaluationItemId !==
                                                         null &&
-                                                    row.amountMinor !== null
+                                                    row.amount_minor !== null
                                                 "
                                                 size="sm"
                                                 @click="selectScheduleRow(row)"
@@ -641,13 +544,13 @@ onBeforeUnmount(() =>
                                             >
                                                 <Link
                                                     :href="
-                                                        row.managementUrl ??
-                                                        row.governanceUrl ??
+                                                        row.management_url ??
+                                                        row.governance_url ??
                                                         '#'
                                                     "
                                                 >
                                                     {{
-                                                        row.managementUrl
+                                                        row.management_url
                                                             ? canManageFeeRules
                                                                 ? 'Manage fee'
                                                                 : 'View fee'
@@ -716,4 +619,3 @@ onBeforeUnmount(() =>
         </DialogContent>
     </Dialog>
 </template>
-contextEvaluationItemId.value = detail?.evaluationItemId ?? null;

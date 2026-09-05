@@ -35,7 +35,7 @@ final class ApplicationData extends Data
         public readonly array $post_payment,
         public readonly BusinessPermitData $permit,
         public readonly array $documents,
-        public readonly MunicipalFeeMenuData $fee_menu,
+        public readonly MunicipalScheduleOfFeesData $schedule_of_fees,
         public readonly array $attachments,
         public readonly ActorContextData $actor_context,
         public readonly array $tabs,

@@ -2,17 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\BuildMunicipalPriceList;
+use App\Actions\BuildMunicipalScheduleOfFees;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class PublicMunicipalServiceCatalogController extends Controller
 {
-    public function __invoke(BuildMunicipalPriceList $buildMunicipalPriceList): Response
+    public function __invoke(BuildMunicipalScheduleOfFees $buildSchedule): Response
     {
         return Inertia::render('public/ServicesAndFees', [
-            'priceList' => $buildMunicipalPriceList->handle(),
+            'scheduleOfFees' => $buildSchedule->handle(),
         ]);
     }
 

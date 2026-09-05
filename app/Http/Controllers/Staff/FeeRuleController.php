@@ -11,6 +11,7 @@ use App\Enums\FeeRuleScope;
 use App\Enums\RevenueCodeProvisionStatus;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ProposeFeeRuleRevisionRequest;
 use App\Models\FeeRule;
 use App\Models\FeeRuleAuditEvent;
 use App\Models\FeeRuleRange;
@@ -179,16 +180,10 @@ class FeeRuleController extends Controller
         ]);
     }
 
-    public function proposeRevision(Request $request, FeeRule $feeRule, ProposeFeeRuleRevision $propose): RedirectResponse
+    public function proposeRevision(ProposeFeeRuleRevisionRequest $request, FeeRule $feeRule, ProposeFeeRuleRevision $propose): RedirectResponse
     {
         Gate::authorize(UserPermission::ManageFeeRules->value);
-        $data = $request->validate([
-            'proposed_amount_minor' => ['required', 'integer', 'min:0'],
-            'effective_from' => ['required', 'date'],
-            'effective_until' => ['nullable', 'date', 'after_or_equal:effective_from'],
-            'reason' => ['required', 'string', 'max:2000'],
-            'authority' => ['required', 'string', 'max:2000'],
-        ]);
+        $data = $request->validated();
         $propose->handle(
             $feeRule,
             $data['proposed_amount_minor'],

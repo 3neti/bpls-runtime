@@ -1,30 +1,16 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { computed } from 'vue';
-import MunicipalFeeMenuSheet from '@/components/permit-applications/MunicipalFeeMenuSheet.vue';
+import MunicipalScheduleOfFeesSheet from '@/components/permit-applications/MunicipalScheduleOfFeesSheet.vue';
 import { dashboard, home, login, register } from '@/routes';
 import { index as servicesAndFeesIndex } from '@/routes/services-and-fees';
-import type { MunicipalPriceList } from '@/types';
+import type { MunicipalScheduleOfFees } from '@/types/municipal-schedule-of-fees';
 
-const props = defineProps<{
-    priceList: MunicipalPriceList;
-}>();
-
-const feeMenu = computed(() => ({
-    title: 'Municipal Fee Menu',
-    scope: props.priceList.catalog.scope,
-    as_of_date: props.priceList.catalog.as_of_date,
-    application_year: props.priceList.catalog.application_year,
-    classification: 'reference_only',
-    statement:
-        'Reference only. This menu is not an Assessment and does not create an amount payable.',
-    services: props.priceList.services,
-}));
+defineProps<{ scheduleOfFees: MunicipalScheduleOfFees }>();
 </script>
 
 <template>
     <div class="min-h-svh bg-background text-foreground">
-        <Head title="Municipal Fee Menu" />
+        <Head title="Municipal Schedule of Fees" />
 
         <header class="border-b bg-background/95">
             <div
@@ -47,7 +33,7 @@ const feeMenu = computed(() => ({
                         aria-current="page"
                         class="hidden rounded-md bg-muted px-3 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex"
                     >
-                        Fee Menu
+                        Schedule of Fees
                     </Link>
                     <Link
                         v-if="$page.props.auth.user"
@@ -75,7 +61,7 @@ const feeMenu = computed(() => ({
         </header>
 
         <main class="mx-auto max-w-6xl px-3 py-6 sm:px-8 sm:py-10">
-            <MunicipalFeeMenuSheet :fee-menu="feeMenu" />
+            <MunicipalScheduleOfFeesSheet :schedule="scheduleOfFees" />
         </main>
     </div>
 </template>

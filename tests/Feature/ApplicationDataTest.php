@@ -56,7 +56,7 @@ test('ApplicationData V1 contains typed canonical facts without Eloquent models 
         ->and($citizenData['declaration'])->toBe($healthData['declaration'])
         ->and($citizenData['financial'])->toBe($healthData['financial'])
         ->and($citizenData['payment'])->toBe($healthData['payment'])
-        ->and($citizenData['fee_menu'])->toBe($healthData['fee_menu'])
+        ->and($citizenData['schedule_of_fees'])->toBe($healthData['schedule_of_fees'])
         ->and($citizenData['attachments'])->toBe($healthData['attachments'])
         ->and($citizenData['actor_context'])->not->toBe($healthData['actor_context'])
         ->and($citizenData['actor_context']['current_tasks'])->toHaveCount(1)
@@ -93,13 +93,12 @@ test('frozen Page 1 and frozen PriceReport survive ApplicationData reconstructio
         ->and($data['routing']['page'])->toBe('page_2')
         ->and($data['routing']['status'])->toBe('determined')
         ->and($data['offices'])->not->toBeEmpty()
-        ->and($data['fee_menu']['schema_version'])->toBe('bpls.municipal-fee-menu-data.v1')
-        ->and($data['fee_menu']['application_year'])->toBe(2025)
-        ->and($data['fee_menu']['as_of_date'])->toBe('2025-01-01')
-        ->and($data['fee_menu']['classification'])->toBe('reference_only')
-        ->and($data['fee_menu']['statement'])->toContain('not an Assessment')
+        ->and($data['schedule_of_fees']['schema_version'])->toBe('bpls.municipal-schedule-of-fees.v1')
+        ->and($data['schedule_of_fees']['application_year'])->toBe(2025)
+        ->and($data['schedule_of_fees']['as_of_date'])->toBe('2025-01-01')
+        ->and($data['schedule_of_fees']['categories'])->not->toBeEmpty()
         ->and(collect($data['attachments'])->pluck('key')->all())->toBe([
-            'fee_menu',
+            'schedule_of_fees',
             'payment_orders',
             'assessment',
             'qr_ph',
@@ -193,21 +192,25 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
     $navigator = file_get_contents(resource_path('js/components/permit-applications/ApplicationDocumentNavigator.vue'));
     $paymentSheet = file_get_contents(resource_path('js/components/permit-applications/IpilPaymentContinuationSheet.vue'));
     $attachmentRail = file_get_contents(resource_path('js/components/permit-applications/ApplicationAttachmentRail.vue'));
-    $feeMenu = file_get_contents(resource_path('js/components/permit-applications/MunicipalFeeMenuSheet.vue'));
+    $schedule = file_get_contents(resource_path('js/components/permit-applications/MunicipalScheduleOfFeesSheet.vue'));
     $paymentOrders = file_get_contents(resource_path('js/components/permit-applications/OfficePaymentOrdersSheet.vue'));
     $officialReceipt = file_get_contents(resource_path('js/components/receipts/Af51OfficialReceipt.vue'));
 
     expect($component)->toContain('ApplicationAttachmentRail')
         ->and($component)->toContain(':attachments="application.attachments"')
-        ->and($component)->toContain('MunicipalFeeMenuSheet')
+        ->and($component)->toContain('MunicipalScheduleOfFeesSheet')
         ->and($component)->toContain('OfficePaymentOrdersSheet')
-        ->and($component)->toContain("activeTab === 'fee_menu'")
+        ->and($component)->toContain("activeTab === 'schedule_of_fees'")
         ->and($component)->toContain("activeTab === 'payment_orders'")
         ->and($attachmentRail)->toContain('role="tablist"')
         ->and($attachmentRail)->toContain(':aria-selected="activeKey === attachment.key"')
-        ->and($feeMenu)->toContain('data-testid="municipal-fee-menu-sheet"')
-        ->and($feeMenu)->toContain('Reference only')
-        ->and($feeMenu)->toContain('Not an Assessment')
+        ->and($schedule)->toContain('data-testid="municipal-schedule-of-fees-sheet"')
+        ->and($schedule)->toContain('schedule.categories')
+        ->and($schedule)->toContain('break-inside-avoid border-b')
+        ->and($schedule)->toContain('print:table-header-group')
+        ->and($schedule)->toContain('schedule-inline-revision-form')
+        ->and($schedule)->toContain('canManageFeeRules && row.revision_eligible')
+        ->and($schedule)->not->toContain('Not an Assessment')
         ->and($paymentOrders)->toContain('data-testid="office-payment-orders-sheet"')
         ->and($component)->toContain('data-testid="application-document-canvas"')
         ->and($component)->toContain('ApplicationDocumentNavigator')

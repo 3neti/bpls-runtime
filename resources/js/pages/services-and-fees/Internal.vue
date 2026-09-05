@@ -36,7 +36,7 @@ const lensMeta: Record<
     { label: string; icon: typeof ClipboardList }
 > = {
     service: { label: 'By Service', icon: ClipboardList },
-    fee: { label: 'Fee Menu', icon: Banknote },
+    fee: { label: 'Schedule of Fees', icon: Banknote },
     lineOfBusiness: { label: 'By Line of Business', icon: ListTree },
     office: { label: 'By Office', icon: Building2 },
 };

@@ -327,15 +327,16 @@ it('surfaces the recorded policy note for a ceiling amount so it is not shown as
         ->toBe('Ordinance states not to exceed PHP 300.00; production configuration must confirm the exact charged amount.');
 });
 
-it('serves one public Fee Menu and redirects the retired staff catalog to pricing administration', function () {
+it('serves one public Schedule of Fees and redirects the retired staff catalog to pricing administration', function () {
     $this->seed(RevenueCodeFeeCatalogSeeder::class);
 
     $this->get(route('services-and-fees.index'))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->component('public/ServicesAndFees')
-            ->where('priceList.catalog.audience', 'public')
-            ->where('priceList.catalog.read_only', true));
+            ->where('scheduleOfFees.schema_version', 'bpls.municipal-schedule-of-fees.v1')
+            ->where('scheduleOfFees.title', 'Municipal Schedule of Fees')
+            ->has('scheduleOfFees.categories'));
 
     $staff = userWithPermissions([
         UserPermission::AccessStaff,
@@ -358,7 +359,7 @@ it('serves one public Fee Menu and redirects the retired staff catalog to pricin
         ->all())->toBe(['GET', 'HEAD']);
 });
 
-it('redirects the retired Citizen catalog route to the one public Fee Menu', function () {
+it('redirects the retired Citizen catalog route to the one public Schedule of Fees', function () {
     $this->seed(RevenueCodeFeeCatalogSeeder::class);
 
     $this->get(route('citizen.services-and-fees.index'))
@@ -375,14 +376,15 @@ it('redirects the retired Citizen catalog route to the one public Fee Menu', fun
         ->assertForbidden();
 });
 
-it('keeps the reusable Fee Menu public and removes competing authenticated navigation', function () {
+it('keeps the reusable paper Schedule of Fees public and removes competing authenticated navigation', function () {
     $publicPage = file_get_contents(resource_path('js/pages/public/ServicesAndFees.vue'));
     $sidebar = file_get_contents(resource_path('js/components/AppSidebar.vue'));
     $dashboard = file_get_contents(resource_path('js/pages/Dashboard.vue'));
 
     expect($publicPage)
-        ->toContain('MunicipalFeeMenuSheet')
-        ->toContain('<Head title="Municipal Fee Menu"')
+        ->toContain('MunicipalScheduleOfFeesSheet')
+        ->toContain('<Head title="Municipal Schedule of Fees"')
+        ->not->toContain('Fee Menu')
         ->and($sidebar)
         ->not->toContain('citizenServiceCatalogIndex')
         ->not->toContain('staffServiceCatalogIndex')

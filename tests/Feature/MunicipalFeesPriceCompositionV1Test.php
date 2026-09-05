@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\BuildFeeMatrixQuickLook;
+use App\Actions\BuildMunicipalScheduleOfFees;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\ExecutePersistedLifecycleScenario;
 use App\Actions\ProposeFeeRuleRevision;
@@ -21,8 +22,10 @@ use App\Models\Assessment;
 use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
+use App\Models\User;
 use Brick\Money\Money;
 use Database\Seeders\RevenueCodeFeeCatalogSeeder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -186,6 +189,32 @@ it('projects both municipal fee families while excluding scenario amounts from s
         ->and(json_encode($matrix))->not->toContain('SCENARIO-ONLY')->not->toContain('99999');
 });
 
+it('builds one categorized paper Schedule of Fees for public application and evaluator projections', function (): void {
+    $this->seed(RevenueCodeFeeCatalogSeeder::class);
+
+    $schedule = app(BuildMunicipalScheduleOfFees::class)->handle(
+        asOf: Carbon::create(2026, 1, 1),
+    );
+    $categories = collect($schedule['categories']);
+    $rows = $categories->flatMap(fn (array $category): array => $category['rows']);
+
+    expect($schedule)
+        ->schema_version->toBe('bpls.municipal-schedule-of-fees.v1')
+        ->title->toBe('Municipal Schedule of Fees')
+        ->application_year->toBe(2026)
+        ->as_of_date->toBe('2026-01-01')
+        ->and($categories->pluck('label'))->toContain(
+            'Business Taxes',
+            "Mayor's Permit & Business Licensing",
+            'Inspections & Certificates',
+            'Weights, Measures & Fuel Pumps',
+        )
+        ->and($rows->whereNotNull('fee_rule_id')->every(
+            fn (array $row): bool => array_key_exists('revision_eligible', $row),
+        ))->toBeTrue()
+        ->and(json_encode($schedule))->not->toContain('SCENARIO-')->not->toContain('EVAL-UAT-');
+});
+
 it('records append-only proposed revisions without execution or historical rewrite', function (): void {
     $actor = userWithPermissions([UserPermission::ManageFeeRules]);
     $rule = FeeRule::factory()->create([
@@ -212,6 +241,37 @@ it('records append-only proposed revisions without execution or historical rewri
         ->and($rule->auditEvents()->count())->toBe(1)
         ->and(fn () => $revision->update(['status' => 'activated']))->toThrow(LogicException::class, 'append-only')
         ->and(fn () => $rule->auditEvents()->firstOrFail()->delete())->toThrow(LogicException::class, 'cannot be deleted');
+});
+
+it('authorizes inline Schedule of Fees proposals and leaves the published amount unchanged', function (): void {
+    $rule = FeeRule::factory()->create([
+        'amount_cents' => 35_000,
+        'effective_from' => '2026-01-01',
+    ]);
+    $viewer = User::factory()->create();
+    $manager = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ManageFeeRules,
+    ]);
+    $payload = [
+        'proposed_amount_minor' => 40_000,
+        'effective_from' => '2027-01-01',
+        'effective_until' => null,
+        'reason' => 'Treasury schedule review.',
+        'authority' => 'Municipal review reference.',
+    ];
+
+    $this->actingAs($viewer)
+        ->post(route('staff.fee-rules.revisions.store', $rule), $payload)
+        ->assertForbidden();
+
+    $this->actingAs($manager)
+        ->post(route('staff.fee-rules.revisions.store', $rule), $payload)
+        ->assertRedirect();
+
+    expect($rule->refresh()->amount_cents)->toBe(35_000)
+        ->and($rule->revisions()->sole()->proposed_amount_minor)->toBe(40_000)
+        ->and($rule->revisions()->sole()->status)->toBe('proposed');
 });
 
 it('keeps the citizen catalog restricted while staff quick look shares the governed FeeRule identity', function (): void {
@@ -351,6 +411,7 @@ it('presents the quick look as a compact fee schedule with governed maintenance 
 
     expect($quickLook)
         ->toContain('Municipal Schedule of Fees')
+        ->toContain('matrix.value?.schedule.categories')
         ->toContain('Basis / condition')
         ->toContain('Fee / rate')
         ->toContain('Manage fee')

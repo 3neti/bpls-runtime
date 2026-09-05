@@ -12,11 +12,14 @@ use App\Models\FeeRuleReconciliation;
 use App\Models\RevenueCodeProvision;
 use App\Models\RevenueCodeProvisionClause;
 use App\Models\RevenueCodeProvisionRow;
+use App\Support\MunicipalFeeScheduleCategory;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 final class BuildFeeMatrixQuickLook
 {
+    public function __construct(private readonly MunicipalFeeScheduleCategory $scheduleCategory) {}
+
     /** @return array<string, mixed> */
     public function handle(
         ?string $search = null,
@@ -121,12 +124,13 @@ final class BuildFeeMatrixQuickLook
             'responsible_office' => data_get($rule->metadata, 'responsible_office'),
             'currency' => 'PHP',
             'amount_minor' => $mayShowAmount ? $rule->amount_cents : null,
+            'calculation_type' => $rule->calculation_type->value,
             'status' => $status,
             'effective_from' => $rule->effective_from->toDateString(),
             'effective_until' => $rule->effective_until?->toDateString(),
             'legal_basis' => $rule->legal_basis,
             'version' => $reconciliation?->version,
-            'service_category' => $this->serviceCategory($rule->code),
+            'service_category' => $this->scheduleCategory->forCode($rule->code),
             'management_url' => route('staff.fee-rules.show', $rule, false),
         ];
     }
@@ -171,7 +175,7 @@ final class BuildFeeMatrixQuickLook
             'reconciliation_status' => $provision->reconciliation_status->value,
             'reconciliation_notes' => $provision->reconciliation_notes,
             'known_ambiguities' => data_get($provision->metadata, 'known_ambiguities', []),
-            'service_category' => $this->serviceCategory($provision->code),
+            'service_category' => $this->scheduleCategory->forCode($provision->code),
             'governance_url' => route('staff.fee-rules.index', absolute: false).'#revenue-code-provision-'.$provision->code,
             'linked_fee_rule' => $provision->feeRule ? [
                 'id' => $provision->feeRule->id,
@@ -181,26 +185,6 @@ final class BuildFeeMatrixQuickLook
             ] : null,
             'entries' => $entries->all(),
         ];
-    }
-
-    /** @return array{key: string, label: string} */
-    private function serviceCategory(string $code): array
-    {
-        return match (true) {
-            Str::startsWith($code, 'MRC-2A') => ['key' => 'business_taxes', 'label' => 'Business Taxes'],
-            Str::startsWith($code, 'MRC-2B') => ['key' => 'markets_mobile_trade', 'label' => 'Markets, Peddlers & Mobile Trade'],
-            Str::startsWith($code, 'MRC-2F') => ['key' => 'business_taxes', 'label' => 'Business Taxes'],
-            Str::startsWith($code, 'MRC-3A-04') => ['key' => 'inspections_certificates', 'label' => 'Inspections & Certificates'],
-            Str::startsWith($code, 'MRC-3A') => ['key' => 'business_permits', 'label' => "Mayor's Permit & Business Licensing"],
-            Str::startsWith($code, ['MRC-3B', 'MRC-3C']) => ['key' => 'cockpit_events', 'label' => 'Cockpit & Special Events'],
-            Str::startsWith($code, ['MRC-3E', 'MRC-3J']) => ['key' => 'special_permits', 'label' => 'Filming, Parades & Special Permits'],
-            Str::startsWith($code, ['MRC-3D', 'MRC-3F']) => ['key' => 'animals_agriculture', 'label' => 'Animals & Agricultural Services'],
-            Str::startsWith($code, 'MRC-3G') => ['key' => 'public_works', 'label' => 'Street Excavation & Public Works'],
-            Str::startsWith($code, ['MRC-3H', 'MRC-3I']) => ['key' => 'weights_measures', 'label' => 'Weights, Measures & Fuel Pumps'],
-            Str::startsWith($code, 'MRC-3K') => ['key' => 'equipment', 'label' => 'Equipment & Machinery'],
-            Str::startsWith($code, 'MRC-3L') => ['key' => 'transport', 'label' => 'Transport & Tricycle Services'],
-            default => ['key' => 'other', 'label' => 'Other Municipal Services'],
-        };
     }
 
     private function clauseServiceLabel(RevenueCodeProvision $provision, RevenueCodeProvisionClause $clause): string

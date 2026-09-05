@@ -29,7 +29,7 @@ import { index as servicesAndFeesIndex } from '@/routes/services-and-fees';
                         :href="servicesAndFeesIndex()"
                         class="hidden rounded-md px-3 py-2 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex"
                     >
-                        Fee Menu
+                        Schedule of Fees
                     </Link>
                     <Link
                         v-if="$page.props.auth.user"
@@ -83,7 +83,7 @@ import { index as servicesAndFeesIndex } from '@/routes/services-and-fees';
                         :href="servicesAndFeesIndex()"
                         class="inline-flex items-center gap-2 rounded-md border px-5 py-3 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                        View Municipal Fee Menu
+                        View Municipal Schedule of Fees
                     </Link>
                     <Link
                         v-if="$page.props.auth.user"

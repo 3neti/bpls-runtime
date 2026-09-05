@@ -2,7 +2,7 @@
 
 namespace App\Data\Application;
 
-use App\Actions\BuildMunicipalPriceList;
+use App\Actions\BuildMunicipalScheduleOfFees;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\ResolveOfficialReceiptProfile;
@@ -38,7 +38,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         private readonly DescribePermitVerificationBoundary $verificationBoundary,
         private readonly QrPhPaymentArtifactCache $qrPhArtifactCache,
         private readonly ResolveOfficialReceiptProfile $resolveOfficialReceiptProfile,
-        private readonly BuildMunicipalPriceList $buildMunicipalPriceList,
+        private readonly BuildMunicipalScheduleOfFees $buildScheduleOfFees,
     ) {}
 
     public function resolve(PermitApplication $permitApplication, ?User $viewer = null): ApplicationData
@@ -79,7 +79,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             ->values()
             ->all());
         $permit = $this->permit($application, $receipts);
-        $feeMenu = $this->feeMenu($application);
+        $scheduleOfFees = $this->scheduleOfFees($application);
         $attachments = $this->attachments($application, $assessment, $receipts, $permit);
         $tasks = $this->tasks($application, $viewer, $evaluationProjection);
         $affordances = $this->affordances($application, $viewer, $tasks);
@@ -177,7 +177,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'size_bytes' => $document->size_bytes,
                 'uploaded_at' => $document->uploaded_at->toIso8601String(),
             ])->values()->all()),
-            fee_menu: $feeMenu,
+            schedule_of_fees: $scheduleOfFees,
             attachments: $attachments,
             actor_context: new ActorContextData(
                 actor_id: $viewer?->id,
@@ -197,21 +197,19 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         );
     }
 
-    private function feeMenu(PermitApplication $application): MunicipalFeeMenuData
+    private function scheduleOfFees(PermitApplication $application): MunicipalScheduleOfFeesData
     {
         $asOf = Carbon::create($application->application_year, 1, 1)->startOfDay();
-        $priceList = $this->buildMunicipalPriceList->handle(asOf: $asOf);
+        $schedule = $this->buildScheduleOfFees->handle(asOf: $asOf);
 
-        return new MunicipalFeeMenuData(
-            schema_version: MunicipalFeeMenuData::Schema,
-            title: 'Municipal Fee Menu',
-            scope: (string) data_get($priceList, 'catalog.scope'),
-            as_of_date: (string) data_get($priceList, 'catalog.as_of_date'),
-            application_year: (int) data_get($priceList, 'catalog.application_year'),
-            currency: 'PHP',
-            classification: 'reference_only',
-            statement: 'Reference only. This menu is not an Assessment and does not create an amount payable.',
-            services: array_values(data_get($priceList, 'services', [])),
+        return new MunicipalScheduleOfFeesData(
+            schema_version: MunicipalScheduleOfFeesData::Schema,
+            title: (string) data_get($schedule, 'title'),
+            scope: (string) data_get($schedule, 'scope'),
+            as_of_date: (string) data_get($schedule, 'as_of_date'),
+            application_year: (int) data_get($schedule, 'application_year'),
+            currency: (string) data_get($schedule, 'currency'),
+            categories: array_values(data_get($schedule, 'categories', [])),
         );
     }
 
@@ -231,7 +229,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         $paymentRequest = $schedule?->xChangePayment;
 
         return [
-            $this->attachment('fee_menu', 1, 'Municipal Fee Menu', 'Fee Menu', 'reference_insert', 'assessment', 'fee_menu', 'attached', true, 'amber'),
+            $this->attachment('schedule_of_fees', 1, 'Municipal Schedule of Fees', 'Schedule of Fees', 'price_list', 'assessment', 'schedule_of_fees', 'attached', true, 'amber'),
             $this->attachment('payment_orders', 2, 'Office Payment Orders', 'Payment Orders', 'office_evidence', 'processing', 'payment_orders', $paymentOrderCount > 0 ? 'attached' : 'pending', $paymentOrderCount > 0, 'sky'),
             $this->attachment('assessment', 3, 'Computation / Assessment Slip', 'Assessment', 'frozen_financial_artifact', 'assessment', 'assessment', $assessment instanceof Assessment ? 'frozen' : 'pending', $assessment instanceof Assessment, 'violet'),
             $this->attachment('qr_ph', 4, 'QR Ph Payment Slip', 'QR Ph', 'payment_instrument', 'payment', 'payment', filled($paymentRequest?->pay_code) ? 'generated' : 'pending', filled($paymentRequest?->pay_code), 'emerald'),

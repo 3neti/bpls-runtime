@@ -14,9 +14,10 @@ import ApplicationWorkNote from '@/components/permit-applications/ApplicationWor
 import BploRoutingTaskSheet from '@/components/permit-applications/BploRoutingTaskSheet.vue';
 import IpilExecutableDocument from '@/components/permit-applications/IpilExecutableDocument.vue';
 import IpilPaymentContinuationSheet from '@/components/permit-applications/IpilPaymentContinuationSheet.vue';
-import MunicipalFeeMenuSheet from '@/components/permit-applications/MunicipalFeeMenuSheet.vue';
+import MunicipalScheduleOfFeesSheet from '@/components/permit-applications/MunicipalScheduleOfFeesSheet.vue';
 import OfficePaymentOrdersSheet from '@/components/permit-applications/OfficePaymentOrdersSheet.vue';
 import Af51OfficialReceipt from '@/components/receipts/Af51OfficialReceipt.vue';
+import type { MunicipalScheduleOfFees } from '@/types/municipal-schedule-of-fees';
 
 type Task = {
     key: string;
@@ -64,15 +65,7 @@ type ApplicationData = {
     post_payment: Record<string, any>;
     permit: Record<string, any>;
     documents: Record<string, any>[];
-    fee_menu: {
-        title: string;
-        scope: string;
-        as_of_date: string;
-        application_year: number;
-        classification: string;
-        statement: string;
-        services: Record<string, any>[];
-    };
+    schedule_of_fees: MunicipalScheduleOfFees;
     attachments: Attachment[];
     actor_context: {
         actor_label: string;
@@ -107,7 +100,7 @@ const props = withDefaults(
 const applicationPacketTargets = [
     'application',
     'processing',
-    'fee_menu',
+    'schedule_of_fees',
     'payment_orders',
     'assessment',
     'payment',
@@ -444,7 +437,7 @@ function label(value: unknown): string {
                     (activeTab === 'application' ||
                         activeTab === 'processing' ||
                         activeTab === 'payment' ||
-                        activeTab === 'fee_menu' ||
+                        activeTab === 'schedule_of_fees' ||
                         activeTab === 'payment_orders')
                         ? 'bg-stone-100 p-0 dark:bg-stone-950'
                         : 'bg-white p-4 sm:p-6 dark:bg-slate-900'
@@ -677,10 +670,12 @@ function label(value: unknown): string {
                 </div>
 
                 <div
-                    v-else-if="activeTab === 'fee_menu'"
+                    v-else-if="activeTab === 'schedule_of_fees'"
                     class="bg-stone-100 p-2 sm:p-5"
                 >
-                    <MunicipalFeeMenuSheet :fee-menu="application.fee_menu" />
+                    <MunicipalScheduleOfFeesSheet
+                        :schedule="application.schedule_of_fees"
+                    />
                 </div>
 
                 <div
