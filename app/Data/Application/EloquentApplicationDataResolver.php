@@ -5,6 +5,7 @@ namespace App\Data\Application;
 use App\Actions\BuildMunicipalScheduleOfFees;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
+use App\Actions\ProjectPermitReadiness;
 use App\Actions\ResolveOfficialReceiptProfile;
 use App\Assessment\Price\HistoricalPriceReport;
 use App\Enums\ReceiptStatus;
@@ -13,9 +14,9 @@ use App\Evaluation\BusinessPermitEvaluationResolver;
 use App\Integrations\QrPhPaymentArtifactCache;
 use App\Models\Assessment;
 use App\Models\BusinessPermitEvaluation;
+use App\Models\LifecycleCleanroomRun;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationDocument;
-use App\Models\PermitClearance;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
 use App\Models\User;
@@ -35,6 +36,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         private readonly BusinessPermitEvaluationResolver $evaluationResolver,
         private readonly HistoricalPriceReport $historicalPriceReport,
         private readonly DescribePermitReleaseReadiness $releaseReadiness,
+        private readonly ProjectPermitReadiness $permitReadiness,
         private readonly DescribePermitVerificationBoundary $verificationBoundary,
         private readonly QrPhPaymentArtifactCache $qrPhArtifactCache,
         private readonly ResolveOfficialReceiptProfile $resolveOfficialReceiptProfile,
@@ -50,6 +52,8 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             'lines.lineOfBusiness',
             'documents',
             'clearances.completedBy',
+            'postPaymentOfficeCertifications.certifiedBy',
+            'postPaymentOfficeCertifications.receipt',
             'assessments' => fn ($query) => $query->whereNull('superseded_at')->latest('sequence'),
             'assessments.lines.lineOfBusiness',
             'assessments.decision.decidedBy',
@@ -66,7 +70,8 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             'businessPermitEvaluation.currentVersion.counterCheck',
             'businessPermitEvaluation.items.revisions.version',
             'businessPermitEvaluation.items.revisions.actor',
-            'provisionalUatPermitCompletion',
+            'provisionalUatPermitCompletion.issuedBy',
+            'provisionalUatPermitCompletion.releasedBy',
         ])->findOrFail($permitApplication->id);
 
         $assessment = $application->assessments->first();
@@ -158,15 +163,27 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             payment: $this->payment($application),
             official_receipts: $receipts,
             post_payment: [
-                'state' => $application->clearances->isEmpty() ? 'pending_payment' : 'in_progress',
-                'certifications' => array_values($application->clearances->map(fn (PermitClearance $clearance): array => [
-                    'id' => $clearance->id,
-                    'code' => $clearance->code,
-                    'label' => $clearance->label,
-                    'status' => $clearance->status->value,
-                    'completed_at' => $clearance->completed_at?->toIso8601String(),
-                    'completed_by' => $clearance->completedBy?->getAttribute('name'),
+                'state' => $application->postPaymentOfficeCertifications->isEmpty()
+                    ? 'pending_official_receipt'
+                    : ($application->postPaymentOfficeCertifications->every(fn ($certification): bool => $certification->status === 'completed') ? 'completed' : 'in_progress'),
+                'certifications' => array_values($application->postPaymentOfficeCertifications->map(fn ($certification): array => [
+                    'id' => $certification->id,
+                    'code' => $certification->office_code,
+                    'label' => $certification->office_label,
+                    'routing_determination_id' => $certification->bplo_routing_determination_id,
+                    'routing_work_ids' => $certification->routing_work_ids,
+                    'receipt_id' => $certification->receipt_id,
+                    'receipt_number' => $certification->receipt->receipt_number,
+                    'receipt_reviewed' => (bool) data_get($certification->evidence, 'result.reviewed', false),
+                    'status' => $certification->status,
+                    'result' => $certification->result,
+                    'remarks' => $certification->remarks,
+                    'completed_at' => $certification->certified_at?->toIso8601String(),
+                    'completed_by' => $certification->certifiedBy?->name,
+                    'semantic_classification' => $certification->semantic_classification,
+                    'production_authority' => $certification->production_authority,
                 ])->values()->all()),
+                'readiness' => $this->permitReadiness->handle($application),
             ],
             permit: $permit,
             documents: array_values($application->documents->map(fn (PermitApplicationDocument $document): array => [
@@ -234,7 +251,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             $this->attachment('assessment', 3, 'Computation / Assessment Slip', 'Assessment', 'frozen_financial_artifact', 'assessment', 'assessment', $assessment instanceof Assessment ? 'frozen' : 'pending', $assessment instanceof Assessment, 'violet'),
             $this->attachment('qr_ph', 4, 'QR Ph Payment Slip', 'QR Ph', 'payment_instrument', 'payment', 'payment', filled($paymentRequest?->pay_code) ? 'generated' : 'pending', filled($paymentRequest?->pay_code), 'emerald'),
             $this->attachment('official_receipt', 5, 'Official Receipt · AF No. 51', 'Official Receipt', 'accountable_form', 'payment', 'payment', $receipts === [] ? 'pending' : 'issued', $receipts !== [], 'rose'),
-            $this->attachment('permit', 6, 'Business Permit', 'Permit', 'final_authority_artifact', 'permit', 'permit', $permit->released ? 'released' : 'pending', $permit->released, 'stone'),
+            $this->attachment('permit', 6, 'Business Permit', 'Permit', 'final_authority_artifact', 'permit', 'permit', $permit->released ? 'released_synthetic' : ($permit->issued ? 'issued_synthetic' : 'pending'), $permit->issued, 'stone'),
         ];
     }
 
@@ -296,7 +313,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
 
         return array_values($application->bploRoutingDetermination->works
             ->groupBy('office_code')
-            ->map(function (Collection $works, string $officeCode) use ($items): ApplicationOfficeData {
+            ->map(function (Collection $works, string $officeCode) use ($items, $application): ApplicationOfficeData {
                 $workIds = $works->pluck('id');
                 $officeItems = $items->filter(fn (array $item): bool => $workIds->contains(data_get($item, 'metadata.bplo_routing_work_id')))->values();
                 $orders = $works->flatMap(fn ($work) => $work->paymentOrders)
@@ -305,6 +322,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 $resolved = $officeItems->where('resolution', 'resolved');
                 $allResolved = $officeItems->isNotEmpty() && $resolved->count() === $officeItems->count();
                 $latest = $resolved->sortByDesc('occurred_at')->first();
+                $postPaymentCertification = $application->postPaymentOfficeCertifications->firstWhere('office_code', $officeCode);
 
                 return new ApplicationOfficeData(
                     code: $officeCode,
@@ -342,6 +360,18 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                         'officer_name' => $latest['actor_name'],
                         'certified_at' => $latest['occurred_at'],
                     ] : null,
+                    post_payment_certification: $postPaymentCertification === null ? null : [
+                        'id' => $postPaymentCertification->id,
+                        'status' => $postPaymentCertification->status,
+                        'result' => $postPaymentCertification->result,
+                        'receipt_number' => $postPaymentCertification->receipt->receipt_number,
+                        'receipt_reviewed' => (bool) data_get($postPaymentCertification->evidence, 'result.reviewed', false),
+                        'remarks' => $postPaymentCertification->remarks,
+                        'certified_by' => $postPaymentCertification->certifiedBy?->name,
+                        'certified_at' => $postPaymentCertification->certified_at?->toIso8601String(),
+                        'semantic_classification' => $postPaymentCertification->semantic_classification,
+                        'production_authority' => $postPaymentCertification->production_authority,
+                    ],
                 );
             })
             ->values()
@@ -630,21 +660,30 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
     private function permit(PermitApplication $application, array $receipts): BusinessPermitData
     {
         $verification = $this->verificationBoundary->handle($application);
-        $readiness = $this->releaseReadiness->handle($application);
+        $syntheticLifecycle = data_get($application->metadata, 'lifecycle_cleanroom.semantic_classification') === 'synthetic_only';
+        $readiness = $this->permitReadiness->handle($application);
+        $legacyReadiness = $this->releaseReadiness->handle($application);
         $receipt = count($receipts) === 1 ? $receipts[0] : null;
         $receiptBound = $receipt instanceof OfficialReceiptData && filled($receipt->receipt_number);
-        $ready = $readiness['ready_for_authority_review'] && $receiptBound;
+        $ready = ($syntheticLifecycle ? $readiness['ready'] : $legacyReadiness['ready_for_authority_review']) && $receiptBound;
         $completion = $application->provisionalUatPermitCompletion;
+        $issued = $completion?->issued_at !== null;
+        $released = $completion?->released_at !== null;
 
         return new BusinessPermitData(
             schema_version: BusinessPermitData::Schema,
-            state: $ready ? 'ready_for_authority_review' : 'pending',
+            state: $released ? 'released_synthetic' : ($issued ? 'issued_synthetic' : ($ready ? 'ready' : 'blocked')),
             ready: $ready,
-            released: false,
+            issued: $issued,
+            released: $released,
             valid: false,
+            semantic_classification: $completion === null
+                ? ($syntheticLifecycle ? $readiness['semantic_classification'] : 'production_pending')
+                : $completion->semantic_classification,
+            production_authority: false,
             permit_number: $completion?->permit_number,
-            issued_on: null,
-            valid_until: null,
+            issued_on: $completion?->issued_at?->toDateString(),
+            valid_until: $completion?->valid_until?->toDateString(),
             business_name: $application->business->name,
             owner_operator: $application->business->owner->name,
             business_address: $application->business->address,
@@ -657,7 +696,10 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             issuing_authority: [
                 'office' => 'Municipal Mayor',
                 'name' => null,
-                'authority_status' => 'unresolved',
+                'authority_status' => $issued ? 'synthetic_only' : ($syntheticLifecycle ? 'production_pending' : 'unresolved'),
+                'signature_reference' => $completion?->synthetic_signature_reference,
+                'real_mayor_login_or_signature_used' => false,
+                'production_authority' => false,
             ],
             official_receipt_number: $receipt?->receipt_number,
             official_receipt_series: $receipt?->series,
@@ -668,12 +710,18 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'url' => $verification['url'],
                 'view_url' => $verification['view_url'],
             ],
-            printable_artifact_url: route('staff.permit-applications.permit.pdf', $application, false),
-            statement: $receiptBound
-                ? 'Official Receipt identity is bound; issuance, signature, release, and legal validity remain uncommissioned.'
-                : 'Permit cannot be valid or released without a canonical Official Receipt number bound to it.',
+            printable_artifact_url: ! $syntheticLifecycle || $issued
+                ? route('staff.permit-applications.permit.pdf', $application, false)
+                : null,
+            statement: $released
+                ? 'Released synthetic cleanroom specimen. The bound QR proves this exact Permit identity only; production authority and legal validity remain false.'
+                : ($issued
+                    ? 'Issued synthetic cleanroom specimen awaiting separate BPLO release. Production authority and legal validity remain false.'
+                    : ($receiptBound
+                        ? 'Official Receipt identity is bound. Every routing-derived post-payment certification must pass before synthetic issuance.'
+                        : 'Permit cannot be issued or released without a canonical Official Receipt number bound to it.')),
             blockers: array_values(array_unique([
-                ...$readiness['blocked_by'],
+                ...($syntheticLifecycle ? $readiness['blocked_by'] : $legacyReadiness['blocked_by']),
                 ...($receiptBound ? [] : ['official_receipt_number_binding']),
                 ...(count($receipts) > 1 ? ['official_receipt_binding_selection_policy'] : []),
             ])),
@@ -842,18 +890,39 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             affordance: $unreceiptedCollection instanceof TreasuryCollection ? $taskIndex->get('issue_receipt_'.$unreceiptedCollection->id) : null,
             completedAt: count($receipts) > 0 ? $receipts[0]->issued_on : null,
         );
+
+        foreach ($application->postPaymentOfficeCertifications as $certification) {
+            $completed = $certification->status === 'completed' && $certification->result === 'certified';
+            $notes[] = $this->workNote(
+                id: 'post_payment_'.$certification->office_code,
+                actorKey: $certification->office_code,
+                actorLabel: $certification->office_label,
+                instruction: 'Review bound OR '.$certification->receipt->receipt_number.' and certify post-payment work',
+                section: 'processing',
+                anchor: 'office_'.$certification->office_code,
+                state: $completed ? 'completed' : 'ready',
+                stateLabel: $completed ? 'Synthetic certification completed' : 'Ready after Official Receipt',
+                tone: 'blue',
+                affordance: $taskIndex->get('post_payment_certification_'.$certification->id),
+                completedAt: $certification->certified_at?->toIso8601String(),
+                blockingReason: $completed ? null : 'Exact per-office production certification semantics remain unresolved; this action records synthetic-only cleanroom evidence.',
+            );
+        }
+
+        $completion = $application->provisionalUatPermitCompletion;
         $notes[] = $this->workNote(
             id: 'permit_authority_review',
-            actorKey: 'mayor',
-            actorLabel: 'Municipal Mayor',
-            instruction: 'Review permit authority record',
+            actorKey: 'permit_issuer',
+            actorLabel: 'Permit Issuance',
+            instruction: 'Issue synthetic Business Permit specimen',
             section: 'permit',
             anchor: 'permit_authority',
-            state: 'not_commissioned',
-            stateLabel: $permit->ready ? 'Ready for authority review · workflow not commissioned' : 'Authority workflow not commissioned',
+            state: $permit->issued ? 'completed' : ($permit->ready ? 'ready' : 'waiting'),
+            stateLabel: $permit->issued ? 'Synthetic specimen issued' : ($permit->ready ? 'Ready' : 'Awaiting PermitReadiness'),
             tone: 'violet',
-            affordance: null,
-            blockingReason: 'Issuance and signature authority remain uncommissioned.',
+            affordance: $taskIndex->get('issue_synthetic_permit'),
+            completedAt: $completion?->issued_at?->toIso8601String(),
+            blockingReason: $permit->issued ? null : 'Synthetic numbering and Mayor authority evidence cannot establish production authority.',
         );
         $notes[] = $this->workNote(
             id: 'permit_release',
@@ -862,11 +931,27 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             instruction: 'Release Business Permit',
             section: 'permit',
             anchor: 'permit_release',
-            state: 'not_commissioned',
-            stateLabel: 'Release workflow not commissioned',
+            state: $permit->released ? 'completed' : ($permit->issued ? 'ready' : 'waiting'),
+            stateLabel: $permit->released ? 'Synthetic specimen released' : ($permit->issued ? 'Ready after issuance' : 'Awaiting issuance'),
             tone: 'violet',
-            affordance: null,
-            blockingReason: 'Permit issuance, release, validity, and legal effect remain uncommissioned.',
+            affordance: $taskIndex->get('release_synthetic_permit'),
+            completedAt: $completion?->released_at?->toIso8601String(),
+            blockingReason: $permit->released ? null : 'Release remains distinct from issuance; production authority and legal effect remain false.',
+        );
+
+        $notes[] = $this->workNote(
+            id: 'citizen_permit_ready',
+            actorKey: 'citizen',
+            actorLabel: 'Applicant',
+            instruction: 'View, print, and verify released Permit specimen',
+            section: 'permit',
+            anchor: 'permit_verification',
+            state: $permit->released ? 'ready' : 'waiting',
+            stateLabel: $permit->released ? 'Permit specimen ready' : 'Awaiting BPLO release',
+            tone: 'cream',
+            affordance: $permit->released ? $this->task('view_permit_verification', 'Verify exact Permit identity', 'permit', $permit->verification['view_url']) : null,
+            completedAt: $completion?->released_at?->toIso8601String(),
+            blockingReason: 'Public verification proves identity only, not legal attestation or revocation status.',
         );
 
         return $notes;
@@ -1006,6 +1091,44 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 if ($collection->receipt === null) {
                     $tasks[] = $this->task('issue_receipt_'.$collection->id, 'Issue the Official Receipt', 'payment', route('staff.payment-schedules.show', $collection->payment_schedule_id, false));
                 }
+            }
+        }
+
+        $runId = data_get($application->metadata, 'lifecycle_cleanroom.run_id');
+        $run = is_string($runId) ? LifecycleCleanroomRun::query()->where('public_id', $runId)->first() : null;
+        if ($run instanceof LifecycleCleanroomRun && $run->status === 'active') {
+            foreach ($application->postPaymentOfficeCertifications->where('status', '!=', 'completed') as $certification) {
+                if (data_get($run->actor_manifest, 'actors.'.$certification->office_code.'.user_id') === $viewer->id) {
+                    $tasks[] = $this->task(
+                        'post_payment_certification_'.$certification->id,
+                        'Certify post-payment '.$certification->office_label.' work',
+                        'processing',
+                        route('stakeholder-preview.lifecycle-cleanroom.post-payment-certifications.store', [$run, $certification], false),
+                    );
+                }
+            }
+
+            $readiness = $this->permitReadiness->handle($application);
+            $completion = $application->provisionalUatPermitCompletion;
+            if ($readiness['ready']
+                && $completion?->issued_at === null
+                && data_get($run->actor_manifest, 'actors.permit_issuer.user_id') === $viewer->id) {
+                $tasks[] = $this->task(
+                    'issue_synthetic_permit',
+                    'Issue synthetic Business Permit specimen',
+                    'permit',
+                    route('stakeholder-preview.lifecycle-cleanroom.permit.issue', $run, false),
+                );
+            }
+            if ($completion?->issued_at !== null
+                && $completion->released_at === null
+                && data_get($run->actor_manifest, 'actors.releasing_officer.user_id') === $viewer->id) {
+                $tasks[] = $this->task(
+                    'release_synthetic_permit',
+                    'Release issued Business Permit specimen',
+                    'permit',
+                    route('stakeholder-preview.lifecycle-cleanroom.permit.release', $run, false),
+                );
             }
         }
 

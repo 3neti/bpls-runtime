@@ -6,7 +6,7 @@ use App\Enums\UserPermission;
 
 class LifecycleCleanroomDefinition
 {
-    public const string Revision = 'cleanroom_lodge_application_v2';
+    public const string Revision = 'complete_business_permit_lifecycle_v3';
 
     /** @return array<string, array{label: string, permissions: list<UserPermission>}> */
     public function actors(): array
@@ -22,6 +22,8 @@ class LifecycleCleanroomDefinition
             'treasury' => ['label' => 'Treasury', 'permissions' => [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::CounterCheckBusinessPermitEvaluations, UserPermission::CorrectEvaluationLinesOfBusiness]],
             'municipal_treasurer' => ['label' => 'Municipal Treasurer', 'permissions' => [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ApproveAssessments]],
             'cashier' => ['label' => 'Cashier', 'permissions' => [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewPaymentSchedules, UserPermission::RecordCollections, UserPermission::ViewReceipts, UserPermission::IssueReceipts]],
+            'permit_issuer' => ['label' => 'Permit Issuance', 'permissions' => [UserPermission::AccessStaff, UserPermission::ViewPermitApplications]],
+            'releasing_officer' => ['label' => 'BPLO Releasing Officer', 'permissions' => [UserPermission::AccessStaff, UserPermission::ViewPermitApplications]],
         ];
     }
 
@@ -41,6 +43,17 @@ class LifecycleCleanroomDefinition
             $this->step('treasury_counter_check', 2025, 'Treasury counter-check complete', 'Treasury records no correction against the exact Assessment and source Evaluation version.', 'product_form', 'treasury', 'Treasury'),
             $this->step('treasurer_approved', 2025, 'Municipal Treasurer exact approval', 'The Municipal Treasurer approves the immutable Assessment fingerprint.', 'product_form', 'municipal_treasurer', 'Approval'),
             $this->step('payable_created', 2025, 'Payable created', 'The approved Assessment becomes one pending Payment Schedule.', 'product_form', 'assessment_officer', '2025 approved payable'),
+            $this->step('qr_payment_collected', 2025, 'QR/payment simulated', 'The Citizen generates QR Ph and the cleanroom records one canonical synthetic Collection; no real funds move.', 'product_form', 'citizen', 'QR/payment simulated'),
+            $this->step('official_receipt_issued', 2025, 'AF No. 51 issued', 'The Cashier issues the AF No. 51 Official Receipt from canonical Collection truth.', 'product_form', 'cashier', 'AF No. 51 issued'),
+            $this->step('post_payment_certifications_commissioned', 2025, 'Post-payment certifications commissioned', 'The actual BPLO routing determines the offices asked to review the bound Official Receipt and certify synthetic cleanroom results.', 'system_action', 'intake', 'Post-payment office work'),
+            $this->step('assessor_post_payment_certified', 2025, 'Assessor post-payment certification', 'The routed Assessor reviews the bound Official Receipt and records synthetic-only certification evidence.', 'product_form', 'assessor', 'Post-payment certification'),
+            $this->step('engineering_post_payment_certified', 2025, 'Engineering post-payment certification', 'The routed Engineering office reviews the bound Official Receipt and records synthetic-only certification evidence.', 'product_form', 'engineering', 'Post-payment certification'),
+            $this->step('health_post_payment_certified', 2025, 'Health post-payment certification', 'The routed Health office reviews the bound Official Receipt and records synthetic-only certification evidence.', 'product_form', 'health', 'Post-payment certification'),
+            $this->step('menro_post_payment_certified', 2025, 'MENRO post-payment certification', 'The routed MENRO office reviews the bound Official Receipt and records synthetic-only certification evidence.', 'product_form', 'menro', 'Post-payment certification'),
+            $this->step('permit_ready', 2025, 'Permit ready', 'The deterministic PermitReadiness projection passes only after OR binding and every routing-derived post-payment certification.', 'product_form', 'permit_issuer', 'Permit ready'),
+            $this->step('permit_issued', 2025, 'Permit issued', 'The cleanroom issues a synthetic-only BP-YYYY-XXXX specimen with separate bounded Mayor authority evidence.', 'product_form', 'permit_issuer', 'Permit issued'),
+            $this->step('permit_released', 2025, 'Permit released', 'The BPLO Releasing Officer records release of the already-issued synthetic specimen.', 'product_form', 'releasing_officer', 'Permit released'),
+            $this->step('public_verification', 2025, 'Public verification available', 'The public QR/reference resolves to the exact released synthetic Permit identity and safe public fields only.', 'product_form', 'citizen', 'Citizen permit ready'),
             $this->step('renewal_lodged', 2026, '2026 Renewal lodged', 'Canonical Renewal intake reuses the exact Municipal Owner and Business without mutating registry identity.', 'system_action', 'intake', 'Renewal lodged'),
             $this->step('renewal_bplo_routing', 2026, 'Renewal BPLO routing determined', 'BPLO makes a fresh situational routing determination for the lodged Renewal.', 'product_form', 'intake', 'Renewal BPLO routing'),
             $this->step('renewal_evaluation_initialized', 2026, 'Renewal office evaluation work created', 'Required Renewal office reviews are assigned from the submitted application and BPLO routing. No amount becomes payable and no Assessment is created at this step.', 'system_action', 'assessment_officer', 'Renewal office reviews assigned'),

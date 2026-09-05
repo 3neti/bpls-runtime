@@ -16,9 +16,14 @@ class DescribeProvisionalUatPermitCompletion
             return null;
         }
 
-        $completion = $permitApplication->provisionalUatPermitCompletion()->with(['decidedBy', 'releasedBy'])->first();
+        $completion = $permitApplication->provisionalUatPermitCompletion()->with(['decidedBy', 'issuedBy', 'releasedBy'])->first();
 
         if ($completion === null) {
+            if (data_get($permitApplication->metadata, 'lifecycle_cleanroom.semantic_classification') !== 'synthetic_only'
+                && data_get($permitApplication->metadata, 'stakeholder_preview') === null) {
+                return null;
+            }
+
             return [
                 'semantic_classification' => 'provisional_uat',
                 'status' => 'not_started',
@@ -35,6 +40,10 @@ class DescribeProvisionalUatPermitCompletion
             'decision' => $completion->decision,
             'reason' => $completion->reason,
             'permit_number' => $completion->permit_number,
+            'issued_in_preview' => $completion->issued_at !== null,
+            'issued_by' => $completion->issuedBy?->name,
+            'issued_at' => $completion->issued_at?->toIso8601String(),
+            'valid_until' => $completion->valid_until?->toDateString(),
             'signature_applied' => $completion->synthetic_signature_reference !== null,
             'synthetic_signature_reference' => $completion->synthetic_signature_reference,
             'decided_by' => $completion->decidedBy?->name,

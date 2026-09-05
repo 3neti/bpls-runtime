@@ -20,6 +20,7 @@ class ResolveLifecycleCleanroomState
         private readonly LifecycleCleanroomDefinition $definition,
         private readonly LifecycleCleanroomApplicationContract $applicationContract,
         private readonly BusinessPermitEvaluationResolver $evaluationResolver,
+        private readonly ProjectPermitReadiness $projectPermitReadiness,
     ) {}
 
     /** @return array<string, mixed> */
@@ -31,10 +32,13 @@ class ResolveLifecycleCleanroomState
             'newApplication.businessPermitEvaluation.currentVersion.counterCheck',
             'newApplication.businessPermitEvaluation.items.revisions.version',
             'newApplication.businessPermitEvaluation.items.revisions.actor',
-            'newApplication.bploRoutingDetermination',
+            'newApplication.bploRoutingDetermination.works',
             'newApplication.assessments.decision',
             'newApplication.assessments.treasuryCounterCheck',
             'newApplication.paymentSchedules',
+            'newApplication.paymentSchedules.treasuryCollections.receipt',
+            'newApplication.postPaymentOfficeCertifications',
+            'newApplication.provisionalUatPermitCompletion',
             'renewalApplication.business.owner',
             'renewalApplication.lines.lineOfBusiness',
             'renewalApplication.businessPermitEvaluation.currentVersion.counterCheck',
@@ -91,7 +95,7 @@ class ResolveLifecycleCleanroomState
                 'profile_statement' => $newProfile['statement'] ?? null,
                 'completion_message' => ($newProfile['scope'] ?? null) === 'single_source_application'
                     ? 'The source-backed 2025 registry specimen reached an approved Payable and its Assessment Reconciliation is ready for review.'
-                    : 'The 2025 New application and 2026 Renewal both reached approved Payable.',
+                    : 'The 2025 New application completes the synthetic permit lifecycle before the preserved 2026 Renewal chronology continues.',
                 'next_step' => $next,
                 'percent' => (int) round(($completedCount / max(1, $steps->count())) * 100),
             ],
@@ -165,6 +169,9 @@ class ResolveLifecycleCleanroomState
             'bplo_routing' => ['tab' => 'processing', 'focus' => 'bplo-routing'],
             'assessment_prepared' => ['tab' => 'processing', 'focus' => $baseStep],
             'treasury_counter_check', 'treasurer_approved', 'payable_created' => ['tab' => 'assessment', 'focus' => $baseStep],
+            'qr_payment_collected', 'official_receipt_issued' => ['tab' => 'payment', 'focus' => $baseStep],
+            'post_payment_certifications_commissioned', 'assessor_post_payment_certified', 'engineering_post_payment_certified', 'health_post_payment_certified', 'menro_post_payment_certified' => ['tab' => 'processing', 'focus' => $baseStep],
+            'permit_ready', 'permit_issued', 'permit_released', 'public_verification' => ['tab' => 'permit', 'focus' => $baseStep],
             default => ['tab' => 'processing', 'focus' => $baseStep],
         };
     }
@@ -214,6 +221,12 @@ class ResolveLifecycleCleanroomState
         }
 
         $baseKey = Str::startsWith($key, 'renewal_') ? Str::after($key, 'renewal_') : $key;
+        $routedOfficeCount = $application instanceof PermitApplication
+            ? $application->bploRoutingDetermination?->works->pluck('office_code')->unique()->count() ?? 0
+            : 0;
+        $commissionedOfficeCount = $application instanceof PermitApplication
+            ? $application->postPaymentOfficeCertifications->count()
+            : 0;
 
         return match ($baseKey) {
             'citizen_intake', 'application_submitted', 'lodged' => $application?->submitted_at !== null,
@@ -228,8 +241,27 @@ class ResolveLifecycleCleanroomState
             'treasury_counter_check' => $application?->assessments->whereNull('superseded_at')->first()?->treasuryCounterCheck !== null,
             'treasurer_approved' => $application?->assessments->whereNull('superseded_at')->first()?->decision?->action === AssessmentDecisionAction::Approved,
             'payable_created' => $application?->paymentSchedules->isNotEmpty() ?? false,
+            'qr_payment_collected' => $application?->paymentSchedules->flatMap(fn ($schedule) => $schedule->treasuryCollections)->isNotEmpty() ?? false,
+            'official_receipt_issued' => $application?->paymentSchedules->flatMap(fn ($schedule) => $schedule->treasuryCollections)->contains(fn ($collection): bool => $collection->receipt !== null) ?? false,
+            'post_payment_certifications_commissioned' => $routedOfficeCount > 0
+                && $commissionedOfficeCount === $routedOfficeCount,
+            'assessor_post_payment_certified' => $this->postPaymentCertified($application, 'assessor'),
+            'engineering_post_payment_certified' => $this->postPaymentCertified($application, 'engineering'),
+            'health_post_payment_certified' => $this->postPaymentCertified($application, 'health'),
+            'menro_post_payment_certified' => $this->postPaymentCertified($application, 'menro'),
+            'permit_ready' => $application instanceof PermitApplication && $this->projectPermitReadiness->handle($application)['ready'],
+            'permit_issued' => $application?->provisionalUatPermitCompletion?->issued_at !== null,
+            'permit_released', 'public_verification' => $application?->provisionalUatPermitCompletion?->released_at !== null,
             default => false,
         };
+    }
+
+    private function postPaymentCertified(?PermitApplication $application, string $office): bool
+    {
+        return $application?->postPaymentOfficeCertifications
+            ->contains(fn ($certification): bool => $certification->office_code === $office
+                && $certification->status === 'completed'
+                && $certification->result === 'certified') ?? false;
     }
 
     /**
@@ -377,6 +409,14 @@ class ResolveLifecycleCleanroomState
             'treasury_counter_check' => ['Treasury result' => 'Pending → No correction'],
             'treasurer_approved' => ['Assessment decision' => 'Pending → Approved'],
             'payable_created' => ['Payable balance' => $isRegistryProfile ? '₱0 → reconciled Assessment' : '₱0 → ₱1,220'],
+            'qr_payment_collected' => ['Collection' => 'Pending → Canonical synthetic Collection'],
+            'official_receipt_issued' => ['AF No. 51' => 'Pending → Issued'],
+            'post_payment_certifications_commissioned' => ['Post-payment offices' => '0 → BPLO-routed offices'],
+            'assessor_post_payment_certified', 'engineering_post_payment_certified', 'health_post_payment_certified', 'menro_post_payment_certified' => ['Office certification' => 'Pending → Synthetic certified'],
+            'permit_ready' => ['PermitReadiness' => 'Blocked → Ready'],
+            'permit_issued' => ['Permit' => 'Ready → Issued synthetic specimen'],
+            'permit_released' => ['BPLO release' => 'Pending → Released synthetic specimen'],
+            'public_verification' => ['Public identity' => 'Pending → Exact Permit identity resolvable'],
             default => [],
         };
     }

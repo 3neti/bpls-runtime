@@ -37,12 +37,14 @@ use Illuminate\Support\Collection;
  * @property-read Collection<int, PaymentSchedule> $paymentSchedules
  * @property-read Collection<int, TreasuryCollection> $treasuryCollections
  * @property-read Collection<int, OfficeChargeContribution> $officeChargeContributions
+ * @property-read Collection<int, PermitClearance> $clearances
  * @property-read BusinessPermitEvaluation|null $businessPermitEvaluation
  * @property-read BploRoutingDetermination|null $bploRoutingDetermination
  * @property-read BploRoutingSuggestion|null $bploRoutingSuggestion
  * @property-read Collection<int, PaperlessPaymentOrder> $paperlessPaymentOrders
  * @property-read PermitApplicationDeclaration|null $declaration
  * @property-read ProvisionalUatPermitCompletion|null $provisionalUatPermitCompletion
+ * @property-read Collection<int, PostPaymentOfficeCertification> $postPaymentOfficeCertifications
  */
 #[Fillable(['business_id', 'submitted_by_id', 'application_number', 'tracking_reference', 'type', 'status', 'application_year', 'submitted_at', 'assessed_at', 'legacy_source_id', 'metadata'])]
 class PermitApplication extends Model
@@ -129,6 +131,12 @@ class PermitApplication extends Model
     public function clearances(): HasMany
     {
         return $this->hasMany(PermitClearance::class);
+    }
+
+    /** @return HasMany<PostPaymentOfficeCertification, $this> */
+    public function postPaymentOfficeCertifications(): HasMany
+    {
+        return $this->hasMany(PostPaymentOfficeCertification::class);
     }
 
     /** @return HasMany<PermitApplicationDocument, $this> */

@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $permit_application_id
  * @property int|null $decided_by_id
+ * @property int|null $issued_by_id
  * @property int|null $released_by_id
  * @property string $status
  * @property string|null $decision
@@ -19,11 +20,14 @@ use Illuminate\Support\Carbon;
  * @property string|null $permit_number
  * @property string|null $synthetic_signature_reference
  * @property Carbon|null $decided_at
+ * @property Carbon|null $issued_at
+ * @property Carbon|null $valid_until
  * @property Carbon|null $released_at
  * @property string $semantic_classification
  * @property array<string, mixed> $source_snapshot
  * @property-read PermitApplication $permitApplication
  * @property-read User|null $decidedBy
+ * @property-read User|null $issuedBy
  * @property-read User|null $releasedBy
  */
 class ProvisionalUatPermitCompletion extends Model
@@ -34,6 +38,7 @@ class ProvisionalUatPermitCompletion extends Model
     protected $fillable = [
         'permit_application_id',
         'decided_by_id',
+        'issued_by_id',
         'released_by_id',
         'status',
         'decision',
@@ -41,6 +46,8 @@ class ProvisionalUatPermitCompletion extends Model
         'permit_number',
         'synthetic_signature_reference',
         'decided_at',
+        'issued_at',
+        'valid_until',
         'released_at',
         'semantic_classification',
         'source_snapshot',
@@ -64,10 +71,18 @@ class ProvisionalUatPermitCompletion extends Model
         return $this->belongsTo(User::class, 'released_by_id');
     }
 
+    /** @return BelongsTo<User, $this> */
+    public function issuedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'issued_by_id');
+    }
+
     protected function casts(): array
     {
         return [
             'decided_at' => 'datetime',
+            'issued_at' => 'datetime',
+            'valid_until' => 'date',
             'released_at' => 'datetime',
             'source_snapshot' => 'array',
         ];

@@ -23,6 +23,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $legacy_source_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read User|null $completedBy
  */
 #[Fillable(['permit_application_id', 'completed_by_id', 'code', 'label', 'status', 'completed_at', 'remarks', 'source_snapshot', 'legacy_source_id'])]
 class PermitClearance extends Model
@@ -34,11 +35,13 @@ class PermitClearance extends Model
         'status' => 'pending',
     ];
 
+    /** @return BelongsTo<PermitApplication, $this> */
     public function permitApplication(): BelongsTo
     {
         return $this->belongsTo(PermitApplication::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function completedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'completed_by_id');

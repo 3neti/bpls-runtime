@@ -10,6 +10,7 @@ final class ApplicationOfficeData extends Data
      * @param  list<array<string, mixed>>  $responsibilities
      * @param  list<array<string, mixed>>  $payment_orders
      * @param  array{statement: string, officer_name: ?string, certified_at: ?string}|null  $certification
+     * @param  array<string, mixed>|null  $post_payment_certification
      */
     public function __construct(
         public readonly string $code,
@@ -20,5 +21,6 @@ final class ApplicationOfficeData extends Data
         public readonly int $paperless_payment_order_count,
         public readonly int $total_amount_cents,
         public readonly ?array $certification,
+        public readonly ?array $post_payment_certification,
     ) {}
 }

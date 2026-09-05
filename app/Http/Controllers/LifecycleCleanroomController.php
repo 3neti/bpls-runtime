@@ -9,6 +9,9 @@ use App\Actions\BuildBploRoutingTask;
 use App\Actions\BuildExecutablePermitApplicationDocument;
 use App\Actions\BuildLifecycleOfficeReviewHandoff;
 use App\Actions\ConfirmLifecycleRoutineOfficeDefaults;
+use App\Actions\IssueSyntheticLifecyclePermit;
+use App\Actions\RecordPostPaymentOfficeCertification;
+use App\Actions\ReleaseSyntheticLifecyclePermit;
 use App\Actions\ResolveLifecycleCleanroomState;
 use App\Actions\SimulateLifecycleOfficeReviews;
 use App\Actions\SimulateLifecycleQrPhPayment;
@@ -19,6 +22,7 @@ use App\Enums\UserPermission;
 use App\Http\Requests\RunLifecycleCleanroomMilestoneRequest;
 use App\Models\LifecycleCleanroomRun;
 use App\Models\PermitApplication;
+use App\Models\PostPaymentOfficeCertification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -159,7 +163,7 @@ class LifecycleCleanroomController extends Controller
             return to_route('stakeholder-preview.lifecycle-laboratory.index');
         }
 
-        for ($guard = 0; $guard < 22; $guard++) {
+        for ($guard = 0; $guard < 40; $guard++) {
             $state = $resolveState->handle($lifecycleCleanroomRun->fresh());
             if (is_string($blocker = data_get($state, 'progress.blocker'))) {
                 return to_route('stakeholder-preview.lifecycle-laboratory.index')->withErrors(['cleanroom' => $blocker]);
@@ -184,6 +188,43 @@ class LifecycleCleanroomController extends Controller
     public function enterActor(Request $request, LifecycleCleanroomRun $lifecycleCleanroomRun, string $actor, AuthenticateLifecycleCleanroomActor $authenticate): RedirectResponse
     {
         return redirect()->to($authenticate->handle($request, $lifecycleCleanroomRun, $actor, 'stakeholder-preview.lifecycle-cleanroom-application.show'));
+    }
+
+    public function certifyPostPaymentOffice(
+        Request $request,
+        LifecycleCleanroomRun $lifecycleCleanroomRun,
+        PostPaymentOfficeCertification $postPaymentOfficeCertification,
+        RecordPostPaymentOfficeCertification $recordCertification,
+    ): RedirectResponse {
+        abort_unless($lifecycleCleanroomRun->status === 'active', 404);
+        $recordCertification->handle(
+            $postPaymentOfficeCertification,
+            $request->user(),
+            'certified',
+            'Synthetic Lifecycle Laboratory certification; exact Ipil per-office production evidence remains unresolved.',
+        );
+
+        return back()->with('success', 'Post-payment office certification recorded as synthetic-only evidence.');
+    }
+
+    public function issuePermit(
+        Request $request,
+        LifecycleCleanroomRun $lifecycleCleanroomRun,
+        IssueSyntheticLifecyclePermit $issuePermit,
+    ): RedirectResponse {
+        $issuePermit->handle($lifecycleCleanroomRun->newApplication()->sole(), $request->user());
+
+        return back()->with('success', 'Synthetic Business Permit specimen issued. Production numbering and Mayor authority remain false.');
+    }
+
+    public function releasePermit(
+        Request $request,
+        LifecycleCleanroomRun $lifecycleCleanroomRun,
+        ReleaseSyntheticLifecyclePermit $releasePermit,
+    ): RedirectResponse {
+        $releasePermit->handle($lifecycleCleanroomRun->newApplication()->sole(), $request->user());
+
+        return back()->with('success', 'BPLO release recorded separately from synthetic permit issuance.');
     }
 
     public function showApplication(
@@ -255,6 +296,15 @@ class LifecycleCleanroomController extends Controller
         }
         if (str_contains($step, 'payable_created')) {
             return 'staff.permit-applications.assessments.show';
+        }
+        if (str_contains($step, 'qr_payment_collected')) {
+            return 'citizen.payment-schedules.show';
+        }
+        if (str_contains($step, 'official_receipt_issued')) {
+            return 'staff.payment-schedules.show';
+        }
+        if (str_contains($step, 'post_payment_certified') || in_array($step, ['permit_ready', 'permit_issued', 'permit_released', 'public_verification'], true)) {
+            return 'stakeholder-preview.lifecycle-cleanroom-application.show';
         }
 
         return null;

@@ -68,5 +68,6 @@ test('the local product-lab wrapper is executable and preserves the required har
         ->and($contents)->toContain('bpls:product-lab:preflight')
         ->and($contents)->toContain('migrate:fresh --force')
         ->and(strpos($contents, 'new-application-happy-path --persist'))->toBeLessThan(strpos($contents, 'renewal-happy-path --persist'))
-        ->and($contents)->toContain('bpls:product-lab:inspect');
+        ->and($contents)->toContain('bpls:product-lab:inspect')
+        ->and($contents)->toContain('completed Permit state is never pre-seeded');
 });

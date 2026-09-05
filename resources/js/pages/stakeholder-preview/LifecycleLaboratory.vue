@@ -402,7 +402,7 @@ function simulateQrPhPayment(): void {
                         >
                         <span
                             class="rounded-full bg-white/10 px-3 py-1.5 text-zinc-200"
-                            >No permit issuance</span
+                            >Synthetic specimen only</span
                         >
                     </div>
                 </div>
@@ -1286,9 +1286,10 @@ function simulateQrPhPayment(): void {
                 <p class="leading-6">
                     This surface is absent in production and requires the exact
                     synthetic Preview safety profile plus the exact Management
-                    preview account. It offers no reset, arbitrary scenario
-                    identifier, collection, permit issuance, or destructive
-                    database operation.
+                    preview account. Collection, receipt, certification,
+                    issuance, and release remain synthetic-only; it offers no
+                    reset, arbitrary scenario identifier, production authority,
+                    or destructive database operation.
                 </p>
             </div>
         </aside>

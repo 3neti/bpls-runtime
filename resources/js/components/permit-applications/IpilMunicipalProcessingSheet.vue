@@ -21,6 +21,17 @@ type Office = {
         officer_name: string | null;
         certified_at: string | null;
     } | null;
+    post_payment_certification?: {
+        status: string;
+        result: string | null;
+        receipt_number: string | null;
+        receipt_reviewed: boolean;
+        remarks: string | null;
+        certified_by: string | null;
+        certified_at: string | null;
+        semantic_classification: string;
+        production_authority: false;
+    } | null;
     lines: OfficeLine[];
 };
 
@@ -90,6 +101,13 @@ type DocumentProjection = {
         issuing_office: string;
         status: string;
         date_issued: string | null;
+        verified_by: string | number | null;
+        receipt_number?: string | null;
+        receipt_reviewed?: boolean;
+        result?: string | null;
+        remarks?: string | null;
+        semantic_classification?: string;
+        production_authority?: false;
     }[];
     permit_reference?: {
         state: string | null;
@@ -561,29 +579,48 @@ function continuationLabel(index: number): string {
                     </h3>
                     <div class="paper-table">
                         <div
-                            class="paper-row paper-table-head grid-cols-[1.5fr_1fr_0.7fr_0.8fr]"
+                            class="paper-row paper-table-head grid-cols-1 sm:grid-cols-[1.1fr_0.75fr_0.8fr_0.8fr_1fr_0.8fr]"
                         >
-                            <span>Certification</span><span>Office</span
-                            ><span>Status</span><span>Date</span>
+                            <span>Office certification</span
+                            ><span>OR reviewed</span><span>Result</span
+                            ><span>Certified by</span
+                            ><span>Remarks / evidence</span><span>Date</span>
                         </div>
                         <div
                             v-for="item in document.verification"
                             :key="item.description"
-                            class="paper-row grid-cols-[1.5fr_1fr_0.7fr_0.8fr]"
+                            class="paper-row grid-cols-1 sm:grid-cols-[1.1fr_0.75fr_0.8fr_0.8fr_1fr_0.8fr]"
                         >
-                            <span>{{ item.description }}</span
-                            ><span>{{ item.issuing_office }}</span
-                            ><span class="uppercase">{{
-                                label(item.status)
-                            }}</span
-                            ><span>{{ date(item.date_issued) }}</span>
+                            <span
+                                ><strong>{{ item.description }}</strong
+                                ><small class="block uppercase"
+                                    >{{ label(item.semantic_classification) }} ·
+                                    production authority: no</small
+                                ></span
+                            >
+                            <span>{{
+                                item.receipt_reviewed
+                                    ? item.receipt_number
+                                    : 'Pending'
+                            }}</span>
+                            <span class="uppercase">{{
+                                label(item.result ?? item.status)
+                            }}</span>
+                            <span>{{ item.verified_by ?? '' }}</span>
+                            <span>{{
+                                item.remarks ??
+                                'Synthetic-only cleanroom evidence'
+                            }}</span>
+                            <span>{{ date(item.date_issued) }}</span>
                         </div>
                         <div
                             v-if="document.verification.length === 0"
-                            class="paper-row h-9 grid-cols-[1.5fr_1fr_0.7fr_0.8fr]"
+                            class="paper-row h-9 grid-cols-1 sm:grid-cols-[1.1fr_0.75fr_0.8fr_0.8fr_1fr_0.8fr]"
                             aria-label="Blank certification row"
                         >
-                            <span></span><span></span><span></span><span></span>
+                            <span>Pending routing-derived certifications</span
+                            ><span></span><span></span><span></span><span></span
+                            ><span></span>
                         </div>
                     </div>
                 </section>

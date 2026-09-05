@@ -3,18 +3,26 @@
 use App\Actions\AdvanceLifecycleCleanroom;
 use App\Actions\BuildLaboratoryAssessmentReconciliation;
 use App\Actions\BuildLifecycleCleanroomIntake;
+use App\Actions\CommissionPostPaymentOfficeCertifications;
 use App\Actions\CompleteBusinessPermitEvaluationResponsibility;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
+use App\Actions\IssueManualCollectionReceipt;
+use App\Actions\IssueSyntheticLifecyclePermit;
 use App\Actions\RecordAssessmentDecision;
 use App\Actions\RecordBploRoutingDetermination;
 use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
+use App\Actions\RecordPostPaymentOfficeCertification;
+use App\Actions\ReleaseSyntheticLifecyclePermit;
 use App\Actions\ResolveLifecycleCleanroomState;
 use App\Actions\SubmitCitizenPermitApplication;
 use App\Enums\AssessmentDecisionAction;
 use App\Enums\BusinessPermitEvaluationApplicability;
 use App\Enums\BusinessPermitEvaluationSource;
 use App\Enums\StakeholderPreviewPersona;
+use App\Enums\TreasuryCollectionChannel;
+use App\Enums\TreasuryCollectionMethod;
+use App\Enums\TreasuryCollectionStatus;
 use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\LifecycleScenarios\RenewalHappyPathDefinition;
 use App\Models\Business;
@@ -23,6 +31,7 @@ use App\Models\LifecycleCleanroomRun;
 use App\Models\LifecycleScenarioSpecimen;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
+use App\Models\TreasuryCollection;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
@@ -700,11 +709,39 @@ test('cleanroom remains compatible with the canonical two year action semantics 
         );
         $schedule = app(CreatePaymentScheduleForAssessment::class)->handle($assessment, $assessmentOfficer);
         expect($schedule->total_amount_cents)->toBe(122_000);
+
+        if ($applicationKey === 'new_application_id') {
+            $collection = TreasuryCollection::factory()->for($application)->for($assessment)->for($schedule)->create([
+                'status' => TreasuryCollectionStatus::PendingReceipt,
+                'channel' => TreasuryCollectionChannel::Online,
+                'method' => TreasuryCollectionMethod::QrPh,
+                'amount_cents' => 122_000,
+            ]);
+            $schedule->forceFill(['status' => 'paid', 'paid_amount_cents' => 122_000])->save();
+            app(IssueManualCollectionReceipt::class)->handle($collection, [
+                'receipt_number' => '7000001',
+                'numbering_authority' => 'manual_synthetic_cleanroom',
+            ], User::query()->findOrFail(data_get($run->actor_manifest, 'actors.cashier.user_id')));
+            foreach (app(CommissionPostPaymentOfficeCertifications::class)->handle($application->fresh()) as $certification) {
+                app(RecordPostPaymentOfficeCertification::class)->handle(
+                    $certification,
+                    User::query()->findOrFail(data_get($run->actor_manifest, 'actors.'.$certification->office_code.'.user_id')),
+                );
+            }
+            app(IssueSyntheticLifecyclePermit::class)->handle(
+                $application->fresh(),
+                User::query()->findOrFail(data_get($run->actor_manifest, 'actors.permit_issuer.user_id')),
+            );
+            app(ReleaseSyntheticLifecyclePermit::class)->handle(
+                $application->fresh(),
+                User::query()->findOrFail(data_get($run->actor_manifest, 'actors.releasing_officer.user_id')),
+            );
+        }
     }
 
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     expect(data_get($state, 'progress.complete'))->toBeTrue()
-        ->and(data_get($state, 'progress.completed_steps'))->toBe(23)
+        ->and(data_get($state, 'progress.completed_steps'))->toBe(34)
         ->and(PermitApplication::query()->whereIn('id', [$run->new_application_id, $run->renewal_application_id])->pluck('application_year')->sort()->values()->all())->toBe([2025, 2026])
         ->and(PermitApplication::query()->whereIn('id', [$run->new_application_id, $run->renewal_application_id])->pluck('business_id')->unique())->toHaveCount(1);
 });

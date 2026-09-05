@@ -314,28 +314,33 @@ async function fillRemainingFields(event: MouseEvent): Promise<void> {
     helperActivityState = [];
     replacedActivities = null;
 
-    const activityTargets = fixture.lines.map((fixtureLine) => {
-        let target = activities.value.find(
-            (activity) =>
-                activity.line_of_business_id ===
-                fixtureLine.line_of_business_id,
-        );
-        let previous: Activity | null = target ? { ...target } : null;
+    // A cleanroom already owns its certified two-LOB fixture. The helper may
+    // fill blank declaration fields, but must not append a legacy specimen LOB
+    // that the cleanroom profile cannot canonically price.
+    const activityTargets = props.cleanroomIntake
+        ? []
+        : fixture.lines.map((fixtureLine) => {
+              let target = activities.value.find(
+                  (activity) =>
+                      activity.line_of_business_id ===
+                      fixtureLine.line_of_business_id,
+              );
+              let previous: Activity | null = target ? { ...target } : null;
 
-        if (!target) {
-            target = activities.value.find(
-                (activity) => !activity.line_of_business_id,
-            );
-            previous = target ? { ...target } : null;
-        }
+              if (!target) {
+                  target = activities.value.find(
+                      (activity) => !activity.line_of_business_id,
+                  );
+                  previous = target ? { ...target } : null;
+              }
 
-        if (!target && activities.value.length < 20) {
-            target = { key: nextKey++ };
-            activities.value.push(target);
-        }
+              if (!target && activities.value.length < 20) {
+                  target = { key: nextKey++ };
+                  activities.value.push(target);
+              }
 
-        return target ? { fixtureLine, previous, target } : null;
-    });
+              return target ? { fixtureLine, previous, target } : null;
+          });
 
     await nextTick();
 

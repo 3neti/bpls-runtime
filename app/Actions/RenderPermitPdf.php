@@ -2,8 +2,10 @@
 
 namespace App\Actions;
 
+use App\Data\Application\ApplicationDataResolver;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
+use App\Models\PostPaymentOfficeCertification;
 use Illuminate\Support\Str;
 
 final class RenderPermitPdf
@@ -12,6 +14,7 @@ final class RenderPermitPdf
         private readonly DescribePermitDocumentConfiguration $documentConfiguration,
         private readonly DescribePermitVerificationBoundary $verificationBoundary,
         private readonly DescribePermitReleaseReadiness $releaseReadiness,
+        private readonly ApplicationDataResolver $applicationDataResolver,
     ) {}
 
     public function handle(PermitApplication $permitApplication): string
@@ -19,30 +22,41 @@ final class RenderPermitPdf
         $documentConfiguration = $this->documentConfiguration->handle();
         $verificationBoundary = $this->verificationBoundary->handle($permitApplication);
         $releaseReadiness = $this->releaseReadiness->handle($permitApplication);
+        $permit = $this->applicationDataResolver->resolve($permitApplication)->permit;
 
         $permitApplication->loadMissing([
             'business.owner',
             'lines.lineOfBusiness',
             'assessments' => fn ($query) => $query->latest(),
-            'clearances' => fn ($query) => $query->with('completedBy')->orderBy('id'),
+            'postPaymentOfficeCertifications' => fn ($query) => $query->with(['certifiedBy', 'receipt'])->orderBy('id'),
         ]);
 
         $document = new SimplePdfDocument(
-            "Mayor's Permit Preview",
+            $permit->semantic_classification === 'synthetic_only' ? 'Business Permit · Synthetic Specimen' : "Mayor's Permit Preview",
             $this->documentCode($permitApplication),
             $documentConfiguration['municipality']['system_name'],
-            'Preview document · not an issued or released permit.',
+            $permit->statement,
         );
         $page = $document->addPage(Str::limit($this->applicationLabel($permitApplication), 46));
         $y = SimplePdfDocument::ContentTop;
 
         $document->rectangle($page, 42, $y - 88, 511, 88, 0.94);
-        $document->text($page, 'PERMIT APPLICATION', 54, $y - 22, 8, true);
-        $document->wrappedText($page, $this->applicationLabel($permitApplication), 54, $y - 43, 320, 11, 13, true, true);
-        $document->text($page, 'APPLICATION YEAR', 406, $y - 22, 8, true);
+        $document->text($page, $permit->semantic_classification === 'synthetic_only' ? 'BUSINESS PERMIT' : 'PERMIT APPLICATION', 54, $y - 22, 8, true);
+        $document->wrappedText(
+            $page,
+            $permit->semantic_classification === 'synthetic_only' ? ($permit->permit_number ?? 'NOT YET ISSUED') : $this->applicationLabel($permitApplication),
+            54,
+            $y - 43,
+            320,
+            $permit->semantic_classification === 'synthetic_only' ? 15 : 11,
+            $permit->semantic_classification === 'synthetic_only' ? 16 : 13,
+            true,
+            true,
+        );
+        $document->text($page, $permit->semantic_classification === 'synthetic_only' ? 'PERMIT YEAR' : 'APPLICATION YEAR', 406, $y - 22, 8, true);
         $document->text($page, (string) $permitApplication->application_year, 541, $y - 45, 18, true, 'right');
-        $document->text($page, 'Type: '.$this->label($permitApplication->type->value), 54, $y - 67, 8);
-        $document->text($page, 'Status: '.$this->label($permitApplication->status->value), 406, $y - 67, 8);
+        $document->text($page, $permit->semantic_classification === 'synthetic_only' ? 'Issued: '.($permit->issued_on ?? 'Pending').'  Valid until: '.($permit->valid_until ?? 'Pending') : 'Type: '.$this->label($permitApplication->type->value), 54, $y - 67, 8);
+        $document->text($page, $permit->semantic_classification === 'synthetic_only' ? 'State: '.$this->label($permit->state) : 'Status: '.$this->label($permitApplication->status->value), 406, $y - 67, 8);
         $y -= 118;
 
         $business = $permitApplication->business;
@@ -62,7 +76,12 @@ final class RenderPermitPdf
             'Latest assessment' => $latestAssessment === null
                 ? 'No assessment recorded'
                 : 'Assessment #'.$latestAssessment->sequence.' ('.$this->label($latestAssessment->status->value).') - '.$this->money($latestAssessment->total_amount_cents),
-            'Document status' => 'Generated preview document; this does not issue or release a permit.',
+            'Official Receipt' => $permit->official_receipt_bound
+                ? trim(($permit->official_receipt_series ? $permit->official_receipt_series.' / ' : '').$permit->official_receipt_number)
+                : 'Not bound - permit remains invalid and unreleased',
+            'Document status' => $permit->semantic_classification === 'synthetic_only'
+                ? $permit->statement
+                : 'Generated preview document; this does not issue or release a permit.',
         ]);
 
         $y = $this->lines($document, $page, $y, $permitApplication);
@@ -155,25 +174,50 @@ final class RenderPermitPdf
         $document->text($page, 'Completed at', 541, $y, 7.5, true, 'right');
         $y -= 14;
 
-        foreach ($permitApplication->clearances as $clearance) {
+        $certifications = $permitApplication->postPaymentOfficeCertifications->isNotEmpty()
+            ? $permitApplication->postPaymentOfficeCertifications
+            : $permitApplication->clearances;
+        $permitApplication->loadMissing('clearances.completedBy');
+        foreach ($certifications as $clearance) {
             if ($y < SimplePdfDocument::ContentBottom + 42) {
                 $page = $document->addPage('Clearance evidence continued');
                 $y = SimplePdfDocument::ContentTop;
             }
 
-            $document->wrappedText($page, $clearance->label, 54, $y, 205, 7.5, 9);
-            $document->text($page, $this->label($clearance->status->value), 285, $y, 7.5);
-            $document->wrappedText($page, $clearance->completedBy?->name ?? 'Not completed', 365, $y, 115, 7.5, 9);
-            $document->text($page, $clearance->completed_at?->toDateString() ?? 'Pending', 541, $y, 7.5, align: 'right');
+            if ($clearance instanceof PostPaymentOfficeCertification) {
+                $label = $clearance->office_label;
+                $status = $clearance->result === null ? $clearance->status : $clearance->result;
+                $actorName = $clearance->certified_by_id === null ? 'Not completed' : $clearance->certifiedBy->name;
+                $date = $clearance->certified_at;
+            } else {
+                $label = $clearance->label;
+                $status = $clearance->status->value;
+                $actorName = $clearance->completed_by_id === null ? 'Not completed' : $clearance->completedBy->name;
+                $date = $clearance->completed_at;
+            }
+            $document->wrappedText($page, $label, 54, $y, 205, 7.5, 9);
+            $document->text($page, $this->label($status), 285, $y, 7.5);
+            $document->wrappedText($page, $actorName, 365, $y, 115, 7.5, 9);
+            $document->text($page, $date?->toDateString() ?? 'Pending', 541, $y, 7.5, align: 'right');
             $y -= 28;
         }
 
-        if ($permitApplication->clearances->isEmpty()) {
-            $document->text($page, 'No clearance checklist evidence has been recorded.', 54, $y, 8);
+        if ($certifications->isEmpty()) {
+            $document->text($page, 'Routing-derived post-payment certifications are pending.', 54, $y, 8);
             $y -= 24;
         }
 
-        $document->wrappedText($page, 'Clearance completion is shown for review. This preview document does not confirm permit issuance or municipal release; the responsible authority, signatories, public verification, and existing release records still require confirmation.', 54, $y, 470, 8, 10);
+        $document->wrappedText(
+            $page,
+            $permitApplication->postPaymentOfficeCertifications->isNotEmpty()
+                ? 'Every certification shown is synthetic-only cleanroom evidence derived from actual BPLO routing. It does not assert production office or issuance authority.'
+                : 'Clearance completion is shown for review. This preview document does not confirm permit issuance or municipal release; the responsible authority, signatories, public verification, and existing release records still require confirmation.',
+            54,
+            $y,
+            470,
+            8,
+            10,
+        );
 
         return $y - 36;
     }
@@ -228,8 +272,8 @@ final class RenderPermitPdf
 
     private function line(SimplePdfDocument $document, int $page, float $y, PermitApplicationLine $line): void
     {
-        $document->text($page, $line->lineOfBusiness?->code ?? 'N/A', 54, $y, 7.5, monospace: true);
-        $document->wrappedText($page, $line->lineOfBusiness?->name ?? 'Unclassified', 145, $y, 210, 7.5, 9);
+        $document->text($page, $line->line_of_business_id === null ? 'N/A' : $line->lineOfBusiness->code, 54, $y, 7.5, monospace: true);
+        $document->wrappedText($page, $line->line_of_business_id === null ? 'Unclassified' : $line->lineOfBusiness->name, 145, $y, 210, 7.5, 9);
         $document->text($page, $this->money($line->declared_gross_sales_cents), 394, $y, 7.5, align: 'right');
         $document->text($page, $this->money($line->capital_investment_cents), 482, $y, 7.5, align: 'right');
         $document->text($page, (string) $line->quantity, 541, $y, 7.5, align: 'right');

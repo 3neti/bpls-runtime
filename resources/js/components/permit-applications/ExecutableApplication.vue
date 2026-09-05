@@ -303,6 +303,16 @@ function activateWorkNote(note: WorkNote): void {
         return;
     }
 
+    if (
+        note.id.startsWith('post_payment_') ||
+        note.id === 'permit_authority_review' ||
+        note.id === 'permit_release'
+    ) {
+        router.post(note.action_url, {}, { preserveScroll: true });
+
+        return;
+    }
+
     router.visit(note.action_url);
 }
 
@@ -952,6 +962,7 @@ function label(value: unknown): string {
                         </dl>
                     </div>
                     <div
+                        v-if="application.permit.issued"
                         class="flex flex-col gap-3 rounded-lg border border-slate-200 p-4 sm:flex-row sm:items-center dark:border-slate-700"
                     >
                         <QrCode class="size-10 shrink-0" />
@@ -969,6 +980,22 @@ function label(value: unknown): string {
                                 <ExternalLink class="size-3.5"
                             /></a>
                         </div>
+                    </div>
+                    <div
+                        v-else-if="application.permit.blockers.length > 0"
+                        class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+                    >
+                        <p class="font-black uppercase">
+                            Pending before issuance
+                        </p>
+                        <ul class="mt-2 list-disc space-y-1 pl-5">
+                            <li
+                                v-for="blocker in application.permit.blockers"
+                                :key="blocker"
+                            >
+                                {{ label(blocker) }}
+                            </li>
+                        </ul>
                     </div>
                 </div>
             </section>

@@ -24,6 +24,7 @@ final class BuildExecutablePermitApplicationDocument
         $receipts = data_get($application, 'official_receipts', []);
         $receipts = is_array($receipts) ? $receipts : [];
         $permit = data_get($application, 'permit', []);
+        $syntheticLifecycle = data_get($permit, 'semantic_classification') === 'synthetic_only';
         $offices = [];
         $officePayloads = is_array($application['offices'] ?? null) ? $application['offices'] : [];
         foreach ($officePayloads as $office) {
@@ -59,6 +60,7 @@ final class BuildExecutablePermitApplicationDocument
                 'payment_order_count' => $office['paperless_payment_order_count'],
                 'total_amount_cents' => $office['total_amount_cents'],
                 'certification' => $office['certification'],
+                'post_payment_certification' => $office['post_payment_certification'],
                 'lines' => $lines,
             ];
         }
@@ -72,6 +74,12 @@ final class BuildExecutablePermitApplicationDocument
                     'status' => $certification['status'],
                     'date_issued' => $certification['completed_at'],
                     'verified_by' => $certification['completed_by'],
+                    'receipt_number' => $certification['receipt_number'],
+                    'receipt_reviewed' => $certification['receipt_reviewed'],
+                    'result' => $certification['result'],
+                    'remarks' => $certification['remarks'],
+                    'semantic_classification' => $certification['semantic_classification'],
+                    'production_authority' => $certification['production_authority'],
                     'recommending_approval' => null,
                 ];
             }
@@ -124,9 +132,10 @@ final class BuildExecutablePermitApplicationDocument
                 'verification_reference' => data_get($permit, 'verification.reference'),
             ],
             'permit' => [
-                'status' => 'not_issued',
-                'statement' => 'Permit not yet issued',
+                'status' => $syntheticLifecycle ? data_get($permit, 'state', 'blocked') : 'not_issued',
+                'statement' => $syntheticLifecycle ? data_get($permit, 'statement', 'Permit not yet issued') : 'Permit not yet issued',
                 'mayor_signature_authority' => data_get($application, 'permit.issuing_authority.authority_status'),
+                ...($syntheticLifecycle ? ['production_authority' => false] : []),
             ],
         ];
     }

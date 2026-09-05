@@ -23,6 +23,17 @@ type PermitSummary = {
     current_stage: string;
     business_name: string;
     trade_name: string | null;
+    permit_number: string | null;
+    issued_on: string | null;
+    valid_until: string | null;
+    released_on: string | null;
+    owner_operator: string;
+    business_address: string | null;
+    lines_of_business: string[];
+    official_receipt_number: string | null;
+    identity_scope: string;
+    production_authority: false;
+    legal_effect: false;
 };
 
 type ReleaseReadiness = {
@@ -109,16 +120,17 @@ function label(value: string): string {
                     <p
                         class="max-w-2xl text-sm text-zinc-600 dark:text-zinc-300"
                     >
-                        This page confirms a generated permit document
-                        reference. It does not confirm municipal release,
-                        validity, or legal effect.
+                        This page confirms a generated permit document reference
+                        and its exact synthetic Permit identity. It does not
+                        claim production authority, legal validity, revocation
+                        status, or broader legal attestation.
                     </p>
                 </div>
                 <Badge
                     variant="secondary"
                     class="w-fit border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/70 dark:bg-amber-950 dark:text-amber-100"
                 >
-                    Document reference only
+                    Exact identity only
                 </Badge>
             </header>
 
@@ -232,6 +244,57 @@ function label(value: string): string {
                                     {{ label(permit.current_stage) }}
                                 </dd>
                             </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <dt
+                                    class="text-xs text-zinc-500 dark:text-zinc-400"
+                                >
+                                    Permit number
+                                </dt>
+                                <dd class="font-mono">
+                                    {{ permit.permit_number ?? 'Not issued' }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt
+                                    class="text-xs text-zinc-500 dark:text-zinc-400"
+                                >
+                                    Official Receipt
+                                </dt>
+                                <dd class="font-mono">
+                                    {{
+                                        permit.official_receipt_number ??
+                                        'Not bound'
+                                    }}
+                                </dd>
+                            </div>
+                        </div>
+                        <div>
+                            <dt
+                                class="text-xs text-zinc-500 dark:text-zinc-400"
+                            >
+                                Owner / operator
+                            </dt>
+                            <dd>{{ permit.owner_operator }}</dd>
+                        </div>
+                        <div>
+                            <dt
+                                class="text-xs text-zinc-500 dark:text-zinc-400"
+                            >
+                                Business address
+                            </dt>
+                            <dd>
+                                {{ permit.business_address ?? 'Not recorded' }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt
+                                class="text-xs text-zinc-500 dark:text-zinc-400"
+                            >
+                                Lines of business
+                            </dt>
+                            <dd>{{ permit.lines_of_business.join(' · ') }}</dd>
                         </div>
                     </dl>
                 </div>

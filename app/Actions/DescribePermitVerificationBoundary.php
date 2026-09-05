@@ -19,7 +19,11 @@ final class DescribePermitVerificationBoundary
      */
     public function handle(PermitApplication $permitApplication): array
     {
+        $permitApplication->loadMissing('provisionalUatPermitCompletion');
+        $completion = $permitApplication->provisionalUatPermitCompletion;
         $reference = $this->reference($permitApplication);
+        $issued = $completion?->issued_at !== null;
+        $released = $completion?->released_at !== null;
 
         return [
             'reference' => $reference,
@@ -31,10 +35,12 @@ final class DescribePermitVerificationBoundary
                 'permitApplication' => $permitApplication,
                 'verificationCode' => $reference,
             ]),
-            'status' => 'artifact_only',
+            'status' => $released ? 'released_synthetic_identity' : ($issued ? 'issued_synthetic_identity' : 'artifact_only'),
             'can_verify_release' => false,
-            'released' => false,
-            'policy_note' => 'This reference identifies a generated preview document only. It does not confirm municipal release or legal validity.',
+            'released' => $released,
+            'policy_note' => $issued
+                ? 'This reference resolves to the exact synthetic Permit identity. It does not establish production authority, legal validity, revocation status, or broader legal attestation.'
+                : 'This reference identifies a generated preview document only. It does not confirm municipal release or legal validity.',
         ];
     }
 
@@ -45,14 +51,18 @@ final class DescribePermitVerificationBoundary
 
     private function reference(PermitApplication $permitApplication): string
     {
+        $completion = $permitApplication->provisionalUatPermitCompletion;
+        $permitNumber = $completion?->permit_number;
         $source = implode('|', [
             $permitApplication->id,
             $permitApplication->application_number ?? '',
             $permitApplication->application_year,
             $permitApplication->business_id,
             $permitApplication->created_at?->toIso8601String() ?? '',
+            $permitNumber === null ? '' : $permitNumber,
+            $completion?->issued_at?->toIso8601String() ?? '',
         ]);
 
-        return 'PVA-'.$permitApplication->id.'-'.substr(hash('sha256', $source), 0, 16);
+        return ($completion?->issued_at === null ? 'PVA-' : 'BPV-').$permitApplication->id.'-'.substr(hash('sha256', $source), 0, 16);
     }
 }

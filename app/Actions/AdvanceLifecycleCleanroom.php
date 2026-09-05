@@ -28,6 +28,7 @@ class AdvanceLifecycleCleanroom
         private readonly InitializeBusinessPermitEvaluation $initializeEvaluation,
         private readonly DefineBusinessPermitEvaluationItem $defineEvaluationItem,
         private readonly CreateRenewalPermitApplicationForExistingBusiness $createRenewal,
+        private readonly CommissionPostPaymentOfficeCertifications $commissionPostPaymentCertifications,
     ) {}
 
     public function handle(LifecycleCleanroomRun $run): LifecycleCleanroomRun
@@ -46,6 +47,7 @@ class AdvanceLifecycleCleanroom
             }
             match ($next['key']) {
                 'evaluation_initialized' => $this->initializeResponsibilities($run->newApplication()->sole(), $run, NewApplicationHappyPathDefinition::Id),
+                'post_payment_certifications_commissioned' => $this->commissionPostPaymentCertifications->handle($run->newApplication()->sole()),
                 'renewal_lodged' => $this->lodgeRenewal($run),
                 'renewal_evaluation_initialized' => $this->initializeResponsibilities($run->renewalApplication()->sole(), $run, RenewalHappyPathDefinition::Id),
                 default => throw new LogicException('Unsupported cleanroom system step.'),

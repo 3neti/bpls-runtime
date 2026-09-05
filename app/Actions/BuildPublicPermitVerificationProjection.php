@@ -15,13 +15,22 @@ class BuildPublicPermitVerificationProjection
     /** @return array<string, mixed> */
     public function handle(PermitApplication $permitApplication): array
     {
-        $permitApplication->loadMissing('business');
+        $permitApplication->loadMissing([
+            'business.owner',
+            'lines.lineOfBusiness',
+            'provisionalUatPermitCompletion',
+            'paymentSchedules.treasuryCollections.receipt',
+        ]);
         $verification = $this->describeVerificationBoundary->handle($permitApplication);
         $readiness = $this->describePermitReleaseReadiness->handle($permitApplication);
         $previewCompletion = $this->describeProvisionalCompletion->handle($permitApplication);
-        $currentStage = $readiness['ready_for_authority_review']
-            ? 'ready_for_authority_review'
-            : $permitApplication->status->value;
+        $completion = $permitApplication->provisionalUatPermitCompletion;
+        $currentStage = $completion === null
+            ? ($readiness['ready_for_authority_review'] ? 'ready_for_authority_review' : $permitApplication->status->value)
+            : $completion->status;
+        $receipt = $permitApplication->paymentSchedules
+            ->flatMap(fn ($schedule) => $schedule->treasuryCollections)
+            ->pluck('receipt')->filter()->first();
 
         return [
             'verification' => [
@@ -36,6 +45,19 @@ class BuildPublicPermitVerificationProjection
                 'current_stage' => $currentStage,
                 'business_name' => $permitApplication->business->name,
                 'trade_name' => $permitApplication->business->trade_name,
+                'permit_number' => $completion?->permit_number,
+                'issued_on' => $completion?->issued_at?->toDateString(),
+                'valid_until' => $completion?->valid_until?->toDateString(),
+                'released_on' => $completion?->released_at?->toDateString(),
+                'owner_operator' => $permitApplication->business->owner->name,
+                'business_address' => $permitApplication->business->address,
+                'lines_of_business' => $permitApplication->lines->map(fn ($line): string => $line->line_of_business_id === null
+                    ? (string) data_get($line->metadata, 'line_of_business_name', 'Unresolved')
+                    : $line->lineOfBusiness->name)->values()->all(),
+                'official_receipt_number' => data_get($receipt, 'receipt_number'),
+                'identity_scope' => 'exact_synthetic_permit_identity_only',
+                'production_authority' => false,
+                'legal_effect' => false,
             ],
             'release_readiness' => [
                 'ready_for_authority_review' => $readiness['ready_for_authority_review'],

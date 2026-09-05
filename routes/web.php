@@ -112,6 +112,12 @@ if ($stakeholderPreviewSafety->isEnabled()) {
                 ->name('stakeholder-preview.lifecycle-application.show');
             Route::get('stakeholder-preview/lifecycle-laboratory/cleanrooms/{lifecycleCleanroomRun}/application', [LifecycleCleanroomController::class, 'showApplication'])
                 ->name('stakeholder-preview.lifecycle-cleanroom-application.show');
+            Route::post('stakeholder-preview/lifecycle-laboratory/cleanrooms/{lifecycleCleanroomRun}/post-payment-certifications/{postPaymentOfficeCertification}', [LifecycleCleanroomController::class, 'certifyPostPaymentOffice'])
+                ->name('stakeholder-preview.lifecycle-cleanroom.post-payment-certifications.store');
+            Route::post('stakeholder-preview/lifecycle-laboratory/cleanrooms/{lifecycleCleanroomRun}/permit/issue', [LifecycleCleanroomController::class, 'issuePermit'])
+                ->name('stakeholder-preview.lifecycle-cleanroom.permit.issue');
+            Route::post('stakeholder-preview/lifecycle-laboratory/cleanrooms/{lifecycleCleanroomRun}/permit/release', [LifecycleCleanroomController::class, 'releasePermit'])
+                ->name('stakeholder-preview.lifecycle-cleanroom.permit.release');
             Route::get('stakeholder-preview/workflow', [StakeholderPreviewWorkflowController::class, 'index'])
                 ->name('stakeholder-preview.workflow');
             Route::post('stakeholder-preview/applications/{permitApplication}/office-charge', [StakeholderPreviewWorkflowController::class, 'storeOfficeCharge'])

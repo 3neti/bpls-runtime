@@ -17,3 +17,5 @@ php artisan bpls:install --check --no-interaction
 php artisan bpls:lifecycle:run new-application-happy-path --persist --no-interaction
 php artisan bpls:lifecycle:run renewal-happy-path --persist --no-interaction
 php artisan bpls:product-lab:inspect --no-interaction
+
+printf '\nProduct lab ready. Open the Lifecycle Laboratory and start a new Interactive cleanroom; its completed Permit state is never pre-seeded, so execute each canonical action in order.\n'
