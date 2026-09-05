@@ -18,6 +18,19 @@ return [
     'default' => env('CACHE_STORE', 'database'),
 
     /*
+    | SQLite permits only one writer at a time. Keeping request-throttle
+    | counters in the same SQLite file as lifecycle transactions can make a
+    | concurrent preview request fail with "database is locked". Use the
+    | shared file store for rate limiting only in that exact local setup.
+    */
+    'limiter' => env(
+        'CACHE_LIMITER_STORE',
+        env('CACHE_STORE', 'database') === 'database' && env('DB_CONNECTION') === 'sqlite'
+            ? 'file'
+            : env('CACHE_STORE', 'database'),
+    ),
+
+    /*
     |--------------------------------------------------------------------------
     | Cache Stores
     |--------------------------------------------------------------------------

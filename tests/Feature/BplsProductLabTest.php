@@ -71,3 +71,11 @@ test('the local product-lab wrapper is executable and preserves the required har
         ->and($contents)->toContain('bpls:product-lab:inspect')
         ->and($contents)->toContain('completed Permit state is never pre-seeded');
 });
+
+test('the sqlite product lab keeps request throttling outside the transactional database', function () {
+    $configuration = file_get_contents(config_path('cache.php'));
+
+    expect($configuration)
+        ->toContain("env('CACHE_STORE', 'database') === 'database' && env('DB_CONNECTION') === 'sqlite'")
+        ->toContain("? 'file'");
+});
