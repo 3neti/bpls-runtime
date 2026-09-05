@@ -323,7 +323,7 @@ test('cleanroom citizen intake accepts an active municipal catalog activity offe
     expect($application->fresh()->businessPermitEvaluation)->toBeNull();
 });
 
-test('source backed registry specimen advances through canonical actions to an auditable single application payable', function () {
+test('source backed registry specimen advances through the complete synthetic permit lifecycle', function () {
     $management = previewAccount(StakeholderPreviewPersona::Management);
     $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'));
     $run = LifecycleCleanroomRun::query()->sole();
@@ -392,7 +392,7 @@ test('source backed registry specimen advances through canonical actions to an a
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     expect(data_get($state, 'progress.blocked'))->toBeFalse()
         ->and(data_get($state, 'progress.profile_kind'))->toBe('registry_source_replay')
-        ->and(data_get($state, 'progress.total_steps'))->toBe(12)
+        ->and(data_get($state, 'progress.total_steps'))->toBe(23)
         ->and(data_get($state, 'progress.next_step.key'))->toBe('evaluation_initialized');
 
     $this->actingAs($management)
@@ -523,11 +523,86 @@ test('source backed registry specimen advances through canonical actions to an a
         User::query()->findOrFail(data_get($run->actor_manifest, 'actors.municipal_treasurer.user_id')),
         AssessmentDecisionAction::Approved,
     );
-    app(CreatePaymentScheduleForAssessment::class)->handle($assessment, $assessmentOfficer);
+    $schedule = app(CreatePaymentScheduleForAssessment::class)->handle($assessment, $assessmentOfficer);
+
+    $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+    expect(data_get($state, 'progress.complete'))->toBeFalse()
+        ->and(data_get($state, 'progress.completed_steps'))->toBe(12)
+        ->and(data_get($state, 'progress.next_step.key'))->toBe('qr_payment_collected')
+        ->and($run->fresh()->renewal_application_id)->toBeNull();
+
+    $collection = TreasuryCollection::factory()->for($application)->for($assessment)->for($schedule)->create([
+        'status' => TreasuryCollectionStatus::PendingReceipt,
+        'channel' => TreasuryCollectionChannel::Online,
+        'method' => TreasuryCollectionMethod::QrPh,
+        'amount_cents' => 517_500,
+    ]);
+    $schedule->forceFill(['status' => 'paid', 'paid_amount_cents' => 517_500])->save();
+
+    $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+    expect(data_get($state, 'progress.completed_steps'))->toBe(13)
+        ->and(data_get($state, 'progress.next_step.key'))->toBe('official_receipt_issued')
+        ->and(collect(data_get($state, 'actors'))->where('is_next', true)->pluck('key')->all())->toBe(['cashier'])
+        ->and(collect(data_get($state, 'actors'))->firstWhere('key', 'cashier')['relationship'])->toBe('next');
+
+    $cashier = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.cashier.user_id'));
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run), [
+            'expected_step_key' => 'official_receipt_issued',
+            'expected_actor_key' => 'cashier',
+        ])
+        ->assertRedirect(route('staff.payment-schedules.show', $schedule));
+    $this->assertAuthenticatedAs($cashier);
+
+    app(IssueManualCollectionReceipt::class)->handle($collection, [
+        'receipt_number' => '7000001',
+        'numbering_authority' => 'manual_synthetic_cleanroom',
+    ], $cashier);
+
+    $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+    expect(data_get($state, 'progress.next_step.key'))->toBe('post_payment_certifications_commissioned')
+        ->and(collect(data_get($state, 'actors'))->where('is_next', true)->pluck('key')->all())->toBe(['intake']);
+
+    app(AdvanceLifecycleCleanroom::class)->handle($run->fresh());
+    $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+    expect(data_get($state, 'progress.next_step.key'))->toBe('assessor_post_payment_certified')
+        ->and(collect(data_get($state, 'actors'))->where('is_next', true)->pluck('key')->all())->toBe(['assessor']);
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run), [
+            'expected_step_key' => 'assessor_post_payment_certified',
+            'expected_actor_key' => 'assessor',
+        ])
+        ->assertRedirect(route('stakeholder-preview.lifecycle-cleanroom-application.show', $run).'?tab=processing');
+
+    foreach ($application->fresh()->postPaymentOfficeCertifications as $certification) {
+        app(RecordPostPaymentOfficeCertification::class)->handle(
+            $certification,
+            User::query()->findOrFail(data_get($run->actor_manifest, 'actors.'.$certification->office_code.'.user_id')),
+        );
+    }
+
+    $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+    expect(data_get($state, 'progress.next_step.key'))->toBe('permit_issued')
+        ->and(collect(data_get($state, 'actors'))->where('is_next', true)->pluck('key')->all())->toBe(['permit_issuer']);
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run), [
+            'expected_step_key' => 'permit_issued',
+            'expected_actor_key' => 'permit_issuer',
+        ])
+        ->assertRedirect(route('stakeholder-preview.lifecycle-cleanroom-application.show', $run).'?tab=permit');
+
+    app(IssueSyntheticLifecyclePermit::class)->handle(
+        $application->fresh(),
+        User::query()->findOrFail(data_get($run->actor_manifest, 'actors.permit_issuer.user_id')),
+    );
+    app(ReleaseSyntheticLifecyclePermit::class)->handle(
+        $application->fresh(),
+        User::query()->findOrFail(data_get($run->actor_manifest, 'actors.releasing_officer.user_id')),
+    );
 
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     expect(data_get($state, 'progress.complete'))->toBeTrue()
-        ->and(data_get($state, 'progress.completed_steps'))->toBe(12)
+        ->and(data_get($state, 'progress.completed_steps'))->toBe(23)
         ->and($run->fresh()->renewal_application_id)->toBeNull();
 });
 

@@ -58,8 +58,8 @@ class ResolveLifecycleCleanroomState
 
         $stepDefinitions = collect($this->definition->steps());
         if (($newProfile['scope'] ?? null) === 'single_source_application') {
-            $payableIndex = $stepDefinitions->search(fn (array $step): bool => $step['key'] === 'payable_created');
-            $stepDefinitions = $stepDefinitions->take(is_int($payableIndex) ? $payableIndex + 1 : 0);
+            $publicVerificationIndex = $stepDefinitions->search(fn (array $step): bool => $step['key'] === 'public_verification');
+            $stepDefinitions = $stepDefinitions->take(is_int($publicVerificationIndex) ? $publicVerificationIndex + 1 : 0);
         }
 
         $steps = $stepDefinitions->map(function (array $step) use ($newApplication, $newProjection, $newProfile, $renewalApplication, $renewalProjection, $renewalProfile): array {
@@ -94,7 +94,7 @@ class ResolveLifecycleCleanroomState
                 'profile_kind' => $newProfile['kind'] ?? 'pending_intake',
                 'profile_statement' => $newProfile['statement'] ?? null,
                 'completion_message' => ($newProfile['scope'] ?? null) === 'single_source_application'
-                    ? 'The source-backed 2025 registry specimen reached an approved Payable and its Assessment Reconciliation is ready for review.'
+                    ? 'The source-backed 2025 registry specimen completes the synthetic Business Permit lifecycle without creating a Renewal.'
                     : 'The 2025 New application completes the synthetic permit lifecycle before the preserved 2026 Renewal chronology continues.',
                 'next_step' => $next,
                 'percent' => (int) round(($completedCount / max(1, $steps->count())) * 100),

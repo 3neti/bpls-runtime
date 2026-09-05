@@ -340,7 +340,15 @@ class LifecycleCleanroomController extends Controller
             ]));
         }
 
-        return redirect()->to($authenticate->handle($request, $run, $actor, $this->destination($step)));
+        $destination = $this->destination($step);
+        $url = $authenticate->handle($request, $run, $actor, $destination);
+        if ($destination === 'stakeholder-preview.lifecycle-cleanroom-application.show') {
+            $tab = str_contains($step, 'post_payment_certified') ? 'processing' : 'permit';
+
+            return redirect()->to($url.'?'.http_build_query(['tab' => $tab]));
+        }
+
+        return redirect()->to($url);
     }
 
     /** @param array<mixed> $steps */
