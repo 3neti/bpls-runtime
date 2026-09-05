@@ -2,7 +2,6 @@
 
 namespace App\Actions;
 
-use App\Models\CollectionAllocation;
 use App\Models\Receipt;
 
 final class RenderReceiptPdf
@@ -18,121 +17,82 @@ final class RenderReceiptPdf
             'assessment',
         ]);
 
+        $profile = data_get($receipt->source_snapshot, 'official_receipt_profile');
+        $profile = is_array($profile) ? $profile : app(ResolveOfficialReceiptProfile::class)->handle();
         $document = new SimplePdfDocument(
-            'Business Permit Receipt',
+            'Business Permit Receipt — Official Receipt AF No. 51',
             $this->documentCode($receipt),
-            'Business Permit and Licensing System',
-            'Receipt numbering, void, reprint, and reconciliation policy remain unresolved.',
+            (string) data_get($profile, 'header.municipality'),
+            'Automatic receipt numbering authority remains unresolved. Void, reprint, and reconciliation policy remain unresolved.',
         );
-        $page = $document->addPage('Receipt '.$receipt->receipt_number);
-        $y = SimplePdfDocument::ContentTop;
-
-        $document->rectangle($page, 42, $y - 78, 511, 78, 0.94);
-        $document->text($page, 'RECEIPT NUMBER', 54, $y - 22, 8, true);
-        $document->text($page, $receipt->receipt_number, 54, $y - 44, 16, true, monospace: true);
-        $document->text($page, 'AMOUNT PAID', 382, $y - 22, 8, true);
-        $document->text($page, $this->money($receipt->amount_cents), 541, $y - 45, 18, true, 'right');
-        $document->text($page, 'Status: '.str($receipt->status->value)->replace('_', ' ')->title(), 54, $y - 64, 8);
-        $document->text($page, 'Numbering: '.$receipt->numbering_authority, 382, $y - 64, 8);
-        $y -= 108;
-
-        $y = $this->section($document, $page, $y, 'Receipt Facts', [
-            'Issued at' => $receipt->issued_at->toIso8601String(),
-            'Issued by' => $receipt->issuedBy?->name ?? 'System',
-            'Collection method' => str($receipt->treasuryCollection->method->value)->replace('_', ' ')->title()->toString(),
-            'Collected at' => $receipt->treasuryCollection->received_at->toIso8601String(),
-            'Collected by' => $receipt->treasuryCollection->receivedBy?->name ?? 'System',
-            'Reference' => $receipt->treasuryCollection->reference_number ?? 'Not recorded',
-        ]);
-
-        $business = $receipt->permitApplication->business;
-        $owner = $business->owner;
-        $y = $this->section($document, $page, $y, 'Business / Payer', [
-            'Business' => $business->name,
-            'Trade name' => $business->trade_name ?? 'Not recorded',
-            'Registration' => $business->registration_number ?? 'Not recorded',
-            'Address' => trim(($business->address ?? 'No address').' '.($business->barangay ? 'Barangay '.$business->barangay : '')),
-            'Payer' => $receipt->treasuryCollection->payer_name ?? $owner->name,
-            'Owner' => $owner->name,
-        ]);
-
-        $y = $this->section($document, $page, $y, 'Application Context', [
-            'Application' => $receipt->permitApplication->application_number ?? 'Application #'.$receipt->permitApplication->id,
-            'Application type' => str($receipt->permitApplication->type->value)->replace('_', ' ')->title()->toString(),
-            'Application year' => (string) $receipt->permitApplication->application_year,
-            'Assessment' => 'Assessment #'.$receipt->assessment->sequence.' ('.$this->label($receipt->assessment->status->value).')',
-            'Payment schedule' => 'Schedule #'.$receipt->paymentSchedule->sequence.' ('.$this->label($receipt->paymentSchedule->status->value).')',
-        ]);
-
-        $y = $this->allocations($document, $page, $y, $receipt);
-
-        $this->section($document, $page, $y, 'Policy Gaps', [
-            'Numbering' => 'Automatic receipt numbering authority remains unresolved.',
-            'Document status' => 'This PDF is a generated receipt artifact, not the final official layout.',
-            'Reconciliation' => 'Void, reprint, and reconciliation policy remain unresolved.',
-        ]);
+        $page = $document->addPage('AF No. 51');
+        $left = 82.0;
+        $right = 513.0;
+        $width = $right - $left;
+        $top = 744.0;
+        $document->rectangle($page, $left, 108, $width, $top - 108, 0.15, false);
+        $document->text($page, 'OFFICIAL RECEIPT', 297.5, 718, 17, true, 'center');
+        $document->text($page, (string) data_get($profile, 'header.republic'), 297.5, 703, 9, false, 'center');
+        $document->text($page, mb_strtoupper((string) data_get($profile, 'header.province')), 297.5, 687, 11, true, 'center');
+        $document->text($page, (string) data_get($profile, 'header.office'), 297.5, 673, 9, false, 'center');
+        $document->text($page, (string) data_get($profile, 'header.municipality'), 297.5, 650, 10, true, 'center');
+        $document->text($page, $receipt->permitApplication->business->name, 297.5, 640, 7, false, 'center');
+        $document->line($page, $left, 636, $right, 636);
+        $document->text($page, 'Accountable Form No. '.data_get($profile, 'form.accountable_form_number', 51), 96, 616, 10, true);
+        $document->text($page, '('.data_get($profile, 'form.revision').')', 96, 603, 8);
+        $document->text($page, (string) data_get($profile, 'form.copy_designation', 'ORIGINAL'), 410, 616, 12, true, 'center');
+        $receiptNumberSize = max(8.0, min(17.0, 350 / max(1, mb_strlen($receipt->receipt_number) * 0.6)));
+        $document->text($page, $receipt->receipt_number, 410, 589, $receiptNumberSize, true, 'center', true);
+        $document->line($page, $left, 574, $right, 574);
+        $document->text($page, 'DATE', 94, 558, 8, true);
+        $document->text($page, $receipt->issued_at->format('F j, Y'), 155, 558, 9);
+        $document->line($page, $left, 545, $right, 545);
+        $document->text($page, 'AGENCY', 94, 529, 8, true);
+        $document->text($page, (string) data_get($receipt->source_snapshot, 'af51.agency', data_get($profile, 'defaults.agency')), 150, 529, 9);
+        $document->text($page, 'FUND', 365, 529, 8, true);
+        $document->text($page, (string) data_get($receipt->source_snapshot, 'af51.fund', data_get($profile, 'defaults.fund')), 410, 529, 9);
+        $document->line($page, $left, 516, $right, 516);
+        $document->text($page, 'PAYOR', 94, 500, 8, true);
+        $document->text($page, $receipt->treasuryCollection->payer_name ?? $receipt->permitApplication->business->owner->name, 150, 500, 9);
+        $document->line($page, $left, 486, $right, 486);
+        $document->text($page, 'NATURE OF COLLECTION', 190, 469, 8, true, 'center');
+        $document->text($page, 'ACCOUNT CODE', 375, 469, 8, true, 'center');
+        $document->text($page, 'AMOUNT', 468, 469, 8, true, 'center');
+        $document->line($page, $left, 454, $right, 454);
+        $document->line($page, 330, 486, 330, 286);
+        $document->line($page, 420, 486, 420, 286);
+        $rowY = 438;
+        foreach ($receipt->treasuryCollection->allocations->take(8) as $allocation) {
+            $document->wrappedText($page, $allocation->paymentScheduleLine->name, 94, $rowY, 226, 8, 9);
+            $document->text($page, (string) data_get($allocation->source_snapshot, 'account_code', data_get($allocation->source_snapshot, 'code', $allocation->paymentScheduleLine->code)), 375, $rowY, 5, false, 'center');
+            $document->text($page, number_format($allocation->amount_cents / 100, 2), 501, $rowY, 8, false, 'right');
+            $document->line($page, $left, $rowY - 12, $right, $rowY - 12, 0.4, 0.55);
+            $rowY -= 21;
+        }
+        $document->line($page, $left, 286, $right, 286);
+        $document->text($page, 'TOTAL', 290, 268, 11, true, 'right');
+        $document->text($page, 'PHP '.number_format($receipt->amount_cents / 100, 2), 501, 268, 10, true, 'right');
+        $document->line($page, $left, 252, $right, 252);
+        $document->text($page, 'AMOUNT IN WORDS', 94, 236, 8, true);
+        $document->wrappedText($page, (string) data_get($receipt->source_snapshot, 'af51.amount_in_words', $this->money($receipt->amount_cents).' ONLY'), 94, 221, 407, 8, 10);
+        $document->line($page, $left, 194, $right, 194);
+        $method = $receipt->treasuryCollection->method->value;
+        $document->text($page, ($method === 'cash' ? '[X]' : '[ ]').' Cash', 96, 178, 8);
+        $document->text($page, ($method === 'check' ? '[X]' : '[ ]').' Check', 96, 164, 8);
+        $document->text($page, ($method === 'money_order' ? '[X]' : '[ ]').' Money Order', 96, 150, 8);
+        $document->text($page, ($method === 'qr_ph' ? '[X]' : '[ ]').' QR Ph', 96, 136, 8);
+        $document->text($page, 'NUMBER / REFERENCE', 230, 178, 7, true);
+        $document->wrappedText($page, $receipt->treasuryCollection->reference_number ?? 'Not recorded', 230, 162, 145, 8, 10, false, true);
+        $document->text($page, 'DATE', 395, 178, 7, true);
+        $document->text($page, $receipt->treasuryCollection->received_at->format('Y-m-d'), 395, 162, 8);
+        $document->text($page, (string) data_get($receipt->source_snapshot, 'issuer.printed_name', data_get($profile, 'collecting_officer.name')), 496, 146, 9, true, 'right');
+        $document->text($page, (string) data_get($receipt->source_snapshot, 'issuer.printed_title', data_get($profile, 'collecting_officer.title')), 496, 133, 8, false, 'right');
+        $document->text($page, (string) data_get($receipt->source_snapshot, 'issuer.printed_designation', data_get($profile, 'collecting_officer.designation')), 496, 120, 8, false, 'right');
+        if (data_get($receipt->source_snapshot, 'official_receipt_profile.collecting_officer.authority_status') !== 'verified') {
+            $document->text($page, (string) data_get($profile, 'laboratory_watermark'), 297.5, 96, 8, true, 'center');
+        }
 
         return $document->render();
-    }
-
-    /**
-     * @param  array<string, string>  $rows
-     */
-    private function section(SimplePdfDocument $document, int $page, float $y, string $title, array $rows): float
-    {
-        $document->text($page, strtoupper($title), 42, $y, 9, true);
-        $y -= 18;
-
-        foreach ($rows as $label => $value) {
-            if ($y < SimplePdfDocument::ContentBottom + 30) {
-                $page = $document->addPage($title.' continued');
-                $y = SimplePdfDocument::ContentTop;
-            }
-
-            $document->text($page, $label, 54, $y, 7.5, true);
-            $y = $document->wrappedText($page, $value, 170, $y, 370, 8.5, 11);
-            $y -= 3;
-        }
-
-        return $y - 10;
-    }
-
-    private function allocations(SimplePdfDocument $document, int $page, float $y, Receipt $receipt): float
-    {
-        $document->text($page, 'ALLOCATIONS', 42, $y, 9, true);
-        $y -= 18;
-        $document->line($page, 42, $y + 7, 553, $y + 7, 0.6, 0.45);
-        $document->text($page, 'Code', 54, $y, 7.5, true);
-        $document->text($page, 'Item', 145, $y, 7.5, true);
-        $document->text($page, 'Category', 370, $y, 7.5, true);
-        $document->text($page, 'Amount', 541, $y, 7.5, true, 'right');
-        $y -= 14;
-
-        foreach ($receipt->treasuryCollection->allocations as $allocation) {
-            if ($y < SimplePdfDocument::ContentBottom + 42) {
-                $page = $document->addPage('Allocations continued');
-                $y = SimplePdfDocument::ContentTop;
-            }
-
-            $this->allocation($document, $page, $y, $allocation);
-            $y -= 28;
-        }
-
-        $document->line($page, 42, $y + 12, 553, $y + 12, 0.6, 0.45);
-        $document->text($page, 'Total', 370, $y, 9, true);
-        $document->text($page, $this->money($receipt->amount_cents), 541, $y, 9, true, 'right');
-
-        return $y - 28;
-    }
-
-    private function allocation(SimplePdfDocument $document, int $page, float $y, CollectionAllocation $allocation): void
-    {
-        $line = $allocation->paymentScheduleLine;
-        $document->text($page, $line->code, 54, $y, 7.5, monospace: true);
-        $document->wrappedText($page, $line->name, 145, $y, 200, 7.5, 9);
-        $document->text($page, str($line->category->value)->title()->toString(), 370, $y, 7.5);
-        $document->text($page, $this->money($allocation->amount_cents), 541, $y, 7.5, align: 'right');
-        $document->text($page, $line->lineOfBusiness?->name ?? 'Application-wide', 145, $y - 12, 7, false);
     }
 
     private function documentCode(Receipt $receipt): string
@@ -143,10 +103,5 @@ final class RenderReceiptPdf
     private function money(int $amountCents): string
     {
         return 'PHP '.number_format($amountCents / 100, 2);
-    }
-
-    private function label(string $value): string
-    {
-        return str($value)->replace('_', ' ')->title()->toString();
     }
 }

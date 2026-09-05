@@ -4,14 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Actions\AdvanceLifecycleCleanroom;
 use App\Actions\AuthenticateLifecycleCleanroomActor;
+use App\Actions\AuthenticateStakeholderPreviewPersona;
 use App\Actions\BuildBploRoutingTask;
 use App\Actions\BuildExecutablePermitApplicationDocument;
 use App\Actions\BuildLifecycleOfficeReviewHandoff;
 use App\Actions\ConfirmLifecycleRoutineOfficeDefaults;
 use App\Actions\ResolveLifecycleCleanroomState;
 use App\Actions\SimulateLifecycleOfficeReviews;
+use App\Actions\SimulateLifecycleQrPhPayment;
 use App\Actions\StartLifecycleCleanroom;
 use App\Data\Application\ApplicationDataResolver;
+use App\Enums\StakeholderPreviewPersona;
 use App\Enums\UserPermission;
 use App\Http\Requests\RunLifecycleCleanroomMilestoneRequest;
 use App\Models\LifecycleCleanroomRun;
@@ -80,6 +83,29 @@ class LifecycleCleanroomController extends Controller
         }
 
         return back()->with('success', $count.' synthetic office '.str('review')->plural($count).' completed. Each audit record states that no real inspection occurred.');
+    }
+
+    public function simulateQrPhPayment(
+        Request $request,
+        LifecycleCleanroomRun $lifecycleCleanroomRun,
+        SimulateLifecycleQrPhPayment $simulatePayment,
+        AuthenticateLifecycleCleanroomActor $authenticateCleanroomActor,
+        AuthenticateStakeholderPreviewPersona $authenticatePreviewPersona,
+    ): RedirectResponse {
+        try {
+            $collection = $simulatePayment->handle($lifecycleCleanroomRun);
+        } catch (LogicException $exception) {
+            return back()->withErrors(['cleanroom' => $exception->getMessage()]);
+        }
+
+        $message = "Synthetic QR Ph payment recorded as Collection #{$collection->id}. No real funds moved. Issue the seven-digit manual Official Receipt number, then print or open its PDF.";
+        if (is_array($lifecycleCleanroomRun->actor('cashier'))) {
+            return redirect()->to($authenticateCleanroomActor->handle($request, $lifecycleCleanroomRun, 'cashier'))->with('success', $message);
+        }
+
+        $authenticatePreviewPersona->handle($request, StakeholderPreviewPersona::Cashier, requireCurrentPreviewAccount: true);
+
+        return to_route('staff.payment-schedules.show', $collection->payment_schedule_id)->with('success', $message);
     }
 
     public function runNext(

@@ -27,6 +27,11 @@ use Illuminate\Support\Carbon;
  * @property string|null $legacy_source_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read TreasuryCollection $treasuryCollection
+ * @property-read PaymentSchedule $paymentSchedule
+ * @property-read PermitApplication $permitApplication
+ * @property-read Assessment $assessment
+ * @property-read User|null $issuedBy
  */
 #[Fillable(['treasury_collection_id', 'payment_schedule_id', 'permit_application_id', 'assessment_id', 'issued_by_id', 'status', 'numbering_authority', 'receipt_number', 'amount_cents', 'issued_at', 'remarks', 'source_snapshot', 'legacy_source_id'])]
 class Receipt extends Model
@@ -39,26 +44,31 @@ class Receipt extends Model
         'numbering_authority' => 'manual',
     ];
 
+    /** @return BelongsTo<TreasuryCollection, $this> */
     public function treasuryCollection(): BelongsTo
     {
         return $this->belongsTo(TreasuryCollection::class);
     }
 
+    /** @return BelongsTo<PaymentSchedule, $this> */
     public function paymentSchedule(): BelongsTo
     {
         return $this->belongsTo(PaymentSchedule::class);
     }
 
+    /** @return BelongsTo<PermitApplication, $this> */
     public function permitApplication(): BelongsTo
     {
         return $this->belongsTo(PermitApplication::class);
     }
 
+    /** @return BelongsTo<Assessment, $this> */
     public function assessment(): BelongsTo
     {
         return $this->belongsTo(Assessment::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function issuedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'issued_by_id');

@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * @property int $id
@@ -33,6 +34,10 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read PermitApplication $permitApplication
+ * @property-read PaymentSchedule $paymentSchedule
+ * @property-read Assessment $assessment
+ * @property-read User|null $receivedBy
+ * @property-read Collection<int, CollectionAllocation> $allocations
  * @property-read Receipt|null $receipt
  */
 #[Fillable(['payment_schedule_id', 'permit_application_id', 'assessment_id', 'received_by_id', 'status', 'channel', 'method', 'amount_cents', 'payer_name', 'reference_number', 'remarks', 'received_at', 'source_snapshot', 'legacy_source_id'])]

@@ -485,8 +485,8 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
 
         return new OfficialReceiptData(
             schema_version: OfficialReceiptData::Schema,
-            accountable_form_number: 51,
-            form_revision: 'Revised June 2008',
+            accountable_form_number: (int) data_get($receipt->source_snapshot, 'official_receipt_profile.form.accountable_form_number', 51),
+            form_revision: (string) data_get($receipt->source_snapshot, 'official_receipt_profile.form.revision', 'Revised June 2008'),
             copy_designation: (string) data_get($receipt->source_snapshot, 'af51.copy_designation', 'ORIGINAL'),
             receipt_number: $receipt->receipt_number,
             series: data_get($receipt->source_snapshot, 'af51.series'),
@@ -498,7 +498,9 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             payor: $collection->payer_name,
             collection_rows: array_values($collection->allocations->map(fn ($allocation): array => [
                 'nature_of_collection' => (string) $allocation->paymentScheduleLine->name,
-                'account_code' => is_string(data_get($allocation->source_snapshot, 'account_code')) ? data_get($allocation->source_snapshot, 'account_code') : null,
+                'account_code' => is_string(data_get($allocation->source_snapshot, 'account_code'))
+                    ? data_get($allocation->source_snapshot, 'account_code')
+                    : (is_string(data_get($allocation->source_snapshot, 'code')) ? data_get($allocation->source_snapshot, 'code') : null),
                 'currency' => 'PHP',
                 'amount_minor' => (int) $allocation->amount_cents,
             ])->values()->all()),
@@ -511,7 +513,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'number' => $collection->reference_number,
                 'date' => data_get($collection->source_snapshot, 'payment_instrument.date'),
             ],
-            collecting_officer: $receipt->issuedBy?->getAttribute('name'),
+            collecting_officer: data_get($receipt->source_snapshot, 'issuer.printed_name') ?? $receipt->issuedBy?->getAttribute('name'),
             source: [
                 'treasury_collection_id' => $collection->id,
                 'payment_schedule_id' => $collection->payment_schedule_id,

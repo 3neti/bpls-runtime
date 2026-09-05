@@ -12,6 +12,8 @@ use LogicException;
 
 class IssueManualCollectionReceipt
 {
+    public function __construct(private readonly ResolveOfficialReceiptProfile $resolveProfile) {}
+
     /**
      * @param  array{receipt_number: string, numbering_authority: string, remarks?: string|null}  $data
      */
@@ -44,7 +46,7 @@ class IssueManualCollectionReceipt
                 'amount_cents' => $collection->amount_cents,
                 'issued_at' => now(),
                 'remarks' => $data['remarks'] ?? null,
-                'source_snapshot' => $this->sourceSnapshot($collection, $data),
+                'source_snapshot' => $this->sourceSnapshot($collection, $data, $issuedBy),
             ]);
 
             $collection->status = TreasuryCollectionStatus::Receipted;
@@ -58,8 +60,10 @@ class IssueManualCollectionReceipt
      * @param  array{receipt_number: string, numbering_authority: string, remarks?: string|null}  $data
      * @return array<string, mixed>
      */
-    private function sourceSnapshot(TreasuryCollection $collection, array $data): array
+    private function sourceSnapshot(TreasuryCollection $collection, array $data, ?User $issuedBy): array
     {
+        $profile = $this->resolveProfile->handle();
+
         return [
             'treasury_collection_id' => $collection->id,
             'collection_status_before' => $collection->status->value,
@@ -77,10 +81,42 @@ class IssueManualCollectionReceipt
                 'numbering_authority' => $data['numbering_authority'],
                 'receipt_number' => $data['receipt_number'],
             ],
+            'official_receipt_profile' => $profile,
+            'af51' => [
+                'copy_designation' => data_get($profile, 'form.copy_designation'),
+                'agency' => data_get($profile, 'defaults.agency'),
+                'fund' => data_get($profile, 'defaults.fund'),
+                'series' => null,
+                'amount_in_words' => $this->amountInWords($collection->amount_cents),
+            ],
+            'issuer' => [
+                'authenticated_user_id' => $issuedBy?->id,
+                'authenticated_user_name' => $issuedBy?->name,
+                'printed_name' => data_get($profile, 'collecting_officer.name'),
+                'printed_title' => data_get($profile, 'collecting_officer.title'),
+                'printed_designation' => data_get($profile, 'collecting_officer.designation'),
+                'signature_applied' => false,
+            ],
             'policy' => [
                 'numbering_mode' => 'manual',
                 'note' => 'Receipt number was supplied by the issuing user. Automatic receipt numbering authority and duplication policy remain explicit later decisions.',
             ],
         ];
+    }
+
+    private function amountInWords(int $amountCents): string
+    {
+        $pesos = intdiv($amountCents, 100);
+        $centavos = $amountCents % 100;
+        if (class_exists(\NumberFormatter::class)) {
+            $formatter = new \NumberFormatter('en', \NumberFormatter::SPELLOUT);
+            $pesoWords = $formatter->format($pesos);
+            $centavoWords = $formatter->format($centavos);
+            if (is_string($pesoWords) && is_string($centavoWords)) {
+                return mb_strtoupper("{$pesoWords} PESOS AND {$centavoWords} CENTAVOS ONLY");
+            }
+        }
+
+        return mb_strtoupper(number_format($amountCents / 100, 2).' PESOS ONLY');
     }
 }

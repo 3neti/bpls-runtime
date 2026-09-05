@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * @property int $id
@@ -28,6 +29,11 @@ use Illuminate\Support\Carbon;
  * @property array<string, mixed> $source_snapshot
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read PaymentSchedule $paymentSchedule
+ * @property-read AssessmentLine|null $assessmentLine
+ * @property-read PermitApplicationLine|null $permitApplicationLine
+ * @property-read LineOfBusiness|null $lineOfBusiness
+ * @property-read Collection<int, CollectionAllocation> $collectionAllocations
  */
 #[Fillable(['payment_schedule_id', 'assessment_line_id', 'permit_application_line_id', 'line_of_business_id', 'code', 'name', 'category', 'due_on', 'status', 'amount_cents', 'paid_amount_cents', 'source_snapshot'])]
 class PaymentScheduleLine extends Model
@@ -40,26 +46,31 @@ class PaymentScheduleLine extends Model
         'paid_amount_cents' => 0,
     ];
 
+    /** @return BelongsTo<PaymentSchedule, $this> */
     public function paymentSchedule(): BelongsTo
     {
         return $this->belongsTo(PaymentSchedule::class);
     }
 
+    /** @return BelongsTo<AssessmentLine, $this> */
     public function assessmentLine(): BelongsTo
     {
         return $this->belongsTo(AssessmentLine::class);
     }
 
+    /** @return BelongsTo<PermitApplicationLine, $this> */
     public function permitApplicationLine(): BelongsTo
     {
         return $this->belongsTo(PermitApplicationLine::class);
     }
 
+    /** @return BelongsTo<LineOfBusiness, $this> */
     public function lineOfBusiness(): BelongsTo
     {
         return $this->belongsTo(LineOfBusiness::class);
     }
 
+    /** @return HasMany<CollectionAllocation, $this> */
     public function collectionAllocations(): HasMany
     {
         return $this->hasMany(CollectionAllocation::class);

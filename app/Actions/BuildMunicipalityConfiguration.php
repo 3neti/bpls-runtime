@@ -6,6 +6,7 @@ class BuildMunicipalityConfiguration
 {
     public function __construct(
         private readonly DescribeMunicipalityOfficialConfiguration $describeOfficials,
+        private readonly ResolveOfficialReceiptProfile $resolveOfficialReceiptProfile,
     ) {}
 
     /** @return array<string, mixed> */
@@ -21,6 +22,7 @@ class BuildMunicipalityConfiguration
             ],
             'officials' => $officialConfiguration['officials'],
             'document_associations' => $officialConfiguration['document_associations'],
+            'official_receipt_profile' => $this->resolveOfficialReceiptProfile->handle(),
             'authority_chain' => $officialConfiguration['authority_chain'],
             'authority' => [
                 ...$officialConfiguration['summary'],

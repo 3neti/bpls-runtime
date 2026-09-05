@@ -33,7 +33,12 @@ test('staff users with issue receipt permission can issue a manual receipt for a
         ->and($receipt->receipt_number)->toBe('0000001')
         ->and($receipt->amount_cents)->toBe(12_500)
         ->and($receipt->source_snapshot['policy']['numbering_mode'])->toBe('manual')
-        ->and($receipt->source_snapshot['policy']['note'])->toContain('Automatic receipt numbering authority');
+        ->and($receipt->source_snapshot['policy']['note'])->toContain('Automatic receipt numbering authority')
+        ->and(data_get($receipt->source_snapshot, 'official_receipt_profile.profile_key'))->toBe('ipil-af51-nelson-v1')
+        ->and(data_get($receipt->source_snapshot, 'official_receipt_profile.form.accountable_form_number'))->toBe(51)
+        ->and(data_get($receipt->source_snapshot, 'issuer.printed_name'))->toBe('MARIA LUZ F. PULMANO')
+        ->and(data_get($receipt->source_snapshot, 'issuer.signature_applied'))->toBeFalse()
+        ->and(data_get($receipt->source_snapshot, 'af51.amount_in_words'))->toContain('PESOS');
 
     expect($collection->refresh()->status)->toBe(TreasuryCollectionStatus::Receipted);
 });

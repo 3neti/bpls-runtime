@@ -31,6 +31,14 @@ class BuildLifecycleCleanroom
             $activeState['application_document'] = $application instanceof PermitApplication
                 ? $this->buildDocument->handle($application)
                 : null;
+            $schedule = $application?->paymentSchedules()->with(['xChangePayment', 'treasuryCollections.receipt'])->latest('sequence')->first();
+            $activeState['payment_simulation'] = [
+                'available' => $schedule?->xChangePayment?->pay_code !== null && $schedule->treasuryCollections->isEmpty(),
+                'pay_code' => $schedule?->xChangePayment?->pay_code,
+                'collection_id' => $schedule?->treasuryCollections->first()?->id,
+                'receipt_id' => $schedule?->treasuryCollections->first()?->receipt?->id,
+                'status' => $schedule?->treasuryCollections->isNotEmpty() ? 'collected' : ($schedule?->xChangePayment?->pay_code !== null ? 'awaiting_simulation' : 'not_ready'),
+            ];
         }
 
         return [

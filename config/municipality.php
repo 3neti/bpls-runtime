@@ -5,6 +5,41 @@ return [
     'province' => env('MUNICIPALITY_PROVINCE', 'Zamboanga Sibugay'),
     'system_name' => env('BPLS_SYSTEM_NAME', 'Business Permit and Licensing System'),
 
+    'official_receipt' => [
+        'profile_key' => env('MUNICIPALITY_RECEIPT_PROFILE', 'ipil-af51-nelson-v1'),
+        'profile_version' => 1,
+        'layout' => 'af51-nelson-v1',
+        'header' => [
+            'republic' => 'Republic of the Philippines',
+            'province' => env('MUNICIPALITY_RECEIPT_PROVINCE', 'Province of Zamboanga Sibugay'),
+            'office' => env('MUNICIPALITY_RECEIPT_OFFICE', 'Office of the Municipal Treasurer'),
+            'municipality' => env('MUNICIPALITY_RECEIPT_MUNICIPALITY', 'Municipality of Ipil'),
+        ],
+        'form' => [
+            'accountable_form_number' => 51,
+            'revision' => env('MUNICIPALITY_RECEIPT_FORM_REVISION', 'Revised June 2008'),
+            'copy_designation' => env('MUNICIPALITY_RECEIPT_COPY', 'ORIGINAL'),
+        ],
+        'defaults' => [
+            'agency' => env('MUNICIPALITY_RECEIPT_AGENCY', 'Municipality of Ipil'),
+            'fund' => env('MUNICIPALITY_RECEIPT_FUND', 'General Fund'),
+        ],
+        'collecting_officer' => [
+            'name' => env('MUNICIPALITY_RECEIPT_COLLECTING_OFFICER_NAME', 'MARIA LUZ F. PULMANO'),
+            'title' => env('MUNICIPALITY_RECEIPT_COLLECTING_OFFICER_TITLE', 'Municipal Treasurer'),
+            'designation' => env('MUNICIPALITY_RECEIPT_COLLECTING_OFFICER_DESIGNATION', 'Collecting Officer'),
+            'authority_status' => env('MUNICIPALITY_RECEIPT_COLLECTING_OFFICER_AUTHORITY_STATUS', 'specimen_source_unverified'),
+        ],
+        'payment_instruments' => [
+            ['key' => 'cash', 'label' => 'Cash'],
+            ['key' => 'check', 'label' => 'Check'],
+            ['key' => 'money_order', 'label' => 'Money Order'],
+            ['key' => 'qr_ph', 'label' => 'QR Ph'],
+        ],
+        'footer_note' => 'Write the number and date of this receipt on the back of a check or money order received.',
+        'laboratory_watermark' => 'LABORATORY SPECIMEN — NOT FOR ACCOUNTING USE',
+    ],
+
     'officials' => [
         'municipal_mayor' => [
             'role' => 'Municipal Mayor',
@@ -76,7 +111,7 @@ return [
             'official_key' => 'municipal_treasurer',
             'document_type' => 'receipt_template',
             'relationship' => 'template_variable',
-            'current_runtime_use' => false,
+            'current_runtime_use' => true,
             'legacy_renderer_status' => 'supported',
             'production_layout_status' => 'observed',
         ],

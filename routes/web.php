@@ -97,6 +97,8 @@ if ($stakeholderPreviewSafety->isEnabled()) {
                 Route::post('stakeholder-preview/lifecycle-laboratory/cleanrooms/{lifecycleCleanroomRun}/office-reviews-assigned/{applicationYear}/simulate-office-reviews', [LifecycleCleanroomController::class, 'simulateOfficeReviews'])
                     ->whereNumber('applicationYear')
                     ->name('stakeholder-preview.lifecycle-laboratory.cleanrooms.office-reviews-assigned.simulate-office-reviews');
+                Route::post('stakeholder-preview/lifecycle-laboratory/cleanrooms/{lifecycleCleanroomRun}/simulate-qr-ph-payment', [LifecycleCleanroomController::class, 'simulateQrPhPayment'])
+                    ->name('stakeholder-preview.lifecycle-laboratory.cleanrooms.simulate-qr-ph-payment');
                 Route::post('stakeholder-preview/lifecycle-laboratory/cleanrooms/{lifecycleCleanroomRun}/next', [LifecycleCleanroomController::class, 'runNext'])
                     ->name('stakeholder-preview.lifecycle-laboratory.cleanrooms.next');
                 Route::post('stakeholder-preview/lifecycle-laboratory/cleanrooms/{lifecycleCleanroomRun}/milestone', [LifecycleCleanroomController::class, 'runToMilestone'])

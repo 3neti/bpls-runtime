@@ -73,6 +73,10 @@ class AuthenticateLifecycleCleanroomActor
             return 'staff.permit-applications.assessments.show';
         }
 
+        if ($actorKey === 'cashier') {
+            return 'staff.payment-schedules.show';
+        }
+
         return 'staff.permit-applications.show';
     }
 
@@ -89,6 +93,9 @@ class AuthenticateLifecycleCleanroomActor
         $application = $this->currentApplication($run);
         if ($destination === 'staff.permit-applications.assessments.show') {
             return $application->assessments()->whereNull('superseded_at')->sole()->id;
+        }
+        if ($destination === 'staff.payment-schedules.show') {
+            return $application->paymentSchedules()->latest('sequence')->sole()->id;
         }
 
         return $application->id;

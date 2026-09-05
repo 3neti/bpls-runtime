@@ -7,6 +7,7 @@ import {
     show as receiptShow,
     voidReceipt as receiptVoidReceipt,
 } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
+import Af51OfficialReceipt from '@/components/receipts/Af51OfficialReceipt.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
@@ -90,6 +91,7 @@ type Receipt = {
 
 const props = defineProps<{
     receipt: Receipt;
+    officialReceiptProfile: Record<string, unknown>;
     policyGaps: string[];
     can: {
         void_receipts: boolean;
@@ -219,8 +221,13 @@ function label(value: string): string {
                 ]"
             />
 
+            <Af51OfficialReceipt
+                :receipt="receipt"
+                :fallback-profile="officialReceiptProfile"
+            />
+
             <section
-                class="rounded-lg border border-sidebar-border/70 bg-background p-6 dark:border-sidebar-border print:rounded-none print:border-black print:bg-white print:p-0"
+                class="rounded-lg border border-sidebar-border/70 bg-background p-6 dark:border-sidebar-border print:hidden"
             >
                 <div
                     class="flex flex-wrap items-start justify-between gap-4 border-b pb-5 print:border-black"

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Staff;
 
 use App\Actions\DescribeReceiptVoidBoundary;
 use App\Actions\RenderReceiptPdf;
+use App\Actions\ResolveOfficialReceiptProfile;
 use App\Actions\VoidReceipt;
 use App\Enums\ReceiptStatus;
 use App\Enums\UserPermission;
@@ -82,7 +83,7 @@ class ReceiptController extends Controller
         ]);
     }
 
-    public function show(Receipt $receipt): Response
+    public function show(Receipt $receipt, ResolveOfficialReceiptProfile $resolveOfficialReceiptProfile): Response
     {
         Gate::authorize(UserPermission::ViewReceipts->value);
 
@@ -97,6 +98,7 @@ class ReceiptController extends Controller
 
         return Inertia::render('receipts/Show', [
             'receipt' => $this->receiptPayload($receipt),
+            'officialReceiptProfile' => $resolveOfficialReceiptProfile->handle(),
             'policyGaps' => [
                 'Automatic receipt numbering authority remains unresolved.',
                 'This is a print-friendly receipt view, not the final official PDF layout.',

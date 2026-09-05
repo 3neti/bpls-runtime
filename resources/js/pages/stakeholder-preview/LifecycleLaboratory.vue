@@ -119,6 +119,13 @@ type CleanroomState = {
     actors: CleanroomActor[];
     application_data: any | null;
     application_document: any | null;
+    payment_simulation: {
+        available: boolean;
+        pay_code: string | null;
+        collection_id: number | null;
+        receipt_id: number | null;
+        status: 'not_ready' | 'awaiting_simulation' | 'collected';
+    };
 };
 
 const props = defineProps<{
@@ -326,6 +333,27 @@ function closeCleanroom(): void {
         closeCleanroomRoute(props.cleanroom.active.run.id).url,
         {},
         { onFinish: () => (working.value = null) },
+    );
+}
+
+function simulateQrPhPayment(): void {
+    if (!props.cleanroom.active) {
+        return;
+    }
+
+    if (
+        !window.confirm(
+            'Simulate full QR Ph payment in this synthetic cleanroom? No real funds will move.',
+        )
+    ) {
+        return;
+    }
+
+    working.value = 'cleanroom:simulate-payment';
+    router.post(
+        `/stakeholder-preview/lifecycle-laboratory/cleanrooms/${props.cleanroom.active.run.id}/simulate-qr-ph-payment`,
+        {},
+        { preserveScroll: true, onFinish: () => (working.value = null) },
     );
 }
 </script>
@@ -662,6 +690,50 @@ function closeCleanroom(): void {
                     <div
                         class="sticky top-4 space-y-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800"
                     >
+                        <div
+                            v-if="
+                                cleanroom.active.payment_simulation.status !==
+                                'not_ready'
+                            "
+                            class="rounded-xl border border-sky-300 bg-sky-50 p-4 text-sky-950 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-100"
+                            data-testid="laboratory-payment-simulator"
+                        >
+                            <p
+                                class="text-xs font-black tracking-wide uppercase"
+                            >
+                                Laboratory payment simulator
+                            </p>
+                            <p class="mt-1 text-sm font-semibold">
+                                Pay Code
+                                {{
+                                    cleanroom.active.payment_simulation.pay_code
+                                }}
+                            </p>
+                            <p class="mt-1 text-xs leading-5">
+                                {{
+                                    cleanroom.active.payment_simulation
+                                        .status === 'collected'
+                                        ? 'Synthetic Collection recorded. Enter as Cashier to issue and print the Official Receipt.'
+                                        : 'Simulates x-change reporting the full Pay Code amount as collected. No real funds move.'
+                                }}
+                            </p>
+                            <button
+                                v-if="
+                                    cleanroom.active.payment_simulation
+                                        .available
+                                "
+                                type="button"
+                                :disabled="working !== null"
+                                class="mt-3 min-h-10 w-full rounded-lg bg-sky-900 px-3 py-2 text-sm font-bold text-white disabled:opacity-50 dark:bg-sky-300 dark:text-sky-950"
+                                @click="simulateQrPhPayment"
+                            >
+                                {{
+                                    working === 'cleanroom:simulate-payment'
+                                        ? 'Recording…'
+                                        : 'Simulate full QR Ph payment'
+                                }}
+                            </button>
+                        </div>
                         <button
                             type="button"
                             :disabled="
