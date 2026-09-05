@@ -60,6 +60,21 @@ type DocumentProjection = {
         verified_by: number | null;
         recommending_approval: string | null;
     }[];
+    routing: {
+        status: 'pending' | 'determined';
+        determination_id: number | null;
+        determined_at: string | null;
+        determined_by: string | null;
+        reason: string | null;
+        works: {
+            id: number;
+            office_code: string;
+            office_label: string;
+            line_of_business_name: string | null;
+            situational_reason: string;
+            required_work: string;
+        }[];
+    };
     page_2_assessment: {
         status: string;
         statement: string;
@@ -585,9 +600,58 @@ function officeStatus(value: OfficeFeeDetermination['status']) {
             <h2
                 class="bg-[#1f416b] px-4 py-3 text-lg font-black text-white uppercase"
             >
-                Assessments
+                Municipal Processing
             </h2>
             <div class="grid gap-4 p-4 sm:p-5">
+                <section
+                    v-if="document.routing.status === 'determined'"
+                    class="grid gap-3 border-2 border-[#1f416b] bg-blue-50 p-3 dark:bg-blue-950/30"
+                    data-testid="page-2-bplo-routing-recorded"
+                >
+                    <div
+                        class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
+                    >
+                        <div>
+                            <p
+                                class="font-black tracking-[0.12em] text-[#1f416b] uppercase dark:text-blue-200"
+                            >
+                                BPLO routing recorded
+                            </p>
+                            <p class="mt-1 text-sm">
+                                {{ document.routing.works.length }}
+                                concerned-office work item(s) written to this
+                                living Page 2 projection.
+                            </p>
+                        </div>
+                        <span class="text-xs font-bold uppercase"
+                            >Canonical record</span
+                        >
+                    </div>
+                    <div class="grid gap-2 sm:grid-cols-2">
+                        <article
+                            v-for="work in document.routing.works"
+                            :key="work.id"
+                            class="border-l-4 border-[#1f416b] bg-white p-3 text-sm dark:bg-stone-900"
+                        >
+                            <p class="font-black">{{ work.office_label }}</p>
+                            <p
+                                class="text-xs text-stone-600 dark:text-stone-300"
+                            >
+                                {{
+                                    work.line_of_business_name ??
+                                    'Application-wide context'
+                                }}
+                            </p>
+                            <p class="mt-2">{{ work.required_work }}</p>
+                        </article>
+                    </div>
+                    <p class="text-xs text-stone-600 dark:text-stone-300">
+                        {{ document.routing.determined_by }} ·
+                        {{ shown(document.routing.determined_at) }} · Page 1
+                        unchanged
+                    </p>
+                </section>
+
                 <div
                     class="flex flex-col gap-2 border-b-2 border-stone-900 pb-3 sm:flex-row sm:items-end sm:justify-between dark:border-stone-400"
                 >
@@ -615,10 +679,20 @@ function officeStatus(value: OfficeFeeDetermination['status']) {
                 </div>
 
                 <p
-                    v-if="document.page_2_assessment.offices.length === 0"
+                    v-if="
+                        document.page_2_assessment.offices.length === 0 &&
+                        document.routing.status === 'pending'
+                    "
                     class="border-2 border-dashed border-stone-400 bg-stone-50 p-4 text-sm dark:bg-stone-800"
                 >
                     Awaiting the mandatory BPLO routing determination.
+                </p>
+                <p
+                    v-else-if="document.page_2_assessment.offices.length === 0"
+                    class="border-2 border-dashed border-stone-400 bg-stone-50 p-4 text-sm dark:bg-stone-800"
+                >
+                    BPLO routing is recorded. Office responsibility records will
+                    appear when Evaluation work is created.
                 </p>
 
                 <div

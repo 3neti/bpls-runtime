@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Staff;
 
 use App\Actions\ApplyDueBploRoutingSuggestions;
 use App\Actions\ArmBploRoutingSentinel;
+use App\Actions\BuildBploRoutingTask;
 use App\Actions\BuildBusinessPermitEvaluationPricePreview;
 use App\Actions\CompleteBusinessPermitEvaluationResponsibility;
 use App\Actions\ConfirmBusinessPermitEvaluationOfficeDefaults;
@@ -38,40 +39,24 @@ class BusinessPermitEvaluationController extends Controller
         DescribeBusinessPermitEvaluation $describe,
         ArmBploRoutingSentinel $armRoutingSentinel,
         ApplyDueBploRoutingSuggestions $applyDueRoutingSuggestions,
+        BuildBploRoutingTask $buildRoutingTask,
     ): Response {
         Gate::authorize(UserPermission::ViewBusinessPermitEvaluations->value);
         $armRoutingSentinel->handle($permitApplication);
         $applyDueRoutingSuggestions->handle();
         $permitApplication->loadMissing('business.owner');
         $evaluation = $permitApplication->businessPermitEvaluation()->first();
+        $routingTask = $buildRoutingTask->handle($permitApplication, auth()->user())->toArray();
 
         return Inertia::render('business-permit-evaluations/Show', [
             'evaluation' => $evaluation instanceof BusinessPermitEvaluation
                 ? $describe->handle($evaluation, auth()->user(), 'internal')
                 : null,
-            'application' => [
-                'id' => $permitApplication->id,
-                'application_number' => $permitApplication->application_number,
-                'tracking_reference' => $permitApplication->tracking_reference,
-                'business_name' => $permitApplication->business->name,
-                'owner_name' => $permitApplication->business->owner->name,
-                'type' => $permitApplication->type->value,
-                'year' => $permitApplication->application_year,
-                'submitted_at' => $permitApplication->submitted_at?->toIso8601String(),
-                'lines' => $permitApplication->lines()->with('lineOfBusiness')->get()->map(fn ($line): array => [
-                    'id' => $line->id,
-                    'line_of_business_id' => $line->line_of_business_id,
-                    'line_of_business_name' => $line->lineOfBusiness?->name,
-                ])->all(),
-            ],
-            'bploRouting' => $this->routingPayload($permitApplication),
-            'routingSuggestion' => $this->routingSuggestionPayload($permitApplication),
-            'routingOfficeOptions' => [
-                ['code' => 'engineering', 'label' => 'Engineering'],
-                ['code' => 'health', 'label' => 'Health'],
-                ['code' => 'assessor', 'label' => 'Municipal Assessor'],
-                ['code' => 'menro', 'label' => 'MENRO'],
-            ],
+            'application' => $routingTask['application'],
+            'bploRouting' => $routingTask['routing'],
+            'routingSuggestion' => $routingTask['suggestion'],
+            'routingOfficeOptions' => $routingTask['office_options'],
+            'routingTask' => $routingTask,
             'lineOfBusinesses' => LineOfBusiness::query()->availableToMunicipalCatalog()->orderBy('name')->get(['id', 'code', 'name']),
             'can' => $this->capabilities(),
         ]);
@@ -319,77 +304,6 @@ class BusinessPermitEvaluationController extends Controller
             'counter_check' => $user?->can(UserPermission::CounterCheckBusinessPermitEvaluations->value) ?? false,
             'correct_lines_of_business' => $user?->can(UserPermission::CorrectEvaluationLinesOfBusiness->value) ?? false,
             'prepare_assessment' => $user?->can(UserPermission::AssessPermitApplications->value) ?? false,
-        ];
-    }
-
-    /** @return array<string, mixed>|null */
-    private function routingPayload(PermitApplication $permitApplication): ?array
-    {
-        $determination = $permitApplication->bploRoutingDetermination()
-            ->with([
-                'determinedBy',
-                'works.lineOfBusiness',
-                'works.paymentOrders' => fn ($query) => $query->with(['issuedBy', 'lines'])->orderBy('sequence'),
-            ])
-            ->first();
-
-        if ($determination === null) {
-            return null;
-        }
-
-        return [
-            'id' => $determination->id,
-            'determined_by' => $determination->determinedBy->name,
-            'determined_at' => $determination->determined_at->toIso8601String(),
-            'situational_context' => $determination->situational_context,
-            'application_facts_snapshot' => $determination->application_facts_snapshot,
-            'origin' => data_get($determination->application_facts_snapshot, 'routing_origin', 'bplo_confirmed'),
-            'works' => $determination->works->map(fn ($work): array => [
-                'id' => $work->id,
-                'office_code' => $work->office_code,
-                'office_label' => $work->office_label,
-                'situational_reason' => $work->situational_reason,
-                'required_work' => $work->required_work,
-                'line_of_business_name' => $work->lineOfBusiness?->name,
-                'payment_orders' => $work->paymentOrders->map(fn ($order): array => [
-                    'id' => $order->id,
-                    'sequence' => $order->sequence,
-                    'status' => $order->superseded_at === null ? $order->status : 'superseded',
-                    'total_amount_cents' => $order->total_amount_cents,
-                    'issued_by' => $order->issuedBy->name,
-                    'issued_at' => $order->issued_at->toIso8601String(),
-                    'lines' => $order->lines->map(fn ($line): array => [
-                        'id' => $line->id,
-                        'code' => $line->code,
-                        'name' => $line->name,
-                        'amount_cents' => $line->amount_cents,
-                    ])->all(),
-                ])->all(),
-            ])->all(),
-        ];
-    }
-
-    /** @return array<string, mixed>|null */
-    private function routingSuggestionPayload(PermitApplication $permitApplication): ?array
-    {
-        $suggestion = $permitApplication->bploRoutingSuggestion()->first();
-        if ($suggestion === null) {
-            return null;
-        }
-
-        return [
-            'id' => $suggestion->id,
-            'profile_version' => $suggestion->profile_version,
-            'profile_keys' => $suggestion->profile_keys,
-            'status' => $suggestion->status,
-            'situational_context' => $suggestion->situational_context,
-            'suggested_work' => $suggestion->suggested_work,
-            'lodged_at' => $suggestion->lodged_at->toIso8601String(),
-            'review_due_at' => $suggestion->review_due_at->toIso8601String(),
-            'resolved_at' => $suggestion->resolved_at?->toIso8601String(),
-            'clock' => 'elapsed',
-            'server_now' => now()->toIso8601String(),
-            'production_authority' => false,
         ];
     }
 

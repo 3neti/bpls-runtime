@@ -81,6 +81,21 @@ type CleanroomStep = {
     delta: Record<string, string>;
 };
 
+type CleanroomActor = {
+    key: string;
+    label: string;
+    relationship: 'next' | 'waiting' | 'view_only';
+    relationship_label: string;
+    is_next: boolean;
+    task: {
+        key: string;
+        label: string;
+        mode: CleanroomStep['mode'];
+        tab: string;
+        focus: string;
+    } | null;
+};
+
 type CleanroomState = {
     run: { id: number; public_id: string; status: string };
     progress: {
@@ -101,7 +116,7 @@ type CleanroomState = {
         new: { current_total_amount_cents: number } | null;
         renewal: { current_total_amount_cents: number } | null;
     };
-    actors: { key: string; label: string }[];
+    actors: CleanroomActor[];
     application_data: any | null;
     application_document: any | null;
 };
@@ -145,6 +160,9 @@ const selectedCleanroomMilestone = ref(
 );
 const currentApplicationData = computed(
     () => props.cleanroom.active?.application_data ?? null,
+);
+const nextCleanroomActor = computed(
+    () => props.cleanroom.active?.actors.find((actor) => actor.is_next) ?? null,
 );
 const visibleCleanroomSteps = computed(
     () =>
@@ -214,9 +232,13 @@ function runCleanroomNext(): void {
     }
 
     working.value = 'cleanroom:next';
+    const next = props.cleanroom.active.progress.next_step;
     router.post(
         runCleanroomNextRoute(props.cleanroom.active.run.id).url,
-        {},
+        {
+            expected_step_key: next?.key ?? null,
+            expected_actor_key: next?.actor ?? null,
+        },
         { onFinish: () => (working.value = null) },
     );
 }
@@ -243,6 +265,16 @@ function openCleanroomActor(actor: string): void {
     router.post(
         enterCleanroomActorRoute([props.cleanroom.active.run.id, actor]).url,
     );
+}
+
+function activateCleanroomActor(actor: CleanroomActor): void {
+    if (actor.is_next) {
+        runCleanroomNext();
+
+        return;
+    }
+
+    openCleanroomActor(actor.key);
 }
 
 function closeCleanroom(): void {
@@ -603,7 +635,7 @@ function closeCleanroom(): void {
                                 cleanroom.active.progress.complete ||
                                 cleanroom.active.progress.blocked
                             "
-                            class="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-zinc-950 px-4 text-sm font-bold text-white disabled:opacity-50 dark:bg-amber-300 dark:text-amber-950"
+                            class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-zinc-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-50 dark:bg-amber-300 dark:text-amber-950"
                             @click="runCleanroomNext"
                         >
                             <Play class="size-4" />{{
@@ -613,7 +645,9 @@ function closeCleanroom(): void {
                                       ? 'Cleanroom complete'
                                       : cleanroom.active.progress.blocked
                                         ? 'Cleanroom blocked'
-                                        : 'Run Next Step'
+                                        : nextCleanroomActor
+                                          ? `Continue as ${nextCleanroomActor.label} — ${nextCleanroomActor.task?.label}`
+                                          : 'Run Next Step'
                             }}
                         </button>
                         <div class="space-y-2">
@@ -647,7 +681,7 @@ function closeCleanroom(): void {
                         </div>
                         <div>
                             <h3 class="text-sm font-semibold">
-                                Open as exact cleanroom actor
+                                Application actors
                             </h3>
                             <div class="mt-2 grid gap-2">
                                 <button
@@ -655,11 +689,37 @@ function closeCleanroom(): void {
                                     :key="actor.key"
                                     type="button"
                                     :disabled="working !== null"
-                                    class="flex items-center justify-between rounded-lg border border-zinc-200 px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
-                                    @click="openCleanroomActor(actor.key)"
+                                    :class="
+                                        actor.is_next
+                                            ? 'border-amber-400 bg-amber-100 text-amber-950 ring-2 ring-amber-300 dark:border-amber-500 dark:bg-amber-400 dark:text-amber-950'
+                                            : 'border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900'
+                                    "
+                                    class="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm disabled:opacity-50"
+                                    :data-actor-relationship="
+                                        actor.relationship
+                                    "
+                                    @click="activateCleanroomActor(actor)"
                                 >
-                                    <span>{{ actor.label }}</span
-                                    ><ExternalLink class="size-4" />
+                                    <span class="min-w-0">
+                                        <strong class="block">{{
+                                            actor.label
+                                        }}</strong>
+                                        <span class="block text-xs opacity-75">
+                                            {{
+                                                actor.is_next
+                                                    ? actor.task?.label
+                                                    : actor.relationship_label
+                                            }}
+                                        </span>
+                                    </span>
+                                    <Play
+                                        v-if="actor.is_next"
+                                        class="size-4 shrink-0"
+                                    />
+                                    <ExternalLink
+                                        v-else
+                                        class="size-4 shrink-0"
+                                    />
                                 </button>
                             </div>
                         </div>
@@ -713,11 +773,24 @@ function closeCleanroom(): void {
                         :key="actor.key"
                         type="button"
                         :disabled="working !== null"
-                        class="shrink-0 rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-bold hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
-                        @click="openCleanroomActor(actor.key)"
+                        :class="
+                            actor.is_next
+                                ? 'border-amber-500 bg-amber-300 text-amber-950 shadow-md ring-2 ring-amber-200'
+                                : 'border-slate-300 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900'
+                        "
+                        class="shrink-0 rounded-full border px-3 py-2 text-xs font-bold disabled:opacity-50"
+                        :data-testid="`application-actor-${actor.key}`"
+                        :data-actor-relationship="actor.relationship"
+                        @click="activateCleanroomActor(actor)"
                     >
-                        {{ actor.label }}
-                        <ExternalLink class="ml-1 inline size-3" />
+                        {{ actor.label }} ·
+                        {{
+                            actor.is_next
+                                ? `Next: ${actor.task?.label}`
+                                : actor.relationship_label
+                        }}
+                        <Play v-if="actor.is_next" class="ml-1 inline size-3" />
+                        <ExternalLink v-else class="ml-1 inline size-3" />
                     </button>
                 </div>
             </div>

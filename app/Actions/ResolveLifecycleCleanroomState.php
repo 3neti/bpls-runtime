@@ -103,9 +103,7 @@ class ResolveLifecycleCleanroomState
                 'new' => $this->applicationSummary($newApplication, $newProjection, $newProfile),
                 'renewal' => $this->applicationSummary($renewalApplication, $renewalProjection, $renewalProfile),
             ],
-            'actors' => collect($run->actors())
-                ->map(fn (array $actor, string $key): array => ['key' => $key, 'label' => $actor['label']])
-                ->values()->all(),
+            'actors' => $this->actorPresentations($run, $steps, $next),
             'safety' => [
                 'classification' => 'Synthetic cleanroom only',
                 'production_available' => false,
@@ -114,6 +112,60 @@ class ResolveLifecycleCleanroomState
                 'execution_boundary' => 'System steps invoke canonical Actions; human steps open the real product form as the exact cleanroom actor.',
             ],
         ];
+    }
+
+    /**
+     * @param  Collection<int, non-empty-array<string, mixed>>  $steps
+     * @param  array<string, mixed>|null  $next
+     * @return list<array<string, mixed>>
+     */
+    private function actorPresentations(LifecycleCleanroomRun $run, Collection $steps, ?array $next): array
+    {
+        $pendingActors = $steps
+            ->where('completed', false)
+            ->pluck('actor')
+            ->filter(fn (mixed $actor): bool => is_string($actor));
+
+        return array_values(collect($run->actors())
+            ->map(function (array $actor, string $key) use ($next, $pendingActors): array {
+                $isNext = ($next['actor'] ?? null) === $key;
+                $relationship = $isNext
+                    ? 'next'
+                    : ($pendingActors->contains($key) ? 'waiting' : 'view_only');
+
+                return [
+                    'key' => $key,
+                    'label' => $actor['label'],
+                    'relationship' => $relationship,
+                    'relationship_label' => match ($relationship) {
+                        'next' => 'Next',
+                        'waiting' => 'Waiting',
+                        default => 'View only',
+                    },
+                    'is_next' => $isNext,
+                    'task' => $isNext ? [
+                        'key' => $next['key'],
+                        'label' => $next['milestone'],
+                        'mode' => $next['mode'],
+                        ...$this->taskFocus((string) $next['key']),
+                    ] : null,
+                ];
+            })
+            ->values()
+            ->all());
+    }
+
+    /** @return array{tab: string, focus: string} */
+    private function taskFocus(string $step): array
+    {
+        $baseStep = Str::startsWith($step, 'renewal_') ? Str::after($step, 'renewal_') : $step;
+
+        return match ($baseStep) {
+            'citizen_intake' => ['tab' => 'application', 'focus' => 'lodge-application'],
+            'bplo_routing' => ['tab' => 'processing', 'focus' => 'bplo-routing'],
+            'assessment_prepared', 'treasury_counter_check', 'treasurer_approved', 'payable_created' => ['tab' => 'assessment', 'focus' => $baseStep],
+            default => ['tab' => 'processing', 'focus' => $baseStep],
+        };
     }
 
     /** @return array<string, mixed>|null */

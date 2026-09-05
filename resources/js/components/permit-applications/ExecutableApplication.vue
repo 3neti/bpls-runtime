@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { router } from '@inertiajs/vue3';
 import { ExternalLink, QrCode, ReceiptText } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import ApplicationWorkNote from '@/components/permit-applications/ApplicationWorkNote.vue';
+import BploRoutingTaskSheet from '@/components/permit-applications/BploRoutingTaskSheet.vue';
 import IpilExecutableDocument from '@/components/permit-applications/IpilExecutableDocument.vue';
 
 type Task = {
@@ -56,8 +58,17 @@ const props = withDefaults(
         mode?:
             'workspace' | 'palette' | 'mobile' | 'print' | 'processing-print';
         initialTab?: string;
+        initialTask?: string;
+        routingTask?: any | null;
+        interactiveTaskRouting?: boolean;
     }>(),
-    { mode: 'workspace', initialTab: 'application' },
+    {
+        mode: 'workspace',
+        initialTab: 'application',
+        initialTask: '',
+        routingTask: null,
+        interactiveTaskRouting: false,
+    },
 );
 
 const activeTab = ref(
@@ -69,6 +80,39 @@ const workNotes = computed(
     () => props.application.actor_context.work_notes ?? [],
 );
 const snapshot = computed(() => props.application.declaration.snapshot ?? {});
+const activeTask = ref(props.initialTask);
+
+watch(
+    () => props.initialTab,
+    (tab) => {
+        if (props.application.tabs.some((candidate) => candidate.key === tab)) {
+            activeTab.value = tab;
+        }
+    },
+);
+watch(
+    () => props.initialTask,
+    (task) => {
+        activeTask.value = task;
+    },
+);
+
+function activateWorkNote(note: WorkNote): void {
+    if (!note.actionable || !note.action_url) {
+        return;
+    }
+
+    if (props.interactiveTaskRouting && note.id === 'bplo_routing') {
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', 'processing');
+        url.searchParams.set('task', 'bplo-routing');
+        router.visit(`${url.pathname}${url.search}`);
+
+        return;
+    }
+
+    router.visit(note.action_url);
+}
 
 function money(minor: number | null | undefined): string {
     if (minor === null || minor === undefined) {
@@ -167,7 +211,12 @@ function label(value: unknown): string {
         </nav>
 
         <div
-            class="grid min-w-0 gap-5 p-3 sm:p-6 lg:grid-cols-[minmax(0,1fr)_19rem]"
+            :class="
+                routingTask && activeTask === 'bplo-routing'
+                    ? 'xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)_19rem]'
+                    : 'lg:grid-cols-[minmax(0,1fr)_19rem]'
+            "
+            class="grid min-w-0 gap-5 p-3 sm:p-6"
         >
             <section
                 data-testid="application-document-canvas"
@@ -779,6 +828,12 @@ function label(value: unknown): string {
                 </div>
             </section>
 
+            <BploRoutingTaskSheet
+                v-if="routingTask && activeTask === 'bplo-routing'"
+                :task="routingTask"
+                mode="sheet"
+            />
+
             <aside
                 :class="{ 'print:hidden': mode !== 'processing-print' }"
                 class="min-w-0"
@@ -858,6 +913,7 @@ function label(value: unknown): string {
                                 :note="note"
                                 :index="index"
                                 class="w-[17rem] shrink-0 snap-start lg:w-auto"
+                                @activate="activateWorkNote"
                             />
                         </div>
                     </section>

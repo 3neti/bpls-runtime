@@ -7,6 +7,8 @@ defineProps<{
     application: any;
     document: any;
     focus: string;
+    initialTab: string;
+    routingTask: any | null;
     scenario: { id: string; run_id: string };
 }>();
 defineOptions({ layout: AppLayout });
@@ -15,7 +17,7 @@ defineOptions({ layout: AppLayout });
 <template>
     <Head title="Executable Application" />
     <main
-        class="mx-auto w-full max-w-7xl overflow-x-clip px-3 py-5 sm:px-6 lg:px-8"
+        class="mx-auto w-full max-w-[96rem] overflow-x-clip px-3 py-5 sm:px-6 lg:px-8"
     >
         <div class="mb-4">
             <p
@@ -32,10 +34,10 @@ defineOptions({ layout: AppLayout });
             :application="application"
             :document="document"
             mode="workspace"
-            :initial-tab="
-                application.actor_context.current_tasks[0]?.section ??
-                'application'
-            "
+            :initial-tab="initialTab"
+            :initial-task="focus"
+            :routing-task="routingTask"
+            interactive-task-routing
         />
     </main>
 </template>

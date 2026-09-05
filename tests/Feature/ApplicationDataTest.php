@@ -151,6 +151,8 @@ test('Business Permit projection preserves many lines of business and verificati
 test('Executable Application centers the facsimile and keeps actor-neutral work notes visible', function () {
     $component = file_get_contents(resource_path('js/components/permit-applications/ExecutableApplication.vue'));
     $note = file_get_contents(resource_path('js/components/permit-applications/ApplicationWorkNote.vue'));
+    $routingTask = file_get_contents(resource_path('js/components/permit-applications/BploRoutingTaskSheet.vue'));
+    $document = file_get_contents(resource_path('js/components/permit-applications/IpilExecutableDocument.vue'));
 
     expect($component)->toContain('role="tablist"')
         ->and($component)->toContain(':aria-selected="activeTab === tab.key"')
@@ -161,13 +163,22 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
         ->and($component)->toContain('data-testid="application-work-notes"')
         ->and($component)->toContain('application.actor_context.work_notes')
         ->and($component)->toContain('ApplicationWorkNote')
+        ->and($component)->toContain('BploRoutingTaskSheet')
+        ->and($component)->toContain("url.searchParams.set('task', 'bplo-routing')")
         ->and($note)->toContain('data-testid="application-work-note"')
         ->and($note)->toContain('note.actionable && note.action_url')
         ->and($note)->not->toMatch('/\bYour Task\b/i')
         ->and($component)->not->toContain('tab.status')
         ->and($component)->toContain('min-w-0')
         ->and($component)->toContain('break-words')
-        ->and($component)->toContain('overflow-x-auto');
+        ->and($component)->toContain('overflow-x-auto')
+        ->and($routingTask)->toContain('data-testid="bplo-routing-task-sheet"')
+        ->and($routingTask)->toContain('Record BPLO routing')
+        ->and($routingTask)->toContain('Manual cleanroom confirmation required')
+        ->and($document)->toContain('data-testid="page-2-bplo-routing-recorded"')
+        ->and($document)->toContain('BPLO routing recorded')
+        ->and($document)->toContain('Page 1')
+        ->and($document)->toContain('unchanged');
 });
 
 function configureApplicationDataPreview(): void

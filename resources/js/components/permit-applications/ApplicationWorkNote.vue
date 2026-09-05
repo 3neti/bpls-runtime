@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
 import {
     AlertTriangle,
     ArrowUpRight,
@@ -29,6 +28,9 @@ type ApplicationWorkNote = {
 const props = defineProps<{
     note: ApplicationWorkNote;
     index: number;
+}>();
+const emit = defineEmits<{
+    activate: [note: ApplicationWorkNote];
 }>();
 
 const paperClass = computed(
@@ -130,13 +132,14 @@ function completedDate(value: string | null): string | null {
             </p>
         </div>
 
-        <Link
+        <button
             v-if="note.actionable && note.action_url"
-            :href="note.action_url"
-            class="mt-4 flex min-h-10 items-center justify-between gap-3 rounded-md bg-slate-950 px-3 py-2 text-sm font-black text-white outline-none hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2"
+            type="button"
+            class="mt-4 flex min-h-10 w-full items-center justify-between gap-3 rounded-md bg-slate-950 px-3 py-2 text-sm font-black text-white outline-none hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2"
+            @click="emit('activate', note)"
         >
             <span>{{ note.action_label ?? 'Open work' }}</span>
             <ArrowUpRight class="size-4 shrink-0" aria-hidden="true" />
-        </Link>
+        </button>
     </article>
 </template>

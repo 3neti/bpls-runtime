@@ -188,6 +188,25 @@ test('sentinel defaults an expired suggestion exactly once without downstream au
         ->and(previewBplo()->notifications()->where('type', BploRoutingDefaulted::class)->count())->toBe(1);
 });
 
+test('sentinel never consumes the manual routing task of a synthetic cleanroom application', function (): void {
+    $application = sariSariApplication();
+    $metadata = $application->metadata;
+    $metadata['lifecycle_cleanroom'] = [
+        'run_id' => 'cleanroom-manual-routing',
+        'semantic_classification' => 'synthetic_only',
+        'production_liability' => false,
+    ];
+    $application->forceFill(['metadata' => $metadata])->save();
+    $suggestion = app(ArmBploRoutingSentinel::class)->handle($application);
+
+    Carbon::setTestNow(now()->addMinutes(15));
+    $result = app(ApplyDueBploRoutingSuggestions::class)->handle();
+
+    expect($result['defaulted'])->toBe(0)
+        ->and($suggestion->fresh()->status)->toBe(BploRoutingSuggestion::AwaitingConfirmation)
+        ->and($application->bploRoutingDetermination()->exists())->toBeFalse();
+});
+
 test('scheduled sweeps never retroactively arm an older unreviewed application', function (): void {
     $application = sariSariApplication();
 

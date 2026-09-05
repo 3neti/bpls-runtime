@@ -80,6 +80,7 @@ final class BuildExecutablePermitApplicationDocument
                 'snapshot' => $application['declaration']['snapshot'],
             ],
             'verification' => $certifications,
+            'routing' => $application['routing'],
             'page_2_assessment' => [
                 'status' => $assessment !== null ? 'assessment_prepared' : (data_get($application, 'routing.status') === 'pending' ? 'awaiting_bplo_routing' : 'office_determinations_in_progress'),
                 'statement' => $assessment !== null

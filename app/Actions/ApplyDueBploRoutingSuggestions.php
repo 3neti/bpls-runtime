@@ -60,6 +60,11 @@ class ApplyDueBploRoutingSuggestions
                     return 'unchanged';
                 }
 
+                if (data_get($application->metadata, 'lifecycle_cleanroom.semantic_classification') === 'synthetic_only'
+                    && data_get($application->metadata, 'lifecycle_cleanroom.production_liability') === false) {
+                    return 'unchanged';
+                }
+
                 $existing = $application->bploRoutingDetermination()->first();
                 if ($existing instanceof BploRoutingDetermination) {
                     $suggestion->update([

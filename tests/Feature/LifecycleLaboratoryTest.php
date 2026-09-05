@@ -220,7 +220,19 @@ test('management starts a non destructive cleanroom and run next opens the real 
         ->all();
     expect($visibleStepKeys)->toBe(['cleanroom_started', 'citizen_intake'])
         ->and(data_get($startedState, 'progress.next_step.key'))->toBe('citizen_intake')
+        ->and(collect(data_get($startedState, 'actors'))->where('is_next', true)->pluck('key')->all())->toBe(['citizen'])
+        ->and(collect(data_get($startedState, 'actors'))->firstWhere('key', 'citizen')['relationship'])->toBe('next')
+        ->and(collect(data_get($startedState, 'actors'))->firstWhere('key', 'intake')['relationship'])->toBe('waiting')
         ->and(collect(data_get($startedState, 'steps'))->firstWhere('key', 'assessor_responsibilities')['status'])->toBe('pending');
+
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run), [
+            'expected_step_key' => 'bplo_routing',
+            'expected_actor_key' => 'intake',
+        ])
+        ->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.index'))
+        ->assertSessionHasErrors('cleanroom');
+    expect($run->fresh()->new_application_id)->toBeNull();
 
     $this->actingAs($management)
         ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.milestone', $run), ['step_key' => 'arbitrary-workflow'])
@@ -535,6 +547,13 @@ test('cleanroom citizen form lodges through canonical draft and submit actions i
     $lodgedState = app(ResolveLifecycleCleanroomState::class)->handle($run);
     expect(data_get($lodgedState, 'progress.completed_steps'))->toBe(2)
         ->and(data_get($lodgedState, 'progress.next_step.key'))->toBe('bplo_routing')
+        ->and(collect(data_get($lodgedState, 'actors'))->where('is_next', true)->pluck('key')->all())->toBe(['intake'])
+        ->and(collect(data_get($lodgedState, 'actors'))->firstWhere('key', 'intake')['task'])->toMatchArray([
+            'key' => 'bplo_routing',
+            'label' => 'BPLO routing',
+            'tab' => 'processing',
+            'focus' => 'bplo-routing',
+        ])
         ->and(collect(data_get($lodgedState, 'steps'))->pluck('key'))->not->toContain('application_submitted')
         ->and(collect(data_get($lodgedState, 'steps'))->firstWhere('key', 'citizen_intake')['label'])->toBe('Application Form completed and lodged');
 
@@ -548,9 +567,40 @@ test('cleanroom citizen form lodges through canonical draft and submit actions i
     expect(session()->has('lifecycle_cleanroom_intake_run_id'))->toBeFalse();
 
     $this->actingAs($management)
-        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))
-        ->assertRedirect(route('staff.permit-applications.evaluation.show', $application));
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run), [
+            'expected_step_key' => 'bplo_routing',
+            'expected_actor_key' => 'intake',
+        ])
+        ->assertRedirect(route('stakeholder-preview.lifecycle-cleanroom-application.show', $run).'?tab=processing&task=bplo-routing');
+    $intakeActor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.intake.user_id'));
+    $this->assertAuthenticatedAs($intakeActor);
+    $focusedUrl = route('stakeholder-preview.lifecycle-cleanroom-application.show', $run).'?tab=processing&task=bplo-routing';
+    $this->get($focusedUrl)
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('stakeholder-preview/LifecycleApplication')
+            ->where('initialTab', 'processing')
+            ->where('focus', 'bplo-routing')
+            ->where('routingTask.schema_version', 'bpls.bplo-routing-task.v1')
+            ->where('routingTask.can_determine', true)
+            ->where('routingTask.manual_confirmation_required', true)
+            ->where('routingTask.routing', null));
+    $citizenActor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.citizen.user_id'));
+    $this->actingAs($citizenActor)->get($focusedUrl)
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('initialTab', 'processing')
+            ->where('focus', '')
+            ->where('routingTask', null));
     recordCleanroomRouting($run, $application);
+    $this->actingAs($intakeActor)->get($focusedUrl)
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('routingTask.can_determine', false)
+            ->where('routingTask.routing.works.0.office_code', 'assessor')
+            ->where('document.routing.status', 'determined')
+            ->where('document.routing.determined_by', $intakeActor->name)
+            ->has('document.routing.works', 5));
     $this->actingAs($management)
         ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))
         ->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.office-reviews-assigned', [$run, 2025]));
