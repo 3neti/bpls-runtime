@@ -56,6 +56,8 @@ test('ApplicationData V1 contains typed canonical facts without Eloquent models 
         ->and($citizenData['declaration'])->toBe($healthData['declaration'])
         ->and($citizenData['financial'])->toBe($healthData['financial'])
         ->and($citizenData['payment'])->toBe($healthData['payment'])
+        ->and($citizenData['fee_menu'])->toBe($healthData['fee_menu'])
+        ->and($citizenData['attachments'])->toBe($healthData['attachments'])
         ->and($citizenData['actor_context'])->not->toBe($healthData['actor_context'])
         ->and($citizenData['actor_context']['current_tasks'])->toHaveCount(1)
         ->and($citizenData['actor_context']['current_tasks'][0]['key'])->toBe('pay_balance')
@@ -91,6 +93,20 @@ test('frozen Page 1 and frozen PriceReport survive ApplicationData reconstructio
         ->and($data['routing']['page'])->toBe('page_2')
         ->and($data['routing']['status'])->toBe('determined')
         ->and($data['offices'])->not->toBeEmpty()
+        ->and($data['fee_menu']['schema_version'])->toBe('bpls.municipal-fee-menu-data.v1')
+        ->and($data['fee_menu']['application_year'])->toBe(2025)
+        ->and($data['fee_menu']['as_of_date'])->toBe('2025-01-01')
+        ->and($data['fee_menu']['classification'])->toBe('reference_only')
+        ->and($data['fee_menu']['statement'])->toContain('not an Assessment')
+        ->and(collect($data['attachments'])->pluck('key')->all())->toBe([
+            'fee_menu',
+            'payment_orders',
+            'assessment',
+            'qr_ph',
+            'official_receipt',
+            'permit',
+        ])
+        ->and(collect($data['attachments'])->firstWhere('key', 'assessment')['state'])->toBe('frozen')
         ->and($data['financial']['price_report'])->toBe($priceReport)
         ->and($assessment->refresh()->price_report_snapshot)->toBe($priceReport);
 });
@@ -107,8 +123,11 @@ test('Official Receipt projection requires canonical Receipt truth and permit va
     ], $collector);
 
     $beforeReceipt = app(ApplicationDataResolver::class)->resolve($application->fresh())->toArray();
+    $beforeReceiptAttachment = collect($beforeReceipt['attachments'])->firstWhere('key', 'official_receipt');
     expect($beforeReceipt['payment']['collections'])->toHaveCount(1)
         ->and($beforeReceipt['official_receipts'])->toBe([])
+        ->and($beforeReceiptAttachment['state'])->toBe('pending')
+        ->and($beforeReceiptAttachment['available'])->toBeFalse()
         ->and($beforeReceipt['permit']['official_receipt_bound'])->toBeFalse()
         ->and($beforeReceipt['permit']['valid'])->toBeFalse();
 
@@ -123,6 +142,7 @@ test('Official Receipt projection requires canonical Receipt truth and permit va
         ->sole();
     $authorizedReceipt = app(ApplicationDataResolver::class)->resolve($application->fresh(), $receiptViewer)->toArray();
     $receiptId = $authorizedReceipt['official_receipts'][0]['source']['receipt_id'];
+    $issuedReceiptAttachment = collect($afterReceipt['attachments'])->firstWhere('key', 'official_receipt');
 
     expect($afterReceipt['official_receipts'])->toHaveCount(1)
         ->and($afterReceipt['official_receipts'][0]['accountable_form_number'])->toBe(51)
@@ -136,6 +156,8 @@ test('Official Receipt projection requires canonical Receipt truth and permit va
         ])
         ->and($authorizedReceipt['official_receipts'][0]['links']['view'])->toBe(route('staff.receipts.show', $receiptId, false))
         ->and($authorizedReceipt['official_receipts'][0]['links']['pdf'])->toBe(route('staff.receipts.pdf', $receiptId, false))
+        ->and($issuedReceiptAttachment['state'])->toBe('issued')
+        ->and($issuedReceiptAttachment['available'])->toBeTrue()
         ->and($afterReceipt['permit']['official_receipt_bound'])->toBeTrue()
         ->and($afterReceipt['permit']['official_receipt_number'])->toBe('SYNTHETIC-AF51-0001')
         ->and($afterReceipt['permit']['released'])->toBeFalse()
@@ -170,12 +192,23 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
     $processingSheet = file_get_contents(resource_path('js/components/permit-applications/IpilMunicipalProcessingSheet.vue'));
     $navigator = file_get_contents(resource_path('js/components/permit-applications/ApplicationDocumentNavigator.vue'));
     $paymentSheet = file_get_contents(resource_path('js/components/permit-applications/IpilPaymentContinuationSheet.vue'));
+    $attachmentRail = file_get_contents(resource_path('js/components/permit-applications/ApplicationAttachmentRail.vue'));
+    $feeMenu = file_get_contents(resource_path('js/components/permit-applications/MunicipalFeeMenuSheet.vue'));
+    $paymentOrders = file_get_contents(resource_path('js/components/permit-applications/OfficePaymentOrdersSheet.vue'));
     $officialReceipt = file_get_contents(resource_path('js/components/receipts/Af51OfficialReceipt.vue'));
 
-    expect($component)->toContain('role="tablist"')
-        ->and($component)->toContain("{ key: 'application_form', label: 'Application Form' }")
-        ->and($component)->toContain("tab.key !== 'application' && tab.key !== 'processing'")
-        ->and($component)->toContain(':aria-selected="artifactIsActive(tab.key)"')
+    expect($component)->toContain('ApplicationAttachmentRail')
+        ->and($component)->toContain(':attachments="application.attachments"')
+        ->and($component)->toContain('MunicipalFeeMenuSheet')
+        ->and($component)->toContain('OfficePaymentOrdersSheet')
+        ->and($component)->toContain("activeTab === 'fee_menu'")
+        ->and($component)->toContain("activeTab === 'payment_orders'")
+        ->and($attachmentRail)->toContain('role="tablist"')
+        ->and($attachmentRail)->toContain(':aria-selected="activeKey === attachment.key"')
+        ->and($feeMenu)->toContain('data-testid="municipal-fee-menu-sheet"')
+        ->and($feeMenu)->toContain('Reference only')
+        ->and($feeMenu)->toContain('Not an Assessment')
+        ->and($paymentOrders)->toContain('data-testid="office-payment-orders-sheet"')
         ->and($component)->toContain('data-testid="application-document-canvas"')
         ->and($component)->toContain('ApplicationDocumentNavigator')
         ->and($component)->toContain('IpilExecutableDocument')

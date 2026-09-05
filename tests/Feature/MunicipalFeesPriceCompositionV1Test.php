@@ -346,6 +346,8 @@ it('uses an exact FeeRule identity when a contextual matrix link is available', 
 it('presents the quick look as a compact fee schedule with governed maintenance links', function (): void {
     $quickLook = file_get_contents(resource_path('js/components/fees/FeeMatrixQuickLook.vue'));
     $feeCatalog = file_get_contents(resource_path('js/pages/fee-rules/Index.vue'));
+    $layout = file_get_contents(resource_path('js/layouts/app/AppSidebarLayout.vue'));
+    $evaluation = file_get_contents(resource_path('js/pages/business-permit-evaluations/Show.vue'));
 
     expect($quickLook)
         ->toContain('Municipal Schedule of Fees')
@@ -355,6 +357,10 @@ it('presents the quick look as a compact fee schedule with governed maintenance 
         ->toContain('Ordinance Source')
         ->not->toContain('All provisions recorded')
         ->not->toContain('Ordinance evidence—not a price list')
+        ->and($quickLook)->toContain('v-if="showTrigger"')
+        ->and($layout)->not->toContain('FeeMatrixQuickLook')
+        ->and($evaluation)->toContain('<FeeMatrixQuickLook')
+        ->and($evaluation)->toContain(':show-trigger="false"')
         ->and($feeCatalog)->toContain("'revenue-code-provision-' +");
 });
 

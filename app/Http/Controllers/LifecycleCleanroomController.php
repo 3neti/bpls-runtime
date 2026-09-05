@@ -211,7 +211,7 @@ class LifecycleCleanroomController extends Controller
                 ? $buildRoutingTask->handle($application, $viewer)->toArray()
                 : null;
         $initialTab = $request->string('tab')->toString();
-        if (! in_array($initialTab, ['application', 'processing', 'assessment', 'payment', 'permit'], true)) {
+        if (! in_array($initialTab, ['application', 'processing', 'fee_menu', 'payment_orders', 'assessment', 'payment', 'permit'], true)) {
             $initialTab = $routingTask === null ? 'application' : 'processing';
         }
 

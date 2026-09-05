@@ -18,6 +18,7 @@ final class ApplicationData extends Data
      * @param  list<OfficialReceiptData>  $official_receipts
      * @param  array<string, mixed>  $post_payment
      * @param  list<array<string, mixed>>  $documents
+     * @param  list<ApplicationAttachmentData>  $attachments
      * @param  list<array{key: string, label: string}>  $tabs
      */
     public function __construct(
@@ -34,6 +35,8 @@ final class ApplicationData extends Data
         public readonly array $post_payment,
         public readonly BusinessPermitData $permit,
         public readonly array $documents,
+        public readonly MunicipalFeeMenuData $fee_menu,
+        public readonly array $attachments,
         public readonly ActorContextData $actor_context,
         public readonly array $tabs,
     ) {}

@@ -2,6 +2,7 @@
 
 namespace App\Data\Application;
 
+use App\Actions\BuildMunicipalPriceList;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\ResolveOfficialReceiptProfile;
@@ -18,6 +19,7 @@ use App\Models\PermitClearance;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 final class EloquentApplicationDataResolver implements ApplicationDataResolver
@@ -36,6 +38,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         private readonly DescribePermitVerificationBoundary $verificationBoundary,
         private readonly QrPhPaymentArtifactCache $qrPhArtifactCache,
         private readonly ResolveOfficialReceiptProfile $resolveOfficialReceiptProfile,
+        private readonly BuildMunicipalPriceList $buildMunicipalPriceList,
     ) {}
 
     public function resolve(PermitApplication $permitApplication, ?User $viewer = null): ApplicationData
@@ -76,6 +79,8 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             ->values()
             ->all());
         $permit = $this->permit($application, $receipts);
+        $feeMenu = $this->feeMenu($application);
+        $attachments = $this->attachments($application, $assessment, $receipts, $permit);
         $tasks = $this->tasks($application, $viewer, $evaluationProjection);
         $affordances = $this->affordances($application, $viewer, $tasks);
         $workNotes = $this->workNotes($application, $evaluationProjection, $offices, $tasks, $receipts, $permit);
@@ -172,6 +177,8 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'size_bytes' => $document->size_bytes,
                 'uploaded_at' => $document->uploaded_at->toIso8601String(),
             ])->values()->all()),
+            fee_menu: $feeMenu,
+            attachments: $attachments,
             actor_context: new ActorContextData(
                 actor_id: $viewer?->id,
                 actor_label: $viewer === null ? 'Laboratory observer' : $viewer->name,
@@ -187,6 +194,76 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 ['key' => 'payment', 'label' => 'Payment'],
                 ['key' => 'permit', 'label' => 'Permit'],
             ],
+        );
+    }
+
+    private function feeMenu(PermitApplication $application): MunicipalFeeMenuData
+    {
+        $asOf = Carbon::create($application->application_year, 1, 1)->startOfDay();
+        $priceList = $this->buildMunicipalPriceList->handle(asOf: $asOf);
+
+        return new MunicipalFeeMenuData(
+            schema_version: MunicipalFeeMenuData::Schema,
+            title: 'Municipal Fee Menu',
+            scope: (string) data_get($priceList, 'catalog.scope'),
+            as_of_date: (string) data_get($priceList, 'catalog.as_of_date'),
+            application_year: (int) data_get($priceList, 'catalog.application_year'),
+            currency: 'PHP',
+            classification: 'reference_only',
+            statement: 'Reference only. This menu is not an Assessment and does not create an amount payable.',
+            services: array_values(data_get($priceList, 'services', [])),
+        );
+    }
+
+    /**
+     * @param  list<OfficialReceiptData>  $receipts
+     * @return list<ApplicationAttachmentData>
+     */
+    private function attachments(
+        PermitApplication $application,
+        ?Assessment $assessment,
+        array $receipts,
+        BusinessPermitData $permit,
+    ): array {
+        $paymentOrderCount = $application->bploRoutingDetermination?->works
+            ->sum(fn ($work): int => $work->paymentOrders->count()) ?? 0;
+        $schedule = $application->paymentSchedules->sortByDesc('sequence')->first();
+        $paymentRequest = $schedule?->xChangePayment;
+
+        return [
+            $this->attachment('fee_menu', 1, 'Municipal Fee Menu', 'Fee Menu', 'reference_insert', 'assessment', 'fee_menu', 'attached', true, 'amber'),
+            $this->attachment('payment_orders', 2, 'Office Payment Orders', 'Payment Orders', 'office_evidence', 'processing', 'payment_orders', $paymentOrderCount > 0 ? 'attached' : 'pending', $paymentOrderCount > 0, 'sky'),
+            $this->attachment('assessment', 3, 'Computation / Assessment Slip', 'Assessment', 'frozen_financial_artifact', 'assessment', 'assessment', $assessment instanceof Assessment ? 'frozen' : 'pending', $assessment instanceof Assessment, 'violet'),
+            $this->attachment('qr_ph', 4, 'QR Ph Payment Slip', 'QR Ph', 'payment_instrument', 'payment', 'payment', filled($paymentRequest?->pay_code) ? 'generated' : 'pending', filled($paymentRequest?->pay_code), 'emerald'),
+            $this->attachment('official_receipt', 5, 'Official Receipt · AF No. 51', 'Official Receipt', 'accountable_form', 'payment', 'payment', $receipts === [] ? 'pending' : 'issued', $receipts !== [], 'rose'),
+            $this->attachment('permit', 6, 'Business Permit', 'Permit', 'final_authority_artifact', 'permit', 'permit', $permit->released ? 'released' : 'pending', $permit->released, 'stone'),
+        ];
+    }
+
+    private function attachment(
+        string $key,
+        int $sequence,
+        string $label,
+        string $shortLabel,
+        string $documentKind,
+        string $section,
+        string $target,
+        string $state,
+        bool $available,
+        string $tone,
+    ): ApplicationAttachmentData {
+        return new ApplicationAttachmentData(
+            schema_version: ApplicationAttachmentData::Schema,
+            key: $key,
+            sequence: $sequence,
+            label: $label,
+            short_label: $shortLabel,
+            document_kind: $documentKind,
+            section: $section,
+            target: $target,
+            state: $state,
+            available: $available,
+            tone: $tone,
         );
     }
 
@@ -246,6 +323,19 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                         'resolution' => $item['resolution'],
                         'applicability' => $item['applicability'],
                         'amount_cents' => data_get($item, 'value.amount_cents') ?? data_get($item, 'default_value.amount_cents'),
+                    ])->all()),
+                    payment_orders: array_values($orders->map(fn ($order): array => [
+                        'id' => $order->id,
+                        'sequence' => $order->sequence,
+                        'status' => $order->status,
+                        'issued_at' => $order->issued_at->toIso8601String(),
+                        'total_amount_cents' => $order->total_amount_cents,
+                        'lines' => array_values($order->lines->map(fn ($line): array => [
+                            'id' => $line->id,
+                            'code' => $line->code,
+                            'name' => $line->name,
+                            'amount_cents' => $line->amount_cents,
+                        ])->all()),
                     ])->all()),
                     paperless_payment_order_count: $orders->count(),
                     total_amount_cents: (int) $orders->sum('total_amount_cents'),

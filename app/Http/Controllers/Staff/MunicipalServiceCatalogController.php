@@ -2,21 +2,19 @@
 
 namespace App\Http\Controllers\Staff;
 
-use App\Actions\BuildMunicipalPriceList;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
-use Inertia\Inertia;
-use Inertia\Response;
 
 class MunicipalServiceCatalogController extends Controller
 {
-    public function index(BuildMunicipalPriceList $buildMunicipalPriceList): Response
+    public function index(): RedirectResponse
     {
         Gate::authorize(UserPermission::AccessStaff->value);
 
-        return Inertia::render('services-and-fees/Internal', [
-            'priceList' => $buildMunicipalPriceList->handle(includeInternalEvidence: true),
-        ]);
+        return Gate::allows(UserPermission::ViewFeeRules->value)
+            ? to_route('staff.fee-rules.index')
+            : to_route('dashboard');
     }
 }

@@ -8,11 +8,14 @@ import {
     ReceiptText,
 } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import ApplicationAttachmentRail from '@/components/permit-applications/ApplicationAttachmentRail.vue';
 import ApplicationDocumentNavigator from '@/components/permit-applications/ApplicationDocumentNavigator.vue';
 import ApplicationWorkNote from '@/components/permit-applications/ApplicationWorkNote.vue';
 import BploRoutingTaskSheet from '@/components/permit-applications/BploRoutingTaskSheet.vue';
 import IpilExecutableDocument from '@/components/permit-applications/IpilExecutableDocument.vue';
 import IpilPaymentContinuationSheet from '@/components/permit-applications/IpilPaymentContinuationSheet.vue';
+import MunicipalFeeMenuSheet from '@/components/permit-applications/MunicipalFeeMenuSheet.vue';
+import OfficePaymentOrdersSheet from '@/components/permit-applications/OfficePaymentOrdersSheet.vue';
 import Af51OfficialReceipt from '@/components/receipts/Af51OfficialReceipt.vue';
 
 type Task = {
@@ -37,6 +40,16 @@ type WorkNote = {
     completed_at: string | null;
     blocking_reason: string | null;
 };
+type Attachment = {
+    key: string;
+    sequence: number;
+    label: string;
+    short_label: string;
+    target: string;
+    state: string;
+    available: boolean;
+    tone: string;
+};
 type ApplicationData = {
     schema_version: string;
     identity: Record<string, any>;
@@ -51,6 +64,16 @@ type ApplicationData = {
     post_payment: Record<string, any>;
     permit: Record<string, any>;
     documents: Record<string, any>[];
+    fee_menu: {
+        title: string;
+        scope: string;
+        as_of_date: string;
+        application_year: number;
+        classification: string;
+        statement: string;
+        services: Record<string, any>[];
+    };
+    attachments: Attachment[];
     actor_context: {
         actor_label: string;
         role_code: string | null;
@@ -81,8 +104,17 @@ const props = withDefaults(
     },
 );
 
+const applicationPacketTargets = [
+    'application',
+    'processing',
+    'fee_menu',
+    'payment_orders',
+    'assessment',
+    'payment',
+    'permit',
+];
 const activeTab = ref(
-    props.application.tabs.some((tab) => tab.key === props.initialTab)
+    applicationPacketTargets.includes(props.initialTab)
         ? props.initialTab
         : 'application',
 );
@@ -96,12 +128,22 @@ const activeApplicationPage = computed<
         ? activeTab.value
         : 'application',
 );
-const artifactTabs = computed(() => [
-    { key: 'application_form', label: 'Application Form' },
-    ...props.application.tabs.filter(
-        (tab) => tab.key !== 'application' && tab.key !== 'processing',
-    ),
-]);
+const preferredPaymentAttachment = (): string =>
+    props.application.official_receipts.length > 0
+        ? 'official_receipt'
+        : 'qr_ph';
+const attachmentKeyForTab = (tab: string): string => {
+    if (tab === 'application' || tab === 'processing') {
+        return 'application_form';
+    }
+
+    if (tab === 'payment') {
+        return preferredPaymentAttachment();
+    }
+
+    return tab;
+};
+const activeAttachmentKey = ref(attachmentKeyForTab(activeTab.value));
 const workNotes = computed(
     () => props.application.actor_context.work_notes ?? [],
 );
@@ -174,8 +216,9 @@ const page2Summary = computed(() => {
 watch(
     () => props.initialTab,
     (tab) => {
-        if (props.application.tabs.some((candidate) => candidate.key === tab)) {
+        if (applicationPacketTargets.includes(tab)) {
             activeTab.value = tab;
+            activeAttachmentKey.value = attachmentKeyForTab(tab);
         }
     },
 );
@@ -271,14 +314,23 @@ function activateWorkNote(note: WorkNote): void {
 }
 
 function artifactIsActive(key: string): boolean {
-    return key === 'application_form'
-        ? activeTab.value === 'application' || activeTab.value === 'processing'
-        : activeTab.value === key;
+    return activeAttachmentKey.value === key;
 }
 
-function selectArtifact(key: string): void {
-    activeTab.value =
-        key === 'application_form' ? lastApplicationPage.value : key;
+function selectApplicationForm(): void {
+    activeAttachmentKey.value = 'application_form';
+    activeTab.value = lastApplicationPage.value;
+}
+
+function selectAttachment(attachment: Attachment): void {
+    activeAttachmentKey.value = attachment.key;
+    activeTab.value = attachment.target;
+}
+
+function selectApplicationPage(page: 'application' | 'processing' | 'payment') {
+    activeTab.value = page;
+    activeAttachmentKey.value =
+        page === 'payment' ? preferredPaymentAttachment() : 'application_form';
 }
 
 function money(minor: number | null | undefined): string {
@@ -341,40 +393,41 @@ function label(value: unknown): string {
             </div>
         </header>
 
-        <nav
-            class="overflow-x-auto border-b border-slate-300 bg-white/80 lg:hidden dark:border-slate-700 dark:bg-slate-900 print:hidden"
-            aria-label="Application artifacts"
+        <div
+            class="flex gap-1.5 overflow-x-auto border-b border-slate-300 bg-white/80 p-2 lg:hidden dark:border-slate-700 dark:bg-slate-900 print:hidden"
+            aria-label="Application packet"
         >
-            <div
-                class="flex min-w-max"
-                role="tablist"
-                aria-label="Application sections"
+            <button
+                type="button"
+                data-testid="application-tab-application_form"
+                :aria-current="
+                    artifactIsActive('application_form') ? 'page' : undefined
+                "
+                :class="
+                    artifactIsActive('application_form')
+                        ? 'opacity-100 shadow-md'
+                        : 'opacity-80'
+                "
+                class="min-h-16 min-w-[9.5rem] rounded-sm border border-t-4 border-sky-700 bg-sky-100 px-3 py-2 text-left text-sky-950 outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+                @click="selectApplicationForm"
             >
-                <button
-                    v-for="(tab, index) in artifactTabs"
-                    :key="tab.key"
-                    type="button"
-                    role="tab"
-                    :aria-selected="artifactIsActive(tab.key)"
-                    :data-testid="`application-tab-${tab.key}`"
-                    :class="[
-                        [
-                            'border-sky-500',
-                            'border-violet-500',
-                            'border-emerald-500',
-                            'border-rose-500',
-                        ][index],
-                        artifactIsActive(tab.key)
-                            ? 'bg-[#f6f0df] text-slate-950 dark:bg-slate-950 dark:text-white'
-                            : 'bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300',
-                    ]"
-                    class="border-t-4 px-4 py-3 text-sm font-black tracking-wide uppercase outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-inset sm:px-6"
-                    @click="selectArtifact(tab.key)"
+                <span
+                    class="block text-[9px] font-black tracking-[0.18em] uppercase"
+                    >Bound document</span
                 >
-                    {{ tab.label }}
-                </button>
-            </div>
-        </nav>
+                <span class="mt-0.5 block text-xs font-black uppercase"
+                    >Application Form</span
+                >
+                <span class="mt-1 block text-[9px] font-bold uppercase"
+                    >Pages 1–3</span
+                >
+            </button>
+            <ApplicationAttachmentRail
+                :attachments="application.attachments"
+                :active-key="activeAttachmentKey"
+                @select="selectAttachment"
+            />
+        </div>
 
         <div
             :class="
@@ -390,7 +443,9 @@ function label(value: unknown): string {
                     document &&
                     (activeTab === 'application' ||
                         activeTab === 'processing' ||
-                        activeTab === 'payment')
+                        activeTab === 'payment' ||
+                        activeTab === 'fee_menu' ||
+                        activeTab === 'payment_orders')
                         ? 'bg-stone-100 p-0 dark:bg-stone-950'
                         : 'bg-white p-4 sm:p-6 dark:bg-slate-900'
                 "
@@ -424,7 +479,7 @@ function label(value: unknown): string {
                         application.payment.payment_request?.state ??
                         application.payment.state
                     "
-                    @select="activeTab = $event"
+                    @select="selectApplicationPage"
                 />
                 <div
                     v-if="activeTab === 'application'"
@@ -619,6 +674,25 @@ function label(value: unknown): string {
                             canonical BPLO routing determination.
                         </p>
                     </div>
+                </div>
+
+                <div
+                    v-else-if="activeTab === 'fee_menu'"
+                    class="bg-stone-100 p-2 sm:p-5"
+                >
+                    <MunicipalFeeMenuSheet :fee-menu="application.fee_menu" />
+                </div>
+
+                <div
+                    v-else-if="activeTab === 'payment_orders'"
+                    class="bg-stone-100 p-2 sm:p-5"
+                >
+                    <OfficePaymentOrdersSheet
+                        :offices="application.offices"
+                        :application-year="
+                            application.identity.application_year
+                        "
+                    />
                 </div>
 
                 <div v-else-if="activeTab === 'assessment'" class="space-y-5">
@@ -935,34 +1009,46 @@ function label(value: unknown): string {
                                 {{ application.actor_context.actor_label }}
                             </p>
                         </div>
-                        <nav
-                            role="tablist"
-                            aria-label="Application sections palette"
+                        <div
+                            class="grid gap-1.5 p-2"
+                            aria-label="Application packet palette"
                         >
                             <button
-                                v-for="(tab, index) in artifactTabs"
-                                :key="tab.key"
                                 type="button"
-                                role="tab"
-                                :aria-selected="artifactIsActive(tab.key)"
-                                :data-testid="`palette-tab-${tab.key}`"
-                                :class="[
-                                    [
-                                        'border-sky-500',
-                                        'border-violet-500',
-                                        'border-emerald-500',
-                                        'border-rose-500',
-                                    ][index],
-                                    artifactIsActive(tab.key)
-                                        ? 'bg-[#f6f0df] text-slate-950 dark:bg-slate-950 dark:text-white'
-                                        : 'border-transparent text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
-                                ]"
-                                class="flex w-full border-l-4 px-4 py-3 text-left text-sm font-black tracking-wide uppercase outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-inset"
-                                @click="selectArtifact(tab.key)"
+                                data-testid="palette-tab-application_form"
+                                :aria-current="
+                                    artifactIsActive('application_form')
+                                        ? 'page'
+                                        : undefined
+                                "
+                                :class="
+                                    artifactIsActive('application_form')
+                                        ? 'opacity-100 shadow-md'
+                                        : 'opacity-80'
+                                "
+                                class="min-h-16 w-full rounded-sm border border-l-4 border-sky-700 bg-sky-100 px-3 py-2 text-left text-sky-950 outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+                                @click="selectApplicationForm"
                             >
-                                {{ tab.label }}
+                                <span
+                                    class="block text-[9px] font-black tracking-[0.18em] uppercase"
+                                    >Bound document</span
+                                >
+                                <span
+                                    class="mt-0.5 block text-xs font-black uppercase"
+                                    >Application Form</span
+                                >
+                                <span
+                                    class="mt-1 block text-[9px] font-bold uppercase"
+                                    >Pages 1–3</span
+                                >
                             </button>
-                        </nav>
+                            <ApplicationAttachmentRail
+                                :attachments="application.attachments"
+                                :active-key="activeAttachmentKey"
+                                desktop
+                                @select="selectAttachment"
+                            />
+                        </div>
                     </section>
 
                     <section data-testid="application-work-notes">

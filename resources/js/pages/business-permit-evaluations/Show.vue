@@ -35,6 +35,7 @@ import {
 import EvaluationComponentRow from '@/components/evaluations/EvaluationComponentRow.vue';
 import EvaluationItemCard from '@/components/evaluations/EvaluationItemCard.vue';
 import EvaluationTotalPanel from '@/components/evaluations/EvaluationTotalPanel.vue';
+import FeeMatrixQuickLook from '@/components/fees/FeeMatrixQuickLook.vue';
 import BploRoutingTaskSheet from '@/components/permit-applications/BploRoutingTaskSheet.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -2001,5 +2002,6 @@ function submitPrepareAssessment(): void {
                 </details>
             </template>
         </main>
+        <FeeMatrixQuickLook v-if="canViewFeeMatrix" :show-trigger="false" />
     </AppLayout>
 </template>

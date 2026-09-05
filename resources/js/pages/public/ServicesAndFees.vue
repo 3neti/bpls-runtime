@@ -1,18 +1,30 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import PublicServiceCatalog from '@/components/services-and-fees/PublicServiceCatalog.vue';
+import { computed } from 'vue';
+import MunicipalFeeMenuSheet from '@/components/permit-applications/MunicipalFeeMenuSheet.vue';
 import { dashboard, home, login, register } from '@/routes';
 import { index as servicesAndFeesIndex } from '@/routes/services-and-fees';
 import type { MunicipalPriceList } from '@/types';
 
-defineProps<{
+const props = defineProps<{
     priceList: MunicipalPriceList;
 }>();
+
+const feeMenu = computed(() => ({
+    title: 'Municipal Fee Menu',
+    scope: props.priceList.catalog.scope,
+    as_of_date: props.priceList.catalog.as_of_date,
+    application_year: props.priceList.catalog.application_year,
+    classification: 'reference_only',
+    statement:
+        'Reference only. This menu is not an Assessment and does not create an amount payable.',
+    services: props.priceList.services,
+}));
 </script>
 
 <template>
     <div class="min-h-svh bg-background text-foreground">
-        <Head title="Services & Fees" />
+        <Head title="Municipal Fee Menu" />
 
         <header class="border-b bg-background/95">
             <div
@@ -35,7 +47,7 @@ defineProps<{
                         aria-current="page"
                         class="hidden rounded-md bg-muted px-3 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex"
                     >
-                        Services & Fees
+                        Fee Menu
                     </Link>
                     <Link
                         v-if="$page.props.auth.user"
@@ -62,8 +74,8 @@ defineProps<{
             </div>
         </header>
 
-        <main class="mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-14">
-            <PublicServiceCatalog :price-list="priceList" />
+        <main class="mx-auto max-w-6xl px-3 py-6 sm:px-8 sm:py-10">
+            <MunicipalFeeMenuSheet :fee-menu="feeMenu" />
         </main>
     </div>
 </template>

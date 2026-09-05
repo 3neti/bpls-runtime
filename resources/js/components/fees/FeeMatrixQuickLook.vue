@@ -99,6 +99,10 @@ type ScheduleRow = {
     sourceText: string;
 };
 
+withDefaults(defineProps<{ showTrigger?: boolean }>(), {
+    showTrigger: true,
+});
+
 const page = usePage();
 const open = ref(false);
 const loading = ref(false);
@@ -398,7 +402,7 @@ onBeforeUnmount(() =>
 
 <template>
     <Dialog v-model:open="open">
-        <DialogTrigger as-child>
+        <DialogTrigger v-if="showTrigger" as-child>
             <Button
                 class="fixed right-4 bottom-4 z-40 rounded-full shadow-lg sm:right-6 sm:bottom-6"
                 data-testid="fee-matrix-quick-look"

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\BuildMunicipalPriceList;
+use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -15,10 +16,8 @@ class PublicMunicipalServiceCatalogController extends Controller
         ]);
     }
 
-    public function citizen(BuildMunicipalPriceList $buildMunicipalPriceList): Response
+    public function citizen(): RedirectResponse
     {
-        return Inertia::render('citizen/services-and-fees/Index', [
-            'priceList' => $buildMunicipalPriceList->handle(),
-        ]);
+        return to_route('services-and-fees.index');
     }
 }

@@ -2,7 +2,6 @@
 import { Link, usePage } from '@inertiajs/vue3';
 import {
     Bell,
-    BookOpenText,
     Building2,
     Calculator,
     ChartColumn,
@@ -44,9 +43,6 @@ import {
 } from '@/components/ui/sidebar';
 import { reportCatalog } from '@/lib/reportCatalog';
 import { dashboard } from '@/routes';
-import { index as citizenServiceCatalogIndex } from '@/routes/citizen/services-and-fees';
-import { index as publicServiceCatalogIndex } from '@/routes/services-and-fees';
-import { index as staffServiceCatalogIndex } from '@/routes/staff/services-and-fees';
 import type { NavItem, NavSection } from '@/types';
 
 const page = usePage();
@@ -55,24 +51,6 @@ const overviewItem: NavItem = {
     title: 'Overview',
     href: dashboard(),
     icon: LayoutDashboard,
-};
-
-const publicServicesAndFeesItem: NavItem = {
-    title: 'Services & Fees',
-    href: publicServiceCatalogIndex(),
-    icon: BookOpenText,
-};
-
-const citizenServicesAndFeesItem: NavItem = {
-    title: 'Services & Fees',
-    href: citizenServiceCatalogIndex(),
-    icon: BookOpenText,
-};
-
-const staffServicesAndFeesItem: NavItem = {
-    title: 'Services & Fees',
-    href: staffServiceCatalogIndex(),
-    icon: BookOpenText,
 };
 
 const reportItems = Object.fromEntries(
@@ -95,7 +73,7 @@ const staffSections = computed<NavSection[]>(() => {
     const sections: NavSection[] = [
         {
             title: 'Overview',
-            items: [overviewItem, staffServicesAndFeesItem],
+            items: [overviewItem],
         },
     ];
 
@@ -276,7 +254,7 @@ const staffSections = computed<NavSection[]>(() => {
 const citizenSections: NavSection[] = [
     {
         title: 'Overview',
-        items: [overviewItem, citizenServicesAndFeesItem],
+        items: [overviewItem],
     },
     {
         title: 'Permit Services',
@@ -303,7 +281,7 @@ const citizenSections: NavSection[] = [
 const authenticatedSections: NavSection[] = [
     {
         title: 'Overview',
-        items: [overviewItem, publicServicesAndFeesItem],
+        items: [overviewItem],
     },
 ];
 

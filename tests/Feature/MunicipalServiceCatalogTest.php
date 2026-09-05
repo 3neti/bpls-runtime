@@ -327,7 +327,7 @@ it('surfaces the recorded policy note for a ceiling amount so it is not shown as
         ->toBe('Ordinance states not to exceed PHP 300.00; production configuration must confirm the exact charged amount.');
 });
 
-it('serves the public catalog read-only and authorizes the internal catalog through existing generic access', function () {
+it('serves one public Fee Menu and redirects the retired staff catalog to pricing administration', function () {
     $this->seed(RevenueCodeFeeCatalogSeeder::class);
 
     $this->get(route('services-and-fees.index'))
@@ -337,15 +337,14 @@ it('serves the public catalog read-only and authorizes the internal catalog thro
             ->where('priceList.catalog.audience', 'public')
             ->where('priceList.catalog.read_only', true));
 
-    $staff = userWithPermissions([UserPermission::AccessStaff]);
+    $staff = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewFeeRules,
+    ]);
 
     $this->actingAs($staff)
         ->get(route('staff.services-and-fees.index'))
-        ->assertSuccessful()
-        ->assertInertia(fn (Assert $page) => $page
-            ->component('services-and-fees/Internal')
-            ->where('priceList.catalog.audience', 'internal')
-            ->where('priceList.catalog.read_only', true));
+        ->assertRedirect(route('staff.fee-rules.index'));
 
     $this->actingAs(User::factory()->create())
         ->get(route('staff.services-and-fees.index'))
@@ -359,7 +358,7 @@ it('serves the public catalog read-only and authorizes the internal catalog thro
         ->all())->toBe(['GET', 'HEAD']);
 });
 
-it('serves the public catalog inside the Citizen application shell route', function () {
+it('redirects the retired Citizen catalog route to the one public Fee Menu', function () {
     $this->seed(RevenueCodeFeeCatalogSeeder::class);
 
     $this->get(route('citizen.services-and-fees.index'))
@@ -369,13 +368,27 @@ it('serves the public catalog inside the Citizen application shell route', funct
 
     $this->actingAs($citizen)
         ->get(route('citizen.services-and-fees.index'))
-        ->assertSuccessful()
-        ->assertInertia(fn (Assert $page) => $page
-            ->component('citizen/services-and-fees/Index')
-            ->where('priceList.catalog.audience', 'public')
-            ->where('priceList.catalog.read_only', true));
+        ->assertRedirect(route('services-and-fees.index'));
 
     $this->actingAs(User::factory()->create())
         ->get(route('citizen.services-and-fees.index'))
         ->assertForbidden();
+});
+
+it('keeps the reusable Fee Menu public and removes competing authenticated navigation', function () {
+    $publicPage = file_get_contents(resource_path('js/pages/public/ServicesAndFees.vue'));
+    $sidebar = file_get_contents(resource_path('js/components/AppSidebar.vue'));
+    $dashboard = file_get_contents(resource_path('js/pages/Dashboard.vue'));
+
+    expect($publicPage)
+        ->toContain('MunicipalFeeMenuSheet')
+        ->toContain('<Head title="Municipal Fee Menu"')
+        ->and($sidebar)
+        ->not->toContain('citizenServiceCatalogIndex')
+        ->not->toContain('staffServiceCatalogIndex')
+        ->not->toContain("title: 'Services & Fees'")
+        ->and($dashboard)
+        ->not->toContain('citizenServiceCatalogIndex')
+        ->not->toContain('staffServiceCatalogIndex')
+        ->not->toContain("title: 'Services & Fees'");
 });
