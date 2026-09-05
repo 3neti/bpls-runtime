@@ -352,7 +352,7 @@ test('source backed registry specimen advances through canonical actions to an a
             ->where('cleanroom.active.application_data.declaration.page', 'page_1')
             ->where('cleanroom.active.application_document.declaration.state', 'frozen')
             ->where('cleanroom.active.application_document.page_2_assessment.status', 'awaiting_bplo_routing')
-            ->where('cleanroom.active.application_data.actor_context.actor_label', 'Laboratory observer')
+            ->where('cleanroom.active.application_data.actor_context.actor_label', 'Preview Municipal Management')
             ->where('cleanroom.active.application_data.actor_context.work_notes.0.id', 'applicant_submission')
             ->where('cleanroom.active.application_data.actor_context.work_notes.0.state', 'completed')
             ->where('cleanroom.active.application_data.actor_context.work_notes.0.actionable', false)

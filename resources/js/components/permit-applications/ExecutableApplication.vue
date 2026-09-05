@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import { router, useHttp } from '@inertiajs/vue3';
-import { ExternalLink, QrCode, ReceiptText } from '@lucide/vue';
+import { Link, router, useHttp } from '@inertiajs/vue3';
+import {
+    ExternalLink,
+    FileText,
+    Printer,
+    QrCode,
+    ReceiptText,
+} from '@lucide/vue';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import ApplicationDocumentNavigator from '@/components/permit-applications/ApplicationDocumentNavigator.vue';
 import ApplicationWorkNote from '@/components/permit-applications/ApplicationWorkNote.vue';
 import BploRoutingTaskSheet from '@/components/permit-applications/BploRoutingTaskSheet.vue';
 import IpilExecutableDocument from '@/components/permit-applications/IpilExecutableDocument.vue';
 import IpilPaymentContinuationSheet from '@/components/permit-applications/IpilPaymentContinuationSheet.vue';
+import Af51OfficialReceipt from '@/components/receipts/Af51OfficialReceipt.vue';
 
 type Task = {
     key: string;
@@ -700,115 +707,39 @@ function label(value: unknown): string {
                     <article
                         v-for="receipt in application.official_receipts"
                         :key="receipt.receipt_number"
-                        class="rounded-xl border-2 border-emerald-700 p-4"
+                        class="space-y-3 rounded-xl border border-stone-300 bg-stone-100 p-2 sm:p-4 dark:border-stone-700 dark:bg-stone-950"
+                        data-testid="application-official-receipt-artifact"
                     >
-                        <div class="flex flex-wrap justify-between gap-3">
-                            <div>
-                                <p class="text-xs font-black uppercase">
-                                    Accountable Form No.
-                                    {{ receipt.accountable_form_number }}
-                                </p>
-                                <h4 class="text-lg font-black">
-                                    Official Receipt
-                                </h4>
-                            </div>
-                            <div class="text-right">
-                                <p class="text-xs font-black">
-                                    {{ receipt.copy_designation }}
-                                </p>
-                                <p class="font-mono text-lg text-red-700">
-                                    {{ receipt.receipt_number }}
-                                </p>
-                            </div>
-                        </div>
-                        <dl class="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-                            <div>
-                                <dt class="text-xs uppercase">Agency / Fund</dt>
-                                <dd>
-                                    {{
-                                        receipt.agency ??
-                                        'Pending canonical detail'
-                                    }}
-                                    /
-                                    {{
-                                        receipt.fund ??
-                                        'Pending canonical detail'
-                                    }}
-                                </dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs uppercase">Payor</dt>
-                                <dd>
-                                    {{
-                                        receipt.payor ??
-                                        'Pending canonical detail'
-                                    }}
-                                </dd>
-                            </div>
-                        </dl>
-                        <div class="mt-4 grid gap-2">
-                            <div
-                                v-for="row in receipt.collection_rows"
-                                :key="`${row.nature_of_collection}-${row.account_code}`"
-                                class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-3 text-sm"
-                            >
-                                <span class="break-words"
-                                    >{{ row.nature_of_collection }} ·
-                                    {{
-                                        row.account_code ??
-                                        'Account code pending'
-                                    }}</span
-                                ><strong>{{ money(row.amount_minor) }}</strong>
-                            </div>
-                        </div>
-                        <p
-                            class="mt-4 border-t pt-3 text-right text-xl font-black"
+                        <div
+                            class="flex flex-wrap items-center justify-between gap-2 print:hidden"
                         >
-                            Total {{ money(receipt.total_amount_minor) }}
-                        </p>
-                        <dl class="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-                            <div>
-                                <dt class="text-xs uppercase">
-                                    Amount in words
-                                </dt>
-                                <dd>
-                                    {{
-                                        receipt.amount_in_words ??
-                                        'Pending canonical detail'
-                                    }}
-                                </dd>
+                            <p
+                                class="text-xs font-black tracking-wide uppercase"
+                            >
+                                Attached Treasury artifact
+                            </p>
+                            <div class="flex flex-wrap gap-2">
+                                <Link
+                                    v-if="receipt.links?.view"
+                                    :href="receipt.links.view"
+                                    class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-stone-400 bg-white px-3 py-2 text-xs font-black uppercase hover:bg-stone-50"
+                                >
+                                    <Printer class="size-3.5" /> Open / Print OR
+                                </Link>
+                                <a
+                                    v-if="receipt.links?.pdf"
+                                    :href="receipt.links.pdf"
+                                    target="_blank"
+                                    class="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-sky-900 px-3 py-2 text-xs font-black text-white uppercase hover:bg-sky-800"
+                                >
+                                    <FileText class="size-3.5" /> Open PDF
+                                </a>
                             </div>
-                            <div>
-                                <dt class="text-xs uppercase">
-                                    Payment instrument
-                                </dt>
-                                <dd>
-                                    {{
-                                        label(receipt.payment_instrument?.type)
-                                    }}
-                                </dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs uppercase">
-                                    Collecting Officer
-                                </dt>
-                                <dd>
-                                    {{
-                                        receipt.collecting_officer ??
-                                        'Pending canonical detail'
-                                    }}
-                                </dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs uppercase">Date</dt>
-                                <dd>
-                                    {{
-                                        receipt.issued_on ??
-                                        'Pending canonical detail'
-                                    }}
-                                </dd>
-                            </div>
-                        </dl>
+                        </div>
+                        <Af51OfficialReceipt
+                            :receipt="receipt"
+                            :view-url="receipt.links?.view"
+                        />
                     </article>
                     <div
                         v-if="application.official_receipts.length === 0"

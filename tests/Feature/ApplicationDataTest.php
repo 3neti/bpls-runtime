@@ -117,12 +117,25 @@ test('Official Receipt projection requires canonical Receipt truth and permit va
         'numbering_authority' => 'synthetic_only',
     ], $collector);
     $afterReceipt = app(ApplicationDataResolver::class)->resolve($application->fresh())->toArray();
+    $receiptViewer = User::query()
+        ->with('role.permissions')
+        ->where('email', 'stakeholder.preview.cashier@example.test')
+        ->sole();
+    $authorizedReceipt = app(ApplicationDataResolver::class)->resolve($application->fresh(), $receiptViewer)->toArray();
+    $receiptId = $authorizedReceipt['official_receipts'][0]['source']['receipt_id'];
 
     expect($afterReceipt['official_receipts'])->toHaveCount(1)
         ->and($afterReceipt['official_receipts'][0]['accountable_form_number'])->toBe(51)
         ->and($afterReceipt['official_receipts'][0]['synthetic_number'])->toBeTrue()
         ->and($afterReceipt['official_receipts'][0]['series'])->toBeNull()
         ->and($afterReceipt['official_receipts'][0]['collection_rows'])->not->toBeEmpty()
+        ->and($afterReceipt['official_receipts'][0]['presentation_profile']['profile_key'])->toBe('ipil-af51-nelson-v1')
+        ->and($afterReceipt['official_receipts'][0]['links'])->toBe([
+            'view' => null,
+            'pdf' => null,
+        ])
+        ->and($authorizedReceipt['official_receipts'][0]['links']['view'])->toBe(route('staff.receipts.show', $receiptId, false))
+        ->and($authorizedReceipt['official_receipts'][0]['links']['pdf'])->toBe(route('staff.receipts.pdf', $receiptId, false))
         ->and($afterReceipt['permit']['official_receipt_bound'])->toBeTrue()
         ->and($afterReceipt['permit']['official_receipt_number'])->toBe('SYNTHETIC-AF51-0001')
         ->and($afterReceipt['permit']['released'])->toBeFalse()
@@ -157,6 +170,7 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
     $processingSheet = file_get_contents(resource_path('js/components/permit-applications/IpilMunicipalProcessingSheet.vue'));
     $navigator = file_get_contents(resource_path('js/components/permit-applications/ApplicationDocumentNavigator.vue'));
     $paymentSheet = file_get_contents(resource_path('js/components/permit-applications/IpilPaymentContinuationSheet.vue'));
+    $officialReceipt = file_get_contents(resource_path('js/components/receipts/Af51OfficialReceipt.vue'));
 
     expect($component)->toContain('role="tablist"')
         ->and($component)->toContain("{ key: 'application_form', label: 'Application Form' }")
@@ -201,6 +215,12 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
         ->and($paymentSheet)->toContain('data-testid="application-payment-collected-stamp"')
         ->and($paymentSheet)->toContain("paymentRequest.value?.state === 'collected'")
         ->and($paymentSheet)->toContain('paymentRequest.value.collection_id !== null')
+        ->and($component)->toContain('data-testid="application-official-receipt-artifact"')
+        ->and($component)->toContain('<Af51OfficialReceipt')
+        ->and($component)->toContain(':view-url="receipt.links?.view"')
+        ->and($officialReceipt)->toContain('data-testid="af51-official-receipt"')
+        ->and($officialReceipt)->toContain('v-if="viewUrl"')
+        ->and($officialReceipt)->toContain('aria-label="Open issued Official Receipt"')
         ->and($component)->toContain('check_payment_status')
         ->and($component)->toContain('setInterval(() => void checkPayment(), 4000)');
 });

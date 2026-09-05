@@ -1,23 +1,102 @@
 <script setup lang="ts">
-const props = defineProps<{ receipt: any; fallbackProfile: any }>();
-const frozenProfile = props.receipt.source_snapshot?.official_receipt_profile;
-const profile = (
-    frozenProfile?.profile_key ? frozenProfile : props.fallbackProfile
-) as any;
-const frozenAf51 = props.receipt.source_snapshot?.af51;
-const af51 = (
-    frozenAf51?.agency ? frozenAf51 : (profile.defaults ?? {})
-) as any;
-const frozenIssuer = props.receipt.source_snapshot?.issuer;
-const issuer = (
-    frozenIssuer?.printed_name
-        ? frozenIssuer
-        : (profile.collecting_officer ?? {})
-) as any;
+import { Link } from '@inertiajs/vue3';
+import { computed } from 'vue';
+
+const props = withDefaults(
+    defineProps<{
+        receipt: any;
+        fallbackProfile?: any;
+        viewUrl?: string | null;
+    }>(),
+    { fallbackProfile: () => ({}), viewUrl: null },
+);
+const profile = computed(() => {
+    const frozen =
+        props.receipt.presentation_profile ??
+        props.receipt.source_snapshot?.official_receipt_profile;
+
+    return frozen?.profile_key ? frozen : props.fallbackProfile;
+});
+const af51 = computed(() => {
+    const frozen = props.receipt.source_snapshot?.af51;
+
+    return frozen?.agency
+        ? frozen
+        : {
+              agency: props.receipt.agency ?? profile.value.defaults?.agency,
+              fund: props.receipt.fund ?? profile.value.defaults?.fund,
+              amount_in_words: props.receipt.amount_in_words,
+          };
+});
+const issuer = computed(() => {
+    const frozen = props.receipt.source_snapshot?.issuer;
+
+    return frozen?.printed_name
+        ? frozen
+        : {
+              ...profile.value.collecting_officer,
+              printed_name:
+                  props.receipt.collecting_officer ??
+                  profile.value.collecting_officer?.name,
+          };
+});
+const receiptNumber = computed(() => props.receipt.receipt_number ?? '');
+const issuedOn = computed(
+    () => props.receipt.issued_on ?? props.receipt.issued_at,
+);
+const payor = computed(
+    () =>
+        props.receipt.payor ??
+        props.receipt.collection?.payer_name ??
+        props.receipt.business?.owner?.name ??
+        '',
+);
+const rows = computed(() =>
+    Array.isArray(props.receipt.collection_rows)
+        ? props.receipt.collection_rows.map((row: any, index: number) => ({
+              id: `${row.nature_of_collection}-${row.account_code}-${index}`,
+              name: row.nature_of_collection,
+              code: row.account_code,
+              amount_cents: row.amount_minor,
+          }))
+        : (props.receipt.allocations ?? []),
+);
+const totalAmount = computed(
+    () => props.receipt.total_amount_minor ?? props.receipt.amount_cents ?? 0,
+);
+const paymentMethod = computed(
+    () =>
+        props.receipt.payment_instrument?.type ??
+        props.receipt.collection?.method ??
+        '',
+);
+const paymentReference = computed(
+    () =>
+        props.receipt.payment_instrument?.number ??
+        props.receipt.collection?.reference_number ??
+        '',
+);
+const collectedOn = computed(
+    () =>
+        props.receipt.payment_instrument?.date ??
+        props.receipt.collection?.received_at ??
+        issuedOn.value,
+);
 
 function amount(cents: number): string {
     return new Intl.NumberFormat('en-PH', { minimumFractionDigits: 2 }).format(
         cents / 100,
+    );
+}
+
+function date(value: string | null | undefined, long = false): string {
+    if (!value) {
+        return '';
+    }
+
+    return new Date(value).toLocaleDateString(
+        'en-PH',
+        long ? { dateStyle: 'long' } : undefined,
     );
 }
 </script>
@@ -51,24 +130,29 @@ function amount(cents: number): string {
                     >({{ profile.form?.revision }})</span
                 >
             </div>
-            <div class="p-3 text-center">
+            <div class="min-w-0 p-3 text-center">
                 <strong class="text-base tracking-widest">{{
                     profile.form?.copy_designation
                 }}</strong>
-                <div class="mt-1 font-mono text-2xl font-bold text-rose-600">
-                    {{ receipt.receipt_number }}
+                <Link
+                    v-if="viewUrl"
+                    :href="viewUrl"
+                    aria-label="Open issued Official Receipt"
+                    class="mt-1 font-mono text-lg font-bold break-all text-rose-600 sm:text-2xl"
+                >
+                    {{ receiptNumber }}
+                </Link>
+                <div
+                    v-else
+                    class="mt-1 font-mono text-lg font-bold break-all text-rose-600 sm:text-2xl"
+                >
+                    {{ receiptNumber }}
                 </div>
             </div>
         </div>
         <dl class="grid grid-cols-[5rem_1fr] border-b border-sky-900">
             <dt class="p-2 font-bold">DATE</dt>
-            <dd class="p-2">
-                {{
-                    new Date(receipt.issued_at).toLocaleDateString('en-PH', {
-                        dateStyle: 'long',
-                    })
-                }}
-            </dd>
+            <dd class="p-2">{{ date(issuedOn, true) }}</dd>
         </dl>
         <div class="grid grid-cols-2 border-b border-sky-900">
             <p class="p-2"><strong>AGENCY</strong><br />{{ af51.agency }}</p>
@@ -77,9 +161,7 @@ function amount(cents: number): string {
             </p>
         </div>
         <p class="border-b border-sky-900 p-2">
-            <strong>PAYOR</strong><br />{{
-                receipt.collection.payer_name ?? receipt.business.owner.name
-            }}
+            <strong>PAYOR</strong><br />{{ payor }}
         </p>
         <table class="w-full table-fixed border-collapse">
             <thead>
@@ -95,12 +177,14 @@ function amount(cents: number): string {
             </thead>
             <tbody>
                 <tr
-                    v-for="row in receipt.allocations"
+                    v-for="row in rows"
                     :key="row.id"
                     class="border-b border-sky-900"
                 >
-                    <td class="p-2">{{ row.name }}</td>
-                    <td class="border-l border-sky-900 p-2 font-mono">
+                    <td class="p-2 break-words">{{ row.name }}</td>
+                    <td
+                        class="border-l border-sky-900 p-2 font-mono text-[9px] break-all"
+                    >
                         {{ row.code }}
                     </td>
                     <td class="border-l border-sky-900 p-2 text-right">
@@ -119,7 +203,7 @@ function amount(cents: number): string {
                     <th
                         class="border-l border-sky-900 p-3 text-right text-base"
                     >
-                        ₱ {{ amount(receipt.amount_cents) }}
+                        ₱ {{ amount(totalAmount) }}
                     </th>
                 </tr>
             </tfoot>
@@ -130,40 +214,23 @@ function amount(cents: number): string {
         </div>
         <div class="grid grid-cols-[8rem_1fr] border-b border-sky-900">
             <div class="space-y-1 border-r border-sky-900 p-3">
+                <p>{{ paymentMethod === 'cash' ? '☒' : '☐' }} Cash</p>
+                <p>{{ paymentMethod === 'check' ? '☒' : '☐' }} Check</p>
                 <p>
-                    {{ receipt.collection.method === 'cash' ? '☒' : '☐' }} Cash
+                    {{ paymentMethod === 'money_order' ? '☒' : '☐' }} Money
+                    Order
                 </p>
-                <p>
-                    {{ receipt.collection.method === 'check' ? '☒' : '☐' }}
-                    Check
-                </p>
-                <p>
-                    {{
-                        receipt.collection.method === 'money_order' ? '☒' : '☐'
-                    }}
-                    Money Order
-                </p>
-                <p>
-                    {{ receipt.collection.method === 'qr_ph' ? '☒' : '☐' }} QR
-                    Ph
-                </p>
+                <p>{{ paymentMethod === 'qr_ph' ? '☒' : '☐' }} QR Ph</p>
             </div>
-            <div class="grid grid-cols-2">
-                <p class="border-r border-sky-900 p-3">
+            <div class="grid min-w-0 grid-cols-2">
+                <p class="min-w-0 border-r border-sky-900 p-3">
                     <strong>NUMBER / REFERENCE</strong><br /><span
                         class="font-mono break-all"
-                        >{{
-                            receipt.collection.reference_number ??
-                            'Not recorded'
-                        }}</span
+                        >{{ paymentReference || 'Not recorded' }}</span
                     >
                 </p>
                 <p class="p-3">
-                    <strong>DATE</strong><br />{{
-                        new Date(
-                            receipt.collection.received_at,
-                        ).toLocaleDateString('en-PH')
-                    }}
+                    <strong>DATE</strong><br />{{ date(collectedOn) }}
                 </p>
             </div>
         </div>

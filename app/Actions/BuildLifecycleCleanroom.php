@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Data\Application\ApplicationDataResolver;
 use App\Models\LifecycleCleanroomRun;
 use App\Models\PermitApplication;
+use App\Models\User;
 
 class BuildLifecycleCleanroom
 {
@@ -15,7 +16,7 @@ class BuildLifecycleCleanroom
     ) {}
 
     /** @return array<string, mixed> */
-    public function handle(): array
+    public function handle(?User $viewer = null): array
     {
         $active = LifecycleCleanroomRun::query()->where('status', 'active')->latest('id')->first();
 
@@ -26,7 +27,7 @@ class BuildLifecycleCleanroom
         $application = is_int($applicationId) ? PermitApplication::query()->find($applicationId) : null;
         if (is_array($activeState)) {
             $activeState['application_data'] = $application instanceof PermitApplication
-                ? $this->applicationDataResolver->resolve($application)->toArray()
+                ? $this->applicationDataResolver->resolve($application, $viewer)->toArray()
                 : null;
             $activeState['application_document'] = $application instanceof PermitApplication
                 ? $this->buildDocument->handle($application)

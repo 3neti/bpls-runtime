@@ -11,7 +11,9 @@ final class OfficialReceiptData extends Data
     /**
      * @param  list<array{nature_of_collection: string, account_code: ?string, currency: string, amount_minor: int}>  $collection_rows
      * @param  array{type: string, drawee_bank: ?string, number: ?string, date: ?string}  $payment_instrument
-     * @param  array{treasury_collection_id: int, payment_schedule_id: int, assessment_id: int, assessment_price_report_fingerprint: ?string}  $source
+     * @param  array<string, mixed>  $presentation_profile
+     * @param  array{view: ?string, pdf: ?string}  $links
+     * @param  array{receipt_id: int, treasury_collection_id: int, payment_schedule_id: int, assessment_id: int, assessment_price_report_fingerprint: ?string}  $source
      */
     public function __construct(
         public readonly string $schema_version,
@@ -32,6 +34,8 @@ final class OfficialReceiptData extends Data
         public readonly ?string $amount_in_words,
         public readonly array $payment_instrument,
         public readonly ?string $collecting_officer,
+        public readonly array $presentation_profile,
+        public readonly array $links,
         public readonly array $source,
     ) {}
 }

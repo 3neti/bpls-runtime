@@ -19,11 +19,11 @@ use Inertia\Response;
 
 final class LifecycleLaboratoryController extends Controller
 {
-    public function index(BuildLifecycleLaboratory $buildLaboratory, BuildLifecycleCleanroom $buildCleanroom): Response
+    public function index(Request $request, BuildLifecycleLaboratory $buildLaboratory, BuildLifecycleCleanroom $buildCleanroom): Response
     {
         return Inertia::render('stakeholder-preview/LifecycleLaboratory', [
             'laboratory' => $buildLaboratory->handle(),
-            'cleanroom' => $buildCleanroom->handle(),
+            'cleanroom' => $buildCleanroom->handle($request->user()),
         ]);
     }
 

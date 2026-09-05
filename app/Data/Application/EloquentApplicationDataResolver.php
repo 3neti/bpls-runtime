@@ -4,6 +4,7 @@ namespace App\Data\Application;
 
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
+use App\Actions\ResolveOfficialReceiptProfile;
 use App\Assessment\Price\HistoricalPriceReport;
 use App\Enums\ReceiptStatus;
 use App\Enums\UserPermission;
@@ -34,6 +35,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         private readonly DescribePermitReleaseReadiness $releaseReadiness,
         private readonly DescribePermitVerificationBoundary $verificationBoundary,
         private readonly QrPhPaymentArtifactCache $qrPhArtifactCache,
+        private readonly ResolveOfficialReceiptProfile $resolveOfficialReceiptProfile,
     ) {}
 
     public function resolve(PermitApplication $permitApplication, ?User $viewer = null): ApplicationData
@@ -69,7 +71,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         $offices = $this->offices($application, $evaluationProjection);
         $receipts = array_values($application->paymentSchedules
             ->flatMap(fn ($schedule) => $schedule->treasuryCollections)
-            ->map(fn (TreasuryCollection $collection): ?OfficialReceiptData => $this->officialReceipt($collection))
+            ->map(fn (TreasuryCollection $collection): ?OfficialReceiptData => $this->officialReceipt($collection, $viewer))
             ->filter()
             ->values()
             ->all());
@@ -475,13 +477,18 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         return $tasks;
     }
 
-    private function officialReceipt(TreasuryCollection $collection): ?OfficialReceiptData
+    private function officialReceipt(TreasuryCollection $collection, ?User $viewer): ?OfficialReceiptData
     {
         $receipt = $collection->receipt;
         if (! $receipt instanceof Receipt || $receipt->status !== ReceiptStatus::Issued) {
             return null;
         }
         $sourceAssessment = $collection->getRelation('assessment');
+        $profile = data_get($receipt->source_snapshot, 'official_receipt_profile');
+        $profile = is_array($profile) && filled($profile)
+            ? $profile
+            : $this->resolveOfficialReceiptProfile->handle();
+        $canOpenReceipt = $viewer?->can(UserPermission::ViewReceipts->value) ?? false;
 
         return new OfficialReceiptData(
             schema_version: OfficialReceiptData::Schema,
@@ -514,7 +521,13 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'date' => data_get($collection->source_snapshot, 'payment_instrument.date'),
             ],
             collecting_officer: data_get($receipt->source_snapshot, 'issuer.printed_name') ?? $receipt->issuedBy?->getAttribute('name'),
+            presentation_profile: $profile,
+            links: [
+                'view' => $canOpenReceipt ? route('staff.receipts.show', $receipt, false) : null,
+                'pdf' => $canOpenReceipt ? route('staff.receipts.pdf', $receipt, false) : null,
+            ],
             source: [
+                'receipt_id' => $receipt->id,
                 'treasury_collection_id' => $collection->id,
                 'payment_schedule_id' => $collection->payment_schedule_id,
                 'assessment_id' => $collection->assessment_id,
