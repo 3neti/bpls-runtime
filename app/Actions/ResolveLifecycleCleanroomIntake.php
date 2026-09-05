@@ -10,14 +10,18 @@ class ResolveLifecycleCleanroomIntake
     public function handle(Request $request): ?LifecycleCleanroomRun
     {
         $runId = $request->session()->get('lifecycle_cleanroom_intake_run_id');
-        if (! is_int($runId) || ! $request->user()) {
+        $publicId = $request->input('lifecycle_cleanroom_run_id');
+        if ((! is_int($runId) && ! is_string($publicId)) || ! $request->user()) {
             return null;
         }
 
         $run = LifecycleCleanroomRun::query()
-            ->whereKey($runId)
+            ->when(
+                is_int($runId),
+                fn ($query) => $query->whereKey($runId),
+                fn ($query) => $query->where('public_id', $publicId),
+            )
             ->where('status', 'active')
-            ->whereNull('new_application_id')
             ->first();
         if (! $run instanceof LifecycleCleanroomRun
             || data_get($run->actor_manifest, 'semantic_classification') !== 'synthetic_only'

@@ -163,8 +163,7 @@ class ResolveLifecycleCleanroomState
         $baseKey = Str::startsWith($key, 'renewal_') ? Str::after($key, 'renewal_') : $key;
 
         return match ($baseKey) {
-            'citizen_intake' => $application instanceof PermitApplication,
-            'application_submitted', 'lodged' => $application?->submitted_at !== null,
+            'citizen_intake', 'application_submitted', 'lodged' => $application?->submitted_at !== null,
             'bplo_routing' => $application?->bploRoutingDetermination !== null,
             'evaluation_initialized' => $projection !== null
                 && $this->responsibilityItems($projection, $profile)->count() === $this->expectedResponsibilities($profile)->count(),
@@ -313,7 +312,7 @@ class ResolveLifecycleCleanroomState
 
         return match ($baseKey) {
             'cleanroom_started' => ['Cleanroom actors' => '0 → 9'],
-            'citizen_intake' => ['Municipal Owners' => '0 → 1', 'Businesses' => '0 → 1', 'Drafts' => '0 → 1', 'Business activities' => '0 → '.($application?->lines->count() ?? 2)],
+            'citizen_intake' => ['Municipal Owners' => '0 → 1', 'Businesses' => '0 → 1', 'Application' => 'None → Lodged', 'Business activities' => '0 → '.($application?->lines->count() ?? 2)],
             'application_submitted', 'lodged' => ['Application' => 'Draft → Lodged'],
             'bplo_routing' => ['BPLO routing determination' => 'Pending → Recorded', 'Concerned offices' => '0 → BPLO selected'],
             'evaluation_initialized' => ['Concerned offices' => '0 → '.$responsibilities->pluck('department')->unique()->count(), 'Responsibilities' => '0 → '.$responsibilities->count()],

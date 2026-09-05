@@ -55,6 +55,9 @@ class StorePermitApplicationRequest extends PermitApplicationIntakeRequest
 
         return [
             ...$rules,
+            'lifecycle_cleanroom_run_id' => $cleanroom === null
+                ? ['prohibited']
+                : ['nullable', 'string', Rule::in([$cleanroom->public_id])],
             'owner_name' => [Rule::requiredIf(! $hasRegistryOwner), 'nullable', 'string', 'max:255'],
             'business_id' => [
                 'nullable',
@@ -71,5 +74,14 @@ class StorePermitApplicationRequest extends PermitApplicationIntakeRequest
             'type' => ['required', Rule::in([PermitApplicationType::New->value])],
             'application_year' => ['required', 'integer', Rule::in($applicationYears)],
         ];
+    }
+
+    /** @return array<string, mixed> */
+    public function validatedForPersistence(): array
+    {
+        $validated = parent::validatedForPersistence();
+        unset($validated['lifecycle_cleanroom_run_id']);
+
+        return $validated;
     }
 }

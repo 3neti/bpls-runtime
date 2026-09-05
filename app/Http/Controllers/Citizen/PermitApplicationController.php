@@ -11,6 +11,7 @@ use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Actions\DescribePaymentPolicyBoundary;
 use App\Actions\DescribePermitArtifact;
 use App\Actions\DescribePermitReleaseReadiness;
+use App\Actions\LodgeLifecycleCleanroomApplication;
 use App\Actions\ResolveLifecycleCleanroomIntake;
 use App\Actions\SubmitCitizenPermitApplication;
 use App\Actions\UpdateCitizenPermitApplicationDraft;
@@ -98,12 +99,31 @@ class PermitApplicationController extends Controller
         ]);
     }
 
-    public function store(StorePermitApplicationRequest $request, CaptureLifecycleCleanroomIntake $captureCleanroomIntake): RedirectResponse
-    {
+    public function store(
+        StorePermitApplicationRequest $request,
+        CaptureLifecycleCleanroomIntake $captureCleanroomIntake,
+        LodgeLifecycleCleanroomApplication $lodgeCleanroomApplication,
+    ): RedirectResponse {
+        $cleanroomRunId = $request->validated('lifecycle_cleanroom_run_id');
+
         try {
+            if (is_string($cleanroomRunId)) {
+                $lodging = $lodgeCleanroomApplication->handle(
+                    $request,
+                    $request->validatedForPersistence(),
+                    $cleanroomRunId,
+                    $request->boolean('undertaking_accepted'),
+                );
+
+                return to_route('stakeholder-preview.lifecycle-cleanroom-application.show', $lodging['run'])
+                    ->with('status', 'Application saved, declaration frozen, and lodged for municipal processing.');
+            }
+
             $permitApplication = $captureCleanroomIntake->create($request, $request->validatedForPersistence());
         } catch (DomainException $exception) {
-            return back()->withErrors(['business_id' => $exception->getMessage()]);
+            $errorKey = is_string($cleanroomRunId) ? 'submission' : 'business_id';
+
+            return back()->withErrors([$errorKey => $exception->getMessage()]);
         }
 
         return to_route('citizen.permit-applications.show', $permitApplication)

@@ -6,6 +6,7 @@ import {
     FileCheck2,
     Plus,
     Save,
+    Send,
     Sparkles,
     Trash2,
 } from '@lucide/vue';
@@ -647,6 +648,12 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     :value="selectedType"
                 />
                 <input
+                    v-if="cleanroomIntake"
+                    type="hidden"
+                    name="lifecycle_cleanroom_run_id"
+                    :value="cleanroomIntake.run_id"
+                />
+                <input
                     v-if="loadedLabFixtureId"
                     type="hidden"
                     name="lab_fixture_id"
@@ -677,8 +684,8 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         >Lifecycle Cleanroom
                         {{ cleanroomIntake.run_id }}</strong
                     >
-                    - complete the real Ipil application form. Saving creates a
-                    draft; lodging freezes this declaration.
+                    - complete and lodge the real Ipil application form in one
+                    action. Page 1 freezes when the Municipality receives it.
                 </section>
                 <section
                     v-if="labIntakeFixtures?.length && !isEditing"
@@ -735,7 +742,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         </p>
                         <p class="mt-1 text-xs opacity-80">
                             {{ labIntakeFixture?.source_note }} Review the form
-                            and accept the undertaking yourself before saving.
+                            and accept the undertaking before lodging.
                         </p>
                         <p
                             v-if="
@@ -807,6 +814,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     >
                 </section>
                 <InputError :message="errors.draft" />
+                <InputError :message="errors.submission" />
 
                 <article
                     data-testid="ipil-executable-application-page-1"
@@ -1813,20 +1821,27 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     class="sticky bottom-0 z-10 flex flex-col gap-2 border border-stone-300 bg-white/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between dark:bg-stone-900/95"
                 >
                     <p class="text-xs text-stone-600 dark:text-stone-300">
-                        Same municipal nouns, responsive layout. Submission
-                        remains a separate lodging action.
+                        {{
+                            cleanroomIntake
+                                ? 'One action saves the canonical Application, freezes Page 1, and lodges it.'
+                                : 'Same municipal nouns, responsive layout. Submission remains a separate lodging action.'
+                        }}
                     </p>
                     <Button
                         type="submit"
                         :disabled="processing || lineOfBusinesses.length === 0"
-                        ><Save />{{
+                        ><Send v-if="cleanroomIntake" /><Save v-else />{{
                             processing
-                                ? 'Saving document...'
-                                : isEditing
-                                  ? 'Save document changes'
-                                  : isCitizen
-                                    ? 'Save application draft'
-                                    : 'Save application'
+                                ? cleanroomIntake
+                                    ? 'Lodging application...'
+                                    : 'Saving document...'
+                                : cleanroomIntake
+                                  ? 'Lodge application'
+                                  : isEditing
+                                    ? 'Save document changes'
+                                    : isCitizen
+                                      ? 'Save application draft'
+                                      : 'Save application'
                         }}</Button
                     >
                 </div>

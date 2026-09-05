@@ -10,6 +10,7 @@ use App\Actions\RecordAssessmentDecision;
 use App\Actions\RecordBploRoutingDetermination;
 use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
 use App\Actions\ResolveLifecycleCleanroomState;
+use App\Actions\SubmitCitizenPermitApplication;
 use App\Enums\AssessmentDecisionAction;
 use App\Enums\BusinessPermitEvaluationApplicability;
 use App\Enums\BusinessPermitEvaluationSource;
@@ -27,6 +28,8 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
+
+use function Pest\Laravel\mock;
 
 beforeEach(function () {
     $this->withoutVite();
@@ -76,6 +79,7 @@ test('management sees the ordered certified chronology with bounded controls and
 
 test('laboratory segregates interactive work from collapsed automated reference evidence', function () {
     $component = file_get_contents(resource_path('js/pages/stakeholder-preview/LifecycleLaboratory.vue'));
+    $intake = file_get_contents(resource_path('js/pages/permit-applications/Create.vue'));
 
     expect($component)
         ->toContain('data-testid="interactive-laboratory"')
@@ -96,6 +100,12 @@ test('laboratory segregates interactive work from collapsed automated reference 
         ->toContain('data-classification="automated-certification-specimen"')
         ->toContain('Inspect reference as actor')
         ->toContain('Generate next certification');
+    expect($intake)
+        ->toContain('name="lifecycle_cleanroom_run_id"')
+        ->toContain("? 'Lodge application'")
+        ->toContain("? 'Lodging application...'")
+        ->toContain('One action saves the canonical Application, freezes Page 1, and lodges it.')
+        ->toContain("? 'Save application draft'");
 });
 
 test('run next uses the certified persisted driver for one continuous two year chronology', function () {
@@ -250,16 +260,15 @@ test('cleanroom citizen intake accepts an active municipal catalog activity offe
     $this->post(route('citizen.permit-applications.store'), [
         ...$intake,
         'type' => 'new',
-    ])->assertSessionHasNoErrors();
+        'lifecycle_cleanroom_run_id' => $run->public_id,
+        'undertaking_accepted' => '1',
+    ])->assertRedirect(route('stakeholder-preview.lifecycle-cleanroom-application.show', $run));
 
     $run->refresh();
     $application = PermitApplication::query()->findOrFail($run->new_application_id);
 
-    expect($application->lines()->sole()->line_of_business_id)->toBe($municipalRetail->id);
-
-    $this->post(route('citizen.permit-applications.submit', $application), [
-        'undertaking_accepted' => '1',
-    ])->assertSessionHasNoErrors();
+    expect($application->lines()->sole()->line_of_business_id)->toBe($municipalRetail->id)
+        ->and($application->submitted_at)->not->toBeNull();
     $actor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.intake.user_id'));
     app(RecordBploRoutingDetermination::class)->handle(
         $application->fresh(),
@@ -362,7 +371,7 @@ test('source backed registry specimen advances through canonical actions to an a
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     expect(data_get($state, 'progress.blocked'))->toBeFalse()
         ->and(data_get($state, 'progress.profile_kind'))->toBe('registry_source_replay')
-        ->and(data_get($state, 'progress.total_steps'))->toBe(13)
+        ->and(data_get($state, 'progress.total_steps'))->toBe(12)
         ->and(data_get($state, 'progress.next_step.key'))->toBe('evaluation_initialized');
 
     $this->actingAs($management)
@@ -491,36 +500,52 @@ test('source backed registry specimen advances through canonical actions to an a
 
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     expect(data_get($state, 'progress.complete'))->toBeTrue()
-        ->and(data_get($state, 'progress.completed_steps'))->toBe(13)
+        ->and(data_get($state, 'progress.completed_steps'))->toBe(12)
         ->and($run->fresh()->renewal_application_id)->toBeNull();
 });
 
-test('cleanroom citizen form uses canonical draft and submit actions before canonical responsibility creation', function () {
+test('cleanroom citizen form lodges through canonical draft and submit actions in one idempotent request', function () {
     $management = previewAccount(StakeholderPreviewPersona::Management);
     $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'));
     $run = LifecycleCleanroomRun::query()->sole();
     $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run));
     $intake = app(BuildLifecycleCleanroomIntake::class)->handle($run);
 
-    $this->post(route('citizen.permit-applications.store'), [
+    $lodging = [
         ...$intake,
         'type' => 'new',
         'owner_email' => null,
         'owner_phone' => null,
-    ])->assertSessionHasNoErrors();
+        'lifecycle_cleanroom_run_id' => $run->public_id,
+        'undertaking_accepted' => '1',
+    ];
+    $this->post(route('citizen.permit-applications.store'), $lodging)
+        ->assertRedirect(route('stakeholder-preview.lifecycle-cleanroom-application.show', $run))
+        ->assertSessionHasNoErrors();
     $run->refresh();
     $application = PermitApplication::query()->findOrFail($run->new_application_id);
-    expect($application->status->value)->toBe('draft')
-        ->and($application->submitted_at)->toBeNull()
+    expect($application->status->value)->toBe('assessment')
+        ->and($application->submitted_at)->not->toBeNull()
         ->and($application->business->owner->name)->toStartWith('Cleanroom Synthetic Owner')
         ->and(data_get($application->metadata, 'applicant_declaration_draft.undertaking.applicant_printed_name'))->toBe($application->business->owner->name)
-        ->and(data_get($application->metadata, 'lifecycle_cleanroom.run_id'))->toBe($run->public_id);
+        ->and(data_get($application->metadata, 'lifecycle_cleanroom.run_id'))->toBe($run->public_id)
+        ->and(data_get($application->declaration()->sole()->snapshot, 'undertaking.applicant_printed_name'))->toBe($application->business->owner->name)
+        ->and(data_get($application->metadata, 'status_history'))->toHaveCount(1)
+        ->and($run->owned_resource_manifest['permit_application_declaration_ids'])->toBe([$application->declaration()->sole()->id]);
+    $lodgedState = app(ResolveLifecycleCleanroomState::class)->handle($run);
+    expect(data_get($lodgedState, 'progress.completed_steps'))->toBe(2)
+        ->and(data_get($lodgedState, 'progress.next_step.key'))->toBe('bplo_routing')
+        ->and(collect(data_get($lodgedState, 'steps'))->pluck('key'))->not->toContain('application_submitted')
+        ->and(collect(data_get($lodgedState, 'steps'))->firstWhere('key', 'citizen_intake')['label'])->toBe('Application Form completed and lodged');
 
-    $this->post(route('citizen.permit-applications.submit', $application), [
-        'undertaking_accepted' => '1',
-    ])->assertSessionHasNoErrors();
-    expect($application->fresh()->submitted_at)->not->toBeNull()
-        ->and(data_get($application->declaration()->sole()->snapshot, 'undertaking.applicant_printed_name'))->toBe($application->business->owner->name);
+    $this->post(route('citizen.permit-applications.store'), $lodging)
+        ->assertRedirect(route('stakeholder-preview.lifecycle-cleanroom-application.show', $run))
+        ->assertSessionHasNoErrors();
+    expect(PermitApplication::query()->count())->toBe(1)
+        ->and($application->declaration()->count())->toBe(1)
+        ->and(data_get($application->fresh()->metadata, 'status_history'))->toHaveCount(1)
+        ->and($application->submittedBy->notifications()->where('data->kind', 'permit_application_received')->count())->toBe(1);
+    expect(session()->has('lifecycle_cleanroom_intake_run_id'))->toBeFalse();
 
     $this->actingAs($management)
         ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))
@@ -536,6 +561,32 @@ test('cleanroom citizen form uses canonical draft and submit actions before cano
     $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.close', $run));
     expect($run->fresh()->status)->toBe('closed')
         ->and(PermitApplication::query()->whereKey($application)->exists())->toBeTrue();
+});
+
+test('failed one action lodging rolls back the draft and retains the cleanroom intake', function () {
+    $management = previewAccount(StakeholderPreviewPersona::Management);
+    $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'));
+    $run = LifecycleCleanroomRun::query()->sole();
+    $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run));
+    $intake = app(BuildLifecycleCleanroomIntake::class)->handle($run);
+
+    mock(SubmitCitizenPermitApplication::class)
+        ->shouldReceive('handle')
+        ->once()
+        ->andThrow(new DomainException('Synthetic submission failure.'));
+
+    $this->post(route('citizen.permit-applications.store'), [
+        ...$intake,
+        'type' => 'new',
+        'lifecycle_cleanroom_run_id' => $run->public_id,
+        'undertaking_accepted' => '1',
+    ])->assertSessionHasErrors('submission');
+
+    expect(PermitApplication::query()->count())->toBe(0)
+        ->and(BusinessOwner::query()->count())->toBe(0)
+        ->and(Business::query()->count())->toBe(0)
+        ->and($run->fresh()->new_application_id)->toBeNull()
+        ->and(session('lifecycle_cleanroom_intake_run_id'))->toBe($run->id);
 });
 
 test('cleanroom remains compatible with the canonical two year action semantics through both payables', function () {
@@ -597,7 +648,7 @@ test('cleanroom remains compatible with the canonical two year action semantics 
 
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     expect(data_get($state, 'progress.complete'))->toBeTrue()
-        ->and(data_get($state, 'progress.completed_steps'))->toBe(24)
+        ->and(data_get($state, 'progress.completed_steps'))->toBe(23)
         ->and(PermitApplication::query()->whereIn('id', [$run->new_application_id, $run->renewal_application_id])->pluck('application_year')->sort()->values()->all())->toBe([2025, 2026])
         ->and(PermitApplication::query()->whereIn('id', [$run->new_application_id, $run->renewal_application_id])->pluck('business_id')->unique())->toHaveCount(1);
 });

@@ -6,7 +6,7 @@ use App\Enums\UserPermission;
 
 class LifecycleCleanroomDefinition
 {
-    public const string Revision = 'cleanroom_bplo_routing_payment_orders_v1';
+    public const string Revision = 'cleanroom_lodge_application_v2';
 
     /** @return array<string, array{label: string, permissions: list<UserPermission>}> */
     public function actors(): array
@@ -29,8 +29,7 @@ class LifecycleCleanroomDefinition
     {
         return [
             $this->step('cleanroom_started', 2025, 'Cleanroom started', 'A uniquely owned synthetic actor set is ready; no municipal transaction exists.', 'complete_on_start', null, 'Cleanroom ready'),
-            $this->step('citizen_intake', 2025, 'Owner, Business, and draft recorded', 'The real Citizen intake form establishes the Municipal Owner and Business and saves an officially unnumbered draft.', 'product_form', 'citizen', 'Citizen intake'),
-            $this->step('application_submitted', 2025, '2025 New Business Permit lodged', 'The Citizen submits the draft through the normal product action and the Municipality receives it for processing.', 'product_form', 'citizen', 'Application lodged'),
+            $this->step('citizen_intake', 2025, 'Application Form completed and lodged', 'One applicant action saves the officially unnumbered Application, freezes Page 1, and lodges it for municipal processing through the canonical draft and submission actions.', 'product_form', 'citizen', 'Lodge Application'),
             $this->step('bplo_routing', 2025, 'BPLO routing determined', 'BPLO records the selected concerned offices, situational reasons, LOB/application context, and required work after lodging.', 'product_form', 'intake', 'BPLO routing'),
             $this->step('evaluation_initialized', 2025, 'Office evaluation work created', 'Required office reviews are assigned from the submitted application and BPLO routing. No amount becomes payable and no Assessment is created at this step.', 'system_action', 'assessment_officer', 'Office reviews assigned'),
             $this->step('assessor_responsibilities', 2025, 'Assessor inputs completed', 'The Assessor confirms Retail and Food Service amounts and issues Paperless Payment Orders.', 'product_form', 'assessor', 'Departmental inputs'),
