@@ -8,6 +8,7 @@ use App\Assessment\Price\HistoricalPriceReport;
 use App\Enums\ReceiptStatus;
 use App\Enums\UserPermission;
 use App\Evaluation\BusinessPermitEvaluationResolver;
+use App\Integrations\QrPhPaymentArtifactCache;
 use App\Models\Assessment;
 use App\Models\BusinessPermitEvaluation;
 use App\Models\PermitApplication;
@@ -32,6 +33,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         private readonly HistoricalPriceReport $historicalPriceReport,
         private readonly DescribePermitReleaseReadiness $releaseReadiness,
         private readonly DescribePermitVerificationBoundary $verificationBoundary,
+        private readonly QrPhPaymentArtifactCache $qrPhArtifactCache,
     ) {}
 
     public function resolve(PermitApplication $permitApplication, ?User $viewer = null): ApplicationData
@@ -51,6 +53,8 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             'paymentSchedules.treasuryCollections.allocations.paymentScheduleLine',
             'paymentSchedules.treasuryCollections.assessment',
             'paymentSchedules.treasuryCollections.receipt.issuedBy',
+            'paymentSchedules.xChangePayment.attempts',
+            'paymentSchedules.xChangePayment.treasuryCollection.receipt',
             'bploRoutingDetermination.determinedBy',
             'bploRoutingDetermination.works.lineOfBusiness',
             'bploRoutingDetermination.works.paymentOrders.lines',
@@ -71,6 +75,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             ->all());
         $permit = $this->permit($application, $receipts);
         $tasks = $this->tasks($application, $viewer, $evaluationProjection);
+        $affordances = $this->affordances($application, $viewer, $tasks);
         $workNotes = $this->workNotes($application, $evaluationProjection, $offices, $tasks, $receipts, $permit);
         $declaration = $application->declaration;
 
@@ -170,7 +175,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 actor_label: $viewer === null ? 'Laboratory observer' : $viewer->name,
                 role_code: $viewer?->role?->code,
                 current_tasks: $tasks,
-                available_affordances: $tasks,
+                available_affordances: $affordances,
                 work_notes: $workNotes,
             ),
             tabs: [
@@ -382,6 +387,9 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
     private function payment(PermitApplication $application): array
     {
         $schedule = $application->paymentSchedules->sortByDesc('sequence')->first();
+        $onlinePayment = $schedule?->xChangePayment;
+        $attempt = $onlinePayment?->attempts->sortByDesc('id')->first();
+        $canonicalCollection = $onlinePayment?->treasuryCollection;
 
         return [
             'state' => $schedule === null ? 'pending_assessment_approval' : $schedule->status->value,
@@ -393,6 +401,30 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'paid_amount_cents' => $schedule->paid_amount_cents,
                 'balance_amount_cents' => $schedule->total_amount_cents - $schedule->paid_amount_cents,
                 'due_on' => $schedule->due_on?->toDateString(),
+            ],
+            'payment_request' => $onlinePayment === null ? null : [
+                'state' => $canonicalCollection instanceof TreasuryCollection ? 'collected' : $onlinePayment->status,
+                'pay_code' => $onlinePayment->pay_code,
+                'external_reference' => $onlinePayment->external_reference,
+                'currency' => $onlinePayment->currency,
+                'target_amount_cents' => $onlinePayment->target_amount_cents ?? $onlinePayment->amount_cents,
+                'collected_total_cents' => $canonicalCollection instanceof TreasuryCollection
+                    ? $canonicalCollection->amount_cents
+                    : $onlinePayment->collected_total_cents,
+                'consumer_status' => $onlinePayment->consumer_status,
+                'provider_status' => $onlinePayment->provider_status,
+                'confirmed_at' => $canonicalCollection?->received_at?->toIso8601String(),
+                'collection_id' => $canonicalCollection?->id,
+                'collection_reference' => $canonicalCollection?->reference_number,
+                'official_receipt_id' => $canonicalCollection?->receipt?->id,
+                'active_attempt' => $attempt === null ? null : [
+                    'reference' => $attempt->reference,
+                    'status' => $attempt->status,
+                    'provider' => $attempt->provider,
+                    'amount_cents' => $attempt->amount_cents,
+                    'expires_at' => $attempt->expires_at?->toIso8601String(),
+                    'qr_data_url' => $this->qrPhArtifactCache->dataUrl($attempt),
+                ],
             ],
             'collections' => $application->paymentSchedules->flatMap(fn ($candidate) => $candidate->treasuryCollections)->map(fn ($collection): array => [
                 'id' => $collection->id,
@@ -406,6 +438,41 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'receipt_id' => $collection->receipt?->id,
             ])->values()->all(),
         ];
+    }
+
+    /**
+     * @param  list<array{key: string, label: string, section: string, href: ?string}>  $tasks
+     * @return list<array{key: string, label: string, section: string, href: ?string}>
+     */
+    private function affordances(PermitApplication $application, ?User $viewer, array $tasks): array
+    {
+        if ($viewer === null) {
+            return $tasks;
+        }
+
+        $schedule = $application->paymentSchedules->sortByDesc('sequence')->first();
+        if ($schedule?->xChangePayment === null) {
+            return $tasks;
+        }
+
+        if ($viewer->hasPermission(UserPermission::ViewPaymentSchedules)) {
+            $tasks[] = $this->task(
+                'check_payment_status',
+                'Check QR Ph payment status',
+                'payment',
+                route('staff.payment-schedules.qr-ph.status', $schedule, false),
+            );
+        } elseif ($viewer->hasPermission(UserPermission::ViewOwnPermitApplicationFinancials)
+            && $application->submitted_by_id === $viewer->id) {
+            $tasks[] = $this->task(
+                'check_payment_status',
+                'Check QR Ph payment status',
+                'payment',
+                route('citizen.payment-schedules.qr-ph.status', $schedule, false),
+            );
+        }
+
+        return $tasks;
     }
 
     private function officialReceipt(TreasuryCollection $collection): ?OfficialReceiptData

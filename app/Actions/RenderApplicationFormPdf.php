@@ -78,8 +78,83 @@ final class RenderApplicationFormPdf
         ]);
         $projection = $this->buildExecutableDocument->handle($permitApplication);
         $this->page2Continuation($document, $projection);
+        $this->page3PaymentContinuation($document, $projection);
 
         return $document->render();
+    }
+
+    /** @param array<string, mixed> $projection */
+    private function page3PaymentContinuation(SimplePdfDocument $document, array $projection): void
+    {
+        $payable = data_get($projection, 'payment_reference.payable');
+        if (! is_array($payable)) {
+            return;
+        }
+
+        $request = data_get($projection, 'payment_reference.payment_request');
+        $request = is_array($request) ? $request : [];
+        $receipt = data_get($projection, 'official_receipt_reference');
+        $receipt = is_array($receipt) ? $receipt : [];
+        $identity = data_get($projection, 'identity', []);
+        $collected = data_get($request, 'state') === 'collected'
+            && is_int(data_get($request, 'collection_id'));
+
+        $page = $document->addPage('Page 3 - Payment');
+        $y = SimplePdfDocument::ContentTop;
+        $document->text($page, 'APPLICATION FORM FOR BUSINESS PERMIT', 42, $y, 13, true);
+        $document->text($page, 'PAGE 3', 553, $y, 9, true, 'right');
+        $document->text($page, 'PAYMENT CONTINUATION SHEET', 42, $y - 18, 9, true);
+        $document->line($page, 42, $y - 27, 553, $y - 27, 1.2, 0.08);
+        $y -= 43;
+
+        $this->processingFieldBand($document, $page, $y, [
+            'OFFICIAL APPLICATION NO.' => (string) data_get($identity, 'application_number', ''),
+            'TRACKING REFERENCE' => wordwrap((string) data_get($identity, 'tracking_reference', ''), 10, ' ', true),
+            'ASSESSMENT NO.' => (string) data_get($projection, 'computation_assessment_slip.sequence', ''),
+            'APPROVED AMOUNT' => $this->blankMoney(data_get($payable, 'total_amount_cents')),
+        ]);
+        $y -= 64;
+
+        $document->text($page, 'A. PAYMENT REQUEST', 42, $y, 8, true);
+        $y -= 14;
+        $this->processingFieldBand($document, $page, $y, [
+            'PAY CODE' => (string) data_get($request, 'pay_code', ''),
+            'STATUS' => strtoupper($this->label((string) data_get($request, 'state', ''))),
+            'AMOUNT DUE' => $this->blankMoney(data_get($payable, 'balance_amount_cents')),
+            'QR VALID UNTIL' => (string) data_get($request, 'active_attempt.expires_at', ''),
+        ], 50);
+        $y -= 68;
+
+        $document->rectangle($page, 42, $y - 190, 190, 190, 0.2, false);
+        $document->text($page, data_get($request, 'active_attempt.qr_data_url') === null ? 'QR PH NOT AVAILABLE' : 'QR PH ARTIFACT', 137, $y - 88, 10, true, 'center');
+        $document->text($page, 'Open the interactive Application to scan.', 137, $y - 108, 7, false, 'center');
+        if ($collected) {
+            $document->rectangle($page, 52, $y - 125, 170, 36, 0.2, false);
+            $document->text($page, 'COLLECTED', 137, $y - 112, 19, true, 'center');
+        }
+
+        $y -= 205;
+        $this->processingFieldBand($document, $page, $y, [
+            'EXTERNAL REFERENCE' => (string) data_get($request, 'external_reference', ''),
+        ], 50);
+        $this->processingFieldBand($document, $page, $y - 62, [
+            'COLLECTED AMOUNT' => $this->blankMoney(data_get($request, 'collected_total_cents')),
+            'CONFIRMED' => (string) data_get($request, 'confirmed_at', ''),
+        ], 50);
+        $this->processingFieldBand($document, $page, $y - 124, [
+            'COLLECTION REFERENCE' => (string) data_get($request, 'collection_reference', ''),
+            'OFFICIAL RECEIPT NO.' => (string) data_get($receipt, 'receipt_number', ''),
+        ], 50);
+        $y -= 188;
+
+        $document->text($page, 'B. TREASURY RECORD', 42, $y, 8, true);
+        $y -= 14;
+        $this->processingFieldBand($document, $page, $y, [
+            'COLLECTION ID' => (string) data_get($request, 'collection_id', ''),
+            'COLLECTIONS' => (string) data_get($projection, 'payment_reference.collection_count', 0),
+            'RECEIPT STATUS' => data_get($receipt, 'receipt_number') === null ? 'PENDING' : 'ISSUED',
+            'PAYABLE STATUS' => strtoupper($this->label((string) data_get($payable, 'status', ''))),
+        ]);
     }
 
     /** @param array<string, mixed> $projection */

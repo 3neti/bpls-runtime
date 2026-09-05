@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { router } from '@inertiajs/vue3';
+import { router, useHttp } from '@inertiajs/vue3';
 import { ExternalLink, QrCode, ReceiptText } from '@lucide/vue';
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import ApplicationDocumentNavigator from '@/components/permit-applications/ApplicationDocumentNavigator.vue';
 import ApplicationWorkNote from '@/components/permit-applications/ApplicationWorkNote.vue';
 import BploRoutingTaskSheet from '@/components/permit-applications/BploRoutingTaskSheet.vue';
 import IpilExecutableDocument from '@/components/permit-applications/IpilExecutableDocument.vue';
+import IpilPaymentContinuationSheet from '@/components/permit-applications/IpilPaymentContinuationSheet.vue';
 
 type Task = {
     key: string;
@@ -47,6 +48,7 @@ type ApplicationData = {
         actor_label: string;
         role_code: string | null;
         current_tasks: Task[];
+        available_affordances: Task[];
         work_notes: WorkNote[];
     };
     tabs: { key: string; label: string }[];
@@ -80,8 +82,12 @@ const activeTab = ref(
 const lastApplicationPage = ref<'application' | 'processing'>(
     props.initialTab === 'processing' ? 'processing' : 'application',
 );
-const activeApplicationPage = computed<'application' | 'processing'>(() =>
-    activeTab.value === 'processing' ? 'processing' : 'application',
+const activeApplicationPage = computed<
+    'application' | 'processing' | 'payment'
+>(() =>
+    activeTab.value === 'processing' || activeTab.value === 'payment'
+        ? activeTab.value
+        : 'application',
 );
 const artifactTabs = computed(() => [
     { key: 'application_form', label: 'Application Form' },
@@ -94,6 +100,15 @@ const workNotes = computed(
 );
 const snapshot = computed(() => props.application.declaration.snapshot ?? {});
 const activeTask = ref(props.initialTask);
+const statusRequest = useHttp({});
+const paymentCheckMessage = ref<string | null>(null);
+const paymentStatusUrl = computed(
+    () =>
+        props.application.actor_context.available_affordances?.find(
+            (affordance) => affordance.key === 'check_payment_status',
+        )?.href ?? null,
+);
+let paymentPollTimer: ReturnType<typeof setInterval> | null = null;
 const page2Summary = computed(() => {
     const projection = props.document?.page_2_assessment;
     const offices = Array.isArray(projection?.offices)
@@ -157,6 +172,68 @@ watch(
         }
     },
 );
+
+watch(
+    [activeTab, () => props.application.payment.payment_request],
+    () => {
+        stopPaymentPolling();
+
+        const request = props.application.payment.payment_request;
+        const expiresAt = request?.active_attempt?.expires_at;
+
+        if (
+            activeTab.value === 'payment' &&
+            request?.state !== 'collected' &&
+            paymentStatusUrl.value &&
+            request?.active_attempt?.qr_data_url &&
+            expiresAt &&
+            new Date(expiresAt).getTime() > Date.now()
+        ) {
+            paymentPollTimer = setInterval(() => void checkPayment(), 4000);
+        }
+    },
+    { immediate: true },
+);
+
+function stopPaymentPolling(): void {
+    if (paymentPollTimer !== null) {
+        clearInterval(paymentPollTimer);
+        paymentPollTimer = null;
+    }
+}
+
+async function checkPayment(): Promise<void> {
+    const statusUrl = paymentStatusUrl.value;
+
+    if (!statusUrl || statusRequest.processing) {
+        return;
+    }
+
+    try {
+        const result = (await statusRequest.get(statusUrl)) as {
+            paid: boolean;
+            status: string;
+        };
+
+        if (result.paid) {
+            stopPaymentPolling();
+            paymentCheckMessage.value =
+                'Payment confirmed. Refreshing the Application record.';
+            router.reload();
+        } else if (result.status === 'expired') {
+            stopPaymentPolling();
+            paymentCheckMessage.value =
+                'The QR expired without a canonical Collection.';
+        } else {
+            paymentCheckMessage.value = 'No confirmed Collection yet.';
+        }
+    } catch {
+        paymentCheckMessage.value =
+            'Payment confirmation is temporarily unavailable. No Application facts were changed.';
+    }
+}
+
+onBeforeUnmount(stopPaymentPolling);
 watch(activeTab, (tab) => {
     if (tab === 'application' || tab === 'processing') {
         lastApplicationPage.value = tab;
@@ -304,7 +381,9 @@ function label(value: unknown): string {
                 data-testid="application-document-canvas"
                 :class="
                     document &&
-                    (activeTab === 'application' || activeTab === 'processing')
+                    (activeTab === 'application' ||
+                        activeTab === 'processing' ||
+                        activeTab === 'payment')
                         ? 'bg-stone-100 p-0 dark:bg-stone-950'
                         : 'bg-white p-4 sm:p-6 dark:bg-slate-900'
                 "
@@ -313,7 +392,8 @@ function label(value: unknown): string {
                 <ApplicationDocumentNavigator
                     v-if="
                         activeTab === 'application' ||
-                        activeTab === 'processing'
+                        activeTab === 'processing' ||
+                        activeTab === 'payment'
                     "
                     :active-page="activeApplicationPage"
                     :declaration-state="application.declaration.state"
@@ -331,6 +411,11 @@ function label(value: unknown): string {
                     "
                     :unresolved-charge-count="
                         page2Summary.unresolvedChargeCount
+                    "
+                    :has-payable="Boolean(application.payment.payable)"
+                    :payment-state="
+                        application.payment.payment_request?.state ??
+                        application.payment.state
                     "
                     @select="activeTab = $event"
                 />
@@ -605,59 +690,13 @@ function label(value: unknown): string {
                 </div>
 
                 <div v-else-if="activeTab === 'payment'" class="space-y-5">
-                    <div>
-                        <p
-                            class="text-xs font-black text-emerald-700 uppercase dark:text-emerald-300"
-                        >
-                            Treasury artifacts
-                        </p>
-                        <h3 class="text-xl font-black">
-                            Payment & Official Receipt
-                        </h3>
-                    </div>
-                    <div
-                        v-if="application.payment.payable"
-                        class="grid gap-3 sm:grid-cols-3"
-                    >
-                        <div
-                            class="rounded-lg bg-slate-100 p-3 dark:bg-slate-800"
-                        >
-                            <p class="text-xs uppercase">Payable</p>
-                            <strong>{{
-                                money(
-                                    application.payment.payable
-                                        .total_amount_cents,
-                                )
-                            }}</strong>
-                        </div>
-                        <div
-                            class="rounded-lg bg-slate-100 p-3 dark:bg-slate-800"
-                        >
-                            <p class="text-xs uppercase">Collected</p>
-                            <strong>{{
-                                money(
-                                    application.payment.payable
-                                        .paid_amount_cents,
-                                )
-                            }}</strong>
-                        </div>
-                        <div class="rounded-lg bg-amber-100 p-3 text-amber-950">
-                            <p class="text-xs uppercase">Balance</p>
-                            <strong>{{
-                                money(
-                                    application.payment.payable
-                                        .balance_amount_cents,
-                                )
-                            }}</strong>
-                        </div>
-                    </div>
-                    <p
-                        v-else
-                        class="rounded-lg border border-dashed border-slate-300 p-5 text-sm dark:border-slate-700"
-                    >
-                        Payable is pending exact Treasurer approval and payment
-                        scheduling.
-                    </p>
+                    <IpilPaymentContinuationSheet
+                        :application="application"
+                        :checking="statusRequest.processing"
+                        :check-message="paymentCheckMessage"
+                        :status-url="paymentStatusUrl"
+                        @check="checkPayment"
+                    />
                     <article
                         v-for="receipt in application.official_receipts"
                         :key="receipt.receipt_number"

@@ -5,6 +5,7 @@ use App\Actions\BuildDailyCollectionsReport;
 use App\Actions\BuildPaymentSummaryReport;
 use App\Actions\IssueManualCollectionReceipt;
 use App\Assessment\AssessmentSnapshotFingerprint;
+use App\Data\Application\ApplicationDataResolver;
 use App\Enums\AssessmentDecisionAction;
 use App\Enums\AssessmentStatus;
 use App\Enums\FeeRuleCategory;
@@ -70,6 +71,18 @@ test('QR Ph initiation sends the exact approved amount and returns the x-change 
         ->assertJsonPath('amount_cents', 12_550)
         ->assertJsonPath('status', 'awaiting_payment')
         ->assertJsonPath('qr_data_url', 'data:image/png;base64,'.$png);
+
+    $applicationData = app(ApplicationDataResolver::class)
+        ->resolve($schedule->permitApplication, $citizen)
+        ->toArray();
+    $checkAffordance = collect($applicationData['actor_context']['available_affordances'])
+        ->firstWhere('key', 'check_payment_status');
+
+    expect(data_get($applicationData, 'payment.payment_request.state'))->toBe('awaiting_payment')
+        ->and(data_get($applicationData, 'payment.payment_request.pay_code'))->toBe('TEST')
+        ->and(data_get($applicationData, 'payment.payment_request.active_attempt.qr_data_url'))->toBe('data:image/png;base64,'.$png)
+        ->and(data_get($applicationData, 'payment.payment_request.collection_id'))->toBeNull()
+        ->and($checkAffordance['href'])->toBe(route('citizen.payment-schedules.qr-ph.status', $schedule, false));
 
     Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/api/partner/v1/pay-codes')
         && $request['amount'] === 125.5
@@ -198,6 +211,15 @@ test('expired unpaid inquiry creates no BPLS collection or receipt', function ()
     expect(TreasuryCollection::query()->count())->toBe(0)
         ->and(Receipt::query()->count())->toBe(0)
         ->and($schedule->refresh()->status)->toBe(PaymentScheduleStatus::Pending);
+
+    $applicationData = app(ApplicationDataResolver::class)
+        ->resolve($schedule->permitApplication, $citizen)
+        ->toArray();
+
+    expect(data_get($applicationData, 'payment.payment_request.state'))->not->toBe('collected')
+        ->and(data_get($applicationData, 'payment.payment_request.collection_id'))->toBeNull()
+        ->and($applicationData['official_receipts'])->toBe([])
+        ->and($applicationData['permit']['official_receipt_bound'])->toBeFalse();
 });
 
 test('authoritative full collection enters the existing collection receipt and report path exactly once', function () {
@@ -222,6 +244,17 @@ test('authoritative full collection enters the existing collection receipt and r
         ->and($schedule->refresh()->status)->toBe(PaymentScheduleStatus::Paid)
         ->and(TreasuryCollection::query()->count())->toBe(1);
 
+    $collectedApplicationData = app(ApplicationDataResolver::class)
+        ->resolve($schedule->permitApplication, $citizen)
+        ->toArray();
+
+    expect(data_get($collectedApplicationData, 'payment.payment_request.state'))->toBe('collected')
+        ->and(data_get($collectedApplicationData, 'payment.payment_request.collection_id'))->toBe($collection->id)
+        ->and(data_get($collectedApplicationData, 'payment.payment_request.collection_reference'))->toBe($collection->reference_number)
+        ->and(data_get($collectedApplicationData, 'payment.payment_request.active_attempt.qr_data_url'))->not->toBeNull()
+        ->and($collectedApplicationData['official_receipts'])->toBe([])
+        ->and($collectedApplicationData['permit']['official_receipt_bound'])->toBeFalse();
+
     $receipt = app(IssueManualCollectionReceipt::class)->handle($collection, [
         'receipt_number' => '7654321',
         'numbering_authority' => 'manual',
@@ -234,6 +267,9 @@ test('authoritative full collection enters the existing collection receipt and r
     $dailyRow = collect($daily['rows'])->firstWhere('collection_id', $collection->id);
     $revenueRow = collect($revenue['rows'])->firstWhere('code', 'QR-PH-FEE');
     $summaryRow = collect($summary['rows'])->firstWhere('payment_schedule_id', $schedule->id);
+    $receiptedApplicationData = app(ApplicationDataResolver::class)
+        ->resolve($schedule->permitApplication, $citizen)
+        ->toArray();
 
     expect($receipt->receipt_number)->toBe('7654321')
         ->and($dailyRow['receipt_number'])->toBe('7654321')
@@ -244,7 +280,9 @@ test('authoritative full collection enters the existing collection receipt and r
         ->and($revenueRow['receipt_count'])->toBe(1)
         ->and($summaryRow['paid_amount_cents'])->toBe(12_550)
         ->and($summaryRow['receipted_amount_cents'])->toBe(12_550)
-        ->and($summaryRow['collection_methods'])->toBe([TreasuryCollectionMethod::QrPh->value]);
+        ->and($summaryRow['collection_methods'])->toBe([TreasuryCollectionMethod::QrPh->value])
+        ->and(data_get($receiptedApplicationData, 'payment.payment_request.official_receipt_id'))->toBe($receipt->id)
+        ->and($receiptedApplicationData['official_receipts'][0]['receipt_number'])->toBe('7654321');
 });
 
 /** @return array{User, PaymentSchedule} */

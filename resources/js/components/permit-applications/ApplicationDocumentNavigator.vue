@@ -1,5 +1,5 @@
 <script setup lang="ts">
-type ApplicationPage = 'application' | 'processing';
+type ApplicationPage = 'application' | 'processing' | 'payment';
 
 defineProps<{
     activePage: ApplicationPage;
@@ -11,6 +11,8 @@ defineProps<{
     paymentOrderCount: number;
     emergingTotalAmountCents: number | null;
     unresolvedChargeCount: number;
+    hasPayable: boolean;
+    paymentState: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -37,8 +39,9 @@ function money(amountCents: number | null): string {
     >
         <div
             role="tablist"
-            aria-label="Application Form Page 1 and Page 2"
-            class="grid min-w-0 grid-cols-2 gap-2"
+            aria-label="Application Form pages"
+            :class="hasPayable ? 'grid-cols-3' : 'grid-cols-2'"
+            class="grid min-w-0 gap-2"
         >
             <button
                 type="button"
@@ -99,6 +102,38 @@ function money(amountCents: number | null): string {
                         requiredDeterminationCount
                     }}
                     determinations
+                </span>
+            </button>
+
+            <button
+                v-if="hasPayable"
+                type="button"
+                role="tab"
+                :aria-selected="activePage === 'payment'"
+                data-testid="application-form-page-3-tab"
+                :class="
+                    activePage === 'payment'
+                        ? 'border-emerald-700 bg-emerald-700 text-white shadow-sm'
+                        : 'border-slate-300 bg-white text-slate-700 hover:border-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
+                "
+                class="min-w-0 rounded-lg border px-3 py-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-amber-500 sm:px-4"
+                @click="emit('select', 'payment')"
+            >
+                <span
+                    class="block text-[10px] font-black tracking-wider uppercase sm:text-xs"
+                    >Page 3</span
+                >
+                <span class="block truncate text-xs font-black sm:text-sm"
+                    >Payment</span
+                >
+                <span
+                    class="mt-1 block truncate text-[10px] font-bold uppercase sm:text-xs"
+                >
+                    {{
+                        paymentState
+                            ? paymentState.replaceAll('_', ' ')
+                            : 'Pending'
+                    }}
                 </span>
             </button>
         </div>

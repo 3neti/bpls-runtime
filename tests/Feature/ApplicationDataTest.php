@@ -55,6 +55,7 @@ test('ApplicationData V1 contains typed canonical facts without Eloquent models 
         ->and($citizenData['identity'])->toBe($healthData['identity'])
         ->and($citizenData['declaration'])->toBe($healthData['declaration'])
         ->and($citizenData['financial'])->toBe($healthData['financial'])
+        ->and($citizenData['payment'])->toBe($healthData['payment'])
         ->and($citizenData['actor_context'])->not->toBe($healthData['actor_context'])
         ->and($citizenData['actor_context']['current_tasks'])->toHaveCount(1)
         ->and($citizenData['actor_context']['current_tasks'][0]['key'])->toBe('pay_balance')
@@ -155,6 +156,7 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
     $document = file_get_contents(resource_path('js/components/permit-applications/IpilExecutableDocument.vue'));
     $processingSheet = file_get_contents(resource_path('js/components/permit-applications/IpilMunicipalProcessingSheet.vue'));
     $navigator = file_get_contents(resource_path('js/components/permit-applications/ApplicationDocumentNavigator.vue'));
+    $paymentSheet = file_get_contents(resource_path('js/components/permit-applications/IpilPaymentContinuationSheet.vue'));
 
     expect($component)->toContain('role="tablist"')
         ->and($component)->toContain("{ key: 'application_form', label: 'Application Form' }")
@@ -183,6 +185,7 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
         ->and($navigator)->toContain('data-testid="application-document-navigator"')
         ->and($navigator)->toContain('data-testid="application-form-page-1-tab"')
         ->and($navigator)->toContain('data-testid="application-form-page-2-tab"')
+        ->and($navigator)->toContain('data-testid="application-form-page-3-tab"')
         ->and($navigator)->toContain('Applicant Declaration')
         ->and($navigator)->toContain('Municipal Processing')
         ->and($navigator)->toContain('Emerging total')
@@ -191,7 +194,15 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
         ->and($processingSheet)->toContain('data-testid="page-2-bplo-routing-recorded"')
         ->and($processingSheet)->toContain('Municipal Processing Continuation Sheet')
         ->and($processingSheet)->toContain('Blank routing row')
-        ->and($processingSheet)->toContain('Assessment Reference');
+        ->and($processingSheet)->toContain('Assessment Reference')
+        ->and($paymentSheet)->toContain('Payment Continuation Sheet')
+        ->and($paymentSheet)->toContain('data-testid="application-payment-pay-code"')
+        ->and($paymentSheet)->toContain('data-testid="application-payment-qr"')
+        ->and($paymentSheet)->toContain('data-testid="application-payment-collected-stamp"')
+        ->and($paymentSheet)->toContain("paymentRequest.value?.state === 'collected'")
+        ->and($paymentSheet)->toContain('paymentRequest.value.collection_id !== null')
+        ->and($component)->toContain('check_payment_status')
+        ->and($component)->toContain('setInterval(() => void checkPayment(), 4000)');
 });
 
 function configureApplicationDataPreview(): void

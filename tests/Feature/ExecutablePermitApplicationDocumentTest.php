@@ -80,6 +80,10 @@ test('the same executable document progressively projects immutable assessment t
         ->and($pdf)->toContain('ASSESSMENT REFERENCE')
         ->and($pdf)->toContain('ASSESSED AMOUNT')
         ->and($pdf)->toContain('PAGE 2-A')
+        ->and($pdf)->toContain('PAYMENT CONTINUATION SHEET')
+        ->and($pdf)->toContain('PAGE 3')
+        ->and($pdf)->toContain('PAY CODE')
+        ->and($pdf)->toContain('QR PH NOT AVAILABLE')
         ->and($pdf)->toContain('PHP 1,220.00');
 });
 

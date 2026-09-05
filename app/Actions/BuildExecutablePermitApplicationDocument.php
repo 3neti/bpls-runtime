@@ -110,6 +110,7 @@ final class BuildExecutablePermitApplicationDocument
             'payment_reference' => [
                 'state' => data_get($payment, 'state'),
                 'payable' => data_get($payment, 'payable'),
+                'payment_request' => data_get($payment, 'payment_request'),
                 'collection_count' => count($collections),
                 'latest_collection' => $collections === [] ? null : $collections[array_key_last($collections)],
             ],

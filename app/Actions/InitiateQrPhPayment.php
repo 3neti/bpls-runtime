@@ -4,6 +4,7 @@ namespace App\Actions;
 
 use App\Assessment\AssessmentSnapshotFingerprint;
 use App\Exceptions\XChangePartnerApiException;
+use App\Integrations\QrPhPaymentArtifactCache;
 use App\Integrations\XChangePartnerApiClient;
 use App\Models\PaymentSchedule;
 use App\Models\XChangePayment;
@@ -17,6 +18,7 @@ final class InitiateQrPhPayment
         private readonly EnsureQrPhPaymentEligible $ensureEligible,
         private readonly AssessmentSnapshotFingerprint $fingerprint,
         private readonly XChangePartnerApiClient $client,
+        private readonly QrPhPaymentArtifactCache $artifactCache,
     ) {}
 
     /**
@@ -65,6 +67,11 @@ final class InitiateQrPhPayment
                     'provider_status' => $created['status'],
                     'last_error_code' => null,
                 ])->save();
+                $this->artifactCache->store(
+                    $attempt,
+                    $created['mime_type'],
+                    $created['base64_payload'],
+                );
 
                 return [
                     'amount_cents' => $payment->amount_cents,
