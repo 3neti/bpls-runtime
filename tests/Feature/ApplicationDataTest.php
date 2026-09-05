@@ -10,6 +10,7 @@ use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Artisan;
 
 beforeEach(function () {
@@ -40,6 +41,15 @@ test('ApplicationData V1 contains typed canonical facts without Eloquent models 
         }
     };
     $assertNoModels($citizenData);
+    $stableWorkNotes = fn (array $notes): array => collect($notes)
+        ->map(fn (array $note): array => Arr::except($note, ['actionable', 'action_label', 'action_url']))
+        ->all();
+    $citizenPaymentNote = collect($citizenData['actor_context']['work_notes'])->firstWhere('id', 'applicant_payment');
+    $healthPaymentNote = collect($healthData['actor_context']['work_notes'])->firstWhere('id', 'applicant_payment');
+    $noteCopy = collect($citizenData['actor_context']['work_notes'])
+        ->flatMap(fn (array $note): array => Arr::only($note, ['actor_label', 'instruction', 'state_label', 'blocking_reason']))
+        ->filter()
+        ->implode(' ');
 
     expect($citizenData['schema_version'])->toBe('bpls.application-data.v1')
         ->and($citizenData['identity'])->toBe($healthData['identity'])
@@ -49,6 +59,13 @@ test('ApplicationData V1 contains typed canonical facts without Eloquent models 
         ->and($citizenData['actor_context']['current_tasks'])->toHaveCount(1)
         ->and($citizenData['actor_context']['current_tasks'][0]['key'])->toBe('pay_balance')
         ->and($healthData['actor_context']['current_tasks'])->toBe([])
+        ->and($stableWorkNotes($citizenData['actor_context']['work_notes']))->toBe($stableWorkNotes($healthData['actor_context']['work_notes']))
+        ->and($citizenData['actor_context']['work_notes'])->toHaveCount(count($healthData['actor_context']['work_notes']))
+        ->and($citizenPaymentNote['actionable'])->toBeTrue()
+        ->and($citizenPaymentNote['action_url'])->not->toBeNull()
+        ->and($healthPaymentNote['actionable'])->toBeFalse()
+        ->and($healthPaymentNote['action_url'])->toBeNull()
+        ->and($noteCopy)->not->toMatch('/\b(your|yours|my|mine|their|theirs|his|hers|its)\b/i')
         ->and($citizenData['tabs'])->toBe([
             ['key' => 'application', 'label' => 'Application'],
             ['key' => 'processing', 'label' => 'Processing'],
@@ -131,14 +148,22 @@ test('Business Permit projection preserves many lines of business and verificati
         ->and($permit['blockers'])->toContain('official_receipt_number_binding');
 });
 
-test('Executable Application uses navigation-only tabs and renders the Post-it only from actor current tasks', function () {
+test('Executable Application centers the facsimile and keeps actor-neutral work notes visible', function () {
     $component = file_get_contents(resource_path('js/components/permit-applications/ExecutableApplication.vue'));
+    $note = file_get_contents(resource_path('js/components/permit-applications/ApplicationWorkNote.vue'));
 
     expect($component)->toContain('role="tablist"')
         ->and($component)->toContain(':aria-selected="activeTab === tab.key"')
-        ->and($component)->toContain('v-if="tasks.length"')
-        ->and($component)->toContain('data-testid="your-task-post-it"')
-        ->and($component)->toContain('application.actor_context.current_tasks')
+        ->and($component)->toContain('data-testid="application-document-canvas"')
+        ->and($component)->toContain('IpilExecutableDocument')
+        ->and($component)->toContain('page="page_1"')
+        ->and($component)->toContain('page="page_2"')
+        ->and($component)->toContain('data-testid="application-work-notes"')
+        ->and($component)->toContain('application.actor_context.work_notes')
+        ->and($component)->toContain('ApplicationWorkNote')
+        ->and($note)->toContain('data-testid="application-work-note"')
+        ->and($note)->toContain('note.actionable && note.action_url')
+        ->and($note)->not->toMatch('/\bYour Task\b/i')
         ->and($component)->not->toContain('tab.status')
         ->and($component)->toContain('min-w-0')
         ->and($component)->toContain('break-words')

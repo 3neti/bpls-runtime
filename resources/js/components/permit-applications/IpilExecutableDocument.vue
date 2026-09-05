@@ -93,7 +93,13 @@ type DocumentProjection = {
     };
 };
 
-const props = defineProps<{ document: DocumentProjection }>();
+const props = withDefaults(
+    defineProps<{
+        document: DocumentProjection;
+        page?: 'all' | 'page_1' | 'page_2';
+    }>(),
+    { page: 'all' },
+);
 const snapshot = computed(() => props.document.declaration.snapshot ?? {});
 const selectedOfficeCode = ref<string | null>(null);
 const selectedOffice = computed(
@@ -172,6 +178,7 @@ function officeStatus(value: OfficeFeeDetermination['status']) {
         class="grid gap-5 bg-stone-100 p-2 text-stone-950 sm:p-4 dark:bg-stone-950 dark:text-stone-100"
     >
         <section
+            v-if="page === 'all' || page === 'page_1'"
             data-testid="ipil-executable-document-page-1"
             class="overflow-hidden border-2 border-stone-900 bg-white shadow-sm dark:border-stone-400 dark:bg-stone-900"
         >
@@ -571,6 +578,7 @@ function officeStatus(value: OfficeFeeDetermination['status']) {
         </section>
 
         <section
+            v-if="page === 'all' || page === 'page_2'"
             data-testid="ipil-executable-document-page-2"
             class="overflow-hidden border-2 border-stone-900 bg-white shadow-sm dark:border-stone-400 dark:bg-stone-900"
         >

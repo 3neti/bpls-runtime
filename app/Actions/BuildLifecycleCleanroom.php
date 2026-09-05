@@ -11,6 +11,7 @@ class BuildLifecycleCleanroom
     public function __construct(
         private readonly ResolveLifecycleCleanroomState $resolveState,
         private readonly ApplicationDataResolver $applicationDataResolver,
+        private readonly BuildExecutablePermitApplicationDocument $buildDocument,
     ) {}
 
     /** @return array<string, mixed> */
@@ -26,6 +27,9 @@ class BuildLifecycleCleanroom
         if (is_array($activeState)) {
             $activeState['application_data'] = $application instanceof PermitApplication
                 ? $this->applicationDataResolver->resolve($application)->toArray()
+                : null;
+            $activeState['application_document'] = $application instanceof PermitApplication
+                ? $this->buildDocument->handle($application)
                 : null;
         }
 

@@ -82,6 +82,7 @@ test('laboratory segregates interactive work from collapsed automated reference 
         ->toContain('Start Interactive')
         ->toContain('data-testid="interactive-application-stage"')
         ->toContain('() => props.cleanroom.active?.application_data ?? null')
+        ->toContain(':document="cleanroom.active?.application_document"')
         ->toContain("(step) => step.status !== 'pending'")
         ->toContain('v-for="step in visibleCleanroomSteps"')
         ->toContain('step.completed &&')
@@ -321,6 +322,23 @@ test('source backed registry specimen advances through canonical actions to an a
     $this->post(route('citizen.permit-applications.submit', $application), [
         'undertaking_accepted' => '1',
     ])->assertSessionHasNoErrors();
+
+    $this->actingAs($management)
+        ->get(route('stakeholder-preview.lifecycle-laboratory.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('cleanroom.active.application_data.identity.application_id', $application->id)
+            ->where('cleanroom.active.application_data.declaration.page', 'page_1')
+            ->where('cleanroom.active.application_document.declaration.state', 'frozen')
+            ->where('cleanroom.active.application_document.page_2_assessment.status', 'awaiting_bplo_routing')
+            ->where('cleanroom.active.application_data.actor_context.actor_label', 'Laboratory observer')
+            ->where('cleanroom.active.application_data.actor_context.work_notes.0.id', 'applicant_submission')
+            ->where('cleanroom.active.application_data.actor_context.work_notes.0.state', 'completed')
+            ->where('cleanroom.active.application_data.actor_context.work_notes.0.actionable', false)
+            ->where('cleanroom.active.application_data.actor_context.work_notes.1.id', 'bplo_routing')
+            ->where('cleanroom.active.application_data.actor_context.work_notes.1.state', 'ready')
+            ->where('cleanroom.active.application_data.actor_context.work_notes.1.actionable', false)
+            ->where('cleanroom.active.application_data.actor_context.work_notes.2.state', 'anticipated'));
 
     $work = collect([
         'engineering' => 'Engineering',

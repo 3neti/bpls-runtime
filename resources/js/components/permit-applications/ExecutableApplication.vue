@@ -1,12 +1,30 @@
 <script setup lang="ts">
-import { ExternalLink, QrCode, ReceiptText, ShieldCheck } from '@lucide/vue';
+import { ExternalLink, QrCode, ReceiptText } from '@lucide/vue';
 import { computed, ref } from 'vue';
+import ApplicationWorkNote from '@/components/permit-applications/ApplicationWorkNote.vue';
+import IpilExecutableDocument from '@/components/permit-applications/IpilExecutableDocument.vue';
 
 type Task = {
     key: string;
     label: string;
     section: string;
     href: string | null;
+};
+type WorkNote = {
+    id: string;
+    actor_key: string;
+    actor_label: string;
+    instruction: string;
+    section: string;
+    anchor: string;
+    state: string;
+    state_label: string;
+    tone: string;
+    actionable: boolean;
+    action_label: string | null;
+    action_url: string | null;
+    completed_at: string | null;
+    blocking_reason: string | null;
 };
 type ApplicationData = {
     schema_version: string;
@@ -26,6 +44,7 @@ type ApplicationData = {
         actor_label: string;
         role_code: string | null;
         current_tasks: Task[];
+        work_notes: WorkNote[];
     };
     tabs: { key: string; label: string }[];
 };
@@ -33,7 +52,9 @@ type ApplicationData = {
 const props = withDefaults(
     defineProps<{
         application: ApplicationData;
-        mode?: 'workspace' | 'palette' | 'mobile' | 'print';
+        document?: any | null;
+        mode?:
+            'workspace' | 'palette' | 'mobile' | 'print' | 'processing-print';
         initialTab?: string;
     }>(),
     { mode: 'workspace', initialTab: 'application' },
@@ -44,7 +65,9 @@ const activeTab = ref(
         ? props.initialTab
         : 'application',
 );
-const tasks = computed(() => props.application.actor_context.current_tasks);
+const workNotes = computed(
+    () => props.application.actor_context.work_notes ?? [],
+);
 const snapshot = computed(() => props.application.declaration.snapshot ?? {});
 
 function money(minor: number | null | undefined): string {
@@ -108,7 +131,7 @@ function label(value: unknown): string {
         </header>
 
         <nav
-            class="overflow-x-auto border-b border-slate-300 bg-white/80 dark:border-slate-700 dark:bg-slate-900"
+            class="overflow-x-auto border-b border-slate-300 bg-white/80 lg:hidden dark:border-slate-700 dark:bg-slate-900 print:hidden"
             aria-label="Application artifacts"
         >
             <div
@@ -144,181 +167,211 @@ function label(value: unknown): string {
         </nav>
 
         <div
-            class="grid min-w-0 gap-5 p-3 sm:p-6 lg:grid-cols-[minmax(0,1fr)_17rem]"
+            class="grid min-w-0 gap-5 p-3 sm:p-6 lg:grid-cols-[minmax(0,1fr)_19rem]"
         >
             <section
-                class="min-w-0 rounded-xl border border-slate-300 bg-white p-4 sm:p-6 dark:border-slate-700 dark:bg-slate-900"
+                data-testid="application-document-canvas"
+                :class="
+                    document &&
+                    (activeTab === 'application' || activeTab === 'processing')
+                        ? 'bg-stone-100 p-0 dark:bg-stone-950'
+                        : 'bg-white p-4 sm:p-6 dark:bg-slate-900'
+                "
+                class="min-w-0 overflow-hidden rounded-xl border border-slate-300 dark:border-slate-700"
             >
                 <div
                     v-if="activeTab === 'application'"
                     data-testid="application-page-1"
-                    class="space-y-5"
                 >
-                    <div
-                        class="flex flex-wrap items-center justify-between gap-3 border-b-2 border-slate-900 pb-3 dark:border-slate-300"
-                    >
-                        <div>
-                            <p class="text-xs font-black uppercase">Page 1</p>
-                            <h3 class="text-xl font-black">
-                                Applicant Declaration
-                            </h3>
-                        </div>
-                        <span
-                            class="rounded bg-emerald-100 px-2.5 py-1 text-xs font-black text-emerald-900 uppercase"
-                            >{{ application.declaration.state }}</span
+                    <IpilExecutableDocument
+                        v-if="document"
+                        :document="document"
+                        page="page_1"
+                    />
+                    <template v-else>
+                        <div
+                            class="flex flex-wrap items-center justify-between gap-3 border-b-2 border-slate-900 pb-3 dark:border-slate-300"
                         >
-                    </div>
-                    <p
-                        class="text-sm leading-6 text-slate-600 dark:text-slate-300"
-                    >
-                        What the applicant declared. Once submitted, this page
-                        is the frozen evidentiary snapshot.
-                    </p>
-                    <dl class="grid gap-4 sm:grid-cols-2">
-                        <div>
-                            <dt
-                                class="text-xs font-bold text-slate-500 uppercase"
+                            <div>
+                                <p class="text-xs font-black uppercase">
+                                    Page 1
+                                </p>
+                                <h3 class="text-xl font-black">
+                                    Applicant Declaration
+                                </h3>
+                            </div>
+                            <span
+                                class="rounded bg-emerald-100 px-2.5 py-1 text-xs font-black text-emerald-900 uppercase"
+                                >{{ application.declaration.state }}</span
                             >
-                                Applicant
-                            </dt>
-                            <dd class="mt-1 font-semibold break-words">
-                                {{ application.applicant.name }}
-                            </dd>
                         </div>
+                        <p
+                            class="text-sm leading-6 text-slate-600 dark:text-slate-300"
+                        >
+                            What the applicant declared. Once submitted, this
+                            page is the frozen evidentiary snapshot.
+                        </p>
+                        <dl class="grid gap-4 sm:grid-cols-2">
+                            <div>
+                                <dt
+                                    class="text-xs font-bold text-slate-500 uppercase"
+                                >
+                                    Applicant
+                                </dt>
+                                <dd class="mt-1 font-semibold break-words">
+                                    {{ application.applicant.name }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt
+                                    class="text-xs font-bold text-slate-500 uppercase"
+                                >
+                                    Business
+                                </dt>
+                                <dd class="mt-1 font-semibold break-words">
+                                    {{ application.business.name }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt
+                                    class="text-xs font-bold text-slate-500 uppercase"
+                                >
+                                    Business address
+                                </dt>
+                                <dd class="mt-1 break-words">
+                                    {{
+                                        application.business.address ??
+                                        snapshot.business_address?.street ??
+                                        'Pending'
+                                    }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt
+                                    class="text-xs font-bold text-slate-500 uppercase"
+                                >
+                                    Declaration hash
+                                </dt>
+                                <dd class="mt-1 font-mono text-xs break-all">
+                                    {{
+                                        application.declaration.snapshot_hash ??
+                                        'Not frozen'
+                                    }}
+                                </dd>
+                            </div>
+                        </dl>
                         <div>
-                            <dt
-                                class="text-xs font-bold text-slate-500 uppercase"
-                            >
-                                Business
-                            </dt>
-                            <dd class="mt-1 font-semibold break-words">
-                                {{ application.business.name }}
-                            </dd>
+                            <h4 class="text-xs font-black uppercase">
+                                Declared lines of business
+                            </h4>
+                            <ul class="mt-2 grid gap-2">
+                                <li
+                                    v-for="line in application.business
+                                        .lines_of_business"
+                                    :key="line.application_line_id"
+                                    class="rounded-lg bg-slate-100 px-3 py-2 text-sm break-words dark:bg-slate-800"
+                                >
+                                    {{ line.code }} · {{ line.name }}
+                                </li>
+                            </ul>
                         </div>
-                        <div>
-                            <dt
-                                class="text-xs font-bold text-slate-500 uppercase"
-                            >
-                                Business address
-                            </dt>
-                            <dd class="mt-1 break-words">
-                                {{
-                                    application.business.address ??
-                                    snapshot.business_address?.street ??
-                                    'Pending'
-                                }}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt
-                                class="text-xs font-bold text-slate-500 uppercase"
-                            >
-                                Declaration hash
-                            </dt>
-                            <dd class="mt-1 font-mono text-xs break-all">
-                                {{
-                                    application.declaration.snapshot_hash ??
-                                    'Not frozen'
-                                }}
-                            </dd>
-                        </div>
-                    </dl>
-                    <div>
-                        <h4 class="text-xs font-black uppercase">
-                            Declared lines of business
-                        </h4>
-                        <ul class="mt-2 grid gap-2">
-                            <li
-                                v-for="line in application.business
-                                    .lines_of_business"
-                                :key="line.application_line_id"
-                                class="rounded-lg bg-slate-100 px-3 py-2 text-sm break-words dark:bg-slate-800"
-                            >
-                                {{ line.code }} · {{ line.name }}
-                            </li>
-                        </ul>
-                    </div>
+                    </template>
                 </div>
 
                 <div
                     v-else-if="activeTab === 'processing'"
                     data-testid="application-page-2"
-                    class="space-y-5"
                 >
-                    <div
-                        class="border-b-2 border-slate-900 pb-3 dark:border-slate-300"
-                    >
-                        <p class="text-xs font-black uppercase">Page 2</p>
-                        <h3 class="text-xl font-black">Municipal Processing</h3>
-                    </div>
-                    <p
-                        class="text-sm leading-6 text-slate-600 dark:text-slate-300"
-                    >
-                        A living projection of what the Municipality has done.
-                        Canonical actions and records remain authoritative.
-                    </p>
-                    <div class="rounded-lg bg-sky-50 p-4 dark:bg-sky-950/40">
+                    <IpilExecutableDocument
+                        v-if="document"
+                        :document="document"
+                        page="page_2"
+                    />
+                    <div v-else class="space-y-5">
+                        <div
+                            class="border-b-2 border-slate-900 pb-3 dark:border-slate-300"
+                        >
+                            <p class="text-xs font-black uppercase">Page 2</p>
+                            <h3 class="text-xl font-black">
+                                Municipal Processing
+                            </h3>
+                        </div>
                         <p
-                            class="text-xs font-black text-sky-800 uppercase dark:text-sky-300"
+                            class="text-sm leading-6 text-slate-600 dark:text-slate-300"
                         >
-                            BPLO routing
+                            A living projection of what the Municipality has
+                            done. Canonical actions and records remain
+                            authoritative.
                         </p>
-                        <p class="mt-1 font-semibold">
-                            {{ label(application.routing.status) }}
-                        </p>
-                        <p
-                            v-if="application.routing.reason"
-                            class="mt-1 text-sm"
+                        <div
+                            class="rounded-lg bg-sky-50 p-4 dark:bg-sky-950/40"
                         >
-                            {{ application.routing.reason }}
-                        </p>
-                    </div>
-                    <div
-                        v-if="application.offices.length"
-                        class="grid gap-3 md:grid-cols-2"
-                    >
-                        <article
-                            v-for="office in application.offices"
-                            :key="office.code"
-                            class="min-w-0 rounded-lg border border-slate-200 p-4 dark:border-slate-700"
-                        >
-                            <div class="flex flex-wrap justify-between gap-2">
-                                <h4 class="font-black">{{ office.label }}</h4>
-                                <span class="text-xs font-bold uppercase">{{
-                                    label(office.status)
-                                }}</span>
-                            </div>
-                            <ul class="mt-3 grid gap-2 text-sm">
-                                <li
-                                    v-for="item in office.responsibilities"
-                                    :key="item.id"
-                                    class="flex min-w-0 justify-between gap-3"
-                                >
-                                    <span class="min-w-0 break-words">{{
-                                        item.label
-                                    }}</span
-                                    ><span class="shrink-0 font-semibold">{{
-                                        money(item.amount_cents)
-                                    }}</span>
-                                </li>
-                            </ul>
-                            <p class="mt-3 text-xs text-slate-500">
-                                {{ office.paperless_payment_order_count }}
-                                paperless payment order(s) ·
-                                {{
-                                    office.certification?.statement ??
-                                    'Certification pending'
-                                }}
+                            <p
+                                class="text-xs font-black text-sky-800 uppercase dark:text-sky-300"
+                            >
+                                BPLO routing
                             </p>
-                        </article>
+                            <p class="mt-1 font-semibold">
+                                {{ label(application.routing.status) }}
+                            </p>
+                            <p
+                                v-if="application.routing.reason"
+                                class="mt-1 text-sm"
+                            >
+                                {{ application.routing.reason }}
+                            </p>
+                        </div>
+                        <div
+                            v-if="application.offices.length"
+                            class="grid gap-3 md:grid-cols-2"
+                        >
+                            <article
+                                v-for="office in application.offices"
+                                :key="office.code"
+                                class="min-w-0 rounded-lg border border-slate-200 p-4 dark:border-slate-700"
+                            >
+                                <div
+                                    class="flex flex-wrap justify-between gap-2"
+                                >
+                                    <h4 class="font-black">
+                                        {{ office.label }}
+                                    </h4>
+                                    <span class="text-xs font-bold uppercase">{{
+                                        label(office.status)
+                                    }}</span>
+                                </div>
+                                <ul class="mt-3 grid gap-2 text-sm">
+                                    <li
+                                        v-for="item in office.responsibilities"
+                                        :key="item.id"
+                                        class="flex min-w-0 justify-between gap-3"
+                                    >
+                                        <span class="min-w-0 break-words">{{
+                                            item.label
+                                        }}</span
+                                        ><span class="shrink-0 font-semibold">{{
+                                            money(item.amount_cents)
+                                        }}</span>
+                                    </li>
+                                </ul>
+                                <p class="mt-3 text-xs text-slate-500">
+                                    {{ office.paperless_payment_order_count }}
+                                    paperless payment order(s) ·
+                                    {{
+                                        office.certification?.statement ??
+                                        'Certification pending'
+                                    }}
+                                </p>
+                            </article>
+                        </div>
+                        <p
+                            v-else
+                            class="rounded-lg border border-dashed border-slate-300 p-5 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300"
+                        >
+                            Concerned-office work will appear after the
+                            canonical BPLO routing determination.
+                        </p>
                     </div>
-                    <p
-                        v-else
-                        class="rounded-lg border border-dashed border-slate-300 p-5 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300"
-                    >
-                        Concerned-office work will appear after the canonical
-                        BPLO routing determination.
-                    </p>
                 </div>
 
                 <div v-else-if="activeTab === 'assessment'" class="space-y-5">
@@ -726,45 +779,88 @@ function label(value: unknown): string {
                 </div>
             </section>
 
-            <aside class="min-w-0">
-                <div
-                    v-if="tasks.length"
-                    data-testid="your-task-post-it"
-                    class="rotate-[-1deg] bg-[#ffe66f] p-5 text-slate-950 shadow-[5px_7px_0_rgba(15,23,42,0.18)]"
-                >
-                    <p class="text-xs font-black tracking-[0.2em] uppercase">
-                        Your Task
-                    </p>
-                    <p class="mt-1 text-sm font-semibold">
-                        {{ application.actor_context.actor_label }}
-                    </p>
-                    <ul class="mt-4 grid gap-3">
-                        <li v-for="task in tasks" :key="task.key">
-                            <a
-                                v-if="task.href"
-                                :href="task.href"
-                                class="flex items-start justify-between gap-2 font-black underline decoration-2 underline-offset-4"
-                                ><span>{{ task.label }}</span
-                                ><ExternalLink
-                                    class="mt-0.5 size-4 shrink-0" /></a
-                            ><span v-else class="font-black">{{
-                                task.label
-                            }}</span>
-                        </li>
-                    </ul>
-                </div>
-                <div
-                    v-else
-                    data-testid="no-current-task"
-                    class="rounded-xl border border-slate-300 bg-white/60 p-4 text-sm dark:border-slate-700 dark:bg-slate-900"
-                >
-                    <div class="flex items-center gap-2 font-bold">
-                        <ShieldCheck class="size-4" />No current action
-                    </div>
-                    <p class="mt-2 text-slate-600 dark:text-slate-300">
-                        This actor has no legitimate actionable responsibility
-                        on the Application now.
-                    </p>
+            <aside
+                :class="{ 'print:hidden': mode !== 'processing-print' }"
+                class="min-w-0"
+                aria-label="Executable Application palette"
+            >
+                <div class="space-y-5 lg:sticky lg:top-4">
+                    <section
+                        class="hidden overflow-hidden rounded-xl border border-slate-300 bg-white/80 lg:block dark:border-slate-700 dark:bg-slate-900"
+                    >
+                        <div
+                            class="border-b border-slate-200 p-4 dark:border-slate-700"
+                        >
+                            <p
+                                class="text-[11px] font-black tracking-[0.18em] text-slate-500 uppercase"
+                            >
+                                Executable palette
+                            </p>
+                            <p class="mt-1 text-sm font-bold break-words">
+                                {{ application.actor_context.actor_label }}
+                            </p>
+                        </div>
+                        <nav
+                            role="tablist"
+                            aria-label="Application sections palette"
+                        >
+                            <button
+                                v-for="(tab, index) in application.tabs"
+                                :key="tab.key"
+                                type="button"
+                                role="tab"
+                                :aria-selected="activeTab === tab.key"
+                                :data-testid="`palette-tab-${tab.key}`"
+                                :class="[
+                                    [
+                                        'border-sky-500',
+                                        'border-amber-500',
+                                        'border-violet-500',
+                                        'border-emerald-500',
+                                        'border-rose-500',
+                                    ][index],
+                                    activeTab === tab.key
+                                        ? 'bg-[#f6f0df] text-slate-950 dark:bg-slate-950 dark:text-white'
+                                        : 'border-transparent text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
+                                ]"
+                                class="flex w-full border-l-4 px-4 py-3 text-left text-sm font-black tracking-wide uppercase outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-inset"
+                                @click="activeTab = tab.key"
+                            >
+                                {{ tab.label }}
+                            </button>
+                        </nav>
+                    </section>
+
+                    <section data-testid="application-work-notes">
+                        <div class="mb-3 flex items-end justify-between gap-3">
+                            <div>
+                                <p
+                                    class="text-[11px] font-black tracking-[0.18em] text-slate-500 uppercase"
+                                >
+                                    Application annotations
+                                </p>
+                                <h3 class="text-lg font-black">
+                                    Municipal work notes
+                                </h3>
+                            </div>
+                            <span
+                                class="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-bold text-white dark:bg-white dark:text-slate-950"
+                            >
+                                {{ workNotes.length }}
+                            </span>
+                        </div>
+                        <div
+                            class="flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pt-2 pb-5 lg:grid lg:max-h-[70vh] lg:overflow-y-auto lg:px-2 lg:pb-8"
+                        >
+                            <ApplicationWorkNote
+                                v-for="(note, index) in workNotes"
+                                :key="note.id"
+                                :note="note"
+                                :index="index"
+                                class="w-[17rem] shrink-0 snap-start lg:w-auto"
+                            />
+                        </div>
+                    </section>
                 </div>
             </aside>
         </div>

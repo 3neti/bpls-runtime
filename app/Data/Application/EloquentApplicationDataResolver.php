@@ -69,6 +69,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             ->all());
         $permit = $this->permit($application, $receipts);
         $tasks = $this->tasks($application, $viewer, $evaluationProjection);
+        $workNotes = $this->workNotes($application, $evaluationProjection, $offices, $tasks, $receipts, $permit);
         $declaration = $application->declaration;
 
         return new ApplicationData(
@@ -159,6 +160,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 role_code: $viewer?->role?->code,
                 current_tasks: $tasks,
                 available_affordances: $tasks,
+                work_notes: $workNotes,
             ),
             tabs: [
                 ['key' => 'application', 'label' => 'Application'],
@@ -499,6 +501,272 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
 
     /**
      * @param  array<string, mixed>|null  $projection
+     * @param  list<ApplicationOfficeData>  $offices
+     * @param  list<array{key: string, label: string, section: string, href: ?string}>  $tasks
+     * @param  list<OfficialReceiptData>  $receipts
+     * @return list<ApplicationWorkNoteData>
+     */
+    private function workNotes(
+        PermitApplication $application,
+        ?array $projection,
+        array $offices,
+        array $tasks,
+        array $receipts,
+        BusinessPermitData $permit,
+    ): array {
+        $notes = [];
+        $taskIndex = collect($tasks)->keyBy('key');
+        $submitted = $application->submitted_at !== null;
+        $routing = $application->bploRoutingDetermination;
+        $assessment = $application->assessments->first();
+        $schedule = $application->paymentSchedules->sortByDesc('sequence')->first();
+        $officeIndex = collect($offices)->keyBy(fn (ApplicationOfficeData $office): string => $office->code);
+
+        $notes[] = $this->workNote(
+            id: 'applicant_submission',
+            actorKey: 'citizen',
+            actorLabel: 'Applicant',
+            instruction: 'Submit Business Permit Application',
+            section: 'application',
+            anchor: 'applicant_declaration',
+            state: $submitted ? 'completed' : 'ready',
+            stateLabel: $submitted ? 'Completed' : 'Ready',
+            tone: 'cream',
+            affordance: $taskIndex->get('submit_application'),
+            completedAt: $application->submitted_at?->toIso8601String(),
+        );
+        $notes[] = $this->workNote(
+            id: 'bplo_routing',
+            actorKey: 'intake',
+            actorLabel: 'BPLO',
+            instruction: 'Record concerned-office routing',
+            section: 'processing',
+            anchor: 'bplo_routing',
+            state: $routing !== null ? 'completed' : ($submitted ? 'ready' : 'waiting'),
+            stateLabel: $routing !== null ? 'Completed' : ($submitted ? 'Ready' : 'Awaiting application submission'),
+            tone: 'yellow',
+            affordance: $taskIndex->get('determine_routing'),
+            completedAt: $routing?->determined_at?->toIso8601String(),
+        );
+
+        $officeDefinitions = $this->officeNoteDefinitions($application, $offices);
+        foreach ($officeDefinitions as $definition) {
+            $office = $officeIndex->get($definition['key']);
+            $officeState = match ($office?->status) {
+                'certified' => 'completed',
+                'in_progress' => 'in_progress',
+                'awaiting_determination' => 'ready',
+                default => $routing === null ? 'anticipated' : 'waiting',
+            };
+            $officeStateLabel = match ($officeState) {
+                'completed' => 'Completed',
+                'in_progress' => 'In progress',
+                'ready' => 'Ready',
+                'anticipated' => 'Awaiting BPLO routing',
+                default => 'Awaiting responsibility creation',
+            };
+            $notes[] = $this->workNote(
+                id: 'office_'.$definition['key'],
+                actorKey: $definition['key'],
+                actorLabel: $definition['label'],
+                instruction: $definition['instruction'],
+                section: 'processing',
+                anchor: 'office_'.$definition['key'],
+                state: $officeState,
+                stateLabel: $officeStateLabel,
+                tone: 'blue',
+                affordance: $this->officeAffordance($tasks, $projection, $definition['key']),
+                completedAt: $office?->certification['certified_at'] ?? null,
+            );
+        }
+
+        $allOfficesCompleted = count($offices) > 0
+            && collect($offices)->every(fn (ApplicationOfficeData $office): bool => $office->status === 'certified');
+        $notes[] = $this->workNote(
+            id: 'assessment_preparation',
+            actorKey: 'assessment_officer',
+            actorLabel: 'Assessment Officer',
+            instruction: 'Prepare immutable Assessment',
+            section: 'assessment',
+            anchor: 'assessment_slip',
+            state: $assessment !== null ? 'completed' : ($allOfficesCompleted ? 'ready' : 'waiting'),
+            stateLabel: $assessment !== null ? 'Completed' : ($allOfficesCompleted ? 'Ready' : 'Awaiting office determinations'),
+            tone: 'orange',
+            affordance: $taskIndex->get('prepare_assessment'),
+            completedAt: $assessment?->assessed_at?->toIso8601String(),
+        );
+        $notes[] = $this->workNote(
+            id: 'treasury_counter_check',
+            actorKey: 'treasury',
+            actorLabel: 'Treasury',
+            instruction: 'Counter-check frozen Assessment',
+            section: 'assessment',
+            anchor: 'treasury_counter_check',
+            state: $assessment?->treasuryCounterCheck !== null ? 'completed' : ($assessment !== null ? 'ready' : 'waiting'),
+            stateLabel: $assessment?->treasuryCounterCheck !== null ? 'Completed' : ($assessment !== null ? 'Ready' : 'Awaiting Assessment'),
+            tone: 'green',
+            affordance: $taskIndex->get('counter_check'),
+            completedAt: $assessment?->treasuryCounterCheck?->checked_at?->toIso8601String(),
+        );
+        $notes[] = $this->workNote(
+            id: 'treasurer_decision',
+            actorKey: 'municipal_treasurer',
+            actorLabel: 'Municipal Treasurer',
+            instruction: 'Approve or return exact Assessment',
+            section: 'assessment',
+            anchor: 'treasurer_decision',
+            state: $assessment?->decision !== null ? 'completed' : ($assessment?->treasuryCounterCheck !== null ? 'ready' : 'waiting'),
+            stateLabel: $assessment?->decision !== null ? 'Completed' : ($assessment?->treasuryCounterCheck !== null ? 'Ready' : 'Awaiting Treasury counter-check'),
+            tone: 'green',
+            affordance: $taskIndex->get('treasurer_decision'),
+            completedAt: $assessment?->decision?->decided_at?->toIso8601String(),
+        );
+
+        $balance = $schedule === null ? null : $schedule->total_amount_cents - $schedule->paid_amount_cents;
+        $paymentState = $schedule === null ? 'waiting' : ($balance === 0 ? 'completed' : ($schedule->paid_amount_cents > 0 ? 'in_progress' : 'ready'));
+        $paymentStateLabel = match ($paymentState) {
+            'completed' => 'Completed',
+            'in_progress' => 'Partially collected',
+            'ready' => 'Ready',
+            default => 'Awaiting approved Payable',
+        };
+        $notes[] = $this->workNote(
+            id: 'applicant_payment',
+            actorKey: 'citizen',
+            actorLabel: 'Applicant',
+            instruction: 'Pay assessed balance',
+            section: 'payment',
+            anchor: 'payable',
+            state: $paymentState,
+            stateLabel: $paymentStateLabel,
+            tone: 'cream',
+            affordance: $taskIndex->get('pay_balance'),
+            completedAt: $balance === 0 ? $application->paymentSchedules->flatMap(fn ($candidate) => $candidate->treasuryCollections)->sortByDesc('received_at')->first()?->received_at?->toIso8601String() : null,
+        );
+
+        $unreceiptedCollection = $application->paymentSchedules
+            ->flatMap(fn ($candidate) => $candidate->treasuryCollections)
+            ->first(fn (TreasuryCollection $collection): bool => $collection->receipt === null);
+        $receiptState = count($receipts) > 0 ? 'completed' : ($unreceiptedCollection instanceof TreasuryCollection ? 'ready' : 'waiting');
+        $notes[] = $this->workNote(
+            id: 'official_receipt',
+            actorKey: 'cashier',
+            actorLabel: 'Cashier',
+            instruction: 'Issue Official Receipt',
+            section: 'payment',
+            anchor: 'official_receipt',
+            state: $receiptState,
+            stateLabel: $receiptState === 'completed' ? 'Completed' : ($receiptState === 'ready' ? 'Ready' : 'Awaiting Collection'),
+            tone: 'green',
+            affordance: $unreceiptedCollection instanceof TreasuryCollection ? $taskIndex->get('issue_receipt_'.$unreceiptedCollection->id) : null,
+            completedAt: count($receipts) > 0 ? $receipts[0]->issued_on : null,
+        );
+        $notes[] = $this->workNote(
+            id: 'permit_authority_review',
+            actorKey: 'mayor',
+            actorLabel: 'Municipal Mayor',
+            instruction: 'Review permit authority record',
+            section: 'permit',
+            anchor: 'permit_authority',
+            state: 'not_commissioned',
+            stateLabel: $permit->ready ? 'Ready for authority review · workflow not commissioned' : 'Authority workflow not commissioned',
+            tone: 'violet',
+            affordance: null,
+            blockingReason: 'Issuance and signature authority remain uncommissioned.',
+        );
+        $notes[] = $this->workNote(
+            id: 'permit_release',
+            actorKey: 'releasing_officer',
+            actorLabel: 'Releasing Officer',
+            instruction: 'Release Business Permit',
+            section: 'permit',
+            anchor: 'permit_release',
+            state: 'not_commissioned',
+            stateLabel: 'Release workflow not commissioned',
+            tone: 'violet',
+            affordance: null,
+            blockingReason: 'Permit issuance, release, validity, and legal effect remain uncommissioned.',
+        );
+
+        return $notes;
+    }
+
+    /**
+     * @param  list<ApplicationOfficeData>  $offices
+     * @return list<array{key: string, label: string, instruction: string}>
+     */
+    private function officeNoteDefinitions(PermitApplication $application, array $offices): array
+    {
+        if (data_get($application->metadata, 'lifecycle_cleanroom.semantic_classification') === 'synthetic_only') {
+            return [
+                ['key' => 'assessor', 'label' => 'Municipal Assessor', 'instruction' => 'Record assessed-value determinations and Paperless Payment Orders'],
+                ['key' => 'engineering', 'label' => 'Engineering', 'instruction' => 'Review premises and record determination'],
+                ['key' => 'health', 'label' => 'Health', 'instruction' => 'Record health and sanitary determinations'],
+                ['key' => 'menro', 'label' => 'MENRO', 'instruction' => 'Record environmental determination'],
+            ];
+        }
+
+        return array_values(collect($offices)->map(fn (ApplicationOfficeData $office): array => [
+            'key' => $office->code,
+            'label' => $office->label,
+            'instruction' => 'Complete required determinations and Paperless Payment Orders',
+        ])->all());
+    }
+
+    /**
+     * @param  list<array{key: string, label: string, section: string, href: ?string}>  $tasks
+     * @param  array<string, mixed>|null  $projection
+     * @return array{key: string, label: string, section: string, href: ?string}|null
+     */
+    private function officeAffordance(array $tasks, ?array $projection, string $officeCode): ?array
+    {
+        $itemIds = collect(is_array($projection['items'] ?? null) ? $projection['items'] : [])
+            ->filter(fn (array $item): bool => ($item['responsible_party'] ?? null) === $officeCode)
+            ->pluck('id')
+            ->map(fn (mixed $id): string => 'responsibility_'.$id);
+
+        $task = collect($tasks)->first(fn (array $candidate): bool => $itemIds->contains($candidate['key']));
+
+        return is_array($task) ? $task : null;
+    }
+
+    /** @param array{key: string, label: string, section: string, href: ?string}|null $affordance */
+    private function workNote(
+        string $id,
+        string $actorKey,
+        string $actorLabel,
+        string $instruction,
+        string $section,
+        string $anchor,
+        string $state,
+        string $stateLabel,
+        string $tone,
+        ?array $affordance,
+        ?string $completedAt = null,
+        ?string $blockingReason = null,
+    ): ApplicationWorkNoteData {
+        $actionable = $affordance !== null && in_array($state, ['ready', 'in_progress'], true);
+
+        return new ApplicationWorkNoteData(
+            id: $id,
+            actor_key: $actorKey,
+            actor_label: $actorLabel,
+            instruction: $instruction,
+            section: $section,
+            anchor: $anchor,
+            state: $state,
+            state_label: $stateLabel,
+            tone: $tone,
+            actionable: $actionable,
+            action_label: $actionable ? $affordance['label'] : null,
+            action_url: $actionable ? $affordance['href'] : null,
+            completed_at: $completedAt,
+            blocking_reason: $blockingReason,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $projection
      * @return list<array{key: string, label: string, section: string, href: ?string}>
      */
     private function tasks(PermitApplication $application, ?User $viewer, ?array $projection): array
@@ -512,6 +780,10 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         $isApplicant = $viewer->business_owner_id !== null && $viewer->business_owner_id === $application->business->business_owner_id;
         $assessment = $application->assessments->first();
         $schedule = $application->paymentSchedules->sortByDesc('sequence')->first();
+
+        if ($application->submitted_at === null && $isApplicant && $viewer->hasPermission(UserPermission::SubmitOwnPermitApplications)) {
+            $tasks[] = $this->task('submit_application', 'Submit Business Permit Application', 'application', route('citizen.permit-applications.show', $application, false));
+        }
 
         if ($application->bploRoutingDetermination === null && $viewer->hasPermission(UserPermission::DetermineBploRouting)) {
             $tasks[] = $this->task('determine_routing', 'Determine BPLO routing', 'processing', route('staff.permit-applications.show', $application, false));

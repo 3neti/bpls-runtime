@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\AdvanceLifecycleCleanroom;
 use App\Actions\AuthenticateLifecycleCleanroomActor;
+use App\Actions\BuildExecutablePermitApplicationDocument;
 use App\Actions\BuildLifecycleOfficeReviewHandoff;
 use App\Actions\ConfirmLifecycleRoutineOfficeDefaults;
 use App\Actions\ResolveLifecycleCleanroomState;
@@ -157,6 +158,7 @@ class LifecycleCleanroomController extends Controller
         Request $request,
         LifecycleCleanroomRun $lifecycleCleanroomRun,
         ApplicationDataResolver $resolver,
+        BuildExecutablePermitApplicationDocument $buildDocument,
     ): Response {
         $actorIds = collect($lifecycleCleanroomRun->actors())->pluck('user_id')->filter()->all();
         abort_unless(
@@ -172,6 +174,7 @@ class LifecycleCleanroomController extends Controller
 
         return Inertia::render('stakeholder-preview/LifecycleApplication', [
             'application' => $resolver->resolve($application, $request->user())->toArray(),
+            'document' => $buildDocument->handle($application, $request->user()),
             'focus' => '',
             'scenario' => ['id' => 'cleanroom', 'run_id' => $lifecycleCleanroomRun->public_id],
         ]);

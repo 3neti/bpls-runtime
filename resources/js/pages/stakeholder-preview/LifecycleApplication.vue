@@ -5,6 +5,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 
 defineProps<{
     application: any;
+    document: any;
     focus: string;
     scenario: { id: string; run_id: string };
 }>();
@@ -29,6 +30,7 @@ defineOptions({ layout: AppLayout });
         </div>
         <ExecutableApplication
             :application="application"
+            :document="document"
             mode="workspace"
             :initial-tab="
                 application.actor_context.current_tasks[0]?.section ??

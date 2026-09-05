@@ -103,6 +103,7 @@ type CleanroomState = {
     };
     actors: { key: string; label: string }[];
     application_data: any | null;
+    application_document: any | null;
 };
 
 const props = defineProps<{
@@ -722,6 +723,7 @@ function closeCleanroom(): void {
             </div>
             <ExecutableApplication
                 :application="currentApplicationData"
+                :document="cleanroom.active?.application_document"
                 mode="workspace"
             />
         </section>
