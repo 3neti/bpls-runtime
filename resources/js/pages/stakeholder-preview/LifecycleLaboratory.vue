@@ -145,6 +145,18 @@ const selectedCleanroomMilestone = ref(
 const currentApplicationData = computed(
     () => props.cleanroom.active?.application_data ?? null,
 );
+const visibleCleanroomSteps = computed(
+    () =>
+        props.cleanroom.active?.steps.filter(
+            (step) => step.status !== 'pending',
+        ) ?? [],
+);
+const pendingCleanroomStepCount = computed(
+    () =>
+        props.cleanroom.active?.steps.filter(
+            (step) => step.status === 'pending',
+        ).length ?? 0,
+);
 
 function pesos(amountCents: number | null): string {
     if (amountCents === null) {
@@ -410,8 +422,8 @@ function closeCleanroom(): void {
                                 <h3 class="mt-1 text-lg font-semibold">
                                     {{
                                         cleanroom.active.progress.next_step
-                                            ?.label ??
-                                        'Two-year chronology complete'
+                                            ? `Next: ${cleanroom.active.progress.next_step.milestone}`
+                                            : 'Two-year chronology complete'
                                     }}
                                 </h3>
                                 <p class="mt-1 text-sm leading-5 text-zinc-300">
@@ -461,9 +473,9 @@ function closeCleanroom(): void {
                         </div>
                     </div>
 
-                    <ol class="space-y-2">
+                    <ol class="space-y-2" aria-label="Cleanroom journey so far">
                         <li
-                            v-for="step in cleanroom.active.steps"
+                            v-for="step in visibleCleanroomSteps"
                             :key="step.key"
                             :class="
                                 step.status === 'current'
@@ -497,17 +509,30 @@ function closeCleanroom(): void {
                                         <h4
                                             class="font-semibold text-zinc-950 dark:text-white"
                                         >
-                                            {{ step.year }} · {{ step.label }}
+                                            {{ step.year }} ·
+                                            {{
+                                                step.status === 'current'
+                                                    ? `Next: ${step.milestone}`
+                                                    : step.label
+                                            }}
                                         </h4>
                                         <span
-                                            class="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                                            :class="
+                                                step.status === 'current'
+                                                    ? 'bg-amber-200 text-amber-950 dark:bg-amber-400 dark:text-amber-950'
+                                                    : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
+                                            "
+                                            class="rounded-full px-2 py-0.5 text-[11px] font-semibold"
                                             >{{
-                                                step.mode === 'product_form'
-                                                    ? 'Real form'
+                                                step.status === 'current'
+                                                    ? 'Next task'
                                                     : step.mode ===
-                                                        'system_action'
-                                                      ? 'Canonical action'
-                                                      : 'Boundary'
+                                                        'product_form'
+                                                      ? 'Real form'
+                                                      : step.mode ===
+                                                          'system_action'
+                                                        ? 'Canonical action'
+                                                        : 'Boundary'
                                             }}</span
                                         >
                                     </div>
@@ -517,7 +542,10 @@ function closeCleanroom(): void {
                                         {{ step.description }}
                                     </p>
                                     <div
-                                        v-if="Object.keys(step.delta).length"
+                                        v-if="
+                                            step.completed &&
+                                            Object.keys(step.delta).length
+                                        "
                                         class="mt-2 flex flex-wrap gap-2"
                                     >
                                         <span
@@ -552,6 +580,15 @@ function closeCleanroom(): void {
                             </div>
                         </li>
                     </ol>
+
+                    <p
+                        v-if="pendingCleanroomStepCount > 0"
+                        class="rounded-lg border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400"
+                    >
+                        {{ pendingCleanroomStepCount }} later
+                        {{ pendingCleanroomStepCount === 1 ? 'step' : 'steps' }}
+                        will appear here only when completed or ready to act on.
+                    </p>
                 </div>
 
                 <aside class="space-y-4">

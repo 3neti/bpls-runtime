@@ -82,6 +82,10 @@ test('laboratory segregates interactive work from collapsed automated reference 
         ->toContain('Start Interactive')
         ->toContain('data-testid="interactive-application-stage"')
         ->toContain('() => props.cleanroom.active?.application_data ?? null')
+        ->toContain("(step) => step.status !== 'pending'")
+        ->toContain('v-for="step in visibleCleanroomSteps"')
+        ->toContain('step.completed &&')
+        ->toContain('will appear here only when completed or ready to act on')
         ->not->toContain('visibleApplicationScenario')
         ->toContain('<details')
         ->toContain('data-testid="certified-regression-evidence"')
@@ -197,6 +201,15 @@ test('management starts a non destructive cleanroom and run next opens the real 
     expect($run->new_application_id)->toBeNull()
         ->and(data_get($run->actor_manifest, 'semantic_classification'))->toBe('synthetic_only')
         ->and(data_get($run->owned_resource_manifest, 'permit_application_ids'))->toBe([]);
+
+    $startedState = app(ResolveLifecycleCleanroomState::class)->handle($run);
+    $visibleStepKeys = collect(data_get($startedState, 'steps'))
+        ->where('status', '!=', 'pending')
+        ->pluck('key')
+        ->all();
+    expect($visibleStepKeys)->toBe(['cleanroom_started', 'citizen_intake'])
+        ->and(data_get($startedState, 'progress.next_step.key'))->toBe('citizen_intake')
+        ->and(collect(data_get($startedState, 'steps'))->firstWhere('key', 'assessor_responsibilities')['status'])->toBe('pending');
 
     $this->actingAs($management)
         ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.milestone', $run), ['step_key' => 'arbitrary-workflow'])

@@ -189,7 +189,9 @@ class ResolveLifecycleCleanroomState
         $expected = $this->expectedResponsibilities($profile)->where('department', $office)->count();
         $items = $this->responsibilityItems($projection, $profile)->where('responsible_party', $office);
 
-        return $items->count() === $expected && $items->every(fn (array $item): bool => $item['resolution'] === 'resolved');
+        return $expected > 0
+            && $items->count() === $expected
+            && $items->every(fn (array $item): bool => $item['resolution'] === 'resolved');
     }
 
     /**
