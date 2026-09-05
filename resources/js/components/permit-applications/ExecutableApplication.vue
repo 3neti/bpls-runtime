@@ -2,6 +2,7 @@
 import { router } from '@inertiajs/vue3';
 import { ExternalLink, QrCode, ReceiptText } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
+import ApplicationDocumentNavigator from '@/components/permit-applications/ApplicationDocumentNavigator.vue';
 import ApplicationWorkNote from '@/components/permit-applications/ApplicationWorkNote.vue';
 import BploRoutingTaskSheet from '@/components/permit-applications/BploRoutingTaskSheet.vue';
 import IpilExecutableDocument from '@/components/permit-applications/IpilExecutableDocument.vue';
@@ -76,11 +77,77 @@ const activeTab = ref(
         ? props.initialTab
         : 'application',
 );
+const lastApplicationPage = ref<'application' | 'processing'>(
+    props.initialTab === 'processing' ? 'processing' : 'application',
+);
+const activeApplicationPage = computed<'application' | 'processing'>(() =>
+    activeTab.value === 'processing' ? 'processing' : 'application',
+);
+const artifactTabs = computed(() => [
+    { key: 'application_form', label: 'Application Form' },
+    ...props.application.tabs.filter(
+        (tab) => tab.key !== 'application' && tab.key !== 'processing',
+    ),
+]);
 const workNotes = computed(
     () => props.application.actor_context.work_notes ?? [],
 );
 const snapshot = computed(() => props.application.declaration.snapshot ?? {});
 const activeTask = ref(props.initialTask);
+const page2Summary = computed(() => {
+    const projection = props.document?.page_2_assessment;
+    const offices = Array.isArray(projection?.offices)
+        ? projection.offices
+        : props.application.offices;
+
+    return {
+        officeCount: offices.length,
+        resolvedDeterminationCount: offices.reduce(
+            (total: number, office: Record<string, any>) =>
+                total +
+                Number(
+                    office.resolved_determination_count ??
+                        office.responsibilities?.filter(
+                            (item: Record<string, any>) =>
+                                item.resolution === 'resolved',
+                        ).length ??
+                        0,
+                ),
+            0,
+        ),
+        requiredDeterminationCount: offices.reduce(
+            (total: number, office: Record<string, any>) =>
+                total +
+                Number(
+                    office.required_determination_count ??
+                        office.responsibilities?.length ??
+                        0,
+                ),
+            0,
+        ),
+        paymentOrderCount: offices.reduce(
+            (total: number, office: Record<string, any>) =>
+                total +
+                Number(
+                    office.payment_order_count ??
+                        office.paperless_payment_order_count ??
+                        0,
+                ),
+            0,
+        ),
+        emergingTotalAmountCents:
+            projection?.emerging_total_amount_cents ??
+            props.application.financial?.evaluation?.working_paper
+                ?.grand_total_amount_cents ??
+            null,
+        unresolvedChargeCount: Number(
+            projection?.required_unresolved_charge_count ??
+                props.application.financial?.evaluation?.working_paper
+                    ?.required_unresolved_charge_count ??
+                0,
+        ),
+    };
+});
 
 watch(
     () => props.initialTab,
@@ -90,6 +157,11 @@ watch(
         }
     },
 );
+watch(activeTab, (tab) => {
+    if (tab === 'application' || tab === 'processing') {
+        lastApplicationPage.value = tab;
+    }
+});
 watch(
     () => props.initialTask,
     (task) => {
@@ -112,6 +184,17 @@ function activateWorkNote(note: WorkNote): void {
     }
 
     router.visit(note.action_url);
+}
+
+function artifactIsActive(key: string): boolean {
+    return key === 'application_form'
+        ? activeTab.value === 'application' || activeTab.value === 'processing'
+        : activeTab.value === key;
+}
+
+function selectArtifact(key: string): void {
+    activeTab.value =
+        key === 'application_form' ? lastApplicationPage.value : key;
 }
 
 function money(minor: number | null | undefined): string {
@@ -184,26 +267,25 @@ function label(value: unknown): string {
                 aria-label="Application sections"
             >
                 <button
-                    v-for="(tab, index) in application.tabs"
+                    v-for="(tab, index) in artifactTabs"
                     :key="tab.key"
                     type="button"
                     role="tab"
-                    :aria-selected="activeTab === tab.key"
+                    :aria-selected="artifactIsActive(tab.key)"
                     :data-testid="`application-tab-${tab.key}`"
                     :class="[
                         [
                             'border-sky-500',
-                            'border-amber-500',
                             'border-violet-500',
                             'border-emerald-500',
                             'border-rose-500',
                         ][index],
-                        activeTab === tab.key
+                        artifactIsActive(tab.key)
                             ? 'bg-[#f6f0df] text-slate-950 dark:bg-slate-950 dark:text-white'
                             : 'bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300',
                     ]"
                     class="border-t-4 px-4 py-3 text-sm font-black tracking-wide uppercase outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-inset sm:px-6"
-                    @click="activeTab = tab.key"
+                    @click="selectArtifact(tab.key)"
                 >
                     {{ tab.label }}
                 </button>
@@ -228,6 +310,30 @@ function label(value: unknown): string {
                 "
                 class="min-w-0 overflow-hidden rounded-xl border border-slate-300 dark:border-slate-700"
             >
+                <ApplicationDocumentNavigator
+                    v-if="
+                        activeTab === 'application' ||
+                        activeTab === 'processing'
+                    "
+                    :active-page="activeApplicationPage"
+                    :declaration-state="application.declaration.state"
+                    :routing-status="application.routing.status"
+                    :office-count="page2Summary.officeCount"
+                    :resolved-determination-count="
+                        page2Summary.resolvedDeterminationCount
+                    "
+                    :required-determination-count="
+                        page2Summary.requiredDeterminationCount
+                    "
+                    :payment-order-count="page2Summary.paymentOrderCount"
+                    :emerging-total-amount-cents="
+                        page2Summary.emergingTotalAmountCents
+                    "
+                    :unresolved-charge-count="
+                        page2Summary.unresolvedChargeCount
+                    "
+                    @select="activeTab = $event"
+                />
                 <div
                     v-if="activeTab === 'application'"
                     data-testid="application-page-1"
@@ -829,7 +935,11 @@ function label(value: unknown): string {
             </section>
 
             <BploRoutingTaskSheet
-                v-if="routingTask && activeTask === 'bplo-routing'"
+                v-if="
+                    routingTask &&
+                    activeTask === 'bplo-routing' &&
+                    activeTab === 'processing'
+                "
                 :task="routingTask"
                 mode="sheet"
             />
@@ -860,26 +970,25 @@ function label(value: unknown): string {
                             aria-label="Application sections palette"
                         >
                             <button
-                                v-for="(tab, index) in application.tabs"
+                                v-for="(tab, index) in artifactTabs"
                                 :key="tab.key"
                                 type="button"
                                 role="tab"
-                                :aria-selected="activeTab === tab.key"
+                                :aria-selected="artifactIsActive(tab.key)"
                                 :data-testid="`palette-tab-${tab.key}`"
                                 :class="[
                                     [
                                         'border-sky-500',
-                                        'border-amber-500',
                                         'border-violet-500',
                                         'border-emerald-500',
                                         'border-rose-500',
                                     ][index],
-                                    activeTab === tab.key
+                                    artifactIsActive(tab.key)
                                         ? 'bg-[#f6f0df] text-slate-950 dark:bg-slate-950 dark:text-white'
                                         : 'border-transparent text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800',
                                 ]"
                                 class="flex w-full border-l-4 px-4 py-3 text-left text-sm font-black tracking-wide uppercase outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-inset"
-                                @click="activeTab = tab.key"
+                                @click="selectArtifact(tab.key)"
                             >
                                 {{ tab.label }}
                             </button>

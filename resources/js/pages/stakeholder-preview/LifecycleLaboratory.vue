@@ -164,6 +164,40 @@ const currentApplicationData = computed(
 const nextCleanroomActor = computed(
     () => props.cleanroom.active?.actors.find((actor) => actor.is_next) ?? null,
 );
+const laboratoryInitialTab = computed(() => {
+    const taskTab = nextCleanroomActor.value?.task?.tab;
+
+    if (taskTab) {
+        return taskTab;
+    }
+
+    const application = currentApplicationData.value;
+
+    if (!application) {
+        return 'application';
+    }
+
+    if (
+        application.payment?.payable ||
+        (application.payment?.collections?.length ?? 0) > 0 ||
+        (application.official_receipts?.length ?? 0) > 0
+    ) {
+        return 'payment';
+    }
+
+    if (application.financial?.assessment) {
+        return 'assessment';
+    }
+
+    if (
+        application.routing?.status === 'determined' ||
+        application.offices?.length > 0
+    ) {
+        return 'processing';
+    }
+
+    return 'application';
+});
 const visibleCleanroomSteps = computed(
     () =>
         props.cleanroom.active?.steps.filter(
@@ -795,8 +829,13 @@ function closeCleanroom(): void {
                 </div>
             </div>
             <ExecutableApplication
+                :key="
+                    cleanroom.active?.progress.next_step?.key ??
+                    'cleanroom-complete'
+                "
                 :application="currentApplicationData"
                 :document="cleanroom.active?.application_document"
+                :initial-tab="laboratoryInitialTab"
                 mode="workspace"
             />
         </section>

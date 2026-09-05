@@ -153,10 +153,14 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
     $note = file_get_contents(resource_path('js/components/permit-applications/ApplicationWorkNote.vue'));
     $routingTask = file_get_contents(resource_path('js/components/permit-applications/BploRoutingTaskSheet.vue'));
     $document = file_get_contents(resource_path('js/components/permit-applications/IpilExecutableDocument.vue'));
+    $navigator = file_get_contents(resource_path('js/components/permit-applications/ApplicationDocumentNavigator.vue'));
 
     expect($component)->toContain('role="tablist"')
-        ->and($component)->toContain(':aria-selected="activeTab === tab.key"')
+        ->and($component)->toContain("{ key: 'application_form', label: 'Application Form' }")
+        ->and($component)->toContain("tab.key !== 'application' && tab.key !== 'processing'")
+        ->and($component)->toContain(':aria-selected="artifactIsActive(tab.key)"')
         ->and($component)->toContain('data-testid="application-document-canvas"')
+        ->and($component)->toContain('ApplicationDocumentNavigator')
         ->and($component)->toContain('IpilExecutableDocument')
         ->and($component)->toContain('page="page_1"')
         ->and($component)->toContain('page="page_2"')
@@ -175,6 +179,13 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
         ->and($routingTask)->toContain('data-testid="bplo-routing-task-sheet"')
         ->and($routingTask)->toContain('Record BPLO routing')
         ->and($routingTask)->toContain('Manual cleanroom confirmation required')
+        ->and($navigator)->toContain('data-testid="application-document-navigator"')
+        ->and($navigator)->toContain('data-testid="application-form-page-1-tab"')
+        ->and($navigator)->toContain('data-testid="application-form-page-2-tab"')
+        ->and($navigator)->toContain('Applicant Declaration')
+        ->and($navigator)->toContain('Municipal Processing')
+        ->and($navigator)->toContain('Emerging total')
+        ->and($navigator)->toContain('sticky top-0')
         ->and($document)->toContain('data-testid="page-2-bplo-routing-recorded"')
         ->and($document)->toContain('BPLO routing recorded')
         ->and($document)->toContain('Page 1')

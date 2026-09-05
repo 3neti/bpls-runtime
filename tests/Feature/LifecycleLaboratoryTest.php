@@ -452,7 +452,13 @@ test('source backed registry specimen advances through canonical actions to an a
 
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     $nextActor = data_get($state, 'progress.next_step.actor');
-    expect($nextActor)->toBeString();
+    expect($nextActor)->toBeString()
+        ->and(data_get($state, 'progress.next_step.key'))->toBe('assessment_prepared')
+        ->and(collect(data_get($state, 'actors'))->firstWhere('key', $nextActor)['task'])->toMatchArray([
+            'key' => 'assessment_prepared',
+            'tab' => 'processing',
+            'focus' => 'assessment_prepared',
+        ]);
     $expectedActor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.'.$nextActor.'.user_id'));
     $this->actingAs($management)
         ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))

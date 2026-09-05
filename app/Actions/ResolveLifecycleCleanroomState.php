@@ -163,7 +163,8 @@ class ResolveLifecycleCleanroomState
         return match ($baseStep) {
             'citizen_intake' => ['tab' => 'application', 'focus' => 'lodge-application'],
             'bplo_routing' => ['tab' => 'processing', 'focus' => 'bplo-routing'],
-            'assessment_prepared', 'treasury_counter_check', 'treasurer_approved', 'payable_created' => ['tab' => 'assessment', 'focus' => $baseStep],
+            'assessment_prepared' => ['tab' => 'processing', 'focus' => $baseStep],
+            'treasury_counter_check', 'treasurer_approved', 'payable_created' => ['tab' => 'assessment', 'focus' => $baseStep],
             default => ['tab' => 'processing', 'focus' => $baseStep],
         };
     }
