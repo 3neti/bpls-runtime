@@ -6,7 +6,9 @@ use App\Actions\BuildMunicipalScheduleOfFees;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\ProjectPermitReadiness;
+use App\Actions\ProjectSyntheticPermitCalendar;
 use App\Actions\ResolveOfficialReceiptProfile;
+use App\Actions\ResolvePermitBusinessAddress;
 use App\Assessment\Price\HistoricalPriceReport;
 use App\Enums\ReceiptStatus;
 use App\Enums\UserPermission;
@@ -38,6 +40,8 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         private readonly HistoricalPriceReport $historicalPriceReport,
         private readonly DescribePermitReleaseReadiness $releaseReadiness,
         private readonly ProjectPermitReadiness $permitReadiness,
+        private readonly ProjectSyntheticPermitCalendar $permitCalendar,
+        private readonly ResolvePermitBusinessAddress $permitBusinessAddress,
         private readonly DescribePermitVerificationBoundary $verificationBoundary,
         private readonly QrPhPaymentArtifactCache $qrPhArtifactCache,
         private readonly ResolveOfficialReceiptProfile $resolveOfficialReceiptProfile,
@@ -687,6 +691,9 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         $completion = $application->provisionalUatPermitCompletion;
         $issued = $completion?->issued_at !== null;
         $released = $completion?->released_at !== null;
+        $permitCalendar = $syntheticLifecycle && $completion?->issued_at !== null
+            ? $this->permitCalendar->handle($application, $completion->issued_at)
+            : null;
 
         return new BusinessPermitData(
             schema_version: BusinessPermitData::Schema,
@@ -700,11 +707,11 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 : $completion->semantic_classification,
             production_authority: false,
             permit_number: $completion?->permit_number,
-            issued_on: $completion?->issued_at?->toDateString(),
-            valid_until: $completion?->valid_until?->toDateString(),
+            issued_on: $permitCalendar['document_issued_on'] ?? $completion?->issued_at?->toDateString(),
+            valid_until: $permitCalendar['valid_until'] ?? $completion?->valid_until?->toDateString(),
             business_name: $application->business->name,
             owner_operator: $application->business->owner->name,
-            business_address: $application->business->address,
+            business_address: $this->permitBusinessAddress->handle($application),
             lines_of_business: array_values($application->lines->map(function ($line): string {
                 return $line->line_of_business_id === null
                     ? (string) data_get($line->metadata, 'line_of_business_name', 'Unresolved line of business')

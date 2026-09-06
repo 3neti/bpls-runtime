@@ -10,6 +10,8 @@ class BuildPublicPermitVerificationProjection
         private readonly DescribePermitVerificationBoundary $describeVerificationBoundary,
         private readonly DescribePermitReleaseReadiness $describePermitReleaseReadiness,
         private readonly DescribeProvisionalUatPermitCompletion $describeProvisionalCompletion,
+        private readonly ProjectSyntheticPermitCalendar $permitCalendar,
+        private readonly ResolvePermitBusinessAddress $permitBusinessAddress,
     ) {}
 
     /** @return array<string, mixed> */
@@ -17,6 +19,7 @@ class BuildPublicPermitVerificationProjection
     {
         $permitApplication->loadMissing([
             'business.owner',
+            'declaration',
             'lines.lineOfBusiness',
             'provisionalUatPermitCompletion',
             'paymentSchedules.treasuryCollections.receipt',
@@ -25,6 +28,10 @@ class BuildPublicPermitVerificationProjection
         $readiness = $this->describePermitReleaseReadiness->handle($permitApplication);
         $previewCompletion = $this->describeProvisionalCompletion->handle($permitApplication);
         $completion = $permitApplication->provisionalUatPermitCompletion;
+        $syntheticLifecycle = data_get($permitApplication->metadata, 'lifecycle_cleanroom.semantic_classification') === 'synthetic_only';
+        $permitCalendar = $syntheticLifecycle && $completion?->issued_at !== null
+            ? $this->permitCalendar->handle($permitApplication, $completion->issued_at)
+            : null;
         $currentStage = $completion === null
             ? ($readiness['ready_for_authority_review'] ? 'ready_for_authority_review' : $permitApplication->status->value)
             : $completion->status;
@@ -46,11 +53,11 @@ class BuildPublicPermitVerificationProjection
                 'business_name' => $permitApplication->business->name,
                 'trade_name' => $permitApplication->business->trade_name,
                 'permit_number' => $completion?->permit_number,
-                'issued_on' => $completion?->issued_at?->toDateString(),
-                'valid_until' => $completion?->valid_until?->toDateString(),
+                'issued_on' => $permitCalendar['document_issued_on'] ?? $completion?->issued_at?->toDateString(),
+                'valid_until' => $permitCalendar['valid_until'] ?? $completion?->valid_until?->toDateString(),
                 'released_on' => $completion?->released_at?->toDateString(),
                 'owner_operator' => $permitApplication->business->owner->name,
-                'business_address' => $permitApplication->business->address,
+                'business_address' => $this->permitBusinessAddress->handle($permitApplication),
                 'lines_of_business' => $permitApplication->lines->map(fn ($line): string => $line->line_of_business_id === null
                     ? (string) data_get($line->metadata, 'line_of_business_name', 'Unresolved')
                     : $line->lineOfBusiness->name)->values()->all(),

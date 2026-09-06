@@ -54,7 +54,10 @@ test('one Application executes routing-derived certification readiness issuance 
     $run = app(StartLifecycleCleanroom::class)->handle($operator);
     $citizen = cleanroomActor($run, 'citizen');
     $owner = BusinessOwner::factory()->create();
-    $business = Business::factory()->for($owner, 'owner')->create(['name' => 'Long Horizon Trading and Community Food Services']);
+    $business = Business::factory()->for($owner, 'owner')->create([
+        'name' => 'Long Horizon Trading and Community Food Services',
+        'address' => null,
+    ]);
     $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->for($business)->for($citizen, 'submittedBy')->create([
         'application_year' => 2025,
         'status' => PermitApplicationStatus::PendingPayment,
@@ -76,7 +79,16 @@ test('one Application executes routing-derived certification readiness issuance 
         PermitApplicationLine::factory()->for($application)->for($lineOfBusiness)->create();
     }
     PermitApplicationDeclaration::factory()->for($application)->create([
-        'snapshot' => ['business' => ['name' => $business->name]],
+        'snapshot' => [
+            'business' => ['name' => $business->name],
+            'business_address' => [
+                'building_name' => 'Long Horizon Building',
+                'street' => 'Purok Masigla',
+                'barangay' => 'Poblacion',
+                'city_municipality' => 'Ipil',
+                'province' => 'Zamboanga Sibugay',
+            ],
+        ],
         'snapshot_hash' => hash('sha256', $business->name),
     ]);
     $declarationHash = $application->declaration()->sole()->snapshot_hash;
@@ -163,8 +175,13 @@ test('one Application executes routing-derived certification readiness issuance 
         ->toThrow(DomainException::class, 'issue the specimen');
 
     $issued = app(IssueSyntheticLifecyclePermit::class)->handle($application->fresh(), cleanroomActor($run, 'permit_issuer'));
+    $documentIssuedOn = sprintf('%d-%s', $application->application_year, $issued->issued_at->format('m-d'));
     expect($issued->permit_number)->toMatch('/^BP-2025-\d{4}$/')
         ->and($issued->issued_at)->not->toBeNull()
+        ->and($issued->issued_at->toDateString())->not->toBe($documentIssuedOn)
+        ->and(data_get($issued->source_snapshot, 'synthetic_permit_calendar.document_issued_on'))->toBe($documentIssuedOn)
+        ->and(data_get($issued->source_snapshot, 'synthetic_permit_calendar.audit_issued_at'))->toBe($issued->issued_at->toIso8601String())
+        ->and(data_get($issued->source_snapshot, 'synthetic_permit_calendar.production_authority'))->toBeFalse()
         ->and($issued->released_at)->toBeNull()
         ->and(data_get($issued->source_snapshot, 'official_numbering_authority'))->toBeFalse()
         ->and(data_get($issued->source_snapshot, 'mayoral_authorization.officeholder_name'))->toBe('Ramses Troy D. Olegario')
@@ -186,6 +203,9 @@ test('one Application executes routing-derived certification readiness issuance 
         ->and($data['permit']['released'])->toBeTrue()
         ->and($data['permit']['valid'])->toBeFalse()
         ->and($data['permit']['official_receipt_number'])->toBe('7654321')
+        ->and($data['permit']['issued_on'])->toBe($documentIssuedOn)
+        ->and($data['permit']['valid_until'])->toBe('2025-12-31')
+        ->and($data['permit']['business_address'])->toBe('Long Horizon Building, Purok Masigla, Poblacion, Ipil, Zamboanga Sibugay')
         ->and($data['permit']['verification']['reference'])->toBe($issuedVerificationReference)
         ->and($data['permit']['verification']['reference'])->toStartWith('BPV-'.$application->id.'-')
         ->and($data['permit']['production_authority'])->toBeFalse()
@@ -199,6 +219,9 @@ test('one Application executes routing-derived certification readiness issuance 
         ->assertSuccessful()
         ->assertJsonPath('permit.permit_number', $issued->permit_number)
         ->assertJsonPath('permit.official_receipt_number', '7654321')
+        ->assertJsonPath('permit.issued_on', $documentIssuedOn)
+        ->assertJsonPath('permit.valid_until', '2025-12-31')
+        ->assertJsonPath('permit.business_address', 'Long Horizon Building, Purok Masigla, Poblacion, Ipil, Zamboanga Sibugay')
         ->assertJsonPath('permit.identity_scope', 'exact_synthetic_permit_identity_only')
         ->assertJsonPath('permit.production_authority', false)
         ->assertJsonPath('permit.legal_effect', false);
@@ -216,6 +239,7 @@ test('one Application executes routing-derived certification readiness issuance 
         ->toContain('NO MAYORAL SIGNATURE APPLIED')
         ->toContain('OR. No.:')
         ->toContain('7654321')
+        ->toContain(strtoupper('Long Horizon Building, Purok Masigla, Poblacion, Ipil, Zamboanga Sibugay'))
         ->toContain('SCAN TO VERIFY IDENTITY')
         ->toContain($data['permit']['verification']['reference'])
         ->not->toContain('DEMEGILLO MATERNITY CLINIC')

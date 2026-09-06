@@ -11,7 +11,10 @@ use Illuminate\Support\Facades\DB;
 
 class IssueSyntheticLifecyclePermit
 {
-    public function __construct(private readonly ProjectPermitReadiness $projectReadiness) {}
+    public function __construct(
+        private readonly ProjectPermitReadiness $projectReadiness,
+        private readonly ProjectSyntheticPermitCalendar $permitCalendar,
+    ) {}
 
     public function handle(PermitApplication $permitApplication, User $actor): ProvisionalUatPermitCompletion
     {
@@ -28,6 +31,7 @@ class IssueSyntheticLifecyclePermit
                 return $completion;
             }
             $issuedAt = now();
+            $permitCalendar = $this->permitCalendar->handle($application, $issuedAt);
             $permitNumber = sprintf('BP-%d-%04d', $application->application_year, $application->id % 10000);
             $mayorName = (string) config('municipality.officials.municipal_mayor.name', 'Ramses Troy D. Olegario');
             $syntheticAuthorizationReference = 'SYNTHETIC-MAYOR-'.substr(hash('sha256', $permitNumber.'|'.$application->id), 0, 16);
@@ -39,10 +43,11 @@ class IssueSyntheticLifecyclePermit
                 'permit_number' => $permitNumber,
                 'synthetic_signature_reference' => $syntheticAuthorizationReference,
                 'issued_at' => $issuedAt,
-                'valid_until' => $issuedAt->copy()->year($application->application_year)->endOfYear()->toDateString(),
+                'valid_until' => $permitCalendar['valid_until'],
                 'semantic_classification' => 'synthetic_only',
                 'source_snapshot' => [
                     'permit_readiness' => $readiness,
+                    'synthetic_permit_calendar' => $permitCalendar,
                     'number_allocator' => 'synthetic_specimen_bp_year_sequence_v1',
                     'official_numbering_authority' => false,
                     'mayor_authority_evidence' => 'bounded_synthetic_cleanroom_representation',
