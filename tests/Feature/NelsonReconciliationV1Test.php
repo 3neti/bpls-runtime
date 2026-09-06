@@ -141,10 +141,12 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
     expect($application->declaration()->sole()->snapshot)->toBe($frozen->snapshot);
 
     $routing = app(RecordBploRoutingDetermination::class)->handle($application, $bplo, '', [
-        ['office_code' => 'engineering', 'office_label' => 'Municipal Engineering Office', 'situational_reason' => '', 'required_work' => ''],
-        ['office_code' => 'health', 'office_label' => 'Municipal Health Office', 'situational_reason' => '', 'required_work' => ''],
+        ['office_code' => 'engineering', 'office_label' => 'Browser supplied label is not authoritative', 'situational_reason' => '', 'required_work' => ''],
+        ['office_code' => 'health', 'office_label' => 'Browser supplied label is not authoritative', 'situational_reason' => '', 'required_work' => ''],
     ]);
     expect($routing->works)->toHaveCount(2)
+        ->and($routing->works->pluck('office_label')->all())->toBe(['Municipal Engineering Office', 'Municipal Health Office'])
+        ->and(data_get($routing->application_facts_snapshot, 'concerned_office_reference.schema_version'))->toBe('ipil.concerned-offices.preview.v1')
         ->and($application->bploRoutingSuggestion()->exists())->toBeFalse()
         ->and(collect($routing->works)->pluck('context_snapshot')->flatten()->contains('inspection'))->toBeFalse();
 

@@ -602,14 +602,14 @@ function treasuryFeeOptions(lineOfBusinessId: number) {
                 </div>
             </div>
 
-            <div class="rounded-xl bg-muted/40 p-4 text-sm">
+            <div
+                v-if="!task.application.commissioned_path"
+                class="rounded-xl bg-muted/40 p-4 text-sm"
+            >
                 <p class="font-black">Application</p>
                 <p class="mt-1 text-muted-foreground">
-                    {{
-                        task.application.commissioned_path
-                            ? task.application.business_activity_description
-                            : `${task.application.owner_name} · ${task.application.lines.length} declared activities`
-                    }}
+                    {{ task.application.owner_name }} ·
+                    {{ task.application.lines.length }} declared activities
                 </p>
             </div>
 
@@ -650,59 +650,79 @@ function treasuryFeeOptions(lineOfBusinessId: number) {
             </div>
 
             <fieldset
-                v-for="group in officeGroups"
-                :key="group.office.code"
-                class="grid gap-3 rounded-xl border p-4"
+                v-if="task.application.commissioned_path"
+                data-testid="concerned-office-checklist"
+                class="divide-y rounded-xl border px-4"
             >
-                <legend class="px-1 font-black">
-                    {{ group.office.label }}
-                </legend>
-                <div
-                    v-for="candidate in group.candidates"
+                <legend class="sr-only">Concerned offices</legend>
+                <label
+                    v-for="candidate in candidates"
                     :key="candidate.key"
-                    class="grid gap-3 border-t pt-3 first:border-t-0 first:pt-0"
+                    data-testid="concerned-office-option"
+                    class="flex min-h-14 cursor-pointer items-center gap-3 py-3 font-bold"
                 >
-                    <label
-                        class="flex min-h-11 items-center gap-3 font-semibold"
-                    >
-                        <input
-                            v-model="drafts[candidate.key].selected"
-                            type="checkbox"
-                        />
-                        <span class="min-w-0 break-words">
-                            {{
-                                candidate.line.line_of_business_name ??
-                                'Concerned office'
-                            }}
-                        </span>
-                    </label>
-                    <template
-                        v-if="
-                            drafts[candidate.key].selected &&
-                            !task.application.commissioned_path
-                        "
-                    >
-                        <label class="grid gap-1 text-sm">
-                            Situational reason
-                            <textarea
-                                v-model="drafts[candidate.key].reason"
-                                required
-                                rows="2"
-                                class="rounded-md border bg-background px-3 py-2"
-                            />
-                        </label>
-                        <label class="grid gap-1 text-sm">
-                            Required office work
-                            <textarea
-                                v-model="drafts[candidate.key].requiredWork"
-                                required
-                                rows="2"
-                                class="rounded-md border bg-background px-3 py-2"
-                            />
-                        </label>
-                    </template>
-                </div>
+                    <input
+                        v-model="drafts[candidate.key].selected"
+                        type="checkbox"
+                        class="size-5 shrink-0"
+                    />
+                    <span class="min-w-0 break-words">
+                        {{ candidate.office.label }}
+                    </span>
+                </label>
             </fieldset>
+
+            <template v-else>
+                <fieldset
+                    v-for="group in officeGroups"
+                    :key="group.office.code"
+                    class="grid gap-3 rounded-xl border p-4"
+                >
+                    <legend class="px-1 font-black">
+                        {{ group.office.label }}
+                    </legend>
+                    <div
+                        v-for="candidate in group.candidates"
+                        :key="candidate.key"
+                        class="grid gap-3 border-t pt-3 first:border-t-0 first:pt-0"
+                    >
+                        <label
+                            class="flex min-h-11 items-center gap-3 font-semibold"
+                        >
+                            <input
+                                v-model="drafts[candidate.key].selected"
+                                type="checkbox"
+                            />
+                            <span class="min-w-0 break-words">
+                                {{
+                                    candidate.line.line_of_business_name ??
+                                    'Concerned office'
+                                }}
+                            </span>
+                        </label>
+                        <template v-if="drafts[candidate.key].selected">
+                            <label class="grid gap-1 text-sm">
+                                Situational reason
+                                <textarea
+                                    v-model="drafts[candidate.key].reason"
+                                    required
+                                    rows="2"
+                                    class="rounded-md border bg-background px-3 py-2"
+                                />
+                            </label>
+                            <label class="grid gap-1 text-sm">
+                                Required office work
+                                <textarea
+                                    v-model="drafts[candidate.key].requiredWork"
+                                    required
+                                    rows="2"
+                                    class="rounded-md border bg-background px-3 py-2"
+                                />
+                            </label>
+                        </template>
+                    </div>
+                </fieldset>
+            </template>
 
             <p
                 v-if="page.props.errors.routing"
@@ -715,7 +735,7 @@ function treasuryFeeOptions(lineOfBusinessId: number) {
                 class="sticky bottom-0 -mx-4 flex flex-col gap-3 border-t bg-white/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between dark:bg-slate-900/95"
             >
                 <p class="text-sm font-semibold">
-                    {{ selectedCount }} routed work item(s)
+                    {{ selectedCount }} selected
                 </p>
                 <Button
                     type="submit"

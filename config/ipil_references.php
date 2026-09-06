@@ -41,6 +41,7 @@ return [
     'concerned_offices' => [
         'schema_version' => 'ipil.concerned-offices.preview.v1',
         'production_catalog_status' => 'awaiting_nelson_source',
+        // Replace this ordered list when Nelson supplies the production routing offices.
         'items' => [
             ['code' => 'engineering', 'label' => 'Municipal Engineering Office'],
             ['code' => 'health', 'label' => 'Municipal Health Office'],

@@ -8,6 +8,7 @@ use App\Models\BploRoutingSuggestion;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
 use App\Models\User;
+use App\References\ConcernedOfficeReference;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -15,8 +16,10 @@ use LogicException;
 
 class RecordBploRoutingDetermination
 {
+    public function __construct(private readonly ConcernedOfficeReference $concernedOffices) {}
+
     /**
-     * @param  list<array{office_code: string, office_label: string, situational_reason: string, required_work: string, permit_application_line_id?: int|null}>  $selectedWork
+     * @param  list<array{office_code: string, office_label: string, situational_reason?: string|null, required_work?: string|null, permit_application_line_id?: int|null}>  $selectedWork
      */
     public function handle(
         PermitApplication $permitApplication,
@@ -51,7 +54,7 @@ class RecordBploRoutingDetermination
     }
 
     /**
-     * @param  list<array{office_code: string, office_label: string, situational_reason: string, required_work: string, permit_application_line_id?: int|null}>  $selectedWork
+     * @param  list<array{office_code: string, office_label: string, situational_reason?: string|null, required_work?: string|null, permit_application_line_id?: int|null}>  $selectedWork
      */
     private function record(
         PermitApplication $permitApplication,
@@ -97,7 +100,7 @@ class RecordBploRoutingDetermination
                 throw new LogicException('BPLO must record the situational context for its routing determination.');
             }
 
-            $configuredOffices = collect(config('ipil_references.concerned_offices.items', []))->keyBy('code');
+            $configuredOffices = collect($this->concernedOffices->items())->keyBy('code');
 
             $availableLines = $application->lines->keyBy('id');
             $normalizedWork = collect($selectedWork)->map(function (array $work) use ($application, $availableLines, $origin, $commissionedPath, $configuredOffices): array {
@@ -109,18 +112,27 @@ class RecordBploRoutingDetermination
                 }
 
                 $officeCode = Str::of($work['office_code'])->trim()->lower()->replaceMatches('/[^a-z0-9_-]+/', '-')->trim('-')->toString();
-                if ($officeCode === '' || blank($work['office_label']) || ((! $commissionedPath) && (blank($work['situational_reason']) || blank($work['required_work'])))) {
+                $situationalReason = $work['situational_reason'] ?? null;
+                $requiredWork = $work['required_work'] ?? null;
+                if ($officeCode === '' || blank($work['office_label']) || ((! $commissionedPath) && (blank($situationalReason) || blank($requiredWork)))) {
                     throw new LogicException('Each BPLO route requires an office, situational reason, and required work.');
                 }
-                if ($commissionedPath && ! $configuredOffices->has($officeCode)) {
+                $configuredOffice = $configuredOffices->get($officeCode);
+                if ($commissionedPath && ! is_array($configuredOffice)) {
                     throw new LogicException('BPLO may select only an office from the configured concerned-office reference list.');
+                }
+                $officeLabel = $commissionedPath
+                    ? Str::squish((string) Arr::get($configuredOffice, 'label'))
+                    : Str::squish($work['office_label']);
+                if ($officeLabel === '') {
+                    throw new LogicException('Each configured concerned office must have a label.');
                 }
 
                 return [
                     'office_code' => $officeCode,
-                    'office_label' => Str::squish($work['office_label']),
-                    'situational_reason' => Str::squish($work['situational_reason'] ?? 'Selected by BPLO checklist.'),
-                    'required_work' => Str::squish($work['required_work'] ?? 'Prepare office Payment Order.'),
+                    'office_label' => $officeLabel,
+                    'situational_reason' => Str::squish($situationalReason ?? 'Selected by BPLO checklist.'),
+                    'required_work' => Str::squish($requiredWork ?? 'Prepare office Payment Order.'),
                     'permit_application_line_id' => $applicationLine?->id,
                     'line_of_business_id' => $applicationLine?->line_of_business_id,
                     'context_snapshot' => [
@@ -155,6 +167,7 @@ class RecordBploRoutingDetermination
                     'routing_origin' => $origin,
                     'routing_suggestion_id' => $suggestion?->id,
                     'routing_profile_version' => $suggestion?->profile_version,
+                    'concerned_office_reference' => $commissionedPath ? $this->concernedOffices->provenance() : null,
                     'routing_review_due_at' => $suggestion?->review_due_at?->toIso8601String(),
                     'silence_is_office_approval' => false,
                     'silence_creates_financial_authority' => false,

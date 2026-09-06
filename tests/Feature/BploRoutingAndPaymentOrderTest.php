@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\BuildBploRoutingTask;
 use App\Actions\ExecutePersistedLifecycleScenario;
 use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\Models\PaperlessPaymentOrder;
@@ -13,6 +14,20 @@ beforeEach(function (): void {
     Storage::fake('local');
     Artisan::call('bpls:install');
     app(ExecutePersistedLifecycleScenario::class)->handle(NewApplicationHappyPathDefinition::Id);
+});
+
+test('BPLO checklist choices come from the replaceable concerned-office reference config', function (): void {
+    config()->set('ipil_references.concerned_offices.production_catalog_status', 'board_test_only');
+    config()->set('ipil_references.concerned_offices.items', [
+        ['code' => 'nelson-office', 'label' => 'Nelson Reference Office'],
+    ]);
+
+    $application = PermitApplication::query()->sole();
+    $task = app(BuildBploRoutingTask::class)->handle($application, null)->toArray();
+
+    expect($task['office_options'])->toBe([
+        ['code' => 'nelson-office', 'label' => 'Nelson Reference Office'],
+    ])->and(data_get($task, 'financial_editor.catalog_status'))->toBe('board_test_only');
 });
 
 test('BPLO owns an explicit post-lodging situational route without changing the applicant declaration', function (): void {

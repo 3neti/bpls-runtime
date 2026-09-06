@@ -26,7 +26,7 @@ class RecordBploRoutingDeterminationRequest extends FormRequest
         return [
             'situational_context' => ['nullable', 'string', 'max:4000'],
             'selected_work' => ['required', 'array', 'min:1', 'max:30'],
-            'selected_work.*.office_code' => ['required', 'string', 'max:80'],
+            'selected_work.*.office_code' => ['required', 'string', 'max:80', 'distinct'],
             'selected_work.*.office_label' => ['required', 'string', 'max:160'],
             'selected_work.*.situational_reason' => ['nullable', 'string', 'max:2000'],
             'selected_work.*.required_work' => ['nullable', 'string', 'max:2000'],

@@ -9,10 +9,15 @@ use App\Enums\UserPermission;
 use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
+use App\Models\TreasuryLineItem;
+use App\Models\TreasuryLineOfBusinessAssignment;
 use App\Models\User;
+use App\References\ConcernedOfficeReference;
 
 class BuildBploRoutingTask
 {
+    public function __construct(private readonly ConcernedOfficeReference $concernedOffices) {}
+
     public function handle(PermitApplication $permitApplication, ?User $viewer): BploRoutingTaskData
     {
         $application = $permitApplication->load([
@@ -92,7 +97,7 @@ class BuildBploRoutingTask
                 'server_now' => now()->toIso8601String(),
                 'production_authority' => false,
             ],
-            office_options: config('ipil_references.concerned_offices.items', []),
+            office_options: $this->concernedOffices->items(),
             financial_editor: $this->financialEditor($application, $viewer),
             can_determine: $determination === null
                 && ($viewer?->can(UserPermission::DetermineBploRouting->value) ?? false),
@@ -109,10 +114,10 @@ class BuildBploRoutingTask
             ->where('calculation_type', FeeRuleCalculationType::Fixed->value)
             ->where('category', '!=', FeeRuleCategory::Tax->value)
             ->orderBy('name')->get();
-        $offices = collect(config('ipil_references.concerned_offices.items', []));
+        $offices = collect($this->concernedOffices->items());
 
         return [
-            'catalog_status' => (string) config('ipil_references.concerned_offices.production_status'),
+            'catalog_status' => $this->concernedOffices->provenance()['production_catalog_status'],
             'office_fee_options' => $offices->mapWithKeys(function (array $office) use ($fixedFees): array {
                 $configuredCodes = collect($office['fee_rule_codes'] ?? []);
                 $fees = $fixedFees->filter(fn (FeeRule $fee): bool => data_get($fee->metadata, 'responsible_office_code') === $office['code']
@@ -137,10 +142,10 @@ class BuildBploRoutingTask
                         'amount_cents' => $fee->amount_cents,
                     ])->values()->all(),
                 ])->values()->all(),
-            'treasury_assignments' => $application->treasuryLineOfBusinessAssignments->whereNull('removed_at')->map(fn ($assignment): array => [
+            'treasury_assignments' => $application->treasuryLineOfBusinessAssignments->whereNull('removed_at')->map(fn (TreasuryLineOfBusinessAssignment $assignment): array => [
                 'id' => $assignment->id,
                 'name' => $assignment->lineOfBusiness->name,
-                'items' => $assignment->items->map(fn ($item): array => ['name' => $item->name, 'amount_cents' => $item->determined_amount_cents])->all(),
+                'items' => $assignment->items->map(fn (TreasuryLineItem $item): array => ['name' => $item->name, 'amount_cents' => $item->determined_amount_cents])->all(),
             ])->values()->all(),
             'can_confirm_payment_orders' => $viewer?->can(UserPermission::ContributeBusinessPermitEvaluations->value) ?? false,
             'can_assign_treasury_lobs' => $viewer?->can(UserPermission::CorrectEvaluationLinesOfBusiness->value) ?? false,
