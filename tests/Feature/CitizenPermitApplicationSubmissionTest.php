@@ -159,6 +159,19 @@ test('citizen submission requires a fresh explicit undertaking confirmation', fu
     'declined confirmation' => [['undertaking_accepted' => '0']],
 ]);
 
+test('signature facsimile capture uses a drawing canvas and keeps a visible confirmed preview', function () {
+    $component = file_get_contents(resource_path('js/components/SignatureFacsimileCapture.vue'));
+
+    expect($component)
+        ->toContain('data-testid="signature-facsimile-canvas"')
+        ->toContain('canvas.value.toBlob')
+        ->toContain("new File([blob], 'signature-facsimile.png'")
+        ->toContain('data-testid="signature-facsimile-preview"')
+        ->toContain('Preview of the captured signature facsimile')
+        ->toContain('Change signature')
+        ->toContain('Remove');
+});
+
 /**
  * @return array{User, PermitApplication}
  */
