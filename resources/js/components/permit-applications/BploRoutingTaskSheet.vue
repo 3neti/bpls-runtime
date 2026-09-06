@@ -342,7 +342,9 @@ function treasuryFeeOptions(lineOfBusinessId: number) {
             <h2 id="bplo-routing-task-title" class="mt-1 text-xl font-black">
                 {{
                     task.routing
-                        ? 'Concerned-office routing recorded'
+                        ? task.application.commissioned_path
+                            ? 'Routing confirmed'
+                            : 'Concerned-office routing recorded'
                         : 'Record concerned-office routing'
                 }}
             </h2>
@@ -363,7 +365,13 @@ function treasuryFeeOptions(lineOfBusinessId: number) {
                         <Check class="size-4" aria-hidden="true" />
                     </span>
                     <div>
-                        <p class="font-black">Written to Application Page 2</p>
+                        <p class="font-black">
+                            {{
+                                task.application.commissioned_path
+                                    ? 'Concerned offices confirmed'
+                                    : 'Written to Application Page 2'
+                            }}
+                        </p>
                         <p class="mt-1 text-sm">
                             {{ task.routing.determined_by }} ·
                             {{ dateTime(task.routing.determined_at) }}
@@ -371,11 +379,21 @@ function treasuryFeeOptions(lineOfBusinessId: number) {
                     </div>
                 </div>
                 <Badge variant="outline" class="w-fit shrink-0">
-                    {{ task.routing.works.length }} routed work item(s)
+                    {{ task.routing.works.length }}
+                    {{
+                        task.application.commissioned_path
+                            ? task.routing.works.length === 1
+                                ? 'office'
+                                : 'offices'
+                            : 'routed work item(s)'
+                    }}
                 </Badge>
             </div>
 
-            <details class="group rounded-xl border bg-background">
+            <details
+                v-if="!task.application.commissioned_path"
+                class="group rounded-xl border bg-background"
+            >
                 <summary
                     class="flex cursor-pointer list-none items-center justify-between gap-3 p-3 text-sm font-medium"
                 >
@@ -390,29 +408,63 @@ function treasuryFeeOptions(lineOfBusinessId: number) {
                 </p>
             </details>
 
-            <div class="grid gap-3">
+            <div
+                data-testid="recorded-concerned-office-list"
+                :class="
+                    task.application.commissioned_path
+                        ? 'divide-y rounded-xl border bg-background'
+                        : 'grid gap-3'
+                "
+            >
                 <article
                     v-for="work in task.routing.works"
                     :key="work.id"
-                    class="min-w-0 rounded-xl border bg-background p-4"
+                    :class="[
+                        'min-w-0 p-4',
+                        task.application.commissioned_path
+                            ? ''
+                            : 'rounded-xl border bg-background',
+                    ]"
                     data-testid="recorded-routing-work"
                 >
                     <div class="flex flex-wrap justify-between gap-2">
                         <div>
                             <p class="font-black">{{ work.office_label }}</p>
-                            <p class="text-xs text-muted-foreground">
+                            <p
+                                v-if="!task.application.commissioned_path"
+                                class="text-xs text-muted-foreground"
+                            >
                                 {{
                                     work.line_of_business_name ??
                                     'Application-wide context'
                                 }}
                             </p>
                         </div>
-                        <Badge variant="outline">Routed</Badge>
+                        <Badge variant="outline">
+                            <Check
+                                v-if="task.application.commissioned_path"
+                                class="size-3"
+                                aria-hidden="true"
+                            />
+                            <span
+                                :class="{
+                                    'sr-only':
+                                        task.application.commissioned_path,
+                                }"
+                                >Routed</span
+                            >
+                        </Badge>
                     </div>
-                    <p class="mt-3 text-sm">
+                    <p
+                        v-if="!task.application.commissioned_path"
+                        class="mt-3 text-sm"
+                    >
                         <strong>Required work:</strong> {{ work.required_work }}
                     </p>
-                    <p class="mt-2 text-sm text-muted-foreground">
+                    <p
+                        v-if="!task.application.commissioned_path"
+                        class="mt-2 text-sm text-muted-foreground"
+                    >
                         {{ work.situational_reason }}
                     </p>
                     <div
@@ -562,7 +614,10 @@ function treasuryFeeOptions(lineOfBusinessId: number) {
                 </template>
             </section>
 
-            <p class="text-xs leading-5 text-muted-foreground">
+            <p
+                v-if="!task.application.commissioned_path"
+                class="text-xs leading-5 text-muted-foreground"
+            >
                 This routing record assigns office work only. It creates no
                 office approval, fee determination, Assessment, or payment
                 authority.

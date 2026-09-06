@@ -232,6 +232,8 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
         ->and($routingTask)->toContain('data-testid="bplo-routing-task-sheet"')
         ->and($routingTask)->toContain('data-testid="concerned-office-checklist"')
         ->and($routingTask)->toContain('data-testid="concerned-office-option"')
+        ->and($routingTask)->toContain('data-testid="recorded-concerned-office-list"')
+        ->and($routingTask)->toContain("? 'Concerned offices confirmed'")
         ->and($routingTask)->toContain('{{ candidate.office.label }}')
         ->and($routingTask)->toContain('Record BPLO routing')
         ->and($routingTask)->toContain('Manual cleanroom confirmation required')
