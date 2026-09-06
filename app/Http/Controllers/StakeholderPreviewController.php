@@ -20,6 +20,7 @@ class StakeholderPreviewController extends Controller
         return Inertia::render('stakeholder-preview/Launcher', [
             'personas' => $this->safety->personas(),
             'citizenSpecimens' => $specimenCitizens->entries(),
+            'authorizedLegacyReview' => $this->safety->allowsAuthorizedLegacySpecimens(),
         ]);
     }
 
@@ -27,6 +28,7 @@ class StakeholderPreviewController extends Controller
     {
         return Inertia::render('stakeholder-preview/Walkthrough', [
             'personas' => $this->safety->personas(),
+            'authorizedLegacyReview' => $this->safety->allowsAuthorizedLegacySpecimens(),
         ]);
     }
 

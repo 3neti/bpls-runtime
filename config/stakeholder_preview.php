@@ -9,6 +9,8 @@ return [
     'production_integrations' => env('STAKEHOLDER_PREVIEW_PRODUCTION_INTEGRATIONS'),
     'password' => env('STAKEHOLDER_PREVIEW_PASSWORD'),
     'legacy_lab_snapshot_tables' => env('STAKEHOLDER_PREVIEW_LEGACY_SNAPSHOT_TABLES'),
+    'legacy_lab_specimen_bundle' => env('STAKEHOLDER_PREVIEW_LEGACY_SPECIMEN_BUNDLE'),
+    'legacy_lab_specimen_pool_sha256' => env('STAKEHOLDER_PREVIEW_LEGACY_SPECIMEN_POOL_SHA256'),
     'accounts' => [
         'citizen' => env('STAKEHOLDER_PREVIEW_CITIZEN_EMAIL', 'stakeholder.preview.citizen@example.test'),
         'bplo' => env('STAKEHOLDER_PREVIEW_BPLO_EMAIL', 'stakeholder.preview.bplo@example.test'),

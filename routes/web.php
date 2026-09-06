@@ -57,13 +57,25 @@ use App\Http\Controllers\StakeholderPreviewSpecimenController;
 use App\Http\Controllers\StakeholderPreviewWorkflowController;
 use App\Http\Middleware\EnsureLifecycleLaboratoryOperator;
 use App\Http\Middleware\EnsureStakeholderPreviewIsSafe;
+use App\Http\Middleware\EnsureStakeholderPreviewReviewer;
 use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Support\Facades\Route;
 
 $stakeholderPreviewSafety = app(StakeholderPreviewSafety::class);
 
 if ($stakeholderPreviewSafety->isEnabled()) {
-    Route::middleware([EnsureStakeholderPreviewIsSafe::class, 'throttle:stakeholder-preview'])->group(function () {
+    $stakeholderPreviewMiddleware = [EnsureStakeholderPreviewIsSafe::class, 'throttle:stakeholder-preview'];
+
+    if ($stakeholderPreviewSafety->requiresPrivateAuthentication()) {
+        $stakeholderPreviewMiddleware = [
+            'auth',
+            'verified',
+            EnsureStakeholderPreviewReviewer::class,
+            ...$stakeholderPreviewMiddleware,
+        ];
+    }
+
+    Route::middleware($stakeholderPreviewMiddleware)->group(function () {
         Route::get('/', [StakeholderPreviewController::class, 'index'])->name('home');
         Route::get('stakeholder-preview/walkthrough', [StakeholderPreviewController::class, 'walkthrough'])
             ->name('stakeholder-preview.walkthrough');
@@ -130,12 +142,18 @@ if ($stakeholderPreviewSafety->isEnabled()) {
     Route::inertia('/', 'Welcome')->name('home');
 }
 
-Route::get('permits/verify/{permitApplication}/{verificationCode}/view', PublicPermitVerificationPageController::class)
-    ->name('public.permits.verify.view');
-Route::get('permits/verify/{permitApplication}/{verificationCode}', PublicPermitVerificationController::class)
-    ->name('public.permits.verify');
-Route::get('services-and-fees', PublicMunicipalServiceCatalogController::class)
-    ->name('services-and-fees.index');
+$restrictedReviewMiddleware = $stakeholderPreviewSafety->requiresPrivateAuthentication()
+    ? ['auth', 'verified', EnsureStakeholderPreviewReviewer::class, EnsureStakeholderPreviewIsSafe::class]
+    : [];
+
+Route::middleware($restrictedReviewMiddleware)->group(function () {
+    Route::get('permits/verify/{permitApplication}/{verificationCode}/view', PublicPermitVerificationPageController::class)
+        ->name('public.permits.verify.view');
+    Route::get('permits/verify/{permitApplication}/{verificationCode}', PublicPermitVerificationController::class)
+        ->name('public.permits.verify');
+    Route::get('services-and-fees', PublicMunicipalServiceCatalogController::class)
+        ->name('services-and-fees.index');
+});
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');

@@ -36,6 +36,7 @@ const props = defineProps<{
         label: string;
         description: string;
     }[];
+    authorizedLegacyReview: boolean;
 }>();
 
 const entering = ref<string | null>(null);
@@ -155,7 +156,11 @@ function openLifecycleLaboratory(): void {
         <div
             class="border-b border-amber-400/50 bg-amber-300 px-5 py-2 text-center text-xs font-semibold tracking-wide text-amber-950"
         >
-            Preview Environment · Sample Data
+            {{
+                authorizedLegacyReview
+                    ? 'Private Review · Authorized Legacy Records'
+                    : 'Preview Environment · Sample Data'
+            }}
         </div>
 
         <div
@@ -179,9 +184,17 @@ function openLifecycleLaboratory(): void {
                         <p
                             class="max-w-3xl text-base leading-7 text-zinc-300 sm:text-lg"
                         >
-                            Select a role to explore its common tasks using
-                            prepared sample records. No username or password is
-                            needed.
+                            <template v-if="authorizedLegacyReview">
+                                Select a role to review the authorized Ipil
+                                source records and exercise the laboratory
+                                workflow. Access requires a verified preview
+                                account.
+                            </template>
+                            <template v-else>
+                                Select a role to explore its common tasks using
+                                prepared sample records. No username or password
+                                is needed.
+                            </template>
                         </p>
                     </div>
                 </div>
@@ -428,7 +441,13 @@ function openLifecycleLaboratory(): void {
                         unavailable until the Municipality confirms the
                         responsible office or authority.
                     </p>
-                    <p>
+                    <p v-if="authorizedLegacyReview">
+                        The application-source choices contain authorized legacy
+                        taxpayer and business records. Access is private;
+                        laboratory actions still provide no production municipal
+                        authority.
+                    </p>
+                    <p v-else>
                         All records shown here are sample data and can be
                         restored by the preview administrator.
                     </p>

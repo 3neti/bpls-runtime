@@ -9,6 +9,7 @@ import type { StakeholderPreviewPersona } from '@/types';
 
 defineProps<{
     personas: StakeholderPreviewPersona[];
+    authorizedLegacyReview: boolean;
 }>();
 
 const steps: Record<StakeholderPreviewPersona['key'], string[]> = {
@@ -94,7 +95,11 @@ const steps: Record<StakeholderPreviewPersona['key'], string[]> = {
         <div
             class="border-b border-amber-800 bg-amber-300 px-5 py-2 text-center text-xs font-semibold tracking-wide text-amber-950"
         >
-            Preview Environment · Sample Data
+            {{
+                authorizedLegacyReview
+                    ? 'Private Review · Authorized Legacy Records'
+                    : 'Preview Environment · Sample Data'
+            }}
         </div>
 
         <div

@@ -12,6 +12,7 @@ use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\LifecycleScenarios\RenewalHappyPathDefinition;
 use App\LifecycleScenarios\ScenarioArtifactStore;
 use App\Models\LifecycleScenarioSpecimen;
+use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -19,11 +20,16 @@ use Inertia\Response;
 
 final class LifecycleLaboratoryController extends Controller
 {
-    public function index(Request $request, BuildLifecycleLaboratory $buildLaboratory, BuildLifecycleCleanroom $buildCleanroom): Response
-    {
+    public function index(
+        Request $request,
+        BuildLifecycleLaboratory $buildLaboratory,
+        BuildLifecycleCleanroom $buildCleanroom,
+        StakeholderPreviewSafety $previewSafety,
+    ): Response {
         return Inertia::render('stakeholder-preview/LifecycleLaboratory', [
             'laboratory' => $buildLaboratory->handle(),
             'cleanroom' => $buildCleanroom->handle($request->user()),
+            'authorizedLegacyReview' => $previewSafety->allowsAuthorizedLegacySpecimens(),
         ]);
     }
 

@@ -12,7 +12,7 @@ class BuildCitizenPermitApplicationLabFixture
     private const string FixturePath = 'seeders/data/ipil_citizen_permit_application.yaml';
 
     /** @var list<string> */
-    private const array AllowedFields = [
+    public const array AllowedFields = [
         'registration_number',
         'reference_number',
         'registered_on',
@@ -38,6 +38,9 @@ class BuildCitizenPermitApplicationLabFixture
         'business_province',
         'business_telephone',
         'business_email',
+        'owner_last_name',
+        'owner_first_name',
+        'owner_middle_name',
         'owner_house_building_number',
         'owner_building_name',
         'owner_unit_number',

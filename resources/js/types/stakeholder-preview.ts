@@ -25,6 +25,8 @@ export type StakeholderPreviewGuidance = {
 
 export type StakeholderPreviewContext = {
     enabled: true;
+    authorized_legacy_review: boolean;
+    access: 'open' | 'private';
     current_persona: StakeholderPreviewPersona['key'] | null;
     current_label: string | null;
     cleanroom_actor: {

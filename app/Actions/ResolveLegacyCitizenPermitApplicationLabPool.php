@@ -6,14 +6,37 @@ use JsonException;
 use RuntimeException;
 use SplFileObject;
 
+/**
+ * @phpstan-type LegacyLabSpecimen array{
+ *     fixture_id: string,
+ *     label: string,
+ *     classification: string,
+ *     source_kind: string,
+ *     source_reference: string,
+ *     source_business_category: string,
+ *     source_note: string,
+ *     historical_assessment: array<string, mixed>,
+ *     fields: array<string, bool|float|int|string|null>,
+ *     activity: array{
+ *         line_of_business_code: string,
+ *         quantity: int,
+ *         capital_investment_pesos: string,
+ *         essential_gross_sales_pesos: string,
+ *         non_essential_gross_sales_pesos: string,
+ *         started_on: string|null
+ *     }
+ * }
+ */
 class ResolveLegacyCitizenPermitApplicationLabPool
 {
-    private const string DefaultTablesPath = 'app/private/legacy-migrations/convex-snapshots/prod-convex-20260816-224400/tables';
+    public const string SourceSnapshot = 'prod-convex-20260816-224400';
 
-    private const string CatalogCode = 'MRC-2A-02-B-WHOLESALE-RETAIL';
+    private const string DefaultTablesPath = 'app/private/legacy-migrations/convex-snapshots/'.self::SourceSnapshot.'/tables';
+
+    public const string CatalogCode = 'MRC-2A-02-B-WHOLESALE-RETAIL';
 
     /** @var list<string> */
-    private const array SourceBusinessCategories = [
+    public const array SourceBusinessCategories = [
         'REC- SARISARI STORE',
         'REC- GROCERY',
         'RNEC- DRY GOODS RETAILER',
@@ -22,29 +45,19 @@ class ResolveLegacyCitizenPermitApplicationLabPool
         'RNEC- HARDWARE RETAILER',
     ];
 
-    /**
-     * @return list<array{
-     *     fixture_id: string,
-     *     label: string,
-     *     classification: string,
-     *     source_kind: string,
-     *     source_reference: string,
-     *     source_business_category: string,
-     *     source_note: string,
-     *     historical_assessment: array<string, mixed>,
-     *     fields: array<string, bool|float|int|string|null>,
-     *     activity: array{
-     *         line_of_business_code: string,
-     *         quantity: int,
-     *         capital_investment_pesos: string,
-     *         essential_gross_sales_pesos: string,
-     *         non_essential_gross_sales_pesos: string,
-     *         started_on: string|null
-     *     }
-     * }>
-     */
+    public function __construct(
+        private readonly ResolveAuthorizedLegacyCitizenPermitApplicationLabBundle $resolveBundle,
+    ) {}
+
+    /** @return list<LegacyLabSpecimen> */
     public function handle(): array
     {
+        $bundledPool = $this->resolveBundle->handle();
+
+        if (is_array($bundledPool)) {
+            return $bundledPool;
+        }
+
         $tablesPath = $this->tablesPath();
 
         if ($tablesPath === null) {

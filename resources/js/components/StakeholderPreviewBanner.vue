@@ -63,7 +63,11 @@ function returnToLaboratory(): void {
                         <p
                             class="text-xs font-extrabold tracking-wide sm:text-sm"
                         >
-                            Preview Environment · Sample Data
+                            {{
+                                preview.authorized_legacy_review
+                                    ? 'Private Review · Authorized Legacy Records'
+                                    : 'Preview Environment · Sample Data'
+                            }}
                         </p>
                         <p
                             v-if="preview.current_label"

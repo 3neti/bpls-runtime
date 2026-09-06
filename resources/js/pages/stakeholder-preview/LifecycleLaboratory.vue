@@ -129,6 +129,7 @@ type CleanroomState = {
 };
 
 const props = defineProps<{
+    authorizedLegacyReview: boolean;
     cleanroom: {
         active: CleanroomState | null;
         history: {
@@ -375,7 +376,11 @@ function simulateQrPhPayment(): void {
                         class="flex items-center gap-2 text-sm font-semibold text-amber-300"
                     >
                         <FlaskConical class="size-5" aria-hidden="true" />
-                        Stakeholder Preview · Synthetic product laboratory
+                        {{
+                            authorizedLegacyReview
+                                ? 'Private review · Authorized legacy source laboratory'
+                                : 'Stakeholder Preview · Synthetic product laboratory'
+                        }}
                     </div>
                     <div class="space-y-2">
                         <h1
@@ -402,7 +407,11 @@ function simulateQrPhPayment(): void {
                         >
                         <span
                             class="rounded-full bg-white/10 px-3 py-1.5 text-zinc-200"
-                            >Synthetic specimen only</span
+                            >{{
+                                authorizedLegacyReview
+                                    ? 'Authorized legacy source · Laboratory actions only'
+                                    : 'Synthetic specimen only'
+                            }}</span
                         >
                     </div>
                 </div>

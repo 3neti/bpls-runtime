@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import { BadgeCheck, FileText, Landmark, LockKeyhole } from '@lucide/vue';
+import { computed } from 'vue';
 import { Badge } from '@/components/ui/badge';
 import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
 
@@ -75,6 +76,11 @@ type ReleaseStatus = {
         status: 'not_confirmed';
     };
 };
+
+const page = usePage();
+const authorizedLegacyReview = computed(
+    () => page.props.stakeholder_preview?.authorized_legacy_review === true,
+);
 
 defineProps<{
     verification: VerificationBoundary;
@@ -187,7 +193,11 @@ function label(value: string): string {
                     <p
                         class="mb-3 text-[0.65rem] font-semibold tracking-wide text-amber-700 uppercase dark:text-amber-300"
                     >
-                        Preview · Sample Data
+                        {{
+                            authorizedLegacyReview
+                                ? 'Restricted legacy source · Laboratory result'
+                                : 'Preview · Sample Data'
+                        }}
                     </p>
                     <div class="mb-4 flex items-center gap-2">
                         <FileText class="size-4 text-zinc-500" />
@@ -385,9 +395,17 @@ function label(value: string): string {
                     </div>
                 </dl>
                 <p class="mt-3 text-xs leading-5 opacity-80">
-                    This is a stakeholder-test result using sample data. It is
-                    not an official permit, numbering decision, Mayor
-                    credential, municipal release, or legal effect.
+                    <template v-if="authorizedLegacyReview">
+                        This private stakeholder-test result is bound to an
+                        authorized legacy application source. Its laboratory
+                        permit, numbering, Mayor credential, release, and legal
+                        effect remain non-production.
+                    </template>
+                    <template v-else>
+                        This is a stakeholder-test result using sample data. It
+                        is not an official permit, numbering decision, Mayor
+                        credential, municipal release, or legal effect.
+                    </template>
                 </p>
             </section>
 

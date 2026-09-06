@@ -1,6 +1,8 @@
 <?php
 
 use App\Actions\BuildCitizenPermitApplicationLabFixture;
+use App\Actions\ResolveAuthorizedLegacyCitizenPermitApplicationLabBundle;
+use App\Actions\ResolveLegacyCitizenPermitApplicationLabPool;
 use App\Enums\StakeholderPreviewPersona;
 use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\LifecycleScenarios\RenewalHappyPathDefinition;
@@ -16,10 +18,14 @@ use App\Models\TreasuryCollection;
 use App\Models\User;
 use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
+
+use function Pest\Laravel\mock;
 
 beforeEach(function () {
     $this->withoutVite();
@@ -98,6 +104,88 @@ test('approved preview citizen receives the deterministic Ipil application helpe
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->has('labIntakeFixtures', 0));
+});
+
+test('authorized legacy review requires a preview login and exposes the exact six-record specimen pool', function () {
+    $specimens = authorizedLegacyReviewSpecimens();
+    $bundle = app(ResolveAuthorizedLegacyCitizenPermitApplicationLabBundle::class);
+
+    configureAuthorizedLegacyReviewSafety(
+        $bundle->encode($specimens),
+        $bundle->fingerprint($specimens),
+    );
+    Route::middleware('web')->group(base_path('routes/web.php'));
+    Route::getRoutes()->refreshNameLookups();
+    Route::getRoutes()->refreshActionLookups();
+
+    LineOfBusiness::factory()->create([
+        'code' => 'MRC-2A-02-B-WHOLESALE-RETAIL',
+        'name' => 'Wholesalers, Retailers, Dealers or Distributors',
+        'metadata' => [],
+    ]);
+    $accounts = createStakeholderPreviewAccounts();
+
+    $this->get('/')->assertRedirect(route('login'));
+    $this->get('/permits/verify/999999/not-a-real-code')->assertRedirect(route('login'));
+
+    $ordinaryUser = User::factory()->create(['email_verified_at' => now()]);
+    $this->actingAs($ordinaryUser)->get('/')->assertNotFound();
+
+    $management = $accounts[StakeholderPreviewPersona::Management->value];
+    $this->actingAs($management)
+        ->get('/')
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page->component('stakeholder-preview/Launcher'));
+
+    $citizen = $accounts[StakeholderPreviewPersona::Citizen->value];
+    $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.create'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Create')
+            ->has('labIntakeFixtures', 6)
+            ->where('labIntakeFixtures.0.source_business_category', ResolveLegacyCitizenPermitApplicationLabPool::SourceBusinessCategories[0])
+            ->where('labIntakeFixtures.5.source_business_category', ResolveLegacyCitizenPermitApplicationLabPool::SourceBusinessCategories[5])
+            ->where('labIntakeFixtures.0.classification', 'authorized_legacy_source_lab_only')
+            ->where('labIntakeFixtures.0.source_kind', 'immutable_production_backup'));
+});
+
+test('authorized legacy review rejects a bundle whose approved fingerprint differs', function () {
+    $specimens = authorizedLegacyReviewSpecimens();
+    $bundle = app(ResolveAuthorizedLegacyCitizenPermitApplicationLabBundle::class);
+
+    configureAuthorizedLegacyReviewSafety($bundle->encode($specimens), str_repeat('0', 64));
+
+    expect(fn () => $bundle->handle())
+        ->toThrow(RuntimeException::class, 'does not match its approved source-pool fingerprint');
+});
+
+test('legacy specimen export writes a private six-record secret payload outside the repository', function () {
+    $specimens = authorizedLegacyReviewSpecimens();
+    mock(ResolveLegacyCitizenPermitApplicationLabPool::class)
+        ->shouldReceive('handle')
+        ->once()
+        ->andReturn($specimens);
+    $directory = sys_get_temp_dir().'/bpls-authorized-legacy-'.Str::random(12);
+    File::makeDirectory($directory, 0700);
+    $output = $directory.'/specimens.bundle';
+
+    try {
+        $this->artisan('lifecycle:export-stakeholder-preview-legacy-specimens', ['--output' => $output])
+            ->expectsOutputToContain('Specimens: 6')
+            ->assertSuccessful();
+
+        expect(File::exists($output))->toBeTrue()
+            ->and(fileperms($output) & 0777)->toBe(0600)
+            ->and(File::get($output))->not->toContain('Authorized source business');
+
+        $bundle = app(ResolveAuthorizedLegacyCitizenPermitApplicationLabBundle::class);
+        configureAuthorizedLegacyReviewSafety(File::get($output), $bundle->fingerprint($specimens));
+
+        expect($bundle->handle())->toBe($specimens);
+    } finally {
+        File::deleteDirectory($directory);
+    }
 });
 
 test('authorized legacy tables produce a source-backed laboratory specimen pool without entering Git', function () {
@@ -784,5 +872,62 @@ function configureStakeholderPreviewSafety(): void
         'stakeholder_preview.production_migration_enabled' => false,
         'stakeholder_preview.production_integrations' => 'disabled',
         'stakeholder_preview.password' => 'Stakeholder-Preview-Test-Only-2026',
+    ]);
+}
+
+/** @return list<array<string, mixed>> */
+function authorizedLegacyReviewSpecimens(): array
+{
+    return collect(ResolveLegacyCitizenPermitApplicationLabPool::SourceBusinessCategories)
+        ->values()
+        ->map(fn (string $category, int $index): array => [
+            'fixture_id' => 'legacy-ipil-test-'.($index + 1),
+            'label' => 'Authorized source specimen '.($index + 1),
+            'classification' => 'authorized_legacy_source_lab_only',
+            'source_kind' => 'immutable_production_backup',
+            'source_reference' => 'AUTHORIZED-TEST-'.($index + 1),
+            'source_business_category' => $category,
+            'source_note' => 'Exact authorized source-chain test fixture.',
+            'historical_assessment' => [
+                'recorded_total_amount_cents' => 100_00 + $index,
+                'component_total_amount_cents' => 100_00 + $index,
+                'source_internal_reconciles' => true,
+                'schedules' => [],
+                'source_evidence_hash' => hash('sha256', 'authorized-test-'.$index),
+            ],
+            'fields' => [
+                'business_name' => 'Authorized source business '.($index + 1),
+                'business_street' => 'Authorized source address',
+                'business_barangay' => 'Poblacion',
+                'business_city_municipality' => 'Ipil',
+                'business_province' => 'Zamboanga Sibugay',
+                'owner_last_name' => 'Reviewer',
+                'owner_first_name' => 'Authorized',
+                'applicant_printed_name' => 'Authorized Reviewer',
+            ],
+            'activity' => [
+                'line_of_business_code' => 'MRC-2A-02-B-WHOLESALE-RETAIL',
+                'quantity' => 1,
+                'capital_investment_pesos' => '100000.00',
+                'essential_gross_sales_pesos' => '0.00',
+                'non_essential_gross_sales_pesos' => '500000.00',
+                'started_on' => '2025-01-15',
+            ],
+        ])
+        ->all();
+}
+
+function configureAuthorizedLegacyReviewSafety(string $bundle, string $poolHash): void
+{
+    config()->set([
+        'stakeholder_preview.mode' => true,
+        'stakeholder_preview.profile' => StakeholderPreviewSafety::AuthorizedLegacyReviewProfile,
+        'stakeholder_preview.data_classification' => 'authorized_legacy_review',
+        'stakeholder_preview.pii_mode' => 'restricted',
+        'stakeholder_preview.production_migration_enabled' => false,
+        'stakeholder_preview.production_integrations' => 'disabled',
+        'stakeholder_preview.password' => 'Stakeholder-Preview-Test-Only-2026',
+        'stakeholder_preview.legacy_lab_specimen_bundle' => $bundle,
+        'stakeholder_preview.legacy_lab_specimen_pool_sha256' => $poolHash,
     ]);
 }

@@ -11,6 +11,8 @@ class StakeholderPreviewSafety
 {
     public const string Profile = 'stakeholder_preview_weekend_v1';
 
+    public const string AuthorizedLegacyReviewProfile = 'stakeholder_preview_authorized_legacy_review_v1';
+
     public function isEnabled(): bool
     {
         if (app()->isProduction() || in_array(strtolower(app()->environment()), ['prod', 'production'], true)) {
@@ -18,9 +20,7 @@ class StakeholderPreviewSafety
         }
 
         if (config('stakeholder_preview.mode') !== true
-            || config('stakeholder_preview.profile') !== self::Profile
-            || config('stakeholder_preview.data_classification') !== 'synthetic_only'
-            || config('stakeholder_preview.pii_mode') !== 'synthetic_only'
+            || ! $this->hasAcceptedDataProfile()
             || config('stakeholder_preview.production_migration_enabled') !== false
             || config('stakeholder_preview.production_integrations') !== 'disabled') {
             return false;
@@ -33,6 +33,18 @@ class StakeholderPreviewSafety
         }
 
         return true;
+    }
+
+    public function requiresPrivateAuthentication(): bool
+    {
+        return config('stakeholder_preview.profile') === self::AuthorizedLegacyReviewProfile;
+    }
+
+    public function allowsAuthorizedLegacySpecimens(): bool
+    {
+        return $this->requiresPrivateAuthentication()
+            && config('stakeholder_preview.data_classification') === 'authorized_legacy_review'
+            && config('stakeholder_preview.pii_mode') === 'restricted';
     }
 
     public function ensureEnabled(): void
@@ -237,5 +249,22 @@ class StakeholderPreviewSafety
             && $user->two_factor_recovery_codes === null
             && $user->two_factor_confirmed_at === null
             && $actualPermissions === $expectedPermissions;
+    }
+
+    private function hasAcceptedDataProfile(): bool
+    {
+        if (config('stakeholder_preview.profile') === self::Profile) {
+            return config('stakeholder_preview.data_classification') === 'synthetic_only'
+                && config('stakeholder_preview.pii_mode') === 'synthetic_only';
+        }
+
+        if (! $this->allowsAuthorizedLegacySpecimens()) {
+            return false;
+        }
+
+        return is_string(config('stakeholder_preview.legacy_lab_specimen_bundle'))
+            && trim((string) config('stakeholder_preview.legacy_lab_specimen_bundle')) !== ''
+            && is_string(config('stakeholder_preview.legacy_lab_specimen_pool_sha256'))
+            && preg_match('/^[a-f0-9]{64}$/', (string) config('stakeholder_preview.legacy_lab_specimen_pool_sha256')) === 1;
     }
 }

@@ -77,6 +77,8 @@ class HandleInertiaRequests extends Middleware
             ],
             'stakeholder_preview' => $previewSafety->isEnabled() ? [
                 'enabled' => true,
+                'authorized_legacy_review' => $previewSafety->allowsAuthorizedLegacySpecimens(),
+                'access' => $previewSafety->requiresPrivateAuthentication() ? 'private' : 'open',
                 'current_persona' => $previewPersona?->value,
                 'current_label' => $previewPersona?->label(),
                 'cleanroom_actor' => $cleanroomActor,
