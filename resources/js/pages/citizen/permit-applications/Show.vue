@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { Head, Link, router, setLayoutProps, useForm } from '@inertiajs/vue3';
+import { Head, Link, setLayoutProps, useForm } from '@inertiajs/vue3';
 import {
     ArrowLeft,
     Banknote,
     BadgeCheck,
     ClipboardCheck,
-    Download,
     ExternalLink,
     FilePenLine,
     History,
@@ -13,7 +12,6 @@ import {
     ReceiptText,
     Send,
     ShieldCheck,
-    Upload,
 } from '@lucide/vue';
 import { computed, watch } from 'vue';
 import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Citizen/PaymentScheduleController';
@@ -23,18 +21,12 @@ import {
     show,
     submit,
 } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
-import {
-    destroy as destroyDocument,
-    download as downloadDocument,
-    store as storeDocument,
-} from '@/actions/App/Http/Controllers/Citizen/PermitApplicationDocumentController';
 import InputError from '@/components/InputError.vue';
+import ApplicationDocumentPillbox from '@/components/permit-applications/ApplicationDocumentPillbox.vue';
 import IpilExecutableDocument from '@/components/permit-applications/IpilExecutableDocument.vue';
 import SignatureFacsimileCapture from '@/components/SignatureFacsimileCapture.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
 import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue';
 import type { BreadcrumbItem } from '@/types';
@@ -81,6 +73,7 @@ type PermitApplication = {
         original_name: string;
         mime_type: string;
         size_bytes: number;
+        version: number | null;
         remarks: string | null;
         uploaded_at: string;
         uploaded_by: string;
@@ -218,17 +211,16 @@ type PermitApplication = {
 
 const props = defineProps<{
     permitApplication: PermitApplication;
+    applicationDocumentTypes: {
+        code: string;
+        label: string;
+        allows_multiple: boolean;
+    }[];
     executableDocument: InstanceType<
         typeof IpilExecutableDocument
     >['$props']['document'];
 }>();
 
-const documentForm = useForm({
-    label: '',
-    document_type: 'other',
-    file: null as File | null,
-    remarks: '',
-});
 const submissionForm = useForm({
     undertaking_accepted: false,
     signature_facsimile: null as File | null,
@@ -266,41 +258,6 @@ function dateTime(value: string): string {
         dateStyle: 'medium',
         timeStyle: 'short',
     }).format(new Date(value));
-}
-
-function fileSize(sizeBytes: number): string {
-    if (sizeBytes < 1024) {
-        return `${sizeBytes} B`;
-    }
-
-    return `${(sizeBytes / 1024).toFixed(1)} KB`;
-}
-
-function selectDocument(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    documentForm.file = input.files?.[0] ?? null;
-}
-
-function uploadDocument(): void {
-    documentForm.post(storeDocument.url(props.permitApplication.id), {
-        forceFormData: true,
-        preserveScroll: true,
-        onSuccess: () => documentForm.reset(),
-    });
-}
-
-function removeDocument(documentId: number): void {
-    router.delete(
-        destroyDocument.url({
-            permitApplication: props.permitApplication.id,
-            document: documentId,
-        }),
-        { preserveScroll: true },
-    );
-}
-
-function documentBoundaryError(): string | undefined {
-    return (documentForm.errors as Record<string, string | undefined>).document;
 }
 
 function submitApplication(): void {
@@ -1743,155 +1700,13 @@ function blockerLabel(blocker: string): string {
                     </p>
                 </div>
 
-                <form
-                    v-if="permitApplication.can_upload_documents"
-                    data-testid="citizen-document-upload-form"
-                    class="grid gap-3 border-y border-border py-4 md:grid-cols-2"
-                    enctype="multipart/form-data"
-                    @submit.prevent="uploadDocument"
-                >
-                    <InputError
-                        :message="documentBoundaryError()"
-                        class="md:col-span-2"
-                    />
-                    <div class="grid gap-2">
-                        <Label for="citizen-document-type">Document type</Label>
-                        <select
-                            id="citizen-document-type"
-                            v-model="documentForm.document_type"
-                            class="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                        >
-                            <option value="dti_registration">
-                                DTI registration
-                            </option>
-                            <option value="sec_registration">
-                                SEC registration
-                            </option>
-                            <option value="bir_registration">
-                                BIR registration
-                            </option>
-                            <option value="barangay_clearance">
-                                Barangay clearance
-                            </option>
-                            <option value="other">Other</option>
-                        </select>
-                        <InputError
-                            :message="documentForm.errors.document_type"
-                        />
-                    </div>
-                    <div class="grid gap-2">
-                        <Label for="citizen-document-label"
-                            >Document label</Label
-                        >
-                        <Input
-                            id="citizen-document-label"
-                            v-model="documentForm.label"
-                            maxlength="120"
-                            required
-                        />
-                        <InputError :message="documentForm.errors.label" />
-                    </div>
-                    <div class="grid gap-2">
-                        <Label for="citizen-document-file">File</Label>
-                        <Input
-                            id="citizen-document-file"
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            required
-                            @change="selectDocument"
-                        />
-                        <p class="text-xs text-muted-foreground">
-                            PDF, JPG, or PNG up to 10 MB.
-                        </p>
-                        <InputError :message="documentForm.errors.file" />
-                    </div>
-                    <div class="grid gap-2 md:col-span-2">
-                        <Label for="citizen-document-remarks">Remarks</Label>
-                        <textarea
-                            id="citizen-document-remarks"
-                            v-model="documentForm.remarks"
-                            rows="2"
-                            maxlength="1000"
-                            class="flex min-h-16 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                        />
-                        <InputError :message="documentForm.errors.remarks" />
-                    </div>
-                    <progress
-                        v-if="documentForm.progress"
-                        class="h-2 w-full md:col-span-2"
-                        :value="documentForm.progress.percentage"
-                        max="100"
-                    >
-                        {{ documentForm.progress.percentage }}%
-                    </progress>
-                    <div class="md:col-span-2">
-                        <Button
-                            type="submit"
-                            :disabled="documentForm.processing"
-                        >
-                            <Upload />
-                            Add document
-                        </Button>
-                    </div>
-                </form>
-
-                <p
-                    v-if="permitApplication.documents.length === 0"
-                    class="py-2 text-sm text-muted-foreground"
-                >
-                    No supporting documents associated with this application.
-                </p>
-                <ul v-else class="divide-y divide-border">
-                    <li
-                        v-for="document in permitApplication.documents"
-                        :key="document.id"
-                        data-testid="citizen-supporting-document"
-                        :data-document-id="document.id"
-                        :data-document-label="document.label"
-                        class="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"
-                    >
-                        <div class="min-w-0 flex-1">
-                            <p class="text-sm font-medium break-words">
-                                {{ document.label }}
-                            </p>
-                            <p class="text-xs break-all text-muted-foreground">
-                                {{ document.original_name }} ·
-                                {{ fileSize(document.size_bytes) }}
-                            </p>
-                            <p
-                                v-if="document.remarks"
-                                class="mt-1 text-sm break-words text-muted-foreground"
-                            >
-                                {{ document.remarks }}
-                            </p>
-                            <p class="mt-1 text-xs text-muted-foreground">
-                                {{ dateTime(document.uploaded_at) }} ·
-                                {{ document.uploaded_by }}
-                            </p>
-                        </div>
-                        <Button as-child variant="outline" size="sm">
-                            <a
-                                :href="
-                                    downloadDocument.url({
-                                        permitApplication: permitApplication.id,
-                                        document: document.id,
-                                    })
-                                "
-                            >
-                                <Download />
-                                Download
-                            </a>
-                        </Button>
-                        <Button
-                            v-if="permitApplication.can_upload_documents"
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            @click="removeDocument(document.id)"
-                            >Remove</Button
-                        >
-                    </li>
-                </ul>
+                <ApplicationDocumentPillbox
+                    :document-types="applicationDocumentTypes"
+                    :documents="permitApplication.documents"
+                    :application-id="permitApplication.id"
+                    :editable="permitApplication.can_upload_documents"
+                    return-to="show"
+                />
             </section>
         </main>
     </div>

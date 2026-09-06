@@ -16,11 +16,17 @@ class CaptureLifecycleCleanroomIntake
         private readonly CreateCitizenPermitApplicationDraft $createDraft,
     ) {}
 
-    /** @param array<string, mixed> $data */
-    public function create(Request $request, array $data): PermitApplication
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  (callable(PermitApplication): void)|null  $afterDraftCreated
+     */
+    public function create(Request $request, array $data, ?callable $afterDraftCreated = null): PermitApplication
     {
-        return DB::transaction(function () use ($request, $data): PermitApplication {
+        return DB::transaction(function () use ($request, $data, $afterDraftCreated): PermitApplication {
             $application = $this->createDraft->handle($data, $request->user());
+            if ($afterDraftCreated !== null) {
+                $afterDraftCreated($application);
+            }
             $this->capture($request, $application);
 
             return $application;

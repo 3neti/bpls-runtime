@@ -19,6 +19,7 @@ class UpdatePermitApplicationRequest extends StorePermitApplicationRequest
         return [
             ...parent::rules(),
             'draft_version' => ['required', 'date'],
+            'application_documents' => ['prohibited'],
         ];
     }
 }

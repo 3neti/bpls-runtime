@@ -12,7 +12,7 @@ use Throwable;
 class StorePermitApplicationDocument
 {
     /**
-     * @param  array{label: string, file: UploadedFile, remarks?: string|null, source?: string}  $data
+     * @param  array{label: string, file: UploadedFile, document_type?: string, remarks?: string|null, source?: string, document_type_catalog_revision?: string}  $data
      */
     public function handle(PermitApplication $permitApplication, array $data, User $uploadedBy): PermitApplicationDocument
     {
@@ -56,6 +56,7 @@ class StorePermitApplicationDocument
                     'classification' => 'applicant_supplied_evidence',
                     'media_id' => $media->id,
                     'media_collection' => PermitApplication::ApplicationDocumentsCollection,
+                    'document_type_catalog_revision' => $data['document_type_catalog_revision'] ?? null,
                     'requirement_catalog_status' => 'unresolved',
                     'submitted_via' => $data['source'] ?? 'staff_intake',
                     'policy_note' => 'Document receipt does not establish statutory sufficiency, approval, or permit eligibility.',

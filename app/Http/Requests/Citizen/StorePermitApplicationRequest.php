@@ -9,6 +9,7 @@ use App\Enums\StakeholderPreviewPersona;
 use App\Enums\UserPermission;
 use App\Http\Requests\PermitApplicationIntakeRequest;
 use App\StakeholderPreview\StakeholderPreviewSafety;
+use App\Support\ApplicationDocumentTypeCatalog;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\File;
@@ -40,9 +41,11 @@ class StorePermitApplicationRequest extends PermitApplicationIntakeRequest
             : [];
 
         $rules = parent::rules();
+        $documentTypeCodes = app(ApplicationDocumentTypeCatalog::class)->activeCodes();
         $nelsonPath = $this->has('business_activity_description');
         if ($nelsonPath) {
-            $barangayCodes = collect(config('ipil_references.barangays.items', []))->pluck('code')->all();
+            $barangayItems = config('ipil_references.barangays.items', []);
+            $barangayCodes = collect(is_array($barangayItems) ? $barangayItems : [])->pluck('code')->all();
             $rules['business_activity_description'] = ['required', 'string', 'max:4000'];
             $rules['business_barangay_psgc_code'] = ['required', 'string', Rule::in($barangayCodes)];
             $rules['lines'] = ['prohibited'];
@@ -83,6 +86,10 @@ class StorePermitApplicationRequest extends PermitApplicationIntakeRequest
             'signature_facsimile' => $cleanroom === null
                 ? ['prohibited']
                 : ['nullable', File::image()->max(2048)],
+            'application_documents' => ['nullable', 'array', 'list', 'max:10'],
+            'application_documents.*' => ['required', 'array:document_type,file'],
+            'application_documents.*.document_type' => ['required', 'string', Rule::in($documentTypeCodes)],
+            'application_documents.*.file' => ['required', File::types(['pdf', 'jpg', 'jpeg', 'png'])->max(10 * 1024)],
         ];
     }
 
@@ -92,6 +99,7 @@ class StorePermitApplicationRequest extends PermitApplicationIntakeRequest
         $validated = parent::validatedForPersistence();
         unset($validated['lifecycle_cleanroom_run_id']);
         unset($validated['signature_facsimile']);
+        unset($validated['application_documents']);
 
         return $validated;
     }
@@ -100,7 +108,8 @@ class StorePermitApplicationRequest extends PermitApplicationIntakeRequest
     {
         parent::prepareForValidation();
 
-        $barangays = collect(config('ipil_references.barangays.items', []))->keyBy('code');
+        $barangayItems = config('ipil_references.barangays.items', []);
+        $barangays = collect(is_array($barangayItems) ? $barangayItems : [])->keyBy('code');
         $barangay = $barangays->get((string) $this->input('business_barangay_psgc_code'));
         if (is_array($barangay)) {
             $this->merge([

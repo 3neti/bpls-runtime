@@ -31,6 +31,7 @@ use App\Models\LifecycleCleanroomRun;
 use App\Models\LifecycleScenarioSpecimen;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
+use App\Models\PermitApplicationDocument;
 use App\Models\SignatureEvidence;
 use App\Models\TreasuryCollection;
 use App\Models\User;
@@ -294,6 +295,7 @@ test('interactive Nelson ceremony drafts before documents and signed lodging', f
             ->missing('cleanroomIntake.lines')
             ->has('barangays', 28)
             ->has('labIntakeFixtures', 1)
+            ->has('applicationDocumentTypes', 5)
             ->where('labIntakeFixtures.0.classification', 'synthetic_uat_only'));
 
     $intake = app(BuildLifecycleCleanroomIntake::class)->handle($run);
@@ -302,20 +304,20 @@ test('interactive Nelson ceremony drafts before documents and signed lodging', f
         'type' => 'new',
         'lifecycle_cleanroom_run_id' => $run->public_id,
         'undertaking_accepted' => '1',
-    ])->assertSessionHasNoErrors();
+        'application_documents' => [[
+            'document_type' => 'dti_registration',
+            'file' => UploadedFile::fake()->create('dti.pdf', 24, 'application/pdf'),
+        ]],
+    ])->assertSessionHasNoErrors()
+        ->assertRedirect();
 
     $application = PermitApplication::query()->findOrFail($run->fresh()->new_application_id);
     expect($application->status->value)->toBe('draft')
         ->and($application->submitted_at)->toBeNull()
         ->and($application->lines)->toBeEmpty()
         ->and($application->business_activity_description)->toBe($intake['business_activity_description'])
-        ->and($application->business->barangay_psgc_code)->toBe('0908305023');
-
-    $this->post(route('citizen.permit-applications.documents.store', $application), [
-        'label' => 'DTI registration specimen',
-        'document_type' => 'dti_registration',
-        'file' => UploadedFile::fake()->create('dti.pdf', 24, 'application/pdf'),
-    ])->assertSessionHasNoErrors();
+        ->and($application->business->barangay_psgc_code)->toBe('0908305023')
+        ->and($application->documents()->whereNull('removed_at')->sole()->label)->toBe('DTI Registration');
 
     $this->post(route('citizen.permit-applications.submit', $application), [
         'undertaking_accepted' => '1',
@@ -706,6 +708,10 @@ test('cleanroom citizen form lodges through canonical draft and submit actions i
         'owner_phone' => null,
         'lifecycle_cleanroom_run_id' => $run->public_id,
         'undertaking_accepted' => '1',
+        'application_documents' => [[
+            'document_type' => 'sec_registration',
+            'file' => UploadedFile::fake()->create('sec.pdf', 18, 'application/pdf'),
+        ]],
     ];
     $this->post(route('citizen.permit-applications.store'), $lodging)
         ->assertRedirect(route('stakeholder-preview.lifecycle-cleanroom-application.show', $run))
@@ -718,6 +724,8 @@ test('cleanroom citizen form lodges through canonical draft and submit actions i
         ->and(data_get($application->metadata, 'applicant_declaration_draft.undertaking.applicant_printed_name'))->toBe($application->business->owner->name)
         ->and(data_get($application->metadata, 'lifecycle_cleanroom.run_id'))->toBe($run->public_id)
         ->and(data_get($application->declaration()->sole()->snapshot, 'undertaking.applicant_printed_name'))->toBe($application->business->owner->name)
+        ->and(data_get($application->declaration()->sole()->snapshot, 'applicant_documents_manifest.documents'))->toHaveCount(1)
+        ->and($application->documents()->whereNull('removed_at')->sole()->label)->toBe('SEC Registration')
         ->and(data_get($application->metadata, 'status_history'))->toHaveCount(1)
         ->and($run->owned_resource_manifest['permit_application_declaration_ids'])->toBe([$application->declaration()->sole()->id]);
     $lodgedState = app(ResolveLifecycleCleanroomState::class)->handle($run);
@@ -806,13 +814,21 @@ test('failed one action lodging rolls back the draft and retains the cleanroom i
         'type' => 'new',
         'lifecycle_cleanroom_run_id' => $run->public_id,
         'undertaking_accepted' => '1',
+        'application_documents' => [[
+            'document_type' => 'dti_registration',
+            'file' => UploadedFile::fake()->create('rollback-dti.pdf', 18, 'application/pdf'),
+        ]],
     ])->assertSessionHasErrors('submission');
 
     expect(PermitApplication::query()->count())->toBe(0)
         ->and(BusinessOwner::query()->count())->toBe(0)
         ->and(Business::query()->count())->toBe(0)
+        ->and(PermitApplicationDocument::query()->count())->toBe(0)
         ->and($run->fresh()->new_application_id)->toBeNull()
         ->and(session('lifecycle_cleanroom_intake_run_id'))->toBe($run->id);
+    expect(collect(Storage::disk('local')->allFiles())
+        ->filter(fn (string $path): bool => str_contains($path, 'rollback-dti.pdf'))
+        ->all())->toBe([]);
 });
 
 test('cleanroom remains compatible with the canonical two year action semantics through both payables', function () {

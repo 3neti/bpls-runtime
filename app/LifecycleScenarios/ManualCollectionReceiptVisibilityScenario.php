@@ -1304,6 +1304,7 @@ final class ManualCollectionReceiptVisibilityScenario
         try {
             $data = [
                 'label' => $label,
+                'document_type' => 'dti_registration',
                 'file' => new UploadedFile(
                     $temporaryPath,
                     'scenario-business-registration.pdf',

@@ -6,7 +6,7 @@ use App\Actions\BuildCitizenPermitApplicationLabFixture;
 use App\Actions\BuildExecutablePermitApplicationDocument;
 use App\Actions\BuildLifecycleCleanroomIntake;
 use App\Actions\BuildPermitApplicationTimeline;
-use App\Actions\CaptureLifecycleCleanroomIntake;
+use App\Actions\CreateCitizenPermitApplicationDraftWithDocuments;
 use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Actions\DescribePaymentPolicyBoundary;
 use App\Actions\DescribePermitArtifact;
@@ -28,6 +28,7 @@ use App\Models\LifecycleCleanroomRun;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\StakeholderPreview\StakeholderPreviewSafety;
+use App\Support\ApplicationDocumentTypeCatalog;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -68,6 +69,7 @@ class PermitApplicationController extends Controller
         BuildLifecycleCleanroomIntake $buildCleanroomIntake,
         BuildCitizenPermitApplicationLabFixture $buildLabFixture,
         StakeholderPreviewSafety $previewSafety,
+        ApplicationDocumentTypeCatalog $documentTypeCatalog,
     ): Response {
         Gate::authorize(UserPermission::CreateOwnPermitApplications->value);
         $cleanroom = $resolveCleanroomIntake->handle($request);
@@ -98,21 +100,29 @@ class PermitApplicationController extends Controller
                 || $previewSafety->personaFor($request->user()) === StakeholderPreviewPersona::Citizen)
                     ? $buildLabFixture->pool()
                     : [],
+            'applicationDocumentTypes' => $documentTypeCatalog->options(),
         ]);
     }
 
     public function store(
         StorePermitApplicationRequest $request,
-        CaptureLifecycleCleanroomIntake $captureCleanroomIntake,
+        CreateCitizenPermitApplicationDraftWithDocuments $createDraft,
         LodgeLifecycleCleanroomApplication $lodgeCleanroomApplication,
     ): RedirectResponse {
         $cleanroomRunId = $request->validated('lifecycle_cleanroom_run_id');
+        $documents = $request->validated('application_documents', []);
+        $documents = is_array($documents) ? array_values($documents) : [];
 
         try {
             if (is_string($cleanroomRunId)) {
                 $cleanroom = app(ResolveLifecycleCleanroomIntake::class)->handle($request);
                 if ($cleanroom?->isNelsonReconciliationV1()) {
-                    $permitApplication = $captureCleanroomIntake->create($request, $request->validatedForPersistence());
+                    $permitApplication = $createDraft->handle($request, $request->validatedForPersistence(), $documents);
+
+                    if ($documents !== []) {
+                        return to_route('citizen.permit-applications.edit', $permitApplication)
+                            ->with('status', 'Application draft saved and applicant document added.');
+                    }
 
                     return to_route('citizen.permit-applications.show', $permitApplication)
                         ->with('status', 'Nelson application draft saved. Add supporting documents, then Sign & Submit to lodge it.');
@@ -124,24 +134,25 @@ class PermitApplicationController extends Controller
                     $cleanroomRunId,
                     $request->boolean('undertaking_accepted'),
                     $request->file('signature_facsimile'),
+                    $documents,
                 );
 
                 return to_route('stakeholder-preview.lifecycle-cleanroom-application.show', $lodging['run'])
                     ->with('status', 'Application saved, declaration frozen, and lodged for municipal processing.');
             }
 
-            $permitApplication = $captureCleanroomIntake->create($request, $request->validatedForPersistence());
+            $permitApplication = $createDraft->handle($request, $request->validatedForPersistence(), $documents);
         } catch (DomainException $exception) {
             $errorKey = is_string($cleanroomRunId) ? 'submission' : 'business_id';
 
             return back()->withErrors([$errorKey => $exception->getMessage()]);
         }
 
-        return to_route('citizen.permit-applications.show', $permitApplication)
+        return to_route($documents === [] ? 'citizen.permit-applications.show' : 'citizen.permit-applications.edit', $permitApplication)
             ->with('status', 'Permit application draft saved.');
     }
 
-    public function edit(Request $request, int $permitApplication): Response
+    public function edit(Request $request, int $permitApplication, ApplicationDocumentTypeCatalog $documentTypeCatalog): Response
     {
         Gate::authorize(UserPermission::EditOwnPermitApplications->value);
 
@@ -166,6 +177,7 @@ class PermitApplicationController extends Controller
             ],
             'registry' => $this->registryPayload($request),
             'draft' => $this->draftIntakePayload($application),
+            'applicationDocumentTypes' => $documentTypeCatalog->options(),
         ]);
     }
 
@@ -217,7 +229,7 @@ class PermitApplicationController extends Controller
             ->with('status', 'Permit application submitted and received for municipal processing.');
     }
 
-    public function show(Request $request, int $permitApplication): Response
+    public function show(Request $request, int $permitApplication, ApplicationDocumentTypeCatalog $documentTypeCatalog): Response
     {
         Gate::authorize(UserPermission::ViewOwnPermitApplications->value);
 
@@ -296,6 +308,7 @@ class PermitApplicationController extends Controller
                         'original_name' => $document->original_name,
                         'mime_type' => $document->mime_type,
                         'size_bytes' => $document->size_bytes,
+                        'version' => $document->version,
                         'remarks' => $document->remarks,
                         'uploaded_at' => $document->uploaded_at->toIso8601String(),
                         'uploaded_by' => $document->uploaded_by_id === $request->user()->id
@@ -429,6 +442,7 @@ class PermitApplicationController extends Controller
                 'can_view_documents' => $canViewDocuments,
                 'can_view_financials' => $canViewFinancials,
             ],
+            'applicationDocumentTypes' => $documentTypeCatalog->options(),
             'executableDocument' => $this->buildExecutableDocument->handle($application),
         ]);
     }
@@ -547,6 +561,14 @@ class PermitApplicationController extends Controller
             'application_year' => $permitApplication->application_year,
             'type' => $permitApplication->type->value,
             'declaration' => data_get($permitApplication->metadata, 'applicant_declaration_draft'),
+            'documents' => $permitApplication->documents->whereNull('removed_at')->map(fn ($document): array => [
+                'id' => $document->id,
+                'label' => $document->label,
+                'document_type' => $document->document_type,
+                'original_name' => $document->original_name,
+                'size_bytes' => $document->size_bytes,
+                'version' => $document->version,
+            ])->values(),
             'lines' => $permitApplication->lines->map(fn ($line): array => [
                 'id' => $line->id,
                 'line_of_business_id' => $line->line_of_business_id,

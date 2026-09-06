@@ -251,7 +251,8 @@ final class CitizenPermitDraftVisibilityScenario
         if ($scenario->key === 'citizen_permit_draft_document_visibility') {
             $fixturePath = $this->createDocumentFixture($artifactStore, $runId);
             $manifest['resources']['expected_document'] = [
-                'label' => 'Business registration evidence',
+                'label' => 'DTI Registration',
+                'document_type' => 'dti_registration',
                 'original_name' => 'citizen-business-registration.pdf',
                 'remarks' => 'Citizen lifecycle scenario evidence.',
                 'fixture_path' => $fixturePath,

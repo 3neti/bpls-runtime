@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { FormDataConvertible } from '@inertiajs/core';
 import { Form, Head, Link, setLayoutProps } from '@inertiajs/vue3';
 import {
     ArrowLeft,
@@ -22,11 +23,31 @@ import {
     store as staffStore,
 } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import InputError from '@/components/InputError.vue';
+import ApplicationDocumentPillbox from '@/components/permit-applications/ApplicationDocumentPillbox.vue';
 import IpilField from '@/components/permit-applications/IpilField.vue';
 import { Button } from '@/components/ui/button';
 import type { BreadcrumbItem } from '@/types';
 
 type Option = { label: string; value: string };
+type ApplicationDocumentType = {
+    code: string;
+    label: string;
+    allows_multiple: boolean;
+};
+type ApplicationDocument = {
+    id: number;
+    label: string;
+    document_type: string | null;
+    original_name: string;
+    size_bytes: number;
+    version: number | null;
+};
+type PendingDocument = {
+    key: number;
+    document_type: string;
+    label: string;
+    file: File;
+};
 type LineOfBusiness = { id: number; name: string; code: string };
 type Activity = {
     key: number;
@@ -86,6 +107,7 @@ type Draft = {
     application_year: number;
     type: string;
     declaration?: Record<string, unknown> | null;
+    documents: ApplicationDocument[];
     lines: Activity[];
 };
 type CleanroomIntake = Record<string, unknown> & {
@@ -127,6 +149,7 @@ const props = defineProps<{
     draft?: Draft;
     cleanroomIntake?: CleanroomIntake | null;
     labIntakeFixtures?: LabIntakeFixture[];
+    applicationDocumentTypes?: ApplicationDocumentType[];
 }>();
 
 const isCitizen = computed(() => props.intakeAudience === 'citizen');
@@ -134,6 +157,9 @@ const isNelsonCleanroom = computed(
     () => props.cleanroomIntake?.ceremony === 'nelson_reconciliation_v1',
 );
 const isEditing = computed(() => props.draft !== undefined);
+const supportsApplicantDocuments = computed(() => isCitizen.value);
+const pendingDocuments = ref<PendingDocument[]>([]);
+let nextDocumentKey = 1;
 const selectedBusinessId = ref<number | ''>(props.draft?.business_id ?? '');
 const selectedRegistryBusiness = computed(
     () =>
@@ -155,6 +181,50 @@ const back = computed(() => {
 
     return isCitizen.value ? citizenIndex() : staffIndex();
 });
+
+function queueDocument(document: Omit<PendingDocument, 'key'>): void {
+    const definition = props.applicationDocumentTypes?.find(
+        (type) => type.code === document.document_type,
+    );
+
+    if (definition?.allows_multiple === false) {
+        pendingDocuments.value = pendingDocuments.value.filter(
+            (pending) => pending.document_type !== document.document_type,
+        );
+    }
+
+    pendingDocuments.value.push({ ...document, key: nextDocumentKey++ });
+}
+
+function removePendingDocument(key: number): void {
+    pendingDocuments.value = pendingDocuments.value.filter(
+        (document) => document.key !== key,
+    );
+}
+
+function saveDraftWithDocuments(): void {
+    nextTick(() => {
+        document
+            .querySelector<HTMLFormElement>('#permit-application-form')
+            ?.requestSubmit();
+    });
+}
+
+function transformApplicationSubmission(
+    data: Record<string, FormDataConvertible>,
+): Record<string, FormDataConvertible> {
+    if (props.draft || pendingDocuments.value.length === 0) {
+        return data;
+    }
+
+    return {
+        ...data,
+        application_documents: pendingDocuments.value.map((document) => ({
+            document_type: document.document_type,
+            file: document.file,
+        })),
+    };
+}
 
 const activities = ref<Activity[]>(
     props.draft?.lines.map((line) => ({ ...line, key: line.id ?? line.key })) ??
@@ -648,6 +718,8 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
             <Form
                 v-bind="action"
                 v-slot="{ errors, processing }"
+                id="permit-application-form"
+                :transform="transformApplicationSubmission"
                 class="mx-auto grid w-full max-w-6xl gap-4"
             >
                 <input
@@ -1877,6 +1949,30 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                     ><Trash2
                                 /></Button>
                             </div>
+                        </section>
+
+                        <section
+                            v-if="supportsApplicantDocuments"
+                            class="border-t-2 border-stone-900 pt-4 dark:border-stone-400"
+                        >
+                            <ApplicationDocumentPillbox
+                                :document-types="applicationDocumentTypes ?? []"
+                                :documents="draft?.documents ?? []"
+                                :pending-documents="pendingDocuments"
+                                :application-id="draft?.id"
+                                :editable="true"
+                                return-to="edit"
+                                :boundary-error="
+                                    errors.application_documents ??
+                                    errors['application_documents.0.file'] ??
+                                    errors[
+                                        'application_documents.0.document_type'
+                                    ]
+                                "
+                                @queue="queueDocument"
+                                @remove-pending="removePendingDocument"
+                                @save-draft="saveDraftWithDocuments"
+                            />
                         </section>
 
                         <section

@@ -9,16 +9,19 @@ use DomainException;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class LodgeLifecycleCleanroomApplication
 {
     public function __construct(
         private readonly CaptureLifecycleCleanroomIntake $captureIntake,
         private readonly SubmitCitizenPermitApplication $submitApplication,
+        private readonly StoreCitizenPermitApplicationDocument $storeDocument,
     ) {}
 
     /**
      * @param  array<string, mixed>  $data
+     * @param  list<array{document_type: string, file: UploadedFile}>  $documents
      * @return array{run: LifecycleCleanroomRun, application: PermitApplication}
      */
     public function handle(
@@ -27,14 +30,17 @@ class LodgeLifecycleCleanroomApplication
         string $cleanroomRunId,
         bool $undertakingAccepted,
         ?UploadedFile $signatureFacsimile = null,
+        array $documents = [],
     ): array {
         $actor = $request->user();
         if (! $actor instanceof User) {
             throw new DomainException('The cleanroom applicant session is unavailable.');
         }
 
+        $storedDocuments = [];
+
         try {
-            $result = DB::transaction(function () use ($request, $data, $cleanroomRunId, $undertakingAccepted, $signatureFacsimile, $actor): array {
+            $result = DB::transaction(function () use ($request, $data, $cleanroomRunId, $undertakingAccepted, $signatureFacsimile, $documents, $actor, &$storedDocuments): array {
                 $run = LifecycleCleanroomRun::query()
                     ->where('public_id', $cleanroomRunId)
                     ->where('status', 'active')
@@ -49,7 +55,15 @@ class LodgeLifecycleCleanroomApplication
                     $this->assertOwnedApplication($run, $application, $actor);
                 } else {
                     $request->session()->put('lifecycle_cleanroom_intake_run_id', $run->id);
-                    $application = $this->captureIntake->create($request, $data);
+                    $application = $this->captureIntake->create(
+                        $request,
+                        $data,
+                        function (PermitApplication $draft) use ($documents, $actor, &$storedDocuments): void {
+                            foreach ($documents as $document) {
+                                $storedDocuments[] = $this->storeDocument->handle($draft, $document, $actor);
+                            }
+                        },
+                    );
                 }
 
                 $application = $this->submitApplication->handle($application, $actor, $undertakingAccepted, $signatureFacsimile);
@@ -58,6 +72,10 @@ class LodgeLifecycleCleanroomApplication
                 return ['run' => $run->fresh(), 'application' => $application];
             }, 3);
         } catch (\Throwable $exception) {
+            foreach ($storedDocuments as $document) {
+                Storage::disk($document->storage_disk)->delete($document->path);
+            }
+
             $run = LifecycleCleanroomRun::query()->where('public_id', $cleanroomRunId)->first();
             if ($run instanceof LifecycleCleanroomRun && $run->new_application_id === null) {
                 $request->session()->put('lifecycle_cleanroom_intake_run_id', $run->id);

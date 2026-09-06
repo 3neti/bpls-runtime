@@ -11,6 +11,7 @@ use App\Models\PermitApplication;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -23,14 +24,28 @@ class PermitApplicationDocumentController extends Controller
         StoreCitizenPermitApplicationDocument $storeDocument,
     ): RedirectResponse {
         $application = $this->ownedApplication($request, $permitApplication);
+        $file = $request->file('file');
+        $documentType = $request->validated('document_type');
+
+        if (! $file instanceof UploadedFile || ! is_string($documentType)) {
+            return back()->withErrors(['document' => 'Choose a configured document type and file.']);
+        }
 
         try {
-            $storeDocument->handle($application, $request->validated(), $request->user());
+            $storeDocument->handle($application, [
+                'document_type' => $documentType,
+                'file' => $file,
+            ], $request->user());
         } catch (DomainException $exception) {
             return back()->withErrors(['document' => $exception->getMessage()]);
         }
 
-        return to_route('citizen.permit-applications.show', $application)
+        return to_route(
+            $request->validated('return_to') === 'edit'
+                ? 'citizen.permit-applications.edit'
+                : 'citizen.permit-applications.show',
+            $application,
+        )
             ->with('status', 'Supporting document added to your draft.');
     }
 
@@ -67,7 +82,12 @@ class PermitApplicationDocumentController extends Controller
             return back()->withErrors(['document' => $exception->getMessage()]);
         }
 
-        return to_route('citizen.permit-applications.show', $application)
+        return to_route(
+            $request->string('return_to')->value() === 'edit'
+                ? 'citizen.permit-applications.edit'
+                : 'citizen.permit-applications.show',
+            $application,
+        )
             ->with('status', 'Applicant document removed from the draft.');
     }
 

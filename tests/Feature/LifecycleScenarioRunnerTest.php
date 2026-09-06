@@ -914,7 +914,7 @@ test('citizen permit draft document scenario audits browser upload against priva
         $artifactStore->rootRelativePath().'/'.$expectedDocument['fixture_path'],
     );
     $document = app(StoreCitizenPermitApplicationDocument::class)->handle($application, [
-        'label' => $expectedDocument['label'],
+        'document_type' => $expectedDocument['document_type'],
         'file' => new UploadedFile(
             $fixturePath,
             $expectedDocument['original_name'],

@@ -30,16 +30,19 @@ class PermitApplicationDocument extends Model
     /** @use HasFactory<PermitApplicationDocumentFactory> */
     use HasFactory;
 
+    /** @return BelongsTo<PermitApplication, $this> */
     public function permitApplication(): BelongsTo
     {
         return $this->belongsTo(PermitApplication::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function uploadedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'uploaded_by_id');
     }
 
+    /** @return BelongsTo<Media, $this> */
     public function media(): BelongsTo
     {
         return $this->belongsTo(Media::class);
