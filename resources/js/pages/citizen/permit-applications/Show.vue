@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, setLayoutProps, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, setLayoutProps, useForm } from '@inertiajs/vue3';
 import {
     ArrowLeft,
     Banknote,
@@ -24,11 +24,13 @@ import {
     submit,
 } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
 import {
+    destroy as destroyDocument,
     download as downloadDocument,
     store as storeDocument,
 } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationDocumentController';
 import InputError from '@/components/InputError.vue';
 import IpilExecutableDocument from '@/components/permit-applications/IpilExecutableDocument.vue';
+import SignatureFacsimileCapture from '@/components/SignatureFacsimileCapture.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -75,6 +77,7 @@ type PermitApplication = {
     documents: {
         id: number;
         label: string;
+        document_type: string | null;
         original_name: string;
         mime_type: string;
         size_bytes: number;
@@ -222,11 +225,13 @@ const props = defineProps<{
 
 const documentForm = useForm({
     label: '',
+    document_type: 'other',
     file: null as File | null,
     remarks: '',
 });
 const submissionForm = useForm({
     undertaking_accepted: false,
+    signature_facsimile: null as File | null,
 });
 const isDraft = computed(() => props.permitApplication.draft_boundary.is_draft);
 
@@ -284,16 +289,30 @@ function uploadDocument(): void {
     });
 }
 
+function removeDocument(documentId: number): void {
+    router.delete(
+        destroyDocument.url({
+            permitApplication: props.permitApplication.id,
+            document: documentId,
+        }),
+        { preserveScroll: true },
+    );
+}
+
 function documentBoundaryError(): string | undefined {
     return (documentForm.errors as Record<string, string | undefined>).document;
 }
 
 function submitApplication(): void {
-    if (!submissionForm.undertaking_accepted) {
+    if (
+        !submissionForm.undertaking_accepted ||
+        !submissionForm.signature_facsimile
+    ) {
         return;
     }
 
     submissionForm.post(submit.url(props.permitApplication.id), {
+        forceFormData: true,
         preserveScroll: true,
     });
 }
@@ -438,6 +457,11 @@ function blockerLabel(blocker: string): string {
                 <InputError
                     :message="submissionForm.errors.undertaking_accepted"
                 />
+                <SignatureFacsimileCapture
+                    v-if="permitApplication.can_submit"
+                    :error="submissionForm.errors.signature_facsimile"
+                    @selected="submissionForm.signature_facsimile = $event"
+                />
 
                 <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                     <Button
@@ -446,7 +470,8 @@ function blockerLabel(blocker: string): string {
                         data-testid="citizen-submit-application"
                         :disabled="
                             submissionForm.processing ||
-                            !submissionForm.undertaking_accepted
+                            !submissionForm.undertaking_accepted ||
+                            !submissionForm.signature_facsimile
                         "
                         @click="submitApplication"
                     >
@@ -1730,6 +1755,31 @@ function blockerLabel(blocker: string): string {
                         class="md:col-span-2"
                     />
                     <div class="grid gap-2">
+                        <Label for="citizen-document-type">Document type</Label>
+                        <select
+                            id="citizen-document-type"
+                            v-model="documentForm.document_type"
+                            class="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                            <option value="dti_registration">
+                                DTI registration
+                            </option>
+                            <option value="sec_registration">
+                                SEC registration
+                            </option>
+                            <option value="bir_registration">
+                                BIR registration
+                            </option>
+                            <option value="barangay_clearance">
+                                Barangay clearance
+                            </option>
+                            <option value="other">Other</option>
+                        </select>
+                        <InputError
+                            :message="documentForm.errors.document_type"
+                        />
+                    </div>
+                    <div class="grid gap-2">
                         <Label for="citizen-document-label"
                             >Document label</Label
                         >
@@ -1832,6 +1882,14 @@ function blockerLabel(blocker: string): string {
                                 Download
                             </a>
                         </Button>
+                        <Button
+                            v-if="permitApplication.can_upload_documents"
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            @click="removeDocument(document.id)"
+                            >Remove</Button
+                        >
                     </li>
                 </ul>
             </section>

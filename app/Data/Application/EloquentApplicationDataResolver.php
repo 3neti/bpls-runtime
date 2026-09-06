@@ -3,6 +3,7 @@
 namespace App\Data\Application;
 
 use App\Actions\BuildMunicipalScheduleOfFees;
+use App\Actions\BuildScheduleOfPayment;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\ProjectPermitReadiness;
@@ -17,11 +18,14 @@ use App\Integrations\QrPhPaymentArtifactCache;
 use App\LifecycleScenarios\LifecycleCleanroomDefinition;
 use App\Models\Assessment;
 use App\Models\BusinessPermitEvaluation;
+use App\Models\CollectionAllocation;
 use App\Models\LifecycleCleanroomRun;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationDocument;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
+use App\Models\TreasuryLineItem;
+use App\Models\TreasuryLineOfBusinessAssignment;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -47,16 +51,20 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         private readonly ResolveOfficialReceiptProfile $resolveOfficialReceiptProfile,
         private readonly BuildMunicipalScheduleOfFees $buildScheduleOfFees,
         private readonly LifecycleCleanroomDefinition $lifecycleCleanroomDefinition,
+        private readonly BuildScheduleOfPayment $buildScheduleOfPayment,
     ) {}
 
     public function resolve(PermitApplication $permitApplication, ?User $viewer = null): ApplicationData
     {
         $application = PermitApplication::query()->with([
-            'declaration',
+            'declaration.signatureEvidences.media',
             'business.owner',
             'submittedBy.role.permissions',
             'lines.lineOfBusiness',
-            'documents',
+            'documents.media',
+            'treasuryLineOfBusinessAssignments.lineOfBusiness',
+            'treasuryLineOfBusinessAssignments.assignedBy',
+            'treasuryLineOfBusinessAssignments.items.feeRule',
             'clearances.completedBy',
             'postPaymentOfficeCertifications.certifiedBy',
             'postPaymentOfficeCertifications.receipt',
@@ -67,7 +75,8 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             'paymentSchedules.lines',
             'paymentSchedules.treasuryCollections.allocations.paymentScheduleLine',
             'paymentSchedules.treasuryCollections.assessment',
-            'paymentSchedules.treasuryCollections.receipt.issuedBy',
+            'paymentSchedules.treasuryCollections.receipts.issuedBy',
+            'paymentSchedules.treasuryCollections.receipts.allocations.paymentScheduleLine',
             'paymentSchedules.xChangePayment.attempts',
             'paymentSchedules.xChangePayment.treasuryCollection.receipt',
             'bploRoutingDetermination.determinedBy',
@@ -85,8 +94,9 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         $offices = $this->offices($application, $evaluationProjection);
         $receipts = array_values($application->paymentSchedules
             ->flatMap(fn ($schedule) => $schedule->treasuryCollections)
-            ->map(fn (TreasuryCollection $collection): ?OfficialReceiptData => $this->officialReceipt($collection, $viewer))
-            ->filter()
+            ->flatMap(fn (TreasuryCollection $collection) => $collection->receipts)
+            ->filter(fn (Receipt $receipt): bool => $receipt->status === ReceiptStatus::Issued)
+            ->map(fn (Receipt $receipt): OfficialReceiptData => $this->officialReceipt($receipt, $viewer))
             ->values()
             ->all());
         $permit = $this->permit($application, $receipts);
@@ -96,6 +106,15 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         $affordances = $this->affordances($application, $viewer, $tasks);
         $workNotes = $this->workNotes($application, $evaluationProjection, $offices, $tasks, $receipts, $permit);
         $declaration = $application->declaration;
+        $priceReport = $assessment instanceof Assessment
+            ? (is_array($assessment->price_report_snapshot) ? $this->historicalPriceReport->forAssessment($assessment) : $this->legacyAssessmentLinesReport($assessment))
+            : null;
+        $scheduleOfPayment = $assessment instanceof Assessment
+            && is_array($priceReport)
+            && data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true
+            ? $this->buildScheduleOfPayment->handle($assessment, $priceReport)
+            : null;
+        $applicantDocuments = $application->documents->whereNull('removed_at')->filter(fn (PermitApplicationDocument $document): bool => $document->media !== null);
 
         return new ApplicationData(
             schema_version: ApplicationData::Schema,
@@ -125,7 +144,28 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'registration_number' => $application->business->registration_number,
                 'address' => $application->business->address,
                 'barangay' => $application->business->barangay,
+                'barangay_psgc_code' => $application->business->barangay_psgc_code,
                 'ownership_type' => $application->business->ownership_type,
+                'applicant_activity_description' => $application->business_activity_description,
+                'applicant_selects_official_lob' => false,
+                'treasury_assigned_lines_of_business' => $application->treasuryLineOfBusinessAssignments
+                    ->whereNull('removed_at')->map(fn (TreasuryLineOfBusinessAssignment $assignment): array => [
+                        'assignment_id' => $assignment->id,
+                        'line_of_business_id' => $assignment->line_of_business_id,
+                        'code' => $assignment->lineOfBusiness->code,
+                        'name' => $assignment->lineOfBusiness->name,
+                        'assigned_by' => $assignment->assignedBy->name,
+                        'assigned_at' => $assignment->assigned_at->toIso8601String(),
+                        'payment_items' => $assignment->items->whereNull('removed_at')->map(fn (TreasuryLineItem $item): array => [
+                            'id' => $item->id,
+                            'fee_rule_id' => $item->fee_rule_id,
+                            'code' => $item->code,
+                            'name' => $item->name,
+                            'default_amount_cents' => $item->default_amount_cents,
+                            'determined_amount_cents' => $item->determined_amount_cents,
+                            'variance_cents' => $item->variance_cents,
+                        ])->values()->all(),
+                    ])->values()->all(),
                 'lines_of_business' => $application->lines->map(function ($line): array {
                     return [
                         'application_line_id' => $line->id,
@@ -167,6 +207,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             offices: $offices,
             financial: $this->financial($assessment, $evaluationProjection),
             payment: $this->payment($application),
+            schedule_of_payment: $scheduleOfPayment,
             official_receipts: $receipts,
             post_payment: [
                 'state' => $application->postPaymentOfficeCertifications->isEmpty()
@@ -200,6 +241,35 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'size_bytes' => $document->size_bytes,
                 'uploaded_at' => $document->uploaded_at->toIso8601String(),
             ])->values()->all()),
+            applicant_documents: array_values($applicantDocuments->map(fn (PermitApplicationDocument $document): ApplicationDocumentData => new ApplicationDocumentData(
+                document_id: $document->id,
+                media_id: (int) $document->media_id,
+                document_type: $document->document_type ?? 'other',
+                label: $document->label,
+                original_name: $document->original_name,
+                mime_type: $document->mime_type,
+                size_bytes: $document->size_bytes,
+                checksum_sha256: (string) $document->checksum_sha256,
+                version: $document->version,
+                uploaded_by_id: (int) $document->uploaded_by_id,
+                uploaded_at: $document->uploaded_at->toIso8601String(),
+                remarks: $document->remarks,
+            ))->values()->all()),
+            signature_evidence: array_values(($declaration === null ? collect() : $declaration->signatureEvidences)->map(function ($evidence): SignatureEvidenceData {
+                $media = $evidence->getFirstMedia($evidence::FacsimileCollection);
+
+                return new SignatureEvidenceData(
+                    id: $evidence->id,
+                    signer_id: $evidence->signer_id,
+                    purpose: $evidence->purpose,
+                    signable_type: $evidence->signable_type,
+                    signable_id: $evidence->signable_id,
+                    captured_at: $evidence->captured_at->toIso8601String(),
+                    method: $evidence->method,
+                    evidence_digest: $evidence->evidence_digest,
+                    media_id: (int) $media?->id,
+                );
+            })->values()->all()),
             schedule_of_fees: $scheduleOfFees,
             attachments: $attachments,
             actor_context: new ActorContextData(
@@ -617,13 +687,10 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         return $tasks;
     }
 
-    private function officialReceipt(TreasuryCollection $collection, ?User $viewer): ?OfficialReceiptData
+    private function officialReceipt(Receipt $receipt, ?User $viewer): OfficialReceiptData
     {
-        $receipt = $collection->receipt;
-        if (! $receipt instanceof Receipt || $receipt->status !== ReceiptStatus::Issued) {
-            return null;
-        }
-        $sourceAssessment = $collection->getRelation('assessment');
+        $collection = $receipt->treasuryCollection;
+        $sourceAssessment = $collection->assessment;
         $profile = data_get($receipt->source_snapshot, 'official_receipt_profile');
         $profile = is_array($profile) && filled($profile)
             ? $profile
@@ -635,15 +702,17 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             accountable_form_number: (int) data_get($receipt->source_snapshot, 'official_receipt_profile.form.accountable_form_number', 51),
             form_revision: (string) data_get($receipt->source_snapshot, 'official_receipt_profile.form.revision', 'Revised June 2008'),
             copy_designation: (string) data_get($receipt->source_snapshot, 'af51.copy_designation', 'ORIGINAL'),
+            receipt_group_key: $receipt->receipt_group_key,
+            receipt_group_label: $receipt->receipt_group_label,
             receipt_number: $receipt->receipt_number,
-            series: data_get($receipt->source_snapshot, 'af51.series'),
+            series: $receipt->series ?? data_get($receipt->source_snapshot, 'af51.series'),
             numbering_authority: $receipt->numbering_authority,
             synthetic_number: str_contains(strtolower($receipt->numbering_authority), 'synthetic'),
             issued_on: $receipt->issued_at->toDateString(),
             agency: data_get($receipt->source_snapshot, 'af51.agency'),
             fund: data_get($receipt->source_snapshot, 'af51.fund'),
             payor: $collection->payer_name,
-            collection_rows: array_values($collection->allocations->map(fn ($allocation): array => [
+            collection_rows: array_values($receipt->allocations->map(fn (CollectionAllocation $allocation): array => [
                 'nature_of_collection' => (string) $allocation->paymentScheduleLine->name,
                 'account_code' => is_string(data_get($allocation->source_snapshot, 'account_code'))
                     ? data_get($allocation->source_snapshot, 'account_code')
@@ -671,9 +740,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'treasury_collection_id' => $collection->id,
                 'payment_schedule_id' => $collection->payment_schedule_id,
                 'assessment_id' => $collection->assessment_id,
-                'assessment_price_report_fingerprint' => $sourceAssessment instanceof Assessment
-                    ? $sourceAssessment->price_report_fingerprint
-                    : null,
+                'assessment_price_report_fingerprint' => $sourceAssessment->price_report_fingerprint,
             ],
         );
     }
@@ -686,7 +753,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         $readiness = $this->permitReadiness->handle($application);
         $legacyReadiness = $this->releaseReadiness->handle($application);
         $receipt = count($receipts) === 1 ? $receipts[0] : null;
-        $receiptBound = $receipt instanceof OfficialReceiptData && filled($receipt->receipt_number);
+        $receiptBound = $receipts !== [] && (bool) data_get($readiness, 'prerequisites.complete_receipt_coverage', count($receipts) === 1);
         $ready = ($syntheticLifecycle ? $readiness['ready'] : $legacyReadiness['ready_for_authority_review']) && $receiptBound;
         $completion = $application->provisionalUatPermitCompletion;
         $issued = $completion?->issued_at !== null;
@@ -712,11 +779,13 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             business_name: $application->business->name,
             owner_operator: $application->business->owner->name,
             business_address: $this->permitBusinessAddress->handle($application),
-            lines_of_business: array_values($application->lines->map(function ($line): string {
-                return $line->line_of_business_id === null
-                    ? (string) data_get($line->metadata, 'line_of_business_name', 'Unresolved line of business')
-                    : $line->lineOfBusiness->name;
-            })->values()->all()),
+            lines_of_business: array_values(($application->treasuryLineOfBusinessAssignments->whereNull('removed_at')->isNotEmpty()
+                ? $application->treasuryLineOfBusinessAssignments->whereNull('removed_at')->map(fn ($assignment): string => $assignment->lineOfBusiness->name)
+                : $application->lines->map(function ($line): string {
+                    return $line->line_of_business_id === null
+                        ? (string) data_get($line->metadata, 'line_of_business_name', 'Unresolved line of business')
+                        : $line->lineOfBusiness->name;
+                }))->values()->all()),
             conditions: self::PermitConditions,
             issuing_authority: [
                 'office' => 'Municipal Mayor',
@@ -726,6 +795,13 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'real_mayor_login_or_signature_used' => false,
                 'production_authority' => false,
             ],
+            official_receipts: array_map(fn (OfficialReceiptData $officialReceipt): array => [
+                'receipt_group_key' => $officialReceipt->receipt_group_key,
+                'receipt_group_label' => $officialReceipt->receipt_group_label,
+                'receipt_number' => $officialReceipt->receipt_number,
+                'series' => $officialReceipt->series,
+                'amount_minor' => $officialReceipt->total_amount_minor,
+            ], $receipts),
             official_receipt_number: $receipt?->receipt_number,
             official_receipt_series: $receipt?->series,
             official_receipt_bound: $receiptBound,
@@ -743,12 +819,11 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 : ($issued
                     ? 'Issued synthetic cleanroom specimen awaiting separate BPLO release. Production authority and legal validity remain false.'
                     : ($receiptBound
-                        ? 'Official Receipt identity is bound. Every routing-derived post-payment certification must pass before synthetic issuance.'
-                        : 'Permit cannot be issued or released without a canonical Official Receipt number bound to it.')),
+                        ? 'All required Official Receipt identities are bound. Every routing-derived post-payment certification must pass before synthetic issuance.'
+                        : 'Permit cannot be issued or released until every required receipt group has a canonical Official Receipt.')),
             blockers: array_values(array_unique([
                 ...($syntheticLifecycle ? $readiness['blocked_by'] : $legacyReadiness['blocked_by']),
-                ...($receiptBound ? [] : ['official_receipt_number_binding']),
-                ...(count($receipts) > 1 ? ['official_receipt_binding_selection_policy'] : []),
+                ...($receiptBound ? [] : ['official_receipt_number_binding', 'complete_official_receipt_group_binding']),
             ])),
         );
     }

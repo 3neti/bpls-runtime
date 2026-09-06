@@ -20,6 +20,8 @@ final class OfficialReceiptData extends Data
         public readonly int $accountable_form_number,
         public readonly string $form_revision,
         public readonly string $copy_designation,
+        public readonly string $receipt_group_key,
+        public readonly string $receipt_group_label,
         public readonly string $receipt_number,
         public readonly ?string $series,
         public readonly string $numbering_authority,

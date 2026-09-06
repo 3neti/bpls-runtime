@@ -20,7 +20,7 @@ class BploRoutingDeterminationController extends Controller
             $recordRouting->handle(
                 $permitApplication,
                 $request->user(),
-                $request->validated('situational_context'),
+                $request->validated('situational_context') ?? 'Concerned offices selected by BPLO checklist.',
                 $request->validated('selected_work'),
             );
         } catch (LogicException $exception) {

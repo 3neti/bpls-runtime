@@ -6,8 +6,6 @@ use App\Models\PermitApplication;
 use App\Models\PermitApplicationDocument;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 
@@ -23,29 +21,41 @@ class StorePermitApplicationDocument
         }
 
         $file = $data['file'];
-        $extension = $file->extension();
-        $path = $file->storeAs(
-            "permit-applications/{$permitApplication->id}/documents",
-            Str::uuid().($extension === '' ? '' : ".{$extension}"),
-            'local',
-        );
-
-        if ($path === false) {
-            throw new RuntimeException('Unable to store the permit application document.');
+        $checksum = hash_file('sha256', $file->getRealPath());
+        if (! is_string($checksum)) {
+            throw new RuntimeException('Unable to checksum the permit application document.');
         }
+
+        $media = $permitApplication
+            ->addMedia($file)
+            ->preservingOriginal()
+            ->usingName($data['label'])
+            ->withCustomProperties([
+                'document_type' => $data['document_type'] ?? 'other',
+                'checksum_sha256' => $checksum,
+                'uploaded_by_id' => $uploadedBy->id,
+                'semantic_classification' => 'applicant_supplied_evidence',
+            ])
+            ->toMediaCollection(PermitApplication::ApplicationDocumentsCollection, 'local');
 
         try {
             return $permitApplication->documents()->create([
                 'uploaded_by_id' => $uploadedBy->id,
+                'media_id' => $media->id,
                 'label' => $data['label'],
-                'original_name' => $file->getClientOriginalName(),
+                'document_type' => $data['document_type'] ?? 'other',
+                'version' => $this->nextVersion($permitApplication, (string) ($data['document_type'] ?? 'other')),
+                'original_name' => $media->file_name,
                 'storage_disk' => 'local',
-                'path' => $path,
-                'mime_type' => $file->getMimeType() ?? 'application/octet-stream',
-                'size_bytes' => (int) $file->getSize(),
+                'path' => $media->getPathRelativeToRoot(),
+                'mime_type' => $media->mime_type,
+                'size_bytes' => $media->size,
+                'checksum_sha256' => $checksum,
                 'remarks' => $data['remarks'] ?? null,
                 'source_snapshot' => [
-                    'classification' => 'supporting_evidence',
+                    'classification' => 'applicant_supplied_evidence',
+                    'media_id' => $media->id,
+                    'media_collection' => PermitApplication::ApplicationDocumentsCollection,
                     'requirement_catalog_status' => 'unresolved',
                     'submitted_via' => $data['source'] ?? 'staff_intake',
                     'policy_note' => 'Document receipt does not establish statutory sufficiency, approval, or permit eligibility.',
@@ -53,9 +63,14 @@ class StorePermitApplicationDocument
                 'uploaded_at' => now(),
             ])->load('uploadedBy');
         } catch (Throwable $exception) {
-            Storage::disk('local')->delete($path);
+            $media->delete();
 
             throw $exception;
         }
+    }
+
+    private function nextVersion(PermitApplication $application, string $documentType): int
+    {
+        return ((int) $application->documents()->where('document_type', $documentType)->max('version')) + 1;
     }
 }

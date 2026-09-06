@@ -35,6 +35,7 @@ use App\Http\Controllers\Staff\FeeMatrixController;
 use App\Http\Controllers\Staff\FeeRuleController;
 use App\Http\Controllers\Staff\MunicipalityConfigurationController;
 use App\Http\Controllers\Staff\MunicipalServiceCatalogController;
+use App\Http\Controllers\Staff\OfficePaymentOrderController;
 use App\Http\Controllers\Staff\PaidEstablishmentReportController;
 use App\Http\Controllers\Staff\PaymentScheduleCollectionController;
 use App\Http\Controllers\Staff\PaymentSummaryReportController;
@@ -50,6 +51,7 @@ use App\Http\Controllers\Staff\RolePermissionController;
 use App\Http\Controllers\Staff\StoryboardController;
 use App\Http\Controllers\Staff\TopEstablishmentTaxDueReportController;
 use App\Http\Controllers\Staff\TotalCapitalGrossSummaryReportController;
+use App\Http\Controllers\Staff\TreasuryLineOfBusinessController;
 use App\Http\Controllers\Staff\UnpaidEstablishmentReportController;
 use App\Http\Controllers\Staff\UserDirectoryController;
 use App\Http\Controllers\StakeholderPreviewController;
@@ -179,6 +181,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.documents.store');
         Route::get('permit-applications/{permitApplication}/documents/{document}/download', [CitizenPermitApplicationDocumentController::class, 'download'])
             ->name('permit-applications.documents.download');
+        Route::delete('permit-applications/{permitApplication}/documents/{document}', [CitizenPermitApplicationDocumentController::class, 'destroy'])
+            ->name('permit-applications.documents.destroy');
         Route::get('payment-schedules/{paymentSchedule}', [CitizenPaymentScheduleController::class, 'show'])
             ->name('payment-schedules.show');
         Route::get('permit-applications/{permitApplication}/evaluation', [CitizenBusinessPermitEvaluationController::class, 'show'])
@@ -206,6 +210,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.evaluation.show');
         Route::post('permit-applications/{permitApplication}/bplo-routing', [BploRoutingDeterminationController::class, 'store'])
             ->name('permit-applications.bplo-routing.store');
+        Route::post('permit-applications/{permitApplication}/office-payment-orders/{work}', [OfficePaymentOrderController::class, 'store'])
+            ->name('permit-applications.office-payment-orders.store');
+        Route::post('permit-applications/{permitApplication}/treasury-lines-of-business', [TreasuryLineOfBusinessController::class, 'store'])
+            ->name('permit-applications.treasury-lines-of-business.store');
         Route::post('permit-applications/{permitApplication}/evaluation', [BusinessPermitEvaluationController::class, 'initialize'])
             ->name('permit-applications.evaluation.initialize');
         Route::post('permit-applications/{permitApplication}/evaluation/refresh', [BusinessPermitEvaluationController::class, 'refresh'])

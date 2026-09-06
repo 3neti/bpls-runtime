@@ -11,6 +11,7 @@ final class BusinessPermitData extends Data
     /**
      * @param  list<string>  $lines_of_business
      * @param  list<string>  $conditions
+     * @param  list<array{receipt_group_key: string, receipt_group_label: string, receipt_number: string, series: ?string, amount_minor: int}>  $official_receipts
      * @param  array{office: string, name: ?string, authority_status: string, signature_reference: ?string, real_mayor_login_or_signature_used: bool, production_authority: bool}  $issuing_authority
      * @param  array{reference: string, status: string, url: string, view_url: string}  $verification
      * @param  list<string>  $blockers
@@ -33,6 +34,7 @@ final class BusinessPermitData extends Data
         public readonly array $lines_of_business,
         public readonly array $conditions,
         public readonly array $issuing_authority,
+        public readonly array $official_receipts,
         public readonly ?string $official_receipt_number,
         public readonly ?string $official_receipt_series,
         public readonly bool $official_receipt_bound,

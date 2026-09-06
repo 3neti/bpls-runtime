@@ -92,12 +92,15 @@ class RecordBploRoutingDetermination
                 throw new LogicException('BPLO must record at least one selected concerned office and its required work.');
             }
 
-            if (blank($situationalContext)) {
+            $commissionedPath = data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true;
+            if (blank($situationalContext) && ! $commissionedPath) {
                 throw new LogicException('BPLO must record the situational context for its routing determination.');
             }
 
+            $configuredOffices = collect(config('ipil_references.concerned_offices.items', []))->keyBy('code');
+
             $availableLines = $application->lines->keyBy('id');
-            $normalizedWork = collect($selectedWork)->map(function (array $work) use ($application, $availableLines, $origin): array {
+            $normalizedWork = collect($selectedWork)->map(function (array $work) use ($application, $availableLines, $origin, $commissionedPath, $configuredOffices): array {
                 $applicationLineId = Arr::get($work, 'permit_application_line_id');
                 $applicationLine = $applicationLineId === null ? null : $availableLines->get($applicationLineId);
 
@@ -106,15 +109,18 @@ class RecordBploRoutingDetermination
                 }
 
                 $officeCode = Str::of($work['office_code'])->trim()->lower()->replaceMatches('/[^a-z0-9_-]+/', '-')->trim('-')->toString();
-                if ($officeCode === '' || blank($work['office_label']) || blank($work['situational_reason']) || blank($work['required_work'])) {
+                if ($officeCode === '' || blank($work['office_label']) || ((! $commissionedPath) && (blank($work['situational_reason']) || blank($work['required_work'])))) {
                     throw new LogicException('Each BPLO route requires an office, situational reason, and required work.');
+                }
+                if ($commissionedPath && ! $configuredOffices->has($officeCode)) {
+                    throw new LogicException('BPLO may select only an office from the configured concerned-office reference list.');
                 }
 
                 return [
                     'office_code' => $officeCode,
                     'office_label' => Str::squish($work['office_label']),
-                    'situational_reason' => Str::squish($work['situational_reason']),
-                    'required_work' => Str::squish($work['required_work']),
+                    'situational_reason' => Str::squish($work['situational_reason'] ?? 'Selected by BPLO checklist.'),
+                    'required_work' => Str::squish($work['required_work'] ?? 'Prepare office Payment Order.'),
                     'permit_application_line_id' => $applicationLine?->id,
                     'line_of_business_id' => $applicationLine?->line_of_business_id,
                     'context_snapshot' => [

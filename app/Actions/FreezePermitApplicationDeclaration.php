@@ -14,7 +14,7 @@ class FreezePermitApplicationDeclaration
     public function handle(PermitApplication $permitApplication, ?User $declaredBy = null): PermitApplicationDeclaration
     {
         $application = PermitApplication::query()
-            ->with(['business.owner', 'lines.lineOfBusiness', 'declaration'])
+            ->with(['business.owner', 'lines.lineOfBusiness', 'declaration', 'documents.media'])
             ->lockForUpdate()
             ->findOrFail($permitApplication->id);
 
@@ -51,9 +51,35 @@ class FreezePermitApplicationDeclaration
             ]);
         }
 
+        $documentManifest = $application->documents
+            ->whereNull('removed_at')
+            ->sortBy('id')
+            ->map(fn ($document): array => [
+                'document_id' => $document->id,
+                'media_id' => $document->media_id,
+                'document_type' => $document->document_type ?? 'other',
+                'label' => $document->label,
+                'original_name' => $document->original_name,
+                'mime_type' => $document->mime_type,
+                'size_bytes' => $document->size_bytes,
+                'checksum_sha256' => $document->checksum_sha256,
+                'version' => $document->version,
+                'uploaded_by_id' => $document->uploaded_by_id,
+                'uploaded_at' => $document->uploaded_at->toIso8601String(),
+            ])->values()->all();
+        $manifestDigest = hash('sha256', json_encode($this->normalize($documentManifest), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+
         $snapshot = [
             ...$draft,
-            'lines_of_business' => $application->lines->map(fn ($line): array => [
+            'applicant_business_activity_description' => $application->business_activity_description,
+            'applicant_documents_manifest' => [
+                'schema_version' => 'bpls.application-document-manifest.v1',
+                'declarant_id' => $declaredBy instanceof User ? $declaredBy->id : $application->submitted_by_id,
+                'frozen_at' => ($application->submitted_at ?? now())->toIso8601String(),
+                'digest' => $manifestDigest,
+                'documents' => $documentManifest,
+            ],
+            'lines_of_business' => data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true ? [] : $application->lines->map(fn ($line): array => [
                 'code' => $line->lineOfBusiness?->code,
                 'name' => $line->lineOfBusiness?->name,
                 'number_of_units' => $line->quantity,

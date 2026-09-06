@@ -86,10 +86,13 @@ class RecordPaymentScheduleCollection
 
                     $allocatedCents = min($remainingCents, $lineBalanceCents);
 
+                    [$receiptGroupKey, $receiptGroupLabel] = $this->receiptGroup($line);
                     $collection->allocations()->create([
                         'payment_schedule_line_id' => $line->id,
+                        'receipt_group_key' => $receiptGroupKey,
+                        'receipt_group_label' => $receiptGroupLabel,
                         'amount_cents' => $allocatedCents,
-                        'source_snapshot' => $this->allocationSnapshot($line, $allocatedCents),
+                        'source_snapshot' => $this->allocationSnapshot($line, $allocatedCents, $receiptGroupKey, $receiptGroupLabel),
                     ]);
 
                     $line->paid_amount_cents += $allocatedCents;
@@ -153,7 +156,7 @@ class RecordPaymentScheduleCollection
     /**
      * @return array<string, mixed>
      */
-    private function allocationSnapshot(PaymentScheduleLine $line, int $allocatedCents): array
+    private function allocationSnapshot(PaymentScheduleLine $line, int $allocatedCents, string $receiptGroupKey, string $receiptGroupLabel): array
     {
         return [
             'payment_schedule_line_id' => $line->id,
@@ -164,6 +167,33 @@ class RecordPaymentScheduleCollection
             'amount_cents' => $line->amount_cents,
             'paid_before_cents' => $line->paid_amount_cents,
             'allocated_cents' => $allocatedCents,
+            'receipt_group_key' => $receiptGroupKey,
+            'receipt_group_label' => $receiptGroupLabel,
         ];
+    }
+
+    /** @return array{string, string} */
+    private function receiptGroup(PaymentScheduleLine $line): array
+    {
+        $nelsonPath = data_get($line->paymentSchedule->permitApplication->metadata, 'nelson_reconciliation_v1.commissioned_path') === true;
+        if (! $nelsonPath) {
+            return ['municipal_consolidated', 'Municipal Collection'];
+        }
+
+        $officeCode = data_get($line->source_snapshot, 'rule_snapshot.office_code')
+            ?? data_get($line->source_snapshot, 'rule_snapshot.source_snapshot.office_code');
+        if (is_string($officeCode) && $officeCode !== '') {
+            $officeLabel = data_get($line->source_snapshot, 'rule_snapshot.office_label')
+                ?? data_get($line->source_snapshot, 'rule_snapshot.source_snapshot.office_label')
+                ?? str($officeCode)->headline()->toString();
+
+            return ['office:'.$officeCode, (string) $officeLabel];
+        }
+
+        if ($line->line_of_business_id !== null) {
+            return ['treasury:lob:'.$line->line_of_business_id, 'Treasury / '.$line->lineOfBusiness->name];
+        }
+
+        return ['treasury:application', 'Treasury / Application'];
     }
 }

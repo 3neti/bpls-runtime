@@ -17,6 +17,7 @@ abstract class PermitApplicationDocumentRequest extends FormRequest
     {
         return [
             'label' => ['required', 'string', 'max:120'],
+            'document_type' => ['nullable', 'string', 'max:80'],
             'file' => ['required', File::types(['pdf', 'jpg', 'jpeg', 'png'])->max(10 * 1024)],
             'remarks' => ['nullable', 'string', 'max:1000'],
         ];

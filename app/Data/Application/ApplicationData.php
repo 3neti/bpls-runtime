@@ -16,6 +16,8 @@ final class ApplicationData extends Data
      * @param  array<string, mixed>  $financial
      * @param  array<string, mixed>  $payment
      * @param  list<OfficialReceiptData>  $official_receipts
+     * @param  list<ApplicationDocumentData>  $applicant_documents
+     * @param  list<SignatureEvidenceData>  $signature_evidence
      * @param  array<string, mixed>  $post_payment
      * @param  list<array<string, mixed>>  $documents
      * @param  list<ApplicationAttachmentData>  $attachments
@@ -31,10 +33,13 @@ final class ApplicationData extends Data
         public readonly array $offices,
         public readonly array $financial,
         public readonly array $payment,
+        public readonly ?ScheduleOfPaymentData $schedule_of_payment,
         public readonly array $official_receipts,
         public readonly array $post_payment,
         public readonly BusinessPermitData $permit,
         public readonly array $documents,
+        public readonly array $applicant_documents,
+        public readonly array $signature_evidence,
         public readonly MunicipalScheduleOfFeesData $schedule_of_fees,
         public readonly array $attachments,
         public readonly ActorContextData $actor_context,

@@ -86,6 +86,7 @@ class PermitApplicationController extends Controller
                 )
                 ->orderBy('name')
                 ->get(['id', 'name', 'code']),
+            'barangays' => config('ipil_references.barangays.items', []),
             'applicant' => [
                 'name' => $request->user()->name,
                 'email' => $request->user()->email,
@@ -113,6 +114,7 @@ class PermitApplicationController extends Controller
                     $request->validatedForPersistence(),
                     $cleanroomRunId,
                     $request->boolean('undertaking_accepted'),
+                    $request->file('signature_facsimile'),
                 );
 
                 return to_route('stakeholder-preview.lifecycle-cleanroom-application.show', $lodging['run'])
@@ -148,6 +150,7 @@ class PermitApplicationController extends Controller
                 ->availableToMunicipalCatalog()
                 ->orderBy('name')
                 ->get(['id', 'name', 'code']),
+            'barangays' => config('ipil_references.barangays.items', []),
             'applicant' => [
                 'name' => $request->user()->name,
                 'email' => $request->user()->email,
@@ -186,6 +189,7 @@ class PermitApplicationController extends Controller
                 $application,
                 $request->user(),
                 $request->boolean('undertaking_accepted'),
+                $request->file('signature_facsimile'),
             );
         } catch (DomainException $exception) {
             return back()->withErrors(['submission' => $exception->getMessage()]);
@@ -249,6 +253,7 @@ class PermitApplicationController extends Controller
                     'registration_number' => data_get($declaration, 'registration.number') ?? $application->business->registration_number,
                     'address' => $declaredBusinessAddress ?? $application->business->address,
                     'barangay' => $declaredBusinessAddress === null ? $application->business->barangay : null,
+                    'activity_description' => $application->business_activity_description,
                 ],
                 'business_permit_evaluation_url' => $application->businessPermitEvaluation !== null
                     && $request->user()->can(UserPermission::ViewOwnBusinessPermitEvaluations->value)
@@ -266,9 +271,10 @@ class PermitApplicationController extends Controller
                     'started_on' => $line->started_on?->toDateString(),
                 ])->values(),
                 'documents' => $canViewDocuments
-                    ? $application->documents->map(fn ($document): array => [
+                    ? $application->documents->whereNull('removed_at')->map(fn ($document): array => [
                         'id' => $document->id,
                         'label' => $document->label,
+                        'document_type' => $document->document_type,
                         'original_name' => $document->original_name,
                         'mime_type' => $document->mime_type,
                         'size_bytes' => $document->size_bytes,
@@ -280,7 +286,7 @@ class PermitApplicationController extends Controller
                     ])->values()
                     : [],
                 'documentary_readiness' => [
-                    'received_document_count' => $canViewDocuments ? $application->documents->count() : 0,
+                    'received_document_count' => $canViewDocuments ? $application->documents->whereNull('removed_at')->count() : 0,
                     'requirement_catalog_status' => 'unresolved',
                     'submission_readiness' => 'not_determined',
                     'statement' => 'Documents are retained as supporting evidence. Their statutory sufficiency and the requirements for formal submission have not yet been determined.',
@@ -418,7 +424,7 @@ class PermitApplicationController extends Controller
                 'business.owner',
                 'submittedBy',
                 'lines.lineOfBusiness',
-                'documents' => fn ($query) => $query->latest('uploaded_at')->latest('id'),
+                'documents' => fn ($query) => $query->whereNull('removed_at')->with('media')->latest('uploaded_at')->latest('id'),
                 'assessments' => fn ($query) => $query
                     ->whereNull('superseded_at')
                     ->with(['decision', 'treasuryCounterCheck'])
@@ -505,6 +511,8 @@ class PermitApplicationController extends Controller
             'registration_number' => $business->registration_number,
             'business_address' => $business->address,
             'barangay' => $business->barangay,
+            'barangay_psgc_code' => $business->barangay_psgc_code,
+            'business_activity_description' => $permitApplication->business_activity_description,
             'ownership_type' => $business->ownership_type,
             'organization_name' => $business->organization_name,
             'occupancy' => $business->occupancy,

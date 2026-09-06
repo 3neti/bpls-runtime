@@ -5,14 +5,18 @@ namespace App\Models;
 use App\Enums\ReceiptStatus;
 use Database\Factories\ReceiptFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
  * @property int $treasury_collection_id
+ * @property string $receipt_group_key
+ * @property string $receipt_group_label
  * @property int $payment_schedule_id
  * @property int $permit_application_id
  * @property int $assessment_id
@@ -20,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property ReceiptStatus $status
  * @property string $numbering_authority
  * @property string $receipt_number
+ * @property string|null $series
  * @property int $amount_cents
  * @property Carbon $issued_at
  * @property string|null $remarks
@@ -32,8 +37,9 @@ use Illuminate\Support\Carbon;
  * @property-read PermitApplication $permitApplication
  * @property-read Assessment $assessment
  * @property-read User|null $issuedBy
+ * @property-read Collection<int, CollectionAllocation> $allocations
  */
-#[Fillable(['treasury_collection_id', 'payment_schedule_id', 'permit_application_id', 'assessment_id', 'issued_by_id', 'status', 'numbering_authority', 'receipt_number', 'amount_cents', 'issued_at', 'remarks', 'source_snapshot', 'legacy_source_id'])]
+#[Fillable(['treasury_collection_id', 'receipt_group_key', 'receipt_group_label', 'payment_schedule_id', 'permit_application_id', 'assessment_id', 'issued_by_id', 'status', 'numbering_authority', 'receipt_number', 'series', 'amount_cents', 'issued_at', 'remarks', 'source_snapshot', 'legacy_source_id'])]
 class Receipt extends Model
 {
     /** @use HasFactory<ReceiptFactory> */
@@ -72,6 +78,12 @@ class Receipt extends Model
     public function issuedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'issued_by_id');
+    }
+
+    /** @return HasMany<CollectionAllocation, $this> */
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(CollectionAllocation::class);
     }
 
     /**

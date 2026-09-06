@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Citizen;
 
+use App\Actions\RemoveCitizenPermitApplicationDocument;
 use App\Actions\StoreCitizenPermitApplicationDocument;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
@@ -40,11 +41,34 @@ class PermitApplicationDocumentController extends Controller
         $application = $this->ownedApplication($request, $permitApplication);
         $supportingDocument = $application->documents()->findOrFail($document);
 
+        if ($supportingDocument->media !== null) {
+            return Storage::disk($supportingDocument->media->disk)->download(
+                $supportingDocument->media->getPathRelativeToRoot(),
+                $supportingDocument->original_name,
+                ['Content-Type' => $supportingDocument->mime_type],
+            );
+        }
+
         return Storage::disk($supportingDocument->storage_disk)->download(
             $supportingDocument->path,
             $supportingDocument->original_name,
             ['Content-Type' => $supportingDocument->mime_type],
         );
+    }
+
+    public function destroy(Request $request, int $permitApplication, int $document, RemoveCitizenPermitApplicationDocument $removeDocument): RedirectResponse
+    {
+        $application = $this->ownedApplication($request, $permitApplication);
+        $supportingDocument = $application->documents()->findOrFail($document);
+
+        try {
+            $removeDocument->handle($supportingDocument, $request->user());
+        } catch (DomainException $exception) {
+            return back()->withErrors(['document' => $exception->getMessage()]);
+        }
+
+        return to_route('citizen.permit-applications.show', $application)
+            ->with('status', 'Applicant document removed from the draft.');
     }
 
     private function ownedApplication(Request $request, int $permitApplication): PermitApplication

@@ -15,7 +15,8 @@ class ProjectPermitReadiness
         $permitApplication->loadMissing([
             'bploRoutingDetermination.works',
             'postPaymentOfficeCertifications',
-            'paymentSchedules.treasuryCollections.receipt.treasuryCollection',
+            'paymentSchedules.treasuryCollections.allocations',
+            'paymentSchedules.treasuryCollections.receipts.treasuryCollection',
             'assessments.decision',
         ]);
 
@@ -23,12 +24,24 @@ class ProjectPermitReadiness
             ->pluck('office_code')->unique()->sort()->values() ?? collect();
         $certifications = $permitApplication->postPaymentOfficeCertifications;
         $certifiedOffices = $certifications->where('status', 'completed')->where('result', 'certified')->pluck('office_code')->unique()->sort()->values();
-        $issuedReceipts = $permitApplication->paymentSchedules
+        $collections = $permitApplication->paymentSchedules
             ->flatMap(fn ($schedule) => $schedule->treasuryCollections)
-            ->pluck('receipt')
-            ->filter(fn ($receipt): bool => $receipt instanceof Receipt && $receipt->status === ReceiptStatus::Issued && filled($receipt->receipt_number))
-            ->values();
-        $receipt = $issuedReceipts->count() === 1 ? $issuedReceipts->first() : null;
+            ->sortByDesc('id')->values();
+        $collection = $collections->first();
+        $requiredReceiptGroups = $collection?->allocations->pluck('receipt_group_key')->unique()->sort()->values() ?? collect();
+        if ($collection !== null && $requiredReceiptGroups->isEmpty()) {
+            $requiredReceiptGroups = collect(['municipal_consolidated']);
+        }
+        $issuedReceipts = $collection?->receipts
+            ->filter(fn (Receipt $receipt): bool => $receipt->status === ReceiptStatus::Issued && filled($receipt->receipt_number))
+            ->values() ?? collect();
+        $issuedReceiptGroups = $issuedReceipts->pluck('receipt_group_key')->unique()->sort()->values();
+        $receiptTotal = (int) $issuedReceipts->sum('amount_cents');
+        $completeReceiptCoverage = $collection !== null
+            && $requiredReceiptGroups->isNotEmpty()
+            && $requiredReceiptGroups->diff($issuedReceiptGroups)->isEmpty()
+            && $issuedReceiptGroups->diff($requiredReceiptGroups)->isEmpty()
+            && $receiptTotal === $collection->amount_cents;
         $assessment = $permitApplication->assessments->whereNull('superseded_at')->sortByDesc('sequence')->first();
         $syntheticAuthority = data_get($permitApplication->metadata, 'lifecycle_cleanroom.semantic_classification') === 'synthetic_only'
             && data_get($permitApplication->metadata, 'lifecycle_cleanroom.production_liability') === false;
@@ -37,9 +50,11 @@ class ProjectPermitReadiness
             'application_eligible' => $permitApplication->submitted_at !== null
                 && ! $permitApplication->isHistoricalEvidenceOnly()
                 && $assessment?->decision?->action === AssessmentDecisionAction::Approved,
-            'canonical_collection' => $receipt?->treasuryCollection !== null,
-            'issued_official_receipt' => $receipt !== null,
-            'official_receipt_number_bound' => filled($receipt?->receipt_number),
+            'canonical_collection' => $collection !== null,
+            'issued_official_receipts' => $issuedReceipts->isNotEmpty(),
+            'issued_official_receipt' => $issuedReceipts->isNotEmpty(),
+            'complete_receipt_coverage' => $completeReceiptCoverage,
+            'official_receipt_totals_reconcile' => $collection !== null && $receiptTotal === $collection->amount_cents,
             'post_payment_certifications_commissioned' => $requiredOffices->isNotEmpty()
                 && $certifications->count() === $requiredOffices->count(),
             'all_required_post_payment_certifications' => $requiredOffices->isNotEmpty()
@@ -56,8 +71,15 @@ class ProjectPermitReadiness
             'blocked_by' => array_keys(array_filter($prerequisites, fn (bool $passed): bool => ! $passed)),
             'required_offices' => $requiredOffices->all(),
             'certified_offices' => $certifiedOffices->all(),
-            'receipt_id' => $receipt?->id,
-            'receipt_number' => $receipt?->receipt_number,
+            'required_receipt_groups' => $requiredReceiptGroups->all(),
+            'issued_receipt_groups' => $issuedReceiptGroups->all(),
+            'receipt_total_cents' => $receiptTotal,
+            'collection_total_cents' => $collection?->amount_cents,
+            'receipt_ids' => $issuedReceipts->pluck('id')->all(),
+            'receipt_numbers' => $issuedReceipts->pluck('receipt_number')->all(),
+            // Compatibility aliases for the pre-Nelson single-receipt projection.
+            'receipt_id' => $issuedReceipts->count() === 1 ? $issuedReceipts->first()?->id : null,
+            'receipt_number' => $issuedReceipts->count() === 1 ? $issuedReceipts->first()?->receipt_number : null,
             'semantic_classification' => $syntheticAuthority ? 'synthetic_only' : 'production_pending',
             'production_authority' => false,
         ];

@@ -8,6 +8,7 @@ use App\Models\PermitApplication;
 use App\Models\User;
 use App\Notifications\PermitApplicationReceived;
 use DomainException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -17,14 +18,16 @@ class SubmitCitizenPermitApplication
         private readonly FreezePermitApplicationDeclaration $freezeDeclaration,
         private readonly PermitApplicationStatusMutation $statusMutation,
         private readonly ArmBploRoutingSentinel $armRoutingSentinel,
+        private readonly CaptureSignatureEvidence $captureSignatureEvidence,
     ) {}
 
     public function handle(
         PermitApplication $permitApplication,
         User $submittedBy,
         bool $undertakingAccepted,
+        ?UploadedFile $signatureFacsimile = null,
     ): PermitApplication {
-        return DB::transaction(function () use ($permitApplication, $submittedBy, $undertakingAccepted): PermitApplication {
+        return DB::transaction(function () use ($permitApplication, $submittedBy, $undertakingAccepted, $signatureFacsimile): PermitApplication {
             if (! $undertakingAccepted) {
                 throw new DomainException('Confirm the Oath of Undertaking before submitting this application.');
             }
@@ -59,6 +62,11 @@ class SubmitCitizenPermitApplication
 
             if ($application->application_number !== null || $application->assessments()->exists()) {
                 throw new DomainException('This application has already entered a later municipal processing step.');
+            }
+
+            $commissionedPath = data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true;
+            if ($commissionedPath && ! $signatureFacsimile instanceof UploadedFile) {
+                throw new DomainException('Capture the applicant signature facsimile before lodging this Application.');
             }
 
             $occurredAt = now();
@@ -99,15 +107,15 @@ class SubmitCitizenPermitApplication
                 ],
             ];
 
-            $this->statusMutation->persistStatusConsequence($application, PermitApplicationStatus::Assessment, [
-                'submitted_at' => $occurredAt,
-                'application_number' => null,
-                'tracking_reference' => $trackingReference,
-                'metadata' => $metadata,
-            ]);
-
             $declaration = $this->freezeDeclaration->handle($application, $submittedBy);
-            $metadata = $application->metadata ?? [];
+            $signatureEvidence = $signatureFacsimile instanceof UploadedFile
+                ? $this->captureSignatureEvidence->handle(
+                    $declaration,
+                    $submittedBy,
+                    'applicant_lodging',
+                    $signatureFacsimile,
+                )
+                : null;
             $metadata['applicant_declaration'] = [
                 'id' => $declaration->id,
                 'snapshot_hash' => $declaration->snapshot_hash,
@@ -117,9 +125,25 @@ class SubmitCitizenPermitApplication
             $metadata['undertaking_confirmation']['declaration_snapshot_hash'] = $declaration->snapshot_hash;
             $metadata['undertaking_confirmation']['applicant_printed_name'] = data_get($declaration->snapshot, 'undertaking.applicant_printed_name');
             $metadata['undertaking_confirmation']['position_title'] = data_get($declaration->snapshot, 'undertaking.position_title');
-            $application->forceFill(['metadata' => $metadata])->save();
+            if ($signatureEvidence !== null) {
+                $metadata['undertaking_confirmation']['signature_evidence'] = [
+                    'id' => $signatureEvidence->id,
+                    'digest' => $signatureEvidence->evidence_digest,
+                    'method' => $signatureEvidence->method,
+                    'purpose' => $signatureEvidence->purpose,
+                ];
+            }
 
-            $this->armRoutingSentinel->handle($application);
+            $this->statusMutation->persistStatusConsequence($application, PermitApplicationStatus::Assessment, [
+                'submitted_at' => $occurredAt,
+                'application_number' => null,
+                'tracking_reference' => $trackingReference,
+                'metadata' => $metadata,
+            ]);
+
+            if (! $commissionedPath) {
+                $this->armRoutingSentinel->handle($application);
+            }
 
             $submittedBy->notify(new PermitApplicationReceived(
                 permitApplicationId: $application->id,

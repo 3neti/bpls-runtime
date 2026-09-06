@@ -123,12 +123,18 @@ final class BuildExecutablePermitApplicationDocument
                 'latest_collection' => $collections === [] ? null : $collections[array_key_last($collections)],
             ],
             'official_receipt_reference' => $receipts === [] ? null : $receipts[array_key_last($receipts)],
+            'official_receipt_packet' => [
+                'receipts' => $receipts,
+                'total_receipted_minor' => (int) collect($receipts)->sum('total_amount_minor'),
+                'receipt_count' => count($receipts),
+            ],
             'permit_reference' => [
                 'state' => data_get($permit, 'state'),
                 'permit_number' => data_get($permit, 'permit_number'),
                 'issued_on' => data_get($permit, 'issued_on'),
                 'valid_until' => data_get($permit, 'valid_until'),
                 'official_receipt_number' => data_get($permit, 'official_receipt_number'),
+                'official_receipts' => data_get($permit, 'official_receipts', []),
                 'verification_reference' => data_get($permit, 'verification.reference'),
             ],
             'permit' => [

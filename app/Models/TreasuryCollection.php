@@ -39,6 +39,7 @@ use Illuminate\Support\Collection;
  * @property-read User|null $receivedBy
  * @property-read Collection<int, CollectionAllocation> $allocations
  * @property-read Receipt|null $receipt
+ * @property-read Collection<int, Receipt> $receipts
  */
 #[Fillable(['payment_schedule_id', 'permit_application_id', 'assessment_id', 'received_by_id', 'status', 'channel', 'method', 'amount_cents', 'payer_name', 'reference_number', 'remarks', 'received_at', 'source_snapshot', 'legacy_source_id'])]
 class TreasuryCollection extends Model
@@ -85,6 +86,12 @@ class TreasuryCollection extends Model
     public function receipt(): HasOne
     {
         return $this->hasOne(Receipt::class);
+    }
+
+    /** @return HasMany<Receipt, $this> */
+    public function receipts(): HasMany
+    {
+        return $this->hasMany(Receipt::class)->orderBy('id');
     }
 
     /**

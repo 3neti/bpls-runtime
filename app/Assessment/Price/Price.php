@@ -57,6 +57,12 @@ final readonly class Price
 
     public static function fromInput(AssessmentPriceInput $input): self
     {
+        if ($input->assessment_context->application_type === 'new'
+            && $input->composition_policy_version === 'bpls.assessment-composition.nelson-new-no-business-tax.v1'
+            && (collect($input->components)->contains(fn (AssessmentPriceComponentInput $component): bool => $component->type === 'business_tax') || $input->taxes !== [])) {
+            throw new LogicException('Business Tax is prohibited for New Applications.');
+        }
+
         return new self(
             $input->currency,
             array_map(PriceComponent::fromInput(...), $input->components),

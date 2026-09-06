@@ -4,13 +4,15 @@ import { Check, ChevronRight, FileClock, Route } from '@lucide/vue';
 import { useNow } from '@vueuse/core';
 import { computed, reactive, ref } from 'vue';
 import { store as recordBploRouting } from '@/actions/App/Http/Controllers/Staff/BploRoutingDeterminationController';
+import FinancialLineItemEditor from '@/components/permit-applications/FinancialLineItemEditor.vue';
+import SignatureFacsimileCapture from '@/components/SignatureFacsimileCapture.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { dateTime, money } from '@/lib/evaluationPresentation';
 
 type RoutingLine = {
-    id: number;
-    line_of_business_id: number;
+    id: number | null;
+    line_of_business_id: number | null;
     line_of_business_name: string | null;
 };
 
@@ -46,6 +48,8 @@ type BploRoutingTask = {
         type: string;
         year: number;
         submitted_at: string | null;
+        business_activity_description: string | null;
+        commissioned_path: boolean;
         lines: RoutingLine[];
     };
     routing: {
@@ -66,6 +70,36 @@ type BploRoutingTask = {
         review_due_at: string;
     } | null;
     office_options: { code: string; label: string }[];
+    financial_editor: {
+        catalog_status: string;
+        office_fee_options: Record<
+            string,
+            {
+                id: number;
+                code: string;
+                name: string;
+                default_amount_cents: number;
+            }[]
+        >;
+        line_of_business_options: {
+            id: number;
+            code: string;
+            name: string;
+            default_items: {
+                fee_rule_id: number;
+                code: string;
+                name: string;
+                amount_cents: number;
+            }[];
+        }[];
+        treasury_assignments: {
+            id: number;
+            name: string;
+            items: { name: string; amount_cents: number }[];
+        }[];
+        can_confirm_payment_orders: boolean;
+        can_assign_treasury_lobs: boolean;
+    };
     can_determine: boolean;
     manual_confirmation_required: boolean;
 };
@@ -80,9 +114,46 @@ const props = withDefaults(
 
 const page = usePage();
 const pending = ref(false);
-const routingContext = ref(props.task.suggestion?.situational_context ?? '');
+const officeItems = reactive<
+    Record<
+        number,
+        {
+            fee_rule_id: number;
+            code: string;
+            name: string;
+            amount_cents: number;
+        }[]
+    >
+>({});
+const officeSignatures = reactive<Record<number, File | null>>({});
+const treasurySelections = ref<
+    {
+        line_of_business_id: number;
+        items: {
+            fee_rule_id: number;
+            code: string;
+            name: string;
+            amount_cents: number;
+        }[];
+    }[]
+>([]);
+const selectedTreasuryLob = ref<number | null>(null);
+
+for (const work of props.task.routing?.works ?? []) {
+    officeItems[work.id] = [];
+    officeSignatures[work.id] = null;
+}
+
+const routingContext = ref(
+    props.task.application.commissioned_path
+        ? 'Concerned offices selected by BPLO checklist.'
+        : (props.task.suggestion?.situational_context ?? ''),
+);
+const routingLines = props.task.application.commissioned_path
+    ? [{ id: null, line_of_business_id: null, line_of_business_name: null }]
+    : props.task.application.lines;
 const candidates = props.task.office_options.flatMap((office) =>
-    props.task.application.lines.map((line) => ({
+    routingLines.map((line) => ({
         key: `${office.code}-${line.id}`,
         office,
         line,
@@ -190,6 +261,71 @@ function submit(): void {
         },
     });
 }
+
+function confirmPaymentOrder(work: RoutingWork): void {
+    const signature = officeSignatures[work.id];
+    const items = officeItems[work.id] ?? [];
+
+    if (!signature || items.length === 0) {
+        return;
+    }
+
+    useForm({ items, signature_facsimile: signature }).post(
+        `/staff/permit-applications/${props.task.application.id}/office-payment-orders/${work.id}`,
+        { preserveScroll: true },
+    );
+}
+
+function addTreasuryLob(): void {
+    const option = props.task.financial_editor.line_of_business_options.find(
+        (candidate) => candidate.id === selectedTreasuryLob.value,
+    );
+
+    if (
+        !option ||
+        treasurySelections.value.some(
+            (item) => item.line_of_business_id === option.id,
+        )
+    ) {
+        return;
+    }
+
+    treasurySelections.value.push({
+        line_of_business_id: option.id,
+        items: option.default_items.map((item) => ({ ...item })),
+    });
+    selectedTreasuryLob.value = null;
+}
+
+function confirmTreasuryLobs(): void {
+    if (treasurySelections.value.length === 0) {
+        return;
+    }
+
+    useForm({ selections: treasurySelections.value }).post(
+        `/staff/permit-applications/${props.task.application.id}/treasury-lines-of-business`,
+        { preserveScroll: true },
+    );
+}
+
+function removeTreasuryLob(lineOfBusinessId: number): void {
+    treasurySelections.value = treasurySelections.value.filter(
+        (item) => item.line_of_business_id !== lineOfBusinessId,
+    );
+}
+
+function treasuryFeeOptions(lineOfBusinessId: number) {
+    return (
+        props.task.financial_editor.line_of_business_options.find(
+            (line) => line.id === lineOfBusinessId,
+        )?.default_items ?? []
+    ).map((item) => ({
+        id: item.fee_rule_id,
+        code: item.code,
+        name: item.name,
+        default_amount_cents: item.amount_cents,
+    }));
+}
 </script>
 
 <template>
@@ -294,8 +430,137 @@ function submit(): void {
                             }}</strong>
                         </p>
                     </div>
+                    <div
+                        v-else-if="
+                            task.financial_editor.can_confirm_payment_orders
+                        "
+                        class="mt-4 grid gap-3 border-t pt-4"
+                    >
+                        <FinancialLineItemEditor
+                            v-model="officeItems[work.id]"
+                            :options="
+                                task.financial_editor.office_fee_options[
+                                    work.office_code
+                                ] ?? []
+                            "
+                        />
+                        <SignatureFacsimileCapture
+                            :required="true"
+                            @selected="officeSignatures[work.id] = $event"
+                        />
+                        <Button
+                            type="button"
+                            :disabled="
+                                !(
+                                    officeItems[work.id]?.length &&
+                                    officeSignatures[work.id]
+                                )
+                            "
+                            @click="confirmPaymentOrder(work)"
+                            >Confirm Payment Order</Button
+                        >
+                    </div>
                 </article>
             </div>
+
+            <section
+                v-if="
+                    task.financial_editor.can_assign_treasury_lobs &&
+                    task.routing.works.every(
+                        (work) => work.payment_orders.length > 0,
+                    )
+                "
+                class="grid gap-3 rounded-xl border bg-background p-4"
+            >
+                <h3 class="font-black">Treasury Lines of Business</h3>
+                <div
+                    v-if="task.financial_editor.treasury_assignments.length"
+                    class="grid gap-2 text-sm"
+                >
+                    <div
+                        v-for="assignment in task.financial_editor
+                            .treasury_assignments"
+                        :key="assignment.id"
+                        class="border-b pb-2"
+                    >
+                        <strong>{{ assignment.name }}</strong>
+                        <p
+                            v-for="item in assignment.items"
+                            :key="item.name"
+                            class="flex justify-between"
+                        >
+                            <span>{{ item.name }}</span
+                            ><span>{{ money(item.amount_cents) }}</span>
+                        </p>
+                    </div>
+                </div>
+                <template v-else>
+                    <div class="flex flex-col gap-2 sm:flex-row">
+                        <select
+                            v-model="selectedTreasuryLob"
+                            class="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
+                        >
+                            <option :value="null">
+                                Select Line of Business
+                            </option>
+                            <option
+                                v-for="line in task.financial_editor
+                                    .line_of_business_options"
+                                :key="line.id"
+                                :value="line.id"
+                            >
+                                {{ line.name }}
+                            </option>
+                        </select>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            @click="addTreasuryLob"
+                            >Add</Button
+                        >
+                    </div>
+                    <div
+                        v-for="selection in treasurySelections"
+                        :key="selection.line_of_business_id"
+                        class="grid gap-2 border-b py-3 text-sm"
+                    >
+                        <div class="flex justify-between">
+                            <strong>{{
+                                task.financial_editor.line_of_business_options.find(
+                                    (line) =>
+                                        line.id ===
+                                        selection.line_of_business_id,
+                                )?.name
+                            }}</strong>
+                            <button
+                                type="button"
+                                class="text-xs text-destructive"
+                                @click="
+                                    removeTreasuryLob(
+                                        selection.line_of_business_id,
+                                    )
+                                "
+                            >
+                                Remove LOB
+                            </button>
+                        </div>
+                        <FinancialLineItemEditor
+                            v-model="selection.items"
+                            :options="
+                                treasuryFeeOptions(
+                                    selection.line_of_business_id,
+                                )
+                            "
+                        />
+                    </div>
+                    <Button
+                        type="button"
+                        :disabled="treasurySelections.length === 0"
+                        @click="confirmTreasuryLobs"
+                        >Confirm Treasury Classification</Button
+                    >
+                </template>
+            </section>
 
             <p class="text-xs leading-5 text-muted-foreground">
                 This routing record assigns office work only. It creates no
@@ -310,7 +575,7 @@ function submit(): void {
             @submit.prevent="submit"
         >
             <div
-                v-if="task.suggestion"
+                v-if="task.suggestion && !task.application.commissioned_path"
                 class="grid gap-3 rounded-xl border border-blue-300 bg-blue-50 p-4 text-blue-950 dark:border-blue-800 dark:bg-blue-950/35 dark:text-blue-100"
             >
                 <div class="flex items-start gap-3">
@@ -338,19 +603,20 @@ function submit(): void {
             </div>
 
             <div class="rounded-xl bg-muted/40 p-4 text-sm">
-                <p class="font-black">Application facts considered</p>
+                <p class="font-black">Application</p>
                 <p class="mt-1 text-muted-foreground">
-                    {{ task.application.owner_name }} ·
-                    {{ task.application.lines.length }} declared
                     {{
-                        task.application.lines.length === 1
-                            ? 'activity'
-                            : 'activities'
+                        task.application.commissioned_path
+                            ? task.application.business_activity_description
+                            : `${task.application.owner_name} · ${task.application.lines.length} declared activities`
                     }}
                 </p>
             </div>
 
-            <label class="grid gap-1 text-sm font-semibold">
+            <label
+                v-if="!task.application.commissioned_path"
+                class="grid gap-1 text-sm font-semibold"
+            >
                 Situational context
                 <textarea
                     v-model="routingContext"
@@ -361,7 +627,10 @@ function submit(): void {
                 />
             </label>
 
-            <div class="flex flex-wrap items-center gap-3">
+            <div
+                v-if="!task.application.commissioned_path"
+                class="flex flex-wrap items-center gap-3"
+            >
                 <Button
                     type="button"
                     variant="outline"
@@ -401,10 +670,18 @@ function submit(): void {
                             type="checkbox"
                         />
                         <span class="min-w-0 break-words">
-                            {{ candidate.line.line_of_business_name }}
+                            {{
+                                candidate.line.line_of_business_name ??
+                                'Concerned office'
+                            }}
                         </span>
                     </label>
-                    <template v-if="drafts[candidate.key].selected">
+                    <template
+                        v-if="
+                            drafts[candidate.key].selected &&
+                            !task.application.commissioned_path
+                        "
+                    >
                         <label class="grid gap-1 text-sm">
                             Situational reason
                             <textarea
@@ -445,7 +722,13 @@ function submit(): void {
                     :disabled="pending || selectedCount === 0"
                     data-testid="confirm-bplo-routing"
                 >
-                    {{ pending ? 'Recording routing…' : 'Record BPLO routing' }}
+                    {{
+                        pending
+                            ? 'Confirming routing…'
+                            : task.application.commissioned_path
+                              ? 'Confirm Routing'
+                              : 'Record BPLO routing'
+                    }}
                 </Button>
             </div>
         </form>

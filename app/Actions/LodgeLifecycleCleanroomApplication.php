@@ -7,6 +7,7 @@ use App\Models\PermitApplication;
 use App\Models\User;
 use DomainException;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
 class LodgeLifecycleCleanroomApplication
@@ -25,6 +26,7 @@ class LodgeLifecycleCleanroomApplication
         array $data,
         string $cleanroomRunId,
         bool $undertakingAccepted,
+        ?UploadedFile $signatureFacsimile = null,
     ): array {
         $actor = $request->user();
         if (! $actor instanceof User) {
@@ -32,7 +34,7 @@ class LodgeLifecycleCleanroomApplication
         }
 
         try {
-            $result = DB::transaction(function () use ($request, $data, $cleanroomRunId, $undertakingAccepted, $actor): array {
+            $result = DB::transaction(function () use ($request, $data, $cleanroomRunId, $undertakingAccepted, $signatureFacsimile, $actor): array {
                 $run = LifecycleCleanroomRun::query()
                     ->where('public_id', $cleanroomRunId)
                     ->where('status', 'active')
@@ -50,7 +52,7 @@ class LodgeLifecycleCleanroomApplication
                     $application = $this->captureIntake->create($request, $data);
                 }
 
-                $application = $this->submitApplication->handle($application, $actor, $undertakingAccepted);
+                $application = $this->submitApplication->handle($application, $actor, $undertakingAccepted, $signatureFacsimile);
                 $this->captureDeclarationOwnership($run, $application);
 
                 return ['run' => $run->fresh(), 'application' => $application];

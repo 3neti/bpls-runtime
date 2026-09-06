@@ -84,8 +84,8 @@ final class RenderPermitPdf
             'Latest assessment' => $latestAssessment === null
                 ? 'No assessment recorded'
                 : 'Assessment #'.$latestAssessment->sequence.' ('.$this->label($latestAssessment->status->value).') - '.$this->money($latestAssessment->total_amount_cents),
-            'Official Receipt' => $permit->official_receipt_bound
-                ? trim(($permit->official_receipt_series ? $permit->official_receipt_series.' / ' : '').$permit->official_receipt_number)
+            'Official Receipts' => $permit->official_receipt_bound
+                ? collect($permit->official_receipts)->map(fn (array $receipt): string => trim($receipt['receipt_number'].($receipt['series'] ? ' · '.$receipt['series'] : '')))->join('; ')
                 : 'Not bound - permit remains invalid and unreleased',
             'Document status' => $permit->semantic_classification === 'synthetic_only'
                 ? $permit->statement
@@ -174,16 +174,20 @@ final class RenderPermitPdf
         $document->text($page, 'Municipal Mayor', 345, 190, 8.5, align: 'center');
         $document->text($page, (string) ($permit->issuing_authority['signature_reference'] ?? 'Synthetic reference pending'), 345, 180, 5.8, align: 'center', monospace: true);
 
-        $receiptSeries = $permit->official_receipt_series ?? 'Series of '.$year;
-        $document->text($page, 'OR. No.:', 225, 164, 8.5);
-        $document->text($page, $permit->official_receipt_number ?? 'NOT BOUND', 272, 164, 9, true);
-        $document->text($page, $receiptSeries, 334, 164, 8.5);
+        $receiptSummary = collect($permit->official_receipts)->map(fn (array $receipt): string => implode(' · ', array_filter([
+            $receipt['receipt_number'],
+            $receipt['series'],
+            $this->money($receipt['amount_minor']),
+        ])))->join(' | ');
+        $receiptSize = mb_strlen($receiptSummary) > 100 ? 6.2 : 7.6;
+        $document->text($page, 'OFFICIAL RECEIPTS — OR. No.:', 128, 164, 7.5, true);
+        $document->wrappedText($page, $receiptSummary === '' ? 'NOT BOUND' : $receiptSummary, 225, 164, 330, $receiptSize, 8.5);
 
         $this->verificationQr($document, $page, $permit->verification['view_url'], 43, 85, 68);
         $document->text($page, 'SCAN TO VERIFY IDENTITY', 77, 76, 6.5, true, 'center');
         $document->wrappedText(
             $page,
-            'NOTE: This specimen must be displayed only for laboratory review. It is invalid without the Official Receipt number shown here. QR verification resolves this exact synthetic Permit identity only and does not establish legal effect or production authority.',
+            'NOTE: This specimen must be displayed only for laboratory review. It is invalid without complete Official Receipt coverage shown here. QR verification resolves this exact synthetic Permit identity only and does not expose receipt numbers or establish legal effect or production authority.',
             128,
             137,
             335,

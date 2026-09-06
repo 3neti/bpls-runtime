@@ -9,11 +9,13 @@ use App\Data\Assessment\AssessmentPriceModifierInput;
 use App\Enums\BusinessPermitEvaluationItemType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
+use App\Enums\PermitApplicationType;
 use App\Models\FeeRule;
 use App\Models\FeeRuleReconciliation;
 use App\Models\PaperlessPaymentOrder;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
+use App\Models\TreasuryLineItem;
 use Illuminate\Support\Collection;
 use LogicException;
 
@@ -32,7 +34,11 @@ final class AssessmentPriceInputResolver
         $components = $this->componentCollection();
         $modifiers = $this->modifierCollection();
 
-        if (is_array($evaluationProjection)) {
+        $nelsonPath = data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true;
+        if ($nelsonPath) {
+            $this->appendNelsonPaymentOrderFacts($application, $components, $modifiers);
+            $this->appendTreasuryLobFacts($application, $components, $modifiers);
+        } elseif (is_array($evaluationProjection)) {
             foreach ($evaluationProjection['projected_charges'] as $charge) {
                 $components->push($this->feeRuleComponent($charge));
             }
@@ -40,6 +46,14 @@ final class AssessmentPriceInputResolver
         } else {
             $this->appendDirectFeeFacts($application, $components);
             $this->appendProvisionalOfficeFacts($application, $components);
+        }
+
+        if ($nelsonPath && $application->type === PermitApplicationType::New
+            && $components->contains(fn (AssessmentPriceComponentInput $component): bool => $component->type === 'business_tax')) {
+            throw new LogicException('Business Tax is prohibited for New Applications.');
+        }
+        if ($nelsonPath && (! $application->treasuryLineOfBusinessAssignments()->whereNull('removed_at')->exists() || $components->isEmpty())) {
+            throw new LogicException('Assessment requires Treasury-assigned Lines of Business and confirmed financial items.');
         }
 
         return new AssessmentPriceInput(
@@ -55,8 +69,108 @@ final class AssessmentPriceInputResolver
             components: array_values($components->sortBy('exact_once_key')->values()->all()),
             modifiers: array_values($modifiers->sortBy('key')->values()->all()),
             taxes: [],
-            composition_policy_version: 'bpls.assessment-composition.fixed-minor-units.v1',
+            composition_policy_version: $nelsonPath
+                ? 'bpls.assessment-composition.nelson-new-no-business-tax.v1'
+                : 'bpls.assessment-composition.fixed-minor-units.v1',
         );
+    }
+
+    /**
+     * @param  Collection<int, AssessmentPriceComponentInput>  $components
+     * @param  Collection<int, AssessmentPriceModifierInput>  $modifiers
+     */
+    private function appendNelsonPaymentOrderFacts(PermitApplication $application, Collection $components, Collection $modifiers): void
+    {
+        PaperlessPaymentOrder::query()
+            ->where('permit_application_id', $application->id)
+            ->whereNull('business_permit_evaluation_item_revision_id')
+            ->where('status', 'issued')->whereNull('superseded_at')
+            ->with(['lines', 'routingWork'])->orderBy('id')->get()
+            ->each(function (PaperlessPaymentOrder $order) use ($components, $modifiers): void {
+                if ((int) $order->lines->sum('amount_cents') !== $order->total_amount_cents) {
+                    throw new LogicException("Payment Order [{$order->id}] does not reconcile to its lines.");
+                }
+                foreach ($order->lines as $line) {
+                    $default = (int) data_get($line->source_snapshot, 'default_amount_minor', $line->amount_cents);
+                    $determined = (int) data_get($line->source_snapshot, 'determined_amount_minor', $line->amount_cents);
+                    $key = "paperless_payment_order_line:{$line->id}";
+                    $components->push(new AssessmentPriceComponentInput(
+                        key: $line->code,
+                        type: 'paperless_payment_order',
+                        label: $line->name,
+                        scope: 'application',
+                        permit_application_line_id: null,
+                        line_of_business_id: null,
+                        line_of_business_name: null,
+                        responsible_office: $order->routingWork->office_code,
+                        currency: 'PHP',
+                        amount_minor: $default,
+                        source_type: 'paperless_payment_order_line',
+                        source_identity: (string) $line->id,
+                        source_version: (string) data_get($line->source_snapshot, 'fee_rule_version'),
+                        exact_once_key: $key,
+                        legal_basis: null,
+                        explanation: [
+                            'paperless_payment_order_id' => $order->id,
+                            'paperless_payment_order_line_id' => $line->id,
+                            'category' => FeeRuleCategory::Fee->value,
+                            'calculation_type' => 'fixed',
+                            'basis' => 'concerned_office_payment_order',
+                            'basis_amount_minor' => $default,
+                            'rule_snapshot' => [...$line->source_snapshot, 'financial_source' => 'concerned_office_payment_order'],
+                        ],
+                    ));
+                    if ($default !== $determined) {
+                        $modifiers->push(new AssessmentPriceModifierInput(
+                            key: "office_item_variance:{$line->id}", type: 'case_override', target_exact_once_key: $key,
+                            currency: 'PHP', amount_minor: $determined - $default,
+                            reason: (string) data_get($line->source_snapshot, 'reason'), authority: (string) data_get($line->source_snapshot, 'authority'),
+                            actor_id: $order->issued_by_id, office: $order->routingWork->office_code, occurred_at: $order->issued_at->toIso8601String(),
+                        ));
+                    }
+                }
+            });
+    }
+
+    /**
+     * @param  Collection<int, AssessmentPriceComponentInput>  $components
+     * @param  Collection<int, AssessmentPriceModifierInput>  $modifiers
+     */
+    private function appendTreasuryLobFacts(PermitApplication $application, Collection $components, Collection $modifiers): void
+    {
+        TreasuryLineItem::query()
+            ->whereHas('assignment', fn ($query) => $query->where('permit_application_id', $application->id)->whereNull('removed_at'))
+            ->whereNull('removed_at')->with(['assignment.lineOfBusiness', 'feeRule'])->orderBy('id')->get()
+            ->each(function (TreasuryLineItem $item) use ($components, $modifiers): void {
+                if ($item->feeRule->category === FeeRuleCategory::Tax) {
+                    throw new LogicException('Business Tax is prohibited for New Applications.');
+                }
+                $key = "treasury_line_item:{$item->id}";
+                $components->push(new AssessmentPriceComponentInput(
+                    key: $item->code, type: 'treasury_lob_fee', label: $item->name, scope: 'line_of_business',
+                    permit_application_line_id: data_get($item->source_snapshot, 'permit_application_line_id'),
+                    line_of_business_id: $item->assignment->line_of_business_id,
+                    line_of_business_name: $item->assignment->lineOfBusiness->name,
+                    responsible_office: null, currency: $item->currency,
+                    amount_minor: $item->default_amount_cents, source_type: 'treasury_line_item', source_identity: (string) $item->id,
+                    source_version: (string) data_get($item->source_snapshot, 'fee_rule_version'), exact_once_key: $key,
+                    legal_basis: $item->feeRule->legal_basis,
+                    explanation: [
+                        'fee_rule_id' => $item->fee_rule_id, 'category' => FeeRuleCategory::Fee->value,
+                        'calculation_type' => 'fixed', 'basis' => 'treasury_lob_determination',
+                        'basis_amount_minor' => $item->default_amount_cents,
+                        'rule_snapshot' => [...$item->source_snapshot, 'financial_source' => 'treasury_lob_component'],
+                    ],
+                ));
+                if ($item->variance_cents !== 0) {
+                    $modifiers->push(new AssessmentPriceModifierInput(
+                        key: "treasury_item_variance:{$item->id}", type: 'case_override', target_exact_once_key: $key,
+                        currency: $item->currency, amount_minor: $item->variance_cents,
+                        reason: (string) data_get($item->source_snapshot, 'reason'), authority: (string) data_get($item->source_snapshot, 'authority'),
+                        actor_id: $item->determined_by_id, office: 'treasury', occurred_at: $item->determined_at->toIso8601String(),
+                    ));
+                }
+            });
     }
 
     /** @param array<string, mixed> $charge */

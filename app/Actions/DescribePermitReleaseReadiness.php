@@ -51,7 +51,7 @@ class DescribePermitReleaseReadiness
             'prerequisites' => $prerequisites,
             'payment_schedule_id' => $latestSchedule?->id,
             'payment_schedule_status' => $latestSchedule?->status?->value,
-            'receipt_count' => $isSyntheticLifecycle ? ($readiness['receipt_id'] === null ? 0 : 1) : $receiptCount,
+            'receipt_count' => $isSyntheticLifecycle ? count($readiness['receipt_ids']) : $receiptCount,
             'clearances_completed' => $isSyntheticLifecycle
                 ? count($readiness['certified_offices'])
                 : $permitApplication->clearances->where('status', PermitClearanceStatus::Completed)->count(),

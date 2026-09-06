@@ -37,7 +37,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read BusinessOwner $owner
  */
-#[Fillable(['business_owner_id', 'name', 'trade_name', 'registration_number', 'address', 'barangay', 'ownership_type', 'organization_name', 'occupancy', 'building_name', 'property_index_number', 'business_area_square_meters', 'male_employee_count', 'female_employee_count', 'contact_number', 'email', 'established_on', 'started_on', 'registered_on', 'legacy_source_id', 'metadata'])]
+#[Fillable(['business_owner_id', 'name', 'trade_name', 'registration_number', 'address', 'barangay', 'barangay_psgc_code', 'ownership_type', 'organization_name', 'occupancy', 'building_name', 'property_index_number', 'business_area_square_meters', 'male_employee_count', 'female_employee_count', 'contact_number', 'email', 'established_on', 'started_on', 'registered_on', 'legacy_source_id', 'metadata'])]
 class Business extends Model
 {
     /** @use HasFactory<BusinessFactory> */

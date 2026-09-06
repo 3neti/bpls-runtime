@@ -23,6 +23,7 @@ import {
 } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import InputError from '@/components/InputError.vue';
 import IpilField from '@/components/permit-applications/IpilField.vue';
+import SignatureFacsimileCapture from '@/components/SignatureFacsimileCapture.vue';
 import { Button } from '@/components/ui/button';
 import type { BreadcrumbItem } from '@/types';
 
@@ -70,6 +71,8 @@ type Draft = {
     registration_number: string | null;
     business_address: string | null;
     barangay: string | null;
+    barangay_psgc_code: string | null;
+    business_activity_description: string | null;
     ownership_type: string | null;
     organization_name: string | null;
     occupancy: string | null;
@@ -89,7 +92,7 @@ type Draft = {
 type CleanroomIntake = Record<string, unknown> & {
     run_id: string;
     application_year: number;
-    lines: Activity[];
+    lines?: Activity[];
 };
 type LabIntakeFixture = {
     fixture_id: string;
@@ -118,6 +121,7 @@ const props = defineProps<{
     currentApplicationYear: number;
     applicationTypes: Option[];
     lineOfBusinesses: LineOfBusiness[];
+    barangays?: { code: string; name: string }[];
     applicant?: { name: string; email: string };
     registry?: Registry;
     draft?: Draft;
@@ -151,7 +155,7 @@ const back = computed(() => {
 
 const activities = ref<Activity[]>(
     props.draft?.lines.map((line) => ({ ...line, key: line.id ?? line.key })) ??
-        props.cleanroomIntake?.lines.map((line, index) => ({
+        props.cleanroomIntake?.lines?.map((line, index) => ({
             ...line,
             key: index + 1,
         })) ?? [{ key: 1, quantity: 1 }],
@@ -1332,7 +1336,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 >
                                     {{ address.title }}
                                 </h3>
-                                <IpilField
+                                <template
                                     v-for="field in [
                                         {
                                             k: 'house_building_number',
@@ -1355,33 +1359,92 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                         { k: 'email', l: 'Email Address' },
                                     ]"
                                     :key="field.k"
-                                    :name="`${address.key}_${field.k}`"
-                                    :label="field.l"
-                                    :type="
-                                        field.k === 'email' ? 'email' : 'text'
-                                    "
-                                    :value="
-                                        initial(
-                                            `${address.key}_address.${field.k}`,
-                                            address.key === 'business'
-                                                ? field.k === 'street'
-                                                    ? (selectedRegistryBusiness?.address ??
-                                                      draft?.business_address ??
-                                                      cleanroom(
-                                                          'business_address',
-                                                      ))
-                                                    : field.k === 'barangay'
-                                                      ? (selectedRegistryBusiness?.barangay ??
-                                                        draft?.barangay ??
-                                                        cleanroom('barangay'))
-                                                      : cleanroom(
-                                                            `business_${field.k}`,
-                                                        )
-                                                : cleanroom(`owner_${field.k}`),
-                                        )
-                                    "
-                                    :error="errors[`${address.key}_${field.k}`]"
-                                />
+                                >
+                                    <label
+                                        v-if="
+                                            isCitizen &&
+                                            address.key === 'business' &&
+                                            field.k === 'barangay'
+                                        "
+                                        class="grid gap-1 text-xs font-bold uppercase"
+                                    >
+                                        Barangay
+                                        <select
+                                            name="business_barangay_psgc_code"
+                                            required
+                                            class="h-10 min-w-0 border border-stone-400 bg-white px-2 text-sm dark:bg-stone-900"
+                                        >
+                                            <option
+                                                value=""
+                                                disabled
+                                                :selected="
+                                                    !draft?.barangay_psgc_code &&
+                                                    !cleanroom(
+                                                        'business_barangay_psgc_code',
+                                                    )
+                                                "
+                                            >
+                                                Select barangay
+                                            </option>
+                                            <option
+                                                v-for="barangay in barangays"
+                                                :key="barangay.code"
+                                                :value="barangay.code"
+                                                :selected="
+                                                    barangay.code ===
+                                                    (draft?.barangay_psgc_code ??
+                                                        cleanroom(
+                                                            'business_barangay_psgc_code',
+                                                        ))
+                                                "
+                                            >
+                                                {{ barangay.name }}
+                                            </option>
+                                        </select>
+                                        <InputError
+                                            :message="
+                                                errors.business_barangay_psgc_code
+                                            "
+                                        />
+                                    </label>
+                                    <IpilField
+                                        v-else
+                                        :name="`${address.key}_${field.k}`"
+                                        :label="field.l"
+                                        :type="
+                                            field.k === 'email'
+                                                ? 'email'
+                                                : 'text'
+                                        "
+                                        :value="
+                                            initial(
+                                                `${address.key}_address.${field.k}`,
+                                                address.key === 'business'
+                                                    ? field.k === 'street'
+                                                        ? (selectedRegistryBusiness?.address ??
+                                                          draft?.business_address ??
+                                                          cleanroom(
+                                                              'business_address',
+                                                          ))
+                                                        : field.k === 'barangay'
+                                                          ? (selectedRegistryBusiness?.barangay ??
+                                                            draft?.barangay ??
+                                                            cleanroom(
+                                                                'barangay',
+                                                            ))
+                                                          : cleanroom(
+                                                                `business_${field.k}`,
+                                                            )
+                                                    : cleanroom(
+                                                          `owner_${field.k}`,
+                                                      ),
+                                            )
+                                        "
+                                        :error="
+                                            errors[`${address.key}_${field.k}`]
+                                        "
+                                    />
+                                </template>
                             </div>
                         </section>
 
@@ -1607,6 +1670,46 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             class="grid gap-3 border-t border-stone-300 pt-4"
                         >
                             <div
+                                v-if="isCitizen && !cleanroomIntake"
+                                class="grid gap-2"
+                            >
+                                <label
+                                    for="business-activity-description"
+                                    class="text-sm font-black uppercase"
+                                    >Nature / Description of Business</label
+                                >
+                                <textarea
+                                    id="business-activity-description"
+                                    name="business_activity_description"
+                                    rows="5"
+                                    maxlength="4000"
+                                    required
+                                    :value="
+                                        String(
+                                            draft?.business_activity_description ??
+                                                cleanroom(
+                                                    'business_activity_description',
+                                                ) ??
+                                                '',
+                                        )
+                                    "
+                                    class="w-full border border-stone-400 bg-white p-3 text-sm dark:bg-stone-900"
+                                ></textarea>
+                                <p
+                                    class="text-xs text-stone-600 dark:text-stone-300"
+                                >
+                                    Describe products sold, services offered,
+                                    and other activities. Treasury assigns
+                                    official Lines of Business later.
+                                </p>
+                                <InputError
+                                    :message="
+                                        errors.business_activity_description
+                                    "
+                                />
+                            </div>
+                            <div
+                                v-if="!isCitizen || cleanroomIntake"
                                 class="flex items-center justify-between gap-3"
                             >
                                 <h3 class="text-sm font-black uppercase">
@@ -1621,8 +1724,12 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                     ><Plus />Add row</Button
                                 >
                             </div>
-                            <InputError :message="errors.lines" />
+                            <InputError
+                                v-if="!isCitizen || cleanroomIntake"
+                                :message="errors.lines"
+                            />
                             <div
+                                v-if="!isCitizen || cleanroomIntake"
                                 class="hidden grid-cols-[100px_minmax(180px,1fr)_100px_140px_140px_140px_50px] border border-stone-900 bg-slate-200 text-[11px] font-black uppercase lg:grid dark:bg-slate-800"
                             >
                                 <span class="p-2">Code</span
@@ -1637,6 +1744,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             <div
                                 v-for="(activity, index) in activities"
                                 :key="activity.key"
+                                v-show="!isCitizen || !!cleanroomIntake"
                                 data-testid="permit-business-activity-row"
                                 class="grid gap-3 border border-stone-400 p-3 lg:grid-cols-[100px_minmax(180px,1fr)_100px_140px_140px_140px_50px] lg:items-start lg:border-t-0 lg:p-0"
                             >
@@ -1818,6 +1926,10 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 unresolved; this field preserves the applicant's
                                 printed-name declaration.
                             </p>
+                            <SignatureFacsimileCapture
+                                v-if="cleanroomIntake"
+                                :error="errors.signature_facsimile"
+                            />
                         </section>
                     </div>
                 </article>
@@ -1834,7 +1946,10 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     </p>
                     <Button
                         type="submit"
-                        :disabled="processing || lineOfBusinesses.length === 0"
+                        :disabled="
+                            processing ||
+                            (!isCitizen && lineOfBusinesses.length === 0)
+                        "
                         ><Send v-if="cleanroomIntake" /><Save v-else />{{
                             processing
                                 ? cleanroomIntake

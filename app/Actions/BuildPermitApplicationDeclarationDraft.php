@@ -47,6 +47,7 @@ class BuildPermitApplicationDeclarationDraft
                 'name' => $this->text($data, 'business_name'),
                 'plate_number' => $this->text($data, 'business_plate_number'),
                 'trade_name' => $this->text($data, 'trade_name'),
+                'activity_description' => $this->text($data, 'business_activity_description'),
             ],
             'corporate_officer' => [
                 'last_name' => $this->text($data, 'corporate_officer_last_name'),

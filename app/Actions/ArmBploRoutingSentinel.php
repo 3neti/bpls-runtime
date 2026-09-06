@@ -16,6 +16,10 @@ class ArmBploRoutingSentinel
 
     public function handle(PermitApplication $permitApplication): ?BploRoutingSuggestion
     {
+        if (data_get($permitApplication->metadata, 'nelson_reconciliation_v1.commissioned_path') === true) {
+            return null;
+        }
+
         if (! $this->isEnabled()) {
             return null;
         }

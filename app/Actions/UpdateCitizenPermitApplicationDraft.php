@@ -85,18 +85,21 @@ class UpdateCitizenPermitApplicationDraft
                 throw new DomainException('This draft changed after it was opened. Reload the latest version before saving.');
             }
 
+            $commissionedPath = (bool) data_get($draft->metadata, 'nelson_reconciliation_v1.commissioned_path');
             $draft->lines()->delete();
-
-            foreach ($data['lines'] as $line) {
-                $draft->lines()->create($line);
-            }
 
             $metadata = $draft->metadata ?? [];
             $metadata['applicant_declaration_draft'] = $this->buildDeclarationDraft->handle($data);
             $draft->forceFill([
                 'application_year' => $data['application_year'],
+                'business_activity_description' => $data['business_activity_description'] ?? $draft->business_activity_description,
                 'metadata' => $metadata,
             ])->save();
+            if (! $commissionedPath) {
+                foreach ($data['lines'] as $line) {
+                    $draft->lines()->create($line);
+                }
+            }
             $draft->touch();
 
             return $draft->refresh()->load(['business.owner', 'lines.lineOfBusiness']);

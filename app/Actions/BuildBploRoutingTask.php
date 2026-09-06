@@ -3,7 +3,11 @@
 namespace App\Actions;
 
 use App\Data\Application\BploRoutingTaskData;
+use App\Enums\FeeRuleCalculationType;
+use App\Enums\FeeRuleCategory;
 use App\Enums\UserPermission;
+use App\Models\FeeRule;
+use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\User;
 
@@ -19,6 +23,8 @@ class BuildBploRoutingTask
             'bploRoutingDetermination.works.lineOfBusiness',
             'bploRoutingDetermination.works.paymentOrders.issuedBy',
             'bploRoutingDetermination.works.paymentOrders.lines',
+            'treasuryLineOfBusinessAssignments.lineOfBusiness',
+            'treasuryLineOfBusinessAssignments.items',
         ]);
         $determination = $application->bploRoutingDetermination;
         $suggestion = $application->bploRoutingSuggestion;
@@ -34,6 +40,8 @@ class BuildBploRoutingTask
                 'type' => $application->type->value,
                 'year' => $application->application_year,
                 'submitted_at' => $application->submitted_at?->toIso8601String(),
+                'business_activity_description' => $application->business_activity_description,
+                'commissioned_path' => data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true,
                 'lines' => $application->lines->map(fn ($line): array => [
                     'id' => $line->id,
                     'line_of_business_id' => $line->line_of_business_id,
@@ -84,16 +92,58 @@ class BuildBploRoutingTask
                 'server_now' => now()->toIso8601String(),
                 'production_authority' => false,
             ],
-            office_options: [
-                ['code' => 'engineering', 'label' => 'Engineering'],
-                ['code' => 'health', 'label' => 'Health'],
-                ['code' => 'assessor', 'label' => 'Municipal Assessor'],
-                ['code' => 'menro', 'label' => 'MENRO'],
-            ],
+            office_options: config('ipil_references.concerned_offices.items', []),
+            financial_editor: $this->financialEditor($application, $viewer),
             can_determine: $determination === null
                 && ($viewer?->can(UserPermission::DetermineBploRouting->value) ?? false),
             manual_confirmation_required: data_get($application->metadata, 'lifecycle_cleanroom.semantic_classification') === 'synthetic_only'
                 && data_get($application->metadata, 'lifecycle_cleanroom.production_liability') === false,
         );
+    }
+
+    /** @return array<string, mixed> */
+    private function financialEditor(PermitApplication $application, ?User $viewer): array
+    {
+        $fixedFees = FeeRule::query()
+            ->where('is_active', true)
+            ->where('calculation_type', FeeRuleCalculationType::Fixed->value)
+            ->where('category', '!=', FeeRuleCategory::Tax->value)
+            ->orderBy('name')->get();
+        $offices = collect(config('ipil_references.concerned_offices.items', []));
+
+        return [
+            'catalog_status' => (string) config('ipil_references.concerned_offices.production_status'),
+            'office_fee_options' => $offices->mapWithKeys(function (array $office) use ($fixedFees): array {
+                $configuredCodes = collect($office['fee_rule_codes'] ?? []);
+                $fees = $fixedFees->filter(fn (FeeRule $fee): bool => data_get($fee->metadata, 'responsible_office_code') === $office['code']
+                    || $configuredCodes->contains($fee->code));
+
+                return [$office['code'] => $fees->map(fn (FeeRule $fee): array => [
+                    'id' => $fee->id,
+                    'code' => $fee->code,
+                    'name' => $fee->name,
+                    'default_amount_cents' => $fee->amount_cents,
+                ])->values()->all()];
+            })->all(),
+            'line_of_business_options' => LineOfBusiness::query()->availableToMunicipalCatalog()->orderBy('name')->get()
+                ->map(fn (LineOfBusiness $line): array => [
+                    'id' => $line->id,
+                    'code' => $line->code,
+                    'name' => $line->name,
+                    'default_items' => $fixedFees->where('line_of_business_id', $line->id)->map(fn (FeeRule $fee): array => [
+                        'fee_rule_id' => $fee->id,
+                        'code' => $fee->code,
+                        'name' => $fee->name,
+                        'amount_cents' => $fee->amount_cents,
+                    ])->values()->all(),
+                ])->values()->all(),
+            'treasury_assignments' => $application->treasuryLineOfBusinessAssignments->whereNull('removed_at')->map(fn ($assignment): array => [
+                'id' => $assignment->id,
+                'name' => $assignment->lineOfBusiness->name,
+                'items' => $assignment->items->map(fn ($item): array => ['name' => $item->name, 'amount_cents' => $item->determined_amount_cents])->all(),
+            ])->values()->all(),
+            'can_confirm_payment_orders' => $viewer?->can(UserPermission::ContributeBusinessPermitEvaluations->value) ?? false,
+            'can_assign_treasury_lobs' => $viewer?->can(UserPermission::CorrectEvaluationLinesOfBusiness->value) ?? false,
+        ];
     }
 }

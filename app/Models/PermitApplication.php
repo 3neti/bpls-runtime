@@ -14,8 +14,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
 /**
  * @property int $id
@@ -46,11 +49,13 @@ use Illuminate\Support\Collection;
  * @property-read ProvisionalUatPermitCompletion|null $provisionalUatPermitCompletion
  * @property-read Collection<int, PostPaymentOfficeCertification> $postPaymentOfficeCertifications
  */
-#[Fillable(['business_id', 'submitted_by_id', 'application_number', 'tracking_reference', 'type', 'status', 'application_year', 'submitted_at', 'assessed_at', 'legacy_source_id', 'metadata'])]
-class PermitApplication extends Model
+#[Fillable(['business_id', 'submitted_by_id', 'application_number', 'tracking_reference', 'type', 'status', 'application_year', 'business_activity_description', 'submitted_at', 'assessed_at', 'legacy_source_id', 'metadata'])]
+class PermitApplication extends Model implements HasMedia
 {
     /** @use HasFactory<PermitApplicationFactory> */
-    use HasFactory;
+    use HasFactory, InteractsWithMedia;
+
+    public const ApplicationDocumentsCollection = 'application_documents';
 
     protected $attributes = [
         'status' => 'draft',
@@ -143,6 +148,23 @@ class PermitApplication extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(PermitApplicationDocument::class);
+    }
+
+    /** @return HasMany<TreasuryLineOfBusinessAssignment, $this> */
+    public function treasuryLineOfBusinessAssignments(): HasMany
+    {
+        return $this->hasMany(TreasuryLineOfBusinessAssignment::class)->orderBy('sequence');
+    }
+
+    /** @return MorphMany<SignatureEvidence, $this> */
+    public function signatureEvidences(): MorphMany
+    {
+        return $this->morphMany(SignatureEvidence::class, 'signable');
+    }
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection(self::ApplicationDocumentsCollection)->useDisk('local');
     }
 
     /** @return HasMany<OfficeChargeContribution, $this> */

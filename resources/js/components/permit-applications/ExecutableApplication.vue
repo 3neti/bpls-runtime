@@ -61,6 +61,7 @@ type ApplicationData = {
     offices: Record<string, any>[];
     financial: Record<string, any>;
     payment: Record<string, any>;
+    schedule_of_payment: Record<string, any> | null;
     official_receipts: Record<string, any>[];
     post_payment: Record<string, any>;
     permit: Record<string, any>;
@@ -593,18 +594,17 @@ function permitBlockerLabel(blocker: string): string {
                         </dl>
                         <div>
                             <h4 class="text-xs font-black uppercase">
-                                Declared lines of business
+                                Nature / Description of Business
                             </h4>
-                            <ul class="mt-2 grid gap-2">
-                                <li
-                                    v-for="line in application.business
-                                        .lines_of_business"
-                                    :key="line.application_line_id"
-                                    class="rounded-lg bg-slate-100 px-3 py-2 text-sm break-words dark:bg-slate-800"
-                                >
-                                    {{ line.code }} · {{ line.name }}
-                                </li>
-                            </ul>
+                            <p
+                                class="mt-2 rounded-lg bg-slate-100 px-3 py-2 text-sm break-words dark:bg-slate-800"
+                            >
+                                {{
+                                    application.business
+                                        .applicant_activity_description ??
+                                    'Not recorded'
+                                }}
+                            </p>
                         </div>
                     </template>
                 </div>
@@ -803,6 +803,37 @@ function permitBlockerLabel(blocker: string): string {
                 </div>
 
                 <div v-else-if="activeTab === 'payment'" class="space-y-5">
+                    <section
+                        v-if="application.schedule_of_payment"
+                        class="rounded-xl border border-slate-300 p-4 dark:border-slate-700"
+                        data-testid="application-schedule-of-payment"
+                    >
+                        <h3 class="font-black">Schedule of Payment</h3>
+                        <div
+                            v-for="group in application.schedule_of_payment
+                                .groups"
+                            :key="group.key"
+                            class="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700"
+                        >
+                            <div
+                                class="flex justify-between gap-3 text-sm font-bold"
+                            >
+                                <span>{{ group.label }}</span
+                                ><span>{{ money(group.subtotal_minor) }}</span>
+                            </div>
+                        </div>
+                        <div
+                            class="mt-4 flex justify-between border-t-2 border-slate-900 pt-3 text-lg font-black dark:border-slate-200"
+                        >
+                            <span>Total</span
+                            ><span>{{
+                                money(
+                                    application.schedule_of_payment
+                                        .grand_total_minor,
+                                )
+                            }}</span>
+                        </div>
+                    </section>
                     <IpilPaymentContinuationSheet
                         :application="application"
                         :checking="statusRequest.processing"
@@ -895,6 +926,28 @@ function permitBlockerLabel(blocker: string): string {
                                 : 'Official Receipt required.'
                         }}</strong>
                         {{ application.permit.statement }}
+                    </div>
+                    <div
+                        v-if="application.permit.official_receipts?.length"
+                        class="rounded-lg border border-rose-200 p-4"
+                    >
+                        <p class="text-xs font-bold uppercase">
+                            Official Receipts
+                        </p>
+                        <div
+                            v-for="receipt in application.permit
+                                .official_receipts"
+                            :key="receipt.receipt_group_key"
+                            class="mt-2 flex flex-wrap justify-between gap-2 text-sm"
+                        >
+                            <span>{{ receipt.receipt_group_label }}</span>
+                            <strong
+                                >{{ receipt.receipt_number
+                                }}<span v-if="receipt.series">
+                                    · {{ receipt.series }}</span
+                                ></strong
+                            >
+                        </div>
                     </div>
                     <dl class="grid gap-3 text-sm">
                         <div>

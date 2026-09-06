@@ -140,6 +140,7 @@ type TreasuryCollection = {
     received_at: string;
     received_by: string | null;
     receipt: Receipt | null;
+    receipts: Receipt[];
     allocations: CollectionAllocation[];
 };
 
@@ -147,7 +148,10 @@ type Receipt = {
     id: number;
     status: string;
     numbering_authority: string;
+    receipt_group_key: string | null;
+    receipt_group_label: string | null;
     receipt_number: string;
+    series: string | null;
     amount_cents: number;
     issued_at: string;
     issued_by: string | null;
@@ -159,6 +163,9 @@ type CollectionAllocation = {
     code: string;
     name: string;
     amount_cents: number;
+    receipt_group_key: string | null;
+    receipt_group_label: string | null;
+    receipt_id: number | null;
 };
 
 type Option = {
@@ -231,6 +238,32 @@ function money(amountCents: number): string {
 
 function label(value: string): string {
     return value.replaceAll('_', ' ');
+}
+
+function pendingReceiptGroups(collection: TreasuryCollection) {
+    const groups = new Map<
+        string,
+        { key: string; label: string; amount_cents: number }
+    >();
+
+    for (const allocation of collection.allocations) {
+        if (allocation.receipt_id !== null) {
+            continue;
+        }
+
+        const key = allocation.receipt_group_key ?? 'municipal_consolidated';
+        const current = groups.get(key);
+        groups.set(key, {
+            key,
+            label:
+                allocation.receipt_group_label ??
+                'Municipal Consolidated Collection',
+            amount_cents:
+                (current?.amount_cents ?? 0) + allocation.amount_cents,
+        });
+    }
+
+    return [...groups.values()];
 }
 
 function stopQrChecks(): void {
@@ -933,75 +966,54 @@ onBeforeUnmount(stopQrChecks);
                                     {{ collection.received_by ?? 'System' }}
                                 </td>
                                 <td class="px-4 py-3 align-top">
-                                    <div v-if="collection.receipt">
-                                        <Badge
-                                            variant="secondary"
-                                            class="capitalize"
-                                        >
-                                            {{
-                                                collection.receipt.status.replace(
-                                                    '_',
-                                                    ' ',
-                                                )
-                                            }}
-                                        </Badge>
+                                    <div
+                                        v-for="receipt in collection.receipts"
+                                        :key="receipt.id"
+                                        class="mb-2 border-b pb-2 last:border-0"
+                                    >
+                                        <div class="text-xs font-medium">
+                                            {{ receipt.receipt_group_label }} ·
+                                            {{ money(receipt.amount_cents) }}
+                                        </div>
                                         <Link
                                             v-if="can.view_receipts"
-                                            :href="
-                                                receiptShow(
-                                                    collection.receipt.id,
-                                                )
-                                            "
-                                            class="mt-1 block w-fit font-mono text-xs text-primary underline-offset-4 hover:underline"
+                                            :href="receiptShow(receipt.id)"
+                                            class="block w-fit font-mono text-xs text-primary hover:underline"
                                         >
-                                            {{
-                                                collection.receipt
-                                                    .receipt_number
-                                            }}
+                                            OR {{ receipt.receipt_number
+                                            }}<span v-if="receipt.series">
+                                                · {{ receipt.series }}</span
+                                            >
                                         </Link>
-                                        <div
-                                            v-else
-                                            class="mt-1 font-mono text-xs"
-                                        >
-                                            {{
-                                                collection.receipt
-                                                    .receipt_number
-                                            }}
-                                        </div>
-                                        <div
-                                            class="text-xs text-muted-foreground"
-                                        >
-                                            {{
-                                                collection.receipt
-                                                    .numbering_authority
-                                            }}
-                                            ·
-                                            {{
-                                                collection.receipt.issued_by ??
-                                                'System'
-                                            }}
+                                        <div v-else class="font-mono text-xs">
+                                            OR {{ receipt.receipt_number }}
                                         </div>
                                     </div>
                                     <Form
-                                        v-else-if="
-                                            can.issue_receipts &&
-                                            collection.status ===
-                                                'pending_receipt'
-                                        "
+                                        v-for="group in can.issue_receipts
+                                            ? pendingReceiptGroups(collection)
+                                            : []"
+                                        :key="group.key"
                                         v-bind="
                                             receiptStore.form(collection.id)
                                         "
                                         v-slot="{ errors, processing }"
-                                        class="grid min-w-72 gap-2"
+                                        class="mb-3 grid min-w-72 gap-2"
                                     >
+                                        <input
+                                            type="hidden"
+                                            name="receipt_group_key"
+                                            :value="group.key"
+                                        />
                                         <Label
-                                            :for="`receipt_number_${collection.id}`"
+                                            :for="`receipt_number_${collection.id}_${group.key}`"
                                         >
-                                            7-digit OR number
+                                            {{ group.label }} ·
+                                            {{ money(group.amount_cents) }}
                                         </Label>
                                         <div class="flex gap-2">
                                             <Input
-                                                :id="`receipt_number_${collection.id}`"
+                                                :id="`receipt_number_${collection.id}_${group.key}`"
                                                 name="receipt_number"
                                                 inputmode="numeric"
                                                 pattern="[0-9]{7}"
@@ -1028,7 +1040,10 @@ onBeforeUnmount(stopQrChecks);
                                         />
                                     </Form>
                                     <span
-                                        v-else
+                                        v-if="
+                                            collection.receipts.length === 0 &&
+                                            !can.issue_receipts
+                                        "
                                         class="text-xs text-muted-foreground"
                                     >
                                         Pending receipt

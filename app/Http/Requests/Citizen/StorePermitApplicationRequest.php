@@ -11,6 +11,7 @@ use App\Http\Requests\PermitApplicationIntakeRequest;
 use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\File;
 
 class StorePermitApplicationRequest extends PermitApplicationIntakeRequest
 {
@@ -39,7 +40,13 @@ class StorePermitApplicationRequest extends PermitApplicationIntakeRequest
             : [];
 
         $rules = parent::rules();
-        if ($cleanroom !== null) {
+        $nelsonPath = $this->has('business_activity_description');
+        if ($nelsonPath) {
+            $barangayCodes = collect(config('ipil_references.barangays.items', []))->pluck('code')->all();
+            $rules['business_activity_description'] = ['required', 'string', 'max:4000'];
+            $rules['business_barangay_psgc_code'] = ['required', 'string', Rule::in($barangayCodes)];
+            $rules['lines'] = ['prohibited'];
+        } elseif ($cleanroom !== null) {
             $rules['lines.*.line_of_business_id'] = [
                 'required',
                 'integer',
@@ -73,6 +80,9 @@ class StorePermitApplicationRequest extends PermitApplicationIntakeRequest
             'application_number' => ['prohibited'],
             'type' => ['required', Rule::in([PermitApplicationType::New->value])],
             'application_year' => ['required', 'integer', Rule::in($applicationYears)],
+            'signature_facsimile' => $nelsonPath
+                ? ['required', File::image()->max(2048)]
+                : ($cleanroom === null ? ['prohibited'] : ['nullable', File::image()->max(2048)]),
         ];
     }
 
@@ -81,7 +91,25 @@ class StorePermitApplicationRequest extends PermitApplicationIntakeRequest
     {
         $validated = parent::validatedForPersistence();
         unset($validated['lifecycle_cleanroom_run_id']);
+        unset($validated['signature_facsimile']);
 
         return $validated;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        parent::prepareForValidation();
+
+        $barangays = collect(config('ipil_references.barangays.items', []))->keyBy('code');
+        $barangay = $barangays->get((string) $this->input('business_barangay_psgc_code'));
+        if (is_array($barangay)) {
+            $this->merge([
+                'business_barangay' => $barangay['name'],
+                'barangay' => $barangay['name'],
+            ]);
+        }
+        if ($this->has('business_activity_description')) {
+            $this->request->remove('lines');
+        }
     }
 }

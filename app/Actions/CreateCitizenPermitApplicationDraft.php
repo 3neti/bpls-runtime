@@ -29,6 +29,7 @@ class CreateCitizenPermitApplicationDraft
             $submittedBy->forceFill(['business_owner_id' => $owner->id]);
             $business = $this->resolveBusiness($owner, $data);
             $laboratoryReconciliation = $this->laboratoryReconciliation($data);
+            $commissionedPath = array_key_exists('business_activity_description', $data);
 
             $permitApplication = PermitApplication::query()->create([
                 'business_id' => $business->id,
@@ -37,11 +38,17 @@ class CreateCitizenPermitApplicationDraft
                 'type' => PermitApplicationType::New,
                 'status' => PermitApplicationStatus::Draft,
                 'application_year' => $data['application_year'],
+                'business_activity_description' => $data['business_activity_description'] ?? null,
                 'submitted_at' => null,
                 'metadata' => [
                     'citizen_intake' => [
                         'registry_owner_id' => $owner->id,
                         'saved_as_draft' => true,
+                    ],
+                    'nelson_reconciliation_v1' => [
+                        'commissioned_path' => $commissionedPath,
+                        'applicant_selects_official_lob' => false,
+                        'inspection_in_scope' => false,
                     ],
                     'applicant_declaration_draft' => $this->buildDeclarationDraft->handle([
                         'type' => PermitApplicationType::New->value,
@@ -57,8 +64,10 @@ class CreateCitizenPermitApplicationDraft
                 ],
             ]);
 
-            foreach ($data['lines'] as $line) {
-                $permitApplication->lines()->create($line);
+            if (! $commissionedPath) {
+                foreach ($data['lines'] ?? [] as $line) {
+                    $permitApplication->lines()->create($line);
+                }
             }
 
             return $permitApplication->load(['business.owner', 'lines.lineOfBusiness']);
@@ -141,6 +150,7 @@ class CreateCitizenPermitApplicationDraft
             'registration_number' => $data['registration_number'] ?? null,
             'address' => $data['business_address'] ?? null,
             'barangay' => $data['barangay'] ?? null,
+            'barangay_psgc_code' => $data['business_barangay_psgc_code'] ?? null,
             'ownership_type' => $data['ownership_type'] ?? null,
             'organization_name' => $data['organization_name'] ?? null,
             'occupancy' => $data['occupancy'] ?? null,

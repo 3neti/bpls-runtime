@@ -109,7 +109,7 @@ class AssessmentPaymentScheduleController extends Controller
                     ->with(['receivedBy', 'allocations.paymentScheduleLine'])
                     ->when(
                         $canIssueReceipts || $canViewReceipts,
-                        fn ($query) => $query->with(['receipt.issuedBy']),
+                        fn ($query) => $query->with(['receipt.issuedBy', 'receipts.issuedBy']),
                     )
                     ->latest('received_at'),
             ]);
@@ -232,6 +232,19 @@ class AssessmentPaymentScheduleController extends Controller
                         'issued_at' => $collection->receipt->issued_at->toIso8601String(),
                         'issued_by' => $collection->receipt->issuedBy?->name,
                     ] : null,
+                    'receipts' => $collection->relationLoaded('receipts') ? $collection->receipts
+                        ->sortBy('id')->values()->map(fn ($receipt): array => [
+                            'id' => $receipt->id,
+                            'status' => $receipt->status->value,
+                            'numbering_authority' => $receipt->numbering_authority,
+                            'receipt_group_key' => $receipt->receipt_group_key,
+                            'receipt_group_label' => $receipt->receipt_group_label,
+                            'receipt_number' => $receipt->receipt_number,
+                            'series' => $receipt->series,
+                            'amount_cents' => $receipt->amount_cents,
+                            'issued_at' => $receipt->issued_at->toIso8601String(),
+                            'issued_by' => $receipt->issuedBy?->name,
+                        ])->all() : [],
                     'allocations' => $collection->allocations
                         ->values()
                         ->map(fn ($allocation): array => [
@@ -240,6 +253,9 @@ class AssessmentPaymentScheduleController extends Controller
                             'code' => $allocation->paymentScheduleLine->code,
                             'name' => $allocation->paymentScheduleLine->name,
                             'amount_cents' => $allocation->amount_cents,
+                            'receipt_group_key' => $allocation->receipt_group_key,
+                            'receipt_group_label' => $allocation->receipt_group_label,
+                            'receipt_id' => $allocation->receipt_id,
                         ]),
                 ]),
             'payment_policy_boundary' => $this->describePaymentPolicyBoundary->handle($paymentSchedule),

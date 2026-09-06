@@ -13,14 +13,18 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $treasury_collection_id
  * @property int $payment_schedule_line_id
+ * @property int|null $receipt_id
+ * @property string|null $receipt_group_key
+ * @property string|null $receipt_group_label
  * @property int $amount_cents
  * @property array<string, mixed> $source_snapshot
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read PaymentScheduleLine $paymentScheduleLine
  * @property-read TreasuryCollection $treasuryCollection
+ * @property-read Receipt|null $receipt
  */
-#[Fillable(['treasury_collection_id', 'payment_schedule_line_id', 'amount_cents', 'source_snapshot'])]
+#[Fillable(['treasury_collection_id', 'payment_schedule_line_id', 'receipt_id', 'receipt_group_key', 'receipt_group_label', 'amount_cents', 'source_snapshot'])]
 class CollectionAllocation extends Model
 {
     /** @use HasFactory<CollectionAllocationFactory> */
@@ -36,6 +40,12 @@ class CollectionAllocation extends Model
     public function paymentScheduleLine(): BelongsTo
     {
         return $this->belongsTo(PaymentScheduleLine::class);
+    }
+
+    /** @return BelongsTo<Receipt, $this> */
+    public function receipt(): BelongsTo
+    {
+        return $this->belongsTo(Receipt::class);
     }
 
     /**

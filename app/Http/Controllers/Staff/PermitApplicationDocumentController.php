@@ -28,8 +28,12 @@ class PermitApplicationDocumentController extends Controller
         Gate::authorize(UserPermission::ViewPermitApplications->value);
         abort_unless($document->permit_application_id === $permitApplication->id, 404);
 
-        return Storage::disk($document->storage_disk)->download(
-            $document->path,
+        $document->loadMissing('media');
+        $disk = $document->media?->disk ?? $document->storage_disk;
+        $path = $document->media?->getPathRelativeToRoot() ?? $document->path;
+
+        return Storage::disk($disk)->download(
+            $path,
             $document->original_name,
             ['Content-Type' => $document->mime_type],
         );
