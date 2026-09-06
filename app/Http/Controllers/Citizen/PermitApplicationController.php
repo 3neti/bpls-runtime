@@ -24,6 +24,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Citizen\StorePermitApplicationRequest;
 use App\Http\Requests\Citizen\SubmitPermitApplicationRequest;
 use App\Http\Requests\Citizen\UpdatePermitApplicationRequest;
+use App\Models\LifecycleCleanroomRun;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\StakeholderPreview\StakeholderPreviewSafety;
@@ -93,8 +94,8 @@ class PermitApplicationController extends Controller
             ],
             'registry' => $this->registryPayload($request),
             'cleanroomIntake' => $cleanroomIntake,
-            'labIntakeFixtures' => $cleanroom !== null
-                || $previewSafety->personaFor($request->user()) === StakeholderPreviewPersona::Citizen
+            'labIntakeFixtures' => ($cleanroom === null
+                && $previewSafety->personaFor($request->user()) === StakeholderPreviewPersona::Citizen)
                     ? $buildLabFixture->pool()
                     : [],
         ]);
@@ -109,6 +110,14 @@ class PermitApplicationController extends Controller
 
         try {
             if (is_string($cleanroomRunId)) {
+                $cleanroom = app(ResolveLifecycleCleanroomIntake::class)->handle($request);
+                if ($cleanroom?->isNelsonReconciliationV1()) {
+                    $permitApplication = $captureCleanroomIntake->create($request, $request->validatedForPersistence());
+
+                    return to_route('citizen.permit-applications.show', $permitApplication)
+                        ->with('status', 'Nelson application draft saved. Add supporting documents, then Sign & Submit to lodge it.');
+                }
+
                 $lodging = $lodgeCleanroomApplication->handle(
                     $request,
                     $request->validatedForPersistence(),
@@ -193,6 +202,15 @@ class PermitApplicationController extends Controller
             );
         } catch (DomainException $exception) {
             return back()->withErrors(['submission' => $exception->getMessage()]);
+        }
+
+        $cleanroomRunId = data_get($application->metadata, 'lifecycle_cleanroom.run_id');
+        if (is_string($cleanroomRunId)) {
+            $cleanroom = LifecycleCleanroomRun::query()->where('public_id', $cleanroomRunId)->first();
+            if ($cleanroom?->isNelsonReconciliationV1()) {
+                return to_route('stakeholder-preview.lifecycle-cleanroom-application.show', $cleanroom)
+                    ->with('status', 'Application declaration, document manifest, and signature evidence frozen at lodging.');
+            }
         }
 
         return to_route('citizen.permit-applications.show', $application)

@@ -42,16 +42,20 @@ class CaptureLifecycleCleanroomIntake
         }
 
         $metadata = $application->metadata ?? [];
+        $scenarioId = $lockedRun->isNelsonReconciliationV1()
+            ? LifecycleCleanroomRun::CeremonyNelsonReconciliationV1
+            : 'new-application-happy-path';
         $metadata['lifecycle_cleanroom'] = [
             'run_id' => $lockedRun->public_id,
             'definition_revision' => LifecycleCleanroomDefinition::Revision,
-            'scenario_id' => 'new-application-happy-path',
+            'ceremony' => data_get($lockedRun->actor_manifest, 'ceremony'),
+            'scenario_id' => $scenarioId,
             'semantic_classification' => 'synthetic_only',
             'production_liability' => false,
         ];
         $metadata['business_permit_evaluation'] = [
             'semantic_classification' => 'provisional_uat',
-            'scenario_id' => 'new-application-happy-path',
+            'scenario_id' => $scenarioId,
             'cleanroom_run_id' => $lockedRun->public_id,
             'production_liability' => false,
         ];

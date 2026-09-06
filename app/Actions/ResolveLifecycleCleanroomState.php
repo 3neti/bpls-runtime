@@ -57,6 +57,20 @@ class ResolveLifecycleCleanroomState
         $renewalProfile = $this->profile($renewalApplication);
 
         $stepDefinitions = collect($this->definition->steps());
+        if ($run->isNelsonReconciliationV1()) {
+            $stepDefinitions = $stepDefinitions->map(function (array $step): array {
+                if ($step['key'] !== 'citizen_intake') {
+                    return $step;
+                }
+
+                return [
+                    ...$step,
+                    'label' => 'Application drafted, documented, signed and lodged',
+                    'description' => 'The applicant saves the plain-language business declaration as a draft, adds supporting documents, then captures a signature facsimile and lodges it. Page 1 and the documentary manifest freeze only at lodging.',
+                    'milestone' => 'Draft, document & lodge Application',
+                ];
+            });
+        }
         if (($newProfile['scope'] ?? null) === 'single_source_application') {
             $publicVerificationIndex = $stepDefinitions->search(fn (array $step): bool => $step['key'] === 'public_verification');
             $stepDefinitions = $stepDefinitions->take(is_int($publicVerificationIndex) ? $publicVerificationIndex + 1 : 0);
@@ -81,6 +95,7 @@ class ResolveLifecycleCleanroomState
             'run' => [
                 'id' => $run->id,
                 'public_id' => $run->public_id,
+                'ceremony' => data_get($run->actor_manifest, 'ceremony', LifecycleCleanroomRun::CeremonyLegacyRegression),
                 'status' => $run->status,
                 'target_step' => $run->target_step,
                 'closed_at' => $run->closed_at?->toIso8601String(),
@@ -91,7 +106,7 @@ class ResolveLifecycleCleanroomState
                 'complete' => $next === null,
                 'blocked' => is_string($blocker),
                 'blocker' => $blocker,
-                'profile_kind' => $newProfile['kind'] ?? 'pending_intake',
+                'profile_kind' => $newProfile['kind'] ?? ($run->isNelsonReconciliationV1() ? 'nelson_reconciliation_v1' : 'pending_intake'),
                 'profile_statement' => $newProfile['statement'] ?? null,
                 'completion_message' => ($newProfile['scope'] ?? null) === 'single_source_application'
                     ? 'The source-backed 2025 registry specimen completes the synthetic Business Permit lifecycle without creating a Renewal.'
@@ -398,7 +413,9 @@ class ResolveLifecycleCleanroomState
 
         return match ($baseKey) {
             'cleanroom_started' => ['Cleanroom actors' => '0 → 9'],
-            'citizen_intake' => ['Municipal Owners' => '0 → 1', 'Businesses' => '0 → 1', 'Application' => 'None → Lodged', 'Business activities' => '0 → '.($application?->lines->count() ?? 2)],
+            'citizen_intake' => ($application?->metadata['ceremony'] ?? null) === LifecycleCleanroomRun::CeremonyNelsonReconciliationV1
+                ? ['Municipal Owners' => '0 → 1', 'Businesses' => '0 → 1', 'Application' => 'None → Draft → Lodged', 'Applicant LOB declarations' => '0 → 0', 'Document manifest' => 'Mutable → Frozen at lodging']
+                : ['Municipal Owners' => '0 → 1', 'Businesses' => '0 → 1', 'Application' => 'None → Lodged', 'Business activities' => '0 → '.($application?->lines->count() ?? 2)],
             'application_submitted', 'lodged' => ['Application' => 'Draft → Lodged'],
             'bplo_routing' => ['BPLO routing determination' => 'Pending → Recorded', 'Concerned offices' => '0 → BPLO selected'],
             'evaluation_initialized' => ['Concerned offices' => '0 → '.$responsibilities->pluck('department')->unique()->count(), 'Responsibilities' => '0 → '.$responsibilities->count()],

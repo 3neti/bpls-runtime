@@ -20,12 +20,12 @@ class StartLifecycleCleanroom
         private readonly EnsureProductLabLineOfBusinessCatalog $ensureCatalog,
     ) {}
 
-    public function handle(User $startedBy): LifecycleCleanroomRun
+    public function handle(User $startedBy, string $ceremony = LifecycleCleanroomRun::CeremonyLegacyRegression): LifecycleCleanroomRun
     {
         $this->safety->ensureReady();
         $this->ensureCatalog->handle();
 
-        return DB::transaction(function () use ($startedBy): LifecycleCleanroomRun {
+        return DB::transaction(function () use ($startedBy, $ceremony): LifecycleCleanroomRun {
             $existing = LifecycleCleanroomRun::query()
                 ->where('status', 'active')
                 ->lockForUpdate()
@@ -68,6 +68,7 @@ class StartLifecycleCleanroom
                 'started_by_id' => $startedBy->id,
                 'actor_manifest' => [
                     'revision' => LifecycleCleanroomDefinition::Revision,
+                    'ceremony' => $ceremony,
                     'actors' => $actors,
                     'actor_user_ids' => collect($actors)->pluck('user_id')->sort()->values()->all(),
                     'actor_role_ids' => collect($actors)->pluck('role_id')->unique()->sort()->values()->all(),
@@ -75,6 +76,7 @@ class StartLifecycleCleanroom
                     'production_liability' => false,
                 ],
                 'owned_resource_manifest' => [
+                    'ceremony' => $ceremony,
                     'user_ids' => collect($actors)->pluck('user_id')->sort()->values()->all(),
                     'business_owner_ids' => [],
                     'business_ids' => [],

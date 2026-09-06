@@ -27,6 +27,15 @@ class LifecycleCleanroomRun extends Model
     /** @use HasFactory<LifecycleCleanroomRunFactory> */
     use HasFactory;
 
+    public const CeremonyLegacyRegression = 'certified_2025_2026_regression';
+
+    public const CeremonyNelsonReconciliationV1 = 'nelson_reconciliation_v1';
+
+    public function isNelsonReconciliationV1(): bool
+    {
+        return data_get($this->actor_manifest, 'ceremony') === self::CeremonyNelsonReconciliationV1;
+    }
+
     /** @return BelongsTo<User, $this> */
     public function startedBy(): BelongsTo
     {

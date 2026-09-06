@@ -31,8 +31,10 @@ use App\Models\LifecycleCleanroomRun;
 use App\Models\LifecycleScenarioSpecimen;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
+use App\Models\SignatureEvidence;
 use App\Models\TreasuryCollection;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
@@ -265,6 +267,67 @@ test('management starts a non destructive cleanroom and run next opens the real 
             ->where('cleanroomIntake.run_id', $run->public_id)
             ->where('cleanroomIntake.lines.0.declared_gross_sales_pesos', '1200000')
             ->has('cleanroomIntake.lines', 2));
+});
+
+test('interactive Nelson ceremony drafts before documents and signed lodging', function () {
+    $management = previewAccount(StakeholderPreviewPersona::Management);
+    $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'), [
+        'ceremony' => LifecycleCleanroomRun::CeremonyNelsonReconciliationV1,
+    ])->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.index'));
+
+    $run = LifecycleCleanroomRun::query()->sole();
+    expect($run->isNelsonReconciliationV1())->toBeTrue();
+
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))
+        ->assertRedirect(route('citizen.permit-applications.create'));
+    $citizen = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.citizen.user_id'));
+    $this->assertAuthenticatedAs($citizen);
+
+    $this->get(route('citizen.permit-applications.create'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Create')
+            ->where('cleanroomIntake.ceremony', LifecycleCleanroomRun::CeremonyNelsonReconciliationV1)
+            ->where('cleanroomIntake.business_activity_description', 'General merchandise store selling household goods and liquor, with a small coffee shop.')
+            ->where('cleanroomIntake.business_barangay_psgc_code', '0908305023')
+            ->missing('cleanroomIntake.lines')
+            ->has('barangays', 28)
+            ->has('labIntakeFixtures', 0));
+
+    $intake = app(BuildLifecycleCleanroomIntake::class)->handle($run);
+    $this->post(route('citizen.permit-applications.store'), [
+        ...$intake,
+        'type' => 'new',
+        'lifecycle_cleanroom_run_id' => $run->public_id,
+        'undertaking_accepted' => '1',
+    ])->assertSessionHasNoErrors();
+
+    $application = PermitApplication::query()->findOrFail($run->fresh()->new_application_id);
+    expect($application->status->value)->toBe('draft')
+        ->and($application->submitted_at)->toBeNull()
+        ->and($application->lines)->toBeEmpty()
+        ->and($application->business_activity_description)->toBe($intake['business_activity_description'])
+        ->and($application->business->barangay_psgc_code)->toBe('0908305023');
+
+    $this->post(route('citizen.permit-applications.documents.store', $application), [
+        'label' => 'DTI registration specimen',
+        'document_type' => 'dti_registration',
+        'file' => UploadedFile::fake()->create('dti.pdf', 24, 'application/pdf'),
+    ])->assertSessionHasNoErrors();
+
+    $this->post(route('citizen.permit-applications.submit', $application), [
+        'undertaking_accepted' => '1',
+        'signature_facsimile' => UploadedFile::fake()->image('applicant-signature.png'),
+    ])->assertRedirect(route('stakeholder-preview.lifecycle-cleanroom-application.show', $run));
+
+    $application->refresh();
+    $declaration = $application->declaration()->sole();
+    expect($application->submitted_at)->not->toBeNull()
+        ->and(data_get($declaration->snapshot, 'applicant_business_activity_description'))->toBe($intake['business_activity_description'])
+        ->and(data_get($declaration->snapshot, 'lines_of_business'))->toBe([])
+        ->and(data_get($declaration->snapshot, 'applicant_documents_manifest.documents'))->toHaveCount(1)
+        ->and(SignatureEvidence::query()->where('signable_type', $declaration->getMorphClass())->where('signable_id', $declaration->id)->where('purpose', 'applicant_lodging')->exists())->toBeTrue();
 });
 
 test('cleanroom citizen intake accepts an active municipal catalog activity offered by the form', function () {

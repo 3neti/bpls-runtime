@@ -80,9 +80,9 @@ class StorePermitApplicationRequest extends PermitApplicationIntakeRequest
             'application_number' => ['prohibited'],
             'type' => ['required', Rule::in([PermitApplicationType::New->value])],
             'application_year' => ['required', 'integer', Rule::in($applicationYears)],
-            'signature_facsimile' => $nelsonPath
-                ? ['required', File::image()->max(2048)]
-                : ($cleanroom === null ? ['prohibited'] : ['nullable', File::image()->max(2048)]),
+            'signature_facsimile' => $cleanroom === null
+                ? ['prohibited']
+                : ['nullable', File::image()->max(2048)],
         ];
     }
 

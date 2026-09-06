@@ -23,7 +23,6 @@ import {
 } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import InputError from '@/components/InputError.vue';
 import IpilField from '@/components/permit-applications/IpilField.vue';
-import SignatureFacsimileCapture from '@/components/SignatureFacsimileCapture.vue';
 import { Button } from '@/components/ui/button';
 import type { BreadcrumbItem } from '@/types';
 
@@ -90,6 +89,7 @@ type Draft = {
     lines: Activity[];
 };
 type CleanroomIntake = Record<string, unknown> & {
+    ceremony?: string;
     run_id: string;
     application_year: number;
     lines?: Activity[];
@@ -130,6 +130,9 @@ const props = defineProps<{
 }>();
 
 const isCitizen = computed(() => props.intakeAudience === 'citizen');
+const isNelsonCleanroom = computed(
+    () => props.cleanroomIntake?.ceremony === 'nelson_reconciliation_v1',
+);
 const isEditing = computed(() => props.draft !== undefined);
 const selectedBusinessId = ref<number | ''>(props.draft?.business_id ?? '');
 const selectedRegistryBusiness = computed(
@@ -693,8 +696,9 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         >Lifecycle Cleanroom
                         {{ cleanroomIntake.run_id }}</strong
                     >
-                    - complete and lodge the real Ipil application form in one
-                    action. Page 1 freezes when the Municipality receives it.
+                    - draft the real Ipil application first. Add documents on
+                    the saved draft, then Sign & Submit to freeze Page 1 and its
+                    document manifest.
                 </section>
                 <section
                     v-if="labIntakeFixtures?.length && !isEditing"
@@ -1669,10 +1673,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             data-testid="permit-business-activity-intake"
                             class="grid gap-3 border-t border-stone-300 pt-4"
                         >
-                            <div
-                                v-if="isCitizen && !cleanroomIntake"
-                                class="grid gap-2"
-                            >
+                            <div v-if="isCitizen" class="grid gap-2">
                                 <label
                                     for="business-activity-description"
                                     class="text-sm font-black uppercase"
@@ -1709,7 +1710,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 />
                             </div>
                             <div
-                                v-if="!isCitizen || cleanroomIntake"
+                                v-if="!isCitizen"
                                 class="flex items-center justify-between gap-3"
                             >
                                 <h3 class="text-sm font-black uppercase">
@@ -1725,11 +1726,11 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 >
                             </div>
                             <InputError
-                                v-if="!isCitizen || cleanroomIntake"
+                                v-if="!isCitizen"
                                 :message="errors.lines"
                             />
                             <div
-                                v-if="!isCitizen || cleanroomIntake"
+                                v-if="!isCitizen"
                                 class="hidden grid-cols-[100px_minmax(180px,1fr)_100px_140px_140px_140px_50px] border border-stone-900 bg-slate-200 text-[11px] font-black uppercase lg:grid dark:bg-slate-800"
                             >
                                 <span class="p-2">Code</span
@@ -1742,9 +1743,10 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 ><span />
                             </div>
                             <div
-                                v-for="(activity, index) in activities"
+                                v-for="(activity, index) in isCitizen
+                                    ? []
+                                    : activities"
                                 :key="activity.key"
-                                v-show="!isCitizen || !!cleanroomIntake"
                                 data-testid="permit-business-activity-row"
                                 class="grid gap-3 border border-stone-400 p-3 lg:grid-cols-[100px_minmax(180px,1fr)_100px_140px_140px_140px_50px] lg:items-start lg:border-t-0 lg:p-0"
                             >
@@ -1926,10 +1928,6 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 unresolved; this field preserves the applicant's
                                 printed-name declaration.
                             </p>
-                            <SignatureFacsimileCapture
-                                v-if="cleanroomIntake"
-                                :error="errors.signature_facsimile"
-                            />
                         </section>
                     </div>
                 </article>
@@ -1939,9 +1937,11 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                 >
                     <p class="text-xs text-stone-600 dark:text-stone-300">
                         {{
-                            cleanroomIntake
-                                ? 'One action saves the canonical Application, freezes Page 1, and lodges it.'
-                                : 'Same municipal nouns, responsive layout. Submission remains a separate lodging action.'
+                            isNelsonCleanroom
+                                ? 'Save the draft first. Supporting documents and Sign & Submit are available on the next screen.'
+                                : cleanroomIntake
+                                  ? 'One action saves the canonical Application, freezes Page 1, and lodges it.'
+                                  : 'Same municipal nouns, responsive layout. Submission remains a separate lodging action.'
                         }}
                     </p>
                     <Button
@@ -1950,18 +1950,22 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             processing ||
                             (!isCitizen && lineOfBusinesses.length === 0)
                         "
-                        ><Send v-if="cleanroomIntake" /><Save v-else />{{
+                        ><Send
+                            v-if="cleanroomIntake && !isNelsonCleanroom"
+                        /><Save v-else />{{
                             processing
-                                ? cleanroomIntake
+                                ? cleanroomIntake && !isNelsonCleanroom
                                     ? 'Lodging application...'
                                     : 'Saving document...'
-                                : cleanroomIntake
+                                : cleanroomIntake && !isNelsonCleanroom
                                   ? 'Lodge application'
-                                  : isEditing
-                                    ? 'Save document changes'
-                                    : isCitizen
-                                      ? 'Save application draft'
-                                      : 'Save application'
+                                  : isNelsonCleanroom
+                                    ? 'Save application draft'
+                                    : isEditing
+                                      ? 'Save document changes'
+                                      : isCitizen
+                                        ? 'Save application draft'
+                                        : 'Save application'
                         }}</Button
                     >
                 </div>

@@ -263,7 +263,7 @@ function startCleanroom(): void {
     working.value = 'cleanroom:start';
     router.post(
         startCleanroomRoute().url,
-        {},
+        { ceremony: 'nelson_reconciliation_v1' },
         { onFinish: () => (working.value = null) },
     );
 }

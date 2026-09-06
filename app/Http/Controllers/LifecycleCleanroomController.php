@@ -51,7 +51,16 @@ class LifecycleCleanroomController extends Controller
 
     public function start(Request $request, StartLifecycleCleanroom $start): RedirectResponse
     {
-        $start->handle($request->user());
+        $ceremony = $request->string('ceremony')->toString();
+        if ($ceremony === '') {
+            $ceremony = LifecycleCleanroomRun::CeremonyLegacyRegression;
+        }
+        abort_unless(in_array($ceremony, [
+            LifecycleCleanroomRun::CeremonyLegacyRegression,
+            LifecycleCleanroomRun::CeremonyNelsonReconciliationV1,
+        ], true), 422);
+
+        $start->handle($request->user(), $ceremony);
 
         return to_route('stakeholder-preview.lifecycle-laboratory.index')->with('success', 'A cleanroom is ready. Run Next Step opens the first real product form.');
     }
