@@ -293,7 +293,8 @@ test('interactive Nelson ceremony drafts before documents and signed lodging', f
             ->where('cleanroomIntake.business_barangay_psgc_code', '0908305023')
             ->missing('cleanroomIntake.lines')
             ->has('barangays', 28)
-            ->has('labIntakeFixtures', 0));
+            ->has('labIntakeFixtures', 1)
+            ->where('labIntakeFixtures.0.classification', 'synthetic_uat_only'));
 
     $intake = app(BuildLifecycleCleanroomIntake::class)->handle($run);
     $this->post(route('citizen.permit-applications.store'), [

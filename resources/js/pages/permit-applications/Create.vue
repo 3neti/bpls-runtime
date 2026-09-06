@@ -439,10 +439,13 @@ async function loadSelectedSpecimen(event: MouseEvent): Promise<void> {
         replaceControl(form, name, fixture.fields[name] ?? null);
     });
 
-    activities.value = fixture.lines.map((line) => ({
-        ...line,
-        key: nextKey++,
-    }));
+    if (!isNelsonCleanroom.value) {
+        activities.value = fixture.lines.map((line) => ({
+            ...line,
+            key: nextKey++,
+        }));
+    }
+
     await nextTick();
     loadedLabFixtureId.value = fixture.fixture_id;
     helperFilled.value = true;
@@ -740,6 +743,10 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             Fill blank fields from
                             {{ labIntakeFixture?.label }}. Anything you have
                             already entered stays unchanged.
+                        </p>
+                        <p v-if="isNelsonCleanroom" class="text-xs">
+                            Applicant activity and historical LOB data are not
+                            imported; describe the business below.
                         </p>
                         <p
                             v-if="

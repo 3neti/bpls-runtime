@@ -94,8 +94,8 @@ class PermitApplicationController extends Controller
             ],
             'registry' => $this->registryPayload($request),
             'cleanroomIntake' => $cleanroomIntake,
-            'labIntakeFixtures' => ($cleanroom === null
-                && $previewSafety->personaFor($request->user()) === StakeholderPreviewPersona::Citizen)
+            'labIntakeFixtures' => ($cleanroom !== null
+                || $previewSafety->personaFor($request->user()) === StakeholderPreviewPersona::Citizen)
                     ? $buildLabFixture->pool()
                     : [],
         ]);
