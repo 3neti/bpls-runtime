@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FormDataConvertible } from '@inertiajs/core';
-import { Form, Head, Link, setLayoutProps } from '@inertiajs/vue3';
+import { Form, Head, Link, setLayoutProps, useForm } from '@inertiajs/vue3';
 import {
     ArrowLeft,
     Eraser,
@@ -14,8 +14,8 @@ import {
 import { computed, nextTick, ref, watch } from 'vue';
 import {
     index as citizenIndex,
-    show as citizenShow,
     store as citizenStore,
+    submit as citizenSubmit,
     update as citizenUpdate,
 } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
 import {
@@ -25,6 +25,7 @@ import {
 import InputError from '@/components/InputError.vue';
 import ApplicationDocumentPillbox from '@/components/permit-applications/ApplicationDocumentPillbox.vue';
 import IpilField from '@/components/permit-applications/IpilField.vue';
+import SignatureFacsimileCapture from '@/components/SignatureFacsimileCapture.vue';
 import { Button } from '@/components/ui/button';
 import type { BreadcrumbItem } from '@/types';
 
@@ -106,6 +107,7 @@ type Draft = {
     registered_on: string | null;
     application_year: number;
     type: string;
+    commissioned_path: boolean;
     declaration?: Record<string, unknown> | null;
     documents: ApplicationDocument[];
     lines: Activity[];
@@ -150,6 +152,7 @@ const props = defineProps<{
     cleanroomIntake?: CleanroomIntake | null;
     labIntakeFixtures?: LabIntakeFixture[];
     applicationDocumentTypes?: ApplicationDocumentType[];
+    canSubmit?: boolean;
 }>();
 
 const isCitizen = computed(() => props.intakeAudience === 'citizen');
@@ -157,8 +160,15 @@ const isNelsonCleanroom = computed(
     () => props.cleanroomIntake?.ceremony === 'nelson_reconciliation_v1',
 );
 const isEditing = computed(() => props.draft !== undefined);
+const isNelsonApplication = computed(
+    () => isNelsonCleanroom.value || props.draft?.commissioned_path === true,
+);
 const supportsApplicantDocuments = computed(() => isCitizen.value);
 const pendingDocuments = ref<PendingDocument[]>([]);
+const submissionForm = useForm({
+    undertaking_accepted: false,
+    signature_facsimile: null as File | null,
+});
 let nextDocumentKey = 1;
 
 watch(
@@ -188,12 +198,38 @@ const action = computed(() => {
     return isCitizen.value ? citizenStore.form() : staffStore.form();
 });
 const back = computed(() => {
-    if (props.draft) {
-        return citizenShow(props.draft.id);
-    }
-
     return isCitizen.value ? citizenIndex() : staffIndex();
 });
+
+function syncSubmissionUndertaking(event: Event): void {
+    if (!isEditing.value || !isNelsonApplication.value) {
+        return;
+    }
+
+    submissionForm.undertaking_accepted = (
+        event.target as HTMLInputElement
+    ).checked;
+}
+
+function submitDraft(): void {
+    if (
+        !props.draft ||
+        !submissionForm.undertaking_accepted ||
+        !submissionForm.signature_facsimile
+    ) {
+        return;
+    }
+
+    submissionForm.post(citizenSubmit.url(props.draft.id), {
+        forceFormData: true,
+        preserveScroll: true,
+    });
+}
+
+function submissionBoundaryError(): string | undefined {
+    return (submissionForm.errors as Record<string, string | undefined>)
+        .submission;
+}
 
 function queueDocument(document: Omit<PendingDocument, 'key'>): void {
     const definition = props.applicationDocumentTypes?.find(
@@ -1997,10 +2033,16 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                     type="checkbox"
                                     value="1"
                                     :checked="
-                                        nested('undertaking.accepted') === true
+                                        isEditing && isNelsonApplication
+                                            ? submissionForm.undertaking_accepted
+                                            : nested('undertaking.accepted') ===
+                                              true
                                     "
-                                    required
+                                    :required="
+                                        !(isEditing && isNelsonApplication)
+                                    "
                                     class="mt-1"
+                                    @change="syncSubmissionUndertaking"
                                 /><span
                                     ><strong>Oath of Undertaking:</strong> I
                                     undertake to comply with the regulatory
@@ -2044,6 +2086,21 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 unresolved; this field preserves the applicant's
                                 printed-name declaration.
                             </p>
+                            <SignatureFacsimileCapture
+                                v-if="
+                                    isEditing &&
+                                    isNelsonApplication &&
+                                    canSubmit
+                                "
+                                :required="false"
+                                :error="
+                                    submissionForm.errors.signature_facsimile
+                                "
+                                @selected="
+                                    submissionForm.signature_facsimile = $event
+                                "
+                            />
+                            <InputError :message="submissionBoundaryError()" />
                         </section>
                     </div>
                 </article>
@@ -2053,37 +2110,59 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                 >
                     <p class="text-xs text-stone-600 dark:text-stone-300">
                         {{
-                            isNelsonCleanroom
-                                ? 'Save the draft first. Supporting documents and Sign & Submit are available on the next screen.'
+                            isNelsonApplication
+                                ? isEditing
+                                    ? 'Save any changed fields, then Sign & Submit this Application here.'
+                                    : 'Save the draft to keep working and enable Sign & Submit on this Page 1 form.'
                                 : cleanroomIntake
                                   ? 'One action saves the canonical Application, freezes Page 1, and lodges it.'
                                   : 'Same municipal nouns, responsive layout. Submission remains a separate lodging action.'
                         }}
                     </p>
-                    <Button
-                        type="submit"
-                        :disabled="
-                            processing ||
-                            (!isCitizen && lineOfBusinesses.length === 0)
-                        "
-                        ><Send
-                            v-if="cleanroomIntake && !isNelsonCleanroom"
-                        /><Save v-else />{{
-                            processing
-                                ? cleanroomIntake && !isNelsonCleanroom
-                                    ? 'Lodging application...'
-                                    : 'Saving document...'
-                                : cleanroomIntake && !isNelsonCleanroom
-                                  ? 'Lodge application'
-                                  : isNelsonCleanroom
-                                    ? 'Save application draft'
-                                    : isEditing
-                                      ? 'Save document changes'
-                                      : isCitizen
+                    <div class="flex flex-col gap-2 sm:flex-row">
+                        <Button
+                            type="submit"
+                            :disabled="
+                                processing ||
+                                (!isCitizen && lineOfBusinesses.length === 0)
+                            "
+                            ><Send
+                                v-if="cleanroomIntake && !isNelsonCleanroom"
+                            /><Save v-else />{{
+                                processing
+                                    ? cleanroomIntake && !isNelsonCleanroom
+                                        ? 'Lodging application...'
+                                        : 'Saving document...'
+                                    : cleanroomIntake && !isNelsonCleanroom
+                                      ? 'Lodge application'
+                                      : isNelsonApplication
                                         ? 'Save application draft'
-                                        : 'Save application'
-                        }}</Button
-                    >
+                                        : isEditing
+                                          ? 'Save document changes'
+                                          : isCitizen
+                                            ? 'Save application draft'
+                                            : 'Save application'
+                            }}</Button
+                        >
+                        <Button
+                            v-if="isEditing && isNelsonApplication && canSubmit"
+                            type="button"
+                            data-testid="citizen-submit-application"
+                            :disabled="
+                                submissionForm.processing ||
+                                !submissionForm.undertaking_accepted ||
+                                !submissionForm.signature_facsimile
+                            "
+                            @click="submitDraft"
+                        >
+                            <Send />
+                            {{
+                                submissionForm.processing
+                                    ? 'Submitting...'
+                                    : 'Sign & Submit'
+                            }}
+                        </Button>
+                    </div>
                 </div>
             </Form>
         </main>

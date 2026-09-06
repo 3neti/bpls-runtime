@@ -3,6 +3,8 @@
 namespace App\Http\Requests\Citizen;
 
 use App\Enums\UserPermission;
+use App\Models\PermitApplication;
+use Illuminate\Validation\Rule;
 
 class UpdatePermitApplicationRequest extends StorePermitApplicationRequest
 {
@@ -16,8 +18,15 @@ class UpdatePermitApplicationRequest extends StorePermitApplicationRequest
      */
     public function rules(): array
     {
+        $rules = parent::rules();
+        $applicationYear = PermitApplication::query()
+            ->whereKey((int) $this->route('permit_application'))
+            ->whereHas('business', fn ($query) => $query->where('business_owner_id', $this->user()?->business_owner_id))
+            ->value('application_year');
+
         return [
-            ...parent::rules(),
+            ...$rules,
+            'application_year' => ['required', 'integer', Rule::in([$applicationYear])],
             'draft_version' => ['required', 'date'],
             'application_documents' => ['prohibited'],
         ];

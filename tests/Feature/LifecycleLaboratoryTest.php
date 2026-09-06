@@ -319,6 +319,24 @@ test('interactive Nelson ceremony drafts before documents and signed lodging', f
         ->and($application->business->barangay_psgc_code)->toBe('0908305023')
         ->and($application->documents()->whereNull('removed_at')->sole()->label)->toBe('DTI Registration');
 
+    $this->get(route('citizen.permit-applications.edit', $application))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Create')
+            ->where('draft.id', $application->id)
+            ->where('draft.commissioned_path', true)
+            ->where('canSubmit', true));
+
+    $this->get(route('citizen.permit-applications.show', $application))
+        ->assertRedirect(route('citizen.permit-applications.edit', $application));
+
+    $this->put(route('citizen.permit-applications.update', $application), [
+        ...$intake,
+        'type' => 'new',
+        'draft_version' => $application->fresh()->updated_at->toIso8601String(),
+    ])->assertSessionHasNoErrors()
+        ->assertRedirect(route('citizen.permit-applications.edit', $application));
+
     $this->post(route('citizen.permit-applications.submit', $application), [
         'undertaking_accepted' => '1',
         'signature_facsimile' => UploadedFile::fake()->image('applicant-signature.png'),

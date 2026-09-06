@@ -124,7 +124,7 @@ class PermitApplicationController extends Controller
                             ->with('status', 'Application draft saved and applicant document added.');
                     }
 
-                    return to_route('citizen.permit-applications.show', $permitApplication)
+                    return to_route('citizen.permit-applications.edit', $permitApplication)
                         ->with('status', 'Nelson application draft saved. Add supporting documents, then Sign & Submit to lodge it.');
                 }
 
@@ -177,6 +177,8 @@ class PermitApplicationController extends Controller
             ],
             'registry' => $this->registryPayload($request),
             'draft' => $this->draftIntakePayload($application),
+            'canSubmit' => $request->user()->can(UserPermission::SubmitOwnPermitApplications->value)
+                && $this->isSubmittableDraft($application, $request->user()->business_owner_id),
             'applicationDocumentTypes' => $documentTypeCatalog->options(),
         ]);
     }
@@ -192,6 +194,11 @@ class PermitApplicationController extends Controller
             $application = $updateDraft->handle($application, $request->validatedForPersistence(), $request->user());
         } catch (DomainException $exception) {
             return back()->withErrors(['draft' => $exception->getMessage()]);
+        }
+
+        if (data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true) {
+            return to_route('citizen.permit-applications.edit', $application)
+                ->with('status', 'Permit application draft updated.');
         }
 
         return to_route('citizen.permit-applications.show', $application)
@@ -229,11 +236,19 @@ class PermitApplicationController extends Controller
             ->with('status', 'Permit application submitted and received for municipal processing.');
     }
 
-    public function show(Request $request, int $permitApplication, ApplicationDocumentTypeCatalog $documentTypeCatalog): Response
+    public function show(Request $request, int $permitApplication, ApplicationDocumentTypeCatalog $documentTypeCatalog): Response|RedirectResponse
     {
         Gate::authorize(UserPermission::ViewOwnPermitApplications->value);
 
         $application = $this->ownedApplication($request, $permitApplication);
+
+        if (
+            $this->isEditableDraft($application)
+            && data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true
+            && $request->user()->can(UserPermission::EditOwnPermitApplications->value)
+        ) {
+            return to_route('citizen.permit-applications.edit', $application);
+        }
 
         $isDraft = $application->status === PermitApplicationStatus::Draft;
         $assessmentStarted = (bool) $application->assessments_exists;
@@ -560,6 +575,7 @@ class PermitApplicationController extends Controller
             'registered_on' => $business->registered_on?->toDateString(),
             'application_year' => $permitApplication->application_year,
             'type' => $permitApplication->type->value,
+            'commissioned_path' => data_get($permitApplication->metadata, 'nelson_reconciliation_v1.commissioned_path') === true,
             'declaration' => data_get($permitApplication->metadata, 'applicant_declaration_draft'),
             'documents' => $permitApplication->documents->whereNull('removed_at')->map(fn ($document): array => [
                 'id' => $document->id,
