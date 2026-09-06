@@ -6,6 +6,7 @@ use App\Actions\IssueSyntheticLifecyclePermit;
 use App\Actions\ProjectPermitReadiness;
 use App\Actions\RecordPostPaymentOfficeCertification;
 use App\Actions\ReleaseSyntheticLifecyclePermit;
+use App\Actions\RenderPermitPdf;
 use App\Actions\StartLifecycleCleanroom;
 use App\Data\Application\ApplicationDataResolver;
 use App\Enums\AssessmentDecisionAction;
@@ -21,9 +22,11 @@ use App\Models\BploRoutingDetermination;
 use App\Models\Business;
 use App\Models\BusinessOwner;
 use App\Models\LifecycleCleanroomRun;
+use App\Models\LineOfBusiness;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationDeclaration;
+use App\Models\PermitApplicationLine;
 use App\Models\TreasuryCollection;
 use App\Models\User;
 use App\StakeholderPreview\StakeholderPreviewSafety;
@@ -65,6 +68,13 @@ test('one Application executes routing-derived certification readiness issuance 
         ],
     ]);
     $run->update(['new_application_id' => $application->id]);
+    foreach (range(1, 18) as $index) {
+        $lineOfBusiness = LineOfBusiness::factory()->create([
+            'code' => sprintf('LOB-%02d', $index),
+            'name' => 'Municipal Supply and Specialist Service Category '.$index.' with Extended Description',
+        ]);
+        PermitApplicationLine::factory()->for($application)->for($lineOfBusiness)->create();
+    }
     PermitApplicationDeclaration::factory()->for($application)->create([
         'snapshot' => ['business' => ['name' => $business->name]],
         'snapshot_hash' => hash('sha256', $business->name),
@@ -192,6 +202,24 @@ test('one Application executes routing-derived certification readiness issuance 
         ->assertJsonPath('permit.identity_scope', 'exact_synthetic_permit_identity_only')
         ->assertJsonPath('permit.production_authority', false)
         ->assertJsonPath('permit.legal_effect', false);
+
+    $permitPdf = app(RenderPermitPdf::class)->handle($application->fresh());
+    preg_match_all('/\/Type \/Page\b/', $permitPdf, $permitPdfPages);
+    expect($permitPdf)
+        ->toStartWith('%PDF-1.4')
+        ->toContain('BUSINESS PERMIT')
+        ->toContain('LABORATORY SPECIMEN - NOT FOR OFFICIAL USE')
+        ->toContain($issued->permit_number)
+        ->toContain('LOB-01- MUNICIPAL SUPPLY')
+        ->toContain('LOB-18- MUNICIPAL SUPPLY')
+        ->toContain('HON. RAMSES TROY D. OLEGARIO')
+        ->toContain('NO MAYORAL SIGNATURE APPLIED')
+        ->toContain('OR. No.:')
+        ->toContain('7654321')
+        ->toContain('SCAN TO VERIFY IDENTITY')
+        ->toContain($data['permit']['verification']['reference'])
+        ->not->toContain('DEMEGILLO MATERNITY CLINIC')
+        ->and($permitPdfPages[0])->toHaveCount(1);
 });
 
 function cleanroomActor(LifecycleCleanroomRun $run, string $key): User

@@ -19,9 +19,12 @@ final class SimplePdfDocument
     public const ContentBottom = 68;
 
     /**
-     * @var array<int, array{section: string, commands: array<int, string>}>
+     * @var array<int, array{section: string, chrome: bool, commands: array<int, string>}>
      */
     private array $pages = [];
+
+    /** @var array<string, array{name: string, data: string, width: int, height: int}> */
+    private array $jpegImages = [];
 
     public function __construct(
         private readonly string $title,
@@ -30,14 +33,20 @@ final class SimplePdfDocument
         private readonly string $footerNote,
     ) {}
 
-    public function addPage(string $section = ''): int
+    public function addPage(string $section = '', bool $chrome = true): int
     {
         $this->pages[] = [
             'section' => $section,
+            'chrome' => $chrome,
             'commands' => [],
         ];
 
         return count($this->pages) - 1;
+    }
+
+    public function addBarePage(): int
+    {
+        return $this->addPage(chrome: false);
     }
 
     public function text(
@@ -50,6 +59,22 @@ final class SimplePdfDocument
         string $align = 'left',
         bool $monospace = false,
     ): void {
+        $this->coloredText($page, $text, $x, $y, $size, $bold, $align, $monospace, 0.08, 0.08, 0.08);
+    }
+
+    public function coloredText(
+        int $page,
+        string $text,
+        float $x,
+        float $y,
+        float $size,
+        bool $bold,
+        string $align,
+        bool $monospace,
+        float $red,
+        float $green,
+        float $blue,
+    ): void {
         $font = $monospace ? 'F3' : ($bold ? 'F2' : 'F1');
         $encoded = $this->encode($text);
         $position = match ($align) {
@@ -61,7 +86,10 @@ final class SimplePdfDocument
         $this->command(
             $page,
             sprintf(
-                '0.08 0.08 0.08 rg BT /%s %.2F Tf %.2F %.2F Td (%s) Tj ET',
+                '%.3F %.3F %.3F rg BT /%s %.2F Tf %.2F %.2F Td (%s) Tj ET',
+                $red,
+                $green,
+                $blue,
                 $font,
                 $size,
                 $position,
@@ -69,6 +97,37 @@ final class SimplePdfDocument
                 $encoded,
             ),
         );
+    }
+
+    public function jpeg(int $page, string $path, float $x, float $y, float $width, float $height): void
+    {
+        $data = file_get_contents($path);
+        if (! is_string($data)) {
+            throw new RuntimeException("PDF image [{$path}] could not be read.");
+        }
+
+        $this->jpegData($page, $data, $x, $y, $width, $height);
+    }
+
+    public function jpegData(int $page, string $data, float $x, float $y, float $width, float $height): void
+    {
+        $dimensions = getimagesizefromstring($data);
+        if (! is_array($dimensions) || $dimensions['mime'] !== 'image/jpeg') {
+            throw new RuntimeException('Simple PDF images must be JPEG data.');
+        }
+
+        $key = hash('sha256', $data);
+        if (! isset($this->jpegImages[$key])) {
+            $this->jpegImages[$key] = [
+                'name' => 'Im'.count($this->jpegImages),
+                'data' => $data,
+                'width' => $dimensions[0],
+                'height' => $dimensions[1],
+            ];
+        }
+
+        $name = $this->jpegImages[$key]['name'];
+        $this->command($page, sprintf('q %.2F 0 0 %.2F %.2F %.2F cm /%s Do Q', $width, $height, $x, $y, $name));
     }
 
     public function wrappedText(
@@ -190,6 +249,39 @@ final class SimplePdfDocument
         );
     }
 
+    public function coloredRectangle(
+        int $page,
+        float $x,
+        float $y,
+        float $width,
+        float $height,
+        float $red,
+        float $green,
+        float $blue,
+    ): void {
+        $this->command(
+            $page,
+            sprintf('%.3F %.3F %.3F rg %.2F %.2F %.2F %.2F re f', $red, $green, $blue, $x, $y, $width, $height),
+        );
+    }
+
+    public function coloredLine(
+        int $page,
+        float $x1,
+        float $y1,
+        float $x2,
+        float $y2,
+        float $width,
+        float $red,
+        float $green,
+        float $blue,
+    ): void {
+        $this->command(
+            $page,
+            sprintf('%.3F %.3F %.3F RG %.2F w %.2F %.2F m %.2F %.2F l S', $red, $green, $blue, $width, $x1, $y1, $x2, $y2),
+        );
+    }
+
     public function render(): string
     {
         if ($this->pages === []) {
@@ -203,6 +295,18 @@ final class SimplePdfDocument
             5 => '<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>',
         ];
         $nextObject = 6;
+        $imageObjects = [];
+        foreach ($this->jpegImages as $image) {
+            $imageObject = $nextObject++;
+            $imageObjects[$image['name']] = $imageObject;
+            $objects[$imageObject] = sprintf(
+                "<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length %d >>\nstream\n%s\nendstream",
+                $image['width'],
+                $image['height'],
+                strlen($image['data']),
+                $image['data'],
+            );
+        }
         $pageObjects = [];
         $pageCount = count($this->pages);
 
@@ -210,7 +314,10 @@ final class SimplePdfDocument
             $pageObject = $nextObject++;
             $contentObject = $nextObject++;
             $pageObjects[] = $pageObject;
-            $resources = '<< /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >>';
+            $xObjects = collect($imageObjects)
+                ->map(fn (int $object, string $name): string => "/{$name} {$object} 0 R")
+                ->implode(' ');
+            $resources = '<< /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >>'.($xObjects === '' ? '' : " /XObject << {$xObjects} >>").' >>';
             $objects[$pageObject] = sprintf(
                 '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %d %d] /Resources %s /Contents %d 0 R >>',
                 self::PageWidth,
@@ -219,9 +326,9 @@ final class SimplePdfDocument
                 $contentObject,
             );
             $content = implode("\n", [
-                $this->headerCommands($page['section']),
+                $page['chrome'] ? $this->headerCommands($page['section']) : '',
                 ...$page['commands'],
-                $this->footerCommands($index + 1, $pageCount),
+                $page['chrome'] ? $this->footerCommands($index + 1, $pageCount) : '',
             ]);
             $objects[$contentObject] = '<< /Length '.strlen($content)." >>\nstream\n{$content}\nendstream";
         }
