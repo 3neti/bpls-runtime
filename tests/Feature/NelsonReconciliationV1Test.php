@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\AssignTreasuryLinesOfBusiness;
+use App\Actions\BuildExecutablePermitApplicationDocument;
 use App\Actions\BuildScheduleOfPayment;
 use App\Actions\CommissionPostPaymentOfficeCertifications;
 use App\Actions\ConfirmOfficePaymentOrder;
@@ -114,6 +115,8 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         ->where('signable_id', $frozen->id)
         ->where('purpose', 'applicant_lodging')
         ->sole();
+    $applicationData = app(ApplicationDataResolver::class)->resolve($application, $citizen)->toArray();
+    $executableDocument = app(BuildExecutablePermitApplicationDocument::class)->handle($application, $citizen);
     expect(data_get($frozen->snapshot, 'applicant_business_activity_description'))->toBe($application->business_activity_description)
         ->and(data_get($frozen->snapshot, 'lines_of_business'))->toBe([])
         ->and(data_get($manifest, 'documents.0.document_id'))->toBe($document->id)
@@ -123,7 +126,11 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         ->and($signature->method)->toBe('captured_facsimile')
         ->and($signature->signer_id)->toBe($citizen->id)
         ->and($signature->evidence_digest)->toHaveLength(64)
-        ->and($signature->getFirstMedia(SignatureEvidence::FacsimileCollection))->not->toBeNull();
+        ->and($signature->getFirstMedia(SignatureEvidence::FacsimileCollection))->not->toBeNull()
+        ->and(data_get($applicationData, 'signature_evidence.0.purpose'))->toBe('applicant_lodging')
+        ->and(data_get($applicationData, 'signature_evidence.0.facsimile_data_url'))->toStartWith('data:image/png;base64,')
+        ->and(data_get($executableDocument, 'signature_evidence.0.evidence_digest'))->toBe($signature->evidence_digest)
+        ->and(data_get($executableDocument, 'signature_evidence.0.facsimile_data_url'))->toBe(data_get($applicationData, 'signature_evidence.0.facsimile_data_url'));
 
     app(StorePermitApplicationDocument::class)->handle($application, [
         'label' => 'Later supplementary specimen',

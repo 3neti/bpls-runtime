@@ -29,6 +29,8 @@ use App\Models\TreasuryLineOfBusinessAssignment;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 final class EloquentApplicationDataResolver implements ApplicationDataResolver
 {
@@ -268,6 +270,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                     method: $evidence->method,
                     evidence_digest: $evidence->evidence_digest,
                     media_id: (int) $media?->id,
+                    facsimile_data_url: $this->signatureFacsimileDataUrl($media),
                 );
             })->values()->all()),
             schedule_of_fees: $scheduleOfFees,
@@ -288,6 +291,21 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 ['key' => 'permit', 'label' => 'Permit'],
             ],
         );
+    }
+
+    private function signatureFacsimileDataUrl(?Media $media): ?string
+    {
+        if ($media === null || ! in_array($media->mime_type, ['image/png', 'image/jpeg'], true)) {
+            return null;
+        }
+
+        $disk = Storage::disk($media->disk);
+        $path = $media->getPathRelativeToRoot();
+        if (! $disk->exists($path)) {
+            return null;
+        }
+
+        return 'data:'.$media->mime_type.';base64,'.base64_encode($disk->get($path));
     }
 
     private function scheduleOfFees(PermitApplication $application): MunicipalScheduleOfFeesData

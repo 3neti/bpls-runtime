@@ -53,6 +53,19 @@ type DocumentProjection = {
         snapshot_hash: string | null;
         snapshot: Record<string, any> | null;
     };
+    signature_evidence: {
+        id: number;
+        signer_id: number;
+        purpose: string;
+        signable_type: string;
+        signable_id: number;
+        captured_at: string;
+        method: string;
+        evidence_digest: string;
+        media_id: number;
+        facsimile_data_url: string | null;
+        legal_semantics: 'visual_facsimile_evidence_only';
+    }[];
     verification: {
         description: string;
         issuing_office: string;
@@ -146,6 +159,15 @@ const props = withDefaults(
     { page: 'all', recentCertificationOffice: null },
 );
 const snapshot = computed(() => props.document.declaration.snapshot ?? {});
+const applicantLodgingSignature = computed(
+    () =>
+        (props.document.signature_evidence ?? []).find(
+            (evidence) =>
+                evidence.purpose === 'applicant_lodging' &&
+                evidence.method === 'captured_facsimile' &&
+                evidence.facsimile_data_url,
+        ) ?? null,
+);
 
 function value(path: string): any {
     return path
@@ -559,17 +581,33 @@ function money(cents: number | null | undefined): string {
                         }}
                     </p>
                     <div class="mt-4 grid gap-4 text-center sm:grid-cols-2">
-                        <p class="border-t border-stone-900 pt-1">
-                            <strong>{{
-                                shown(
-                                    value('undertaking.applicant_printed_name'),
-                                )
-                            }}</strong
-                            ><span class="block text-[10px] uppercase"
-                                >Signature of Applicant over Printed Name</span
-                            >
-                        </p>
-                        <p class="border-t border-stone-900 pt-1">
+                        <div class="flex min-h-24 flex-col justify-end">
+                            <img
+                                v-if="
+                                    applicantLodgingSignature?.facsimile_data_url
+                                "
+                                data-testid="applicant-lodging-signature"
+                                :src="
+                                    applicantLodgingSignature.facsimile_data_url
+                                "
+                                alt="Applicant signature facsimile"
+                                class="mx-auto mb-1 h-20 max-w-full object-contain"
+                            />
+                            <p class="border-t border-stone-900 pt-1">
+                                <strong>{{
+                                    shown(
+                                        value(
+                                            'undertaking.applicant_printed_name',
+                                        ),
+                                    )
+                                }}</strong
+                                ><span class="block text-[10px] uppercase"
+                                    >Signature of Applicant over Printed
+                                    Name</span
+                                >
+                            </p>
+                        </div>
+                        <p class="mt-auto border-t border-stone-900 pt-1">
                             <strong>{{
                                 shown(value('undertaking.position_title'))
                             }}</strong

@@ -66,6 +66,8 @@ type ApplicationData = {
     post_payment: Record<string, any>;
     permit: Record<string, any>;
     documents: Record<string, any>[];
+    applicant_documents: Record<string, any>[];
+    signature_evidence: Record<string, any>[];
     schedule_of_fees: MunicipalScheduleOfFees;
     attachments: Attachment[];
     actor_context: {

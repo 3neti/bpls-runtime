@@ -93,6 +93,7 @@ final class BuildExecutablePermitApplicationDocument
                 'snapshot_hash' => $application['declaration']['snapshot_hash'],
                 'snapshot' => $application['declaration']['snapshot'],
             ],
+            'signature_evidence' => $application['signature_evidence'],
             'verification' => $certifications,
             'routing' => $application['routing'],
             'page_2_assessment' => [

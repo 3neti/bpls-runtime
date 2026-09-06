@@ -16,6 +16,7 @@ final class SignatureEvidenceData extends Data
         public readonly string $method,
         public readonly string $evidence_digest,
         public readonly int $media_id,
+        public readonly ?string $facsimile_data_url = null,
         public readonly string $legal_semantics = 'visual_facsimile_evidence_only',
     ) {}
 }
