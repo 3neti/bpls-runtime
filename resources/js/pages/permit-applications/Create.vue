@@ -11,7 +11,7 @@ import {
     Sparkles,
     Trash2,
 } from '@lucide/vue';
-import { computed, nextTick, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import {
     index as citizenIndex,
     show as citizenShow,
@@ -160,6 +160,19 @@ const isEditing = computed(() => props.draft !== undefined);
 const supportsApplicantDocuments = computed(() => isCitizen.value);
 const pendingDocuments = ref<PendingDocument[]>([]);
 let nextDocumentKey = 1;
+
+watch(
+    () => props.draft?.id,
+    (draftId, previousDraftId) => {
+        if (draftId === undefined || draftId === previousDraftId) {
+            return;
+        }
+
+        pendingDocuments.value = [];
+        nextDocumentKey = 1;
+    },
+);
+
 const selectedBusinessId = ref<number | ''>(props.draft?.business_id ?? '');
 const selectedRegistryBusiness = computed(
     () =>
