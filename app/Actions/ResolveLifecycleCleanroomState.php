@@ -125,13 +125,14 @@ class ResolveLifecycleCleanroomState
      */
     private function actorPresentations(LifecycleCleanroomRun $run, Collection $steps, ?array $next): array
     {
+        $currentActorDefinitions = $this->definition->actors();
         $pendingActors = $steps
             ->where('completed', false)
             ->pluck('actor')
             ->filter(fn (mixed $actor): bool => is_string($actor));
 
         return array_values(collect($run->actors())
-            ->map(function (array $actor, string $key) use ($next, $pendingActors): array {
+            ->map(function (array $actor, string $key) use ($currentActorDefinitions, $next, $pendingActors): array {
                 $isNext = ($next['actor'] ?? null) === $key;
                 $relationship = $isNext
                     ? 'next'
@@ -139,7 +140,7 @@ class ResolveLifecycleCleanroomState
 
                 return [
                     'key' => $key,
-                    'label' => $actor['label'],
+                    'label' => $currentActorDefinitions[$key]['label'] ?? $actor['label'],
                     'relationship' => $relationship,
                     'relationship_label' => match ($relationship) {
                         'next' => 'Next',

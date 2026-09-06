@@ -137,6 +137,18 @@ test('one Application executes routing-derived certification readiness issuance 
         ->and($readiness['receipt_number'])->toBe('7654321')
         ->and($readiness['production_authority'])->toBeFalse();
 
+    $mayoralAuthorizationData = app(ApplicationDataResolver::class)
+        ->resolve($application->fresh(), cleanroomActor($run, 'permit_issuer'))
+        ->toArray();
+    $mayoralAuthorizationNote = collect($mayoralAuthorizationData['actor_context']['work_notes'])
+        ->firstWhere('id', 'permit_authority_review');
+    expect($mayoralAuthorizationData['actor_context']['actor_label'])->toBe('Mayor Ramses Troy D. Olegario')
+        ->and($mayoralAuthorizationNote['actor_label'])->toBe('Mayor Ramses Troy D. Olegario')
+        ->and($mayoralAuthorizationNote['instruction'])->toBe('Record synthetic Mayoral Authorization and issue the Business Permit specimen')
+        ->and($mayoralAuthorizationNote['state_label'])->toBe('Ready for Mayoral Authorization')
+        ->and($mayoralAuthorizationNote['blocking_reason'])->toContain('Mayor Olegario did not log in, sign, or authorize')
+        ->and(collect($mayoralAuthorizationData['actor_context']['current_tasks'])->firstWhere('key', 'issue_synthetic_permit')['label'])->toBe('Record synthetic Mayoral Authorization');
+
     expect(fn () => app(ReleaseSyntheticLifecyclePermit::class)->handle($application->fresh(), cleanroomActor($run, 'releasing_officer')))
         ->toThrow(DomainException::class, 'issue the specimen');
 
@@ -145,6 +157,10 @@ test('one Application executes routing-derived certification readiness issuance 
         ->and($issued->issued_at)->not->toBeNull()
         ->and($issued->released_at)->toBeNull()
         ->and(data_get($issued->source_snapshot, 'official_numbering_authority'))->toBeFalse()
+        ->and(data_get($issued->source_snapshot, 'mayoral_authorization.officeholder_name'))->toBe('Ramses Troy D. Olegario')
+        ->and(data_get($issued->source_snapshot, 'mayoral_authorization.method'))->toBe('synthetic_reference')
+        ->and(data_get($issued->source_snapshot, 'mayoral_authorization.personally_performed_by_officeholder'))->toBeFalse()
+        ->and(data_get($issued->source_snapshot, 'mayoral_authorization.production_authority'))->toBeFalse()
         ->and(data_get($issued->source_snapshot, 'real_mayor_login_or_signature_used'))->toBeFalse();
 
     $issuedVerificationReference = app(ApplicationDataResolver::class)
@@ -163,6 +179,9 @@ test('one Application executes routing-derived certification readiness issuance 
         ->and($data['permit']['verification']['reference'])->toBe($issuedVerificationReference)
         ->and($data['permit']['verification']['reference'])->toStartWith('BPV-'.$application->id.'-')
         ->and($data['permit']['production_authority'])->toBeFalse()
+        ->and($data['permit']['issuing_authority']['name'])->toBe('Ramses Troy D. Olegario')
+        ->and($data['permit']['issuing_authority']['real_mayor_login_or_signature_used'])->toBeFalse()
+        ->and($data['permit']['issuing_authority']['production_authority'])->toBeFalse()
         ->and($data['post_payment']['certifications'])->toHaveCount(3)
         ->and(collect($data['post_payment']['certifications'])->every(fn (array $item): bool => $item['receipt_reviewed'] && $item['production_authority'] === false))->toBeTrue();
 

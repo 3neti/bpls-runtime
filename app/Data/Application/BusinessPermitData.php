@@ -11,7 +11,7 @@ final class BusinessPermitData extends Data
     /**
      * @param  list<string>  $lines_of_business
      * @param  list<string>  $conditions
-     * @param  array{office: string, name: ?string, authority_status: string}  $issuing_authority
+     * @param  array{office: string, name: ?string, authority_status: string, signature_reference: ?string, real_mayor_login_or_signature_used: bool, production_authority: bool}  $issuing_authority
      * @param  array{reference: string, status: string, url: string, view_url: string}  $verification
      * @param  list<string>  $blockers
      */

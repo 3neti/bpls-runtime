@@ -6,11 +6,13 @@ use App\Enums\UserPermission;
 
 class LifecycleCleanroomDefinition
 {
-    public const string Revision = 'complete_business_permit_lifecycle_v3';
+    public const string Revision = 'complete_business_permit_lifecycle_v4';
 
     /** @return array<string, array{label: string, permissions: list<UserPermission>}> */
     public function actors(): array
     {
+        $mayorName = (string) config('municipality.officials.municipal_mayor.name', 'Ramses Troy D. Olegario');
+
         return [
             'citizen' => ['label' => 'Citizen', 'permissions' => [UserPermission::AccessCitizen, UserPermission::CreateOwnPermitApplications, UserPermission::EditOwnPermitApplications, UserPermission::SubmitOwnPermitApplications, UserPermission::UploadOwnPermitApplicationDocuments, UserPermission::ViewOwnPermitApplications, UserPermission::ViewOwnPermitApplicationDocuments, UserPermission::ViewOwnPermitApplicationFinancials, UserPermission::ViewOwnBusinessPermitEvaluations]],
             'intake' => ['label' => 'BPLO Intake', 'permissions' => [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::CreatePermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::DetermineBploRouting]],
@@ -22,7 +24,7 @@ class LifecycleCleanroomDefinition
             'treasury' => ['label' => 'Treasury', 'permissions' => [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::CounterCheckBusinessPermitEvaluations, UserPermission::CorrectEvaluationLinesOfBusiness]],
             'municipal_treasurer' => ['label' => 'Municipal Treasurer', 'permissions' => [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewBusinessPermitEvaluations, UserPermission::ApproveAssessments]],
             'cashier' => ['label' => 'Cashier', 'permissions' => [UserPermission::AccessStaff, UserPermission::ViewPermitApplications, UserPermission::ViewPaymentSchedules, UserPermission::RecordCollections, UserPermission::ViewReceipts, UserPermission::IssueReceipts]],
-            'permit_issuer' => ['label' => 'Permit Issuance', 'permissions' => [UserPermission::AccessStaff, UserPermission::ViewPermitApplications]],
+            'permit_issuer' => ['label' => 'Mayor '.$mayorName, 'permissions' => [UserPermission::AccessStaff, UserPermission::ViewPermitApplications]],
             'releasing_officer' => ['label' => 'BPLO Releasing Officer', 'permissions' => [UserPermission::AccessStaff, UserPermission::ViewPermitApplications]],
         ];
     }
@@ -50,8 +52,8 @@ class LifecycleCleanroomDefinition
             $this->step('engineering_post_payment_certified', 2025, 'Engineering post-payment certification', 'The routed Engineering office reviews the bound Official Receipt and records synthetic-only certification evidence.', 'product_form', 'engineering', 'Post-payment certification'),
             $this->step('health_post_payment_certified', 2025, 'Health post-payment certification', 'The routed Health office reviews the bound Official Receipt and records synthetic-only certification evidence.', 'product_form', 'health', 'Post-payment certification'),
             $this->step('menro_post_payment_certified', 2025, 'MENRO post-payment certification', 'The routed MENRO office reviews the bound Official Receipt and records synthetic-only certification evidence.', 'product_form', 'menro', 'Post-payment certification'),
-            $this->step('permit_ready', 2025, 'Permit ready', 'The deterministic PermitReadiness projection passes only after OR binding and every routing-derived post-payment certification.', 'product_form', 'permit_issuer', 'Permit ready'),
-            $this->step('permit_issued', 2025, 'Permit issued', 'The cleanroom issues a synthetic-only BP-YYYY-XXXX specimen with separate bounded Mayor authority evidence.', 'product_form', 'permit_issuer', 'Permit issued'),
+            $this->step('permit_ready', 2025, 'Ready for Mayoral Authorization', 'The deterministic PermitReadiness projection passes only after OR binding and every routing-derived post-payment certification.', 'product_form', 'permit_issuer', 'Mayoral Authorization ready'),
+            $this->step('permit_issued', 2025, 'Mayoral Authorization recorded and Permit issued', 'The cleanroom records bounded synthetic Mayoral Authorization evidence for the configured Municipal Mayor and issues a synthetic-only BP-YYYY-XXXX specimen. It does not represent the Mayor\'s login, signature, or production approval.', 'product_form', 'permit_issuer', 'Record Mayoral Authorization'),
             $this->step('permit_released', 2025, 'Permit released', 'The BPLO Releasing Officer records release of the already-issued synthetic specimen.', 'product_form', 'releasing_officer', 'Permit released'),
             $this->step('public_verification', 2025, 'Public verification available', 'The public QR/reference resolves to the exact released synthetic Permit identity and safe public fields only.', 'product_form', 'citizen', 'Citizen permit ready'),
             $this->step('renewal_lodged', 2026, '2026 Renewal lodged', 'Canonical Renewal intake reuses the exact Municipal Owner and Business without mutating registry identity.', 'system_action', 'intake', 'Renewal lodged'),

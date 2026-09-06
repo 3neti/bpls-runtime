@@ -29,13 +29,15 @@ class IssueSyntheticLifecyclePermit
             }
             $issuedAt = now();
             $permitNumber = sprintf('BP-%d-%04d', $application->application_year, $application->id % 10000);
+            $mayorName = (string) config('municipality.officials.municipal_mayor.name', 'Ramses Troy D. Olegario');
+            $syntheticAuthorizationReference = 'SYNTHETIC-MAYOR-'.substr(hash('sha256', $permitNumber.'|'.$application->id), 0, 16);
             $completion->fill([
                 'permit_application_id' => $application->id,
                 'issued_by_id' => $actor->id,
                 'status' => 'issued_synthetic',
                 'decision' => 'issue_synthetic_specimen',
                 'permit_number' => $permitNumber,
-                'synthetic_signature_reference' => 'SYNTHETIC-MAYOR-'.substr(hash('sha256', $permitNumber.'|'.$application->id), 0, 16),
+                'synthetic_signature_reference' => $syntheticAuthorizationReference,
                 'issued_at' => $issuedAt,
                 'valid_until' => $issuedAt->copy()->year($application->application_year)->endOfYear()->toDateString(),
                 'semantic_classification' => 'synthetic_only',
@@ -44,6 +46,14 @@ class IssueSyntheticLifecyclePermit
                     'number_allocator' => 'synthetic_specimen_bp_year_sequence_v1',
                     'official_numbering_authority' => false,
                     'mayor_authority_evidence' => 'bounded_synthetic_cleanroom_representation',
+                    'mayoral_authorization' => [
+                        'office' => 'Municipal Mayor',
+                        'officeholder_name' => $mayorName,
+                        'method' => 'synthetic_reference',
+                        'reference' => $syntheticAuthorizationReference,
+                        'personally_performed_by_officeholder' => false,
+                        'production_authority' => false,
+                    ],
                     'real_mayor_login_or_signature_used' => false,
                     'permit_issuance_authority' => false,
                     'production_authority' => false,

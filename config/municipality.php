@@ -43,7 +43,7 @@ return [
     'officials' => [
         'municipal_mayor' => [
             'role' => 'Municipal Mayor',
-            'name' => env('MUNICIPALITY_MAYOR_NAME', 'Unverified municipal mayor'),
+            'name' => env('MUNICIPALITY_MAYOR_NAME', 'Ramses Troy D. Olegario'),
             'title' => env('MUNICIPALITY_MAYOR_TITLE', 'Municipal Mayor'),
             'configured_authority_claim' => env('MUNICIPALITY_MAYOR_AUTHORITY_STATUS', 'unverified'),
             'effective_from' => env('MUNICIPALITY_MAYOR_EFFECTIVE_FROM'),

@@ -222,7 +222,11 @@ test('management starts a non destructive cleanroom and run next opens the real 
         ->and(data_get($run->actor_manifest, 'semantic_classification'))->toBe('synthetic_only')
         ->and(data_get($run->owned_resource_manifest, 'permit_application_ids'))->toBe([]);
 
-    $startedState = app(ResolveLifecycleCleanroomState::class)->handle($run);
+    $actorManifest = $run->actor_manifest;
+    data_set($actorManifest, 'actors.permit_issuer.label', 'Permit Issuance');
+    $run->update(['actor_manifest' => $actorManifest]);
+
+    $startedState = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     $visibleStepKeys = collect(data_get($startedState, 'steps'))
         ->where('status', '!=', 'pending')
         ->pluck('key')
@@ -232,6 +236,7 @@ test('management starts a non destructive cleanroom and run next opens the real 
         ->and(collect(data_get($startedState, 'actors'))->where('is_next', true)->pluck('key')->all())->toBe(['citizen'])
         ->and(collect(data_get($startedState, 'actors'))->firstWhere('key', 'citizen')['relationship'])->toBe('next')
         ->and(collect(data_get($startedState, 'actors'))->firstWhere('key', 'intake')['relationship'])->toBe('waiting')
+        ->and(collect(data_get($startedState, 'actors'))->firstWhere('key', 'permit_issuer')['label'])->toBe('Mayor Ramses Troy D. Olegario')
         ->and(collect(data_get($startedState, 'steps'))->firstWhere('key', 'assessor_responsibilities')['status'])->toBe('pending');
 
     $this->actingAs($management)

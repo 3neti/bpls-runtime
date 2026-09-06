@@ -12,6 +12,7 @@ use App\Enums\ReceiptStatus;
 use App\Enums\UserPermission;
 use App\Evaluation\BusinessPermitEvaluationResolver;
 use App\Integrations\QrPhPaymentArtifactCache;
+use App\LifecycleScenarios\LifecycleCleanroomDefinition;
 use App\Models\Assessment;
 use App\Models\BusinessPermitEvaluation;
 use App\Models\LifecycleCleanroomRun;
@@ -41,6 +42,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         private readonly QrPhPaymentArtifactCache $qrPhArtifactCache,
         private readonly ResolveOfficialReceiptProfile $resolveOfficialReceiptProfile,
         private readonly BuildMunicipalScheduleOfFees $buildScheduleOfFees,
+        private readonly LifecycleCleanroomDefinition $lifecycleCleanroomDefinition,
     ) {}
 
     public function resolve(PermitApplication $permitApplication, ?User $viewer = null): ApplicationData
@@ -198,7 +200,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             attachments: $attachments,
             actor_context: new ActorContextData(
                 actor_id: $viewer?->id,
-                actor_label: $viewer === null ? 'Laboratory observer' : $viewer->name,
+                actor_label: $this->actorLabel($application, $viewer),
                 role_code: $viewer?->role?->code,
                 current_tasks: $tasks,
                 available_affordances: $affordances,
@@ -711,7 +713,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             conditions: self::PermitConditions,
             issuing_authority: [
                 'office' => 'Municipal Mayor',
-                'name' => null,
+                'name' => (string) config('municipality.officials.municipal_mayor.name', 'Ramses Troy D. Olegario'),
                 'authority_status' => $issued ? 'synthetic_only' : ($syntheticLifecycle ? 'production_pending' : 'unresolved'),
                 'signature_reference' => $completion?->synthetic_signature_reference,
                 'real_mayor_login_or_signature_used' => false,
@@ -929,16 +931,16 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         $notes[] = $this->workNote(
             id: 'permit_authority_review',
             actorKey: 'permit_issuer',
-            actorLabel: 'Permit Issuance',
-            instruction: 'Issue synthetic Business Permit specimen',
+            actorLabel: $this->lifecycleCleanroomDefinition->actors()['permit_issuer']['label'],
+            instruction: 'Record synthetic Mayoral Authorization and issue the Business Permit specimen',
             section: 'permit',
             anchor: 'permit_authority',
             state: $permit->issued ? 'completed' : ($permit->ready ? 'ready' : 'waiting'),
-            stateLabel: $permit->issued ? 'Synthetic specimen issued' : ($permit->ready ? 'Ready' : 'Awaiting PermitReadiness'),
+            stateLabel: $permit->issued ? 'Synthetic Mayoral Authorization recorded; specimen issued' : ($permit->ready ? 'Ready for Mayoral Authorization' : 'Awaiting PermitReadiness'),
             tone: 'violet',
             affordance: $taskIndex->get('issue_synthetic_permit'),
             completedAt: $completion?->issued_at?->toIso8601String(),
-            blockingReason: $permit->issued ? null : 'Synthetic numbering and Mayor authority evidence cannot establish production authority.',
+            blockingReason: 'Laboratory specimen only. Mayor Olegario did not log in, sign, or authorize this specimen; production authority remains false.',
         );
         $notes[] = $this->workNote(
             id: 'permit_release',
@@ -1131,7 +1133,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 && data_get($run->actor_manifest, 'actors.permit_issuer.user_id') === $viewer->id) {
                 $tasks[] = $this->task(
                     'issue_synthetic_permit',
-                    'Issue synthetic Business Permit specimen',
+                    'Record synthetic Mayoral Authorization',
                     'permit',
                     route('stakeholder-preview.lifecycle-cleanroom.permit.issue', $run, false),
                 );
@@ -1149,6 +1151,22 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         }
 
         return $tasks;
+    }
+
+    private function actorLabel(PermitApplication $application, ?User $viewer): string
+    {
+        if ($viewer === null) {
+            return 'Laboratory observer';
+        }
+
+        $runId = data_get($application->metadata, 'lifecycle_cleanroom.run_id');
+        $run = is_string($runId) ? LifecycleCleanroomRun::query()->where('public_id', $runId)->first() : null;
+        if ($run instanceof LifecycleCleanroomRun
+            && data_get($run->actor_manifest, 'actors.permit_issuer.user_id') === $viewer->id) {
+            return $this->lifecycleCleanroomDefinition->actors()['permit_issuer']['label'];
+        }
+
+        return $viewer->name;
     }
 
     /** @return array{key: string, label: string, section: string, href: ?string} */

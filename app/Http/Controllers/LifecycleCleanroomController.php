@@ -217,7 +217,7 @@ class LifecycleCleanroomController extends Controller
     ): RedirectResponse {
         $issuePermit->handle($lifecycleCleanroomRun->newApplication()->sole(), $request->user());
 
-        return back()->with('success', 'Synthetic Business Permit specimen issued. Production numbering and Mayor authority remain false.');
+        return back()->with('success', 'Synthetic Mayoral Authorization recorded and Business Permit specimen issued. The Mayor did not log in or sign; production authority remains false.');
     }
 
     public function releasePermit(
