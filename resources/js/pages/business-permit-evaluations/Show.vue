@@ -3,7 +3,6 @@ import { Head, Link, useForm, usePage, usePoll } from '@inertiajs/vue3';
 import {
     AlertTriangle,
     ArrowRight,
-    BriefcaseBusiness,
     Check,
     CheckCircle2,
     ChevronRight,
@@ -244,18 +243,6 @@ const applicationReference = computed(
         `Record #${props.application.id}`,
 );
 
-const applicationReferenceLabel = computed(() => {
-    if (props.application.application_number) {
-        return 'Official application number';
-    }
-
-    if (props.application.tracking_reference) {
-        return 'Submission tracking reference';
-    }
-
-    return 'Internal record';
-});
-
 function reviewStage(item: EvaluationItem): string {
     const value = item.resolved_value;
     const inspection =
@@ -353,7 +340,7 @@ const workspaceStatusLabel = computed(() => {
                 ? 'Ready for Assessment'
                 : concernedOfficePaymentOrders.value.all_finalized
                   ? 'Payment Orders Finalized'
-                  : 'Payment Orders In Progress';
+                  : 'In progress';
         }
 
         return props.evaluation?.status_label ?? 'Awaiting Evaluation';
@@ -370,7 +357,7 @@ const nextStepTitle = computed(() => {
             ? 'Prepare Assessment'
             : concernedOfficePaymentOrders.value.all_finalized
               ? 'Treasury LOB classification'
-              : 'Waiting for concerned-office Payment Orders';
+              : `${concernedOfficePaymentOrders.value.finalized_office_count} of ${concernedOfficePaymentOrders.value.required_office_count} Payment Orders finalized`;
     }
 
     if (props.evaluation === null) {
@@ -388,28 +375,6 @@ const nextStepTitle = computed(() => {
     }
 
     return 'Waiting for concerned offices';
-});
-
-const nextStepNote = computed(() => {
-    if (isNelsonPath.value) {
-        return treasuryAssignmentsComplete.value
-            ? 'Concerned-office Payment Orders and Treasury payment items are complete. The Assessment Officer can now prepare the immutable Assessment and Schedule of Payment.'
-            : concernedOfficePaymentOrders.value.all_finalized
-              ? 'Concerned-office Payment Orders are complete. Treasury LOB classification is the next stage before Assessment preparation.'
-              : `${concernedOfficePaymentOrders.value.finalized_office_count} of ${concernedOfficePaymentOrders.value.required_office_count} concerned offices have finalized their Payment Orders.`;
-    }
-
-    if (props.evaluation === null) {
-        return props.can.initialize
-            ? 'Create the evaluation responsibilities and begin recording the required office decisions.'
-            : 'BPLO routing is recorded. An Assessment Officer must start the Evaluation before concerned offices can record fee determinations.';
-    }
-
-    if (myOpenWork.value.length > 0) {
-        return 'Use the assigned charge rows below to confirm the scheduled amount, record an override, or mark the charge not applicable.';
-    }
-
-    return readiness.value?.note ?? '';
 });
 
 const requiredResponsibilitiesComplete = computed(() =>
@@ -730,33 +695,6 @@ function submitPrepareAssessment(): void {
         <Head title="Business Permit Evaluator" />
 
         <main class="flex min-w-0 flex-1 flex-col gap-5 p-4 sm:p-6 lg:p-8">
-            <header
-                class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"
-            >
-                <div class="min-w-0 space-y-1">
-                    <p
-                        class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
-                    >
-                        Municipal evaluation workspace
-                    </p>
-                    <h1 class="text-2xl font-semibold tracking-tight">
-                        Application evaluation
-                    </h1>
-                    <p
-                        class="max-w-3xl text-sm leading-6 text-muted-foreground"
-                    >
-                        {{
-                            isCitizenLens
-                                ? 'What you declared, what the Municipality currently evaluates, and which municipal reviews are still open.'
-                                : 'Complete the required office determinations, review the emerging assessment, and preserve the decision trail.'
-                        }}
-                    </p>
-                </div>
-                <Badge variant="outline" class="self-start px-3 py-1.5 text-sm">
-                    {{ workspaceStatusLabel }}
-                </Badge>
-            </header>
-
             <div
                 v-if="evaluationError"
                 role="alert"
@@ -777,70 +715,53 @@ function submitPrepareAssessment(): void {
                 </div>
             </div>
 
-            <section
-                class="grid gap-4 rounded-2xl border bg-card p-5 shadow-xs sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.65fr)]"
+            <header
+                class="flex flex-col gap-4 rounded-2xl border bg-card p-5 shadow-xs sm:flex-row sm:items-start sm:justify-between sm:p-6"
                 aria-labelledby="application-identity-heading"
                 data-testid="evaluation-application-summary"
             >
-                <div class="flex min-w-0 items-start gap-3">
-                    <div
-                        class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
-                    >
-                        <BriefcaseBusiness class="size-5" aria-hidden="true" />
-                    </div>
-                    <div class="min-w-0">
-                        <p
-                            class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
-                        >
-                            Application being evaluated
-                        </p>
-                        <h2
-                            id="application-identity-heading"
-                            class="mt-1 text-xl font-semibold break-words"
-                        >
-                            {{ application.business_name }}
-                        </h2>
-                        <p class="mt-1 text-sm text-muted-foreground">
-                            {{ application.owner_name }} ·
-                            {{ applicationTypeLabel(application.type) }} ·
-                            {{ application.year }}
-                        </p>
-                        <dl class="mt-3 text-xs text-muted-foreground">
-                            <dt>{{ applicationReferenceLabel }}</dt>
-                            <dd class="mt-0.5 font-mono break-all">
-                                {{ applicationReference }}
-                            </dd>
-                        </dl>
-                    </div>
-                </div>
-
-                <div
-                    class="rounded-xl border border-primary/20 bg-primary/5 p-4"
-                    role="status"
-                >
+                <div class="min-w-0">
                     <p
                         class="text-xs font-semibold tracking-wide text-primary uppercase"
                     >
-                        Next step
+                        {{ isNelsonPath ? 'Payment Orders' : 'Evaluation' }}
                     </p>
-                    <p class="mt-1 font-semibold">
-                        {{ nextStepTitle }}
+                    <h1
+                        id="application-identity-heading"
+                        class="mt-1 text-2xl font-semibold tracking-tight break-words"
+                    >
+                        {{ application.business_name }}
+                    </h1>
+                    <p class="mt-1 text-sm text-muted-foreground">
+                        {{ application.owner_name }} ·
+                        {{ applicationTypeLabel(application.type) }} ·
+                        {{ application.year }} ·
+                        <span class="font-mono break-all">{{
+                            applicationReference
+                        }}</span>
                     </p>
-                    <p class="mt-1 text-sm leading-6 text-muted-foreground">
-                        {{ nextStepNote }}
-                    </p>
+                </div>
+
+                <div
+                    class="flex shrink-0 flex-col items-start gap-2 sm:items-end"
+                    role="status"
+                >
+                    <Badge variant="outline" class="px-3 py-1.5 text-sm">
+                        {{ workspaceStatusLabel }}
+                    </Badge>
+                    <p class="text-sm font-medium">{{ nextStepTitle }}</p>
                     <Link
                         v-if="!evaluation && can.initialize"
                         :href="initialize(application.id)"
                         method="post"
                         as="button"
-                        class="mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-3 focus-visible:ring-ring/50"
+                        class="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-3 focus-visible:ring-ring/50"
                     >
                         <ClipboardCheck class="size-4" aria-hidden="true" />
                         Start Evaluation
                     </Link>
                 </div>
-            </section>
+            </header>
 
             <section
                 v-if="!officeWorkspace"
@@ -1458,13 +1379,23 @@ function submitPrepareAssessment(): void {
                 </section>
 
                 <!-- 7. Declaration versus municipal determination -->
-                <section
+                <component
+                    :is="isNelsonPath ? 'details' : 'section'"
                     v-if="!officeWorkspace"
                     class="rounded-2xl border bg-card p-5 shadow-xs sm:p-6"
                     aria-labelledby="declaration-heading"
                 >
+                    <summary
+                        v-if="isNelsonPath"
+                        class="-m-5 cursor-pointer list-none p-5 font-semibold sm:-m-6 sm:p-6"
+                    >
+                        Application details
+                    </summary>
                     <div
-                        class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+                        :class="[
+                            'flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between',
+                            isNelsonPath ? 'mt-10' : '',
+                        ]"
                     >
                         <div>
                             <p
@@ -1725,15 +1656,26 @@ function submitPrepareAssessment(): void {
                             </Button>
                         </fieldset>
                     </form>
-                </section>
+                </component>
 
                 <!-- 8. Non-monetary municipal work -->
-                <section
+                <component
+                    :is="isNelsonPath ? 'details' : 'section'"
                     v-if="!officeWorkspace && responsibilityItems.length"
-                    class="space-y-4"
+                    :class="
+                        isNelsonPath
+                            ? 'rounded-2xl border bg-card shadow-xs'
+                            : 'space-y-4'
+                    "
                     aria-labelledby="responsibilities-heading"
                 >
-                    <div>
+                    <summary
+                        v-if="isNelsonPath"
+                        class="cursor-pointer list-none p-5 font-semibold sm:p-6"
+                    >
+                        Municipal facts
+                    </summary>
+                    <div :class="isNelsonPath ? 'border-t p-5 sm:p-6' : ''">
                         <p
                             class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
                         >
@@ -1745,12 +1687,20 @@ function submitPrepareAssessment(): void {
                         >
                             Municipal reviews and recorded facts
                         </h2>
-                        <p class="mt-1 text-sm text-muted-foreground">
+                        <p
+                            v-if="!isNelsonPath"
+                            class="mt-1 text-sm text-muted-foreground"
+                        >
                             These do not carry an amount, but the Assessment
                             cannot proceed until the required ones are complete.
                         </p>
                     </div>
-                    <div class="grid gap-4">
+                    <div
+                        :class="[
+                            'grid gap-4',
+                            isNelsonPath ? 'px-5 pb-5 sm:px-6 sm:pb-6' : '',
+                        ]"
+                    >
                         <EvaluationItemCard
                             v-for="item in responsibilityItems"
                             :key="item.id"
@@ -1764,7 +1714,7 @@ function submitPrepareAssessment(): void {
                             @submit="submitResponsibility"
                         />
                     </div>
-                </section>
+                </component>
 
                 <!-- 9. Role context: Treasury, Assessment Officer, Municipal Treasurer -->
                 <div
@@ -2054,7 +2004,9 @@ function submitPrepareAssessment(): void {
                             {{
                                 isCitizenLens
                                     ? 'The Municipality has not issued an assessment for this application yet, so the amount above can still change.'
-                                    : 'No Assessment consumes this Evaluation yet.'
+                                    : isNelsonPath
+                                      ? 'Pending'
+                                      : 'No Assessment consumes this Evaluation yet.'
                             }}
                         </p>
                     </section>

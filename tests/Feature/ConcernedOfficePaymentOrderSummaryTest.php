@@ -112,9 +112,12 @@ test('Nelson assessment presentation uses the Payment Order stage and honest Tre
     $summary = file_get_contents(resource_path('js/components/permit-applications/ConcernedOfficePaymentOrderSummary.vue'));
 
     expect($page)->toContain('!officeWorkspace && !isNelsonPath')
-        ->and($page)->toContain('Treasury LOB classification is the next stage before')
-        ->and($summary)->toContain('Concerned-office Payment Orders')
+        ->and($page)->toContain("isNelsonPath ? 'Payment Orders' : 'Evaluation'")
+        ->and($page)->toContain('Application details')
+        ->and($page)->toContain('Municipal facts')
+        ->and($summary)->toContain('Payment Order summary')
         ->and($summary)->toContain('Office Payment Order subtotal')
+        ->and($summary)->not->toContain('Assessment total')
         ->and($summary)->toContain("'TBD'")
         ->and($summary)->not->toContain('Evaluated total');
 });

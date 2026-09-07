@@ -118,6 +118,7 @@ test('laboratory segregates interactive work from collapsed automated reference 
         ->toContain(':document="cleanroom.active?.application_document"')
         ->toContain('data-testid="lifecycle-stage-rail"')
         ->toContain('v-for="stage in lifecycleStages"')
+        ->toContain("label: 'Payment Orders'")
         ->toContain('View technical lifecycle')
         ->toContain('data-testid="current-lifecycle-task"')
         ->toContain('Open Application As')

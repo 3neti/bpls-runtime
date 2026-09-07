@@ -88,11 +88,12 @@ test('catalog refuses prohibited items and unknown concerned-office mappings', f
     }
 });
 
-test('Payment Order editor identifies preview provenance and explains an empty fee menu', function () {
+test('Payment Order editor keeps preview provenance concise and explains an empty fee menu', function () {
     $taskSheet = file_get_contents(resource_path('js/components/permit-applications/BploRoutingTaskSheet.vue'));
     $editor = file_get_contents(resource_path('js/components/permit-applications/FinancialLineItemEditor.vue'));
 
-    expect($taskSheet)->toContain('Synthetic preview fee menu · awaiting Nelson source')
+    expect($taskSheet)->toContain('Preview fee menu')
+        ->not->toContain('Synthetic preview fee menu · awaiting Nelson source')
         ->and($editor)->toContain('No preview fee menu is configured for this office. Awaiting the')
         ->and($editor)->toContain('Nelson schedule.');
 });

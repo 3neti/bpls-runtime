@@ -19,24 +19,15 @@ function money(cents: number): string {
         data-testid="concerned-office-payment-order-summary"
     >
         <header
-            class="flex flex-col gap-3 border-b p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6"
+            class="flex items-center justify-between gap-3 border-b p-4 sm:p-5"
         >
             <div class="min-w-0">
-                <p
-                    class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
-                >
-                    Financial stage
-                </p>
                 <h2
                     id="concerned-office-payment-orders-heading"
-                    class="mt-1 text-lg font-semibold"
+                    class="font-semibold"
                 >
-                    Concerned-office Payment Orders
+                    Payment Order summary
                 </h2>
-                <p class="mt-1 text-sm text-muted-foreground">
-                    {{ summary.finalized_office_count }} of
-                    {{ summary.required_office_count }} offices finalized
-                </p>
             </div>
             <span
                 :class="
@@ -52,11 +43,12 @@ function money(cents: number): string {
                     aria-hidden="true"
                 />
                 <Clock3 v-else class="size-3.5" aria-hidden="true" />
-                {{ summary.all_finalized ? 'Finalized' : 'In progress' }}
+                {{ summary.finalized_office_count }} of
+                {{ summary.required_office_count }} finalized
             </span>
         </header>
 
-        <div class="grid gap-4 p-5 sm:p-6">
+        <div class="grid gap-3 p-4 sm:p-5">
             <dl class="grid gap-2 text-sm">
                 <div
                     v-for="office in summary.offices"
@@ -92,20 +84,6 @@ function money(cents: number): string {
                     }}
                 </strong>
             </div>
-
-            <div
-                class="flex flex-wrap items-baseline justify-between gap-3 text-sm"
-            >
-                <span class="text-muted-foreground">Assessment total</span>
-                <strong>TBD</strong>
-            </div>
-            <p
-                v-if="summary.all_finalized"
-                class="text-sm leading-6 text-muted-foreground"
-            >
-                Concerned-office Payment Orders are complete. Treasury LOB
-                classification is the next stage before Assessment preparation.
-            </p>
         </div>
     </section>
 </template>

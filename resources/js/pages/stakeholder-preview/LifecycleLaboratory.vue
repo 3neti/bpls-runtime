@@ -231,6 +231,10 @@ const laboratoryInitialTab = computed(() => {
 const lifecycleStages = computed<LifecycleStage[]>(() => {
     const steps = props.cleanroom.active?.steps ?? [];
     const application = currentApplicationData.value;
+    const paymentOrderCount = (application?.offices ?? []).filter(
+        (office: { paperless_payment_order_count?: number }) =>
+            (office.paperless_payment_order_count ?? 0) > 0,
+    ).length;
     const groups = [
         {
             key: 'application',
@@ -249,8 +253,8 @@ const lifecycleStages = computed<LifecycleStage[]>(() => {
         },
         {
             key: 'offices',
-            label: 'Offices',
-            summary: `${application?.offices?.length ?? 0} Payment Orders`,
+            label: 'Payment Orders',
+            summary: `${paymentOrderCount} of ${application?.offices?.length ?? 0} finalized`,
             steps: [
                 'evaluation_initialized',
                 'assessor_responsibilities',

@@ -196,6 +196,33 @@ const selectedCount = computed(
     () =>
         candidates.filter((candidate) => drafts[candidate.key].selected).length,
 );
+const activePaymentOrderWorkIds = computed(
+    () =>
+        new Set(
+            (props.task.routing?.works ?? [])
+                .filter(
+                    (work) =>
+                        work.payment_orders.length === 0 &&
+                        props.task.financial_editor.authorized_payment_order_office_codes.includes(
+                            work.office_code,
+                        ),
+                )
+                .map((work) => work.id),
+        ),
+);
+const displayedRoutingWorks = computed(() =>
+    activePaymentOrderWorkIds.value.size > 0
+        ? (props.task.routing?.works ?? []).filter((work) =>
+              activePaymentOrderWorkIds.value.has(work.id),
+          )
+        : (props.task.routing?.works ?? []),
+);
+const finalizedOfficeCount = computed(
+    () =>
+        (props.task.routing?.works ?? []).filter(
+            (work) => work.payment_orders.length > 0,
+        ).length,
+);
 const clock = useNow({ interval: 1_000 });
 const countdown = computed(() => {
     if (
@@ -340,30 +367,71 @@ const treasurySelectionsReady = computed(
     <section
         data-testid="bplo-routing-task-sheet"
         :data-task-mode="mode"
-        class="min-w-0 overflow-hidden rounded-xl border-2 border-[#1f416b]/35 bg-white shadow-sm dark:bg-slate-900"
+        :class="[
+            'min-w-0 overflow-hidden rounded-xl bg-white shadow-sm dark:bg-slate-900',
+            task.application.commissioned_path
+                ? 'border'
+                : 'border-2 border-[#1f416b]/35',
+        ]"
         aria-labelledby="bplo-routing-task-title"
     >
-        <header class="bg-[#1f416b] px-4 py-4 text-white sm:px-5">
-            <p class="text-xs font-bold tracking-[0.18em] uppercase">
-                BPLO task sheet
+        <header
+            :class="[
+                'px-4 py-4 sm:px-5',
+                task.application.commissioned_path
+                    ? 'border-b bg-card'
+                    : 'bg-[#1f416b] text-white',
+            ]"
+        >
+            <p
+                :class="[
+                    'text-xs font-bold tracking-[0.18em] uppercase',
+                    task.application.commissioned_path ? 'text-primary' : '',
+                ]"
+            >
+                {{
+                    task.application.commissioned_path
+                        ? 'Current work'
+                        : 'BPLO task sheet'
+                }}
             </p>
             <h2 id="bplo-routing-task-title" class="mt-1 text-xl font-black">
                 {{
-                    task.routing
-                        ? task.application.commissioned_path
-                            ? 'Routing confirmed'
-                            : 'Concerned-office routing recorded'
-                        : 'Record concerned-office routing'
+                    task.application.commissioned_path && task.routing
+                        ? activePaymentOrderWorkIds.size
+                            ? `${displayedRoutingWorks[0].office_label} Payment Order`
+                            : 'Payment Orders'
+                        : task.routing
+                          ? task.application.commissioned_path
+                              ? 'Routing confirmed'
+                              : 'Concerned-office routing recorded'
+                          : 'Record concerned-office routing'
                 }}
             </h2>
-            <p class="mt-1 text-sm text-white/80">
-                {{ task.application.business_name }} ·
-                {{ task.application.year }} {{ task.application.type }}
+            <p
+                :class="[
+                    'mt-1 text-sm',
+                    task.application.commissioned_path
+                        ? 'text-muted-foreground'
+                        : 'text-white/80',
+                ]"
+            >
+                <template
+                    v-if="task.application.commissioned_path && task.routing"
+                >
+                    {{ finalizedOfficeCount }} of
+                    {{ task.routing.works.length }} finalized
+                </template>
+                <template v-else>
+                    {{ task.application.business_name }} ·
+                    {{ task.application.year }} {{ task.application.type }}
+                </template>
             </p>
         </header>
 
         <div v-if="task.routing" class="grid gap-4 p-4 sm:p-5">
             <div
+                v-if="!task.application.commissioned_path"
                 class="flex flex-col gap-3 rounded-xl bg-emerald-50 p-4 text-emerald-950 sm:flex-row sm:items-start sm:justify-between dark:bg-emerald-950/30 dark:text-emerald-100"
             >
                 <div class="flex items-start gap-3">
@@ -425,12 +493,14 @@ const treasurySelectionsReady = computed(
                 "
             >
                 <article
-                    v-for="work in task.routing.works"
+                    v-for="work in displayedRoutingWorks"
                     :key="work.id"
                     :class="[
                         'min-w-0 p-4',
                         task.application.commissioned_path
-                            ? ''
+                            ? activePaymentOrderWorkIds.has(work.id)
+                                ? 'bg-primary/5'
+                                : ''
                             : 'rounded-xl border bg-background',
                     ]"
                     data-testid="recorded-routing-work"
@@ -450,17 +520,23 @@ const treasurySelectionsReady = computed(
                         </div>
                         <Badge variant="outline">
                             <Check
-                                v-if="task.application.commissioned_path"
+                                v-if="
+                                    task.application.commissioned_path &&
+                                    work.payment_orders.length
+                                "
                                 class="size-3"
                                 aria-hidden="true"
                             />
-                            <span
-                                :class="{
-                                    'sr-only':
-                                        task.application.commissioned_path,
-                                }"
-                                >Routed</span
-                            >
+                            <span v-if="task.application.commissioned_path">
+                                {{
+                                    work.payment_orders.length
+                                        ? 'Finalized'
+                                        : activePaymentOrderWorkIds.has(work.id)
+                                          ? 'Your task'
+                                          : 'Pending'
+                                }}
+                            </span>
+                            <span v-else>Routed</span>
                         </Badge>
                     </div>
                     <p
@@ -504,9 +580,9 @@ const treasurySelectionsReady = computed(
                                 task.financial_editor.catalog_status ===
                                     'awaiting_nelson_source'
                             "
-                            class="text-xs font-semibold text-amber-700 dark:text-amber-300"
+                            class="text-xs font-semibold text-muted-foreground"
                         >
-                            Synthetic preview fee menu · awaiting Nelson source
+                            Preview fee menu
                         </p>
                         <FinancialLineItemEditor
                             v-model="officeItems[work.id]"
@@ -534,6 +610,26 @@ const treasurySelectionsReady = computed(
                     </div>
                 </article>
             </div>
+
+            <details
+                v-if="task.application.commissioned_path"
+                class="group rounded-lg border bg-background"
+            >
+                <summary
+                    class="flex cursor-pointer list-none items-center justify-between gap-3 p-3 text-sm font-medium"
+                >
+                    BPLO routing details
+                    <ChevronRight
+                        class="size-4 transition-transform group-open:rotate-90"
+                        aria-hidden="true"
+                    />
+                </summary>
+                <p class="border-t p-3 text-sm text-muted-foreground">
+                    {{ task.routing.determined_by }} ·
+                    {{ dateTime(task.routing.determined_at) }} ·
+                    {{ task.routing.works.length }} offices
+                </p>
+            </details>
 
             <section
                 v-if="
