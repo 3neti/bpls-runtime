@@ -73,7 +73,7 @@ type CleanroomStep = {
     year: number;
     label: string;
     description: string;
-    mode: 'boundary' | 'complete_on_start' | 'product_form' | 'system_action';
+    mode: 'complete_on_start' | 'product_form' | 'system_action';
     actor: string | null;
     milestone: string;
     completed: boolean;
@@ -131,7 +131,8 @@ type CleanroomState = {
         available: boolean;
         pay_code: string | null;
         collection_id: number | null;
-        receipt_id: number | null;
+        receipt_ids: number[];
+        receipt_coverage_complete: boolean;
         status: 'not_ready' | 'awaiting_simulation' | 'collected';
     };
 };
@@ -179,9 +180,6 @@ const currentApplicationData = computed(
 );
 const isNelsonCleanroom = computed(
     () => props.cleanroom.active?.run.ceremony === 'nelson_reconciliation_v1',
-);
-const isCleanroomBoundary = computed(
-    () => props.cleanroom.active?.progress.next_step?.mode === 'boundary',
 );
 const nextCleanroomActor = computed(
     () => props.cleanroom.active?.actors.find((actor) => actor.is_next) ?? null,
@@ -283,7 +281,7 @@ function startCleanroom(): void {
 }
 
 function runCleanroomNext(): void {
-    if (!props.cleanroom.active || isCleanroomBoundary.value) {
+    if (!props.cleanroom.active) {
         return;
     }
 
@@ -300,7 +298,7 @@ function runCleanroomNext(): void {
 }
 
 function runCleanroomMilestone(): void {
-    if (!props.cleanroom.active || isCleanroomBoundary.value) {
+    if (!props.cleanroom.active) {
         return;
     }
 
@@ -762,8 +760,7 @@ function simulateQrPhPayment(): void {
                             :disabled="
                                 working !== null ||
                                 cleanroom.active.progress.complete ||
-                                cleanroom.active.progress.blocked ||
-                                isCleanroomBoundary
+                                cleanroom.active.progress.blocked
                             "
                             class="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-zinc-950 px-4 py-3 text-sm font-bold text-white disabled:opacity-50 dark:bg-amber-300 dark:text-amber-950"
                             @click="runCleanroomNext"
@@ -775,11 +772,9 @@ function simulateQrPhPayment(): void {
                                       ? 'Cleanroom complete'
                                       : cleanroom.active.progress.blocked
                                         ? 'Cleanroom blocked'
-                                        : isCleanroomBoundary
-                                          ? 'Next wave not implemented'
-                                          : nextCleanroomActor
-                                            ? `Continue as ${nextCleanroomActor.label} — ${nextCleanroomActor.task?.label}`
-                                            : 'Run Next Step'
+                                        : nextCleanroomActor
+                                          ? `Continue as ${nextCleanroomActor.label} — ${nextCleanroomActor.task?.label}`
+                                          : 'Run Next Step'
                             }}
                         </button>
                         <div class="space-y-2">
@@ -803,8 +798,7 @@ function simulateQrPhPayment(): void {
                                 type="button"
                                 :disabled="
                                     working !== null ||
-                                    cleanroom.active.progress.blocked ||
-                                    isCleanroomBoundary
+                                    cleanroom.active.progress.blocked
                                 "
                                 class="h-10 w-full rounded-lg border border-zinc-300 text-sm font-semibold dark:border-zinc-700"
                                 @click="runCleanroomMilestone"

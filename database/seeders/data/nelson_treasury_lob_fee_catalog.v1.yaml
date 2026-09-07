@@ -1,0 +1,35 @@
+schema_version: 1
+catalog_version: nelson-treasury-lob-preview-v1
+classification: synthetic_preview
+production_authority: false
+production_catalog_status: awaiting_nelson_source
+currency: PHP
+periods:
+  - application_year: 2025
+    effective_from: '2025-01-01'
+    effective_until: '2025-12-31'
+  - application_year: 2026
+    effective_from: '2026-01-01'
+    effective_until: '2026-12-31'
+lines_of_business:
+  - code: LAB-NELSON-LOB-GENERAL-MERCHANDISE
+    name: General Merchandise
+    major_category: Retail
+    payment_items:
+      - code: LAB-NELSON-LOB-GENERAL-MERCHANDISE-PERMIT
+        label: General Merchandise Permit Component
+        default_amount_minor: 15000
+  - code: LAB-NELSON-LOB-LIQUOR-RETAIL
+    name: Retail Sale of Liquor
+    major_category: Retail
+    payment_items:
+      - code: LAB-NELSON-LOB-LIQUOR-RETAIL-PERMIT
+        label: Liquor Retail Permit Component
+        default_amount_minor: 17500
+  - code: LAB-NELSON-LOB-COFFEE-SHOP
+    name: Coffee Shop
+    major_category: Food Service
+    payment_items:
+      - code: LAB-NELSON-LOB-COFFEE-SHOP-PERMIT
+        label: Coffee Shop Permit Component
+        default_amount_minor: 20000

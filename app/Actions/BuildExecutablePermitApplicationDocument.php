@@ -9,7 +9,10 @@ use App\Models\User;
 /** Compatibility adapter for the existing Page 1/Page 2 document surface. */
 final class BuildExecutablePermitApplicationDocument
 {
-    public function __construct(private readonly ApplicationDataResolver $resolver) {}
+    public function __construct(
+        private readonly ApplicationDataResolver $resolver,
+        private readonly BuildConcernedOfficePaymentOrderSummary $paymentOrderSummary,
+    ) {}
 
     /** @return array<string, mixed> */
     public function handle(PermitApplication $permitApplication, ?User $viewer = null): array
@@ -25,6 +28,10 @@ final class BuildExecutablePermitApplicationDocument
         $receipts = is_array($receipts) ? $receipts : [];
         $permit = data_get($application, 'permit', []);
         $syntheticLifecycle = data_get($permit, 'semantic_classification') === 'synthetic_only';
+        $commissionedPath = data_get($permitApplication->metadata, 'nelson_reconciliation_v1.commissioned_path') === true;
+        $officePaymentOrders = $commissionedPath
+            ? $this->paymentOrderSummary->handle($permitApplication)
+            : null;
         $offices = [];
         $officePayloads = is_array($application['offices'] ?? null) ? $application['offices'] : [];
         foreach ($officePayloads as $office) {
@@ -86,7 +93,7 @@ final class BuildExecutablePermitApplicationDocument
         }
 
         return [
-            'commissioned_path' => data_get($permitApplication->metadata, 'nelson_reconciliation_v1.commissioned_path') === true,
+            'commissioned_path' => $commissionedPath,
             'identity' => [...$application['identity'], 'tax_year' => $application['identity']['application_year']],
             'declaration' => [
                 'state' => $application['declaration']['state'],
@@ -106,6 +113,8 @@ final class BuildExecutablePermitApplicationDocument
                 'emerging_total_amount_cents' => $assessment['total_amount_cents'] ?? data_get($application, 'financial.evaluation.working_paper.grand_total_amount_cents'),
                 'required_unresolved_charge_count' => (int) data_get($application, 'financial.evaluation.working_paper.required_unresolved_charge_count', 0),
                 'offices' => $offices,
+                'concerned_office_payment_orders' => $officePaymentOrders,
+                'treasury_lines_of_business' => data_get($application, 'business.treasury_assigned_lines_of_business', []),
             ],
             'computation_assessment_slip' => $assessment === null ? null : [
                 'assessment_id' => $assessment['id'],

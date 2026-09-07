@@ -97,6 +97,27 @@ type DocumentProjection = {
         emerging_total_amount_cents: number | null;
         required_unresolved_charge_count: number;
         offices: OfficeFeeDetermination[];
+        concerned_office_payment_orders: {
+            all_finalized: boolean;
+            finalized_subtotal_amount_cents: number | null;
+            offices: {
+                routing_work_id: number;
+                office_code: string;
+                status: 'finalized' | 'awaiting_payment_order' | 'conflict';
+                total_amount_cents: number | null;
+            }[];
+        } | null;
+        treasury_lines_of_business: {
+            assignment_id: number;
+            name: string;
+            assigned_by: string;
+            assigned_at: string;
+            payment_items: {
+                id: number;
+                name: string;
+                determined_amount_cents: number;
+            }[];
+        }[];
     };
     computation_assessment_slip: {
         assessment_id: number;

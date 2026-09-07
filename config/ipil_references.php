@@ -61,4 +61,7 @@ return [
     'nelson_concerned_office_fee_catalog' => [
         'path' => database_path('seeders/data/nelson_concerned_office_fee_catalog.v1.yaml'),
     ],
+    'nelson_treasury_lob_fee_catalog' => [
+        'path' => database_path('seeders/data/nelson_treasury_lob_fee_catalog.v1.yaml'),
+    ],
 ];

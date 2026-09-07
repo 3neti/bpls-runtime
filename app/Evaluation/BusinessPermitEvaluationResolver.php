@@ -292,6 +292,17 @@ class BusinessPermitEvaluationResolver
      */
     private function resolvedLineOfBusinessIds(BusinessPermitEvaluation $evaluation, Collection $items): array
     {
+        if (data_get($evaluation->permitApplication->metadata, 'nelson_reconciliation_v1.commissioned_path') === true) {
+            return array_values($evaluation->permitApplication->treasuryLineOfBusinessAssignments()
+                ->whereNull('removed_at')
+                ->pluck('line_of_business_id')
+                ->map(fn (mixed $id): int => (int) $id)
+                ->unique()
+                ->sort()
+                ->values()
+                ->all());
+        }
+
         $lineItem = $items->firstWhere('key', self::APPLICANT_LINES_ITEM_KEY);
         $ids = is_array($lineItem) ? data_get($lineItem, 'value.line_of_business_ids') : null;
 

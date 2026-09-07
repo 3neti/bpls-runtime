@@ -63,6 +63,27 @@ type DocumentProjection = {
         emerging_total_amount_cents: number | null;
         required_unresolved_charge_count: number;
         offices: Office[];
+        concerned_office_payment_orders: {
+            all_finalized: boolean;
+            finalized_subtotal_amount_cents: number | null;
+            offices: {
+                routing_work_id: number;
+                office_code: string;
+                status: 'finalized' | 'awaiting_payment_order' | 'conflict';
+                total_amount_cents: number | null;
+            }[];
+        } | null;
+        treasury_lines_of_business: {
+            assignment_id: number;
+            name: string;
+            assigned_by: string;
+            assigned_at: string;
+            payment_items: {
+                id: number;
+                name: string;
+                determined_amount_cents: number;
+            }[];
+        }[];
     };
     computation_assessment_slip: {
         assessment_id: number;
@@ -159,17 +180,32 @@ const commissionedOfficeRows = computed(() =>
         const office = props.document.page_2_assessment.offices.find(
             (candidate) => candidate.code === work.office_code,
         );
+        const paymentOrder =
+            props.document.page_2_assessment.concerned_office_payment_orders?.offices.find(
+                (candidate) => candidate.routing_work_id === work.id,
+            );
 
         return {
             ...work,
-            status: office?.status ?? 'awaiting_determination',
+            status: paymentOrder?.status ?? 'awaiting_payment_order',
             paymentOrderCount: office?.payment_order_count ?? 0,
-            totalAmountCents: office?.total_amount_cents ?? null,
+            totalAmountCents:
+                paymentOrder?.status === 'finalized'
+                    ? paymentOrder.total_amount_cents
+                    : null,
         };
     }),
 );
-const hasAnyCommissionedPaymentOrder = computed(() =>
-    commissionedOfficeRows.value.some((row) => row.paymentOrderCount > 0),
+const treasurySubtotal = computed(() =>
+    props.document.page_2_assessment.treasury_lines_of_business.reduce(
+        (total, assignment) =>
+            total +
+            assignment.payment_items.reduce(
+                (subtotal, item) => subtotal + item.determined_amount_cents,
+                0,
+            ),
+        0,
+    ),
 );
 
 onMounted(async () => {
@@ -340,15 +376,15 @@ function continuationLabel(index: number): string {
                             <strong>{{ office.office_label }}</strong>
                             <span class="uppercase">
                                 {{
-                                    office.paymentOrderCount > 0
-                                        ? label(office.status)
-                                        : 'Awaiting Payment Order'
+                                    office.status === 'finalized'
+                                        ? 'Payment Order finalized'
+                                        : label(office.status)
                                 }}
                             </span>
                             <span>{{ office.paymentOrderCount || '—' }}</span>
                             <strong class="text-right tabular-nums">
                                 {{
-                                    office.paymentOrderCount > 0
+                                    office.status === 'finalized'
                                         ? money(office.totalAmountCents)
                                         : 'TBD'
                                 }}
@@ -369,14 +405,17 @@ function continuationLabel(index: number): string {
                             class="grid grid-cols-[1fr_auto] border-t-2 border-stone-900 p-2 text-xs"
                         >
                             <span class="font-black uppercase"
-                                >Processing working total</span
+                                >Concerned-office Payment Order subtotal</span
                             >
                             <strong class="tabular-nums">
                                 {{
-                                    hasAnyCommissionedPaymentOrder
+                                    document.page_2_assessment
+                                        .concerned_office_payment_orders
+                                        ?.all_finalized
                                         ? money(
                                               document.page_2_assessment
-                                                  .emerging_total_amount_cents,
+                                                  .concerned_office_payment_orders
+                                                  .finalized_subtotal_amount_cents,
                                           )
                                         : 'TBD'
                                 }}
@@ -417,6 +456,74 @@ function continuationLabel(index: number): string {
                             </dd>
                         </div>
                     </dl>
+                </section>
+
+                <section
+                    v-if="document.commissioned_path"
+                    data-testid="page-2-treasury-lines-of-business"
+                >
+                    <h3 class="paper-section-title">
+                        B. Treasury Lines of Business and Payment Items
+                    </h3>
+                    <div class="paper-table">
+                        <div
+                            class="paper-row paper-table-head grid-cols-[1.2fr_1.6fr_0.8fr]"
+                        >
+                            <span>Official Line of Business</span
+                            ><span>Payment items</span><span>Subtotal</span>
+                        </div>
+                        <div
+                            v-for="assignment in document.page_2_assessment
+                                .treasury_lines_of_business"
+                            :key="assignment.assignment_id"
+                            class="paper-row grid-cols-1 sm:grid-cols-[1.2fr_1.6fr_0.8fr]"
+                        >
+                            <strong>{{ assignment.name }}</strong>
+                            <span>
+                                {{
+                                    assignment.payment_items
+                                        .map((item) => item.name)
+                                        .join(', ') || 'No payment item'
+                                }}
+                            </span>
+                            <strong class="text-right tabular-nums">
+                                {{
+                                    money(
+                                        assignment.payment_items.reduce(
+                                            (total, item) =>
+                                                total +
+                                                item.determined_amount_cents,
+                                            0,
+                                        ),
+                                    )
+                                }}
+                            </strong>
+                        </div>
+                        <div
+                            v-if="
+                                document.page_2_assessment
+                                    .treasury_lines_of_business.length === 0
+                            "
+                            class="paper-row grid-cols-1"
+                        >
+                            <span>Treasury classification pending</span>
+                        </div>
+                        <div
+                            class="grid grid-cols-[1fr_auto] border-t-2 border-stone-900 p-2 text-xs"
+                        >
+                            <span class="font-black uppercase"
+                                >Treasury payment-item subtotal</span
+                            >
+                            <strong class="tabular-nums">
+                                {{
+                                    document.page_2_assessment
+                                        .treasury_lines_of_business.length > 0
+                                        ? money(treasurySubtotal)
+                                        : 'TBD'
+                                }}
+                            </strong>
+                        </div>
+                    </div>
                 </section>
 
                 <section
@@ -552,7 +659,7 @@ function continuationLabel(index: number): string {
                     <h3 class="paper-section-title">
                         {{
                             document.commissioned_path
-                                ? 'B. Assessment Reference'
+                                ? 'C. Assessment Reference'
                                 : 'C. Assessment Reference'
                         }}
                     </h3>

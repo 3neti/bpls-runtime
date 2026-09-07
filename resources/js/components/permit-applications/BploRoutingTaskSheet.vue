@@ -326,6 +326,14 @@ function treasuryFeeOptions(lineOfBusinessId: number) {
         default_amount_cents: item.amount_cents,
     }));
 }
+
+const treasurySelectionsReady = computed(
+    () =>
+        treasurySelections.value.length > 0 &&
+        treasurySelections.value.every(
+            (selection) => selection.items.length > 0,
+        ),
+);
 </script>
 
 <template>
@@ -617,7 +625,7 @@ function treasuryFeeOptions(lineOfBusinessId: number) {
                     </div>
                     <Button
                         type="button"
-                        :disabled="treasurySelections.length === 0"
+                        :disabled="!treasurySelectionsReady"
                         @click="confirmTreasuryLobs"
                         >Confirm Treasury Classification</Button
                     >

@@ -188,6 +188,18 @@ const concernedOfficePaymentOrders = computed(
         props.routingTask.financial_editor
             .concerned_office_payment_orders as ConcernedOfficePaymentOrderSummaryData,
 );
+const treasuryAssignmentsComplete = computed(
+    () =>
+        props.routingTask.financial_editor.treasury_assignments.length > 0 &&
+        props.routingTask.financial_editor.treasury_assignments.every(
+            (assignment: { items: unknown[] }) => assignment.items.length > 0,
+        ),
+);
+const nelsonAssessmentReady = computed(
+    () =>
+        concernedOfficePaymentOrders.value.all_finalized &&
+        treasuryAssignmentsComplete.value,
+);
 
 /** Presentation-only hierarchy over backend-provided charges and totals. */
 const workingPaper = computed(() =>
@@ -337,9 +349,11 @@ const myRoutingWork = computed(() => {
 const workspaceStatusLabel = computed(() => {
     if (!officeWorkspace.value) {
         if (isNelsonPath.value) {
-            return concernedOfficePaymentOrders.value.all_finalized
-                ? 'Payment Orders Finalized'
-                : 'Payment Orders In Progress';
+            return nelsonAssessmentReady.value
+                ? 'Ready for Assessment'
+                : concernedOfficePaymentOrders.value.all_finalized
+                  ? 'Payment Orders Finalized'
+                  : 'Payment Orders In Progress';
         }
 
         return props.evaluation?.status_label ?? 'Awaiting Evaluation';
@@ -352,9 +366,11 @@ const workspaceStatusLabel = computed(() => {
 
 const nextStepTitle = computed(() => {
     if (isNelsonPath.value) {
-        return concernedOfficePaymentOrders.value.all_finalized
-            ? 'Treasury LOB classification'
-            : 'Waiting for concerned-office Payment Orders';
+        return treasuryAssignmentsComplete.value
+            ? 'Prepare Assessment'
+            : concernedOfficePaymentOrders.value.all_finalized
+              ? 'Treasury LOB classification'
+              : 'Waiting for concerned-office Payment Orders';
     }
 
     if (props.evaluation === null) {
@@ -376,9 +392,11 @@ const nextStepTitle = computed(() => {
 
 const nextStepNote = computed(() => {
     if (isNelsonPath.value) {
-        return concernedOfficePaymentOrders.value.all_finalized
-            ? 'Concerned-office Payment Orders are complete. Treasury LOB classification is the next stage before Assessment preparation.'
-            : `${concernedOfficePaymentOrders.value.finalized_office_count} of ${concernedOfficePaymentOrders.value.required_office_count} concerned offices have finalized their Payment Orders.`;
+        return treasuryAssignmentsComplete.value
+            ? 'Concerned-office Payment Orders and Treasury payment items are complete. The Assessment Officer can now prepare the immutable Assessment and Schedule of Payment.'
+            : concernedOfficePaymentOrders.value.all_finalized
+              ? 'Concerned-office Payment Orders are complete. Treasury LOB classification is the next stage before Assessment preparation.'
+              : `${concernedOfficePaymentOrders.value.finalized_office_count} of ${concernedOfficePaymentOrders.value.required_office_count} concerned offices have finalized their Payment Orders.`;
     }
 
     if (props.evaluation === null) {
@@ -1853,8 +1871,9 @@ function submitPrepareAssessment(): void {
                         <Button
                             class="mt-4 w-full"
                             :disabled="
-                                isNelsonPath ||
-                                !readiness?.ready ||
+                                (isNelsonPath
+                                    ? !nelsonAssessmentReady
+                                    : !readiness?.ready) ||
                                 currentAssessmentExists ||
                                 pendingAction !== null
                             "
@@ -1873,8 +1892,14 @@ function submitPrepareAssessment(): void {
                             v-if="isNelsonPath"
                             class="mt-2 text-xs text-muted-foreground"
                         >
+                            <template v-if="treasuryAssignmentsComplete">
+                                Concerned-office Payment Orders and Treasury
+                                payment items are complete. Preparing the
+                                Assessment will freeze the canonical Price and
+                                Schedule of Payment.
+                            </template>
                             <template
-                                v-if="
+                                v-else-if="
                                     concernedOfficePaymentOrders.all_finalized
                                 "
                             >

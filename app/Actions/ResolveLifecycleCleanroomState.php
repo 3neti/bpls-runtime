@@ -21,6 +21,7 @@ class ResolveLifecycleCleanroomState
         private readonly LifecycleCleanroomApplicationContract $applicationContract,
         private readonly BusinessPermitEvaluationResolver $evaluationResolver,
         private readonly ProjectPermitReadiness $projectPermitReadiness,
+        private readonly BuildConcernedOfficePaymentOrderSummary $paymentOrderSummary,
     ) {}
 
     /** @return array<string, mixed> */
@@ -33,6 +34,8 @@ class ResolveLifecycleCleanroomState
             'newApplication.businessPermitEvaluation.items.revisions.version',
             'newApplication.businessPermitEvaluation.items.revisions.actor',
             'newApplication.bploRoutingDetermination.works',
+            'newApplication.bploRoutingDetermination.works.paymentOrders.lines',
+            'newApplication.treasuryLineOfBusinessAssignments.items',
             'newApplication.assessments.decision',
             'newApplication.assessments.treasuryCounterCheck',
             'newApplication.paymentSchedules',
@@ -58,32 +61,39 @@ class ResolveLifecycleCleanroomState
 
         $stepDefinitions = collect($this->definition->steps());
         if ($run->isNelsonReconciliationV1()) {
-            $stepDefinitions = $stepDefinitions->map(function (array $step): array {
+            $stepDefinitions = $stepDefinitions->flatMap(function (array $step): array {
                 if ($step['key'] === 'citizen_intake') {
-                    return [
+                    return [[
                         ...$step,
                         'label' => 'Application drafted, documented, signed and lodged',
                         'description' => 'The applicant saves the plain-language business declaration as a draft, adds supporting documents, then captures a signature facsimile and lodges it. Page 1 and the documentary manifest freeze only at lodging.',
                         'milestone' => 'Draft, document & lodge Application',
-                    ];
+                    ]];
                 }
 
                 if ($step['key'] === 'assessment_prepared') {
                     return [
-                        ...$step,
-                        'key' => 'treasury_lob_classification',
-                        'label' => 'Treasury LOB classification deferred',
-                        'description' => 'Concerned-office Payment Orders are complete. Treasury LOB classification and Treasury payment items begin in a later wave before Assessment preparation.',
-                        'mode' => 'boundary',
-                        'actor' => null,
-                        'milestone' => 'Treasury LOB classification',
+                        [
+                            ...$step,
+                            'key' => 'treasury_lob_classification',
+                            'label' => 'Treasury Lines of Business and payment items confirmed',
+                            'description' => 'Treasury assigns one or more official Lines of Business and confirms their configured payment items without rewriting the applicant declaration.',
+                            'mode' => 'product_form',
+                            'actor' => 'treasury',
+                            'milestone' => 'Treasury LOB classification',
+                        ],
+                        [
+                            ...$step,
+                            'label' => 'Assessment and Schedule of Payment prepared',
+                            'description' => 'The Assessment Officer compiles concerned-office and Treasury components once through Price and PriceReport, producing one immutable Assessment and its reconciled Schedule of Payment.',
+                        ],
                     ];
                 }
 
-                return $step;
-            });
-            $treasuryBoundary = $stepDefinitions->search(fn (array $step): bool => $step['key'] === 'treasury_lob_classification');
-            $stepDefinitions = $stepDefinitions->take(is_int($treasuryBoundary) ? $treasuryBoundary + 1 : 0);
+                return [$step];
+            })->values();
+            $publicVerification = $stepDefinitions->search(fn (array $step): bool => $step['key'] === 'public_verification');
+            $stepDefinitions = $stepDefinitions->take(is_int($publicVerification) ? $publicVerification + 1 : 0);
         }
         if (($newProfile['scope'] ?? null) === 'single_source_application') {
             $publicVerificationIndex = $stepDefinitions->search(fn (array $step): bool => $step['key'] === 'public_verification');
@@ -270,11 +280,15 @@ class ResolveLifecycleCleanroomState
             'health_responsibilities' => $this->officeResolved($application, $projection, $profile, 'health'),
             'menro_responsibility' => $this->officeResolved($application, $projection, $profile, 'menro'),
             'assessment_prepared' => $application?->assessments->whereNull('superseded_at')->isNotEmpty() ?? false,
+            'treasury_lob_classification' => $this->treasuryClassificationComplete($application),
             'treasury_counter_check' => $application?->assessments->whereNull('superseded_at')->first()?->treasuryCounterCheck !== null,
             'treasurer_approved' => $application?->assessments->whereNull('superseded_at')->first()?->decision?->action === AssessmentDecisionAction::Approved,
             'payable_created' => $application?->paymentSchedules->isNotEmpty() ?? false,
             'qr_payment_collected' => $application?->paymentSchedules->flatMap(fn ($schedule) => $schedule->treasuryCollections)->isNotEmpty() ?? false,
-            'official_receipt_issued' => $application?->paymentSchedules->flatMap(fn ($schedule) => $schedule->treasuryCollections)->contains(fn ($collection): bool => $collection->receipt !== null) ?? false,
+            'official_receipt_issued' => $application instanceof PermitApplication
+                && ($profile['kind'] ?? null) === LifecycleCleanroomRun::CeremonyNelsonReconciliationV1
+                    ? $this->projectPermitReadiness->handle($application)['prerequisites']['complete_receipt_coverage']
+                    : ($application?->paymentSchedules->flatMap(fn ($schedule) => $schedule->treasuryCollections)->contains(fn ($collection): bool => $collection->receipt !== null) ?? false),
             'post_payment_certifications_commissioned' => $routedOfficeCount > 0
                 && $commissionedOfficeCount === $routedOfficeCount,
             'assessor_post_payment_certified' => $this->postPaymentCertified($application, 'assessor'),
@@ -286,6 +300,20 @@ class ResolveLifecycleCleanroomState
             'permit_released', 'public_verification' => $application?->provisionalUatPermitCompletion?->released_at !== null,
             default => false,
         };
+    }
+
+    private function treasuryClassificationComplete(?PermitApplication $application): bool
+    {
+        if (! $application instanceof PermitApplication) {
+            return false;
+        }
+
+        $paymentOrders = $this->paymentOrderSummary->handle($application);
+        $assignments = $application->treasuryLineOfBusinessAssignments->whereNull('removed_at');
+
+        return $paymentOrders['all_finalized'] === true
+            && $assignments->isNotEmpty()
+            && $assignments->every(fn ($assignment): bool => $assignment->items->whereNull('removed_at')->isNotEmpty());
     }
 
     private function postPaymentCertified(?PermitApplication $application, string $office): bool
@@ -303,15 +331,15 @@ class ResolveLifecycleCleanroomState
     private function officeResolved(?PermitApplication $application, ?array $projection, ?array $profile, string $office): bool
     {
         if (($profile['kind'] ?? null) === LifecycleCleanroomRun::CeremonyNelsonReconciliationV1) {
-            $works = $application?->bploRoutingDetermination?->works
-                ->where('office_code', $office);
+            if (! $application instanceof PermitApplication) {
+                return false;
+            }
+            $works = $application->bploRoutingDetermination?->works->where('office_code', $office);
+            $summaries = collect($this->paymentOrderSummary->handle($application)['offices']);
 
             return $works?->isEmpty() === true
                 || ($works?->isNotEmpty() === true
-                    && $works->every(fn ($work): bool => $work->paymentOrders()
-                        ->where('status', 'issued')
-                        ->whereNull('superseded_at')
-                        ->exists()));
+                    && $works->every(fn ($work): bool => data_get($summaries->firstWhere('routing_work_id', $work->id), 'status') === 'finalized'));
         }
 
         $expected = $this->expectedResponsibilities($profile)->where('department', $office)->count();
@@ -454,11 +482,14 @@ class ResolveLifecycleCleanroomState
             'health_responsibilities' => $this->officeDelta($profile, 'Health', 'health', $responsibilities),
             'menro_responsibility' => $this->officeDelta($profile, 'MENRO', 'menro', $responsibilities),
             'assessment_prepared' => ['Assessment total' => $isRegistryProfile ? '— → source-backed instant audit' : '— → ₱1,220'],
+            'treasury_lob_classification' => ['Official Lines of Business' => 'Pending → Treasury assigned', 'Treasury payment items' => 'Pending → Confirmed'],
             'treasury_counter_check' => ['Treasury result' => 'Pending → No correction'],
             'treasurer_approved' => ['Assessment decision' => 'Pending → Approved'],
             'payable_created' => ['Payable balance' => $isRegistryProfile ? '₱0 → reconciled Assessment' : '₱0 → ₱1,220'],
             'qr_payment_collected' => ['Collection' => 'Pending → Canonical synthetic Collection'],
-            'official_receipt_issued' => ['AF No. 51' => 'Pending → Issued'],
+            'official_receipt_issued' => ($profile['kind'] ?? null) === LifecycleCleanroomRun::CeremonyNelsonReconciliationV1
+                ? ['Official Receipt groups' => 'Pending → Fully receipted', 'OR totals' => 'Pending → Collection reconciled']
+                : ['AF No. 51' => 'Pending → Issued'],
             'post_payment_certifications_commissioned' => ['Post-payment offices' => '0 → BPLO-routed offices'],
             'assessor_post_payment_certified', 'engineering_post_payment_certified', 'health_post_payment_certified', 'menro_post_payment_certified' => ['Office certification' => 'Pending → Synthetic certified'],
             'permit_ready' => ['PermitReadiness' => 'Blocked → Ready'],
@@ -494,6 +525,12 @@ class ResolveLifecycleCleanroomState
                 $step['label'] = $office.' Payment Order confirmed';
                 $step['description'] = $office.' selects applicable configured fees, may edit permitted amounts, signs, and confirms its Payment Order.';
                 $step['milestone'] = 'Concerned-office Payment Order';
+            }
+
+            if ($step['key'] === 'official_receipt_issued') {
+                $step['label'] = 'Official Receipt packet completed';
+                $step['description'] = 'The Cashier issues one AF No. 51 per required receipt group until every allocation is covered and all Official Receipt totals reconcile to the consolidated Collection.';
+                $step['milestone'] = 'All Official Receipts issued';
             }
 
             return $step;

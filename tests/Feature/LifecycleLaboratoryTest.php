@@ -1,11 +1,14 @@
 <?php
 
 use App\Actions\AdvanceLifecycleCleanroom;
+use App\Actions\AssignTreasuryLinesOfBusiness;
+use App\Actions\BuildExecutablePermitApplicationDocument;
 use App\Actions\BuildLaboratoryAssessmentReconciliation;
 use App\Actions\BuildLifecycleCleanroom;
 use App\Actions\BuildLifecycleCleanroomIntake;
 use App\Actions\CommissionPostPaymentOfficeCertifications;
 use App\Actions\CompleteBusinessPermitEvaluationResponsibility;
+use App\Actions\ConfirmOfficePaymentOrder;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\IssueManualCollectionReceipt;
@@ -13,10 +16,12 @@ use App\Actions\IssueSyntheticLifecyclePermit;
 use App\Actions\RecordAssessmentDecision;
 use App\Actions\RecordBploRoutingDetermination;
 use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
+use App\Actions\RecordPaymentScheduleCollection;
 use App\Actions\RecordPostPaymentOfficeCertification;
 use App\Actions\ReleaseSyntheticLifecyclePermit;
 use App\Actions\ResolveLifecycleCleanroomState;
 use App\Actions\SubmitCitizenPermitApplication;
+use App\Data\Application\ApplicationDataResolver;
 use App\Enums\AssessmentDecisionAction;
 use App\Enums\BusinessPermitEvaluationApplicability;
 use App\Enums\BusinessPermitEvaluationSource;
@@ -28,16 +33,16 @@ use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\LifecycleScenarios\RenewalHappyPathDefinition;
 use App\Models\Business;
 use App\Models\BusinessOwner;
+use App\Models\FeeRule;
 use App\Models\LifecycleCleanroomRun;
 use App\Models\LifecycleScenarioSpecimen;
 use App\Models\LineOfBusiness;
-use App\Models\PaperlessPaymentOrder;
-use App\Models\PaperlessPaymentOrderLine;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationDocument;
 use App\Models\SignatureEvidence;
 use App\Models\TreasuryCollection;
 use App\Models\User;
+use Database\Seeders\NelsonTreasuryLobFeeCatalogSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
@@ -106,8 +111,8 @@ test('laboratory segregates interactive work from collapsed automated reference 
         ->toContain('v-for="step in visibleCleanroomSteps"')
         ->toContain('step.completed &&')
         ->toContain('will appear here only when completed or ready to act on')
-        ->toContain("mode === 'boundary'")
-        ->toContain('Next wave not implemented')
+        ->not->toContain("mode === 'boundary'")
+        ->not->toContain('Next wave not implemented')
         ->not->toContain('visibleApplicationScenario')
         ->toContain('<details')
         ->toContain('data-testid="certified-regression-evidence"')
@@ -879,27 +884,148 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
             ->where('handoff.summary.responsibility_count', 0)
             ->where('handoff.offices.0.status', 'Not started'));
 
-    foreach ($application->fresh()->bploRoutingDetermination->works as $index => $work) {
-        $amount = [6_000, 12_500, 9_500, 4_000][$index];
-        $order = PaperlessPaymentOrder::factory()->for($work, 'routingWork')->create([
-            'permit_application_id' => $application->id,
-            'total_amount_cents' => $amount,
-        ]);
-        PaperlessPaymentOrderLine::factory()->for($order, 'paymentOrder')->create([
-            'code' => 'NELSON-OFFICE-'.($index + 1),
-            'amount_cents' => $amount,
-        ]);
+    foreach ($application->fresh()->bploRoutingDetermination->works as $work) {
+        $fees = FeeRule::query()
+            ->where('metadata->responsible_office_code', $work->office_code)
+            ->where('metadata->application_year', $application->application_year)
+            ->orderBy('code')
+            ->get();
+        app(ConfirmOfficePaymentOrder::class)->handle(
+            $work,
+            $fees->map(fn (FeeRule $fee): array => [
+                'fee_rule_id' => $fee->id,
+                'amount_cents' => $fee->amount_cents,
+            ])->all(),
+            User::query()->findOrFail(data_get($run->actor_manifest, 'actors.'.$work->office_code.'.user_id')),
+            UploadedFile::fake()->image($work->office_code.'-payment-order-signature.png'),
+        );
     }
 
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     $cleanroom = app(BuildLifecycleCleanroom::class)->handle($management);
+    $pageTwo = app(BuildExecutablePermitApplicationDocument::class)->handle($application->fresh(), $management);
     expect(data_get($state, 'progress.next_step.key'))->toBe('treasury_lob_classification')
-        ->and(data_get($state, 'progress.next_step.mode'))->toBe('boundary')
-        ->and(data_get($state, 'progress.next_step.actor'))->toBeNull()
+        ->and(data_get($state, 'progress.next_step.mode'))->toBe('product_form')
+        ->and(data_get($state, 'progress.next_step.actor'))->toBe('treasury')
         ->and(data_get($state, 'progress.completed_steps'))->toBe(8)
-        ->and(data_get($state, 'progress.total_steps'))->toBe(9)
+        ->and(data_get($state, 'progress.total_steps'))->toBe(24)
         ->and(data_get($cleanroom, 'active.concerned_office_payment_orders.status'))->toBe('finalized')
-        ->and(data_get($cleanroom, 'active.concerned_office_payment_orders.finalized_subtotal_amount_cents'))->toBe(32_000);
+        ->and(data_get($cleanroom, 'active.concerned_office_payment_orders.finalized_subtotal_amount_cents'))->toBe(32_000)
+        ->and(data_get($pageTwo, 'page_2_assessment.concerned_office_payment_orders.finalized_subtotal_amount_cents'))->toBe(32_000)
+        ->and(data_get($pageTwo, 'page_2_assessment.treasury_lines_of_business'))->toBe([]);
+
+    $this->seed(NelsonTreasuryLobFeeCatalogSeeder::class);
+    $lines = LineOfBusiness::query()->where('code', 'like', 'LAB-NELSON-LOB-%')->orderBy('code')->get();
+    $selections = $lines->map(function (LineOfBusiness $line) use ($application): array {
+        $fee = FeeRule::query()
+            ->where('line_of_business_id', $line->id)
+            ->whereYear('effective_from', $application->application_year)
+            ->sole();
+
+        return [
+            'line_of_business_id' => $line->id,
+            'items' => [['fee_rule_id' => $fee->id, 'amount_cents' => $fee->amount_cents]],
+        ];
+    })->all();
+    app(AssignTreasuryLinesOfBusiness::class)->handle(
+        $application,
+        $selections,
+        User::query()->findOrFail(data_get($run->actor_manifest, 'actors.treasury.user_id')),
+    );
+
+    $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+    $pageTwo = app(BuildExecutablePermitApplicationDocument::class)->handle($application->fresh(), $management);
+    expect($lines)->toHaveCount(3)
+        ->and(data_get($state, 'progress.next_step.key'))->toBe('assessment_prepared')
+        ->and(data_get($state, 'progress.next_step.actor'))->toBe('assessment_officer')
+        ->and(data_get($pageTwo, 'page_2_assessment.treasury_lines_of_business'))->toHaveCount(3);
+
+    $assessment = app(CreateAssessmentForPermitApplication::class)->handle(
+        $application->fresh(),
+        User::query()->findOrFail(data_get($run->actor_manifest, 'actors.assessment_officer.user_id')),
+    );
+    $applicationData = app(ApplicationDataResolver::class)->resolve($application->fresh(), $management)->toArray();
+    $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+    expect(data_get($state, 'progress.next_step.key'))->toBe('treasury_counter_check')
+        ->and($assessment->total_amount_cents)->toBe(84_500)
+        ->and(data_get($applicationData, 'schedule_of_payment.groups'))->toHaveCount(7)
+        ->and(data_get($applicationData, 'schedule_of_payment.grand_total_minor'))->toBe($assessment->total_amount_cents)
+        ->and(data_get($applicationData, 'schedule_of_payment.price_report_total_minor'))->toBe($assessment->total_amount_cents);
+
+    $treasury = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.treasury.user_id'));
+    $assessmentOfficer = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.assessment_officer.user_id'));
+    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($assessment, $treasury);
+    app(RecordAssessmentDecision::class)->handle(
+        $assessment,
+        User::query()->findOrFail(data_get($run->actor_manifest, 'actors.municipal_treasurer.user_id')),
+        AssessmentDecisionAction::Approved,
+    );
+    $schedule = app(CreatePaymentScheduleForAssessment::class)->handle($assessment, $assessmentOfficer);
+    expect($schedule->total_amount_cents)->toBe($assessment->total_amount_cents)
+        ->and(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))->toBe('qr_payment_collected');
+
+    $cashier = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.cashier.user_id'));
+    $collection = app(RecordPaymentScheduleCollection::class)->handle($schedule, [
+        'amount_cents' => $schedule->total_amount_cents,
+        'method' => TreasuryCollectionMethod::Cash->value,
+        'channel' => TreasuryCollectionChannel::OverTheCounter->value,
+        'payer_name' => 'Nelson Cleanroom Applicant',
+        'remarks' => 'Synthetic Nelson lifecycle laboratory collection.',
+    ], $cashier);
+    $receiptGroups = $collection->allocations->pluck('receipt_group_key')->unique()->sort()->values();
+    expect($receiptGroups)->toHaveCount(7)
+        ->and($collection->allocations->sum('amount_cents'))->toBe($collection->amount_cents)
+        ->and(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))->toBe('official_receipt_issued');
+
+    foreach ($receiptGroups as $index => $receiptGroup) {
+        app(IssueManualCollectionReceipt::class)->handle($collection->fresh(), [
+            'receipt_group_key' => $receiptGroup,
+            'receipt_number' => (string) (7_100_001 + $index),
+            'series' => '2025',
+            'numbering_authority' => 'synthetic_nelson_cleanroom',
+        ], $cashier);
+
+        $receiptState = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+        if ($index < $receiptGroups->count() - 1) {
+            expect(data_get($receiptState, 'progress.next_step.key'))->toBe('official_receipt_issued')
+                ->and($collection->fresh()->status)->toBe(TreasuryCollectionStatus::PendingReceipt);
+        }
+    }
+
+    $collection->refresh();
+    $cleanroom = app(BuildLifecycleCleanroom::class)->handle($management);
+    expect($collection->status)->toBe(TreasuryCollectionStatus::Receipted)
+        ->and($collection->receipts()->sum('amount_cents'))->toBe($collection->amount_cents)
+        ->and(data_get($cleanroom, 'active.payment_simulation.receipt_ids'))->toHaveCount(7)
+        ->and(data_get($cleanroom, 'active.payment_simulation.receipt_coverage_complete'))->toBeTrue()
+        ->and(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))->toBe('post_payment_certifications_commissioned');
+
+    app(AdvanceLifecycleCleanroom::class)->handle($run->fresh());
+    foreach ($application->fresh()->postPaymentOfficeCertifications as $certification) {
+        app(RecordPostPaymentOfficeCertification::class)->handle(
+            $certification,
+            User::query()->findOrFail(data_get($run->actor_manifest, 'actors.'.$certification->office_code.'.user_id')),
+        );
+    }
+    expect(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))->toBe('permit_issued');
+
+    app(IssueSyntheticLifecyclePermit::class)->handle(
+        $application->fresh(),
+        User::query()->findOrFail(data_get($run->actor_manifest, 'actors.permit_issuer.user_id')),
+    );
+    app(ReleaseSyntheticLifecyclePermit::class)->handle(
+        $application->fresh(),
+        User::query()->findOrFail(data_get($run->actor_manifest, 'actors.releasing_officer.user_id')),
+    );
+
+    $finalState = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+    $finalData = app(ApplicationDataResolver::class)->resolve($application->fresh(), $management)->toArray();
+    expect(data_get($finalState, 'progress.complete'))->toBeTrue()
+        ->and(data_get($finalState, 'progress.completed_steps'))->toBe(24)
+        ->and(data_get($finalData, 'official_receipts'))->toHaveCount(7)
+        ->and(data_get($finalData, 'permit.official_receipts'))->toHaveCount(7)
+        ->and(data_get($finalData, 'permit.official_receipt_bound'))->toBeTrue()
+        ->and(collect(data_get($finalData, 'official_receipts'))->sum('total_amount_minor'))->toBe($collection->amount_cents);
 });
 
 test('failed one action lodging rolls back the draft and retains the cleanroom intake', function () {

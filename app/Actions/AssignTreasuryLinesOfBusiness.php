@@ -15,6 +15,11 @@ use LogicException;
 
 class AssignTreasuryLinesOfBusiness
 {
+    public function __construct(
+        private readonly BuildConcernedOfficePaymentOrderSummary $paymentOrderSummary,
+        private readonly RefreshBusinessPermitEvaluation $refreshEvaluation,
+    ) {}
+
     /**
      * @param  list<array{line_of_business_id: int, items?: list<array{fee_rule_id: int, amount_cents: int, reason?: string|null, authority?: string|null}>}>  $selections
      * @return list<TreasuryLineOfBusinessAssignment>
@@ -32,11 +37,16 @@ class AssignTreasuryLinesOfBusiness
             if ($selections === [] || collect($selections)->pluck('line_of_business_id')->duplicates()->isNotEmpty()) {
                 throw new LogicException('Treasury must assign one or more unique canonical Lines of Business.');
             }
-            $works = $application->bploRoutingDetermination === null
-                ? collect()
-                : $application->bploRoutingDetermination->works;
-            if ($works->isEmpty() || $works->contains(fn ($work): bool => ! $work->paymentOrders->contains(fn ($order): bool => $order->status === 'issued' && $order->superseded_at === null))) {
-                throw new LogicException('Treasury classification begins only after every routed office confirms a Payment Order.');
+            $selectedFeeIds = collect($selections)->flatMap(fn (array $selection): array => collect($selection['items'] ?? [])->pluck('fee_rule_id')->all());
+            if ($selectedFeeIds->duplicates()->isNotEmpty()) {
+                throw new LogicException('Each Treasury payment item may be selected only once.');
+            }
+            $paymentOrders = $this->paymentOrderSummary->handle($application);
+            if ($paymentOrders['all_finalized'] !== true) {
+                throw new LogicException('Treasury classification begins only after every routed office has exactly one current, reconciled Payment Order.');
+            }
+            if ($application->treasuryLineOfBusinessAssignments()->whereNull('removed_at')->exists()) {
+                throw new LogicException('Treasury classification has already been confirmed for this Application.');
             }
 
             $lineIds = collect($selections)->pluck('line_of_business_id');
@@ -71,6 +81,9 @@ class AssignTreasuryLinesOfBusiness
                 ]);
 
                 $configuredItems = $selection['items'] ?? $this->defaultItems($application, $line);
+                if ($configuredItems === []) {
+                    throw new LogicException('Each assigned Line of Business requires at least one confirmed Treasury payment item.');
+                }
                 foreach ($configuredItems as $item) {
                     $rule = FeeRule::query()->with('currentReconciliation')->findOrFail($item['fee_rule_id']);
                     if ($rule->line_of_business_id !== $line->id) {
@@ -80,8 +93,20 @@ class AssignTreasuryLinesOfBusiness
                         throw new LogicException('Business Tax is prohibited for New Applications.');
                     }
                     $amount = $item['amount_cents'];
+                    if ($amount < 0
+                        || ! $rule->is_active
+                        || $rule->effective_from->year > $application->application_year
+                        || ($rule->effective_until !== null && $rule->effective_until->year < $application->application_year)) {
+                        throw new LogicException('The Treasury payment item must be active for the Application year and have a non-negative amount.');
+                    }
                     $variance = $amount - $rule->amount_cents;
-                    if ($variance !== 0 && (blank($item['reason'] ?? null) || blank($item['authority'] ?? null))) {
+                    $reason = $item['reason'] ?? null;
+                    $authority = $item['authority'] ?? null;
+                    if ($variance !== 0) {
+                        $reason ??= 'Amount edited in the Nelson financial line-item editor.';
+                        $authority ??= 'Authorized Treasury actor holding '.UserPermission::CorrectEvaluationLinesOfBusiness->value.'.';
+                    }
+                    if ($variance !== 0 && (blank($reason) || blank($authority))) {
                         throw new LogicException('A Treasury item variance requires reason and authority provenance.');
                     }
                     $assignment->items()->create([
@@ -102,13 +127,16 @@ class AssignTreasuryLinesOfBusiness
                             'default_amount_minor' => $rule->amount_cents,
                             'determined_amount_minor' => $amount,
                             'variance_minor' => $variance,
-                            'reason' => $item['reason'] ?? null,
-                            'authority' => $item['authority'] ?? null,
+                            'reason' => $reason,
+                            'authority' => $authority,
                             'determined_by_id' => $actor->id,
                         ],
                     ]);
                 }
                 $result[] = $assignment->load(['lineOfBusiness', 'items.feeRule']);
+            }
+            if ($application->businessPermitEvaluation !== null) {
+                $this->refreshEvaluation->handle($application->businessPermitEvaluation, $actor);
             }
 
             return $result;
@@ -124,6 +152,7 @@ class AssignTreasuryLinesOfBusiness
             ->where('effective_from', '<=', "{$application->application_year}-12-31")
             ->where(fn ($query) => $query->whereNull('effective_until')->orWhere('effective_until', '>=', "{$application->application_year}-01-01"))
             ->where('category', '!=', FeeRuleCategory::Tax->value)
+            ->where('calculation_type', 'fixed')
             ->orderBy('code')->get()
             ->map(fn (FeeRule $rule): array => ['fee_rule_id' => $rule->id, 'amount_cents' => $rule->amount_cents])
             ->values()

@@ -153,16 +153,20 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         ->and($application->bploRoutingSuggestion()->exists())->toBeFalse()
         ->and(collect($routing->works)->pluck('context_snapshot')->flatten()->contains('inspection'))->toBeFalse();
 
-    foreach ($routing->works as $work) {
+    foreach ($routing->works as $officeIndex => $work) {
         $fee = FeeRule::query()
             ->where('metadata->responsible_office_code', $work->office_code)
             ->where('metadata->application_year', now()->year)
             ->firstOrFail();
         app(ConfirmOfficePaymentOrder::class)->handle($work, [[
             'fee_rule_id' => $fee->id,
-            'amount_cents' => $fee->amount_cents,
+            'amount_cents' => $fee->amount_cents + ($officeIndex === 0 ? 100 : 0),
         ]], $office, UploadedFile::fake()->image("{$work->office_code}-signature.png"));
     }
+    $editedOfficeLine = $application->paperlessPaymentOrders()->with('lines')->oldest('id')->firstOrFail()->lines->sole();
+    expect(data_get($editedOfficeLine->source_snapshot, 'variance_minor'))->toBe(100)
+        ->and(data_get($editedOfficeLine->source_snapshot, 'reason'))->toBe('Amount edited in the Nelson financial line-item editor.')
+        ->and(data_get($editedOfficeLine->source_snapshot, 'authority'))->toContain('business_permit_evaluations.contribute');
 
     $lobSelections = [];
     foreach ([
@@ -195,8 +199,12 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         'items' => [['fee_rule_id' => $tax->id, 'amount_cents' => $tax->amount_cents]],
     ]], $treasurer))->toThrow(LogicException::class, 'Business Tax is prohibited');
 
+    $lobSelections[0]['items'][0]['amount_cents'] += 200;
     $assignments = app(AssignTreasuryLinesOfBusiness::class)->handle($application, $lobSelections, $treasurer);
     expect($assignments)->toHaveCount(3)
+        ->and($assignments[0]->items->sole()->variance_cents)->toBe(200)
+        ->and(data_get($assignments[0]->items->sole()->source_snapshot, 'reason'))->toBe('Amount edited in the Nelson financial line-item editor.')
+        ->and(data_get($assignments[0]->items->sole()->source_snapshot, 'authority'))->toContain('business_permit_evaluations.correct_lines_of_business')
         ->and($application->refresh()->business_activity_description)->toBe('General merchandise store selling household goods and liquor, with a small coffee shop.');
 
     $assessment = app(CreateAssessmentForPermitApplication::class)->handle($application->fresh(), $assessor);

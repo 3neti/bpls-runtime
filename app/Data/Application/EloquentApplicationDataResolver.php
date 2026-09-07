@@ -360,7 +360,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             $this->attachment('payment_orders', 2, 'Office Payment Orders', 'Payment Orders', 'office_evidence', 'processing', 'payment_orders', $paymentOrderCount > 0 ? 'attached' : 'pending', $paymentOrderCount > 0, 'sky'),
             $this->attachment('assessment', 3, 'Computation / Assessment Slip', 'Assessment', 'frozen_financial_artifact', 'assessment', 'assessment', $assessment instanceof Assessment ? 'frozen' : 'pending', $assessment instanceof Assessment, 'violet'),
             $this->attachment('qr_ph', 4, 'QR Ph Payment Slip', 'QR Ph', 'payment_instrument', 'payment', 'payment', filled($paymentRequest?->pay_code) ? 'generated' : 'pending', filled($paymentRequest?->pay_code), 'emerald'),
-            $this->attachment('official_receipt', 5, 'Official Receipt · AF No. 51', 'Official Receipt', 'accountable_form', 'payment', 'payment', $receipts === [] ? 'pending' : 'issued', $receipts !== [], 'rose'),
+            $this->attachment('official_receipt', 5, 'Official Receipt Packet · AF No. 51', 'Official Receipts', 'accountable_form', 'payment', 'payment', $permit->official_receipt_bound ? 'issued' : ($receipts === [] ? 'pending' : 'in_progress'), $receipts !== [], 'rose'),
             $this->attachment('permit', 6, 'Business Permit', 'Permit', 'final_authority_artifact', 'permit', 'permit', $permitAttachmentState, $receipts !== [] || $permit->issued, 'stone'),
         ];
     }
@@ -991,22 +991,26 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             completedAt: $balance === 0 ? $application->paymentSchedules->flatMap(fn ($candidate) => $candidate->treasuryCollections)->sortByDesc('received_at')->first()?->received_at?->toIso8601String() : null,
         );
 
-        $unreceiptedCollection = $application->paymentSchedules
-            ->flatMap(fn ($candidate) => $candidate->treasuryCollections)
-            ->first(fn (TreasuryCollection $collection): bool => $collection->receipt === null);
-        $receiptState = count($receipts) > 0 ? 'completed' : ($unreceiptedCollection instanceof TreasuryCollection ? 'ready' : 'waiting');
+        $collections = $application->paymentSchedules->flatMap(fn ($candidate) => $candidate->treasuryCollections);
+        $unreceiptedCollection = $collections->first(fn (TreasuryCollection $collection): bool => $collection->allocations->isEmpty()
+            ? $collection->receipts->isEmpty()
+            : $collection->allocations->contains(fn ($allocation): bool => $allocation->receipt_id === null));
+        $receiptCoverageComplete = $collections->isNotEmpty()
+            && ! $unreceiptedCollection instanceof TreasuryCollection
+            && collect($receipts)->sum(fn (OfficialReceiptData $receipt): int => $receipt->total_amount_minor) === $collections->sum('amount_cents');
+        $receiptState = $receiptCoverageComplete ? 'completed' : ($unreceiptedCollection instanceof TreasuryCollection ? 'ready' : 'waiting');
         $notes[] = $this->workNote(
             id: 'official_receipt',
             actorKey: 'cashier',
             actorLabel: 'Cashier',
-            instruction: 'Issue Official Receipt',
+            instruction: 'Issue all required Official Receipts',
             section: 'payment',
             anchor: 'official_receipt',
             state: $receiptState,
             stateLabel: $receiptState === 'completed' ? 'Completed' : ($receiptState === 'ready' ? 'Ready' : 'Awaiting Collection'),
             tone: 'green',
             affordance: $unreceiptedCollection instanceof TreasuryCollection ? $taskIndex->get('issue_receipt_'.$unreceiptedCollection->id) : null,
-            completedAt: count($receipts) > 0 ? $receipts[0]->issued_on : null,
+            completedAt: $receiptCoverageComplete ? collect($receipts)->last()?->issued_on : null,
         );
 
         foreach ($application->postPaymentOfficeCertifications as $certification) {

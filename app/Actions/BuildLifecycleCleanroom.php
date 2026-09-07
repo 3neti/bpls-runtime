@@ -37,12 +37,24 @@ class BuildLifecycleCleanroom
                 && data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true
                     ? $this->paymentOrderSummary->handle($application)
                     : null;
-            $schedule = $application?->paymentSchedules()->with(['xChangePayment', 'treasuryCollections.receipt'])->latest('sequence')->first();
+            $schedule = $application?->paymentSchedules()->with([
+                'xChangePayment',
+                'treasuryCollections.receipts',
+                'treasuryCollections.allocations',
+            ])->latest('sequence')->first();
+            $collection = $schedule?->treasuryCollections->first();
+            $receiptIds = $collection?->receipts->pluck('id')->values()->all() ?? [];
+            $requiredReceiptGroups = $collection?->allocations->pluck('receipt_group_key')->filter()->unique()->values() ?? collect();
+            $issuedReceiptGroups = $collection?->receipts->pluck('receipt_group_key')->filter()->unique()->values() ?? collect();
             $activeState['payment_simulation'] = [
                 'available' => $schedule?->xChangePayment?->pay_code !== null && $schedule->treasuryCollections->isEmpty(),
                 'pay_code' => $schedule?->xChangePayment?->pay_code,
-                'collection_id' => $schedule?->treasuryCollections->first()?->id,
-                'receipt_id' => $schedule?->treasuryCollections->first()?->receipt?->id,
+                'collection_id' => $collection?->id,
+                'receipt_ids' => $receiptIds,
+                'receipt_coverage_complete' => $collection !== null
+                    && $requiredReceiptGroups->isNotEmpty()
+                    && $requiredReceiptGroups->diff($issuedReceiptGroups)->isEmpty()
+                    && $collection->receipts->sum('amount_cents') === $collection->amount_cents,
                 'status' => $schedule?->treasuryCollections->isNotEmpty() ? 'collected' : ($schedule?->xChangePayment?->pay_code !== null ? 'awaiting_simulation' : 'not_ready'),
             ];
         }

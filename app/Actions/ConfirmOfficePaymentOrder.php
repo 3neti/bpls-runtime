@@ -104,7 +104,13 @@ class ConfirmOfficePaymentOrder
                     throw new LogicException('A Payment Order amount cannot be negative.');
                 }
                 $variance = $amount - $rule->amount_cents;
-                if ($variance !== 0 && (blank($item['reason'] ?? null) || blank($item['authority'] ?? null))) {
+                $reason = $item['reason'] ?? null;
+                $authority = $item['authority'] ?? null;
+                if ($variance !== 0 && data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true) {
+                    $reason ??= 'Amount edited in the Nelson financial line-item editor.';
+                    $authority ??= 'Authorized concerned-office actor holding '.UserPermission::ContributeBusinessPermitEvaluations->value.'.';
+                }
+                if ($variance !== 0 && (blank($reason) || blank($authority))) {
                     throw new LogicException('An amount variance requires the existing reason and authority provenance.');
                 }
 
@@ -121,8 +127,8 @@ class ConfirmOfficePaymentOrder
                         'default_amount_minor' => $rule->amount_cents,
                         'determined_amount_minor' => $amount,
                         'variance_minor' => $variance,
-                        'reason' => $item['reason'] ?? null,
-                        'authority' => $item['authority'] ?? null,
+                        'reason' => $reason,
+                        'authority' => $authority,
                         'determined_by_id' => $actor->id,
                         'determined_at' => $issuedAt->toIso8601String(),
                     ],

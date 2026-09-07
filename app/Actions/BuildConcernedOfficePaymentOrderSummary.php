@@ -7,7 +7,22 @@ use App\Models\PermitApplication;
 
 class BuildConcernedOfficePaymentOrderSummary
 {
-    /** @return array<string, mixed> */
+    /**
+     * @return array{
+     *     schema_version: string,
+     *     status: string,
+     *     currency: string,
+     *     required_office_count: int,
+     *     finalized_office_count: int,
+     *     all_finalized: bool,
+     *     offices: list<array<string, mixed>>,
+     *     recorded_subtotal_amount_cents: int,
+     *     finalized_subtotal_amount_cents: int|null,
+     *     assessment_total_amount_cents: null,
+     *     assessment_total_status: string,
+     *     next_stage: string
+     * }
+     */
     public function handle(PermitApplication $permitApplication): array
     {
         $application = $permitApplication->loadMissing([
@@ -69,7 +84,7 @@ class BuildConcernedOfficePaymentOrderSummary
             'required_office_count' => $offices->count(),
             'finalized_office_count' => $offices->where('status', 'finalized')->count(),
             'all_finalized' => $allFinalized,
-            'offices' => $offices->all(),
+            'offices' => array_values($offices->all()),
             'recorded_subtotal_amount_cents' => $recordedSubtotal,
             'finalized_subtotal_amount_cents' => $allFinalized ? $recordedSubtotal : null,
             'assessment_total_amount_cents' => null,
