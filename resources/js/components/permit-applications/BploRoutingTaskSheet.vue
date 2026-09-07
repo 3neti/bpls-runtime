@@ -488,6 +488,16 @@ function treasuryFeeOptions(lineOfBusinessId: number) {
                         "
                         class="mt-4 grid gap-3 border-t pt-4"
                     >
+                        <p
+                            v-if="
+                                task.application.commissioned_path &&
+                                task.financial_editor.catalog_status ===
+                                    'awaiting_nelson_source'
+                            "
+                            class="text-xs font-semibold text-amber-700 dark:text-amber-300"
+                        >
+                            Synthetic preview fee menu · awaiting Nelson source
+                        </p>
                         <FinancialLineItemEditor
                             v-model="officeItems[work.id]"
                             :options="

@@ -43,10 +43,22 @@ return [
         'production_catalog_status' => 'awaiting_nelson_source',
         // Replace this ordered list when Nelson supplies the production routing offices.
         'items' => [
-            ['code' => 'engineering', 'label' => 'Municipal Engineering Office'],
-            ['code' => 'health', 'label' => 'Municipal Health Office'],
-            ['code' => 'menro', 'label' => 'MENRO'],
-            ['code' => 'assessor', 'label' => 'Municipal Assessor'],
+            ['code' => 'engineering', 'label' => 'Municipal Engineering Office', 'fee_rule_codes' => [
+                'LAB-NELSON-ENGINEERING-REGULATORY',
+            ]],
+            ['code' => 'health', 'label' => 'Municipal Health Office', 'fee_rule_codes' => [
+                'LAB-NELSON-HEALTH-SANITARY',
+                'LAB-NELSON-HEALTH-CERTIFICATE',
+            ]],
+            ['code' => 'menro', 'label' => 'MENRO', 'fee_rule_codes' => [
+                'LAB-NELSON-MENRO-SOLID-WASTE',
+            ]],
+            ['code' => 'assessor', 'label' => 'Municipal Assessor', 'fee_rule_codes' => [
+                'LAB-NELSON-ASSESSOR-WEIGHTS-MEASURES',
+            ]],
         ],
+    ],
+    'nelson_concerned_office_fee_catalog' => [
+        'path' => database_path('seeders/data/nelson_concerned_office_fee_catalog.v1.yaml'),
     ],
 ];

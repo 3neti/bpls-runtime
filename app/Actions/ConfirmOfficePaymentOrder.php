@@ -9,13 +9,17 @@ use App\Models\BploRoutingWork;
 use App\Models\FeeRule;
 use App\Models\PaperlessPaymentOrder;
 use App\Models\User;
+use App\References\ConcernedOfficeReference;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
 class ConfirmOfficePaymentOrder
 {
-    public function __construct(private readonly CaptureSignatureEvidence $captureSignatureEvidence) {}
+    public function __construct(
+        private readonly CaptureSignatureEvidence $captureSignatureEvidence,
+        private readonly ConcernedOfficeReference $concernedOffices,
+    ) {}
 
     /**
      * @param  list<array{fee_rule_id: int, amount_cents: int, reason?: string|null, authority?: string|null}>  $items
@@ -65,12 +69,35 @@ class ConfirmOfficePaymentOrder
                 if (! $rule instanceof FeeRule || $rule->calculation_type !== FeeRuleCalculationType::Fixed) {
                     throw new LogicException('The simple Payment Order editor accepts only catalogued fixed-amount fees in this wave.');
                 }
+                if (! $rule->is_active
+                    || $rule->effective_from->year > $application->application_year
+                    || ($rule->effective_until !== null && $rule->effective_until->year < $application->application_year)) {
+                    throw new LogicException('The selected fee is not active for this application year.');
+                }
                 if ($rule->category === FeeRuleCategory::Tax) {
                     throw new LogicException('Concerned-office Payment Orders cannot determine Business Tax.');
                 }
                 $configuredOffice = data_get($rule->metadata, 'responsible_office_code');
                 if (is_string($configuredOffice) && $configuredOffice !== $work->office_code) {
                     throw new LogicException('The selected fee does not belong to this concerned office.');
+                }
+                if (data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true) {
+                    $office = collect($this->concernedOffices->items())->firstWhere('code', $work->office_code);
+                    if (! is_array($office) || ! in_array($rule->code, $office['fee_rule_codes'] ?? [], true)) {
+                        throw new LogicException('The selected fee is not in this concerned office’s configured Nelson fee menu.');
+                    }
+
+                    $semanticIdentity = str($rule->code.' '.$rule->name)
+                        ->lower()
+                        ->replace(['-', '_'], ' ')
+                        ->squish()
+                        ->toString();
+                    if (str_contains($semanticIdentity, 'business tax')) {
+                        throw new LogicException('Business Tax is prohibited for a Nelson New Application.');
+                    }
+                    if (str_contains($semanticIdentity, 'inspection')) {
+                        throw new LogicException('Inspection is outside the Nelson V1 Payment Order path.');
+                    }
                 }
                 $amount = $item['amount_cents'];
                 if ($amount < 0) {

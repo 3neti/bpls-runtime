@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call(RevenueCodeFeeCatalogSeeder::class);
+        $this->call(NelsonConcernedOfficeFeeCatalogSeeder::class);
 
         $permissions = collect(UserPermission::cases())
             ->mapWithKeys(fn (UserPermission $permission): array => [

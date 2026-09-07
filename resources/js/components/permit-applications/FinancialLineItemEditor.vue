@@ -121,7 +121,8 @@ function money(cents: number): string {
             v-else-if="options.length === 0"
             class="text-xs text-muted-foreground"
         >
-            No production fee choices are configured for this office yet.
+            No preview fee menu is configured for this office. Awaiting the
+            Nelson schedule.
         </p>
     </div>
 </template>

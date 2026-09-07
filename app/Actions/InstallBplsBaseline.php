@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use Database\Seeders\NelsonConcernedOfficeFeeCatalogSeeder;
 use Database\Seeders\RevenueCodeFeeCatalogSeeder;
 use Illuminate\Support\Facades\Storage;
 
@@ -9,6 +10,7 @@ class InstallBplsBaseline
 {
     public function __construct(
         private readonly RevenueCodeFeeCatalogSeeder $revenueCodeFeeCatalog,
+        private readonly NelsonConcernedOfficeFeeCatalogSeeder $nelsonConcernedOfficeFeeCatalog,
         private readonly EnsureBplsInstitution $ensureInstitution,
         private readonly ProvisionStakeholderPreviewPersonas $provisionPreviewPersonas,
         private readonly InspectBplsInstallation $inspectInstallation,
@@ -18,6 +20,7 @@ class InstallBplsBaseline
     public function handle(): array
     {
         $this->revenueCodeFeeCatalog->run();
+        $this->nelsonConcernedOfficeFeeCatalog->run();
         $this->ensureInstitution->handle();
         $this->provisionPreviewPersonas->handle();
 

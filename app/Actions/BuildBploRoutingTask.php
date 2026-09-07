@@ -109,19 +109,28 @@ class BuildBploRoutingTask
     /** @return array<string, mixed> */
     private function financialEditor(PermitApplication $application, ?User $viewer): array
     {
+        $periodStart = $application->application_year.'-01-01';
+        $periodEnd = $application->application_year.'-12-31';
         $fixedFees = FeeRule::query()
             ->where('is_active', true)
             ->where('calculation_type', FeeRuleCalculationType::Fixed->value)
             ->where('category', '!=', FeeRuleCategory::Tax->value)
+            ->whereDate('effective_from', '<=', $periodEnd)
+            ->where(fn ($query) => $query
+                ->whereNull('effective_until')
+                ->orWhereDate('effective_until', '>=', $periodStart))
             ->orderBy('name')->get();
         $offices = collect($this->concernedOffices->items());
 
         return [
             'catalog_status' => $this->concernedOffices->provenance()['production_catalog_status'],
-            'office_fee_options' => $offices->mapWithKeys(function (array $office) use ($fixedFees): array {
+            'office_fee_options' => $offices->mapWithKeys(function (array $office) use ($application, $fixedFees): array {
                 $configuredCodes = collect($office['fee_rule_codes'] ?? []);
-                $fees = $fixedFees->filter(fn (FeeRule $fee): bool => data_get($fee->metadata, 'responsible_office_code') === $office['code']
-                    || $configuredCodes->contains($fee->code));
+                $commissionedPath = data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true;
+                $fees = $fixedFees->filter(fn (FeeRule $fee): bool => $commissionedPath
+                    ? $configuredCodes->contains($fee->code)
+                    : data_get($fee->metadata, 'responsible_office_code') === $office['code']
+                        && data_get($fee->metadata, 'assessment_selection') !== 'concerned_office_payment_order_only');
 
                 return [$office['code'] => $fees->map(fn (FeeRule $fee): array => [
                     'id' => $fee->id,

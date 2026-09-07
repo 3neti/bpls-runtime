@@ -63,18 +63,23 @@ class InspectBplsInstallation
         $syntheticPublishedCharges = $publishedCharges->filter(
             fn (array $charge): bool => $charge['traceability']['source_classification'] !== FeeRulePublicationSource::AcceptedMunicipalAuthority->value,
         )->values();
-        $syntheticRules = $feeRules->filter(fn (FeeRule $rule): bool => in_array(
-            FeeRulePublicationSource::forRule($rule),
-            [
-                FeeRulePublicationSource::Synthetic,
-                FeeRulePublicationSource::ProvisionalUat,
-                FeeRulePublicationSource::Historical,
-                FeeRulePublicationSource::Mock,
-                FeeRulePublicationSource::LegacyEvidenceOnly,
-                FeeRulePublicationSource::LifecycleTest,
-            ],
-            true,
-        ));
+        $paymentOrderPreviewRules = $feeRules
+            ->filter(fn (FeeRule $rule): bool => data_get($rule->metadata, 'assessment_selection') === 'concerned_office_payment_order_only'
+                && data_get($rule->metadata, 'production_authority') === false);
+        $syntheticRules = $feeRules
+            ->whereNotIn('id', $paymentOrderPreviewRules->modelKeys())
+            ->filter(fn (FeeRule $rule): bool => in_array(
+                FeeRulePublicationSource::forRule($rule),
+                [
+                    FeeRulePublicationSource::Synthetic,
+                    FeeRulePublicationSource::ProvisionalUat,
+                    FeeRulePublicationSource::Historical,
+                    FeeRulePublicationSource::Mock,
+                    FeeRulePublicationSource::LegacyEvidenceOnly,
+                    FeeRulePublicationSource::LifecycleTest,
+                ],
+                true,
+            ));
         $blockedRules = $feeRules->filter(
             fn (FeeRule $rule): bool => $rule->currentReconciliation?->execution_status === FeeRuleExecutionStatus::Blocked,
         )->values();
@@ -119,6 +124,7 @@ class InspectBplsInstallation
             'published_unique_exact_rule_count' => $uniquePublishedCharges->count(),
             'synthetic_uat_exact_published_count' => $syntheticPublishedCharges->count(),
             'synthetic_uat_fee_rule_count' => $syntheticRules->count(),
+            'synthetic_preview_payment_order_fee_rule_count' => $paymentOrderPreviewRules->count(),
             'coherent' => $issues === [],
             'assessment_parity' => $assessmentParity,
         ];

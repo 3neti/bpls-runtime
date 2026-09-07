@@ -321,6 +321,10 @@ class BusinessPermitEvaluationResolver
     private function projectRuleCharges(BusinessPermitEvaluation $evaluation, array $lineOfBusinessIds, Collection $items): array
     {
         $permitApplication = $evaluation->permitApplication;
+        if (data_get($permitApplication->metadata, 'nelson_reconciliation_v1.commissioned_path') === true) {
+            return [collect(), []];
+        }
+
         $notApplicableFeeRuleIds = $items
             ->where('item_type', BusinessPermitEvaluationItemType::Charge->value)
             ->where('applicability', BusinessPermitEvaluationApplicability::NotApplicable->value)

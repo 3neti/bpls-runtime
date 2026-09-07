@@ -32,12 +32,14 @@ use App\Models\LifecycleCleanroomRun;
 use App\Models\LineOfBusiness;
 use App\Models\SignatureEvidence;
 use App\Models\User;
+use Database\Seeders\NelsonConcernedOfficeFeeCatalogSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use LogicException;
 
 test('Nelson cleanroom ceremony preserves applicant truth and reconciles one collection to every canonical OR', function () {
     Storage::fake('local');
+    $this->seed(NelsonConcernedOfficeFeeCatalogSeeder::class);
     expect(config('ipil_references.barangays.items'))->toHaveCount(28);
     $citizen = userWithPermissions([UserPermission::AccessCitizen, UserPermission::CreateOwnPermitApplications], UserRole::Citizen);
     $staffPermissions = [
@@ -151,13 +153,11 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         ->and($application->bploRoutingSuggestion()->exists())->toBeFalse()
         ->and(collect($routing->works)->pluck('context_snapshot')->flatten()->contains('inspection'))->toBeFalse();
 
-    foreach ($routing->works as $index => $work) {
-        $fee = FeeRule::factory()->create([
-            'code' => 'NELSON-OFFICE-'.($index + 1),
-            'name' => $work->office_label.' fee',
-            'amount_cents' => 10_000 + ($index * 2_500),
-            'metadata' => ['responsible_office_code' => $work->office_code, 'classification' => 'synthetic_preview'],
-        ]);
+    foreach ($routing->works as $work) {
+        $fee = FeeRule::query()
+            ->where('metadata->responsible_office_code', $work->office_code)
+            ->where('metadata->application_year', now()->year)
+            ->firstOrFail();
         app(ConfirmOfficePaymentOrder::class)->handle($work, [[
             'fee_rule_id' => $fee->id,
             'amount_cents' => $fee->amount_cents,
