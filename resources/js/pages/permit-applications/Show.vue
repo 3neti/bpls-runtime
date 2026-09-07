@@ -308,6 +308,27 @@ function label(value: string): string {
     return value.replaceAll(/[_-]/g, ' ');
 }
 
+function applicationHeadlineStatus(): string {
+    if (props.permitApplication.verification_boundary.released) {
+        return 'Released';
+    }
+
+    const schedule = props.permitApplication.latest_payment_schedule;
+
+    if (schedule === null) {
+        return label(props.permitApplication.status);
+    }
+
+    const remainingAmountCents = Math.max(
+        0,
+        schedule.total_amount_cents - schedule.paid_amount_cents,
+    );
+
+    return remainingAmountCents > 0
+        ? `${money(remainingAmountCents)} pending payment`
+        : 'Payment complete';
+}
+
 function dateTime(value: string | null): string {
     if (value === null) {
         return 'Time not recorded';
@@ -369,7 +390,7 @@ function fileSize(sizeBytes: number): string {
             <WorkflowStageSummary
                 data-testid="permit-lifecycle-summary"
                 eyebrow="Certified lifecycle"
-                :title="`${label(permitApplication.type)} · ${permitApplication.latest_payment_schedule ? `${money(permitApplication.latest_payment_schedule.total_amount_cents - permitApplication.latest_payment_schedule.paid_amount_cents)} pending payment` : label(permitApplication.status)}`"
+                :title="`${label(permitApplication.type)} · ${applicationHeadlineStatus()}`"
                 :description="`${label(permitApplication.type)} → ${permitApplication.lines.map((line) => line.line_of_business.name ?? 'Unclassified').join(' + ')} → ${permitApplication.latest_assessment ? `Assessment ${money(permitApplication.latest_assessment.total_amount_cents)}` : 'Assessment pending'} → ${permitApplication.latest_assessment?.treasury_counter_check?.result === 'no_correction' ? 'Treasury counter-check complete — no correction' : 'Treasury counter-check pending'} → ${permitApplication.latest_assessment?.treasurer_decision?.action === 'approved' ? 'Municipal Treasurer approved' : 'Municipal Treasurer decision pending'}`"
                 :items="[
                     {

@@ -213,47 +213,24 @@ function paymentSource(): string {
             </header>
 
             <dl
-                class="grid grid-cols-2 border-b-2 border-stone-900 text-xs sm:grid-cols-4 dark:border-stone-400"
+                class="grid grid-cols-3 border-b-2 border-stone-900 text-xs dark:border-stone-400"
             >
-                <div
-                    class="border-r border-b border-stone-400 p-2 sm:border-b-0"
-                >
-                    <dt class="text-[9px] font-black uppercase">
-                        Official application no.
-                    </dt>
-                    <dd class="min-h-5 font-bold">
-                        {{ application.identity.application_number ?? '' }}
-                    </dd>
-                </div>
-                <div
-                    class="border-b border-stone-400 p-2 sm:border-r sm:border-b-0"
-                >
-                    <dt class="text-[9px] font-black uppercase">
-                        Tracking reference
-                    </dt>
-                    <dd
-                        class="min-h-5 font-mono text-[10px] font-bold break-all"
-                    >
-                        {{ application.identity.tracking_reference ?? '' }}
-                    </dd>
-                </div>
-                <div class="border-r border-stone-400 p-2">
+                <div class="border-r border-stone-400 p-3">
                     <dt class="text-[9px] font-black uppercase">Assessment</dt>
-                    <dd class="min-h-5 font-bold">
-                        <template v-if="application.financial.assessment"
-                            >No.
-                            {{
-                                application.financial.assessment.sequence
-                            }}</template
-                        >
+                    <dd class="font-black">
+                        {{ money(reconciliation?.approved_amount_cents) }}
                     </dd>
                 </div>
-                <div class="p-2">
-                    <dt class="text-[9px] font-black uppercase">
-                        Approved amount
-                    </dt>
-                    <dd class="min-h-5 font-bold">
-                        {{ money(reconciliation?.approved_amount_cents) }}
+                <div class="border-r border-stone-400 p-3">
+                    <dt class="text-[9px] font-black uppercase">Paid</dt>
+                    <dd class="font-black">
+                        {{ money(reconciliation?.collected_amount_cents) }}
+                    </dd>
+                </div>
+                <div class="p-3">
+                    <dt class="text-[9px] font-black uppercase">Balance</dt>
+                    <dd class="font-black">
+                        {{ money(reconciliation?.remaining_balance_cents) }}
                     </dd>
                 </div>
             </dl>
@@ -262,19 +239,9 @@ function paymentSource(): string {
                 class="grid border-b-2 border-stone-900 sm:grid-cols-[minmax(0,1fr)_14rem] dark:border-stone-400"
             >
                 <div class="grid gap-4 p-4 sm:p-5">
-                    <div
-                        class="flex flex-wrap items-center justify-between gap-2"
-                    >
-                        <h3 class="text-xs font-black uppercase">
-                            A. x-change payment confirmation
-                        </h3>
-                        <span
-                            v-if="reconciliation?.synthetic"
-                            class="border border-amber-500 px-2 py-1 text-[9px] font-black text-amber-800 uppercase dark:text-amber-300"
-                        >
-                            Laboratory simulation · no funds moved
-                        </span>
-                    </div>
+                    <h3 class="text-xs font-black uppercase">
+                        A. Payment summary
+                    </h3>
 
                     <dl class="grid gap-3 text-xs sm:grid-cols-2">
                         <div>
@@ -298,15 +265,6 @@ function paymentSource(): string {
                         </div>
                         <div>
                             <dt class="text-[9px] font-black uppercase">
-                                Provider / rail
-                            </dt>
-                            <dd class="font-bold">
-                                {{ label(reconciliation?.provider) || '—' }} ·
-                                {{ paymentSource() || '—' }}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt class="text-[9px] font-black uppercase">
                                 Confirmed
                             </dt>
                             <dd class="font-bold">
@@ -316,23 +274,61 @@ function paymentSource(): string {
                                 }}
                             </dd>
                         </div>
-                        <div class="sm:col-span-2">
-                            <dt class="text-[9px] font-black uppercase">
-                                External reference
-                            </dt>
-                            <dd class="font-mono text-[10px] break-all">
-                                {{ paymentRequest?.external_reference ?? '' }}
-                            </dd>
-                        </div>
-                        <div class="sm:col-span-2">
-                            <dt class="text-[9px] font-black uppercase">
-                                Collection reference
-                            </dt>
-                            <dd class="font-mono text-[10px] break-all">
-                                {{ reconciliation?.collection_reference ?? '' }}
-                            </dd>
-                        </div>
                     </dl>
+
+                    <details
+                        class="rounded border border-stone-300 text-xs dark:border-stone-700 print:hidden"
+                        data-testid="payment-details"
+                    >
+                        <summary
+                            class="cursor-pointer px-3 py-2 font-black uppercase"
+                        >
+                            Payment details
+                        </summary>
+                        <dl
+                            class="grid gap-3 border-t border-stone-300 p-3 dark:border-stone-700"
+                        >
+                            <div>
+                                <dt class="text-[9px] font-black uppercase">
+                                    Provider / rail
+                                </dt>
+                                <dd class="font-bold">
+                                    {{ label(reconciliation?.provider) || '—' }}
+                                    ·
+                                    {{ paymentSource() || '—' }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-[9px] font-black uppercase">
+                                    External reference
+                                </dt>
+                                <dd class="font-mono text-[10px] break-all">
+                                    {{
+                                        paymentRequest?.external_reference ?? ''
+                                    }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-[9px] font-black uppercase">
+                                    Collection reference
+                                </dt>
+                                <dd class="font-mono text-[10px] break-all">
+                                    {{
+                                        reconciliation?.collection_reference ??
+                                        ''
+                                    }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-[9px] font-black uppercase">
+                                    Collection ID
+                                </dt>
+                                <dd class="font-mono">
+                                    {{ paymentRequest?.collection_id ?? '—' }}
+                                </dd>
+                            </div>
+                        </dl>
+                    </details>
 
                     <button
                         v-if="statusUrl && !isCollected"
@@ -386,43 +382,6 @@ function paymentSource(): string {
                     </div>
                 </div>
             </section>
-
-            <dl
-                class="grid grid-cols-2 border-b-2 border-stone-900 text-xs sm:grid-cols-4 dark:border-stone-400"
-            >
-                <div
-                    class="border-r border-b border-stone-400 p-3 sm:border-b-0"
-                >
-                    <dt class="text-[9px] font-black uppercase">Approved</dt>
-                    <dd class="font-black">
-                        {{ money(reconciliation?.approved_amount_cents) }}
-                    </dd>
-                </div>
-                <div
-                    class="border-b border-stone-400 p-3 sm:border-r sm:border-b-0"
-                >
-                    <dt class="text-[9px] font-black uppercase">Collected</dt>
-                    <dd class="font-black">
-                        {{ money(reconciliation?.collected_amount_cents) }}
-                    </dd>
-                </div>
-                <div class="border-r border-stone-400 p-3">
-                    <dt class="text-[9px] font-black uppercase">
-                        Remaining balance
-                    </dt>
-                    <dd class="font-black">
-                        {{ money(reconciliation?.remaining_balance_cents) }}
-                    </dd>
-                </div>
-                <div class="p-3">
-                    <dt class="text-[9px] font-black uppercase">
-                        Collection ID
-                    </dt>
-                    <dd class="font-black">
-                        {{ paymentRequest?.collection_id ?? '' }}
-                    </dd>
-                </div>
-            </dl>
 
             <section class="grid gap-3 p-4 text-xs sm:p-5">
                 <div class="flex flex-wrap items-center justify-between gap-2">

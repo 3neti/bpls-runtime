@@ -1,12 +1,6 @@
 <script setup lang="ts">
-import { Link, router, useHttp } from '@inertiajs/vue3';
-import {
-    ExternalLink,
-    FileText,
-    Printer,
-    QrCode,
-    ReceiptText,
-} from '@lucide/vue';
+import { router, useHttp } from '@inertiajs/vue3';
+import { ExternalLink, Printer, QrCode, ReceiptText } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import ApplicationAttachmentRail from '@/components/permit-applications/ApplicationAttachmentRail.vue';
 import ApplicationDocumentNavigator from '@/components/permit-applications/ApplicationDocumentNavigator.vue';
@@ -17,7 +11,6 @@ import IpilExecutableDocument from '@/components/permit-applications/IpilExecuta
 import IpilPaymentContinuationSheet from '@/components/permit-applications/IpilPaymentContinuationSheet.vue';
 import MunicipalScheduleOfFeesSheet from '@/components/permit-applications/MunicipalScheduleOfFeesSheet.vue';
 import OfficePaymentOrdersSheet from '@/components/permit-applications/OfficePaymentOrdersSheet.vue';
-import Af51OfficialReceipt from '@/components/receipts/Af51OfficialReceipt.vue';
 import type { MunicipalScheduleOfFees } from '@/types/municipal-schedule-of-fees';
 
 type Task = {
@@ -87,6 +80,7 @@ type PermitPresentation = {
     printable_artifact_url: string | null;
     statement: string;
     issued: boolean;
+    released: boolean;
     blockers: string[];
 };
 type ApplicationData = {
@@ -183,6 +177,24 @@ const activeAttachmentKey = ref(attachmentKeyForTab(activeTab.value));
 const workNotes = computed(
     () => props.application.actor_context.work_notes ?? [],
 );
+const currentWorkNote = computed(
+    () => workNotes.value.find((note) => note.actionable) ?? null,
+);
+const applicationStatusLabel = computed(() => {
+    if (props.application.permit.released) {
+        return 'Released';
+    }
+
+    if (props.application.permit.issued) {
+        return 'Issued';
+    }
+
+    if (props.application.payment.reconciliation?.totals_reconciled) {
+        return 'Payment complete';
+    }
+
+    return label(props.application.identity.status);
+});
 const snapshot = computed(() => props.application.declaration.snapshot ?? {});
 const activeTask = ref(props.initialTask);
 const statusRequest = useHttp({});
@@ -458,7 +470,7 @@ function permitBlockerLabel(blocker: string): string {
                 <span
                     class="w-fit rounded-full bg-white/12 px-3 py-1.5 text-xs font-bold uppercase"
                 >
-                    {{ label(application.identity.status) }}
+                    {{ applicationStatusLabel }}
                 </span>
             </div>
         </header>
@@ -881,43 +893,6 @@ function permitBlockerLabel(blocker: string): string {
                         :status-url="paymentStatusUrl"
                         @check="checkPayment"
                     />
-                    <article
-                        v-for="receipt in application.official_receipts"
-                        :key="receipt.receipt_number"
-                        class="space-y-3 rounded-xl border border-stone-300 bg-stone-100 p-2 sm:p-4 dark:border-stone-700 dark:bg-stone-950"
-                        data-testid="application-official-receipt-artifact"
-                    >
-                        <div
-                            class="flex flex-wrap items-center justify-between gap-2 print:hidden"
-                        >
-                            <p
-                                class="text-xs font-black tracking-wide uppercase"
-                            >
-                                Attached Treasury artifact
-                            </p>
-                            <div class="flex flex-wrap gap-2">
-                                <Link
-                                    v-if="receipt.links?.view"
-                                    :href="receipt.links.view"
-                                    class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-stone-400 bg-white px-3 py-2 text-xs font-black uppercase hover:bg-stone-50"
-                                >
-                                    <Printer class="size-3.5" /> Open / Print OR
-                                </Link>
-                                <a
-                                    v-if="receipt.links?.pdf"
-                                    :href="receipt.links.pdf"
-                                    target="_blank"
-                                    class="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-sky-900 px-3 py-2 text-xs font-black text-white uppercase hover:bg-sky-800"
-                                >
-                                    <FileText class="size-3.5" /> Open PDF
-                                </a>
-                            </div>
-                        </div>
-                        <Af51OfficialReceipt
-                            :receipt="receipt"
-                            :view-url="receipt.links?.view"
-                        />
-                    </article>
                     <div
                         v-if="application.official_receipts.length === 0"
                         class="rounded-lg border border-dashed border-slate-300 p-5 text-sm dark:border-slate-700"
@@ -1243,37 +1218,43 @@ function permitBlockerLabel(blocker: string): string {
                         </div>
                     </section>
 
-                    <section data-testid="application-work-notes">
-                        <div class="mb-3 flex items-end justify-between gap-3">
-                            <div>
-                                <p
-                                    class="text-[11px] font-black tracking-[0.18em] text-slate-500 uppercase"
-                                >
-                                    Application annotations
-                                </p>
-                                <h3 class="text-lg font-black">
-                                    Municipal work notes
-                                </h3>
-                            </div>
-                            <span
-                                class="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-bold text-white dark:bg-white dark:text-slate-950"
-                            >
-                                {{ workNotes.length }}
-                            </span>
-                        </div>
+                    <section
+                        v-if="currentWorkNote"
+                        data-testid="application-current-work-note"
+                    >
+                        <p
+                            class="mb-2 text-[11px] font-black tracking-[0.18em] text-slate-500 uppercase"
+                        >
+                            Current action
+                        </p>
+                        <ApplicationWorkNote
+                            :note="currentWorkNote"
+                            :index="0"
+                            @activate="activateWorkNote"
+                        />
+                    </section>
+
+                    <details
+                        data-testid="application-activity"
+                        class="rounded-xl border border-slate-300 bg-white/80 dark:border-slate-700 dark:bg-slate-900"
+                    >
+                        <summary
+                            class="cursor-pointer px-4 py-3 text-sm font-semibold"
+                        >
+                            Activity · {{ workNotes.length }} entries
+                        </summary>
                         <div
-                            class="flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pt-2 pb-5 lg:grid lg:max-h-[70vh] lg:overflow-y-auto lg:px-2 lg:pb-8"
+                            class="grid max-h-[70vh] gap-4 overflow-y-auto border-t border-slate-200 p-4 dark:border-slate-700"
                         >
                             <ApplicationWorkNote
                                 v-for="(note, index) in workNotes"
                                 :key="note.id"
                                 :note="note"
                                 :index="index"
-                                class="w-[17rem] shrink-0 snap-start lg:w-auto"
                                 @activate="activateWorkNote"
                             />
                         </div>
-                    </section>
+                    </details>
                 </div>
             </aside>
         </div>

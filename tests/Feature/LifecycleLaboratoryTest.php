@@ -104,19 +104,28 @@ test('management sees the ordered certified chronology with bounded controls and
 
 test('laboratory segregates interactive work from collapsed automated reference evidence', function () {
     $component = file_get_contents(resource_path('js/pages/stakeholder-preview/LifecycleLaboratory.vue'));
+    $application = file_get_contents(resource_path('js/components/permit-applications/ExecutableApplication.vue'));
+    $payment = file_get_contents(resource_path('js/components/permit-applications/IpilPaymentContinuationSheet.vue'));
     $intake = file_get_contents(resource_path('js/pages/permit-applications/Create.vue'));
 
     expect($component)
         ->toContain('data-testid="interactive-laboratory"')
-        ->toContain('Start Interactive')
+        ->toContain('Business Permit Lifecycle')
+        ->toContain('Municipality of Ipil · Laboratory')
+        ->toContain('Laboratory specimen')
         ->toContain('data-testid="interactive-application-stage"')
         ->toContain('() => props.cleanroom.active?.application_data ?? null')
         ->toContain(':document="cleanroom.active?.application_document"')
-        ->toContain("(step) => step.status !== 'pending'")
-        ->toContain('v-for="step in visibleCleanroomSteps"')
-        ->toContain('step.completed &&')
-        ->toContain('will appear here only when completed or ready to act on')
-        ->not->toContain("mode === 'boundary'")
+        ->toContain('data-testid="lifecycle-stage-rail"')
+        ->toContain('v-for="stage in lifecycleStages"')
+        ->toContain('View technical lifecycle')
+        ->toContain('data-testid="current-lifecycle-task"')
+        ->toContain('Open Application As')
+        ->toContain("focusApplication('permit')")
+        ->toContain('data-testid="laboratory-details"')
+        ->not->toContain('Financial destination')
+        ->not->toContain("? 'Real form'")
+        ->not->toContain("? 'Canonical action'")
         ->not->toContain('Next wave not implemented')
         ->not->toContain('visibleApplicationScenario')
         ->toContain('<details')
@@ -127,6 +136,27 @@ test('laboratory segregates interactive work from collapsed automated reference 
         ->toContain('data-classification="automated-certification-specimen"')
         ->toContain('Inspect reference as actor')
         ->toContain('Generate next certification');
+    expect($application)
+        ->toContain('const applicationStatusLabel = computed')
+        ->toContain("return 'Released'")
+        ->toContain("return 'Payment complete'")
+        ->toContain('{{ applicationStatusLabel }}')
+        ->toContain('data-testid="application-current-work-note"')
+        ->toContain('data-testid="application-activity"')
+        ->not->toContain('<Af51OfficialReceipt');
+    expect($payment)
+        ->toContain('A. Payment summary')
+        ->toContain('data-testid="payment-details"')
+        ->toContain('B. Official Receipt packet · AF No. 51')
+        ->toContain('data-testid="official-receipt-group-row"')
+        ->toContain('View');
+    $staffApplication = file_get_contents(resource_path('js/pages/permit-applications/Show.vue'));
+    expect($staffApplication)
+        ->toContain('function applicationHeadlineStatus(): string')
+        ->toContain("return 'Released'")
+        ->toContain("'Payment complete';")
+        ->toContain(':title="`${label(permitApplication.type)} · ${applicationHeadlineStatus()}`"')
+        ->not->toContain('`${money(permitApplication.latest_payment_schedule.total_amount_cents - permitApplication.latest_payment_schedule.paid_amount_cents)} pending payment`');
     expect($intake)
         ->toContain('name="lifecycle_cleanroom_run_id"')
         ->toContain("? 'Lodge application'")
