@@ -9,9 +9,7 @@ import {
     CircleDashed,
     ClipboardList,
     FileCheck2,
-    Landmark,
     LockKeyhole,
-    ShieldCheck,
 } from '@lucide/vue';
 import { computed } from 'vue';
 import {
@@ -87,6 +85,16 @@ const props = defineProps<{ handoff: Handoff }>();
 const nextOffice = computed(() =>
     props.handoff.offices.find((office) => office.is_next),
 );
+const completedOfficeCount = computed(
+    () =>
+        props.handoff.offices.filter((office) => office.status === 'Complete')
+            .length,
+);
+const allOfficeReviewsComplete = computed(
+    () =>
+        props.handoff.offices.length > 0 &&
+        completedOfficeCount.value === props.handoff.offices.length,
+);
 
 const money = (amountCents: number): string =>
     new Intl.NumberFormat('en-PH', {
@@ -147,38 +155,30 @@ function simulateRemainingOfficeReviews(): void {
             <header
                 class="overflow-hidden rounded-2xl bg-zinc-950 text-white shadow-sm"
             >
-                <div class="space-y-6 p-6 sm:p-8">
+                <div class="space-y-5 p-5 sm:p-6">
                     <Link
                         :href="laboratoryIndex()"
                         class="inline-flex items-center gap-2 text-sm font-semibold text-zinc-300 hover:text-white"
                     >
                         <ArrowLeft class="size-4" />
-                        Back to Lifecycle Laboratory
+                        Laboratory
                     </Link>
 
                     <div
-                        class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-end"
+                        class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-end"
                     >
-                        <div class="space-y-3">
+                        <div class="space-y-2">
                             <div
                                 class="flex items-center gap-2 text-sm font-semibold text-amber-300"
                             >
                                 <ClipboardList class="size-5" />
-                                {{ handoff.application.year }} lifecycle
-                                milestone
+                                {{ handoff.application.year }} · Office work
                             </div>
                             <h1
                                 class="text-3xl font-semibold tracking-tight sm:text-4xl"
                             >
-                                Office reviews assigned
+                                Office reviews
                             </h1>
-                            <p
-                                class="max-w-3xl text-sm leading-6 text-zinc-300 sm:text-base"
-                            >
-                                The submitted application and BPLO’s recorded
-                                routing have been turned into work for the
-                                concerned offices.
-                            </p>
                         </div>
                         <div
                             class="rounded-xl border border-white/10 bg-white/5 p-4"
@@ -212,57 +212,24 @@ function simulateRemainingOfficeReviews(): void {
 
             <section class="grid gap-3 sm:grid-cols-3">
                 <div class="rounded-xl border bg-card p-4 shadow-xs">
-                    <p class="text-sm text-muted-foreground">
-                        Concerned offices
-                    </p>
+                    <p class="text-sm text-muted-foreground">Offices</p>
                     <p class="mt-1 text-2xl font-semibold">
                         {{ handoff.summary.office_count }}
                     </p>
                 </div>
                 <div class="rounded-xl border bg-card p-4 shadow-xs">
                     <p class="text-sm text-muted-foreground">
-                        Fee responsibilities assigned
+                        Reviews complete
                     </p>
                     <p class="mt-1 text-2xl font-semibold">
-                        {{ handoff.summary.responsibility_count }}
+                        {{ completedOfficeCount }} of
+                        {{ handoff.summary.office_count }}
                     </p>
                 </div>
                 <div class="rounded-xl border bg-card p-4 shadow-xs">
-                    <p class="text-sm text-muted-foreground">
-                        Determinations completed
-                    </p>
+                    <p class="text-sm text-muted-foreground">Payment Orders</p>
                     <p class="mt-1 text-2xl font-semibold">
-                        {{ handoff.summary.resolved_count }} of
-                        {{ handoff.summary.responsibility_count }}
-                    </p>
-                </div>
-            </section>
-
-            <section
-                v-if="handoff.summary.payment_order_count === 0"
-                class="flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100"
-            >
-                <ShieldCheck class="mt-0.5 size-6 shrink-0" />
-                <div>
-                    <h2 class="font-semibold">No fees have been charged</h2>
-                    <p class="mt-1 text-sm leading-6">
-                        This handoff created office work only. Each office must
-                        still confirm applicability and any amount. No Paperless
-                        Payment Order or Assessment was created at this step.
-                    </p>
-                </div>
-            </section>
-
-            <section v-else class="flex gap-3 rounded-2xl border bg-card p-5">
-                <ClipboardList class="mt-0.5 size-6 shrink-0" />
-                <div>
-                    <h2 class="font-semibold">Office reviews in progress</h2>
-                    <p class="mt-1 text-sm text-muted-foreground">
-                        {{ handoff.summary.payment_order_count }} amount-bearing
-                        office record{{
-                            handoff.summary.payment_order_count === 1 ? '' : 's'
-                        }}
-                        issued so far. No Assessment exists yet.
+                        {{ handoff.summary.payment_order_count }}
                     </p>
                 </div>
             </section>
@@ -320,13 +287,14 @@ function simulateRemainingOfficeReviews(): void {
                 </button>
             </section>
 
-            <section class="space-y-4">
-                <div>
-                    <h2 class="text-xl font-semibold">Who acts next</h2>
-                    <p class="mt-1 text-sm text-muted-foreground">
+            <section class="space-y-3">
+                <div
+                    class="flex flex-wrap items-baseline justify-between gap-2"
+                >
+                    <h2 class="text-xl font-semibold">Office work</h2>
+                    <p class="text-sm text-muted-foreground">
                         <template v-if="nextOffice">
-                            Continue with {{ nextOffice.label }}. Each office
-                            opens only its own assigned work.
+                            Next: {{ nextOffice.label }}
                         </template>
                         <template v-else>
                             All office determinations are complete.
@@ -334,19 +302,21 @@ function simulateRemainingOfficeReviews(): void {
                     </p>
                 </div>
 
-                <div class="grid gap-4 lg:grid-cols-2">
+                <div class="grid gap-3">
                     <article
                         v-for="office in handoff.offices"
                         :key="`${office.code}-${office.activity}`"
-                        class="rounded-2xl border bg-card p-5 shadow-xs"
+                        class="rounded-xl border bg-card p-4 shadow-xs"
                         :class="
                             office.is_next
                                 ? 'border-primary/60 ring-2 ring-primary/10'
                                 : ''
                         "
                     >
-                        <div class="flex items-start justify-between gap-4">
-                            <div class="flex min-w-0 gap-3">
+                        <div
+                            class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                            <div class="flex min-w-0 items-center gap-3">
                                 <span
                                     class="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted"
                                 >
@@ -356,111 +326,112 @@ function simulateRemainingOfficeReviews(): void {
                                     <h3 class="font-semibold">
                                         {{ office.label }}
                                     </h3>
-                                    <p
-                                        v-if="office.activity"
-                                        class="mt-0.5 text-sm text-muted-foreground"
-                                    >
-                                        {{ office.activity }}
+                                    <p class="text-xs text-muted-foreground">
+                                        {{ office.required_work }}
                                     </p>
                                 </div>
                             </div>
-                            <span
-                                class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold"
-                                :class="
-                                    office.status === 'Complete'
-                                        ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
-                                        : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200'
-                                "
-                            >
-                                {{ office.status }}
-                            </span>
-                        </div>
-
-                        <div class="mt-4 rounded-xl bg-muted/50 p-4">
-                            <p
-                                class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
-                            >
-                                Required work
-                            </p>
-                            <p class="mt-1 text-sm leading-6">
-                                {{ office.required_work }}
-                            </p>
-                        </div>
-
-                        <ul class="mt-4 space-y-2">
-                            <li
-                                v-for="responsibility in office.responsibilities"
-                                :key="responsibility.label"
-                                class="flex items-start justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm"
-                            >
-                                <span class="flex gap-2">
-                                    <CheckCircle2
-                                        v-if="
-                                            responsibility.status ===
-                                            'Determined'
-                                        "
-                                        class="mt-0.5 size-4 shrink-0 text-emerald-600"
-                                    />
-                                    <CircleDashed
-                                        v-else
-                                        class="mt-0.5 size-4 shrink-0 text-amber-600"
-                                    />
-                                    <span>
-                                        <span>{{ responsibility.label }}</span>
-                                        <span
-                                            v-if="
-                                                responsibility.default_amount_cents !==
-                                                null
-                                            "
-                                            class="mt-0.5 block text-xs font-semibold text-muted-foreground tabular-nums"
-                                        >
-                                            Default
-                                            {{
-                                                money(
-                                                    responsibility.default_amount_cents,
-                                                )
-                                            }}
-                                        </span>
-                                    </span>
-                                </span>
+                            <div class="flex items-center gap-2 sm:shrink-0">
                                 <span
-                                    class="shrink-0 text-xs text-muted-foreground"
-                                    >{{ responsibility.status }}</span
+                                    class="rounded-full px-2.5 py-1 text-xs font-semibold"
+                                    :class="
+                                        office.status === 'Complete'
+                                            ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
+                                            : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200'
+                                    "
                                 >
-                            </li>
-                        </ul>
+                                    {{ office.status }}
+                                </span>
+                                <Link
+                                    v-if="office.status !== 'Complete'"
+                                    :href="office.action_url"
+                                    method="post"
+                                    as="button"
+                                    class="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground"
+                                >
+                                    {{
+                                        office.status === 'In progress'
+                                            ? 'Continue review'
+                                            : 'Open review'
+                                    }}
+                                    <ArrowRight class="size-4" />
+                                </Link>
+                            </div>
+                        </div>
 
-                        <details class="mt-4 border-t pt-4">
+                        <details
+                            v-if="
+                                office.responsibilities.length > 0 ||
+                                office.reason
+                            "
+                            class="mt-3 border-t pt-3"
+                        >
                             <summary
                                 class="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold"
                             >
-                                Why this office was included
+                                Review details
                                 <ChevronDown class="size-4" />
                             </summary>
                             <p
-                                class="mt-3 text-sm leading-6 text-muted-foreground"
+                                v-if="office.activity"
+                                class="mt-3 text-sm text-muted-foreground"
+                            >
+                                {{ office.activity }}
+                            </p>
+                            <ul class="mt-3 space-y-2">
+                                <li
+                                    v-for="responsibility in office.responsibilities"
+                                    :key="responsibility.label"
+                                    class="flex items-start justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm"
+                                >
+                                    <span class="flex gap-2">
+                                        <CheckCircle2
+                                            v-if="
+                                                responsibility.status ===
+                                                'Determined'
+                                            "
+                                            class="mt-0.5 size-4 shrink-0 text-emerald-600"
+                                        />
+                                        <CircleDashed
+                                            v-else
+                                            class="mt-0.5 size-4 shrink-0 text-amber-600"
+                                        />
+                                        <span>
+                                            <span>{{
+                                                responsibility.label
+                                            }}</span>
+                                            <span
+                                                v-if="
+                                                    responsibility.default_amount_cents !==
+                                                    null
+                                                "
+                                                class="mt-0.5 block text-xs font-semibold text-muted-foreground tabular-nums"
+                                            >
+                                                Default
+                                                {{
+                                                    money(
+                                                        responsibility.default_amount_cents,
+                                                    )
+                                                }}
+                                            </span>
+                                        </span>
+                                    </span>
+                                    <span
+                                        class="shrink-0 text-xs text-muted-foreground"
+                                        >{{ responsibility.status }}</span
+                                    >
+                                </li>
+                            </ul>
+                            <p
+                                v-if="office.reason"
+                                class="mt-3 text-sm text-muted-foreground"
                             >
                                 {{ office.reason }}
                             </p>
                         </details>
-
-                        <Link
-                            v-if="office.status !== 'Complete'"
-                            :href="office.action_url"
-                            method="post"
-                            as="button"
-                            class="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground"
-                        >
-                            {{
-                                office.status === 'In progress'
-                                    ? `Continue ${office.label} review`
-                                    : `Open ${office.label} review`
-                            }}
-                            <ArrowRight class="size-4" />
-                        </Link>
                         <p
-                            v-else
-                            class="mt-4 flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300"
+                            v-if="office.status === 'Complete'"
+                            class="mt-3 flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300"
                         >
                             <CheckCircle2 class="size-4" /> Office review
                             complete
@@ -475,8 +446,8 @@ function simulateRemainingOfficeReviews(): void {
                         class="flex cursor-pointer list-none items-center justify-between gap-3 font-semibold"
                     >
                         <span class="flex items-center gap-2"
-                            ><FileCheck2 class="size-5" />Application facts
-                            used</span
+                            ><FileCheck2 class="size-5" />Application
+                            facts</span
                         >
                         <ChevronDown class="size-4" />
                     </summary>
@@ -561,7 +532,7 @@ function simulateRemainingOfficeReviews(): void {
                         class="flex cursor-pointer list-none items-center justify-between gap-3 font-semibold"
                     >
                         <span class="flex items-center gap-2"
-                            ><LockKeyhole class="size-5" />Audit details</span
+                            ><LockKeyhole class="size-5" />Audit</span
                         >
                         <ChevronDown class="size-4" />
                     </summary>
@@ -618,43 +589,32 @@ function simulateRemainingOfficeReviews(): void {
                 </details>
             </section>
 
-            <section class="rounded-2xl border bg-card p-5 shadow-xs sm:p-6">
+            <section
+                v-if="allOfficeReviewsComplete"
+                class="rounded-2xl border bg-card p-5 shadow-xs"
+            >
                 <div
                     class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"
                 >
-                    <div class="max-w-2xl">
-                        <div
-                            class="flex items-center gap-2 text-sm font-semibold text-muted-foreground"
-                        >
-                            <Landmark class="size-5" />Next lifecycle stage
-                        </div>
-                        <h2 class="mt-2 text-xl font-semibold">
-                            Concerned-office determination
+                    <div>
+                        <h2 class="text-xl font-semibold">
+                            Office reviews complete
                         </h2>
-                        <p class="mt-1 text-sm leading-6 text-muted-foreground">
-                            Select a fee, review its default amount, optionally
-                            edit it, then Add Item and Sign &amp; Confirm
-                            Payment Order.
-                        </p>
                     </div>
                     <div class="flex flex-col gap-2 sm:items-end">
                         <button
-                            v-if="
-                                handoff.summary.resolved_count ===
-                                handoff.summary.responsibility_count
-                            "
                             type="button"
                             class="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground"
                             @click="continueOfficeReviews"
                         >
-                            Continue to Assessment review
+                            Continue to Assessment
                             <ArrowRight class="size-4" />
                         </button>
                         <Link
                             :href="laboratoryIndex()"
                             class="text-center text-sm font-semibold text-muted-foreground underline underline-offset-4 hover:text-foreground"
                         >
-                            Continue in Lifecycle Laboratory
+                            Laboratory
                         </Link>
                     </div>
                 </div>

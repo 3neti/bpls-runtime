@@ -107,7 +107,12 @@ test('Nelson presentation separates applicant description from Treasury classifi
         ->toContain('Treasury Classification / Assigned Lines of')
         ->toContain('v-if="isNelsonPath"')
         ->and($paymentOrders)->toContain('Sign & Confirm Payment Order')
-        ->and($handoff)->toContain('Select a fee, review its default amount, optionally')
+        ->and($handoff)->toContain('Review details')
+        ->and($handoff)->toContain('Open review')
+        ->and($handoff)->toContain('allOfficeReviewsComplete')
+        ->and($handoff)->not->toContain('No fees have been charged')
+        ->and($handoff)->not->toContain('Who acts next')
+        ->and($handoff)->not->toContain('Select a fee, review its default amount, optionally')
         ->not->toContain('Confirm, Override, or Not Applicable');
 });
 
