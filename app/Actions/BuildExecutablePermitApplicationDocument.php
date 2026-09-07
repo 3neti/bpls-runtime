@@ -26,6 +26,7 @@ final class BuildExecutablePermitApplicationDocument
         $collections = is_array($collections) ? $collections : [];
         $receipts = data_get($application, 'official_receipts', []);
         $receipts = is_array($receipts) ? $receipts : [];
+        $paymentReconciliation = data_get($payment, 'reconciliation');
         $permit = data_get($application, 'permit', []);
         $syntheticLifecycle = data_get($permit, 'semantic_classification') === 'synthetic_only';
         $commissionedPath = data_get($permitApplication->metadata, 'nelson_reconciliation_v1.commissioned_path') === true;
@@ -130,6 +131,7 @@ final class BuildExecutablePermitApplicationDocument
                 'state' => data_get($payment, 'state'),
                 'payable' => data_get($payment, 'payable'),
                 'payment_request' => data_get($payment, 'payment_request'),
+                'reconciliation' => is_array($paymentReconciliation) ? $paymentReconciliation : null,
                 'collection_count' => count($collections),
                 'latest_collection' => $collections === [] ? null : $collections[array_key_last($collections)],
             ],
@@ -138,6 +140,12 @@ final class BuildExecutablePermitApplicationDocument
                 'receipts' => $receipts,
                 'total_receipted_minor' => (int) collect($receipts)->sum('total_amount_minor'),
                 'receipt_count' => count($receipts),
+                'required_receipt_group_count' => (int) data_get($paymentReconciliation, 'required_receipt_group_count', 0),
+                'issued_receipt_group_count' => (int) data_get($paymentReconciliation, 'issued_receipt_group_count', 0),
+                'unreceipted_amount_minor' => (int) data_get($paymentReconciliation, 'unreceipted_amount_cents', 0),
+                'receipt_coverage_complete' => data_get($paymentReconciliation, 'receipt_coverage_complete') === true,
+                'totals_reconciled' => data_get($paymentReconciliation, 'totals_reconciled') === true,
+                'status' => (string) data_get($paymentReconciliation, 'status', 'awaiting_collection'),
             ],
             'permit_reference' => [
                 'state' => data_get($permit, 'state'),

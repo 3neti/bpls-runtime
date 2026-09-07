@@ -93,8 +93,29 @@ final class RenderApplicationFormPdf
 
         $request = data_get($projection, 'payment_reference.payment_request');
         $request = is_array($request) ? $request : [];
-        $receipt = data_get($projection, 'official_receipt_reference');
-        $receipt = is_array($receipt) ? $receipt : [];
+        $reconciliation = data_get($projection, 'payment_reference.reconciliation');
+        $reconciliation = is_array($reconciliation) ? $reconciliation : [];
+        $receiptPacket = data_get($projection, 'official_receipt_packet', []);
+        $receiptPacket = is_array($receiptPacket) ? $receiptPacket : [];
+        $receipts = data_get($receiptPacket, 'receipts', []);
+        $receipts = is_array($receipts) ? array_values($receipts) : [];
+        $receiptGroups = data_get($reconciliation, 'receipt_groups', []);
+        $receiptGroups = is_array($receiptGroups) ? array_values($receiptGroups) : [];
+        $receiptsByGroup = collect($receipts)->keyBy('receipt_group_key');
+        $receiptRows = $receiptGroups === []
+            ? $receipts
+            : collect($receiptGroups)->map(function (mixed $group) use ($receiptsByGroup): array {
+                $group = is_array($group) ? $group : [];
+                $receipt = $receiptsByGroup->get(data_get($group, 'key'));
+                $receipt = is_array($receipt) ? $receipt : [];
+
+                return [
+                    'receipt_group_label' => (string) data_get($group, 'label', ''),
+                    'receipt_number' => (string) data_get($receipt, 'receipt_number', 'PENDING'),
+                    'series' => data_get($receipt, 'series'),
+                    'total_amount_minor' => (int) data_get($group, 'allocated_amount_cents', 0),
+                ];
+            })->all();
         $identity = data_get($projection, 'identity', []);
         $collected = data_get($request, 'state') === 'collected'
             && is_int(data_get($request, 'collection_id'));
@@ -115,46 +136,78 @@ final class RenderApplicationFormPdf
         ]);
         $y -= 64;
 
-        $document->text($page, 'A. PAYMENT REQUEST', 42, $y, 8, true);
+        $document->text($page, 'A. X-CHANGE PAYMENT CONFIRMATION', 42, $y, 8, true);
         $y -= 14;
         $this->processingFieldBand($document, $page, $y, [
             'PAY CODE' => (string) data_get($request, 'pay_code', ''),
-            'STATUS' => strtoupper($this->label((string) data_get($request, 'state', ''))),
-            'AMOUNT DUE' => $this->blankMoney(data_get($payable, 'balance_amount_cents')),
-            'QR VALID UNTIL' => (string) data_get($request, 'active_attempt.expires_at', ''),
+            'BPLS STATUS' => strtoupper($this->label((string) data_get($request, 'state', ''))),
+            'PROVIDER' => strtoupper($this->label((string) data_get($reconciliation, 'provider', ''))),
+            'PAYMENT RAIL' => strtoupper($this->paymentSourceLabel($reconciliation)),
         ], 50);
         $y -= 68;
-
-        $document->rectangle($page, 42, $y - 190, 190, 190, 0.2, false);
-        $document->text($page, data_get($request, 'active_attempt.qr_data_url') === null ? 'QR PH NOT AVAILABLE' : 'QR PH ARTIFACT', 137, $y - 88, 10, true, 'center');
-        $document->text($page, 'Open the interactive Application to scan.', 137, $y - 108, 7, false, 'center');
-        if ($collected) {
-            $document->rectangle($page, 52, $y - 125, 170, 36, 0.2, false);
-            $document->text($page, 'COLLECTED', 137, $y - 112, 19, true, 'center');
-        }
-
-        $y -= 205;
         $this->processingFieldBand($document, $page, $y, [
             'EXTERNAL REFERENCE' => (string) data_get($request, 'external_reference', ''),
+            'COLLECTION REFERENCE' => (string) data_get($reconciliation, 'collection_reference', ''),
         ], 50);
-        $this->processingFieldBand($document, $page, $y - 62, [
-            'COLLECTED AMOUNT' => $this->blankMoney(data_get($request, 'collected_total_cents')),
-            'CONFIRMED' => (string) data_get($request, 'confirmed_at', ''),
-        ], 50);
-        $this->processingFieldBand($document, $page, $y - 124, [
-            'COLLECTION REFERENCE' => (string) data_get($request, 'collection_reference', ''),
-            'OFFICIAL RECEIPT NO.' => (string) data_get($receipt, 'receipt_number', ''),
-        ], 50);
-        $y -= 188;
-
-        $document->text($page, 'B. TREASURY RECORD', 42, $y, 8, true);
-        $y -= 14;
+        $y -= 62;
         $this->processingFieldBand($document, $page, $y, [
-            'COLLECTION ID' => (string) data_get($request, 'collection_id', ''),
-            'COLLECTIONS' => (string) data_get($projection, 'payment_reference.collection_count', 0),
-            'RECEIPT STATUS' => data_get($receipt, 'receipt_number') === null ? 'PENDING' : 'ISSUED',
-            'PAYABLE STATUS' => strtoupper($this->label((string) data_get($payable, 'status', ''))),
-        ]);
+            'APPROVED AMOUNT' => $this->blankMoney(data_get($reconciliation, 'approved_amount_cents')),
+            'COLLECTED AMOUNT' => $this->blankMoney(data_get($request, 'collected_total_cents')),
+            'REMAINING BALANCE' => $this->blankMoney(data_get($reconciliation, 'remaining_balance_cents')),
+            'CONFIRMED' => (string) data_get($reconciliation, 'confirmed_at', ''),
+        ], 42);
+        $y -= 56;
+        $document->text(
+            $page,
+            data_get($request, 'active_attempt.qr_data_url') === null ? 'QR PH NOT AVAILABLE' : 'QR PH ARTIFACT IN INTERACTIVE APPLICATION',
+            42,
+            $y,
+            6.5,
+            true,
+        );
+        $y -= 12;
+        if (data_get($reconciliation, 'synthetic') === true) {
+            $document->text($page, 'LABORATORY SIMULATION - NO REAL FUNDS MOVED', 42, $y, 7, true);
+            $y -= 15;
+        } elseif ($collected) {
+            $document->text($page, 'COLLECTED', 42, $y, 7, true);
+            $y -= 15;
+        }
+
+        $document->text($page, 'B. OFFICIAL RECEIPT PACKET - AF NO. 51', 42, $y, 8, true);
+        $y -= 14;
+        $this->receiptTableHeader($document, $page, $y);
+        $y -= 18;
+        foreach (array_slice($receiptRows, 0, 7) as $receipt) {
+            $this->receiptTableRow($document, $page, $y, is_array($receipt) ? $receipt : []);
+            $y -= 34;
+        }
+        if ($receiptRows === []) {
+            $this->receiptTableRow($document, $page, $y, []);
+            $y -= 34;
+        }
+
+        $this->processingFieldBand($document, $page, $y, [
+            'RECEIPT GROUPS' => data_get($receiptPacket, 'issued_receipt_group_count', 0).' OF '.data_get($receiptPacket, 'required_receipt_group_count', 0).' ISSUED',
+            'COLLECTED TOTAL' => $this->blankMoney(data_get($reconciliation, 'collected_amount_cents')),
+            'TOTAL RECEIPTED' => $this->blankMoney(data_get($receiptPacket, 'total_receipted_minor')),
+            'RECONCILIATION' => data_get($receiptPacket, 'totals_reconciled') === true ? 'FULLY RECONCILED' : 'PENDING RECEIPT COVERAGE',
+        ], 42);
+
+        foreach (array_chunk(array_slice($receiptRows, 7), 12) as $sheetIndex => $continuedReceiptRows) {
+            $page = $document->addPage('Page 3-'.chr(65 + $sheetIndex));
+            $y = SimplePdfDocument::ContentTop;
+            $document->text($page, 'OFFICIAL RECEIPT PACKET - AF NO. 51', 42, $y, 12, true);
+            $document->text($page, 'PAGE 3-'.chr(65 + $sheetIndex), 553, $y, 9, true, 'right');
+            $document->text($page, (string) data_get($identity, 'tracking_reference', ''), 42, $y - 17, 7, monospace: true);
+            $y -= 36;
+            $this->receiptTableHeader($document, $page, $y);
+            $y -= 18;
+            foreach ($continuedReceiptRows as $receipt) {
+                $this->receiptTableRow($document, $page, $y, is_array($receipt) ? $receipt : []);
+                $y -= 34;
+            }
+        }
     }
 
     /** @param array<string, mixed> $projection */
@@ -167,7 +220,8 @@ final class RenderApplicationFormPdf
         $page2 = data_get($projection, 'page_2_assessment', []);
         $assessment = data_get($projection, 'computation_assessment_slip');
         $payment = data_get($projection, 'payment_reference', []);
-        $receipt = data_get($projection, 'official_receipt_reference');
+        $reconciliation = data_get($payment, 'reconciliation');
+        $reconciliation = is_array($reconciliation) ? $reconciliation : [];
         $permit = data_get($projection, 'permit_reference', []);
 
         $document->text($page, 'APPLICATION FORM FOR BUSINESS PERMIT', 42, $y, 13, true);
@@ -256,15 +310,11 @@ final class RenderApplicationFormPdf
 
         $document->text($page, 'E. PAYMENT AND OFFICIAL RECEIPT REFERENCE', 42, $y, 8, true);
         $y -= 10;
-        $this->processingFieldBand($document, $page, $y, [
-            'PAYABLE STATUS' => strtoupper($this->label((string) data_get($payment, 'payable.status', ''))),
-            'BALANCE' => $this->blankMoney(data_get($payment, 'payable.balance_amount_cents')),
-            'OFFICIAL RECEIPT NO.' => is_array($receipt) ? (string) data_get($receipt, 'receipt_number', '') : '',
-            'SERIES / DATE' => is_array($receipt)
-                ? trim((string) data_get($receipt, 'series', '').' / '.(string) data_get($receipt, 'issued_on', ''), ' /')
-                : '',
-        ], 37);
-        $y -= 51;
+        $document->rectangle($page, 42, $y - 53, 511, 53, 0.2, false);
+        $document->text($page, $this->paymentSummaryLead($reconciliation), 50, $y - 14, 7, true);
+        $document->wrappedText($page, 'Confirmed '.(string) data_get($reconciliation, 'confirmed_at', '').' - Collection reference '.(string) data_get($reconciliation, 'collection_reference', ''), 50, $y - 27, 495, 6.5, 8);
+        $document->text($page, 'Official Receipts: '.$this->receiptCoverageLabel($reconciliation).' - '.$this->blankMoney(data_get($reconciliation, 'total_receipted_cents')).' '.(data_get($reconciliation, 'totals_reconciled') === true ? 'fully reconciled' : 'pending receipt coverage'), 50, $y - 45, 7, true);
+        $y -= 67;
 
         $document->text($page, 'F. POST-PAYMENT CERTIFICATIONS', 42, $y, 8, true);
         $document->text($page, 'G. PERMIT PROCESSING REFERENCE', 300, $y, 8, true);
@@ -357,6 +407,70 @@ final class RenderApplicationFormPdf
             $document->wrappedText($page, $value, $x + 6, $y - ($header ? 12 : 14), $width - 12, $header ? 6 : 7, $header ? 7 : 8, $header);
             $x += $width;
         }
+    }
+
+    private function receiptTableHeader(SimplePdfDocument $document, int $page, float $y): void
+    {
+        $this->receiptTableRow($document, $page, $y, [
+            'receipt_group_label' => 'RECEIPT GROUP',
+            'receipt_number' => 'OR NUMBER',
+            'series' => 'SERIES',
+            'total_amount_minor' => 'AMOUNT',
+        ], true);
+    }
+
+    /** @param array<string, mixed> $receipt */
+    private function receiptTableRow(SimplePdfDocument $document, int $page, float $y, array $receipt, bool $header = false): void
+    {
+        $columns = [
+            [(string) data_get($receipt, 'receipt_group_label', ''), 220, 'left'],
+            [(string) data_get($receipt, 'receipt_number', ''), 105, 'left'],
+            [(string) data_get($receipt, 'series', ''), 76, 'left'],
+            [$header ? (string) data_get($receipt, 'total_amount_minor', '') : $this->blankMoney(data_get($receipt, 'total_amount_minor')), 110, 'right'],
+        ];
+        $height = $header ? 18 : 34;
+        $x = 42;
+        foreach ($columns as [$value, $width, $alignment]) {
+            $document->rectangle($page, $x, $y - $height, $width, $height, $header ? 0.91 : 0.2, $header);
+            if ($alignment === 'right') {
+                $document->text($page, $value, $x + $width - 6, $y - ($header ? 12 : 14), $header ? 6 : 7, $header, 'right');
+            } else {
+                $document->wrappedText($page, $value, $x + 6, $y - ($header ? 12 : 14), $width - 12, $header ? 6 : 7, $header ? 7 : 8, $header);
+            }
+            $x += $width;
+        }
+    }
+
+    /** @param array<string, mixed> $reconciliation */
+    private function paymentSourceLabel(array $reconciliation): string
+    {
+        $integration = data_get($reconciliation, 'integration') === 'x_change' ? 'x-change' : null;
+        $rail = $this->label((string) data_get($reconciliation, 'payment_rail', ''));
+
+        return implode(' / ', array_filter([$integration, $rail])) ?: 'recorded collection';
+    }
+
+    /** @param array<string, mixed> $reconciliation */
+    private function paymentSummaryLead(array $reconciliation): string
+    {
+        $collectedAmountCents = data_get($reconciliation, 'collected_amount_cents');
+        if (is_int($collectedAmountCents) && $collectedAmountCents > 0) {
+            return 'Paid via '.$this->paymentSourceLabel($reconciliation).' - '.$this->money($collectedAmountCents);
+        }
+
+        return 'Payment pending - remaining balance '.$this->blankMoney(data_get($reconciliation, 'remaining_balance_cents'));
+    }
+
+    /** @param array<string, mixed> $reconciliation */
+    private function receiptCoverageLabel(array $reconciliation): string
+    {
+        $issued = (int) data_get($reconciliation, 'issued_receipt_group_count', 0);
+
+        if (data_get($reconciliation, 'receipt_coverage_complete') === true) {
+            return $issued.' issued';
+        }
+
+        return $issued.' of '.(int) data_get($reconciliation, 'required_receipt_group_count', 0).' issued';
     }
 
     private function blankMoney(mixed $amountCents): string

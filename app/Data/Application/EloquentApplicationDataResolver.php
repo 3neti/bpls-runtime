@@ -619,7 +619,75 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         $schedule = $application->paymentSchedules->sortByDesc('sequence')->first();
         $onlinePayment = $schedule?->xChangePayment;
         $attempt = $onlinePayment?->attempts->sortByDesc('id')->first();
-        $canonicalCollection = $onlinePayment?->treasuryCollection;
+        $scheduleCollections = $schedule === null ? collect() : $schedule->treasuryCollections;
+        $canonicalCollection = $onlinePayment === null ? null : $onlinePayment->treasuryCollection;
+        $canonicalCollection ??= $scheduleCollections->sortByDesc('received_at')->first();
+        $issuedReceipts = $scheduleCollections
+            ->flatMap(fn (TreasuryCollection $collection) => $collection->receipts)
+            ->filter(fn (Receipt $receipt): bool => $receipt->status === ReceiptStatus::Issued);
+        $requiredReceiptGroups = $scheduleCollections
+            ->flatMap(fn (TreasuryCollection $collection) => $collection->allocations)
+            ->pluck('receipt_group_key')
+            ->filter()
+            ->unique()
+            ->values();
+        $issuedReceiptGroups = $issuedReceipts
+            ->pluck('receipt_group_key')
+            ->filter()
+            ->unique()
+            ->values();
+        $receiptGroups = $scheduleCollections
+            ->flatMap(fn (TreasuryCollection $collection) => $collection->allocations)
+            ->groupBy('receipt_group_key')
+            ->map(function (Collection $allocations, string $receiptGroupKey) use ($issuedReceipts): array {
+                $receipt = $issuedReceipts->firstWhere('receipt_group_key', $receiptGroupKey);
+
+                return [
+                    'key' => $receiptGroupKey,
+                    'label' => (string) $allocations->first()?->receipt_group_label,
+                    'allocated_amount_cents' => (int) $allocations->sum('amount_cents'),
+                    'receipt_issued' => $receipt instanceof Receipt,
+                    'receipt_id' => $receipt?->id,
+                ];
+            })
+            ->values();
+        if ($receiptGroups->isEmpty() && $issuedReceipts->isNotEmpty()) {
+            $receiptGroups = $issuedReceipts->map(fn (Receipt $receipt): array => [
+                'key' => $receipt->receipt_group_key,
+                'label' => $receipt->receipt_group_label,
+                'allocated_amount_cents' => $receipt->amount_cents,
+                'receipt_issued' => true,
+                'receipt_id' => $receipt->id,
+            ])->values();
+        }
+        $collectionTotalCents = (int) $scheduleCollections->sum('amount_cents');
+        $totalReceiptedCents = (int) $issuedReceipts->sum('amount_cents');
+        $requiredReceiptGroupCount = $requiredReceiptGroups->count();
+        if ($scheduleCollections->isNotEmpty() && $requiredReceiptGroupCount === 0) {
+            $requiredReceiptGroupCount = 1;
+        }
+        $issuedReceiptGroupCount = $issuedReceiptGroups->count();
+        if ($issuedReceipts->isNotEmpty() && $issuedReceiptGroupCount === 0) {
+            $issuedReceiptGroupCount = $issuedReceipts->count();
+        }
+        $receiptCoverageComplete = $scheduleCollections->isNotEmpty()
+            && $issuedReceipts->isNotEmpty()
+            && $scheduleCollections->every(fn (TreasuryCollection $collection): bool => $collection->allocations->isEmpty()
+                ? $collection->receipts->isNotEmpty()
+                : $collection->allocations->every(fn ($allocation): bool => $allocation->receipt_id !== null));
+        $totalsReconciled = $schedule !== null
+            && $receiptCoverageComplete
+            && $collectionTotalCents === $schedule->paid_amount_cents
+            && $totalReceiptedCents === $collectionTotalCents;
+        $reconciliationStatus = match (true) {
+            $scheduleCollections->isEmpty() => 'awaiting_collection',
+            $totalsReconciled => 'fully_reconciled',
+            $totalReceiptedCents > $collectionTotalCents => 'mismatch',
+            default => 'pending_receipts',
+        };
+        $syntheticPayment = $scheduleCollections->contains(
+            fn (TreasuryCollection $collection): bool => data_get($collection->source_snapshot, 'integration_evidence.synthetic_only') === true,
+        );
 
         return [
             'state' => $schedule === null ? 'pending_assessment_approval' : $schedule->status->value,
@@ -655,6 +723,28 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                     'expires_at' => $attempt->expires_at?->toIso8601String(),
                     'qr_data_url' => $this->qrPhArtifactCache->dataUrl($attempt),
                 ],
+            ],
+            'reconciliation' => $schedule === null ? null : [
+                'integration' => $onlinePayment === null ? null : 'x_change',
+                'provider' => $attempt?->provider,
+                'payment_rail' => $canonicalCollection?->method->value,
+                'channel' => $canonicalCollection?->channel->value,
+                'approved_amount_cents' => $schedule->total_amount_cents,
+                'paid_amount_cents' => $schedule->paid_amount_cents,
+                'collected_amount_cents' => $collectionTotalCents,
+                'remaining_balance_cents' => $schedule->total_amount_cents - $schedule->paid_amount_cents,
+                'confirmed_at' => $canonicalCollection?->received_at?->toIso8601String(),
+                'collection_reference' => $canonicalCollection?->reference_number,
+                'required_receipt_group_count' => $requiredReceiptGroupCount,
+                'issued_receipt_group_count' => $issuedReceiptGroupCount,
+                'receipt_groups' => $receiptGroups->all(),
+                'receipt_count' => $issuedReceipts->count(),
+                'total_receipted_cents' => $totalReceiptedCents,
+                'unreceipted_amount_cents' => max(0, $collectionTotalCents - $totalReceiptedCents),
+                'receipt_coverage_complete' => $receiptCoverageComplete,
+                'totals_reconciled' => $totalsReconciled,
+                'status' => $reconciliationStatus,
+                'synthetic' => $syntheticPayment,
             ],
             'collections' => $application->paymentSchedules->flatMap(fn ($candidate) => $candidate->treasuryCollections)->map(fn ($collection): array => [
                 'id' => $collection->id,

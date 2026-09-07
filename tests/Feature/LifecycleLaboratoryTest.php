@@ -18,6 +18,7 @@ use App\Actions\RecordBploRoutingDetermination;
 use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
 use App\Actions\RecordPostPaymentOfficeCertification;
 use App\Actions\ReleaseSyntheticLifecyclePermit;
+use App\Actions\RenderApplicationFormPdf;
 use App\Actions\ResolveLifecycleCleanroomState;
 use App\Actions\SimulateLifecycleQrPhPayment;
 use App\Actions\SubmitCitizenPermitApplication;
@@ -1031,6 +1032,14 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
             expect(data_get($receiptState, 'progress.next_step.key'))->toBe('official_receipt_issued')
                 ->and($collection->fresh()->status)->toBe(TreasuryCollectionStatus::PendingReceipt);
         }
+        if ($index === 0) {
+            $pendingReceiptData = app(ApplicationDataResolver::class)->resolve($application->fresh(), $cashier)->toArray();
+            expect(data_get($pendingReceiptData, 'payment.reconciliation.status'))->toBe('pending_receipts')
+                ->and(data_get($pendingReceiptData, 'payment.reconciliation.issued_receipt_group_count'))->toBe(1)
+                ->and(data_get($pendingReceiptData, 'payment.reconciliation.required_receipt_group_count'))->toBe(7)
+                ->and(data_get($pendingReceiptData, 'payment.reconciliation.totals_reconciled'))->toBeFalse()
+                ->and(data_get($pendingReceiptData, 'payment.reconciliation.unreceipted_amount_cents'))->toBeGreaterThan(0);
+        }
     }
 
     $collection->refresh();
@@ -1061,12 +1070,38 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
 
     $finalState = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     $finalData = app(ApplicationDataResolver::class)->resolve($application->fresh(), $management)->toArray();
+    $finalDocument = app(BuildExecutablePermitApplicationDocument::class)->handle($application->fresh(), $cashier);
+    $applicationFormPdf = app(RenderApplicationFormPdf::class)->handle($application->fresh());
     expect(data_get($finalState, 'progress.complete'))->toBeTrue()
         ->and(data_get($finalState, 'progress.completed_steps'))->toBe(24)
         ->and(data_get($finalData, 'official_receipts'))->toHaveCount(7)
         ->and(data_get($finalData, 'permit.official_receipts'))->toHaveCount(7)
         ->and(data_get($finalData, 'permit.official_receipt_bound'))->toBeTrue()
-        ->and(collect(data_get($finalData, 'official_receipts'))->sum('total_amount_minor'))->toBe($collection->amount_cents);
+        ->and(collect(data_get($finalData, 'official_receipts'))->sum('total_amount_minor'))->toBe($collection->amount_cents)
+        ->and(data_get($finalData, 'payment.reconciliation.integration'))->toBe('x_change')
+        ->and(data_get($finalData, 'payment.reconciliation.provider'))->toBe('netbank')
+        ->and(data_get($finalData, 'payment.reconciliation.payment_rail'))->toBe(TreasuryCollectionMethod::QrPh->value)
+        ->and(data_get($finalData, 'payment.reconciliation.approved_amount_cents'))->toBe($assessment->total_amount_cents)
+        ->and(data_get($finalData, 'payment.reconciliation.collected_amount_cents'))->toBe($collection->amount_cents)
+        ->and(data_get($finalData, 'payment.reconciliation.remaining_balance_cents'))->toBe(0)
+        ->and(data_get($finalData, 'payment.reconciliation.receipt_groups'))->toHaveCount(7)
+        ->and(data_get($finalData, 'payment.reconciliation.issued_receipt_group_count'))->toBe(7)
+        ->and(data_get($finalData, 'payment.reconciliation.total_receipted_cents'))->toBe($collection->amount_cents)
+        ->and(data_get($finalData, 'payment.reconciliation.unreceipted_amount_cents'))->toBe(0)
+        ->and(data_get($finalData, 'payment.reconciliation.status'))->toBe('fully_reconciled')
+        ->and(data_get($finalData, 'payment.reconciliation.totals_reconciled'))->toBeTrue()
+        ->and(data_get($finalDocument, 'official_receipt_packet.receipts'))->toHaveCount(7)
+        ->and(data_get($finalDocument, 'official_receipt_packet.required_receipt_group_count'))->toBe(7)
+        ->and(data_get($finalDocument, 'official_receipt_packet.totals_reconciled'))->toBeTrue()
+        ->and(collect(data_get($finalDocument, 'official_receipt_packet.receipts'))->every(
+            fn (array $receipt): bool => is_string(data_get($receipt, 'links.view')),
+        ))->toBeTrue()
+        ->and($applicationFormPdf)->toContain('X-CHANGE PAYMENT CONFIRMATION')
+        ->and($applicationFormPdf)->toContain('OFFICIAL RECEIPT PACKET - AF NO. 51')
+        ->and($applicationFormPdf)->toContain('FULLY RECONCILED');
+    foreach (range(7_100_001, 7_100_007) as $receiptNumber) {
+        expect($applicationFormPdf)->toContain((string) $receiptNumber);
+    }
 });
 
 test('failed one action lodging rolls back the draft and retains the cleanroom intake', function () {

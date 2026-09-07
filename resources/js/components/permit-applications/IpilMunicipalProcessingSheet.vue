@@ -113,6 +113,27 @@ type DocumentProjection = {
             amount_cents: number;
             received_at: string;
         } | null;
+        reconciliation?: {
+            integration: string | null;
+            provider: string | null;
+            payment_rail: string | null;
+            channel: string | null;
+            approved_amount_cents: number;
+            paid_amount_cents: number;
+            collected_amount_cents: number;
+            remaining_balance_cents: number;
+            confirmed_at: string | null;
+            collection_reference: string | null;
+            required_receipt_group_count: number;
+            issued_receipt_group_count: number;
+            receipt_count: number;
+            total_receipted_cents: number;
+            unreceipted_amount_cents: number;
+            receipt_coverage_complete: boolean;
+            totals_reconciled: boolean;
+            status: string;
+            synthetic: boolean;
+        } | null;
     };
     official_receipt_reference?: {
         receipt_number: string;
@@ -207,6 +228,9 @@ const treasurySubtotal = computed(() =>
         0,
     ),
 );
+const paymentReconciliation = computed(
+    () => props.document.payment_reference?.reconciliation ?? null,
+);
 
 onMounted(async () => {
     if (!props.recentCertificationOffice) {
@@ -274,6 +298,35 @@ function date(value: string | null | undefined): string {
 
     return new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' }).format(
         new Date(value),
+    );
+}
+
+function dateTime(value: string | null | undefined): string {
+    if (!value) {
+        return '';
+    }
+
+    return new Intl.DateTimeFormat('en-PH', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+    }).format(new Date(value));
+}
+
+function paymentSource(): string {
+    const reconciliation = paymentReconciliation.value;
+
+    if (!reconciliation) {
+        return '';
+    }
+
+    const integration =
+        reconciliation.integration === 'x_change' ? 'x-change' : null;
+    const rail = label(reconciliation.payment_rail);
+
+    return (
+        [integration, rail].filter(Boolean).join(' / ') ||
+        label(reconciliation.channel) ||
+        'recorded collection'
     );
 }
 
@@ -767,90 +820,84 @@ function continuationLabel(index: number): string {
                                 : 'E. Payment and Official Receipt Reference'
                         }}
                     </h3>
-                    <dl class="paper-field-grid sm:grid-cols-4">
-                        <div>
-                            <dt>Payable status</dt>
-                            <dd>
+                    <div
+                        v-if="paymentReconciliation"
+                        data-testid="page-2-payment-summary"
+                        class="grid gap-1 border border-stone-400 p-3 text-xs dark:border-stone-600"
+                    >
+                        <p class="font-black">
+                            <template
+                                v-if="
+                                    paymentReconciliation.collected_amount_cents >
+                                    0
+                                "
+                            >
+                                Paid via {{ paymentSource() }} ·
+                                {{
+                                    money(
+                                        paymentReconciliation.collected_amount_cents,
+                                    )
+                                }}
+                            </template>
+                            <template v-else>
                                 {{
                                     label(
                                         document.payment_reference?.payable
                                             ?.status,
                                     )
                                 }}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt>Balance</dt>
-                            <dd>
+                                · Remaining balance
                                 {{
                                     money(
-                                        document.payment_reference?.payable
-                                            ?.balance_amount_cents,
+                                        paymentReconciliation.remaining_balance_cents,
                                     )
                                 }}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt>Collections</dt>
-                            <dd>
+                            </template>
+                        </p>
+                        <p v-if="paymentReconciliation.confirmed_at">
+                            Confirmed
+                            {{ dateTime(paymentReconciliation.confirmed_at) }} ·
+                            Collection reference
+                            <span class="font-mono break-all">{{
+                                paymentReconciliation.collection_reference
+                            }}</span>
+                        </p>
+                        <p>
+                            Official Receipts:
+                            {{
+                                paymentReconciliation.issued_receipt_group_count
+                            }}
+                            <template
+                                v-if="
+                                    !paymentReconciliation.receipt_coverage_complete
+                                "
+                            >
+                                of
                                 {{
-                                    document.payment_reference
-                                        ?.collection_count || ''
+                                    paymentReconciliation.required_receipt_group_count
                                 }}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt>Latest collection</dt>
-                            <dd>
+                            </template>
+                            issued ·
+                            {{
+                                money(
+                                    paymentReconciliation.total_receipted_cents,
+                                )
+                            }}
+                            <strong
+                                :class="
+                                    paymentReconciliation.totals_reconciled
+                                        ? 'text-emerald-800 dark:text-emerald-300'
+                                        : 'text-amber-800 dark:text-amber-300'
+                                "
+                            >
                                 {{
-                                    money(
-                                        document.payment_reference
-                                            ?.latest_collection?.amount_cents,
-                                    )
+                                    paymentReconciliation.totals_reconciled
+                                        ? 'fully reconciled'
+                                        : 'pending receipt coverage'
                                 }}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt>Official Receipt no.</dt>
-                            <dd>
-                                {{
-                                    document.official_receipt_reference
-                                        ?.receipt_number ?? ''
-                                }}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt>Series</dt>
-                            <dd>
-                                {{
-                                    document.official_receipt_reference
-                                        ?.series ?? ''
-                                }}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt>Date issued</dt>
-                            <dd>
-                                {{
-                                    date(
-                                        document.official_receipt_reference
-                                            ?.issued_on,
-                                    )
-                                }}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt>Due date</dt>
-                            <dd>
-                                {{
-                                    date(
-                                        document.payment_reference?.payable
-                                            ?.due_on,
-                                    )
-                                }}
-                            </dd>
-                        </div>
-                    </dl>
+                            </strong>
+                        </p>
+                    </div>
                 </section>
 
                 <section>
