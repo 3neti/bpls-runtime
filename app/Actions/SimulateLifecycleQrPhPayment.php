@@ -49,8 +49,9 @@ class SimulateLifecycleQrPhPayment
         }
         $cashierId = data_get($run->actor_manifest, 'actors.cashier.user_id');
         $cashier = is_int($cashierId) ? User::query()->find($cashierId) : null;
+        $inquiry = $this->successfulInquiry($payment);
 
-        return DB::transaction(function () use ($schedule, $payment, $attempt, $cashier): TreasuryCollection {
+        return DB::transaction(function () use ($schedule, $payment, $attempt, $cashier, $inquiry): TreasuryCollection {
             $collection = $this->recordCollection->handle($schedule, [
                 'amount_cents' => $payment->amount_cents,
                 'channel' => TreasuryCollectionChannel::Online->value,
@@ -66,24 +67,47 @@ class SimulateLifecycleQrPhPayment
                     'external_reference' => $payment->external_reference,
                     'pay_code' => $payment->pay_code,
                     'attempt_reference' => $attempt->reference,
-                    'collected_total_cents' => $payment->amount_cents,
-                    'target_amount_cents' => $payment->amount_cents,
+                    'consumer_status' => $inquiry['consumer_status'],
+                    'provider_status' => $inquiry['provider_status'],
+                    'collected_total_cents' => $inquiry['collected_total_cents'],
+                    'target_amount_cents' => $inquiry['target_amount_cents'],
+                    'is_fully_collected' => $inquiry['is_fully_collected'],
+                    'is_terminal' => $inquiry['is_terminal'],
                 ],
             ], $cashier);
 
             $payment->forceFill([
                 'treasury_collection_id' => $collection->id,
                 'status' => 'collected',
-                'consumer_status' => 'synthetic_paid',
-                'provider_status' => 'synthetic_collected',
-                'collected_total_cents' => $payment->amount_cents,
-                'target_amount_cents' => $payment->amount_cents,
-                'is_fully_collected' => true,
+                'consumer_status' => $inquiry['consumer_status'],
+                'provider_status' => $inquiry['provider_status'],
+                'collected_total_cents' => $inquiry['collected_total_cents'],
+                'target_amount_cents' => $inquiry['target_amount_cents'],
+                'is_fully_collected' => $inquiry['is_fully_collected'],
                 'confirmed_at' => now(),
                 'last_error_code' => null,
             ])->save();
 
             return $collection;
         });
+    }
+
+    /**
+     * Mirror the normalized successful inquiry returned by XChangePartnerApiClient
+     * without contacting x-change or representing that real funds moved.
+     *
+     * @return array{external_reference: string, consumer_status: string, provider_status: string, collected_total_cents: int, target_amount_cents: int, is_fully_collected: true, is_terminal: false}
+     */
+    private function successfulInquiry(XChangePayment $payment): array
+    {
+        return [
+            'external_reference' => $payment->external_reference,
+            'consumer_status' => 'paid',
+            'provider_status' => 'active',
+            'collected_total_cents' => $payment->amount_cents,
+            'target_amount_cents' => $payment->amount_cents,
+            'is_fully_collected' => true,
+            'is_terminal' => false,
+        ];
     }
 }

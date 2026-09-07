@@ -16,10 +16,10 @@ use App\Actions\IssueSyntheticLifecyclePermit;
 use App\Actions\RecordAssessmentDecision;
 use App\Actions\RecordBploRoutingDetermination;
 use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
-use App\Actions\RecordPaymentScheduleCollection;
 use App\Actions\RecordPostPaymentOfficeCertification;
 use App\Actions\ReleaseSyntheticLifecyclePermit;
 use App\Actions\ResolveLifecycleCleanroomState;
+use App\Actions\SimulateLifecycleQrPhPayment;
 use App\Actions\SubmitCitizenPermitApplication;
 use App\Data\Application\ApplicationDataResolver;
 use App\Enums\AssessmentDecisionAction;
@@ -42,6 +42,8 @@ use App\Models\PermitApplicationDocument;
 use App\Models\SignatureEvidence;
 use App\Models\TreasuryCollection;
 use App\Models\User;
+use App\Models\XChangePayment;
+use App\Models\XChangePaymentAttempt;
 use Database\Seeders\NelsonTreasuryLobFeeCatalogSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
@@ -964,17 +966,56 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     expect($schedule->total_amount_cents)->toBe($assessment->total_amount_cents)
         ->and(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))->toBe('qr_payment_collected');
 
-    $cashier = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.cashier.user_id'));
-    $collection = app(RecordPaymentScheduleCollection::class)->handle($schedule, [
+    $payment = XChangePayment::query()->create([
+        'payment_schedule_id' => $schedule->id,
+        'assessment_id' => $assessment->id,
+        'external_reference' => 'bpls-ps-'.$schedule->id.'-synthetic-nelson',
+        'issue_idempotency_key' => 'synthetic-issue-'.$schedule->id,
+        'terms_hash' => str_repeat('a', 64),
         'amount_cents' => $schedule->total_amount_cents,
-        'method' => TreasuryCollectionMethod::Cash->value,
-        'channel' => TreasuryCollectionChannel::OverTheCounter->value,
-        'payer_name' => 'Nelson Cleanroom Applicant',
-        'remarks' => 'Synthetic Nelson lifecycle laboratory collection.',
-    ], $cashier);
+        'currency' => 'PHP',
+        'binding_secret' => 'synthetic-binding-secret',
+        'status' => 'awaiting_payment',
+        'pay_code' => 'NELS',
+        'consumer_status' => 'payable',
+        'provider_status' => 'awaiting_payment',
+        'target_amount_cents' => $schedule->total_amount_cents,
+    ]);
+    XChangePaymentAttempt::query()->create([
+        'x_change_payment_id' => $payment->id,
+        'idempotency_key' => 'synthetic-attempt-'.$schedule->id,
+        'reference' => 'SYNTHETIC-QRPH-'.$schedule->id,
+        'status' => 'awaiting_payment',
+        'provider' => 'netbank',
+        'amount_cents' => $schedule->total_amount_cents,
+        'expires_at' => now()->addMinutes(15),
+    ]);
+
+    $cashier = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.cashier.user_id'));
+    $collection = app(SimulateLifecycleQrPhPayment::class)->handle($run->fresh());
+    $payment->refresh();
+    $simulatedApplicationData = app(ApplicationDataResolver::class)->resolve($application->fresh(), $management)->toArray();
     $receiptGroups = $collection->allocations->pluck('receipt_group_key')->unique()->sort()->values();
     expect($receiptGroups)->toHaveCount(7)
+        ->and($collection->channel)->toBe(TreasuryCollectionChannel::Online)
+        ->and($collection->method)->toBe(TreasuryCollectionMethod::QrPh)
         ->and($collection->allocations->sum('amount_cents'))->toBe($collection->amount_cents)
+        ->and(data_get($collection->source_snapshot, 'integration_evidence.source'))->toBe('lifecycle_laboratory_simulator')
+        ->and(data_get($collection->source_snapshot, 'integration_evidence.synthetic_only'))->toBeTrue()
+        ->and(data_get($collection->source_snapshot, 'integration_evidence.real_funds_moved'))->toBeFalse()
+        ->and(data_get($collection->source_snapshot, 'integration_evidence.consumer_status'))->toBe('paid')
+        ->and(data_get($collection->source_snapshot, 'integration_evidence.provider_status'))->toBe('active')
+        ->and($payment->consumer_status)->toBe('paid')
+        ->and($payment->provider_status)->toBe('active')
+        ->and($payment->collected_total_cents)->toBe($schedule->total_amount_cents)
+        ->and($payment->target_amount_cents)->toBe($schedule->total_amount_cents)
+        ->and($payment->is_fully_collected)->toBeTrue()
+        ->and($payment->treasury_collection_id)->toBe($collection->id)
+        ->and(data_get($simulatedApplicationData, 'payment.payment_request.state'))->toBe('collected')
+        ->and(data_get($simulatedApplicationData, 'payment.payment_request.consumer_status'))->toBe('paid')
+        ->and(data_get($simulatedApplicationData, 'payment.payment_request.provider_status'))->toBe('active')
+        ->and(data_get($simulatedApplicationData, 'payment.payment_request.active_attempt.provider'))->toBe('netbank')
+        ->and(data_get($simulatedApplicationData, 'payment.payment_request.collection_reference'))->toBe('SYNTHETIC-QRPH-'.$schedule->id)
         ->and(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))->toBe('official_receipt_issued');
 
     foreach ($receiptGroups as $index => $receiptGroup) {
