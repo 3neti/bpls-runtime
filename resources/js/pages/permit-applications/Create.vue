@@ -169,6 +169,19 @@ const submissionForm = useForm({
     undertaking_accepted: false,
     signature_facsimile: null as File | null,
 });
+const submissionBlockers = computed(() => {
+    const blockers: string[] = [];
+
+    if (!submissionForm.undertaking_accepted) {
+        blockers.push('Check the Oath of Undertaking.');
+    }
+
+    if (!submissionForm.signature_facsimile) {
+        blockers.push('Capture and use your signature.');
+    }
+
+    return blockers;
+});
 let nextDocumentKey = 1;
 
 watch(
@@ -200,16 +213,6 @@ const action = computed(() => {
 const back = computed(() => {
     return isCitizen.value ? citizenIndex() : staffIndex();
 });
-
-function syncSubmissionUndertaking(event: Event): void {
-    if (!isEditing.value || !isNelsonApplication.value) {
-        return;
-    }
-
-    submissionForm.undertaking_accepted = (
-        event.target as HTMLInputElement
-    ).checked;
-}
 
 function submitDraft(): void {
     if (
@@ -2029,20 +2032,24 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         >
                             <label class="flex items-start gap-3 text-sm"
                                 ><input
+                                    v-if="isEditing && isNelsonApplication"
+                                    v-model="
+                                        submissionForm.undertaking_accepted
+                                    "
+                                    name="undertaking_accepted"
+                                    type="checkbox"
+                                    value="1"
+                                    class="mt-1"
+                                /><input
+                                    v-else
                                     name="undertaking_accepted"
                                     type="checkbox"
                                     value="1"
                                     :checked="
-                                        isEditing && isNelsonApplication
-                                            ? submissionForm.undertaking_accepted
-                                            : nested('undertaking.accepted') ===
-                                              true
+                                        nested('undertaking.accepted') === true
                                     "
-                                    :required="
-                                        !(isEditing && isNelsonApplication)
-                                    "
+                                    required
                                     class="mt-1"
-                                    @change="syncSubmissionUndertaking"
                                 /><span
                                     ><strong>Oath of Undertaking:</strong> I
                                     undertake to comply with the regulatory
@@ -2119,49 +2126,80 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                   : 'Same municipal nouns, responsive layout. Submission remains a separate lodging action.'
                         }}
                     </p>
-                    <div class="flex flex-col gap-2 sm:flex-row">
-                        <Button
-                            type="submit"
-                            :disabled="
-                                processing ||
-                                (!isCitizen && lineOfBusinesses.length === 0)
+                    <div class="grid gap-2">
+                        <div
+                            v-if="
+                                isEditing &&
+                                isNelsonApplication &&
+                                canSubmit &&
+                                submissionBlockers.length > 0
                             "
-                            ><Send
-                                v-if="cleanroomIntake && !isNelsonCleanroom"
-                            /><Save v-else />{{
-                                processing
-                                    ? cleanroomIntake && !isNelsonCleanroom
-                                        ? 'Lodging application...'
-                                        : 'Saving document...'
-                                    : cleanroomIntake && !isNelsonCleanroom
-                                      ? 'Lodge application'
-                                      : isNelsonApplication
-                                        ? 'Save application draft'
-                                        : isEditing
-                                          ? 'Save document changes'
-                                          : isCitizen
+                            role="status"
+                            aria-live="polite"
+                            data-testid="submission-readiness"
+                            class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+                        >
+                            <p class="font-semibold">
+                                Before you can Sign & Submit:
+                            </p>
+                            <ul class="mt-1 list-disc pl-4">
+                                <li
+                                    v-for="blocker in submissionBlockers"
+                                    :key="blocker"
+                                >
+                                    {{ blocker }}
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="flex flex-col gap-2 sm:flex-row">
+                            <Button
+                                type="submit"
+                                :disabled="
+                                    processing ||
+                                    (!isCitizen &&
+                                        lineOfBusinesses.length === 0)
+                                "
+                                ><Send
+                                    v-if="cleanroomIntake && !isNelsonCleanroom"
+                                /><Save v-else />{{
+                                    processing
+                                        ? cleanroomIntake && !isNelsonCleanroom
+                                            ? 'Lodging application...'
+                                            : 'Saving document...'
+                                        : cleanroomIntake && !isNelsonCleanroom
+                                          ? 'Lodge application'
+                                          : isNelsonApplication
                                             ? 'Save application draft'
-                                            : 'Save application'
-                            }}</Button
-                        >
-                        <Button
-                            v-if="isEditing && isNelsonApplication && canSubmit"
-                            type="button"
-                            data-testid="citizen-submit-application"
-                            :disabled="
-                                submissionForm.processing ||
-                                !submissionForm.undertaking_accepted ||
-                                !submissionForm.signature_facsimile
-                            "
-                            @click="submitDraft"
-                        >
-                            <Send />
-                            {{
-                                submissionForm.processing
-                                    ? 'Submitting...'
-                                    : 'Sign & Submit'
-                            }}
-                        </Button>
+                                            : isEditing
+                                              ? 'Save document changes'
+                                              : isCitizen
+                                                ? 'Save application draft'
+                                                : 'Save application'
+                                }}</Button
+                            >
+                            <Button
+                                v-if="
+                                    isEditing &&
+                                    isNelsonApplication &&
+                                    canSubmit
+                                "
+                                type="button"
+                                data-testid="citizen-submit-application"
+                                :disabled="
+                                    submissionForm.processing ||
+                                    !submissionForm.undertaking_accepted ||
+                                    !submissionForm.signature_facsimile
+                                "
+                                @click="submitDraft"
+                            >
+                                <Send />
+                                {{
+                                    submissionForm.processing
+                                        ? 'Submitting...'
+                                        : 'Sign & Submit'
+                                }}
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </Form>

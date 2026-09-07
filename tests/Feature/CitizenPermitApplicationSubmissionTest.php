@@ -172,6 +172,19 @@ test('signature facsimile capture uses a drawing canvas and keeps a visible conf
         ->toContain('Remove');
 });
 
+test('nelson application form explains every disabled submission prerequisite', function () {
+    $component = file_get_contents(resource_path('js/pages/permit-applications/Create.vue'));
+
+    expect($component)
+        ->toContain('const submissionBlockers = computed')
+        ->toContain("blockers.push('Check the Oath of Undertaking.')")
+        ->toContain("blockers.push('Capture and use your signature.')")
+        ->toContain('data-testid="submission-readiness"')
+        ->toContain('Before you can Sign & Submit:')
+        ->toContain('v-model="')
+        ->toContain('submissionForm.undertaking_accepted');
+});
+
 /**
  * @return array{User, PermitApplication}
  */
