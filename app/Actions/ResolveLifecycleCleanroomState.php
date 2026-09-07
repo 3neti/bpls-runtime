@@ -59,17 +59,31 @@ class ResolveLifecycleCleanroomState
         $stepDefinitions = collect($this->definition->steps());
         if ($run->isNelsonReconciliationV1()) {
             $stepDefinitions = $stepDefinitions->map(function (array $step): array {
-                if ($step['key'] !== 'citizen_intake') {
-                    return $step;
+                if ($step['key'] === 'citizen_intake') {
+                    return [
+                        ...$step,
+                        'label' => 'Application drafted, documented, signed and lodged',
+                        'description' => 'The applicant saves the plain-language business declaration as a draft, adds supporting documents, then captures a signature facsimile and lodges it. Page 1 and the documentary manifest freeze only at lodging.',
+                        'milestone' => 'Draft, document & lodge Application',
+                    ];
                 }
 
-                return [
-                    ...$step,
-                    'label' => 'Application drafted, documented, signed and lodged',
-                    'description' => 'The applicant saves the plain-language business declaration as a draft, adds supporting documents, then captures a signature facsimile and lodges it. Page 1 and the documentary manifest freeze only at lodging.',
-                    'milestone' => 'Draft, document & lodge Application',
-                ];
+                if ($step['key'] === 'assessment_prepared') {
+                    return [
+                        ...$step,
+                        'key' => 'treasury_lob_classification',
+                        'label' => 'Treasury LOB classification deferred',
+                        'description' => 'Concerned-office Payment Orders are complete. Treasury LOB classification and Treasury payment items begin in a later wave before Assessment preparation.',
+                        'mode' => 'boundary',
+                        'actor' => null,
+                        'milestone' => 'Treasury LOB classification',
+                    ];
+                }
+
+                return $step;
             });
+            $treasuryBoundary = $stepDefinitions->search(fn (array $step): bool => $step['key'] === 'treasury_lob_classification');
+            $stepDefinitions = $stepDefinitions->take(is_int($treasuryBoundary) ? $treasuryBoundary + 1 : 0);
         }
         if (($newProfile['scope'] ?? null) === 'single_source_application') {
             $publicVerificationIndex = $stepDefinitions->search(fn (array $step): bool => $step['key'] === 'public_verification');

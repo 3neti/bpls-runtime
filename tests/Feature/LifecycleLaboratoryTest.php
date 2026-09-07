@@ -2,6 +2,7 @@
 
 use App\Actions\AdvanceLifecycleCleanroom;
 use App\Actions\BuildLaboratoryAssessmentReconciliation;
+use App\Actions\BuildLifecycleCleanroom;
 use App\Actions\BuildLifecycleCleanroomIntake;
 use App\Actions\CommissionPostPaymentOfficeCertifications;
 use App\Actions\CompleteBusinessPermitEvaluationResponsibility;
@@ -30,6 +31,8 @@ use App\Models\BusinessOwner;
 use App\Models\LifecycleCleanroomRun;
 use App\Models\LifecycleScenarioSpecimen;
 use App\Models\LineOfBusiness;
+use App\Models\PaperlessPaymentOrder;
+use App\Models\PaperlessPaymentOrderLine;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationDocument;
 use App\Models\SignatureEvidence;
@@ -103,6 +106,8 @@ test('laboratory segregates interactive work from collapsed automated reference 
         ->toContain('v-for="step in visibleCleanroomSteps"')
         ->toContain('step.completed &&')
         ->toContain('will appear here only when completed or ready to act on')
+        ->toContain("mode === 'boundary'")
+        ->toContain('Next wave not implemented')
         ->not->toContain('visibleApplicationScenario')
         ->toContain('<details')
         ->toContain('data-testid="certified-regression-evidence"')
@@ -873,6 +878,28 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
             ->where('handoff.summary.office_count', 4)
             ->where('handoff.summary.responsibility_count', 0)
             ->where('handoff.offices.0.status', 'Not started'));
+
+    foreach ($application->fresh()->bploRoutingDetermination->works as $index => $work) {
+        $amount = [6_000, 12_500, 9_500, 4_000][$index];
+        $order = PaperlessPaymentOrder::factory()->for($work, 'routingWork')->create([
+            'permit_application_id' => $application->id,
+            'total_amount_cents' => $amount,
+        ]);
+        PaperlessPaymentOrderLine::factory()->for($order, 'paymentOrder')->create([
+            'code' => 'NELSON-OFFICE-'.($index + 1),
+            'amount_cents' => $amount,
+        ]);
+    }
+
+    $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+    $cleanroom = app(BuildLifecycleCleanroom::class)->handle($management);
+    expect(data_get($state, 'progress.next_step.key'))->toBe('treasury_lob_classification')
+        ->and(data_get($state, 'progress.next_step.mode'))->toBe('boundary')
+        ->and(data_get($state, 'progress.next_step.actor'))->toBeNull()
+        ->and(data_get($state, 'progress.completed_steps'))->toBe(8)
+        ->and(data_get($state, 'progress.total_steps'))->toBe(9)
+        ->and(data_get($cleanroom, 'active.concerned_office_payment_orders.status'))->toBe('finalized')
+        ->and(data_get($cleanroom, 'active.concerned_office_payment_orders.finalized_subtotal_amount_cents'))->toBe(32_000);
 });
 
 test('failed one action lodging rolls back the draft and retains the cleanroom intake', function () {

@@ -16,7 +16,10 @@ use App\References\ConcernedOfficeReference;
 
 class BuildBploRoutingTask
 {
-    public function __construct(private readonly ConcernedOfficeReference $concernedOffices) {}
+    public function __construct(
+        private readonly ConcernedOfficeReference $concernedOffices,
+        private readonly BuildConcernedOfficePaymentOrderSummary $paymentOrderSummary,
+    ) {}
 
     public function handle(PermitApplication $permitApplication, ?User $viewer): BploRoutingTaskData
     {
@@ -124,6 +127,7 @@ class BuildBploRoutingTask
 
         return [
             'catalog_status' => $this->concernedOffices->provenance()['production_catalog_status'],
+            'concerned_office_payment_orders' => $this->paymentOrderSummary->handle($application),
             'office_fee_options' => $offices->mapWithKeys(function (array $office) use ($application, $fixedFees): array {
                 $configuredCodes = collect($office['fee_rule_codes'] ?? []);
                 $commissionedPath = data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true;

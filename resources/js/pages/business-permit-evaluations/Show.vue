@@ -37,6 +37,7 @@ import EvaluationItemCard from '@/components/evaluations/EvaluationItemCard.vue'
 import EvaluationTotalPanel from '@/components/evaluations/EvaluationTotalPanel.vue';
 import FeeMatrixQuickLook from '@/components/fees/FeeMatrixQuickLook.vue';
 import BploRoutingTaskSheet from '@/components/permit-applications/BploRoutingTaskSheet.vue';
+import ConcernedOfficePaymentOrderSummary from '@/components/permit-applications/ConcernedOfficePaymentOrderSummary.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -56,6 +57,7 @@ import type { ResponsibilityDraft } from '@/lib/evaluationPresentation';
 import type {
     BreadcrumbItem,
     BusinessPermitEvaluationData,
+    ConcernedOfficePaymentOrderSummary as ConcernedOfficePaymentOrderSummaryData,
     EvaluationCapabilities,
     EvaluationItem,
     EvaluationLineOfBusinessOption,
@@ -76,6 +78,7 @@ const props = defineProps<{
         type: string;
         year: number;
         submitted_at: string | null;
+        commissioned_path: boolean;
         lines: {
             id: number;
             line_of_business_id: number;
@@ -179,6 +182,12 @@ const lineCorrectionReason = reactive({ value: '' });
 const counterCheckReason = reactive({ value: '' });
 
 const isCitizenLens = computed(() => props.evaluation?.lens === 'citizen');
+const isNelsonPath = computed(() => props.application.commissioned_path);
+const concernedOfficePaymentOrders = computed(
+    () =>
+        props.routingTask.financial_editor
+            .concerned_office_payment_orders as ConcernedOfficePaymentOrderSummaryData,
+);
 
 /** Presentation-only hierarchy over backend-provided charges and totals. */
 const workingPaper = computed(() =>
@@ -327,6 +336,12 @@ const myRoutingWork = computed(() => {
 
 const workspaceStatusLabel = computed(() => {
     if (!officeWorkspace.value) {
+        if (isNelsonPath.value) {
+            return concernedOfficePaymentOrders.value.all_finalized
+                ? 'Payment Orders Finalized'
+                : 'Payment Orders In Progress';
+        }
+
         return props.evaluation?.status_label ?? 'Awaiting Evaluation';
     }
 
@@ -336,6 +351,12 @@ const workspaceStatusLabel = computed(() => {
 });
 
 const nextStepTitle = computed(() => {
+    if (isNelsonPath.value) {
+        return concernedOfficePaymentOrders.value.all_finalized
+            ? 'Treasury LOB classification'
+            : 'Waiting for concerned-office Payment Orders';
+    }
+
     if (props.evaluation === null) {
         return props.can.initialize
             ? 'Start the fee evaluation'
@@ -354,6 +375,12 @@ const nextStepTitle = computed(() => {
 });
 
 const nextStepNote = computed(() => {
+    if (isNelsonPath.value) {
+        return concernedOfficePaymentOrders.value.all_finalized
+            ? 'Concerned-office Payment Orders are complete. Treasury LOB classification is the next stage before Assessment preparation.'
+            : `${concernedOfficePaymentOrders.value.finalized_office_count} of ${concernedOfficePaymentOrders.value.required_office_count} concerned offices have finalized their Payment Orders.`;
+    }
+
     if (props.evaluation === null) {
         return props.can.initialize
             ? 'Create the evaluation responsibilities and begin recording the required office decisions.'
@@ -895,10 +922,14 @@ function submitPrepareAssessment(): void {
             <template v-else-if="workingPaper">
                 <!-- What it currently costs, and how that was assembled -->
                 <EvaluationTotalPanel
-                    v-if="!officeWorkspace"
+                    v-if="!officeWorkspace && !isNelsonPath"
                     :working-paper="workingPaper"
                     :status-label="evaluation.status_label"
                     :financial-lock="evaluation.financial_lock"
+                />
+                <ConcernedOfficePaymentOrderSummary
+                    v-if="!officeWorkspace && isNelsonPath"
+                    :summary="concernedOfficePaymentOrders"
                 />
 
                 <!-- 3. The viewer's own legitimate work -->
@@ -1026,7 +1057,7 @@ function submitPrepareAssessment(): void {
 
                 <!-- 4. The financial build-up -->
                 <section
-                    v-if="!officeWorkspace"
+                    v-if="!officeWorkspace && !isNelsonPath"
                     class="space-y-4"
                     aria-labelledby="build-up-heading"
                 >
@@ -1212,7 +1243,7 @@ function submitPrepareAssessment(): void {
 
                 <!-- 5. What is still open -->
                 <section
-                    v-if="!officeWorkspace"
+                    v-if="!officeWorkspace && !isNelsonPath"
                     :class="['rounded-xl border p-4', statusTone]"
                     aria-labelledby="open-work-heading"
                 >
@@ -1822,6 +1853,7 @@ function submitPrepareAssessment(): void {
                         <Button
                             class="mt-4 w-full"
                             :disabled="
+                                isNelsonPath ||
                                 !readiness?.ready ||
                                 currentAssessmentExists ||
                                 pendingAction !== null
@@ -1838,7 +1870,26 @@ function submitPrepareAssessment(): void {
                             }}
                         </Button>
                         <p
-                            v-if="!readiness?.ready"
+                            v-if="isNelsonPath"
+                            class="mt-2 text-xs text-muted-foreground"
+                        >
+                            <template
+                                v-if="
+                                    concernedOfficePaymentOrders.all_finalized
+                                "
+                            >
+                                Concerned-office Payment Orders are complete.
+                                Treasury LOB classification is the next stage
+                                before Assessment preparation.
+                            </template>
+                            <template v-else>
+                                Assessment preparation remains unavailable until
+                                every concerned office finalizes its Payment
+                                Order.
+                            </template>
+                        </p>
+                        <p
+                            v-else-if="!readiness?.ready"
                             class="mt-2 text-xs text-muted-foreground"
                         >
                             Available once the open municipal evaluations above

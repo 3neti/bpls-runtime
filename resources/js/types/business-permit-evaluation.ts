@@ -220,3 +220,36 @@ export type EvaluationCapabilities = {
     correct_lines_of_business: boolean;
     prepare_assessment: boolean;
 };
+
+export type ConcernedOfficePaymentOrderSummary = {
+    schema_version: 'bpls.concerned-office-payment-orders.v1';
+    status: 'finalized' | 'in_progress';
+    currency: 'PHP';
+    required_office_count: number;
+    finalized_office_count: number;
+    all_finalized: boolean;
+    offices: {
+        routing_work_id: number;
+        office_code: string;
+        office_label: string;
+        status: 'finalized' | 'awaiting_payment_order' | 'conflict';
+        payment_order_id: number | null;
+        sequence: number | null;
+        total_amount_cents: number | null;
+        line_total_amount_cents: number | null;
+        financially_reconciled: boolean;
+        issued_at: string | null;
+        issued_by: string | null;
+        lines: {
+            id: number;
+            code: string;
+            name: string;
+            amount_cents: number;
+        }[];
+    }[];
+    recorded_subtotal_amount_cents: number;
+    finalized_subtotal_amount_cents: number | null;
+    assessment_total_amount_cents: null;
+    assessment_total_status: 'deferred_until_treasury_lob_classification';
+    next_stage: 'treasury_lob_classification';
+};

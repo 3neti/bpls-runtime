@@ -13,6 +13,7 @@ class BuildLifecycleCleanroom
         private readonly ResolveLifecycleCleanroomState $resolveState,
         private readonly ApplicationDataResolver $applicationDataResolver,
         private readonly BuildExecutablePermitApplicationDocument $buildDocument,
+        private readonly BuildConcernedOfficePaymentOrderSummary $paymentOrderSummary,
     ) {}
 
     /** @return array<string, mixed> */
@@ -32,6 +33,10 @@ class BuildLifecycleCleanroom
             $activeState['application_document'] = $application instanceof PermitApplication
                 ? $this->buildDocument->handle($application)
                 : null;
+            $activeState['concerned_office_payment_orders'] = $application instanceof PermitApplication
+                && data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true
+                    ? $this->paymentOrderSummary->handle($application)
+                    : null;
             $schedule = $application?->paymentSchedules()->with(['xChangePayment', 'treasuryCollections.receipt'])->latest('sequence')->first();
             $activeState['payment_simulation'] = [
                 'available' => $schedule?->xChangePayment?->pay_code !== null && $schedule->treasuryCollections->isEmpty(),
