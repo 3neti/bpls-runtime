@@ -255,11 +255,19 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         ->and(json_encode($applicationData))->not->toContain('Illuminate\\Database\\Eloquent');
 
     $permitPdf = app(RenderPermitPdf::class)->handle($application->fresh());
+    expect($permitPdf)
+        ->toContain('GENERAL MERCHANDISE / RETAIL SALE OF LIQUOR / COFFEE SHOP')
+        ->not->toContain('NELSON-LOB-');
     foreach (range(7000001, 7000005) as $receiptNumber) {
         expect($permitPdf)->toContain((string) $receiptNumber);
     }
     $this->get($applicationData['permit']['verification']['url'])
         ->assertSuccessful()
         ->assertJsonPath('permit.permit_number', $issued->permit_number)
+        ->assertJsonPath('permit.lines_of_business', [
+            'General Merchandise',
+            'Retail Sale of Liquor',
+            'Coffee Shop',
+        ])
         ->assertJsonMissingPath('permit.official_receipts');
 });

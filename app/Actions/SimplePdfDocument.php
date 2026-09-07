@@ -58,8 +58,9 @@ final class SimplePdfDocument
         bool $bold = false,
         string $align = 'left',
         bool $monospace = false,
+        bool $italic = false,
     ): void {
-        $this->coloredText($page, $text, $x, $y, $size, $bold, $align, $monospace, 0.08, 0.08, 0.08);
+        $this->coloredText($page, $text, $x, $y, $size, $bold, $align, $monospace, 0.08, 0.08, 0.08, $italic);
     }
 
     public function coloredText(
@@ -74,8 +75,15 @@ final class SimplePdfDocument
         float $red,
         float $green,
         float $blue,
+        bool $italic = false,
     ): void {
-        $font = $monospace ? 'F3' : ($bold ? 'F2' : 'F1');
+        $font = match (true) {
+            $monospace => 'F3',
+            $bold && $italic => 'F5',
+            $italic => 'F4',
+            $bold => 'F2',
+            default => 'F1',
+        };
         $encoded = $this->encode($text);
         $position = match ($align) {
             'center' => $x - ($this->textWidth($text, $size, $monospace) / 2),
@@ -293,8 +301,10 @@ final class SimplePdfDocument
             3 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
             4 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
             5 => '<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>',
+            6 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>',
+            7 => '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique /Encoding /WinAnsiEncoding >>',
         ];
-        $nextObject = 6;
+        $nextObject = 8;
         $imageObjects = [];
         foreach ($this->jpegImages as $image) {
             $imageObject = $nextObject++;
@@ -317,7 +327,7 @@ final class SimplePdfDocument
             $xObjects = collect($imageObjects)
                 ->map(fn (int $object, string $name): string => "/{$name} {$object} 0 R")
                 ->implode(' ');
-            $resources = '<< /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >>'.($xObjects === '' ? '' : " /XObject << {$xObjects} >>").' >>';
+            $resources = '<< /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R /F5 7 0 R >>'.($xObjects === '' ? '' : " /XObject << {$xObjects} >>").' >>';
             $objects[$pageObject] = sprintf(
                 '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %d %d] /Resources %s /Contents %d 0 R >>',
                 self::PageWidth,

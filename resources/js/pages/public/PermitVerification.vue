@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
-import { BadgeCheck, FileText, Landmark, LockKeyhole } from '@lucide/vue';
+import {
+    ArrowLeft,
+    BadgeCheck,
+    FileText,
+    Landmark,
+    LockKeyhole,
+} from '@lucide/vue';
 import { computed } from 'vue';
 import { Badge } from '@/components/ui/badge';
 import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
@@ -99,6 +105,16 @@ function label(value: string): string {
 
     return labels[value] ?? value.replaceAll('_', ' ');
 }
+
+function goBack(): void {
+    if (window.history.length > 1) {
+        window.history.back();
+
+        return;
+    }
+
+    window.location.assign('/');
+}
 </script>
 
 <template>
@@ -110,6 +126,15 @@ function label(value: string): string {
         <div
             class="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8"
         >
+            <button
+                type="button"
+                data-testid="permit-verification-back"
+                class="flex w-fit items-center gap-2 text-sm font-semibold text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-white"
+                @click="goBack"
+            >
+                <ArrowLeft class="size-4" />
+                Back
+            </button>
             <header
                 class="flex flex-col gap-4 border-b border-zinc-200 pb-5 sm:flex-row sm:items-start sm:justify-between dark:border-zinc-800"
             >

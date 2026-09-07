@@ -1254,6 +1254,15 @@ test('public permit verification page renders the artifact authority boundary', 
         );
 });
 
+test('public permit verification page provides a safe back navigation control', function () {
+    $page = file_get_contents(resource_path('js/pages/public/PermitVerification.vue'));
+
+    expect($page)
+        ->toContain('data-testid="permit-verification-back"')
+        ->toContain('window.history.back()')
+        ->toContain("window.location.assign('/')");
+});
+
 test('public permit verification refuses mismatched references', function () {
     $application = permitDocumentFixture();
 

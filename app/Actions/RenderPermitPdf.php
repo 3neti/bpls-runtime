@@ -119,43 +119,38 @@ final class RenderPermitPdf
         $document->coloredText($page, Str::substr($year, 0, 2), 298, 488, 176, true, 'center', false, 0.78, 0.80, 0.87);
         $document->coloredText($page, Str::substr($year, 2, 2), 298, 315, 176, true, 'center', false, 0.93, 0.78, 0.79);
 
-        $document->coloredText($page, 'BUSINESS PERMIT', 298, 724, 29, true, 'center', false, 0.92, 0.03, 0.05);
-        $document->coloredRectangle($page, 54, 694, 487, 18, 0.92, 0.03, 0.05);
-        $document->coloredText($page, 'LABORATORY SPECIMEN - NOT FOR OFFICIAL USE', 298, 699, 9, true, 'center', false, 1, 1, 1);
+        $document->coloredText($page, 'BUSINESS PERMIT', 300, 722, 30, true, 'center', false, 0.12, 0.12, 0.12, true);
+        $document->coloredText($page, 'BUSINESS PERMIT', 298, 724, 30, true, 'center', false, 0.92, 0.03, 0.05, true);
+        $document->coloredText($page, 'LABORATORY SPECIMEN - NOT FOR OFFICIAL USE', 298, 701, 7.2, true, 'center', false, 0.68, 0.08, 0.10);
 
         $this->permitIdentityHeader($document, $page, $permit);
-        $document->text($page, 'This is to certify that permission is hereby granted to', 298, 627, 11, align: 'center');
+        $document->text($page, 'This is to certify that permission is hereby granted to', 298, 638, 11.5, align: 'center');
 
-        $y = 594.0;
-        $y = $this->permitFact($document, $page, 'Name of Business', Str::upper($permit->business_name), $y, 11.5, true);
-        $y = $this->permitFact($document, $page, 'Name of Owner/Operator', Str::upper($permit->owner_operator), $y, 10.5, true);
-        $y = $this->permitFact($document, $page, 'Business Address', Str::upper($permit->business_address ?? 'NOT RECORDED'), $y, 8.5);
+        $y = 601.0;
+        $y = $this->permitFact($document, $page, 'Name of Business', Str::upper($permit->business_name), $y, 12.5, true);
+        $y = $this->permitFact($document, $page, 'Name of Owner/Operator', Str::upper($permit->owner_operator), $y, 11.5, true);
+        $y = $this->permitFact($document, $page, 'Business Address', Str::upper($permit->business_address ?? 'NOT RECORDED'), $y, 9.2);
 
-        $linesOfBusiness = $permitApplication->lines
-            ->map(fn (PermitApplicationLine $line): string => Str::upper(
-                ($line->line_of_business_id === null ? 'N/A' : $line->lineOfBusiness->code)
-                .'- '.($line->line_of_business_id === null
-                    ? (string) data_get($line->metadata, 'line_of_business_name', 'UNRESOLVED')
-                    : $line->lineOfBusiness->name),
-            ))
-            ->implode(', ');
+        $linesOfBusiness = collect($permit->lines_of_business)
+            ->map(fn (string $lineOfBusiness): string => Str::upper($lineOfBusiness))
+            ->implode(' / ');
         $lineSize = match (true) {
             mb_strlen($linesOfBusiness) > 900 => 5.8,
             mb_strlen($linesOfBusiness) > 500 => 6.6,
             mb_strlen($linesOfBusiness) > 250 => 7.4,
-            default => 8.5,
+            default => 9.5,
         };
         $y = $this->permitFact($document, $page, 'Line of Business', $linesOfBusiness === '' ? 'NOT RECORDED' : $linesOfBusiness, $y, $lineSize);
 
         $y -= 8;
         $jurisdiction = 'To operate and conduct business within the jurisdiction of the Municipality of Ipil, Zamboanga Sibugay, subject to existing laws, ordinances, rules and regulations.';
-        $y = $document->wrappedText($page, $jurisdiction, 36, $y, 523, 8.8, 11);
+        $y = $document->wrappedText($page, $jurisdiction, 36, $y, 523, 9.2, 11.5);
         $y -= 8;
         $document->text($page, 'CONDITIONS', 36, $y, 10, true);
         $y -= 17;
         foreach ($permit->conditions as $index => $condition) {
-            $document->text($page, ($index + 1).'.', 53, $y, 7.8);
-            $nextY = $document->wrappedText($page, $condition, 72, $y, 474, 7.8, 9.5);
+            $document->text($page, ($index + 1).'.', 53, $y, 8.6);
+            $nextY = $document->wrappedText($page, $condition, 72, $y, 474, 8.6, 10.5);
             $y = $nextY - 3;
         }
 
@@ -167,32 +162,39 @@ final class RenderPermitPdf
                 $this->ordinal($issuedOn->day),
                 $issuedOn->format('F Y'),
             );
-        $document->text($page, $issuanceSentence, 298, max(242, $y - 5), 8.8, align: 'center');
+        $document->text($page, $issuanceSentence, 298, max(250, $y - 3), 9.2, align: 'center');
 
-        $document->coloredText($page, 'SYNTHETIC AUTHORIZATION REFERENCE - NO MAYORAL SIGNATURE APPLIED', 298, 222, 6.6, true, 'center', false, 0.68, 0.08, 0.10);
-        $document->text($page, 'HON. '.Str::upper($permit->issuing_authority['name'] ?? 'UNVERIFIED MUNICIPAL MAYOR'), 345, 202, 10, true, 'center');
-        $document->text($page, 'Municipal Mayor', 345, 190, 8.5, align: 'center');
-        $document->text($page, (string) ($permit->issuing_authority['signature_reference'] ?? 'Synthetic reference pending'), 345, 180, 5.8, align: 'center', monospace: true);
+        $document->coloredText($page, 'SYNTHETIC AUTHORIZATION REFERENCE - NO MAYORAL SIGNATURE APPLIED', 337, 229, 6.4, true, 'center', false, 0.68, 0.08, 0.10);
+        $document->text($page, 'HON. '.Str::upper($permit->issuing_authority['name'] ?? 'UNVERIFIED MUNICIPAL MAYOR'), 337, 210, 10.5, true, 'center');
+        $document->text($page, 'Municipal Mayor', 337, 197, 9, align: 'center');
+        $document->text($page, (string) ($permit->issuing_authority['signature_reference'] ?? 'Synthetic reference pending'), 337, 187, 5.8, align: 'center', monospace: true);
 
-        $receiptSummary = collect($permit->official_receipts)->map(fn (array $receipt): string => implode(' · ', array_filter([
+        $receiptLines = collect($permit->official_receipts)->map(fn (array $receipt): string => implode(' · ', array_filter([
             $receipt['receipt_number'],
             $receipt['series'],
             $this->money($receipt['amount_minor']),
-        ])))->join(' | ');
-        $receiptSize = mb_strlen($receiptSummary) > 100 ? 6.2 : 7.6;
-        $document->text($page, 'OFFICIAL RECEIPTS — OR. No.:', 128, 164, 7.5, true);
-        $document->wrappedText($page, $receiptSummary === '' ? 'NOT BOUND' : $receiptSummary, 225, 164, 330, $receiptSize, 8.5);
+        ])))->chunk(3)->map(fn ($receipts): string => $receipts->join(' | '));
+        $document->text($page, 'OFFICIAL RECEIPTS:', 128, 166, 7.5, true);
+        if ($receiptLines->isEmpty()) {
+            $document->text($page, 'NOT BOUND', 213, 166, 7.5, true);
+        } else {
+            $receiptY = 166.0;
+            foreach ($receiptLines as $receiptLine) {
+                $document->text($page, $receiptLine, 213, $receiptY, 6.1);
+                $receiptY -= 8;
+            }
+        }
 
         $this->verificationQr($document, $page, $permit->verification['view_url'], 43, 85, 68);
         $document->text($page, 'SCAN TO VERIFY IDENTITY', 77, 76, 6.5, true, 'center');
         $document->wrappedText(
             $page,
-            'NOTE: This specimen must be displayed only for laboratory review. It is invalid without complete Official Receipt coverage shown here. QR verification resolves this exact synthetic Permit identity only and does not expose receipt numbers or establish legal effect or production authority.',
+            'NOTE: This permit must be displayed in a conspicuous place within the establishment and must likewise be renewed after every end of the quarter/semester/year. This laboratory specimen is invalid without complete Official Receipt coverage. QR verification confirms identity only and does not establish legal effect.',
             128,
             137,
             335,
-            7.2,
-            9,
+            7,
+            8.4,
         );
         $document->text($page, 'Identity: '.$permit->verification['reference'].' | State: '.$this->label($permit->state), 128, 91, 6.2, true);
 
@@ -205,18 +207,18 @@ final class RenderPermitPdf
         BusinessPermitData $permit,
     ): void {
         $columns = [
-            ['x' => 114.0, 'label' => 'BUSINESS PERMIT NO.', 'value' => $permit->permit_number ?? 'NOT YET ISSUED'],
+            ['x' => 119.0, 'label' => 'BUSINESS PERMIT NO.', 'value' => $permit->permit_number ?? 'NOT YET ISSUED'],
             ['x' => 298.0, 'label' => 'DATE ISSUED', 'value' => $permit->issued_on === null ? 'PENDING' : Str::upper(Carbon::parse($permit->issued_on)->format('F d, Y'))],
-            ['x' => 480.0, 'label' => 'VALID UNTIL', 'value' => $permit->valid_until === null ? 'PENDING' : Carbon::parse($permit->valid_until)->format('F d, Y')],
+            ['x' => 477.0, 'label' => 'VALID UNTIL', 'value' => $permit->valid_until === null ? 'PENDING' : Carbon::parse($permit->valid_until)->format('F d, Y')],
         ];
 
         foreach ($columns as $column) {
-            $document->coloredRectangle($page, $column['x'] - 78, 661, 156, 17, 0.92, 0.03, 0.05);
-            $document->coloredText($page, $column['label'], $column['x'], 666, 8, true, 'center', false, 1, 1, 1);
-            $document->text($page, $column['value'], $column['x'], 644, 10.2, true, 'center');
+            $document->coloredRectangle($page, $column['x'] - 84, 676, 168, 18, 0.92, 0.03, 0.05);
+            $document->coloredText($page, $column['label'], $column['x'], 681, 8.5, true, 'center', false, 1, 1, 1);
+            $document->text($page, $column['value'], $column['x'], 658, 10.8, true, 'center');
         }
 
-        $document->coloredLine($page, 36, 637, 559, 637, 1.1, 0.92, 0.03, 0.05);
+        $document->coloredLine($page, 35, 649, 561, 649, 1.1, 0.92, 0.03, 0.05);
     }
 
     private function permitFact(
@@ -228,7 +230,7 @@ final class RenderPermitPdf
         float $size,
         bool $bold = false,
     ): float {
-        $document->text($page, $label, 181, $y, 8, align: 'right');
+        $document->text($page, $label, 181, $y, 9, align: 'right');
         $lines = $document->wrap($value, 365, $size);
         foreach ($lines as $line) {
             $document->text($page, $line, 188, $y, $size, $bold);

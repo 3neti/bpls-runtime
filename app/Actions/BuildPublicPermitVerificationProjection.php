@@ -21,6 +21,7 @@ class BuildPublicPermitVerificationProjection
             'business.owner',
             'declaration',
             'lines.lineOfBusiness',
+            'treasuryLineOfBusinessAssignments.lineOfBusiness',
             'provisionalUatPermitCompletion',
             'paymentSchedules.treasuryCollections.receipt',
         ]);
@@ -58,9 +59,11 @@ class BuildPublicPermitVerificationProjection
                 'released_on' => $completion?->released_at?->toDateString(),
                 'owner_operator' => $permitApplication->business->owner->name,
                 'business_address' => $this->permitBusinessAddress->handle($permitApplication),
-                'lines_of_business' => $permitApplication->lines->map(fn ($line): string => $line->line_of_business_id === null
-                    ? (string) data_get($line->metadata, 'line_of_business_name', 'Unresolved')
-                    : $line->lineOfBusiness->name)->values()->all(),
+                'lines_of_business' => ($permitApplication->treasuryLineOfBusinessAssignments->whereNull('removed_at')->isNotEmpty()
+                    ? $permitApplication->treasuryLineOfBusinessAssignments->whereNull('removed_at')->map(fn ($assignment): string => $assignment->lineOfBusiness->name)
+                    : $permitApplication->lines->map(fn ($line): string => $line->line_of_business_id === null
+                        ? (string) data_get($line->metadata, 'line_of_business_name', 'Unresolved')
+                        : $line->lineOfBusiness->name))->values()->all(),
                 'official_receipt_number' => data_get($receipt, 'receipt_number'),
                 'identity_scope' => 'exact_synthetic_permit_identity_only',
                 'production_authority' => false,
