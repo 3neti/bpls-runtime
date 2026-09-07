@@ -2048,7 +2048,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                     :checked="
                                         nested('undertaking.accepted') === true
                                     "
-                                    required
+                                    :required="!isNelsonApplication"
                                     class="mt-1"
                                 /><span
                                     ><strong>Oath of Undertaking:</strong> I

@@ -97,7 +97,7 @@ type BploRoutingTask = {
             name: string;
             items: { name: string; amount_cents: number }[];
         }[];
-        can_confirm_payment_orders: boolean;
+        authorized_payment_order_office_codes: string[];
         can_assign_treasury_lobs: boolean;
     };
     can_determine: boolean;
@@ -492,7 +492,9 @@ const treasurySelectionsReady = computed(
                     </div>
                     <div
                         v-else-if="
-                            task.financial_editor.can_confirm_payment_orders
+                            task.financial_editor.authorized_payment_order_office_codes.includes(
+                                work.office_code,
+                            )
                         "
                         class="mt-4 grid gap-3 border-t pt-4"
                     >
@@ -527,7 +529,7 @@ const treasurySelectionsReady = computed(
                                 )
                             "
                             @click="confirmPaymentOrder(work)"
-                            >Confirm Payment Order</Button
+                            >Sign & Confirm Payment Order</Button
                         >
                     </div>
                 </article>

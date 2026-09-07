@@ -632,11 +632,9 @@ function simulateRemainingOfficeReviews(): void {
                             Concerned-office determination
                         </h2>
                         <p class="mt-1 text-sm leading-6 text-muted-foreground">
-                            Offices record Confirm, Override, or Not Applicable.
-                            Only completed amount-bearing determinations can
-                            proceed toward the provisional Assessment. The
-                            Assessment Officer returns after every concerned
-                            office has finished.
+                            Select a fee, review its default amount, optionally
+                            edit it, then Add Item and Sign &amp; Confirm
+                            Payment Order.
                         </p>
                     </div>
                     <div class="flex flex-col gap-2 sm:items-end">

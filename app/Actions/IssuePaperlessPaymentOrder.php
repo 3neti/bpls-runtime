@@ -16,6 +16,8 @@ use LogicException;
 
 class IssuePaperlessPaymentOrder
 {
+    public function __construct(private readonly AuthorizeRoutedOfficeActor $authorizeRoutedOfficeActor) {}
+
     public function handle(
         BusinessPermitEvaluationItem $item,
         BusinessPermitEvaluationItemRevision $revision,
@@ -35,6 +37,13 @@ class IssuePaperlessPaymentOrder
                 || $routingWork->office_code !== $item->responsible_party) {
                 throw new LogicException('Paperless Payment Order provenance does not match the BPLO-selected office and Application.');
             }
+            $authorizedActorId = data_get($item->metadata, 'authorized_actor_id');
+            $this->authorizeRoutedOfficeActor->handle(
+                $application,
+                $routingWork->office_code,
+                $issuingActor,
+                is_int($authorizedActorId) ? $authorizedActorId : null,
+            );
 
             if ($revision->business_permit_evaluation_item_id !== $item->id
                 || $item->item_type !== BusinessPermitEvaluationItemType::Charge

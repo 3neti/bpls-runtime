@@ -53,7 +53,8 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         UserPermission::IssueReceipts,
     ];
     $bplo = userWithPermissions($staffPermissions, UserRole::Bplo);
-    $office = User::factory()->for($bplo->role)->create();
+    $engineering = User::factory()->for($bplo->role)->create();
+    $health = User::factory()->for($bplo->role)->create();
     $assessor = User::factory()->for($bplo->role)->create();
     $treasurer = User::factory()->for($bplo->role)->create();
     $cashier = User::factory()->for($bplo->role)->create();
@@ -62,8 +63,8 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
     $run = LifecycleCleanroomRun::factory()->for($bplo, 'startedBy')->create([
         'actor_manifest' => [
             'actors' => [
-                'engineering' => ['label' => 'Engineering', 'user_id' => $office->id, 'role_id' => $office->role_id],
-                'health' => ['label' => 'Health', 'user_id' => $office->id, 'role_id' => $office->role_id],
+                'engineering' => ['label' => 'Engineering', 'user_id' => $engineering->id, 'role_id' => $engineering->role_id],
+                'health' => ['label' => 'Health', 'user_id' => $health->id, 'role_id' => $health->role_id],
                 'permit_issuer' => ['label' => 'Mayor\'s Office', 'user_id' => $permitIssuer->id, 'role_id' => $permitIssuer->role_id],
                 'releasing_officer' => ['label' => 'Releasing Officer', 'user_id' => $releasingOfficer->id, 'role_id' => $releasingOfficer->role_id],
             ],
@@ -161,7 +162,7 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         app(ConfirmOfficePaymentOrder::class)->handle($work, [[
             'fee_rule_id' => $fee->id,
             'amount_cents' => $fee->amount_cents + ($officeIndex === 0 ? 100 : 0),
-        ]], $office, UploadedFile::fake()->image("{$work->office_code}-signature.png"));
+        ]], User::query()->findOrFail(data_get($run->actor_manifest, 'actors.'.$work->office_code.'.user_id')), UploadedFile::fake()->image("{$work->office_code}-signature.png"));
     }
     $editedOfficeLine = $application->paperlessPaymentOrders()->with('lines')->oldest('id')->firstOrFail()->lines->sole();
     expect(data_get($editedOfficeLine->source_snapshot, 'variance_minor'))->toBe(100)
@@ -237,7 +238,10 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
 
     $certifications = app(CommissionPostPaymentOfficeCertifications::class)->handle($application->fresh());
     foreach ($certifications as $certification) {
-        app(RecordPostPaymentOfficeCertification::class)->handle($certification, $office);
+        app(RecordPostPaymentOfficeCertification::class)->handle(
+            $certification,
+            User::query()->findOrFail(data_get($run->actor_manifest, 'actors.'.$certification->office_code.'.user_id')),
+        );
     }
     expect(app(ProjectPermitReadiness::class)->handle($application->fresh())['ready'])->toBeTrue();
     $issued = app(IssueSyntheticLifecyclePermit::class)->handle($application->fresh(), $permitIssuer);

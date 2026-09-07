@@ -19,6 +19,7 @@ class ConfirmOfficePaymentOrder
     public function __construct(
         private readonly CaptureSignatureEvidence $captureSignatureEvidence,
         private readonly ConcernedOfficeReference $concernedOffices,
+        private readonly AuthorizeRoutedOfficeActor $authorizeRoutedOfficeActor,
     ) {}
 
     /**
@@ -29,6 +30,13 @@ class ConfirmOfficePaymentOrder
         return DB::transaction(function () use ($work, $items, $actor, $signatureFacsimile): PaperlessPaymentOrder {
             $work = BploRoutingWork::query()->with('determination.permitApplication')->lockForUpdate()->findOrFail($work->id);
             $application = $work->determination->permitApplication;
+            $explicitlyAuthorizedActorId = data_get($work->context_snapshot, 'authorized_actor_id');
+            $this->authorizeRoutedOfficeActor->handle(
+                $application,
+                $work->office_code,
+                $actor,
+                is_int($explicitlyAuthorizedActorId) ? $explicitlyAuthorizedActorId : null,
+            );
             if (! $actor->can(UserPermission::ContributeBusinessPermitEvaluations->value)) {
                 throw new LogicException('Only an authorized concerned-office actor may confirm a Payment Order.');
             }
@@ -139,7 +147,13 @@ class ConfirmOfficePaymentOrder
                 throw new LogicException('Payment Order subtotal must equal its financial lines.');
             }
 
-            $this->captureSignatureEvidence->handle($order, $actor, 'concerned_office_payment_order_confirmation', $signatureFacsimile);
+            $this->captureSignatureEvidence->handle(
+                $order,
+                $actor,
+                'concerned_office_payment_order_confirmation',
+                $signatureFacsimile,
+                $work->office_code,
+            );
 
             return $order->load(['lines', 'issuedBy']);
         });

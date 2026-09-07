@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Models\PaperlessPaymentOrder;
 use App\Models\SignatureEvidence;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -12,8 +13,34 @@ use Throwable;
 
 class CaptureSignatureEvidence
 {
-    public function handle(Model $signable, User $signer, string $purpose, UploadedFile $facsimile): SignatureEvidence
-    {
+    public function __construct(private readonly AuthorizeRoutedOfficeActor $authorizeRoutedOfficeActor) {}
+
+    public function handle(
+        Model $signable,
+        User $signer,
+        string $purpose,
+        UploadedFile $facsimile,
+        ?string $officeCode = null,
+    ): SignatureEvidence {
+        if ($signable instanceof PaperlessPaymentOrder) {
+            if ($officeCode === null) {
+                throw new RuntimeException('Payment Order signature evidence requires its exact office.');
+            }
+            $signable->loadMissing(['routingWork', 'permitApplication']);
+            if ($signable->routingWork->office_code !== $officeCode) {
+                throw new RuntimeException('Signature evidence office must match the Payment Order office.');
+            }
+            $authorizedActorId = data_get($signable->routingWork->context_snapshot, 'authorized_actor_id');
+            $this->authorizeRoutedOfficeActor->handle(
+                $signable->permitApplication,
+                $officeCode,
+                $signer,
+                is_int($authorizedActorId) ? $authorizedActorId : null,
+            );
+        } elseif ($officeCode !== null) {
+            throw new RuntimeException('Office-bound signature evidence requires a Payment Order signable.');
+        }
+
         $checksum = hash_file('sha256', $facsimile->getRealPath());
         if (! is_string($checksum)) {
             throw new RuntimeException('Unable to checksum the captured signature facsimile.');
@@ -25,13 +52,14 @@ class CaptureSignatureEvidence
             $signable->getKey(),
             $signer->id,
             $purpose,
+            $officeCode ?? 'not_office_bound',
             $capturedAt->toIso8601String(),
             $checksum,
         ]));
 
         $evidence = null;
         try {
-            return DB::transaction(function () use ($signable, $signer, $purpose, $facsimile, $checksum, $capturedAt, $digest, &$evidence): SignatureEvidence {
+            return DB::transaction(function () use ($signable, $signer, $purpose, $facsimile, $checksum, $capturedAt, $digest, $officeCode, &$evidence): SignatureEvidence {
                 $evidence = SignatureEvidence::query()->create([
                     'signer_id' => $signer->id,
                     'signable_type' => $signable->getMorphClass(),
@@ -45,6 +73,7 @@ class CaptureSignatureEvidence
                         'signable_id' => $signable->getKey(),
                         'signer_id' => $signer->id,
                         'purpose' => $purpose,
+                        'office_code' => $officeCode,
                         'captured_at' => $capturedAt->toIso8601String(),
                         'method' => 'captured_facsimile',
                         'facsimile_checksum_sha256' => $checksum,

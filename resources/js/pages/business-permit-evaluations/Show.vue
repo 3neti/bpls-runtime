@@ -1476,15 +1476,20 @@ function submitPrepareAssessment(): void {
                                 id="declaration-heading"
                                 class="mt-1 text-lg font-semibold"
                             >
-                                Applicant declaration and municipal
-                                determination
+                                {{
+                                    isNelsonPath
+                                        ? 'Applicant description and Treasury classification'
+                                        : 'Applicant declaration and municipal determination'
+                                }}
                             </h2>
                             <p
                                 class="mt-1 text-sm leading-6 text-muted-foreground"
                             >
-                                The original declaration remains visible when
-                                the Municipality records a correction or
-                                additional activity.
+                                {{
+                                    isNelsonPath
+                                        ? 'The applicant description remains frozen while Treasury assigns the official classifications.'
+                                        : 'The original declaration remains visible when the Municipality records a correction or additional activity.'
+                                }}
                             </p>
                         </div>
                         <Badge
@@ -1502,7 +1507,55 @@ function submitPrepareAssessment(): void {
                         </Badge>
                     </div>
 
-                    <div class="mt-5 grid gap-4 md:grid-cols-2">
+                    <div
+                        v-if="isNelsonPath"
+                        class="mt-5 grid gap-4 md:grid-cols-2"
+                    >
+                        <div class="rounded-xl border bg-muted/20 p-4">
+                            <h3 class="font-semibold">
+                                Applicant’s frozen business description
+                            </h3>
+                            <p class="mt-3 text-sm leading-6">
+                                {{
+                                    routingTask?.application
+                                        .business_activity_description ??
+                                    'Not recorded'
+                                }}
+                            </p>
+                        </div>
+                        <div
+                            class="rounded-xl border border-primary/30 bg-primary/5 p-4"
+                        >
+                            <h3 class="font-semibold">
+                                Treasury Classification / Assigned Lines of
+                                Business
+                            </h3>
+                            <ul
+                                v-if="
+                                    routingTask?.financial_editor
+                                        .treasury_assignments.length
+                                "
+                                class="mt-3 grid gap-2"
+                            >
+                                <li
+                                    v-for="assignment in routingTask
+                                        .financial_editor.treasury_assignments"
+                                    :key="assignment.id"
+                                    class="rounded-lg bg-background p-3 font-medium"
+                                >
+                                    {{ assignment.name }}
+                                </li>
+                            </ul>
+                            <p
+                                v-else
+                                class="mt-3 text-sm text-muted-foreground"
+                            >
+                                Treasury classification pending.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div v-else class="mt-5 grid gap-4 md:grid-cols-2">
                         <div class="rounded-xl border bg-muted/20 p-4">
                             <div class="flex items-center gap-2">
                                 <UserRound
@@ -1588,6 +1641,7 @@ function submitPrepareAssessment(): void {
 
                     <form
                         v-if="
+                            !isNelsonPath &&
                             can.correct_lines_of_business &&
                             !evaluation.financial_lock
                         "

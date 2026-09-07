@@ -97,6 +97,20 @@ test('Payment Order editor identifies preview provenance and explains an empty f
         ->and($editor)->toContain('Nelson schedule.');
 });
 
+test('Nelson presentation separates applicant description from Treasury classification', function () {
+    $evaluation = file_get_contents(resource_path('js/pages/business-permit-evaluations/Show.vue'));
+    $paymentOrders = file_get_contents(resource_path('js/components/permit-applications/BploRoutingTaskSheet.vue'));
+    $handoff = file_get_contents(resource_path('js/pages/stakeholder-preview/OfficeReviewsAssigned.vue'));
+
+    expect($evaluation)
+        ->toContain('Applicant’s frozen business description')
+        ->toContain('Treasury Classification / Assigned Lines of')
+        ->toContain('v-if="isNelsonPath"')
+        ->and($paymentOrders)->toContain('Sign & Confirm Payment Order')
+        ->and($handoff)->toContain('Select a fee, review its default amount, optionally')
+        ->not->toContain('Confirm, Override, or Not Applicable');
+});
+
 test('Nelson evaluation excludes the historical automatic Inspection charge path', function () {
     $application = PermitApplication::factory()->create([
         'type' => PermitApplicationType::New,

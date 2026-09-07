@@ -2,10 +2,12 @@
 
 use App\Actions\AdvanceLifecycleCleanroom;
 use App\Actions\AssignTreasuryLinesOfBusiness;
+use App\Actions\BuildBploRoutingTask;
 use App\Actions\BuildExecutablePermitApplicationDocument;
 use App\Actions\BuildLaboratoryAssessmentReconciliation;
 use App\Actions\BuildLifecycleCleanroom;
 use App\Actions\BuildLifecycleCleanroomIntake;
+use App\Actions\CaptureSignatureEvidence;
 use App\Actions\CommissionPostPaymentOfficeCertifications;
 use App\Actions\CompleteBusinessPermitEvaluationResponsibility;
 use App\Actions\ConfirmOfficePaymentOrder;
@@ -316,7 +318,7 @@ test('interactive Nelson ceremony drafts before documents and signed lodging', f
         ...$intake,
         'type' => 'new',
         'lifecycle_cleanroom_run_id' => $run->public_id,
-        'undertaking_accepted' => '1',
+        'undertaking_accepted' => null,
         'application_documents' => [[
             'document_type' => 'dti_registration',
             'file' => UploadedFile::fake()->create('dti.pdf', 24, 'application/pdf'),
@@ -327,6 +329,7 @@ test('interactive Nelson ceremony drafts before documents and signed lodging', f
     $application = PermitApplication::query()->findOrFail($run->fresh()->new_application_id);
     expect($application->status->value)->toBe('draft')
         ->and($application->submitted_at)->toBeNull()
+        ->and(data_get($application->metadata, 'applicant_declaration_draft.undertaking.accepted'))->toBeFalse()
         ->and($application->lines)->toBeEmpty()
         ->and($application->business_activity_description)->toBe($intake['business_activity_description'])
         ->and($application->business->barangay_psgc_code)->toBe('0908305023')
@@ -346,9 +349,14 @@ test('interactive Nelson ceremony drafts before documents and signed lodging', f
     $this->put(route('citizen.permit-applications.update', $application), [
         ...$intake,
         'type' => 'new',
+        'undertaking_accepted' => null,
         'draft_version' => $application->fresh()->updated_at->toIso8601String(),
     ])->assertSessionHasNoErrors()
         ->assertRedirect(route('citizen.permit-applications.edit', $application));
+
+    $this->post(route('citizen.permit-applications.submit', $application))
+        ->assertSessionHasErrors(['undertaking_accepted', 'signature_facsimile']);
+    expect($application->fresh()->submitted_at)->toBeNull();
 
     $this->post(route('citizen.permit-applications.submit', $application), [
         'undertaking_accepted' => '1',
@@ -887,6 +895,44 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
             ->where('handoff.summary.responsibility_count', 0)
             ->where('handoff.offices.0.status', 'Not started'));
 
+    $works = $application->fresh()->bploRoutingDetermination->works->keyBy('office_code');
+    $engineeringWork = $works->get('engineering');
+    $healthWork = $works->get('health');
+    $engineeringActor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.engineering.user_id'));
+    $healthActor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.health.user_id'));
+    $unroutedHealthActor = User::factory()->for($healthActor->role)->create();
+    $healthFee = FeeRule::query()
+        ->where('metadata->responsible_office_code', 'health')
+        ->where('metadata->application_year', $application->application_year)
+        ->firstOrFail();
+    $healthItems = [['fee_rule_id' => $healthFee->id, 'amount_cents' => $healthFee->amount_cents]];
+
+    expect(fn () => app(ConfirmOfficePaymentOrder::class)->handle(
+        $healthWork,
+        $healthItems,
+        $engineeringActor,
+        UploadedFile::fake()->image('engineering-health-exploit.png'),
+    ))->toThrow(LogicException::class, 'authorized routed [health] office actor')
+        ->and(fn () => app(ConfirmOfficePaymentOrder::class)->handle(
+            $healthWork,
+            $healthItems,
+            $management,
+            UploadedFile::fake()->image('management-health-exploit.png'),
+        ))->toThrow(LogicException::class, 'authorized routed [health] office actor')
+        ->and(fn () => app(ConfirmOfficePaymentOrder::class)->handle(
+            $healthWork,
+            $healthItems,
+            $unroutedHealthActor,
+            UploadedFile::fake()->image('unrouted-health-exploit.png'),
+        ))->toThrow(LogicException::class, 'authorized routed [health] office actor')
+        ->and($application->paperlessPaymentOrders()->count())->toBe(0)
+        ->and(SignatureEvidence::query()->where('purpose', 'concerned_office_payment_order_confirmation')->count())->toBe(0);
+
+    $engineeringTask = app(BuildBploRoutingTask::class)->handle($application->fresh(), $engineeringActor)->toArray();
+    $managementTask = app(BuildBploRoutingTask::class)->handle($application->fresh(), $management)->toArray();
+    expect(data_get($engineeringTask, 'financial_editor.authorized_payment_order_office_codes'))->toBe(['engineering'])
+        ->and(data_get($managementTask, 'financial_editor.authorized_payment_order_office_codes'))->toBe([]);
+
     foreach ($application->fresh()->bploRoutingDetermination->works as $work) {
         $fees = FeeRule::query()
             ->where('metadata->responsible_office_code', $work->office_code)
@@ -903,6 +949,31 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
             UploadedFile::fake()->image($work->office_code.'-payment-order-signature.png'),
         );
     }
+
+    $engineeringOrder = $engineeringWork->paymentOrders()->sole();
+    expect($engineeringOrder->issued_by_id)->toBe($engineeringActor->id)
+        ->and($healthWork->paymentOrders()->sole()->issued_by_id)->toBe($healthActor->id)
+        ->and(data_get(
+            SignatureEvidence::query()
+                ->where('signable_type', $engineeringOrder->getMorphClass())
+                ->where('signable_id', $engineeringOrder->id)
+                ->sole()->source_snapshot,
+            'office_code',
+        ))->toBe('engineering')
+        ->and(fn () => app(CaptureSignatureEvidence::class)->handle(
+            $engineeringOrder,
+            $engineeringActor,
+            'concerned_office_payment_order_confirmation',
+            UploadedFile::fake()->image('cross-office-signature.png'),
+            'health',
+        ))->toThrow(RuntimeException::class, 'Signature evidence office must match')
+        ->and(fn () => app(CaptureSignatureEvidence::class)->handle(
+            $engineeringOrder,
+            $healthActor,
+            'concerned_office_payment_order_confirmation',
+            UploadedFile::fake()->image('cross-office-signer.png'),
+            'engineering',
+        ))->toThrow(LogicException::class, 'authorized routed [engineering] office actor');
 
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     $cleanroom = app(BuildLifecycleCleanroom::class)->handle($management);
@@ -1051,6 +1122,11 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         ->and(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))->toBe('post_payment_certifications_commissioned');
 
     app(AdvanceLifecycleCleanroom::class)->handle($run->fresh());
+    $healthCertification = $application->fresh()->postPaymentOfficeCertifications->firstWhere('office_code', 'health');
+    expect(fn () => app(RecordPostPaymentOfficeCertification::class)->handle(
+        $healthCertification,
+        $engineeringActor,
+    ))->toThrow(LogicException::class, 'authorized routed [health] office actor');
     foreach ($application->fresh()->postPaymentOfficeCertifications as $certification) {
         app(RecordPostPaymentOfficeCertification::class)->handle(
             $certification,
@@ -1059,10 +1135,12 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     }
     expect(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))->toBe('permit_issued');
 
-    app(IssueSyntheticLifecyclePermit::class)->handle(
+    $issuedPermit = app(IssueSyntheticLifecyclePermit::class)->handle(
         $application->fresh(),
         User::query()->findOrFail(data_get($run->actor_manifest, 'actors.permit_issuer.user_id')),
     );
+    expect($issuedPermit->issued_at)->not->toBeNull()
+        ->and($issuedPermit->released_at)->toBeNull();
     app(ReleaseSyntheticLifecyclePermit::class)->handle(
         $application->fresh(),
         User::query()->findOrFail(data_get($run->actor_manifest, 'actors.releasing_officer.user_id')),
@@ -1072,11 +1150,22 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     $finalData = app(ApplicationDataResolver::class)->resolve($application->fresh(), $management)->toArray();
     $finalDocument = app(BuildExecutablePermitApplicationDocument::class)->handle($application->fresh(), $cashier);
     $applicationFormPdf = app(RenderApplicationFormPdf::class)->handle($application->fresh());
+    $parityTotals = [
+        data_get($finalData, 'schedule_of_payment.grand_total_minor'),
+        data_get($finalData, 'schedule_of_payment.price_report_total_minor'),
+        $assessment->total_amount_cents,
+        $schedule->total_amount_cents,
+        $collection->amount_cents,
+        data_get($finalData, 'payment.reconciliation.total_receipted_cents'),
+    ];
     expect(data_get($finalState, 'progress.complete'))->toBeTrue()
         ->and(data_get($finalState, 'progress.completed_steps'))->toBe(24)
+        ->and($parityTotals)->each->toBe($assessment->total_amount_cents)
         ->and(data_get($finalData, 'official_receipts'))->toHaveCount(7)
         ->and(data_get($finalData, 'permit.official_receipts'))->toHaveCount(7)
         ->and(data_get($finalData, 'permit.official_receipt_bound'))->toBeTrue()
+        ->and(data_get($finalData, 'permit.issued'))->toBeTrue()
+        ->and(data_get($finalData, 'permit.released'))->toBeTrue()
         ->and(collect(data_get($finalData, 'official_receipts'))->sum('total_amount_minor'))->toBe($collection->amount_cents)
         ->and(data_get($finalData, 'payment.reconciliation.integration'))->toBe('x_change')
         ->and(data_get($finalData, 'payment.reconciliation.provider'))->toBe('netbank')
@@ -1102,6 +1191,9 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     foreach (range(7_100_001, 7_100_007) as $receiptNumber) {
         expect($applicationFormPdf)->toContain((string) $receiptNumber);
     }
+    $this->get(data_get($finalData, 'permit.verification.url'))
+        ->assertSuccessful()
+        ->assertJsonPath('permit.permit_number', $issuedPermit->permit_number);
 });
 
 test('failed one action lodging rolls back the draft and retains the cleanroom intake', function () {

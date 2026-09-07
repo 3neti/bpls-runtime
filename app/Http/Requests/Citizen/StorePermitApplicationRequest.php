@@ -49,6 +49,7 @@ class StorePermitApplicationRequest extends PermitApplicationIntakeRequest
             $rules['business_activity_description'] = ['required', 'string', 'max:4000'];
             $rules['business_barangay_psgc_code'] = ['required', 'string', Rule::in($barangayCodes)];
             $rules['lines'] = ['prohibited'];
+            $rules['undertaking_accepted'] = ['nullable', 'boolean'];
         } elseif ($cleanroom !== null) {
             $rules['lines.*.line_of_business_id'] = [
                 'required',

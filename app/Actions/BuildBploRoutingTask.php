@@ -19,6 +19,7 @@ class BuildBploRoutingTask
     public function __construct(
         private readonly ConcernedOfficeReference $concernedOffices,
         private readonly BuildConcernedOfficePaymentOrderSummary $paymentOrderSummary,
+        private readonly AuthorizeRoutedOfficeActor $authorizeRoutedOfficeActor,
     ) {}
 
     public function handle(PermitApplication $permitApplication, ?User $viewer): BploRoutingTaskData
@@ -160,7 +161,21 @@ class BuildBploRoutingTask
                 'name' => $assignment->lineOfBusiness->name,
                 'items' => $assignment->items->map(fn (TreasuryLineItem $item): array => ['name' => $item->name, 'amount_cents' => $item->determined_amount_cents])->all(),
             ])->values()->all(),
-            'can_confirm_payment_orders' => $viewer?->can(UserPermission::ContributeBusinessPermitEvaluations->value) ?? false,
+            'authorized_payment_order_office_codes' => $viewer === null
+                || ! $viewer->can(UserPermission::ContributeBusinessPermitEvaluations->value)
+                ? []
+                : $application->bploRoutingDetermination?->works
+                    ->filter(function ($work) use ($application, $viewer): bool {
+                        $authorizedActorId = data_get($work->context_snapshot, 'authorized_actor_id');
+
+                        return $this->authorizeRoutedOfficeActor->allows(
+                            $application,
+                            $work->office_code,
+                            $viewer,
+                            is_int($authorizedActorId) ? $authorizedActorId : null,
+                        );
+                    })
+                    ->pluck('office_code')->unique()->values()->all() ?? [],
             'can_assign_treasury_lobs' => $viewer?->can(UserPermission::CorrectEvaluationLinesOfBusiness->value) ?? false,
         ];
     }
