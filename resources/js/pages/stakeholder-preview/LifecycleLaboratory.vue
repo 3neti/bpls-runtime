@@ -97,7 +97,12 @@ type CleanroomActor = {
 };
 
 type CleanroomState = {
-    run: { id: number; public_id: string; status: string };
+    run: {
+        id: number;
+        public_id: string;
+        ceremony: string;
+        status: string;
+    };
     progress: {
         completed_steps: number;
         total_steps: number;
@@ -106,7 +111,10 @@ type CleanroomState = {
         blocked: boolean;
         blocker: string | null;
         profile_kind:
-            'pending_intake' | 'certified_two_year' | 'registry_source_replay';
+            | 'pending_intake'
+            | 'certified_two_year'
+            | 'registry_source_replay'
+            | 'nelson_reconciliation_v1';
         profile_statement: string | null;
         completion_message: string;
         next_step: CleanroomStep | null;
@@ -168,6 +176,9 @@ const selectedCleanroomMilestone = ref(
 );
 const currentApplicationData = computed(
     () => props.cleanroom.active?.application_data ?? null,
+);
+const isNelsonCleanroom = computed(
+    () => props.cleanroom.active?.run.ceremony === 'nelson_reconciliation_v1',
 );
 const nextCleanroomActor = computed(
     () => props.cleanroom.active?.actors.find((actor) => actor.is_next) ?? null,
@@ -843,9 +854,15 @@ function simulateQrPhPayment(): void {
                         >
                             <strong class="text-zinc-900 dark:text-white"
                                 >Financial destination</strong
-                            ><br />Retail Trading ₱330 + Food Service ₱540 +
-                            governed Business Inspection Fee ₱350 = ₱1,220 per
-                            year.
+                            ><template v-if="isNelsonCleanroom"
+                                ><br />Office Payment Orders and later Treasury
+                                LOB components will determine the total. No
+                                amount is preloaded here.</template
+                            ><template v-else
+                                ><br />Retail Trading ₱330 + Food Service ₱540 +
+                                governed Business Inspection Fee ₱350 = ₱1,220
+                                per year.</template
+                            >
                         </div>
                         <button
                             type="button"

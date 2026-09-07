@@ -247,12 +247,14 @@ class ResolveLifecycleCleanroomState
         return match ($baseKey) {
             'citizen_intake', 'application_submitted', 'lodged' => $application?->submitted_at !== null,
             'bplo_routing' => $application?->bploRoutingDetermination !== null,
-            'evaluation_initialized' => $projection !== null
-                && $this->responsibilityItems($projection, $profile)->count() === $this->expectedResponsibilities($profile)->count(),
-            'assessor_responsibilities' => $this->officeResolved($projection, $profile, 'assessor'),
-            'engineering_responsibility' => $this->officeResolved($projection, $profile, 'engineering'),
-            'health_responsibilities' => $this->officeResolved($projection, $profile, 'health'),
-            'menro_responsibility' => $this->officeResolved($projection, $profile, 'menro'),
+            'evaluation_initialized' => ($profile['kind'] ?? null) === LifecycleCleanroomRun::CeremonyNelsonReconciliationV1
+                ? $projection !== null && $routedOfficeCount > 0
+                : $projection !== null
+                    && $this->responsibilityItems($projection, $profile)->count() === $this->expectedResponsibilities($profile)->count(),
+            'assessor_responsibilities' => $this->officeResolved($application, $projection, $profile, 'assessor'),
+            'engineering_responsibility' => $this->officeResolved($application, $projection, $profile, 'engineering'),
+            'health_responsibilities' => $this->officeResolved($application, $projection, $profile, 'health'),
+            'menro_responsibility' => $this->officeResolved($application, $projection, $profile, 'menro'),
             'assessment_prepared' => $application?->assessments->whereNull('superseded_at')->isNotEmpty() ?? false,
             'treasury_counter_check' => $application?->assessments->whereNull('superseded_at')->first()?->treasuryCounterCheck !== null,
             'treasurer_approved' => $application?->assessments->whereNull('superseded_at')->first()?->decision?->action === AssessmentDecisionAction::Approved,
@@ -284,8 +286,20 @@ class ResolveLifecycleCleanroomState
      * @param  array<string, mixed>|null  $projection
      * @param  array<string, mixed>|null  $profile
      */
-    private function officeResolved(?array $projection, ?array $profile, string $office): bool
+    private function officeResolved(?PermitApplication $application, ?array $projection, ?array $profile, string $office): bool
     {
+        if (($profile['kind'] ?? null) === LifecycleCleanroomRun::CeremonyNelsonReconciliationV1) {
+            $works = $application?->bploRoutingDetermination?->works
+                ->where('office_code', $office);
+
+            return $works?->isEmpty() === true
+                || ($works?->isNotEmpty() === true
+                    && $works->every(fn ($work): bool => $work->paymentOrders()
+                        ->where('status', 'issued')
+                        ->whereNull('superseded_at')
+                        ->exists()));
+        }
+
         $expected = $this->expectedResponsibilities($profile)->where('department', $office)->count();
         $items = $this->responsibilityItems($projection, $profile)->where('responsible_party', $office);
 
@@ -413,16 +427,18 @@ class ResolveLifecycleCleanroomState
 
         return match ($baseKey) {
             'cleanroom_started' => ['Cleanroom actors' => '0 → 9'],
-            'citizen_intake' => ($application?->metadata['ceremony'] ?? null) === LifecycleCleanroomRun::CeremonyNelsonReconciliationV1
+            'citizen_intake' => ($profile['kind'] ?? null) === LifecycleCleanroomRun::CeremonyNelsonReconciliationV1
                 ? ['Municipal Owners' => '0 → 1', 'Businesses' => '0 → 1', 'Application' => 'None → Draft → Lodged', 'Applicant LOB declarations' => '0 → 0', 'Document manifest' => 'Mutable → Frozen at lodging']
                 : ['Municipal Owners' => '0 → 1', 'Businesses' => '0 → 1', 'Application' => 'None → Lodged', 'Business activities' => '0 → '.($application?->lines->count() ?? 2)],
             'application_submitted', 'lodged' => ['Application' => 'Draft → Lodged'],
             'bplo_routing' => ['BPLO routing determination' => 'Pending → Recorded', 'Concerned offices' => '0 → BPLO selected'],
-            'evaluation_initialized' => ['Concerned offices' => '0 → '.$responsibilities->pluck('department')->unique()->count(), 'Responsibilities' => '0 → '.$responsibilities->count()],
-            'assessor_responsibilities' => ['Assessor contributions' => '₱0 → '.$this->pesos((int) $responsibilities->where('department', 'assessor')->sum('amount_cents'))],
-            'engineering_responsibility' => ['Engineering contributions' => '₱0 → '.$this->pesos((int) $responsibilities->where('department', 'engineering')->sum('amount_cents'))],
-            'health_responsibilities' => ['Health contributions' => '₱0 → '.$this->pesos((int) $responsibilities->where('department', 'health')->sum('amount_cents'))],
-            'menro_responsibility' => ['MENRO contributions' => '₱0 → '.$this->pesos((int) $responsibilities->where('department', 'menro')->sum('amount_cents'))],
+            'evaluation_initialized' => ($profile['kind'] ?? null) === LifecycleCleanroomRun::CeremonyNelsonReconciliationV1
+                ? ['Concerned offices' => 'BPLO routing → Payment Order work assigned', 'Amounts' => 'Not invented']
+                : ['Concerned offices' => '0 → '.$responsibilities->pluck('department')->unique()->count(), 'Responsibilities' => '0 → '.$responsibilities->count()],
+            'assessor_responsibilities' => $this->officeDelta($profile, 'Assessor', 'assessor', $responsibilities),
+            'engineering_responsibility' => $this->officeDelta($profile, 'Engineering', 'engineering', $responsibilities),
+            'health_responsibilities' => $this->officeDelta($profile, 'Health', 'health', $responsibilities),
+            'menro_responsibility' => $this->officeDelta($profile, 'MENRO', 'menro', $responsibilities),
             'assessment_prepared' => ['Assessment total' => $isRegistryProfile ? '— → source-backed instant audit' : '— → ₱1,220'],
             'treasury_counter_check' => ['Treasury result' => 'Pending → No correction'],
             'treasurer_approved' => ['Assessment decision' => 'Pending → Approved'],
@@ -446,6 +462,29 @@ class ResolveLifecycleCleanroomState
      */
     private function stepPresentation(array $step, ?array $profile): array
     {
+        if (($profile['kind'] ?? null) === LifecycleCleanroomRun::CeremonyNelsonReconciliationV1) {
+            if ($step['key'] === 'evaluation_initialized') {
+                $step['label'] = 'Concerned-office Payment Order work assigned';
+                $step['description'] = 'The offices selected by BPLO can now build Payment Orders from their configured Municipal Schedule of Fees. No fee or amount is invented at assignment.';
+                $step['milestone'] = 'Payment Order work assigned';
+            }
+
+            $office = match ($step['key']) {
+                'assessor_responsibilities' => 'Municipal Assessor',
+                'engineering_responsibility' => 'Municipal Engineering Office',
+                'health_responsibilities' => 'Municipal Health Office',
+                'menro_responsibility' => 'MENRO',
+                default => null,
+            };
+            if (is_string($office)) {
+                $step['label'] = $office.' Payment Order confirmed';
+                $step['description'] = $office.' selects applicable configured fees, may edit permitted amounts, signs, and confirms its Payment Order.';
+                $step['milestone'] = 'Concerned-office Payment Order';
+            }
+
+            return $step;
+        }
+
         if (($profile['kind'] ?? null) !== 'registry_source_replay') {
             return $step;
         }
@@ -475,5 +514,19 @@ class ResolveLifecycleCleanroomState
     private function pesos(int $amountCents): string
     {
         return number_format($amountCents / 100, $amountCents % 100 === 0 ? 0 : 2);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $profile
+     * @param  Collection<int, array<string, mixed>>  $responsibilities
+     * @return array<string, string>
+     */
+    private function officeDelta(?array $profile, string $label, string $office, Collection $responsibilities): array
+    {
+        if (($profile['kind'] ?? null) === LifecycleCleanroomRun::CeremonyNelsonReconciliationV1) {
+            return [$label.' Payment Order' => 'Pending → Office-determined'];
+        }
+
+        return [$label.' contributions' => '₱0 → '.$this->pesos((int) $responsibilities->where('department', $office)->sum('amount_cents'))];
     }
 }

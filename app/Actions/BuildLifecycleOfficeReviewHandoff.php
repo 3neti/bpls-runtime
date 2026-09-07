@@ -31,6 +31,7 @@ class BuildLifecycleOfficeReviewHandoff
             'lines.lineOfBusiness',
             'bploRoutingDetermination.determinedBy',
             'bploRoutingDetermination.works.lineOfBusiness',
+            'bploRoutingDetermination.works.paymentOrders',
             'businessPermitEvaluation.currentVersion',
             'businessPermitEvaluation.items.revisions.version',
             'businessPermitEvaluation.items.revisions.actor',
@@ -43,6 +44,7 @@ class BuildLifecycleOfficeReviewHandoff
         }
 
         $projection = $this->evaluationResolver->resolve($evaluation);
+        $commissionedPath = data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true;
         $responsibilities = collect($projection['items'])
             ->filter(fn (array $item): bool => data_get($item, 'metadata.lifecycle_cleanroom_responsibility') === true)
             ->values();
@@ -60,13 +62,15 @@ class BuildLifecycleOfficeReviewHandoff
         )->count();
         $offices = $routing->works
             ->groupBy('office_code')
-            ->map(function (Collection $works, string $officeCode) use ($responsibilities, $run): array {
+            ->map(function (Collection $works, string $officeCode) use ($responsibilities, $run, $commissionedPath): array {
                 $workIds = $works->pluck('id');
                 $officeResponsibilities = $responsibilities
                     ->filter(fn (array $item): bool => $workIds->contains(data_get($item, 'metadata.bplo_routing_work_id')))
                     ->values();
                 $resolvedCount = $officeResponsibilities->where('resolution', 'resolved')->count();
                 $firstWork = $works->first();
+                $confirmedOrderCount = $works->filter(fn ($work): bool => $work->paymentOrders
+                    ->contains(fn ($order): bool => $order->status === 'issued' && $order->superseded_at === null))->count();
 
                 return [
                     'code' => $officeCode,
@@ -75,6 +79,8 @@ class BuildLifecycleOfficeReviewHandoff
                     'reason' => $works->pluck('situational_reason')->filter()->unique()->join(' '),
                     'required_work' => $works->pluck('required_work')->filter()->unique()->join(' '),
                     'status' => match (true) {
+                        $commissionedPath && $confirmedOrderCount === $works->count() => 'Complete',
+                        $commissionedPath && $confirmedOrderCount > 0 => 'In progress',
                         $officeResponsibilities->isNotEmpty() && $resolvedCount === $officeResponsibilities->count() => 'Complete',
                         $resolvedCount > 0 => 'In progress',
                         default => 'Not started',

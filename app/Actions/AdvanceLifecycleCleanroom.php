@@ -88,6 +88,10 @@ class AdvanceLifecycleCleanroom
             throw new LogicException('Concerned-office work cannot be initialized before BPLO routing is recorded.');
         }
         $evaluation = $this->initializeEvaluation->handle($application, $this->actor($run, 'assessment_officer'));
+        if (($profile['kind'] ?? null) === LifecycleCleanroomRun::CeremonyNelsonReconciliationV1) {
+            return;
+        }
+
         if ($this->hasDeclaredResponsibilities($evaluation, $responsibilities)) {
             return;
         }

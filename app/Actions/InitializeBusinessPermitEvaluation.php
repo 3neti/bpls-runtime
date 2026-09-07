@@ -40,6 +40,7 @@ class InitializeBusinessPermitEvaluation
                 return $existing->load('currentVersion');
             }
 
+            $commissionedPath = data_get($permitApplication->metadata, 'nelson_reconciliation_v1.commissioned_path') === true;
             $evaluation = $permitApplication->businessPermitEvaluation()->create(['created_by_id' => $actor?->id]);
             $lineItem = $evaluation->items()->create([
                 'key' => BusinessPermitEvaluationResolver::APPLICANT_LINES_ITEM_KEY,
@@ -48,9 +49,10 @@ class InitializeBusinessPermitEvaluation
                 'is_required' => true,
                 'requires_confirmation' => false,
                 'metadata' => [
-                    'label' => 'Line(s) of Business',
+                    'label' => $commissionedPath ? 'Nature / Description of Business' : 'Line(s) of Business',
                     'registry_mutation' => false,
                     'evidence_provenance' => self::EVIDENCE_PROVENANCE,
+                    'municipal_line_of_business_assignment_pending' => $commissionedPath,
                 ],
             ]);
 
@@ -58,7 +60,7 @@ class InitializeBusinessPermitEvaluation
                 $evaluation,
                 $actor,
                 'applicant_declaration_recorded',
-                function (BusinessPermitEvaluationVersion $version) use ($lineItem, $permitApplication, $actor): void {
+                function (BusinessPermitEvaluationVersion $version) use ($lineItem, $permitApplication, $actor, $commissionedPath): void {
                     $lineItem->revisions()->create([
                         'business_permit_evaluation_version_id' => $version->id,
                         'action' => BusinessPermitEvaluationRevisionAction::Declaration,
@@ -67,10 +69,15 @@ class InitializeBusinessPermitEvaluation
                             'line_of_business_ids' => $permitApplication->lines
                                 ->pluck('line_of_business_id')->filter()->unique()->sort()->values()->all(),
                             'permit_application_line_ids' => $permitApplication->lines->pluck('id')->sort()->values()->all(),
+                            'business_activity_description' => $commissionedPath
+                                ? $permitApplication->business_activity_description
+                                : null,
                         ],
                         'source_classification' => BusinessPermitEvaluationSource::ApplicantDeclaration,
                         'actor_id' => $permitApplication->submitted_by_id ?? $actor?->id,
-                        'reason' => 'Original applicant declaration copied into the new Evaluation without changing the application or Business registry.',
+                        'reason' => $commissionedPath
+                            ? 'The frozen applicant business description is carried forward without treating it as a municipal Line of Business assignment.'
+                            : 'Original applicant declaration copied into the new Evaluation without changing the application or Business registry.',
                         'occurred_at' => $permitApplication->submitted_at,
                     ]);
                 },

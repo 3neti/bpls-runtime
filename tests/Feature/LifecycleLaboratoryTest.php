@@ -815,6 +815,66 @@ test('cleanroom citizen form lodges through canonical draft and submit actions i
         ->and(PermitApplication::query()->whereKey($application)->exists())->toBeTrue();
 });
 
+test('nelson cleanroom assigns routed Payment Order work without requiring an applicant Line of Business', function () {
+    $management = previewAccount(StakeholderPreviewPersona::Management);
+    $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'), [
+        'ceremony' => LifecycleCleanroomRun::CeremonyNelsonReconciliationV1,
+    ]);
+    $run = LifecycleCleanroomRun::query()->sole();
+    $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run));
+    $intake = app(BuildLifecycleCleanroomIntake::class)->handle($run);
+
+    $this->post(route('citizen.permit-applications.store'), [
+        ...$intake,
+        'type' => 'new',
+        'business_activity_description' => 'General merchandise store selling household goods and liquor, with a small coffee shop.',
+        'lifecycle_cleanroom_run_id' => $run->public_id,
+    ])->assertSessionHasNoErrors();
+
+    $run->refresh();
+    $application = PermitApplication::query()->findOrFail($run->new_application_id);
+    $this->post(route('citizen.permit-applications.submit', $application), [
+        'undertaking_accepted' => '1',
+        'signature_facsimile' => UploadedFile::fake()->image('applicant-signature.png'),
+    ])->assertSessionHasNoErrors();
+    expect($application->lines()->count())->toBe(0);
+
+    app(RecordBploRoutingDetermination::class)->handle(
+        $application->fresh(),
+        User::query()->findOrFail(data_get($run->actor_manifest, 'actors.intake.user_id')),
+        'Concerned offices selected by BPLO checklist.',
+        collect(['assessor', 'engineering', 'health', 'menro'])->map(fn (string $office): array => [
+            'office_code' => $office,
+            'office_label' => str($office)->headline()->toString(),
+            'situational_reason' => 'Selected by BPLO checklist.',
+            'required_work' => 'Prepare office Payment Order.',
+            'permit_application_line_id' => null,
+        ])->all(),
+    );
+
+    $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+    expect(data_get($state, 'progress.blocked'))->toBeFalse()
+        ->and(data_get($state, 'progress.profile_kind'))->toBe(LifecycleCleanroomRun::CeremonyNelsonReconciliationV1)
+        ->and(data_get($state, 'progress.next_step.key'))->toBe('evaluation_initialized');
+
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run))
+        ->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.office-reviews-assigned', [$run, 2025]))
+        ->assertSessionHasNoErrors();
+
+    $application->refresh();
+    expect($application->businessPermitEvaluation)->not->toBeNull()
+        ->and($application->businessPermitEvaluation->items)->toHaveCount(1)
+        ->and(data_get($application->businessPermitEvaluation->items->sole()->metadata, 'label'))->toBe('Nature / Description of Business');
+
+    $this->get(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.office-reviews-assigned', [$run, 2025]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('handoff.summary.office_count', 4)
+            ->where('handoff.summary.responsibility_count', 0)
+            ->where('handoff.offices.0.status', 'Not started'));
+});
+
 test('failed one action lodging rolls back the draft and retains the cleanroom intake', function () {
     $management = previewAccount(StakeholderPreviewPersona::Management);
     $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'));

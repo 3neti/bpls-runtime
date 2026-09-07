@@ -3,6 +3,7 @@
 namespace App\LifecycleScenarios;
 
 use App\Actions\BuildLifecycleCleanroomRegistryProfile;
+use App\Models\LifecycleCleanroomRun;
 use App\Models\PermitApplication;
 use LogicException;
 use UnexpectedValueException;
@@ -40,6 +41,17 @@ class LifecycleCleanroomApplicationContract
     /** @return array<string, mixed> */
     public function profile(PermitApplication $application): array
     {
+        if (data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true) {
+            return [
+                'kind' => LifecycleCleanroomRun::CeremonyNelsonReconciliationV1,
+                'profile_version' => 'nelson_reconciliation_v1',
+                'scope' => 'application_specific',
+                'source_reference' => (string) data_get($application->metadata, 'lifecycle_cleanroom.run_id', 'nelson-reconciliation-v1'),
+                'responsibilities' => [],
+                'statement' => 'BPLO routing commissions concerned-office Payment Orders without inventing applicant Lines of Business, office fees, or amounts. Treasury classifies municipal Lines of Business later.',
+            ];
+        }
+
         $registryProfile = $this->buildRegistryProfile->handle($application);
         if (is_array($registryProfile)) {
             return $registryProfile;

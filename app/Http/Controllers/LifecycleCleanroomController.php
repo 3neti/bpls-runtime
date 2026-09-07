@@ -266,8 +266,13 @@ class LifecycleCleanroomController extends Controller
             $recentCertificationOffice = '';
         }
         $requestedTask = $request->string('task')->toString();
-        $routingTask = $requestedTask === 'bplo-routing'
-            && $viewer->can(UserPermission::DetermineBploRouting->value)
+        $commissionedFinancialTask = data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true
+            && $application->bploRoutingDetermination()->exists()
+            && ($viewer->can(UserPermission::ContributeBusinessPermitEvaluations->value)
+                || $viewer->can(UserPermission::CorrectEvaluationLinesOfBusiness->value));
+        $routingTask = ($requestedTask === 'bplo-routing'
+            && $viewer->can(UserPermission::DetermineBploRouting->value))
+            || $commissionedFinancialTask
                 ? $buildRoutingTask->handle($application, $viewer)->toArray()
                 : null;
         $initialTab = $request->string('tab')->toString();
