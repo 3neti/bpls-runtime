@@ -8,6 +8,7 @@ import {
     LockKeyhole,
 } from '@lucide/vue';
 import { computed } from 'vue';
+import IpilBusinessPermit from '@/components/permit-applications/IpilBusinessPermit.vue';
 import { Badge } from '@/components/ui/badge';
 import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
 
@@ -18,6 +19,7 @@ type VerificationBoundary = {
     status: string;
     can_verify_release: boolean;
     released: boolean;
+    qr_data_url: string;
     legal_release_confirmed: boolean;
     legal_effect_confirmed: boolean;
     policy_note: string;
@@ -37,7 +39,14 @@ type PermitSummary = {
     owner_operator: string;
     business_address: string | null;
     lines_of_business: string[];
-    official_receipt_number: string | null;
+    conditions: string[];
+    issuing_authority: {
+        office: string;
+        name: string | null;
+        authority_status: string;
+        signature_applied: false;
+    };
+    receipt_coverage_confirmed: boolean;
     identity_scope: string;
     production_authority: false;
     legal_effect: false;
@@ -164,6 +173,13 @@ function goBack(): void {
                     Exact identity only
                 </Badge>
             </header>
+
+            <IpilBusinessPermit
+                :permit="permit"
+                :verification="verification"
+                :application-year="permit.application_year"
+                public-safe
+            />
 
             <section
                 class="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
@@ -295,12 +311,13 @@ function goBack(): void {
                                 <dt
                                     class="text-xs text-zinc-500 dark:text-zinc-400"
                                 >
-                                    Official Receipt
+                                    Receipt coverage
                                 </dt>
-                                <dd class="font-mono">
+                                <dd>
                                     {{
-                                        permit.official_receipt_number ??
-                                        'Not bound'
+                                        permit.receipt_coverage_confirmed
+                                            ? 'Complete'
+                                            : 'Not confirmed'
                                     }}
                                 </dd>
                             </div>

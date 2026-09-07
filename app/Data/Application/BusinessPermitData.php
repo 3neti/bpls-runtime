@@ -13,7 +13,7 @@ final class BusinessPermitData extends Data
      * @param  list<string>  $conditions
      * @param  list<array{receipt_group_key: string, receipt_group_label: string, receipt_number: string, series: ?string, amount_minor: int}>  $official_receipts
      * @param  array{office: string, name: ?string, authority_status: string, signature_reference: ?string, real_mayor_login_or_signature_used: bool, production_authority: bool}  $issuing_authority
-     * @param  array{reference: string, status: string, url: string, view_url: string}  $verification
+     * @param  array{reference: string, status: string, url: string, view_url: string, qr_data_url: string}  $verification
      * @param  list<string>  $blockers
      */
     public function __construct(

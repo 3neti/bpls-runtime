@@ -3,6 +3,7 @@
 namespace App\Data\Application;
 
 use App\Actions\BuildMunicipalScheduleOfFees;
+use App\Actions\BuildPermitVerificationQrDataUrl;
 use App\Actions\BuildScheduleOfPayment;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
@@ -54,6 +55,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         private readonly BuildMunicipalScheduleOfFees $buildScheduleOfFees,
         private readonly LifecycleCleanroomDefinition $lifecycleCleanroomDefinition,
         private readonly BuildScheduleOfPayment $buildScheduleOfPayment,
+        private readonly BuildPermitVerificationQrDataUrl $buildPermitVerificationQrDataUrl,
     ) {}
 
     public function resolve(PermitApplication $permitApplication, ?User $viewer = null): ApplicationData
@@ -918,6 +920,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'status' => $verification['status'],
                 'url' => $verification['url'],
                 'view_url' => $verification['view_url'],
+                'qr_data_url' => $this->buildPermitVerificationQrDataUrl->handle($verification['view_url']),
             ],
             printable_artifact_url: ! $syntheticLifecycle || $issued
                 ? route('staff.permit-applications.permit.pdf', $application, false)

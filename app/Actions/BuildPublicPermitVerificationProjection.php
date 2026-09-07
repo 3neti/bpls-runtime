@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Data\Application\ApplicationDataResolver;
 use App\Models\PermitApplication;
 
 class BuildPublicPermitVerificationProjection
@@ -10,8 +11,7 @@ class BuildPublicPermitVerificationProjection
         private readonly DescribePermitVerificationBoundary $describeVerificationBoundary,
         private readonly DescribePermitReleaseReadiness $describePermitReleaseReadiness,
         private readonly DescribeProvisionalUatPermitCompletion $describeProvisionalCompletion,
-        private readonly ProjectSyntheticPermitCalendar $permitCalendar,
-        private readonly ResolvePermitBusinessAddress $permitBusinessAddress,
+        private readonly ApplicationDataResolver $applicationDataResolver,
     ) {}
 
     /** @return array<string, mixed> */
@@ -26,23 +26,18 @@ class BuildPublicPermitVerificationProjection
             'paymentSchedules.treasuryCollections.receipt',
         ]);
         $verification = $this->describeVerificationBoundary->handle($permitApplication);
+        $canonicalPermit = $this->applicationDataResolver->resolve($permitApplication)->permit;
         $readiness = $this->describePermitReleaseReadiness->handle($permitApplication);
         $previewCompletion = $this->describeProvisionalCompletion->handle($permitApplication);
         $completion = $permitApplication->provisionalUatPermitCompletion;
-        $syntheticLifecycle = data_get($permitApplication->metadata, 'lifecycle_cleanroom.semantic_classification') === 'synthetic_only';
-        $permitCalendar = $syntheticLifecycle && $completion?->issued_at !== null
-            ? $this->permitCalendar->handle($permitApplication, $completion->issued_at)
-            : null;
         $currentStage = $completion === null
             ? ($readiness['ready_for_authority_review'] ? 'ready_for_authority_review' : $permitApplication->status->value)
             : $completion->status;
-        $receipt = $permitApplication->paymentSchedules
-            ->flatMap(fn ($schedule) => $schedule->treasuryCollections)
-            ->pluck('receipt')->filter()->first();
 
         return [
             'verification' => [
                 ...$verification,
+                'qr_data_url' => $canonicalPermit->verification['qr_data_url'],
                 'legal_release_confirmed' => false,
                 'legal_effect_confirmed' => false,
             ],
@@ -51,20 +46,23 @@ class BuildPublicPermitVerificationProjection
                 'application_year' => $permitApplication->application_year,
                 'application_status' => $permitApplication->status->value,
                 'current_stage' => $currentStage,
-                'business_name' => $permitApplication->business->name,
+                'business_name' => $canonicalPermit->business_name,
                 'trade_name' => $permitApplication->business->trade_name,
-                'permit_number' => $completion?->permit_number,
-                'issued_on' => $permitCalendar['document_issued_on'] ?? $completion?->issued_at?->toDateString(),
-                'valid_until' => $permitCalendar['valid_until'] ?? $completion?->valid_until?->toDateString(),
+                'permit_number' => $canonicalPermit->permit_number,
+                'issued_on' => $canonicalPermit->issued_on,
+                'valid_until' => $canonicalPermit->valid_until,
                 'released_on' => $completion?->released_at?->toDateString(),
-                'owner_operator' => $permitApplication->business->owner->name,
-                'business_address' => $this->permitBusinessAddress->handle($permitApplication),
-                'lines_of_business' => ($permitApplication->treasuryLineOfBusinessAssignments->whereNull('removed_at')->isNotEmpty()
-                    ? $permitApplication->treasuryLineOfBusinessAssignments->whereNull('removed_at')->map(fn ($assignment): string => $assignment->lineOfBusiness->name)
-                    : $permitApplication->lines->map(fn ($line): string => $line->line_of_business_id === null
-                        ? (string) data_get($line->metadata, 'line_of_business_name', 'Unresolved')
-                        : $line->lineOfBusiness->name))->values()->all(),
-                'official_receipt_number' => data_get($receipt, 'receipt_number'),
+                'owner_operator' => $canonicalPermit->owner_operator,
+                'business_address' => $canonicalPermit->business_address,
+                'lines_of_business' => $canonicalPermit->lines_of_business,
+                'conditions' => $canonicalPermit->conditions,
+                'issuing_authority' => [
+                    'office' => $canonicalPermit->issuing_authority['office'],
+                    'name' => $canonicalPermit->issuing_authority['name'],
+                    'authority_status' => $canonicalPermit->issuing_authority['authority_status'],
+                    'signature_applied' => false,
+                ],
+                'receipt_coverage_confirmed' => $canonicalPermit->official_receipt_bound,
                 'identity_scope' => 'exact_synthetic_permit_identity_only',
                 'production_authority' => false,
                 'legal_effect' => false,

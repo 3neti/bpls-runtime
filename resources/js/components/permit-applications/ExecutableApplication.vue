@@ -12,6 +12,7 @@ import ApplicationAttachmentRail from '@/components/permit-applications/Applicat
 import ApplicationDocumentNavigator from '@/components/permit-applications/ApplicationDocumentNavigator.vue';
 import ApplicationWorkNote from '@/components/permit-applications/ApplicationWorkNote.vue';
 import BploRoutingTaskSheet from '@/components/permit-applications/BploRoutingTaskSheet.vue';
+import IpilBusinessPermit from '@/components/permit-applications/IpilBusinessPermit.vue';
 import IpilExecutableDocument from '@/components/permit-applications/IpilExecutableDocument.vue';
 import IpilPaymentContinuationSheet from '@/components/permit-applications/IpilPaymentContinuationSheet.vue';
 import MunicipalScheduleOfFeesSheet from '@/components/permit-applications/MunicipalScheduleOfFeesSheet.vue';
@@ -51,6 +52,43 @@ type Attachment = {
     available: boolean;
     tone: string;
 };
+type PermitPresentation = {
+    state: string;
+    permit_number: string | null;
+    issued_on: string | null;
+    valid_until: string | null;
+    business_name: string;
+    owner_operator: string;
+    business_address: string | null;
+    lines_of_business: string[];
+    conditions: string[];
+    issuing_authority: {
+        office: string;
+        name: string | null;
+        authority_status: string;
+        signature_reference?: string | null;
+        production_authority?: boolean;
+    };
+    official_receipts: {
+        receipt_group_key: string;
+        receipt_group_label: string;
+        receipt_number: string;
+        series: string | null;
+        amount_minor: number;
+    }[];
+    official_receipt_bound: boolean;
+    semantic_classification: string;
+    production_authority: boolean;
+    verification: {
+        reference: string;
+        view_url: string;
+        qr_data_url: string;
+    };
+    printable_artifact_url: string | null;
+    statement: string;
+    issued: boolean;
+    blockers: string[];
+};
 type ApplicationData = {
     schema_version: string;
     identity: Record<string, any>;
@@ -64,7 +102,7 @@ type ApplicationData = {
     schedule_of_payment: Record<string, any> | null;
     official_receipts: Record<string, any>[];
     post_payment: Record<string, any>;
-    permit: Record<string, any>;
+    permit: PermitPresentation;
     documents: Record<string, any>[];
     applicant_documents: Record<string, any>[];
     signature_evidence: Record<string, any>[];
@@ -891,194 +929,244 @@ function permitBlockerLabel(blocker: string): string {
                 </div>
 
                 <div v-else class="space-y-5">
-                    <div>
-                        <p
-                            class="text-xs font-black text-rose-700 uppercase dark:text-rose-300"
-                        >
-                            Final authority artifact
-                        </p>
-                        <h3 class="text-xl font-black">Business Permit</h3>
-                    </div>
-                    <div class="grid gap-3 sm:grid-cols-3">
-                        <div>
-                            <p class="text-xs uppercase">Permit no.</p>
-                            <strong>{{
-                                application.permit.permit_number ?? 'Pending'
-                            }}</strong>
-                        </div>
-                        <div>
-                            <p class="text-xs uppercase">Date issued</p>
-                            <strong>{{
-                                application.permit.issued_on ?? 'Pending'
-                            }}</strong>
-                        </div>
-                        <div>
-                            <p class="text-xs uppercase">Valid until</p>
-                            <strong>{{
-                                application.permit.valid_until ?? 'Pending'
-                            }}</strong>
-                        </div>
-                    </div>
-                    <div
-                        class="rounded-lg bg-rose-50 p-4 text-sm leading-6 text-rose-950 dark:bg-rose-950/30 dark:text-rose-100"
-                    >
-                        <strong>{{
-                            application.permit.official_receipt_bound
-                                ? 'Official Receipt linked.'
-                                : 'Official Receipt required.'
-                        }}</strong>
-                        {{ application.permit.statement }}
-                    </div>
-                    <div
-                        v-if="application.permit.official_receipts?.length"
-                        class="rounded-lg border border-rose-200 p-4"
-                    >
-                        <p class="text-xs font-bold uppercase">
-                            Official Receipts
-                        </p>
+                    <template v-if="application.permit.issued">
                         <div
-                            v-for="receipt in application.permit
-                                .official_receipts"
-                            :key="receipt.receipt_group_key"
-                            class="mt-2 flex flex-wrap justify-between gap-2 text-sm"
+                            class="flex flex-wrap items-center justify-between gap-3 print:hidden"
                         >
-                            <span>{{ receipt.receipt_group_label }}</span>
-                            <strong
-                                >{{ receipt.receipt_number
-                                }}<span v-if="receipt.series">
-                                    · {{ receipt.series }}</span
-                                ></strong
-                            >
-                        </div>
-                    </div>
-                    <dl class="grid gap-3 text-sm">
-                        <div>
-                            <dt class="text-xs font-bold uppercase">
-                                Business
-                            </dt>
-                            <dd class="text-lg font-black break-words">
-                                {{ application.permit.business_name }}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt class="text-xs font-bold uppercase">
-                                Owner / Operator
-                            </dt>
-                            <dd class="break-words">
-                                {{ application.permit.owner_operator }}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt class="text-xs font-bold uppercase">Address</dt>
-                            <dd class="break-words">
-                                {{
-                                    application.permit.business_address ??
-                                    'Pending'
-                                }}
-                            </dd>
-                        </div>
-                    </dl>
-                    <div>
-                        <p class="text-xs font-bold uppercase">
-                            Lines of business
-                        </p>
-                        <ul class="mt-2 grid gap-1 text-sm">
-                            <li
-                                v-for="(lob, index) in application.permit
-                                    .lines_of_business"
-                                :key="index"
-                                class="break-words"
-                            >
-                                {{ lob }}
-                            </li>
-                        </ul>
-                    </div>
-                    <div class="grid gap-4 text-sm md:grid-cols-2">
-                        <div>
-                            <p class="text-xs font-bold uppercase">
-                                Conditions
-                            </p>
-                            <ol class="mt-2 grid list-decimal gap-1 pl-5">
-                                <li
-                                    v-for="condition in application.permit
-                                        .conditions"
-                                    :key="condition"
-                                    class="break-words"
+                            <div>
+                                <p
+                                    class="text-xs font-black text-rose-700 uppercase dark:text-rose-300"
                                 >
-                                    {{ condition }}
-                                </li>
-                            </ol>
-                        </div>
-                        <dl>
-                            <dt class="text-xs font-bold uppercase">
-                                Issuing authority
-                            </dt>
-                            <dd class="mt-2 font-black">
-                                {{
-                                    application.permit.issuing_authority.office
-                                }}
-                            </dd>
-                            <dd class="break-words">
-                                {{
-                                    application.permit.issuing_authority.name ??
-                                    'Authority identity unresolved'
-                                }}
-                            </dd>
-                            <dd class="mt-1 text-xs uppercase">
-                                {{
-                                    label(
-                                        application.permit.issuing_authority
-                                            .authority_status,
-                                    )
-                                }}
-                            </dd>
+                                    Attachment F · Final authority artifact
+                                </p>
+                                <h3 class="text-xl font-black">
+                                    Business Permit
+                                </h3>
+                            </div>
                             <a
                                 v-if="application.permit.printable_artifact_url"
                                 :href="
                                     application.permit.printable_artifact_url
                                 "
-                                class="mt-3 inline-flex items-center gap-1 font-semibold underline"
-                                >Printable artifact
-                                <ExternalLink class="size-3.5"
-                            /></a>
-                        </dl>
-                    </div>
-                    <div
-                        v-if="application.permit.issued"
-                        class="flex flex-col gap-3 rounded-lg border border-slate-200 p-4 sm:flex-row sm:items-center dark:border-slate-700"
-                    >
-                        <QrCode class="size-10 shrink-0" />
-                        <div class="min-w-0">
-                            <p class="font-black">
-                                Public verification identity
-                            </p>
-                            <p class="font-mono text-xs break-all">
-                                {{ application.permit.verification.reference }}
-                            </p>
-                            <a
-                                :href="application.permit.verification.view_url"
-                                class="mt-1 inline-flex items-center gap-1 text-sm font-semibold underline"
-                                >Open verification
-                                <ExternalLink class="size-3.5"
-                            /></a>
-                        </div>
-                    </div>
-                    <div
-                        v-else-if="application.permit.blockers.length > 0"
-                        class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
-                    >
-                        <p class="font-black uppercase">
-                            Pending before issuance
-                        </p>
-                        <ul class="mt-2 list-disc space-y-1 pl-5">
-                            <li
-                                v-for="blocker in application.permit.blockers"
-                                :key="blocker"
+                                target="_blank"
+                                class="inline-flex min-h-10 items-center gap-2 rounded-md bg-sky-900 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-800"
                             >
-                                {{ permitBlockerLabel(blocker) }}
-                            </li>
-                        </ul>
-                    </div>
+                                <Printer class="size-4" /> Open PDF
+                            </a>
+                        </div>
+                        <IpilBusinessPermit
+                            :permit="application.permit"
+                            :verification="application.permit.verification"
+                            :application-year="
+                                application.identity.application_year
+                            "
+                        />
+                    </template>
+                    <template v-else>
+                        <div>
+                            <p
+                                class="text-xs font-black text-rose-700 uppercase dark:text-rose-300"
+                            >
+                                Final authority artifact
+                            </p>
+                            <h3 class="text-xl font-black">Business Permit</h3>
+                        </div>
+                        <div class="grid gap-3 sm:grid-cols-3">
+                            <div>
+                                <p class="text-xs uppercase">Permit no.</p>
+                                <strong>{{
+                                    application.permit.permit_number ??
+                                    'Pending'
+                                }}</strong>
+                            </div>
+                            <div>
+                                <p class="text-xs uppercase">Date issued</p>
+                                <strong>{{
+                                    application.permit.issued_on ?? 'Pending'
+                                }}</strong>
+                            </div>
+                            <div>
+                                <p class="text-xs uppercase">Valid until</p>
+                                <strong>{{
+                                    application.permit.valid_until ?? 'Pending'
+                                }}</strong>
+                            </div>
+                        </div>
+                        <div
+                            class="rounded-lg bg-rose-50 p-4 text-sm leading-6 text-rose-950 dark:bg-rose-950/30 dark:text-rose-100"
+                        >
+                            <strong>{{
+                                application.permit.official_receipt_bound
+                                    ? 'Official Receipt linked.'
+                                    : 'Official Receipt required.'
+                            }}</strong>
+                            {{ application.permit.statement }}
+                        </div>
+                        <div
+                            v-if="application.permit.official_receipts?.length"
+                            class="rounded-lg border border-rose-200 p-4"
+                        >
+                            <p class="text-xs font-bold uppercase">
+                                Official Receipts
+                            </p>
+                            <div
+                                v-for="receipt in application.permit
+                                    .official_receipts"
+                                :key="receipt.receipt_group_key"
+                                class="mt-2 flex flex-wrap justify-between gap-2 text-sm"
+                            >
+                                <span>{{ receipt.receipt_group_label }}</span>
+                                <strong
+                                    >{{ receipt.receipt_number
+                                    }}<span v-if="receipt.series">
+                                        · {{ receipt.series }}</span
+                                    ></strong
+                                >
+                            </div>
+                        </div>
+                        <dl class="grid gap-3 text-sm">
+                            <div>
+                                <dt class="text-xs font-bold uppercase">
+                                    Business
+                                </dt>
+                                <dd class="text-lg font-black break-words">
+                                    {{ application.permit.business_name }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs font-bold uppercase">
+                                    Owner / Operator
+                                </dt>
+                                <dd class="break-words">
+                                    {{ application.permit.owner_operator }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs font-bold uppercase">
+                                    Address
+                                </dt>
+                                <dd class="break-words">
+                                    {{
+                                        application.permit.business_address ??
+                                        'Pending'
+                                    }}
+                                </dd>
+                            </div>
+                        </dl>
+                        <div>
+                            <p class="text-xs font-bold uppercase">
+                                Lines of business
+                            </p>
+                            <ul class="mt-2 grid gap-1 text-sm">
+                                <li
+                                    v-for="(lob, index) in application.permit
+                                        .lines_of_business"
+                                    :key="index"
+                                    class="break-words"
+                                >
+                                    {{ lob }}
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="grid gap-4 text-sm md:grid-cols-2">
+                            <div>
+                                <p class="text-xs font-bold uppercase">
+                                    Conditions
+                                </p>
+                                <ol class="mt-2 grid list-decimal gap-1 pl-5">
+                                    <li
+                                        v-for="condition in application.permit
+                                            .conditions"
+                                        :key="condition"
+                                        class="break-words"
+                                    >
+                                        {{ condition }}
+                                    </li>
+                                </ol>
+                            </div>
+                            <dl>
+                                <dt class="text-xs font-bold uppercase">
+                                    Issuing authority
+                                </dt>
+                                <dd class="mt-2 font-black">
+                                    {{
+                                        application.permit.issuing_authority
+                                            .office
+                                    }}
+                                </dd>
+                                <dd class="break-words">
+                                    {{
+                                        application.permit.issuing_authority
+                                            .name ??
+                                        'Authority identity unresolved'
+                                    }}
+                                </dd>
+                                <dd class="mt-1 text-xs uppercase">
+                                    {{
+                                        label(
+                                            application.permit.issuing_authority
+                                                .authority_status,
+                                        )
+                                    }}
+                                </dd>
+                                <a
+                                    v-if="
+                                        application.permit
+                                            .printable_artifact_url
+                                    "
+                                    :href="
+                                        application.permit
+                                            .printable_artifact_url
+                                    "
+                                    class="mt-3 inline-flex items-center gap-1 font-semibold underline"
+                                    >Printable artifact
+                                    <ExternalLink class="size-3.5"
+                                /></a>
+                            </dl>
+                        </div>
+                        <div
+                            v-if="application.permit.issued"
+                            class="flex flex-col gap-3 rounded-lg border border-slate-200 p-4 sm:flex-row sm:items-center dark:border-slate-700"
+                        >
+                            <QrCode class="size-10 shrink-0" />
+                            <div class="min-w-0">
+                                <p class="font-black">
+                                    Public verification identity
+                                </p>
+                                <p class="font-mono text-xs break-all">
+                                    {{
+                                        application.permit.verification
+                                            .reference
+                                    }}
+                                </p>
+                                <a
+                                    :href="
+                                        application.permit.verification.view_url
+                                    "
+                                    class="mt-1 inline-flex items-center gap-1 text-sm font-semibold underline"
+                                    >Open verification
+                                    <ExternalLink class="size-3.5"
+                                /></a>
+                            </div>
+                        </div>
+                        <div
+                            v-else-if="application.permit.blockers.length > 0"
+                            class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+                        >
+                            <p class="font-black uppercase">
+                                Pending before issuance
+                            </p>
+                            <ul class="mt-2 list-disc space-y-1 pl-5">
+                                <li
+                                    v-for="blocker in application.permit
+                                        .blockers"
+                                    :key="blocker"
+                                >
+                                    {{ permitBlockerLabel(blocker) }}
+                                </li>
+                            </ul>
+                        </div>
+                    </template>
                 </div>
             </section>
 

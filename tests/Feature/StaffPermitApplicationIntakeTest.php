@@ -1240,6 +1240,7 @@ test('public permit verification page renders the artifact authority boundary', 
         ->assertInertia(fn (Assert $page) => $page
             ->component('public/PermitVerification')
             ->where('verification.reference', $verification['reference'])
+            ->where('verification.qr_data_url', fn (string $value): bool => str_starts_with($value, 'data:image/svg+xml;base64,'))
             ->where('verification.status', 'artifact_only')
             ->where('verification.can_verify_release', false)
             ->where('verification.released', false)
@@ -1247,6 +1248,9 @@ test('public permit verification page renders the artifact authority boundary', 
             ->where('verification.legal_effect_confirmed', false)
             ->where('permit.application_number', 'APP-2026-00013')
             ->where('permit.business_name', 'Permit Artifact Store')
+            ->has('permit.conditions', 4)
+            ->where('permit.receipt_coverage_confirmed', false)
+            ->missing('permit.official_receipt_number')
             ->where('releaseReadiness.can_release', false)
             ->where('releaseStatus.preview_sample.completed', false)
             ->where('releaseStatus.municipal_legal_release.confirmed', false)
@@ -1256,11 +1260,19 @@ test('public permit verification page renders the artifact authority boundary', 
 
 test('public permit verification page provides a safe back navigation control', function () {
     $page = file_get_contents(resource_path('js/pages/public/PermitVerification.vue'));
+    $permit = file_get_contents(resource_path('js/components/permit-applications/IpilBusinessPermit.vue'));
 
     expect($page)
         ->toContain('data-testid="permit-verification-back"')
+        ->toContain('IpilBusinessPermit')
+        ->toContain('public-safe')
+        ->not->toContain('permit.official_receipt_number')
         ->toContain('window.history.back()')
-        ->toContain("window.location.assign('/')");
+        ->toContain("window.location.assign('/')")
+        ->and($permit)->toContain('data-testid="ipil-business-permit"')
+        ->toContain('permitHeaderUrl')
+        ->toContain('permitFooterUrl')
+        ->toContain('receipt numbers withheld from this public view');
 });
 
 test('public permit verification refuses mismatched references', function () {

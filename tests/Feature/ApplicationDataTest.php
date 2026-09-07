@@ -205,6 +205,7 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
     $schedule = file_get_contents(resource_path('js/components/permit-applications/MunicipalScheduleOfFeesSheet.vue'));
     $paymentOrders = file_get_contents(resource_path('js/components/permit-applications/OfficePaymentOrdersSheet.vue'));
     $officialReceipt = file_get_contents(resource_path('js/components/receipts/Af51OfficialReceipt.vue'));
+    $businessPermit = file_get_contents(resource_path('js/components/permit-applications/IpilBusinessPermit.vue'));
 
     expect($component)->toContain('ApplicationAttachmentRail')
         ->and($component)->toContain(':attachments="application.attachments"')
@@ -225,6 +226,10 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
         ->and($component)->toContain('data-testid="application-document-canvas"')
         ->and($component)->toContain('ApplicationDocumentNavigator')
         ->and($component)->toContain('IpilExecutableDocument')
+        ->and($component)->toContain('IpilBusinessPermit')
+        ->and($component)->toContain(':permit="application.permit"')
+        ->and($businessPermit)->toContain('data-testid="ipil-business-permit"')
+        ->and($businessPermit)->toContain('permitPatternUrl')
         ->and($component)->toContain('page="page_1"')
         ->and($component)->toContain('page="page_2"')
         ->and($component)->toContain('data-testid="application-work-notes"')
