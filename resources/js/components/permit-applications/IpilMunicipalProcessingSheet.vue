@@ -36,6 +36,7 @@ type Office = {
 };
 
 type DocumentProjection = {
+    commissioned_path: boolean;
     identity: {
         application_id: number;
         application_number: string | null;
@@ -52,6 +53,7 @@ type DocumentProjection = {
         determined_by: string | null;
         works: {
             id: number;
+            office_code: string;
             office_label: string;
             line_of_business_name: string | null;
             required_work: string;
@@ -151,6 +153,23 @@ const recentCertification = computed(() =>
     props.document.verification.find(
         (item) => item.issuing_office === props.recentCertificationOffice,
     ),
+);
+const commissionedOfficeRows = computed(() =>
+    props.document.routing.works.map((work) => {
+        const office = props.document.page_2_assessment.offices.find(
+            (candidate) => candidate.code === work.office_code,
+        );
+
+        return {
+            ...work,
+            status: office?.status ?? 'awaiting_determination',
+            paymentOrderCount: office?.payment_order_count ?? 0,
+            totalAmountCents: office?.total_amount_cents ?? null,
+        };
+    }),
+);
+const hasAnyCommissionedPaymentOrder = computed(() =>
+    commissionedOfficeRows.value.some((row) => row.paymentOrderCount > 0),
 );
 
 onMounted(async () => {
@@ -298,7 +317,112 @@ function continuationLabel(index: number): string {
             </dl>
 
             <div class="grid gap-4 p-3 sm:p-5">
-                <section data-testid="page-2-bplo-routing-recorded">
+                <section
+                    v-if="document.commissioned_path"
+                    data-testid="page-2-commissioned-office-routing"
+                >
+                    <h3 class="paper-section-title">
+                        A. Concerned Offices and Payment Orders
+                    </h3>
+                    <div class="paper-table">
+                        <div
+                            class="paper-row paper-table-head grid-cols-[1.35fr_1fr_0.75fr_0.9fr]"
+                        >
+                            <span>Concerned office</span><span>Status</span
+                            ><span>Payment orders</span
+                            ><span>Working subtotal</span>
+                        </div>
+                        <div
+                            v-for="office in commissionedOfficeRows"
+                            :key="office.id"
+                            class="paper-row grid-cols-1 sm:grid-cols-[1.35fr_1fr_0.75fr_0.9fr]"
+                        >
+                            <strong>{{ office.office_label }}</strong>
+                            <span class="uppercase">
+                                {{
+                                    office.paymentOrderCount > 0
+                                        ? label(office.status)
+                                        : 'Awaiting Payment Order'
+                                }}
+                            </span>
+                            <span>{{ office.paymentOrderCount || '—' }}</span>
+                            <strong class="text-right tabular-nums">
+                                {{
+                                    office.paymentOrderCount > 0
+                                        ? money(office.totalAmountCents)
+                                        : 'TBD'
+                                }}
+                            </strong>
+                        </div>
+                        <div
+                            v-for="blankRow in Math.max(
+                                0,
+                                4 - commissionedOfficeRows.length,
+                            )"
+                            :key="`commissioned-office-blank-${blankRow}`"
+                            class="paper-row h-9 grid-cols-[1.35fr_1fr_0.75fr_0.9fr]"
+                            aria-label="Blank concerned-office row"
+                        >
+                            <span></span><span></span><span></span><span></span>
+                        </div>
+                        <div
+                            class="grid grid-cols-[1fr_auto] border-t-2 border-stone-900 p-2 text-xs"
+                        >
+                            <span class="font-black uppercase"
+                                >Processing working total</span
+                            >
+                            <strong class="tabular-nums">
+                                {{
+                                    hasAnyCommissionedPaymentOrder
+                                        ? money(
+                                              document.page_2_assessment
+                                                  .emerging_total_amount_cents,
+                                          )
+                                        : 'TBD'
+                                }}
+                            </strong>
+                        </div>
+                    </div>
+                    <dl
+                        class="mt-1 grid grid-cols-2 border border-stone-400 text-[10px] sm:grid-cols-4"
+                    >
+                        <div class="border-r border-stone-400 p-1.5">
+                            <dt class="font-black uppercase">Status</dt>
+                            <dd class="min-h-4 uppercase">
+                                {{ label(document.routing.status) }}
+                            </dd>
+                        </div>
+                        <div class="border-r border-stone-400 p-1.5">
+                            <dt class="font-black uppercase">Recorded by</dt>
+                            <dd class="min-h-4">
+                                {{ document.routing.determined_by ?? '' }}
+                            </dd>
+                        </div>
+                        <div class="border-r border-stone-400 p-1.5">
+                            <dt class="font-black uppercase">Date</dt>
+                            <dd class="min-h-4">
+                                {{ date(document.routing.determined_at) }}
+                            </dd>
+                        </div>
+                        <div class="p-1.5">
+                            <dt class="font-black uppercase">
+                                Page 1 declaration
+                            </dt>
+                            <dd class="min-h-4">
+                                {{
+                                    document.declaration.snapshot_hash
+                                        ? 'Frozen'
+                                        : ''
+                                }}
+                            </dd>
+                        </div>
+                    </dl>
+                </section>
+
+                <section
+                    v-if="!document.commissioned_path"
+                    data-testid="page-2-bplo-routing-recorded"
+                >
                     <h3 class="paper-section-title">A. BPLO Routing</h3>
                     <div class="paper-table">
                         <div
@@ -365,7 +489,7 @@ function continuationLabel(index: number): string {
                     </dl>
                 </section>
 
-                <section>
+                <section v-if="!document.commissioned_path">
                     <h3 class="paper-section-title">
                         B. Office Determinations and Payment Orders
                     </h3>
@@ -425,7 +549,13 @@ function continuationLabel(index: number): string {
                 </section>
 
                 <section data-testid="page-2-assessment-reference">
-                    <h3 class="paper-section-title">C. Assessment Reference</h3>
+                    <h3 class="paper-section-title">
+                        {{
+                            document.commissioned_path
+                                ? 'B. Assessment Reference'
+                                : 'C. Assessment Reference'
+                        }}
+                    </h3>
                     <dl class="paper-field-grid sm:grid-cols-4">
                         <div>
                             <dt>Assessment no.</dt>
@@ -472,7 +602,11 @@ function continuationLabel(index: number): string {
 
                 <section>
                     <h3 class="paper-section-title">
-                        D. Treasury Verification
+                        {{
+                            document.commissioned_path
+                                ? 'C. Treasury Verification'
+                                : 'D. Treasury Verification'
+                        }}
                     </h3>
                     <dl class="paper-field-grid sm:grid-cols-4">
                         <div>
@@ -520,7 +654,11 @@ function continuationLabel(index: number): string {
 
                 <section>
                     <h3 class="paper-section-title">
-                        E. Payment and Official Receipt Reference
+                        {{
+                            document.commissioned_path
+                                ? 'D. Payment and Official Receipt Reference'
+                                : 'E. Payment and Official Receipt Reference'
+                        }}
                     </h3>
                     <dl class="paper-field-grid sm:grid-cols-4">
                         <div>
@@ -610,7 +748,11 @@ function continuationLabel(index: number): string {
 
                 <section>
                     <h3 class="paper-section-title">
-                        F. Post-payment Certifications
+                        {{
+                            document.commissioned_path
+                                ? 'E. Post-payment Certifications'
+                                : 'F. Post-payment Certifications'
+                        }}
                     </h3>
                     <div
                         v-if="document.verification.length > 0"
@@ -718,7 +860,11 @@ function continuationLabel(index: number): string {
 
                 <section>
                     <h3 class="paper-section-title">
-                        G. Permit Processing Reference
+                        {{
+                            document.commissioned_path
+                                ? 'F. Permit Processing Reference'
+                                : 'G. Permit Processing Reference'
+                        }}
                     </h3>
                     <dl class="paper-field-grid sm:grid-cols-3">
                         <div>

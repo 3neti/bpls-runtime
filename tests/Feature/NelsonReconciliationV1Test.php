@@ -129,6 +129,7 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         ->and($signature->getFirstMedia(SignatureEvidence::FacsimileCollection))->not->toBeNull()
         ->and(data_get($applicationData, 'signature_evidence.0.purpose'))->toBe('applicant_lodging')
         ->and(data_get($applicationData, 'signature_evidence.0.facsimile_data_url'))->toStartWith('data:image/png;base64,')
+        ->and(data_get($executableDocument, 'commissioned_path'))->toBeTrue()
         ->and(data_get($executableDocument, 'signature_evidence.0.evidence_digest'))->toBe($signature->evidence_digest)
         ->and(data_get($executableDocument, 'signature_evidence.0.facsimile_data_url'))->toBe(data_get($applicationData, 'signature_evidence.0.facsimile_data_url'));
 

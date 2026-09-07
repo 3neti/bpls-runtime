@@ -39,6 +39,7 @@ type OfficeFeeDetermination = {
 };
 
 type DocumentProjection = {
+    commissioned_path: boolean;
     identity: {
         application_id: number;
         application_number: string | null;

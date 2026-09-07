@@ -86,6 +86,7 @@ final class BuildExecutablePermitApplicationDocument
         }
 
         return [
+            'commissioned_path' => data_get($permitApplication->metadata, 'nelson_reconciliation_v1.commissioned_path') === true,
             'identity' => [...$application['identity'], 'tax_year' => $application['identity']['application_year']],
             'declaration' => [
                 'state' => $application['declaration']['state'],
