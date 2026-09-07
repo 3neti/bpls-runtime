@@ -117,7 +117,12 @@ const props = withDefaults(
         application: ApplicationData;
         document?: any | null;
         mode?:
-            'workspace' | 'palette' | 'mobile' | 'print' | 'processing-print';
+            | 'workspace'
+            | 'office'
+            | 'palette'
+            | 'mobile'
+            | 'print'
+            | 'processing-print';
         initialTab?: string;
         initialTask?: string;
         recentCertificationOffice?: string | null;
@@ -180,7 +185,63 @@ const workNotes = computed(
 const currentWorkNote = computed(
     () => workNotes.value.find((note) => note.actionable) ?? null,
 );
+const officePaymentOrderWork = computed(() => {
+    if (props.mode !== 'office' || !props.routingTask?.routing) {
+        return null;
+    }
+
+    const authorized = new Set<string>(
+        props.routingTask.financial_editor
+            ?.authorized_payment_order_office_codes ?? [],
+    );
+
+    return (
+        props.routingTask.routing.works.find((work: { office_code: string }) =>
+            authorized.has(work.office_code),
+        ) ?? null
+    );
+});
+const officePaymentOrderNote = computed<WorkNote | null>(() => {
+    const work = officePaymentOrderWork.value;
+
+    if (!work) {
+        return null;
+    }
+
+    const completed = work.payment_orders.length > 0;
+
+    return {
+        id: 'office_payment_order',
+        actor_key: work.office_code,
+        actor_label: work.office_label,
+        instruction: work.required_work || 'Prepare office Payment Order',
+        section: 'processing',
+        anchor: 'office_' + work.office_code,
+        state: completed ? 'completed' : 'ready',
+        state_label: completed ? 'Payment Order finalized' : 'Ready',
+        tone: 'blue',
+        actionable: !completed,
+        action_label: completed ? null : 'Open Payment Order',
+        action_url: completed ? null : '#payment-order',
+        completed_at: work.payment_orders[0]?.issued_at ?? null,
+        blocking_reason: work.situational_reason || null,
+    };
+});
+const officeApplicationNote = computed(
+    () => officePaymentOrderNote.value ?? currentWorkNote.value,
+);
 const applicationStatusLabel = computed(() => {
+    if (props.mode === 'office' && props.routingTask?.routing?.works) {
+        const works = props.routingTask.routing.works as {
+            payment_orders: unknown[];
+        }[];
+        const finalized = works.filter(
+            (work) => work.payment_orders.length > 0,
+        ).length;
+
+        return `${finalized}/${works.length} Payment Orders`;
+    }
+
     if (props.application.permit.released) {
         return 'Released';
     }
@@ -197,6 +258,7 @@ const applicationStatusLabel = computed(() => {
 });
 const snapshot = computed(() => props.application.declaration.snapshot ?? {});
 const activeTask = ref(props.initialTask);
+const officeMobileView = ref<'application' | 'payment-order'>('payment-order');
 const statusRequest = useHttp({});
 const paymentCheckMessage = ref<string | null>(null);
 const paymentStatusUrl = computed(
@@ -349,6 +411,12 @@ function activateWorkNote(note: WorkNote): void {
         return;
     }
 
+    if (note.id === 'office_payment_order') {
+        officeMobileView.value = 'payment-order';
+
+        return;
+    }
+
     if (props.interactiveTaskRouting && note.id === 'bplo_routing') {
         const url = new URL(window.location.href);
         url.searchParams.set('tab', 'processing');
@@ -453,11 +521,12 @@ function permitBlockerLabel(blocker: string): string {
                     >
                         Executable Business Permit Application
                     </p>
-                    <h2
+                    <component
+                        :is="mode === 'office' ? 'h1' : 'h2'"
                         class="mt-1 text-2xl font-black tracking-tight break-words sm:text-3xl"
                     >
                         {{ application.business.name }}
-                    </h2>
+                    </component>
                     <p class="mt-1 text-sm text-slate-200">
                         {{ application.identity.application_year }} ·
                         {{ label(application.identity.type) }} ·
@@ -476,7 +545,43 @@ function permitBlockerLabel(blocker: string): string {
         </header>
 
         <div
+            v-if="mode === 'office'"
+            class="grid grid-cols-2 border-b border-slate-300 bg-white p-1.5 lg:hidden dark:border-slate-700 dark:bg-slate-900 print:hidden"
+            aria-label="Office workspace view"
+        >
+            <button
+                type="button"
+                :aria-pressed="officeMobileView === 'application'"
+                :class="
+                    officeMobileView === 'application'
+                        ? 'bg-[#123f72] text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-300'
+                "
+                class="rounded-md px-3 py-2 text-sm font-bold"
+                @click="officeMobileView = 'application'"
+            >
+                Application
+            </button>
+            <button
+                type="button"
+                :aria-pressed="officeMobileView === 'payment-order'"
+                :class="
+                    officeMobileView === 'payment-order'
+                        ? 'bg-[#123f72] text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-300'
+                "
+                class="rounded-md px-3 py-2 text-sm font-bold"
+                @click="officeMobileView = 'payment-order'"
+            >
+                Payment Order
+            </button>
+        </div>
+
+        <div
             class="flex gap-1.5 overflow-x-auto border-b border-slate-300 bg-white/80 p-2 lg:hidden dark:border-slate-700 dark:bg-slate-900 print:hidden"
+            :class="{
+                hidden: mode === 'office' && officeMobileView !== 'application',
+            }"
             aria-label="Application packet"
         >
             <button
@@ -513,15 +618,22 @@ function permitBlockerLabel(blocker: string): string {
 
         <div
             :class="
-                routingTask && activeTask === 'bplo-routing'
-                    ? 'xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)_19rem]'
-                    : 'lg:grid-cols-[minmax(0,1fr)_19rem]'
+                mode === 'office' &&
+                routingTask &&
+                activeTask === 'bplo-routing'
+                    ? 'lg:grid-cols-[minmax(0,3fr)_minmax(22rem,2fr)]'
+                    : routingTask && activeTask === 'bplo-routing'
+                      ? 'xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)_19rem]'
+                      : 'lg:grid-cols-[minmax(0,1fr)_19rem]'
             "
             class="grid min-w-0 gap-5 p-3 sm:p-6"
         >
             <section
                 data-testid="application-document-canvas"
-                :class="
+                :class="[
+                    mode === 'office' && officeMobileView !== 'application'
+                        ? 'hidden lg:block'
+                        : '',
                     document &&
                     (activeTab === 'application' ||
                         activeTab === 'processing' ||
@@ -529,10 +641,21 @@ function permitBlockerLabel(blocker: string): string {
                         activeTab === 'schedule_of_fees' ||
                         activeTab === 'payment_orders')
                         ? 'bg-stone-100 p-0 dark:bg-stone-950'
-                        : 'bg-white p-4 sm:p-6 dark:bg-slate-900'
-                "
+                        : 'bg-white p-4 sm:p-6 dark:bg-slate-900',
+                ]"
                 class="min-w-0 overflow-hidden rounded-xl border border-slate-300 dark:border-slate-700"
             >
+                <section
+                    v-if="mode === 'office' && officeApplicationNote"
+                    class="border-b border-slate-300 bg-amber-50 p-3 dark:border-slate-700 dark:bg-amber-950/20"
+                    data-testid="office-application-work-note"
+                >
+                    <ApplicationWorkNote
+                        :note="officeApplicationNote"
+                        :index="0"
+                        @activate="activateWorkNote"
+                    />
+                </section>
                 <ApplicationDocumentNavigator
                     v-if="
                         activeTab === 'application' ||
@@ -1153,9 +1276,16 @@ function permitBlockerLabel(blocker: string): string {
                 "
                 :task="routingTask"
                 mode="sheet"
+                class="self-start lg:sticky lg:top-4"
+                :class="{
+                    'hidden lg:block':
+                        mode === 'office' &&
+                        officeMobileView !== 'payment-order',
+                }"
             />
 
             <aside
+                v-if="mode !== 'office'"
                 :class="{ 'print:hidden': mode !== 'processing-print' }"
                 class="min-w-0"
                 aria-label="Executable Application palette"

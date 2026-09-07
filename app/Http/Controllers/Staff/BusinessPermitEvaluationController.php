@@ -6,6 +6,7 @@ use App\Actions\ApplyDueBploRoutingSuggestions;
 use App\Actions\ArmBploRoutingSentinel;
 use App\Actions\BuildBploRoutingTask;
 use App\Actions\BuildBusinessPermitEvaluationPricePreview;
+use App\Actions\BuildExecutablePermitApplicationDocument;
 use App\Actions\CompleteBusinessPermitEvaluationResponsibility;
 use App\Actions\ConfirmBusinessPermitEvaluationOfficeDefaults;
 use App\Actions\CorrectEvaluationLinesOfBusiness;
@@ -13,6 +14,7 @@ use App\Actions\DescribeBusinessPermitEvaluation;
 use App\Actions\InitializeBusinessPermitEvaluation;
 use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
 use App\Actions\RefreshBusinessPermitEvaluation;
+use App\Data\Application\ApplicationDataResolver;
 use App\Enums\BusinessPermitEvaluationApplicability;
 use App\Enums\BusinessPermitEvaluationSource;
 use App\Enums\TreasuryCounterCheckResult;
@@ -40,6 +42,8 @@ class BusinessPermitEvaluationController extends Controller
         ArmBploRoutingSentinel $armRoutingSentinel,
         ApplyDueBploRoutingSuggestions $applyDueRoutingSuggestions,
         BuildBploRoutingTask $buildRoutingTask,
+        ApplicationDataResolver $applicationDataResolver,
+        BuildExecutablePermitApplicationDocument $buildExecutableDocument,
     ): Response {
         Gate::authorize(UserPermission::ViewBusinessPermitEvaluations->value);
         $armRoutingSentinel->handle($permitApplication);
@@ -57,6 +61,8 @@ class BusinessPermitEvaluationController extends Controller
             'routingSuggestion' => $routingTask['suggestion'],
             'routingOfficeOptions' => $routingTask['office_options'],
             'routingTask' => $routingTask,
+            'applicationData' => $applicationDataResolver->resolve($permitApplication, auth()->user())->toArray(),
+            'applicationDocument' => $buildExecutableDocument->handle($permitApplication, auth()->user()),
             'lineOfBusinesses' => LineOfBusiness::query()->availableToMunicipalCatalog()->orderBy('name')->get(['id', 'code', 'name']),
             'can' => $this->capabilities(),
         ]);

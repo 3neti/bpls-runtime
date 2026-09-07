@@ -51,6 +51,8 @@ it('renders the same typed Evaluator product surface through an authorized staff
             ->where('evaluation.lens', 'internal')
             ->where('evaluation.applicant_declaration.0.line_of_business_name', 'Retail')
             ->where('evaluation.version.fingerprint_current', true)
+            ->where('applicationData.identity.application_id', $fixture['application']->id)
+            ->where('applicationDocument.identity.application_id', $fixture['application']->id)
             ->where('can.correct_lines_of_business', false));
 });
 

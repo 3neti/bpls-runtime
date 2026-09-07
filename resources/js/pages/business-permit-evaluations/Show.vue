@@ -37,6 +37,7 @@ import EvaluationTotalPanel from '@/components/evaluations/EvaluationTotalPanel.
 import FeeMatrixQuickLook from '@/components/fees/FeeMatrixQuickLook.vue';
 import BploRoutingTaskSheet from '@/components/permit-applications/BploRoutingTaskSheet.vue';
 import ConcernedOfficePaymentOrderSummary from '@/components/permit-applications/ConcernedOfficePaymentOrderSummary.vue';
+import ExecutableApplication from '@/components/permit-applications/ExecutableApplication.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -67,6 +68,8 @@ type LineOfBusiness = EvaluationLineOfBusinessOption;
 
 const props = defineProps<{
     routingTask: any;
+    applicationData?: any | null;
+    applicationDocument?: any | null;
     evaluation: Evaluation | null;
     application: {
         id: number;
@@ -182,6 +185,13 @@ const counterCheckReason = reactive({ value: '' });
 
 const isCitizenLens = computed(() => props.evaluation?.lens === 'citizen');
 const isNelsonPath = computed(() => props.application.commissioned_path);
+const showExecutableOfficeWorkspace = computed(
+    () =>
+        isNelsonPath.value &&
+        !isCitizenLens.value &&
+        props.applicationData != null &&
+        props.applicationDocument != null,
+);
 const concernedOfficePaymentOrders = computed(
     () =>
         props.routingTask.financial_editor
@@ -198,6 +208,24 @@ const nelsonAssessmentReady = computed(
     () =>
         concernedOfficePaymentOrders.value.all_finalized &&
         treasuryAssignmentsComplete.value,
+);
+const officeBasisWork = computed(() => {
+    const authorized = new Set<string>(
+        props.routingTask.financial_editor
+            .authorized_payment_order_office_codes ?? [],
+    );
+
+    return (props.routingTask.routing?.works ?? []).filter(
+        (work: { office_code: string }) => authorized.has(work.office_code),
+    );
+});
+const applicantDocumentCount = computed(
+    () => props.applicationData?.applicant_documents?.length ?? 0,
+);
+const applicantDocumentReference = computed(() =>
+    applicantDocumentCount.value === 1
+        ? '1 supporting document is available in the Application.'
+        : `${applicantDocumentCount.value} supporting documents are available in the Application.`,
 );
 
 /** Presentation-only hierarchy over backend-provided charges and totals. */
@@ -716,6 +744,7 @@ function submitPrepareAssessment(): void {
             </div>
 
             <header
+                v-if="!showExecutableOfficeWorkspace"
                 class="flex flex-col gap-4 rounded-2xl border bg-card p-5 shadow-xs sm:flex-row sm:items-start sm:justify-between sm:p-6"
                 aria-labelledby="application-identity-heading"
                 data-testid="evaluation-application-summary"
@@ -763,8 +792,19 @@ function submitPrepareAssessment(): void {
                 </div>
             </header>
 
+            <ExecutableApplication
+                v-if="showExecutableOfficeWorkspace"
+                :application="applicationData"
+                :document="applicationDocument"
+                :routing-task="routingTask"
+                initial-tab="processing"
+                initial-task="bplo-routing"
+                mode="office"
+                data-testid="concerned-office-executable-workspace"
+            />
+
             <section
-                v-if="!officeWorkspace"
+                v-if="!officeWorkspace && !showExecutableOfficeWorkspace"
                 data-testid="bplo-routing-boundary"
             >
                 <BploRoutingTaskSheet :task="routingTask" mode="embedded" />
@@ -866,10 +906,54 @@ function submitPrepareAssessment(): void {
                     :status-label="evaluation.status_label"
                     :financial-lock="evaluation.financial_lock"
                 />
-                <ConcernedOfficePaymentOrderSummary
+                <div
                     v-if="!officeWorkspace && isNelsonPath"
-                    :summary="concernedOfficePaymentOrders"
-                />
+                    class="grid min-w-0 gap-5 lg:grid-cols-2"
+                >
+                    <ConcernedOfficePaymentOrderSummary
+                        :summary="concernedOfficePaymentOrders"
+                    />
+                    <section
+                        v-if="officeBasisWork.length"
+                        class="rounded-2xl border bg-card p-5 shadow-xs"
+                        aria-labelledby="office-basis-heading"
+                        data-testid="office-basis"
+                    >
+                        <p
+                            class="text-xs font-semibold tracking-wide text-primary uppercase"
+                        >
+                            Office reference
+                        </p>
+                        <h2
+                            id="office-basis-heading"
+                            class="mt-1 text-lg font-semibold"
+                        >
+                            Office basis
+                        </h2>
+                        <div class="mt-4 grid gap-4">
+                            <article
+                                v-for="work in officeBasisWork"
+                                :key="work.id"
+                            >
+                                <p class="font-semibold">
+                                    {{ work.office_label }}
+                                </p>
+                                <p class="mt-1 text-sm">
+                                    {{ work.required_work }}
+                                </p>
+                                <p
+                                    v-if="work.situational_reason"
+                                    class="mt-2 text-sm text-muted-foreground"
+                                >
+                                    {{ work.situational_reason }}
+                                </p>
+                            </article>
+                            <p class="text-sm text-muted-foreground">
+                                {{ applicantDocumentReference }}
+                            </p>
+                        </div>
+                    </section>
+                </div>
 
                 <!-- 3. The viewer's own legitimate work -->
                 <section
@@ -1245,6 +1329,7 @@ function submitPrepareAssessment(): void {
                     v-if="
                         !officeWorkspace &&
                         !isCitizenLens &&
+                        !showExecutableOfficeWorkspace &&
                         departmentResponsibilities.length > 0
                     "
                     class="rounded-2xl border bg-card p-5 shadow-xs sm:p-6"
@@ -1381,7 +1466,7 @@ function submitPrepareAssessment(): void {
                 <!-- 7. Declaration versus municipal determination -->
                 <component
                     :is="isNelsonPath ? 'details' : 'section'"
-                    v-if="!officeWorkspace"
+                    v-if="!officeWorkspace && !showExecutableOfficeWorkspace"
                     class="rounded-2xl border bg-card p-5 shadow-xs sm:p-6"
                     aria-labelledby="declaration-heading"
                 >
@@ -1661,7 +1746,11 @@ function submitPrepareAssessment(): void {
                 <!-- 8. Non-monetary municipal work -->
                 <component
                     :is="isNelsonPath ? 'details' : 'section'"
-                    v-if="!officeWorkspace && responsibilityItems.length"
+                    v-if="
+                        !officeWorkspace &&
+                        !showExecutableOfficeWorkspace &&
+                        responsibilityItems.length
+                    "
                     :class="
                         isNelsonPath
                             ? 'rounded-2xl border bg-card shadow-xs'
@@ -1718,7 +1807,13 @@ function submitPrepareAssessment(): void {
 
                 <!-- 9. Role context: Treasury, Assessment Officer, Municipal Treasurer -->
                 <div
-                    v-if="!officeWorkspace"
+                    v-if="
+                        !officeWorkspace &&
+                        (!showExecutableOfficeWorkspace ||
+                            can.counter_check ||
+                            can.prepare_assessment ||
+                            latestAssessment)
+                    "
                     class="grid min-w-0 gap-4 xl:grid-cols-2"
                 >
                     <section

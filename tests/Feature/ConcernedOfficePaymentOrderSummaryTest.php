@@ -113,6 +113,9 @@ test('Nelson assessment presentation uses the Payment Order stage and honest Tre
 
     expect($page)->toContain('!officeWorkspace && !isNelsonPath')
         ->and($page)->toContain("isNelsonPath ? 'Payment Orders' : 'Evaluation'")
+        ->and($page)->toContain('concerned-office-executable-workspace')
+        ->and($page)->toContain('initial-task="bplo-routing"')
+        ->and($page)->toContain('Office basis')
         ->and($page)->toContain('Application details')
         ->and($page)->toContain('Municipal facts')
         ->and($summary)->toContain('Payment Order summary')

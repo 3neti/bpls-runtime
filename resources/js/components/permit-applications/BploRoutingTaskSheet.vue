@@ -196,6 +196,18 @@ const selectedCount = computed(
     () =>
         candidates.filter((candidate) => drafts[candidate.key].selected).length,
 );
+const authorizedPaymentOrderWorkIds = computed(
+    () =>
+        new Set(
+            (props.task.routing?.works ?? [])
+                .filter((work) =>
+                    props.task.financial_editor.authorized_payment_order_office_codes.includes(
+                        work.office_code,
+                    ),
+                )
+                .map((work) => work.id),
+        ),
+);
 const activePaymentOrderWorkIds = computed(
     () =>
         new Set(
@@ -211,9 +223,9 @@ const activePaymentOrderWorkIds = computed(
         ),
 );
 const displayedRoutingWorks = computed(() =>
-    activePaymentOrderWorkIds.value.size > 0
+    authorizedPaymentOrderWorkIds.value.size > 0
         ? (props.task.routing?.works ?? []).filter((work) =>
-              activePaymentOrderWorkIds.value.has(work.id),
+              authorizedPaymentOrderWorkIds.value.has(work.id),
           )
         : (props.task.routing?.works ?? []),
 );
@@ -398,7 +410,7 @@ const treasurySelectionsReady = computed(
             <h2 id="bplo-routing-task-title" class="mt-1 text-xl font-black">
                 {{
                     task.application.commissioned_path && task.routing
-                        ? activePaymentOrderWorkIds.size
+                        ? authorizedPaymentOrderWorkIds.size
                             ? `${displayedRoutingWorks[0].office_label} Payment Order`
                             : 'Payment Orders'
                         : task.routing
