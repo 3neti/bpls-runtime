@@ -12,6 +12,11 @@ defineProps<{
     routingTask: any | null;
     scenario: { id: string; run_id: string };
 }>();
+
+function actorName(label: string): string {
+    return label.replace(/^Cleanroom \S+\s+/, '');
+}
+
 defineOptions({ layout: AppLayout });
 </script>
 
@@ -24,11 +29,11 @@ defineOptions({ layout: AppLayout });
             <p
                 class="text-xs font-bold tracking-wider text-slate-500 uppercase"
             >
-                Lifecycle Laboratory · {{ scenario.id }}
+                Cleanroom
             </p>
             <h1 class="text-2xl font-black">
-                The same Application, focused for
-                {{ application.actor_context.actor_label }}
+                Application ·
+                {{ actorName(application.actor_context.actor_label) }}
             </h1>
         </div>
         <ExecutableApplication

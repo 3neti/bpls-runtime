@@ -759,7 +759,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         Municipality of Ipil
                     </p>
                     <h1 class="text-lg font-bold">
-                        Executable municipal document
+                        Business Permit Application
                     </h1>
                 </div>
                 <Button as-child variant="outline"
@@ -819,131 +819,117 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     data-testid="lifecycle-cleanroom-intake"
                     class="border-l-4 border-emerald-600 bg-emerald-50 p-3 text-sm text-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-100"
                 >
-                    <strong
-                        >Lifecycle Cleanroom
-                        {{ cleanroomIntake.run_id }}</strong
-                    >
-                    - draft the real Ipil application first. Add documents on
-                    the saved draft, then Sign & Submit to freeze Page 1 and its
-                    document manifest.
+                    <strong>Cleanroom {{ cleanroomIntake.run_id }}</strong>
+                    · Draft, add documents, then Sign & Submit.
                 </section>
                 <section
                     v-if="labIntakeFixtures?.length && !isEditing"
                     data-testid="permit-application-lab-helper"
-                    class="flex flex-wrap items-center justify-between gap-3 border border-blue-200 bg-blue-50 p-4 text-blue-950 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100"
+                    class="grid gap-3 border border-blue-200 bg-blue-50 p-4 text-blue-950 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100"
                     aria-label="Permit application laboratory helper"
                 >
-                    <div class="grid max-w-3xl gap-2">
-                        <p class="text-sm font-black">
-                            {{
-                                labIntakeFixture?.source_kind ===
-                                'immutable_production_backup'
-                                    ? 'Legacy Ipil specimen pool'
-                                    : 'Laboratory helper only'
-                            }}
-                        </p>
-                        <label
-                            for="lab-intake-fixture"
-                            class="text-xs font-bold tracking-wide uppercase"
-                        >
-                            Source specimen
-                        </label>
-                        <select
-                            id="lab-intake-fixture"
-                            data-testid="permit-application-lab-specimen"
-                            class="h-10 border border-blue-300 bg-white px-3 text-sm text-stone-950 dark:border-blue-700 dark:bg-stone-950 dark:text-stone-50"
-                            :value="selectedLabFixtureId"
-                            @change="selectLabFixture"
-                        >
-                            <option
-                                v-for="fixture in labIntakeFixtures"
-                                :key="fixture.fixture_id"
-                                :value="fixture.fixture_id"
+                    <div
+                        class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+                    >
+                        <div class="grid gap-1.5">
+                            <p class="text-sm font-black">
+                                {{
+                                    labIntakeFixture?.source_kind ===
+                                    'immutable_production_backup'
+                                        ? 'Legacy specimen'
+                                        : 'Form helper'
+                                }}
+                            </p>
+                            <label
+                                for="lab-intake-fixture"
+                                class="text-xs font-bold tracking-wide uppercase"
                             >
-                                {{ fixture.label }}
-                            </option>
-                        </select>
-                        <p class="mt-1 text-sm font-semibold">
-                            Fill blank fields from
-                            {{ labIntakeFixture?.label }}. Anything you have
-                            already entered stays unchanged.
-                        </p>
-                        <p v-if="isNelsonCleanroom" class="text-xs">
-                            Applicant activity and historical LOB data are not
-                            imported; describe the business below.
-                        </p>
-                        <p
-                            v-if="
-                                labIntakeFixture?.source_kind ===
-                                'immutable_production_backup'
-                            "
-                            class="font-mono text-xs"
-                        >
-                            Legacy application
-                            {{ labIntakeFixture.source_reference }} · Declared
-                            activity
-                            {{ labIntakeFixture.source_business_category }}
-                        </p>
-                        <p class="mt-1 text-xs opacity-80">
-                            {{ labIntakeFixture?.source_note }} Review the form
-                            and accept the undertaking before lodging.
-                        </p>
-                        <p
-                            v-if="
-                                labIntakeFixture?.source_kind ===
-                                'immutable_production_backup'
-                            "
-                            class="text-xs font-semibold"
-                        >
-                            Loading replaces the current business declaration,
-                            but keeps the laboratory actor and leaves the
-                            undertaking for you to accept.
-                        </p>
-                        <p
-                            v-if="labIntakeFixture?.historical_assessment"
-                            class="text-xs font-semibold"
-                            data-testid="legacy-assessment-reconciliation-notice"
-                        >
-                            Its recorded legacy Assessment evidence will be
-                            checksum-bound to this draft and compared after the
-                            new BPLS Assessment is prepared.
-                        </p>
+                                Source specimen
+                            </label>
+                            <select
+                                id="lab-intake-fixture"
+                                data-testid="permit-application-lab-specimen"
+                                class="h-10 border border-blue-300 bg-white px-3 text-sm text-stone-950 dark:border-blue-700 dark:bg-stone-950 dark:text-stone-50"
+                                :value="selectedLabFixtureId"
+                                @change="selectLabFixture"
+                            >
+                                <option
+                                    v-for="fixture in labIntakeFixtures"
+                                    :key="fixture.fixture_id"
+                                    :value="fixture.fixture_id"
+                                >
+                                    {{ fixture.label }}
+                                </option>
+                            </select>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <Button
+                                v-if="
+                                    labIntakeFixture?.source_kind ===
+                                    'immutable_production_backup'
+                                "
+                                data-testid="load-permit-legacy-specimen"
+                                type="button"
+                                @click="loadSelectedSpecimen"
+                            >
+                                <Sparkles />Load specimen
+                            </Button>
+                            <Button
+                                data-testid="fill-remaining-permit-fields"
+                                type="button"
+                                :variant="
+                                    labIntakeFixture?.source_kind ===
+                                    'immutable_production_backup'
+                                        ? 'outline'
+                                        : 'default'
+                                "
+                                @click="fillRemainingFields"
+                            >
+                                <Sparkles />Fill blanks
+                            </Button>
+                            <Button
+                                data-testid="clear-permit-helper-values"
+                                type="button"
+                                variant="outline"
+                                :disabled="!helperFilled"
+                                @click="clearHelperValues"
+                            >
+                                <Eraser />Clear
+                            </Button>
+                        </div>
                     </div>
-                    <div class="flex flex-wrap gap-2">
-                        <Button
-                            v-if="
-                                labIntakeFixture?.source_kind ===
-                                'immutable_production_backup'
-                            "
-                            data-testid="load-permit-legacy-specimen"
-                            type="button"
-                            @click="loadSelectedSpecimen"
+                    <details
+                        class="text-xs"
+                        data-testid="permit-application-lab-details"
+                    >
+                        <summary class="cursor-pointer font-semibold">
+                            Specimen details
+                        </summary>
+                        <div
+                            class="mt-2 grid gap-1 border-t border-blue-200 pt-2 dark:border-blue-800"
                         >
-                            <Sparkles />Load selected legacy specimen
-                        </Button>
-                        <Button
-                            data-testid="fill-remaining-permit-fields"
-                            type="button"
-                            :variant="
-                                labIntakeFixture?.source_kind ===
-                                'immutable_production_backup'
-                                    ? 'outline'
-                                    : 'default'
-                            "
-                            @click="fillRemainingFields"
-                        >
-                            <Sparkles />Fill remaining fields
-                        </Button>
-                        <Button
-                            data-testid="clear-permit-helper-values"
-                            type="button"
-                            variant="outline"
-                            :disabled="!helperFilled"
-                            @click="clearHelperValues"
-                        >
-                            <Eraser />Clear helper values
-                        </Button>
-                    </div>
+                            <p
+                                v-if="
+                                    labIntakeFixture?.source_kind ===
+                                    'immutable_production_backup'
+                                "
+                                class="font-mono"
+                            >
+                                {{ labIntakeFixture.source_reference }} ·
+                                {{ labIntakeFixture.source_business_category }}
+                            </p>
+                            <p v-if="isNelsonCleanroom">
+                                Business activity is entered manually.
+                            </p>
+                            <p
+                                v-if="labIntakeFixture?.historical_assessment"
+                                data-testid="legacy-assessment-reconciliation-notice"
+                            >
+                                Legacy Assessment evidence will be compared
+                                after assessment.
+                            </p>
+                        </div>
+                    </details>
                 </section>
                 <section
                     data-testid="citizen-draft-boundary"
@@ -951,10 +937,8 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                 >
                     <FileCheck2 class="mt-0.5 size-5 shrink-0" />
                     <span
-                        ><strong>Applicant Declaration.</strong> This document
-                        remains editable until formally submitted. Assessment,
-                        payment, and permit authority are separate municipal
-                        facts.</span
+                        ><strong>Draft.</strong> Editable until Sign &
+                        Submit.</span
                     >
                 </section>
                 <InputError :message="errors.draft" />
