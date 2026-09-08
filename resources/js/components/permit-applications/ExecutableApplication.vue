@@ -129,6 +129,7 @@ const props = withDefaults(
         recentCertificationOffice?: string | null;
         routingTask?: any | null;
         interactiveTaskRouting?: boolean;
+        showRoutingTask?: boolean;
     }>(),
     {
         mode: 'workspace',
@@ -137,6 +138,7 @@ const props = withDefaults(
         recentCertificationOffice: null,
         routingTask: null,
         interactiveTaskRouting: false,
+        showRoutingTask: true,
     },
 );
 
@@ -570,7 +572,7 @@ function permitBlockerLabel(blocker: string): string {
         </header>
 
         <div
-            v-if="mode === 'office'"
+            v-if="mode === 'office' && showRoutingTask"
             class="grid grid-cols-2 border-b border-slate-300 bg-white p-1.5 lg:hidden dark:border-slate-700 dark:bg-slate-900 print:hidden"
             aria-label="Office workspace view"
         >
@@ -605,7 +607,10 @@ function permitBlockerLabel(blocker: string): string {
         <div
             class="flex gap-1.5 overflow-x-auto border-b border-slate-300 bg-white/80 p-2 lg:hidden dark:border-slate-700 dark:bg-slate-900 print:hidden"
             :class="{
-                hidden: mode === 'office' && officeMobileView !== 'application',
+                hidden:
+                    mode === 'office' &&
+                    showRoutingTask &&
+                    officeMobileView !== 'application',
             }"
             aria-label="Application packet"
         >
@@ -644,19 +649,26 @@ function permitBlockerLabel(blocker: string): string {
         <div
             :class="
                 mode === 'office' &&
+                showRoutingTask &&
                 routingTask &&
                 activeTask === 'bplo-routing'
                     ? 'lg:grid-cols-[minmax(0,3fr)_minmax(22rem,2fr)]'
-                    : routingTask && activeTask === 'bplo-routing'
-                      ? 'xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)_19rem]'
-                      : 'lg:grid-cols-[minmax(0,1fr)_19rem]'
+                    : mode === 'office'
+                      ? 'lg:grid-cols-1'
+                      : routingTask &&
+                          showRoutingTask &&
+                          activeTask === 'bplo-routing'
+                        ? 'xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)_19rem]'
+                        : 'lg:grid-cols-[minmax(0,1fr)_19rem]'
             "
             class="grid min-w-0 gap-5 p-3 sm:p-6"
         >
             <section
                 data-testid="application-document-canvas"
                 :class="[
-                    mode === 'office' && officeMobileView !== 'application'
+                    mode === 'office' &&
+                    showRoutingTask &&
+                    officeMobileView !== 'application'
                         ? 'hidden lg:block'
                         : '',
                     document &&
@@ -1298,6 +1310,7 @@ function permitBlockerLabel(blocker: string): string {
             <BploRoutingTaskSheet
                 v-if="
                     routingTask &&
+                    showRoutingTask &&
                     activeTask === 'bplo-routing' &&
                     activeTab === 'processing'
                 "

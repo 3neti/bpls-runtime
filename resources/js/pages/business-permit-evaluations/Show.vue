@@ -438,6 +438,32 @@ const currentAssessmentExists = computed(
         latestAssessment.value.superseded === false &&
         latestAssessment.value.consumes_current_evaluation === true,
 );
+const showAssessmentActionRail = computed(
+    () =>
+        showExecutableOfficeWorkspace.value &&
+        props.can.prepare_assessment &&
+        props.evaluation?.financial_lock === false,
+);
+const assessmentActionTotal = computed(
+    () =>
+        props.applicationDocument?.page_2_assessment
+            ?.emerging_total_amount_cents ?? 0,
+);
+const treasuryPaymentItemSubtotal = computed(() =>
+    (
+        props.routingTask.financial_editor.treasury_assignments as {
+            items: { amount_cents: number }[];
+        }[]
+    ).reduce(
+        (total, assignment) =>
+            total +
+            assignment.items.reduce(
+                (itemTotal, item) => itemTotal + item.amount_cents,
+                0,
+            ),
+        0,
+    ),
+);
 
 /**
  * Readiness stays canonical: `ready` and the issue list come straight from
@@ -792,16 +818,139 @@ function submitPrepareAssessment(): void {
                 </div>
             </header>
 
-            <ExecutableApplication
+            <div
                 v-if="showExecutableOfficeWorkspace"
-                :application="applicationData"
-                :document="applicationDocument"
-                :routing-task="routingTask"
-                initial-tab="processing"
-                initial-task="bplo-routing"
-                mode="office"
-                data-testid="concerned-office-executable-workspace"
-            />
+                :class="
+                    showAssessmentActionRail
+                        ? 'grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start'
+                        : ''
+                "
+            >
+                <ExecutableApplication
+                    :application="applicationData"
+                    :document="applicationDocument"
+                    :routing-task="routingTask"
+                    :show-routing-task="!showAssessmentActionRail"
+                    initial-tab="processing"
+                    initial-task="bplo-routing"
+                    mode="office"
+                    data-testid="concerned-office-executable-workspace"
+                />
+
+                <aside
+                    v-if="showAssessmentActionRail"
+                    class="order-last min-w-0 xl:sticky xl:top-4"
+                    aria-labelledby="assessment-action-heading"
+                    data-testid="assessment-action-rail"
+                >
+                    <section
+                        class="overflow-hidden rounded-2xl border bg-card shadow-xs"
+                    >
+                        <header class="border-b p-5">
+                            <p
+                                class="text-xs font-semibold tracking-wide text-primary uppercase"
+                            >
+                                Assessment Officer
+                            </p>
+                            <h2
+                                id="assessment-action-heading"
+                                class="mt-1 text-xl font-semibold"
+                            >
+                                Prepare Assessment
+                            </h2>
+                        </header>
+
+                        <div class="grid gap-4 p-5">
+                            <dl class="grid grid-cols-2 gap-3">
+                                <div class="rounded-lg bg-muted/50 p-3">
+                                    <dt
+                                        class="text-xs text-muted-foreground uppercase"
+                                    >
+                                        Current total
+                                    </dt>
+                                    <dd
+                                        class="mt-1 text-lg font-semibold tabular-nums"
+                                    >
+                                        {{ money(assessmentActionTotal) }}
+                                    </dd>
+                                </div>
+                                <div class="rounded-lg bg-muted/50 p-3">
+                                    <dt
+                                        class="text-xs text-muted-foreground uppercase"
+                                    >
+                                        Assessment
+                                    </dt>
+                                    <dd class="mt-1 font-semibold">Pending</dd>
+                                </div>
+                            </dl>
+
+                            <p class="text-sm text-muted-foreground">
+                                Freeze the current total as the Assessment.
+                                Treasurer approval follows.
+                            </p>
+
+                            <Button
+                                class="w-full"
+                                :disabled="
+                                    !nelsonAssessmentReady ||
+                                    currentAssessmentExists ||
+                                    pendingAction !== null
+                                "
+                                @click="submitPrepareAssessment"
+                            >
+                                <PhilippinePeso aria-hidden="true" />
+                                {{
+                                    pendingAction === 'prepare-assessment'
+                                        ? 'Preparing…'
+                                        : 'Prepare Assessment'
+                                }}
+                            </Button>
+
+                            <details
+                                class="group rounded-lg border"
+                                data-testid="assessment-financial-sources"
+                            >
+                                <summary
+                                    class="flex cursor-pointer list-none items-center justify-between gap-3 p-3 text-sm font-medium"
+                                >
+                                    Review financial sources
+                                    <ChevronRight
+                                        class="size-4 transition-transform group-open:rotate-90"
+                                        aria-hidden="true"
+                                    />
+                                </summary>
+                                <dl class="grid gap-2 border-t p-3 text-sm">
+                                    <div
+                                        class="flex items-center justify-between gap-3"
+                                    >
+                                        <dt>Payment Orders</dt>
+                                        <dd class="font-semibold tabular-nums">
+                                            {{
+                                                money(
+                                                    concernedOfficePaymentOrders.finalized_subtotal_amount_cents ??
+                                                        0,
+                                                )
+                                            }}
+                                        </dd>
+                                    </div>
+                                    <div
+                                        class="flex items-center justify-between gap-3"
+                                    >
+                                        <dt>Treasury payment items</dt>
+                                        <dd class="font-semibold tabular-nums">
+                                            {{
+                                                money(
+                                                    treasuryPaymentItemSubtotal,
+                                                )
+                                            }}
+                                        </dd>
+                                    </div>
+                                </dl>
+                            </details>
+                        </div>
+                    </section>
+                </aside>
+            </div>
 
             <section
                 v-if="!officeWorkspace && !showExecutableOfficeWorkspace"
@@ -909,6 +1058,7 @@ function submitPrepareAssessment(): void {
                 <div
                     v-if="
                         !officeWorkspace &&
+                        !showExecutableOfficeWorkspace &&
                         isNelsonPath &&
                         !routingTask.financial_editor.can_assign_treasury_lobs
                     "
@@ -1813,6 +1963,7 @@ function submitPrepareAssessment(): void {
                 <div
                     v-if="
                         !officeWorkspace &&
+                        !showAssessmentActionRail &&
                         (!showExecutableOfficeWorkspace ||
                             latestAssessment ||
                             (can.prepare_assessment &&
