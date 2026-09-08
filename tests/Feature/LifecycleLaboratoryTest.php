@@ -876,9 +876,11 @@ test('cleanroom citizen form lodges through canonical draft and submit actions i
 
 test('nelson cleanroom assigns routed Payment Order work without requiring an applicant Line of Business', function () {
     $this->seed(MunicipalFeeCatalogSeeder::class);
+    config()->set('stakeholder_preview.source_backed_2025_specimen_path', sourceBackedNewApplicationSpecimenFile());
     $management = previewAccount(StakeholderPreviewPersona::Management);
     $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'), [
         'ceremony' => LifecycleCleanroomRun::CeremonyNelsonReconciliationV1,
+        'source_specimen_id' => LifecycleCleanroomRun::SourceSpecimenCal2026001New2025,
     ]);
     $run = LifecycleCleanroomRun::query()->sole();
     $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run));
@@ -887,7 +889,7 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     $this->post(route('citizen.permit-applications.store'), [
         ...$intake,
         'type' => 'new',
-        'business_activity_description' => 'General merchandise store selling household goods and liquor, with a small coffee shop.',
+        'business_activity_description' => 'Retail sale of fresh fish at the Ipil public market.',
         'lifecycle_cleanroom_run_id' => $run->public_id,
     ])->assertSessionHasNoErrors();
 
@@ -897,7 +899,11 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         'undertaking_accepted' => '1',
         'signature_facsimile' => UploadedFile::fake()->image('applicant-signature.png'),
     ])->assertSessionHasNoErrors();
-    expect($application->lines()->count())->toBe(0);
+    expect($application->lines()->count())->toBe(0)
+        ->and($application->business->name)->toBe('Source Business')
+        ->and($application->business->owner->name)->toBe('Source Owner')
+        ->and(data_get($application->metadata, 'lifecycle_cleanroom.source_specimen.id'))
+        ->toBe(LifecycleCleanroomRun::SourceSpecimenCal2026001New2025);
 
     app(RecordBploRoutingDetermination::class)->handle(
         $application->fresh(),
@@ -941,7 +947,7 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     $healthActor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.health.user_id'));
     $unroutedHealthActor = User::factory()->for($healthActor->role)->create();
     $healthFee = FeeRule::query()->where('code', 'IPIL-LEGACY-99C7F1CE5E8189C8')->sole();
-    $healthItems = [['fee_rule_id' => $healthFee->id, 'amount_cents' => 70_000]];
+    $healthItems = [['fee_rule_id' => $healthFee->id, 'amount_cents' => 10_000]];
 
     expect(fn () => app(ConfirmOfficePaymentOrder::class)->handle(
         $healthWork,
@@ -979,8 +985,8 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
                 ->where('code', 'FEE-C2E404D2D1B97545')
                 ->map(fn (array $fee): array => [...$fee, 'default_amount_cents' => 15_000]),
             'assessor' => collect(data_get($engineeringTask, 'financial_editor.office_fee_options.assessor'))
-                ->where('code', 'LAB-IPIL-ASSESSOR-CERTIFICATION')
-                ->map(fn (array $fee): array => [...$fee, 'default_amount_cents' => 20_000]),
+                ->where('code', 'IPIL-LEGACY-E5B97AA20294C7AA')
+                ->map(fn (array $fee): array => [...$fee, 'default_amount_cents' => 10_000]),
         };
         app(ConfirmOfficePaymentOrder::class)->handle(
             $work,
@@ -1027,18 +1033,23 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         ->and(data_get($state, 'progress.completed_steps'))->toBe(8)
         ->and(data_get($state, 'progress.total_steps'))->toBe(24)
         ->and(data_get($cleanroom, 'active.concerned_office_payment_orders.status'))->toBe('finalized')
-        ->and(data_get($cleanroom, 'active.concerned_office_payment_orders.finalized_subtotal_amount_cents'))->toBe(495_000)
-        ->and(data_get($pageTwo, 'page_2_assessment.concerned_office_payment_orders.finalized_subtotal_amount_cents'))->toBe(495_000)
+        ->and(data_get($cleanroom, 'active.concerned_office_payment_orders.finalized_subtotal_amount_cents'))->toBe(305_000)
+        ->and(data_get($pageTwo, 'page_2_assessment.concerned_office_payment_orders.finalized_subtotal_amount_cents'))->toBe(305_000)
         ->and(data_get($pageTwo, 'page_2_assessment.treasury_lines_of_business'))->toBe([]);
 
-    $line = LineOfBusiness::query()->where('code', ResolveLegacyCitizenPermitApplicationLabPool::CatalogCode)->sole();
+    $line = LineOfBusiness::query()->where('code', 'LOB-3A9A93CA46967768')->sole();
     $treasuryDefaults = collect(data_get($engineeringTask, 'financial_editor.line_of_business_options'))
-        ->firstWhere('code', ResolveLegacyCitizenPermitApplicationLabPool::CatalogCode)['default_items'];
+        ->firstWhere('code', 'LOB-3A9A93CA46967768')['default_items'];
     $selections = [[
         'line_of_business_id' => $line->id,
         'items' => collect($treasuryDefaults)
-            ->whereIn('code', ['IPIL-LEGACY-A9B730041C0AE6F6', 'IPIL-LEGACY-FEE443B6D6004315'])
-            ->map(fn (array $item): array => ['fee_rule_id' => $item['fee_rule_id'], 'amount_cents' => $item['amount_cents']])
+            ->whereIn('code', ['IPIL-LEGACY-A9B730041C0AE6F6', 'IPIL-LEGACY-FEE443B6D6004315', 'IPIL-LEGACY-5F028B76EEBEF485'])
+            ->map(fn (array $item): array => [
+                'fee_rule_id' => $item['fee_rule_id'],
+                'amount_cents' => $item['code'] === 'IPIL-LEGACY-5F028B76EEBEF485' ? 100_000 : $item['amount_cents'],
+                'reason' => $item['code'] === 'IPIL-LEGACY-5F028B76EEBEF485' ? 'Source-observed CAL-2026-001 Mayor’s Permit amount.' : null,
+                'authority' => $item['code'] === 'IPIL-LEGACY-5F028B76EEBEF485' ? 'Municipality-supplied operational specimen 892d1c07377988ab17d12e60c7bfeb80ba9227bb5f5569bc441bf81092a9f995.' : null,
+            ])
             ->values()->all(),
     ]];
     app(AssignTreasuryLinesOfBusiness::class)->handle(
@@ -1049,7 +1060,7 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
 
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     $pageTwo = app(BuildExecutablePermitApplicationDocument::class)->handle($application->fresh(), $management);
-    expect($selections[0]['items'])->toHaveCount(2)
+    expect($selections[0]['items'])->toHaveCount(3)
         ->and(data_get($state, 'progress.next_step.key'))->toBe('assessment_prepared')
         ->and(data_get($state, 'progress.next_step.actor'))->toBe('assessment_officer')
         ->and(data_get($pageTwo, 'page_2_assessment.treasury_lines_of_business'))->toHaveCount(1);
@@ -1062,8 +1073,8 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     $requiredReceiptGroupCount = count(data_get($applicationData, 'schedule_of_payment.groups'));
     expect(data_get($state, 'progress.next_step.key'))->toBe('treasury_counter_check')
-        ->and($assessment->total_amount_cents)->toBe(582_500)
-        ->and($requiredReceiptGroupCount)->toBe(5)
+        ->and($assessment->total_amount_cents)->toBe(417_500)
+        ->and($requiredReceiptGroupCount)->toBe(6)
         ->and(data_get($applicationData, 'schedule_of_payment.grand_total_minor'))->toBe($assessment->total_amount_cents)
         ->and(data_get($applicationData, 'schedule_of_payment.price_report_total_minor'))->toBe($assessment->total_amount_cents);
 
@@ -1201,6 +1212,7 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     ];
     expect(data_get($finalState, 'progress.complete'))->toBeTrue()
         ->and(data_get($finalState, 'progress.completed_steps'))->toBe(24)
+        ->and(data_get($finalState, 'progress.completion_message'))->toBe('The source-backed 2025 registry specimen completes the synthetic Business Permit lifecycle without creating a Renewal.')
         ->and(data_get($finalData, 'identity.status'))->toBe(PermitApplicationStatus::Released->value)
         ->and($parityTotals)->each->toBe($assessment->total_amount_cents)
         ->and(data_get($finalData, 'official_receipts'))->toHaveCount($requiredReceiptGroupCount)
@@ -1455,4 +1467,52 @@ function sourceBackedHistoricalAssessment(): array
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR,
         )),
     ];
+}
+
+function sourceBackedNewApplicationSpecimenFile(): string
+{
+    $path = tempnam(sys_get_temp_dir(), 'source-backed-new-');
+    file_put_contents($path, json_encode([
+        'schema_version' => 'bpls.lifecycle-source-specimen.v1',
+        'specimen_id' => LifecycleCleanroomRun::SourceSpecimenCal2026001New2025,
+        'calibration_id' => 'CAL-2026-001',
+        'classification' => 'source_backed_identity_reconstructed_2025_transaction',
+        'source_specimen_sha256' => '892d1c07377988ab17d12e60c7bfeb80ba9227bb5f5569bc441bf81092a9f995',
+        'source_snapshot_sha256' => str_repeat('a', 64),
+        'intake' => [
+            'application_year' => 2025,
+            'type' => 'new',
+            'line_of_business_code' => 'LOB-3A9A93CA46967768',
+            'owner_name' => 'Source Owner',
+            'owner_first_name' => 'Source',
+            'owner_last_name' => 'Owner',
+            'owner_address' => 'Source owner address',
+            'business_name' => 'Source Business',
+            'business_address' => 'Source business address',
+            'barangay' => 'Don Andres',
+            'business_barangay_psgc_code' => '0908305006',
+            'business_activity_description' => 'Retail sale of fresh fish at the Ipil public market.',
+            'ownership_type' => 'sole-proprietorship',
+            'date_of_application' => '2025-01-15',
+            'mode_of_payment' => 'annually',
+            'business_city_municipality' => 'Ipil',
+            'business_province' => 'Zamboanga Sibugay',
+            'owner_city_municipality' => 'Ipil',
+            'owner_province' => 'Zamboanga Sibugay',
+            'occupancy' => 'rented',
+            'business_area_square_meters' => '12.00',
+            'male_employee_count' => 1,
+            'female_employee_count' => 0,
+            'total_employee_count' => 1,
+            'employees_residing_in_lgu' => 1,
+            'monthly_rental_pesos' => '0.00',
+            'emergency_contact_name' => 'Source emergency contact',
+            'emergency_contact_mobile' => '09990000000',
+            'applicant_printed_name' => 'Source Owner',
+            'position_title' => 'Owner',
+            'undertaking_accepted' => true,
+        ],
+    ], JSON_THROW_ON_ERROR));
+
+    return $path;
 }

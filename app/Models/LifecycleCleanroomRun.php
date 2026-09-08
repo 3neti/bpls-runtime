@@ -31,9 +31,16 @@ class LifecycleCleanroomRun extends Model
 
     public const CeremonyNelsonReconciliationV1 = 'nelson_reconciliation_v1';
 
+    public const SourceSpecimenCal2026001New2025 = 'cal-2026-001-2025-new';
+
     public function isNelsonReconciliationV1(): bool
     {
         return data_get($this->actor_manifest, 'ceremony') === self::CeremonyNelsonReconciliationV1;
+    }
+
+    public function usesSourceBackedNewApplication(): bool
+    {
+        return data_get($this->actor_manifest, 'source_specimen.id') === self::SourceSpecimenCal2026001New2025;
     }
 
     /** @return BelongsTo<User, $this> */

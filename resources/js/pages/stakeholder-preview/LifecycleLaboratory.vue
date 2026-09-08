@@ -102,6 +102,13 @@ type CleanroomState = {
         public_id: string;
         ceremony: string;
         status: string;
+        source_specimen: {
+            id: string;
+            calibration_id: string;
+            source_specimen_sha256: string;
+            chronology: string;
+            external_payment_simulation_only: boolean;
+        } | null;
     };
     progress: {
         completed_steps: number;
@@ -389,7 +396,10 @@ function startCleanroom(): void {
     working.value = 'cleanroom:start';
     router.post(
         startCleanroomRoute().url,
-        { ceremony: 'nelson_reconciliation_v1' },
+        {
+            ceremony: 'nelson_reconciliation_v1',
+            source_specimen_id: 'cal-2026-001-2025-new',
+        },
         { onFinish: () => (working.value = null) },
     );
 }
@@ -558,8 +568,7 @@ function simulateQrPhPayment(): void {
                             class="mt-1 text-xl font-semibold text-zinc-950 dark:text-white"
                         >
                             {{
-                                cleanroom.active?.progress.profile_kind ===
-                                'registry_source_replay'
+                                cleanroom.active?.run.source_specimen
                                     ? 'Source-backed Application'
                                     : 'Executable Application'
                             }}
@@ -1380,15 +1389,23 @@ function simulateQrPhPayment(): void {
                 <ShieldCheck class="size-5" aria-hidden="true" />
                 Laboratory details
             </summary>
-            <p
-                class="border-t border-zinc-200 p-4 text-sm leading-6 text-zinc-600 dark:border-zinc-800 dark:text-zinc-400"
+            <div
+                class="grid gap-3 border-t border-zinc-200 p-4 text-sm leading-6 text-zinc-600 dark:border-zinc-800 dark:text-zinc-400"
             >
-                This local/UAT surface requires the synthetic Preview safety
-                profile and Management account. Collection, receipt,
-                certification, issuance, and release remain synthetic-only. No
-                reset, migration, production authority, or destructive database
-                action is available.
-            </p>
+                <p v-if="cleanroom.active?.run.source_specimen">
+                    Registry identity from
+                    {{ cleanroom.active.run.source_specimen.calibration_id }};
+                    the 2025 New Application chronology is reconstructed.
+                    Payment is simulated and no real funds move.
+                </p>
+                <p>
+                    This local/UAT surface requires the synthetic Preview safety
+                    profile and Management account. Collection, receipt,
+                    certification, issuance, and release remain synthetic-only.
+                    No reset, migration, production authority, or destructive
+                    database action is available.
+                </p>
+            </div>
         </details>
     </div>
 </template>

@@ -11,6 +11,7 @@ return [
     'legacy_lab_snapshot_tables' => env('STAKEHOLDER_PREVIEW_LEGACY_SNAPSHOT_TABLES'),
     'legacy_lab_specimen_bundle' => env('STAKEHOLDER_PREVIEW_LEGACY_SPECIMEN_BUNDLE'),
     'legacy_lab_specimen_pool_sha256' => env('STAKEHOLDER_PREVIEW_LEGACY_SPECIMEN_POOL_SHA256'),
+    'source_backed_2025_specimen_path' => env('STAKEHOLDER_PREVIEW_SOURCE_BACKED_2025_SPECIMEN_PATH'),
     'accounts' => [
         'citizen' => env('STAKEHOLDER_PREVIEW_CITIZEN_EMAIL', 'stakeholder.preview.citizen@example.test'),
         'bplo' => env('STAKEHOLDER_PREVIEW_BPLO_EMAIL', 'stakeholder.preview.bplo@example.test'),

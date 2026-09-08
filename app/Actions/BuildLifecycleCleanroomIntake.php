@@ -8,13 +8,24 @@ use App\Models\LineOfBusiness;
 
 class BuildLifecycleCleanroomIntake
 {
-    public function __construct(private readonly NewApplicationHappyPathDefinition $definition) {}
+    public function __construct(
+        private readonly NewApplicationHappyPathDefinition $definition,
+        private readonly BuildSourceBackedNewApplicationIntake $buildSourceBackedIntake,
+    ) {}
 
     /** @return array<string, mixed> */
     public function handle(LifecycleCleanroomRun $run): array
     {
         $ownerName = 'Cleanroom Synthetic Owner '.str($run->public_id)->substr(-6)->upper();
         if ($run->isNelsonReconciliationV1()) {
+            if ($run->usesSourceBackedNewApplication()) {
+                return [
+                    ...$this->buildSourceBackedIntake->handle(),
+                    'ceremony' => LifecycleCleanroomRun::CeremonyNelsonReconciliationV1,
+                    'run_id' => $run->public_id,
+                ];
+            }
+
             return [
                 'ceremony' => LifecycleCleanroomRun::CeremonyNelsonReconciliationV1,
                 'run_id' => $run->public_id,

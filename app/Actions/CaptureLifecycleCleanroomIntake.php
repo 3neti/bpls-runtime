@@ -57,6 +57,15 @@ class CaptureLifecycleCleanroomIntake
             'ceremony' => data_get($lockedRun->actor_manifest, 'ceremony'),
             'scenario_id' => $scenarioId,
             'semantic_classification' => 'synthetic_only',
+            'identity_classification' => $lockedRun->usesSourceBackedNewApplication()
+                ? 'source_backed'
+                : 'synthetic',
+            'chronology_classification' => $lockedRun->usesSourceBackedNewApplication()
+                ? 'reconstructed_2025_new_application'
+                : 'synthetic',
+            'source_specimen' => $lockedRun->usesSourceBackedNewApplication()
+                ? data_get($lockedRun->actor_manifest, 'source_specimen')
+                : null,
             'production_liability' => false,
         ];
         $metadata['business_permit_evaluation'] = [

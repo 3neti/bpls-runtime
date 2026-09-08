@@ -123,6 +123,7 @@ class ResolveLifecycleCleanroomState
                 'status' => $run->status,
                 'target_step' => $run->target_step,
                 'closed_at' => $run->closed_at?->toIso8601String(),
+                'source_specimen' => data_get($run->actor_manifest, 'source_specimen'),
             ],
             'progress' => [
                 'completed_steps' => $completedCount,
@@ -132,7 +133,8 @@ class ResolveLifecycleCleanroomState
                 'blocker' => $blocker,
                 'profile_kind' => $newProfile['kind'] ?? ($run->isNelsonReconciliationV1() ? 'nelson_reconciliation_v1' : 'pending_intake'),
                 'profile_statement' => $newProfile['statement'] ?? null,
-                'completion_message' => ($newProfile['scope'] ?? null) === 'single_source_application'
+                'completion_message' => $run->usesSourceBackedNewApplication()
+                    || ($newProfile['scope'] ?? null) === 'single_source_application'
                     ? 'The source-backed 2025 registry specimen completes the synthetic Business Permit lifecycle without creating a Renewal.'
                     : 'The 2025 New application completes the synthetic permit lifecycle before the preserved 2026 Renewal chronology continues.',
                 'next_step' => $next,

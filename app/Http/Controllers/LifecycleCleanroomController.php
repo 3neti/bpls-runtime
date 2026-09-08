@@ -60,7 +60,14 @@ class LifecycleCleanroomController extends Controller
             LifecycleCleanroomRun::CeremonyNelsonReconciliationV1,
         ], true), 422);
 
-        $start->handle($request->user(), $ceremony);
+        $sourceSpecimenId = $request->string('source_specimen_id')->toString();
+        if ($sourceSpecimenId === '') {
+            $sourceSpecimenId = null;
+        }
+        abort_unless($sourceSpecimenId === null
+            || $sourceSpecimenId === LifecycleCleanroomRun::SourceSpecimenCal2026001New2025, 422);
+
+        $start->handle($request->user(), $ceremony, $sourceSpecimenId);
 
         return to_route('stakeholder-preview.lifecycle-laboratory.index')->with('success', 'A cleanroom is ready. Run Next Step opens the first real product form.');
     }

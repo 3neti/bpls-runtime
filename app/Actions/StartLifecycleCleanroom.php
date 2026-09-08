@@ -18,20 +18,39 @@ class StartLifecycleCleanroom
         private readonly StakeholderPreviewSafety $safety,
         private readonly LifecycleCleanroomDefinition $definition,
         private readonly EnsureProductLabLineOfBusinessCatalog $ensureCatalog,
+        private readonly BuildSourceBackedNewApplicationIntake $buildSourceBackedIntake,
     ) {}
 
-    public function handle(User $startedBy, string $ceremony = LifecycleCleanroomRun::CeremonyLegacyRegression): LifecycleCleanroomRun
-    {
+    public function handle(
+        User $startedBy,
+        string $ceremony = LifecycleCleanroomRun::CeremonyLegacyRegression,
+        ?string $sourceSpecimenId = null,
+    ): LifecycleCleanroomRun {
         $this->safety->ensureReady();
         $this->ensureCatalog->handle();
 
-        return DB::transaction(function () use ($startedBy, $ceremony): LifecycleCleanroomRun {
+        if ($sourceSpecimenId !== null
+            && ($ceremony !== LifecycleCleanroomRun::CeremonyNelsonReconciliationV1
+                || $sourceSpecimenId !== LifecycleCleanroomRun::SourceSpecimenCal2026001New2025)) {
+            throw new \InvalidArgumentException('The requested lifecycle source specimen is unsupported.');
+        }
+        $sourceSpecimen = $sourceSpecimenId === null
+            ? null
+            : $this->buildSourceBackedIntake->handle()['source_specimen'];
+
+        return DB::transaction(function () use ($startedBy, $ceremony, $sourceSpecimenId, $sourceSpecimen): LifecycleCleanroomRun {
             $existing = LifecycleCleanroomRun::query()
                 ->where('status', 'active')
                 ->lockForUpdate()
                 ->latest('id')
                 ->first();
             if ($existing instanceof LifecycleCleanroomRun) {
+                $existingCeremony = data_get($existing->actor_manifest, 'ceremony', LifecycleCleanroomRun::CeremonyLegacyRegression);
+                $existingSourceSpecimenId = data_get($existing->actor_manifest, 'source_specimen.id');
+                if ($existingCeremony !== $ceremony || $existingSourceSpecimenId !== $sourceSpecimenId) {
+                    throw new \RuntimeException('Close the active lifecycle cleanroom before starting a different ceremony or source specimen.');
+                }
+
                 return $existing;
             }
 
@@ -69,6 +88,7 @@ class StartLifecycleCleanroom
                 'actor_manifest' => [
                     'revision' => LifecycleCleanroomDefinition::Revision,
                     'ceremony' => $ceremony,
+                    'source_specimen' => $sourceSpecimen,
                     'actors' => $actors,
                     'actor_user_ids' => collect($actors)->pluck('user_id')->sort()->values()->all(),
                     'actor_role_ids' => collect($actors)->pluck('role_id')->unique()->sort()->values()->all(),
@@ -77,6 +97,7 @@ class StartLifecycleCleanroom
                 ],
                 'owned_resource_manifest' => [
                     'ceremony' => $ceremony,
+                    'source_specimen_id' => $sourceSpecimenId,
                     'user_ids' => collect($actors)->pluck('user_id')->sort()->values()->all(),
                     'business_owner_ids' => [],
                     'business_ids' => [],
