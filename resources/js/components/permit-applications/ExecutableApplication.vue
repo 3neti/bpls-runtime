@@ -328,6 +328,11 @@ const page2Summary = computed(() => {
                 ),
             0,
         ),
+        totalLabel:
+            projection?.total_label ??
+            (props.application.financial?.assessment
+                ? 'Assessment total'
+                : 'Current total'),
         emergingTotalAmountCents:
             projection?.emerging_total_amount_cents ??
             props.application.financial?.evaluation?.working_paper
@@ -692,6 +697,7 @@ function permitBlockerLabel(blocker: string): string {
                         page2Summary.requiredDeterminationCount
                     "
                     :payment-order-count="page2Summary.paymentOrderCount"
+                    :total-label="page2Summary.totalLabel"
                     :emerging-total-amount-cents="
                         page2Summary.emergingTotalAmountCents
                     "

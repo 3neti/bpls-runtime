@@ -12,6 +12,7 @@ final class BuildExecutablePermitApplicationDocument
     public function __construct(
         private readonly ApplicationDataResolver $resolver,
         private readonly BuildConcernedOfficePaymentOrderSummary $paymentOrderSummary,
+        private readonly ProjectCurrentAssessmentTotal $currentAssessmentTotal,
     ) {}
 
     /** @return array<string, mixed> */
@@ -33,6 +34,13 @@ final class BuildExecutablePermitApplicationDocument
         $officePaymentOrders = $commissionedPath
             ? $this->paymentOrderSummary->handle($permitApplication)
             : null;
+        $projectedTotal = $assessment === null
+            ? $this->currentAssessmentTotal->handle($permitApplication)
+            : null;
+        $displayedTotal = $assessment['total_amount_cents']
+            ?? ($commissionedPath
+                ? $projectedTotal
+                : data_get($application, 'financial.evaluation.working_paper.grand_total_amount_cents'));
         $offices = [];
         $officePayloads = is_array($application['offices'] ?? null) ? $application['offices'] : [];
         foreach ($officePayloads as $office) {
@@ -111,7 +119,13 @@ final class BuildExecutablePermitApplicationDocument
                     ? 'The canonical Assessment has been prepared from completed municipal determinations.'
                     : (data_get($application, 'routing.status') === 'pending' ? 'Awaiting the mandatory BPLO routing determination.' : 'Page 2 is the living municipal processing projection.'),
                 'populated_from_canonical_assessment' => $assessment !== null,
-                'emerging_total_amount_cents' => $assessment['total_amount_cents'] ?? data_get($application, 'financial.evaluation.working_paper.grand_total_amount_cents'),
+                'total_label' => $assessment !== null ? 'Assessment total' : 'Current total',
+                'total_source' => $assessment !== null
+                    ? 'assessment'
+                    : ($commissionedPath
+                        ? ($projectedTotal !== null ? 'canonical_price_projection' : 'pending_canonical_inputs')
+                        : 'evaluation_working_paper'),
+                'emerging_total_amount_cents' => $displayedTotal,
                 'required_unresolved_charge_count' => (int) data_get($application, 'financial.evaluation.working_paper.required_unresolved_charge_count', 0),
                 'offices' => $offices,
                 'concerned_office_payment_orders' => $officePaymentOrders,

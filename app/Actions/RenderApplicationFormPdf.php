@@ -265,7 +265,8 @@ final class RenderApplicationFormPdf
         $y -= 49;
 
         $document->text($page, 'B. OFFICE DETERMINATIONS AND PAYMENT ORDERS', 42, $y, 8, true);
-        $document->text($page, 'WORKING TOTAL '.$this->blankMoney(data_get($page2, 'emerging_total_amount_cents')), 553, $y, 8, true, 'right');
+        $totalLabel = strtoupper((string) data_get($page2, 'total_label', 'Current total'));
+        $document->text($page, $totalLabel.' '.$this->blankMoney(data_get($page2, 'emerging_total_amount_cents')), 553, $y, 8, true, 'right');
         $y -= 14;
         $this->processingTableHeader($document, $page, $y, ['OFFICE', 'DETERMINATIONS', 'PPOS']);
         $y -= 18;

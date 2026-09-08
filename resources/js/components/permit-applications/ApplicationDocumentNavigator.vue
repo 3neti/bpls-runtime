@@ -9,6 +9,7 @@ defineProps<{
     resolvedDeterminationCount: number;
     requiredDeterminationCount: number;
     paymentOrderCount: number;
+    totalLabel: string;
     emergingTotalAmountCents: number | null;
     unresolvedChargeCount: number;
     hasPayable: boolean;
@@ -160,9 +161,9 @@ function money(amountCents: number | null): string {
             <p
                 class="min-w-0 rounded-md bg-white/80 px-2 py-1.5 dark:bg-slate-900"
             >
-                <span class="block text-slate-500 uppercase"
-                    >Emerging total</span
-                >
+                <span class="block text-slate-500 uppercase">{{
+                    totalLabel
+                }}</span>
                 <strong class="block truncate">{{
                     money(emergingTotalAmountCents)
                 }}</strong>

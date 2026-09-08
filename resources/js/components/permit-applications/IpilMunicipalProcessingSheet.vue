@@ -60,6 +60,8 @@ type DocumentProjection = {
         }[];
     };
     page_2_assessment: {
+        total_label: string;
+        total_source: string;
         emerging_total_amount_cents: number | null;
         required_unresolved_charge_count: number;
         offices: Office[];
@@ -695,9 +697,9 @@ function continuationLabel(index: number): string {
                         <div
                             class="grid grid-cols-[1fr_auto] border-t-2 border-stone-900 p-2 text-xs"
                         >
-                            <span class="font-black uppercase"
-                                >Processing working total</span
-                            >
+                            <span class="font-black uppercase">{{
+                                document.page_2_assessment.total_label
+                            }}</span>
                             <strong class="tabular-nums">{{
                                 money(
                                     document.page_2_assessment

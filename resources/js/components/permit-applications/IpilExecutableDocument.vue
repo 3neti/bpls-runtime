@@ -94,6 +94,8 @@ type DocumentProjection = {
         status: string;
         statement: string;
         populated_from_canonical_assessment: boolean;
+        total_label: string;
+        total_source: string;
         emerging_total_amount_cents: number | null;
         required_unresolved_charge_count: number;
         offices: OfficeFeeDetermination[];

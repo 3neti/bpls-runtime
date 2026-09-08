@@ -133,6 +133,9 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         ->and(data_get($applicationData, 'signature_evidence.0.purpose'))->toBe('applicant_lodging')
         ->and(data_get($applicationData, 'signature_evidence.0.facsimile_data_url'))->toStartWith('data:image/png;base64,')
         ->and(data_get($executableDocument, 'commissioned_path'))->toBeTrue()
+        ->and(data_get($executableDocument, 'page_2_assessment.total_label'))->toBe('Current total')
+        ->and(data_get($executableDocument, 'page_2_assessment.total_source'))->toBe('pending_canonical_inputs')
+        ->and(data_get($executableDocument, 'page_2_assessment.emerging_total_amount_cents'))->toBeNull()
         ->and(data_get($executableDocument, 'signature_evidence.0.evidence_digest'))->toBe($signature->evidence_digest)
         ->and(data_get($executableDocument, 'signature_evidence.0.facsimile_data_url'))->toBe(data_get($applicationData, 'signature_evidence.0.facsimile_data_url'));
 
@@ -208,10 +211,24 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         ->and(data_get($assignments[0]->items->sole()->source_snapshot, 'authority'))->toContain('business_permit_evaluations.correct_lines_of_business')
         ->and($application->refresh()->business_activity_description)->toBe('General merchandise store selling household goods and liquor, with a small coffee shop.');
 
+    $paymentOrderSubtotal = (int) $application->paperlessPaymentOrders()->whereNull('superseded_at')->sum('total_amount_cents');
+    $treasurySubtotal = (int) collect($assignments)->flatMap->items->sum('determined_amount_cents');
+    $currentDocument = app(BuildExecutablePermitApplicationDocument::class)->handle($application->fresh(), $treasurer);
+    $currentTotal = $paymentOrderSubtotal + $treasurySubtotal;
+    expect(data_get($currentDocument, 'page_2_assessment.total_label'))->toBe('Current total')
+        ->and(data_get($currentDocument, 'page_2_assessment.total_source'))->toBe('canonical_price_projection')
+        ->and(data_get($currentDocument, 'page_2_assessment.emerging_total_amount_cents'))->toBe($currentTotal)
+        ->and($application->assessments()->count())->toBe(0);
+
     $assessment = app(CreateAssessmentForPermitApplication::class)->handle($application->fresh(), $assessor);
+    $assessedDocument = app(BuildExecutablePermitApplicationDocument::class)->handle($application->fresh(), $treasurer);
     $report = $assessment->price_report_snapshot;
     $scheduleOfPayment = app(BuildScheduleOfPayment::class)->handle($assessment, $report)->toArray();
-    expect(collect($report['components'])->pluck('type'))->not->toContain('business_tax')
+    expect($assessment->total_amount_cents)->toBe($currentTotal)
+        ->and(data_get($assessedDocument, 'page_2_assessment.total_label'))->toBe('Assessment total')
+        ->and(data_get($assessedDocument, 'page_2_assessment.total_source'))->toBe('assessment')
+        ->and(data_get($assessedDocument, 'page_2_assessment.emerging_total_amount_cents'))->toBe($assessment->total_amount_cents)
+        ->and(collect($report['components'])->pluck('type'))->not->toContain('business_tax')
         ->and($scheduleOfPayment['groups'])->toHaveCount(5)
         ->and($scheduleOfPayment['grand_total_minor'])->toBe($report['total']['minor'])
         ->and($scheduleOfPayment['assessment_total_minor'])->toBe($assessment->total_amount_cents);
