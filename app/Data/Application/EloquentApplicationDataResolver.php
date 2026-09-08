@@ -104,7 +104,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             ->values()
             ->all());
         $permit = $this->permit($application, $receipts);
-        $scheduleOfFees = $this->scheduleOfFees($application);
+        $scheduleOfFees = $this->scheduleOfFees($application, $assessment);
         $attachments = $this->attachments($application, $assessment, $receipts, $permit);
         $tasks = $this->tasks($application, $viewer, $evaluationProjection);
         $affordances = $this->affordances($application, $viewer, $tasks);
@@ -310,10 +310,27 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         return 'data:'.$media->mime_type.';base64,'.base64_encode($disk->get($path));
     }
 
-    private function scheduleOfFees(PermitApplication $application): MunicipalScheduleOfFeesData
+    private function scheduleOfFees(PermitApplication $application, ?Assessment $assessment): MunicipalScheduleOfFeesData
     {
         $asOf = Carbon::create($application->application_year, 1, 1)->startOfDay();
         $schedule = $this->buildScheduleOfFees->handle(asOf: $asOf);
+        $scheduleCategories = data_get($schedule, 'categories');
+        $catalogueRows = collect(is_array($scheduleCategories) ? $scheduleCategories : [])
+            ->flatMap(function (array $category): array {
+                $rows = data_get($category, 'rows');
+
+                return is_array($rows) ? array_values(array_filter($rows, is_array(...))) : [];
+            })
+            ->keyBy(fn (array $row): int => (int) data_get($row, 'fee_rule_id'));
+        $categories = $assessment instanceof Assessment
+            ? $this->assessedFeeCategories($assessment, $catalogueRows)
+            : $this->currentFeeCategories($application, $catalogueRows);
+        $rows = collect($categories)->flatMap(fn (array $category): array => $category['rows']);
+        $state = $assessment instanceof Assessment
+            ? 'assessed_snapshot'
+            : ($rows->contains(fn (array $row): bool => data_get($row, 'application_state') === 'selected')
+                ? 'selected_charges'
+                : ($rows->isNotEmpty() ? 'application_options' : 'awaiting_context'));
 
         return new MunicipalScheduleOfFeesData(
             schema_version: MunicipalScheduleOfFeesData::Schema,
@@ -322,8 +339,154 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             as_of_date: (string) data_get($schedule, 'as_of_date'),
             application_year: (int) data_get($schedule, 'application_year'),
             currency: (string) data_get($schedule, 'currency'),
-            categories: array_values(data_get($schedule, 'categories', [])),
+            categories: $categories,
+            context: [
+                'kind' => 'application',
+                'state' => $state,
+                'item_count' => $rows->count(),
+                'selected_count' => $rows->whereIn('application_state', ['selected', 'assessed'])->count(),
+                'total_amount_minor' => (int) $rows
+                    ->whereIn('application_state', ['selected', 'assessed'])
+                    ->sum(fn (array $row): int => (int) data_get($row, 'amount_minor', 0)),
+            ],
         );
+    }
+
+    /**
+     * @param  Collection<int, array<mixed, mixed>>  $catalogueRows
+     * @return list<array<string, mixed>>
+     */
+    private function assessedFeeCategories(Assessment $assessment, Collection $catalogueRows): array
+    {
+        $rows = $assessment->lines->map(function ($line) use ($catalogueRows): array {
+            $catalogue = $line->fee_rule_id === null ? [] : ($catalogueRows->get($line->fee_rule_id) ?? []);
+
+            return [
+                ...$catalogue,
+                'id' => 'assessment-line-'.$line->id,
+                'fee_rule_id' => $line->fee_rule_id,
+                'service' => $line->name,
+                'basis' => $line->basis,
+                'code' => $line->code,
+                'amount_minor' => $line->amount_cents,
+                'application_state' => 'assessed',
+                'source_label' => data_get($line->rule_snapshot, 'office_label')
+                    ?? data_get($line, 'lineOfBusiness.name')
+                    ?? 'Application-wide',
+                'catalogue_version' => data_get($catalogue, 'catalogue_version'),
+                'rule_version' => data_get($line->rule_snapshot, 'fee_rule_version'),
+            ];
+        })->values()->all();
+
+        return $rows === [] ? [] : [[
+            'key' => 'assessed-charges',
+            'label' => 'Assessment of record',
+            'rows' => $rows,
+        ]];
+    }
+
+    /**
+     * @param  Collection<int, array<mixed, mixed>>  $catalogueRows
+     * @return list<array<string, mixed>>
+     */
+    private function currentFeeCategories(PermitApplication $application, Collection $catalogueRows): array
+    {
+        $routingDetermination = $application->getRelation('bploRoutingDetermination');
+        $routingWorks = $routingDetermination === null ? collect() : $routingDetermination->works;
+        $outstandingOfficeCodes = $routingWorks
+            ->filter(fn ($work): bool => $work->paymentOrders
+                ->where('status', 'issued')->whereNull('superseded_at')->isEmpty())
+            ->pluck('office_code')->unique()->values();
+        $lineOfBusinessIds = $application->treasuryLineOfBusinessAssignments
+            ->whereNull('removed_at')->pluck('line_of_business_id')->unique()->values();
+        $selectedOfficeRows = $routingWorks
+            ->flatMap(fn ($work) => $work->paymentOrders
+                ->where('status', 'issued')->whereNull('superseded_at')
+                ->flatMap(fn ($order) => $order->lines->map(function ($line) use ($work, $catalogueRows): array {
+                    $feeRuleId = data_get($line->source_snapshot, 'fee_rule_id');
+                    $catalogue = is_numeric($feeRuleId) ? ($catalogueRows->get((int) $feeRuleId) ?? []) : [];
+
+                    return [
+                        ...$catalogue,
+                        'id' => 'payment-order-line-'.$line->id,
+                        'fee_rule_id' => is_numeric($feeRuleId) ? (int) $feeRuleId : null,
+                        'service' => $line->name,
+                        'code' => $line->code,
+                        'amount_minor' => $line->amount_cents,
+                        'application_state' => 'selected',
+                        'source_label' => $work->office_label,
+                        'catalogue_version' => data_get($catalogue, 'catalogue_version'),
+                        'rule_version' => data_get($line->source_snapshot, 'fee_rule_version'),
+                    ];
+                })))
+            ->values();
+        $selectedTreasuryRows = $application->treasuryLineOfBusinessAssignments
+            ->whereNull('removed_at')
+            ->flatMap(fn (TreasuryLineOfBusinessAssignment $assignment) => $assignment->items
+                ->whereNull('removed_at')->map(function (TreasuryLineItem $item) use ($assignment, $catalogueRows): array {
+                    $catalogue = $catalogueRows->get($item->fee_rule_id) ?? [];
+
+                    return [
+                        ...$catalogue,
+                        'id' => 'treasury-line-item-'.$item->id,
+                        'fee_rule_id' => $item->fee_rule_id,
+                        'service' => $item->name,
+                        'code' => $item->code,
+                        'amount_minor' => $item->determined_amount_cents,
+                        'application_state' => 'selected',
+                        'source_label' => $assignment->lineOfBusiness->name,
+                        'catalogue_version' => data_get($catalogue, 'catalogue_version'),
+                        'rule_version' => data_get($item->source_snapshot, 'fee_rule_version'),
+                    ];
+                }))
+            ->values();
+        $selectedRows = $selectedOfficeRows->concat($selectedTreasuryRows)->values();
+        $selectedFeeRuleIds = $selectedRows->pluck('fee_rule_id')->filter()->map(fn ($id): int => (int) $id);
+        $eligibleRows = $catalogueRows
+            ->reject(fn (array $row): bool => $selectedFeeRuleIds->contains((int) data_get($row, 'fee_rule_id')))
+            ->filter(function (array $row) use ($outstandingOfficeCodes, $lineOfBusinessIds, $selectedTreasuryRows): bool {
+                $channel = data_get($row, 'determination_channel');
+                if ($channel === 'concerned_office_payment_order') {
+                    $officeCodes = data_get($row, 'responsible_office_codes');
+
+                    return is_array($officeCodes)
+                        && collect($officeCodes)->intersect($outstandingOfficeCodes)->isNotEmpty();
+                }
+
+                $rowLineOfBusinessIds = data_get($row, 'line_of_business_ids');
+
+                return $channel === 'treasury_lob'
+                    && $selectedTreasuryRows->isEmpty()
+                    && is_array($rowLineOfBusinessIds)
+                    && collect($rowLineOfBusinessIds)->intersect($lineOfBusinessIds)->isNotEmpty();
+            })
+            ->map(function (array $row) use ($routingWorks): array {
+                $responsibleOfficeCodes = data_get($row, 'responsible_office_codes');
+                $officeLabels = is_array($responsibleOfficeCodes)
+                    ? $routingWorks->whereIn('office_code', $responsibleOfficeCodes)->pluck('office_label')->unique()->values()
+                    : collect();
+
+                return [
+                    ...$row,
+                    'application_state' => 'eligible',
+                    'source_label' => data_get($row, 'determination_channel') === 'treasury_lob'
+                        ? 'Treasury Line of Business'
+                        : ($officeLabels->implode(', ') ?: 'Concerned-office Payment Order'),
+                ];
+            })->values();
+
+        return array_values(array_filter([
+            $selectedRows->isEmpty() ? null : [
+                'key' => 'selected-charges',
+                'label' => 'Selected for this Application',
+                'rows' => $selectedRows->all(),
+            ],
+            $eligibleRows->isEmpty() ? null : [
+                'key' => 'eligible-fees',
+                'label' => 'Available for current municipal work',
+                'rows' => $eligibleRows->all(),
+            ],
+        ]));
     }
 
     /**

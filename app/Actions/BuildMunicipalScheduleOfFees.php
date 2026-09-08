@@ -58,10 +58,16 @@ final class BuildMunicipalScheduleOfFees
                 'fee_rule_id' => data_get($fee, 'id'),
                 'category' => data_get($fee, 'service_category'),
                 'service' => data_get($fee, 'name'),
-                'basis' => data_get($fee, 'family') === 'application_wide'
-                    ? 'Whole application'
-                    : data_get($fee, 'line_of_business_name', 'Line of Business'),
+                'basis' => data_get($fee, 'applies_to_label')
+                    ?? (data_get($fee, 'family') === 'application_wide'
+                        ? 'Whole application'
+                        : data_get($fee, 'line_of_business_name', 'Line of Business')),
                 'code' => data_get($fee, 'code'),
+                'revenue_code' => data_get($fee, 'revenue_code'),
+                'determination_channel' => data_get($fee, 'determination_channel'),
+                'responsible_office_codes' => data_get($fee, 'responsible_office_codes', []),
+                'line_of_business_ids' => data_get($fee, 'line_of_business_ids', []),
+                'catalogue_version' => data_get($fee, 'catalogue_version'),
                 'amount_minor' => data_get($fee, 'amount_minor'),
                 'rate_basis_points' => null,
                 'is_ceiling' => false,
@@ -97,6 +103,11 @@ final class BuildMunicipalScheduleOfFees
                             data_get($entry, 'unit_label'),
                         ]),
                         'code' => data_get($entry, 'code'),
+                        'revenue_code' => data_get($entry, 'code'),
+                        'determination_channel' => 'reference_only',
+                        'responsible_office_codes' => [],
+                        'line_of_business_ids' => [],
+                        'catalogue_version' => null,
                         'amount_minor' => data_get($entry, 'amount_minor'),
                         'rate_basis_points' => data_get($entry, 'rate_basis_points'),
                         'is_ceiling' => (bool) data_get($entry, 'is_ceiling'),

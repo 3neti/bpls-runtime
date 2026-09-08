@@ -4,6 +4,12 @@ export type MunicipalFeeScheduleRow = {
     service: string;
     basis: string;
     code: string;
+    revenue_code?: string | null;
+    determination_channel?: string | null;
+    responsible_office_codes?: string[];
+    line_of_business_ids?: number[];
+    catalogue_version?: string | null;
+    rule_version?: string | null;
     amount_minor: number | null;
     rate_basis_points: string | number | null;
     is_ceiling: boolean;
@@ -13,6 +19,8 @@ export type MunicipalFeeScheduleRow = {
     revision_eligible: boolean;
     management_url: string | null;
     governance_url: string | null;
+    application_state?: 'eligible' | 'selected' | 'assessed';
+    source_label?: string | null;
 };
 
 export type MunicipalFeeScheduleCategory = {
@@ -29,4 +37,16 @@ export type MunicipalScheduleOfFees = {
     application_year: number;
     currency: 'PHP' | string;
     categories: MunicipalFeeScheduleCategory[];
+    context?: {
+        kind?: 'application' | string;
+        state?:
+            | 'awaiting_context'
+            | 'application_options'
+            | 'selected_charges'
+            | 'assessed_snapshot'
+            | string;
+        item_count?: number;
+        selected_count?: number;
+        total_amount_minor?: number;
+    };
 };

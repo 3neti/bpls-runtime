@@ -5,12 +5,12 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { ApplicantDocumentReferenceItem } from '@/components/permit-applications/ApplicantDocumentReference.vue';
 import ApplicationAttachmentRail from '@/components/permit-applications/ApplicationAttachmentRail.vue';
 import ApplicationDocumentNavigator from '@/components/permit-applications/ApplicationDocumentNavigator.vue';
+import ApplicationFeeCatalogueSheet from '@/components/permit-applications/ApplicationFeeCatalogueSheet.vue';
 import ApplicationWorkNote from '@/components/permit-applications/ApplicationWorkNote.vue';
 import BploRoutingTaskSheet from '@/components/permit-applications/BploRoutingTaskSheet.vue';
 import IpilBusinessPermit from '@/components/permit-applications/IpilBusinessPermit.vue';
 import IpilExecutableDocument from '@/components/permit-applications/IpilExecutableDocument.vue';
 import IpilPaymentContinuationSheet from '@/components/permit-applications/IpilPaymentContinuationSheet.vue';
-import MunicipalScheduleOfFeesSheet from '@/components/permit-applications/MunicipalScheduleOfFeesSheet.vue';
 import OfficePaymentOrdersSheet from '@/components/permit-applications/OfficePaymentOrdersSheet.vue';
 import type { MunicipalScheduleOfFees } from '@/types/municipal-schedule-of-fees';
 
@@ -924,7 +924,7 @@ function permitBlockerLabel(blocker: string): string {
                     v-else-if="activeTab === 'schedule_of_fees'"
                     class="bg-stone-100 p-2 sm:p-5"
                 >
-                    <MunicipalScheduleOfFeesSheet
+                    <ApplicationFeeCatalogueSheet
                         :schedule="application.schedule_of_fees"
                     />
                 </div>

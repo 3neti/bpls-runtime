@@ -97,6 +97,10 @@ test('frozen Page 1 and frozen PriceReport survive ApplicationData reconstructio
         ->and($data['schedule_of_fees']['application_year'])->toBe(2025)
         ->and($data['schedule_of_fees']['as_of_date'])->toBe('2025-01-01')
         ->and($data['schedule_of_fees']['categories'])->not->toBeEmpty()
+        ->and($data['schedule_of_fees']['context']['kind'])->toBe('application')
+        ->and($data['schedule_of_fees']['context']['state'])->toBe('assessed_snapshot')
+        ->and($data['schedule_of_fees']['context']['total_amount_minor'])->toBe($assessment->total_amount_cents)
+        ->and(collect($data['schedule_of_fees']['categories'])->flatMap(fn (array $category): array => $category['rows'])->pluck('application_state')->unique()->all())->toBe(['assessed'])
         ->and(collect($data['attachments'])->pluck('key')->all())->toBe([
             'schedule_of_fees',
             'payment_orders',
@@ -203,13 +207,14 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
     $paymentSheet = file_get_contents(resource_path('js/components/permit-applications/IpilPaymentContinuationSheet.vue'));
     $attachmentRail = file_get_contents(resource_path('js/components/permit-applications/ApplicationAttachmentRail.vue'));
     $schedule = file_get_contents(resource_path('js/components/permit-applications/MunicipalScheduleOfFeesSheet.vue'));
+    $applicationFeeCatalogue = file_get_contents(resource_path('js/components/permit-applications/ApplicationFeeCatalogueSheet.vue'));
     $paymentOrders = file_get_contents(resource_path('js/components/permit-applications/OfficePaymentOrdersSheet.vue'));
     $officialReceipt = file_get_contents(resource_path('js/components/receipts/Af51OfficialReceipt.vue'));
     $businessPermit = file_get_contents(resource_path('js/components/permit-applications/IpilBusinessPermit.vue'));
 
     expect($component)->toContain('ApplicationAttachmentRail')
         ->and($component)->toContain(':attachments="application.attachments"')
-        ->and($component)->toContain('MunicipalScheduleOfFeesSheet')
+        ->and($component)->toContain('ApplicationFeeCatalogueSheet')
         ->and($component)->toContain('OfficePaymentOrdersSheet')
         ->and($component)->toContain("activeTab === 'schedule_of_fees'")
         ->and($component)->toContain("activeTab === 'payment_orders'")
@@ -222,6 +227,10 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
         ->and($schedule)->toContain('schedule-inline-revision-form')
         ->and($schedule)->toContain('canManageFeeRules && row.revision_eligible')
         ->and($schedule)->not->toContain('Not an Assessment')
+        ->and($applicationFeeCatalogue)->toContain('data-testid="application-fee-catalogue-sheet"')
+        ->and($applicationFeeCatalogue)->toContain('Limited to the municipal work assigned to this Application.')
+        ->and($applicationFeeCatalogue)->toContain('View fee details')
+        ->and($applicationFeeCatalogue)->toContain("row.revenue_code || '—'")
         ->and($paymentOrders)->toContain('data-testid="office-payment-orders-sheet"')
         ->and($component)->toContain('data-testid="application-document-canvas"')
         ->and($component)->toContain('ApplicationDocumentNavigator')

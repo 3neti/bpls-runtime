@@ -12,13 +12,17 @@ use App\Models\FeeRuleReconciliation;
 use App\Models\RevenueCodeProvision;
 use App\Models\RevenueCodeProvisionClause;
 use App\Models\RevenueCodeProvisionRow;
+use App\Support\MunicipalFeeCatalogPresentation;
 use App\Support\MunicipalFeeScheduleCategory;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 final class BuildFeeMatrixQuickLook
 {
-    public function __construct(private readonly MunicipalFeeScheduleCategory $scheduleCategory) {}
+    public function __construct(
+        private readonly MunicipalFeeScheduleCategory $scheduleCategory,
+        private readonly MunicipalFeeCatalogPresentation $presentation,
+    ) {}
 
     /** @return array<string, mixed> */
     public function handle(
@@ -31,7 +35,15 @@ final class BuildFeeMatrixQuickLook
         ?string $sourceClassification = null,
     ): array {
         $allRules = FeeRule::query()
-            ->with(['lineOfBusiness', 'currentReconciliation'])
+            ->with([
+                'businessDivision',
+                'catalogVersion',
+                'currentReconciliation',
+                'lineOfBusiness',
+                'lineOfBusinesses:id',
+                'officeAssignments',
+                'revenueAccount',
+            ])
             ->where('is_active', true)
             ->whereNull('metadata->scenario_id')
             ->where('code', 'not like', 'SCENARIO-%')
@@ -125,7 +137,17 @@ final class BuildFeeMatrixQuickLook
             'family' => $rule->scope === FeeRuleScope::Application ? 'application_wide' : 'line_of_business',
             'line_of_business_id' => $rule->line_of_business_id,
             'line_of_business_name' => $rule->lineOfBusiness?->name,
+            'applies_to_label' => implode(', ', $this->presentation->appliesTo($rule)),
             'responsible_office' => data_get($rule->metadata, 'responsible_office'),
+            'responsible_office_codes' => $rule->officeAssignments->pluck('office_code')->values()->all(),
+            'line_of_business_ids' => $rule->lineOfBusinesses->pluck('id')->whenEmpty(
+                fn (Collection $ids): Collection => $rule->line_of_business_id === null
+                    ? $ids
+                    : collect([$rule->line_of_business_id]),
+            )->values()->all(),
+            'determination_channel' => $rule->determination_channel->value,
+            'revenue_code' => $rule->revenueAccount?->code,
+            'catalogue_version' => $rule->catalogVersion?->code,
             'currency' => 'PHP',
             'amount_minor' => $mayShowAmount ? $rule->amount_cents : null,
             'calculation_type' => $rule->calculation_type->value,
