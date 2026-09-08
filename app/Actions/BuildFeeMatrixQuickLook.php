@@ -55,6 +55,10 @@ final class BuildFeeMatrixQuickLook
 
         $ordinanceRegister = RevenueCodeProvision::query()
             ->with(['feeRule.currentReconciliation', 'rows', 'clauses'])
+            ->where(function ($query): void {
+                $query->whereNull('metadata->catalog_status')
+                    ->orWhere('metadata->catalog_status', '!=', 'superseded_by_ipil_legacy_uat_v1');
+            })
             ->whereIn('provision_type', [
                 RevenueCodeProvisionType::FixedFee->value,
                 RevenueCodeProvisionType::TaxSchedule->value,

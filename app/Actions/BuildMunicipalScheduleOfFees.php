@@ -52,7 +52,6 @@ final class BuildMunicipalScheduleOfFees
                 fn (array $group): array => $this->arrayRows($group, 'fees'),
             ))
             ->filter(fn (array $fee): bool => $this->isEffective($fee, $effectiveDate))
-            ->filter(fn (array $fee): bool => data_get($fee, 'amount_minor') !== null)
             ->filter(fn (array $fee): bool => $includeUnconfirmedRules || data_get($fee, 'status') === 'in_force')
             ->map(fn (array $fee): array => [
                 'id' => 'rule-'.data_get($fee, 'id'),
@@ -66,7 +65,9 @@ final class BuildMunicipalScheduleOfFees
                 'amount_minor' => data_get($fee, 'amount_minor'),
                 'rate_basis_points' => null,
                 'is_ceiling' => false,
-                'status' => data_get($fee, 'status') === 'in_force' ? 'available' : 'for_confirmation',
+                'status' => data_get($fee, 'status') === 'in_force'
+                    ? (data_get($fee, 'amount_minor') === null ? 'needs_determination' : 'available')
+                    : 'for_confirmation',
                 'effective_from' => data_get($fee, 'effective_from'),
                 'effective_until' => data_get($fee, 'effective_until'),
                 'revision_eligible' => data_get($fee, 'calculation_type') === 'fixed',

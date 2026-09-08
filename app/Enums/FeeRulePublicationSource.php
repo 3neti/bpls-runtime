@@ -7,6 +7,7 @@ use App\Models\FeeRule;
 enum FeeRulePublicationSource: string
 {
     case AcceptedMunicipalAuthority = 'accepted_municipal_authority';
+    case MigratedLegacyUat = 'migrated_legacy_uat';
     case MunicipalConfirmationRequired = 'municipal_confirmation_required';
     case Synthetic = 'synthetic';
     case ProvisionalUat = 'provisional_uat';
@@ -47,6 +48,6 @@ enum FeeRulePublicationSource: string
 
     public function mayPublishExactAmount(): bool
     {
-        return $this === self::AcceptedMunicipalAuthority;
+        return in_array($this, [self::AcceptedMunicipalAuthority, self::MigratedLegacyUat], true);
     }
 }

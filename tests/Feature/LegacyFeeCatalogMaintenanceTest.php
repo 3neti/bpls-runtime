@@ -1,8 +1,10 @@
 <?php
 
+use App\Actions\ActivateLegacyUatFeeCatalog;
 use App\Actions\CharacterizeLegacyFeeCatalog;
 use App\Actions\ReconcileLegacyFeeCatalogCandidate;
 use App\Enums\FeeRuleExecutionStatus;
+use App\Enums\LegacyFeeRuleReconciliationStatus;
 use App\Enums\UserPermission;
 use App\Models\FeeRule;
 use App\Models\LegacyFeeRuleReconciliation;
@@ -10,6 +12,7 @@ use App\Models\LegacyImportBatch;
 use App\Models\LegacyLineOfBusinessReconciliation;
 use App\Models\LegacyRecord;
 use App\Models\LineOfBusiness;
+use App\Models\RevenueCodeProvision;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -237,4 +240,58 @@ test('supports normalized many-to-many Lines of Business and explicit office own
     expect($rule->lineOfBusinesses()->pluck('line_of_businesses.name')->all())
         ->toEqualCanonicalizing(['S- COFFEE SHOP', 'S- RESTAURANT'])
         ->and($rule->officeAssignments()->sole()->office_code)->toBe('health');
+});
+
+test('activates the scoped migrated Ipil catalogue for UAT and excludes repeated seed and test fixtures', function (): void {
+    $fixture = legacyFeeCatalogFixture();
+    legacyFeeCatalogRecord($fixture['batch'], 'fees', 'fee-unscoped-seed', [
+        'name' => 'Business Permit Fee',
+        'feeType' => 'Constant',
+        'amount' => 500,
+        'applicationType' => ['New'],
+    ], 4);
+    $testDivision = legacyFeeCatalogRecord($fixture['batch'], 'divisions', 'division-test', ['name' => 'Test Division'], 2);
+    legacyFeeCatalogRecord($fixture['batch'], 'fees', 'fee-test', [
+        'name' => 'Fee Name Test',
+        'feeType' => 'Constant',
+        'amount' => 500,
+        'applicationType' => ['New'],
+        'divisionId' => $testDivision->legacy_id,
+    ], 5);
+    app(CharacterizeLegacyFeeCatalog::class)->handle($fixture['batch']);
+
+    $placeholder = FeeRule::factory()->create(['code' => 'MRC-PLACEHOLDER', 'is_active' => true]);
+    $paperReference = FeeRule::factory()->create(['code' => 'LAB-IPIL-ENGINEERING-BUILDING-PERMIT', 'is_active' => true]);
+    $ordinanceProvision = RevenueCodeProvision::factory()->create();
+
+    $result = app(ActivateLegacyUatFeeCatalog::class)->handle(
+        $fixture['batch'],
+        '2025-01-01',
+        $fixture['actor'],
+    );
+
+    $health = LegacyFeeRuleReconciliation::query()->where('source_legacy_id', 'fee-health')->sole();
+    $formula = LegacyFeeRuleReconciliation::query()->where('source_legacy_id', 'fee-occupation')->sole();
+    $unscoped = LegacyFeeRuleReconciliation::query()->where('source_legacy_id', 'fee-unscoped-seed')->sole();
+    $test = LegacyFeeRuleReconciliation::query()->where('source_legacy_id', 'fee-test')->sole();
+
+    expect($result)->toMatchArray([
+        'activated_fee_rule_count' => 3,
+        'excluded_unscoped_seed_count' => 1,
+        'excluded_test_fixture_count' => 1,
+        'deactivated_placeholder_count' => 1,
+        'superseded_ordinance_provision_count' => 1,
+        'health_fee_count' => 1,
+    ])->and($placeholder->refresh()->is_active)->toBeFalse()
+        ->and($paperReference->refresh()->is_active)->toBeTrue()
+        ->and($ordinanceProvision->refresh()->metadata['catalog_status'])->toBe('superseded_by_ipil_legacy_uat_v1')
+        ->and($health->refresh()->status)->toBe(LegacyFeeRuleReconciliationStatus::Accepted)
+        ->and($health->feeRule->is_active)->toBeTrue()
+        ->and($health->feeRule->metadata['price_list_source_classification'])->toBe('migrated_legacy_uat')
+        ->and($health->feeRule->officeAssignments()->sole()->office_code)->toBe('health')
+        ->and($health->feeRule->lineOfBusinesses()->pluck('line_of_businesses.name')->all())->toBe(['S- COFFEE SHOP'])
+        ->and($formula->refresh()->feeRule->metadata['manual_amount_required'])->toBeTrue()
+        ->and($formula->feeRule->currentReconciliation->execution_status)->toBe(FeeRuleExecutionStatus::Executable)
+        ->and($unscoped->status)->toBe(LegacyFeeRuleReconciliationStatus::Rejected)
+        ->and($test->status)->toBe(LegacyFeeRuleReconciliationStatus::Rejected);
 });

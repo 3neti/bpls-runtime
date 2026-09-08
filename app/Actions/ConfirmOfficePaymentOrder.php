@@ -2,7 +2,6 @@
 
 namespace App\Actions;
 
-use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\UserPermission;
 use App\Models\BploRoutingWork;
@@ -74,8 +73,11 @@ class ConfirmOfficePaymentOrder
 
             foreach ($items as $item) {
                 $rule = $rules->get($item['fee_rule_id']);
-                if (! $rule instanceof FeeRule || $rule->calculation_type !== FeeRuleCalculationType::Fixed) {
-                    throw new LogicException('The simple Payment Order editor accepts only catalogued fixed-amount fees in this wave.');
+                if (! $rule instanceof FeeRule) {
+                    throw new LogicException('The Payment Order item must reference a catalogued fee.');
+                }
+                if ($rule->calculation_type->value !== 'fixed' && data_get($rule->metadata, 'manual_amount_required') !== true) {
+                    throw new LogicException('A ranged or formula fee requires an explicitly configured manual municipal determination.');
                 }
                 if (! $rule->is_active
                     || $rule->effective_from->year > $application->application_year

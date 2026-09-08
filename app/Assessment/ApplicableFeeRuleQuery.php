@@ -61,7 +61,10 @@ class ApplicableFeeRuleQuery
 
     private function appliesToApplicationType(FeeRule $feeRule, PermitApplicationType $applicationType): bool
     {
-        if (data_get($feeRule->metadata, 'assessment_selection') === 'concerned_office_payment_order_only') {
+        if (in_array(data_get($feeRule->metadata, 'assessment_selection'), [
+            'concerned_office_payment_order_only',
+            'treasury_lob_determination_only',
+        ], true)) {
             return false;
         }
 

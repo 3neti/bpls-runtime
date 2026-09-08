@@ -10,6 +10,7 @@ import FinancialLineItemEditor from '@/components/permit-applications/FinancialL
 import SignatureFacsimileCapture from '@/components/SignatureFacsimileCapture.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { dateTime, money } from '@/lib/evaluationPresentation';
 
 type RoutingLine = {
@@ -142,6 +143,7 @@ const treasurySelections = ref<
     }[]
 >([]);
 const selectedTreasuryLob = ref<number | null>(null);
+const treasuryLobSearch = ref('');
 
 for (const work of props.task.routing?.works ?? []) {
     officeItems[work.id] = [];
@@ -359,6 +361,7 @@ function addTreasuryLob(): void {
         items: option.default_items.map((item) => ({ ...item })),
     });
     selectedTreasuryLob.value = null;
+    treasuryLobSearch.value = '';
 }
 
 function confirmTreasuryLobs(): void {
@@ -402,6 +405,20 @@ const treasurySelectionsReady = computed(
             (selection) => selection.items.length > 0,
         ),
 );
+const filteredTreasuryLobOptions = computed(() => {
+    const query = treasuryLobSearch.value.trim().toLocaleLowerCase();
+    const options = props.task.financial_editor.line_of_business_options;
+
+    return (
+        query === ''
+            ? options
+            : options.filter((line) =>
+                  `${line.name} ${line.code}`
+                      .toLocaleLowerCase()
+                      .includes(query),
+              )
+    ).slice(0, 100);
+});
 </script>
 
 <template>
@@ -610,6 +627,12 @@ const treasurySelectionsReady = computed(
                         >
                             Select Line of Business
                         </label>
+                        <Input
+                            v-model="treasuryLobSearch"
+                            type="search"
+                            placeholder="Search the Ipil Line of Business catalogue"
+                            autocomplete="off"
+                        />
                         <div class="flex flex-col gap-2 sm:flex-row">
                             <select
                                 id="treasury-line-of-business"
@@ -620,8 +643,7 @@ const treasurySelectionsReady = computed(
                                     Choose an official classification
                                 </option>
                                 <option
-                                    v-for="line in task.financial_editor
-                                        .line_of_business_options"
+                                    v-for="line in filteredTreasuryLobOptions"
                                     :key="line.id"
                                     :value="line.id"
                                 >
@@ -995,29 +1017,36 @@ const treasurySelectionsReady = computed(
                     </div>
                 </div>
                 <template v-else>
-                    <div class="flex flex-col gap-2 sm:flex-row">
-                        <select
-                            v-model="selectedTreasuryLob"
-                            class="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
-                        >
-                            <option :value="null">
-                                Select Line of Business
-                            </option>
-                            <option
-                                v-for="line in task.financial_editor
-                                    .line_of_business_options"
-                                :key="line.id"
-                                :value="line.id"
+                    <div class="grid gap-2">
+                        <Input
+                            v-model="treasuryLobSearch"
+                            type="search"
+                            placeholder="Search Line of Business"
+                            autocomplete="off"
+                        />
+                        <div class="flex flex-col gap-2 sm:flex-row">
+                            <select
+                                v-model="selectedTreasuryLob"
+                                class="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
                             >
-                                {{ line.name }}
-                            </option>
-                        </select>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            @click="addTreasuryLob"
-                            >Add</Button
-                        >
+                                <option :value="null">
+                                    Select Line of Business
+                                </option>
+                                <option
+                                    v-for="line in filteredTreasuryLobOptions"
+                                    :key="line.id"
+                                    :value="line.id"
+                                >
+                                    {{ line.name }}
+                                </option>
+                            </select>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                @click="addTreasuryLob"
+                                >Add</Button
+                            >
+                        </div>
                     </div>
                     <div
                         v-for="selection in treasurySelections"
