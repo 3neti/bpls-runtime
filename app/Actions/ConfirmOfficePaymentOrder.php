@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Assessment\AssessmentCalculator;
 use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCategory;
 use App\Enums\UserPermission;
@@ -20,6 +21,7 @@ class ConfirmOfficePaymentOrder
         private readonly CaptureSignatureEvidence $captureSignatureEvidence,
         private readonly ConcernedOfficeReference $concernedOffices,
         private readonly AuthorizeRoutedOfficeActor $authorizeRoutedOfficeActor,
+        private readonly AssessmentCalculator $assessmentCalculator,
     ) {}
 
     /**
@@ -51,6 +53,18 @@ class ConfirmOfficePaymentOrder
             if ($rules->count() !== count($items)) {
                 throw new LogicException('Every Payment Order item must reference the Municipal Schedule of Fees.');
             }
+            $exactOnceKeys = $rules->map(fn (FeeRule $rule): string => (string) data_get($rule->metadata, 'exact_once_key', 'fee-rule-'.$rule->id));
+            if ($exactOnceKeys->duplicates()->isNotEmpty()) {
+                throw new LogicException('An application-wide fee may appear only once in a Payment Order.');
+            }
+            $existingExactOnceKeys = $application->paperlessPaymentOrders()
+                ->where('status', 'issued')->whereNull('superseded_at')
+                ->with('lines')->get()->flatMap->lines
+                ->map(fn ($line): mixed => data_get($line->source_snapshot, 'exact_once_key'))
+                ->filter();
+            if ($exactOnceKeys->intersect($existingExactOnceKeys)->isNotEmpty()) {
+                throw new LogicException('An application-wide fee has already been determined for this Application.');
+            }
 
             $issuedAt = now();
             $order = $application->paperlessPaymentOrders()->create([
@@ -76,9 +90,6 @@ class ConfirmOfficePaymentOrder
                 $rule = $rules->get($item['fee_rule_id']);
                 if (! $rule instanceof FeeRule) {
                     throw new LogicException('The Payment Order item must reference a catalogued fee.');
-                }
-                if ($rule->calculation_type->value !== 'fixed' && data_get($rule->metadata, 'manual_amount_required') !== true) {
-                    throw new LogicException('A ranged or formula fee requires an explicitly configured manual municipal determination.');
                 }
                 if (! $rule->is_active
                     || $rule->effective_from->year > $application->application_year
@@ -122,7 +133,11 @@ class ConfirmOfficePaymentOrder
                 if ($amount < 0) {
                     throw new LogicException('A Payment Order amount cannot be negative.');
                 }
-                $variance = $amount - $rule->amount_cents;
+                $calculation = data_get($rule->metadata, 'manual_amount_required') === true
+                    ? ['basis_amount_cents' => 0, 'amount_cents' => $rule->amount_cents, 'range_id' => null, 'rule_snapshot' => null]
+                    : $this->assessmentCalculator->calculate($rule, null, $application);
+                $defaultAmount = $calculation['amount_cents'];
+                $variance = $amount - $defaultAmount;
                 $reason = $item['reason'] ?? null;
                 $authority = $item['authority'] ?? null;
                 if ($variance !== 0 && data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true) {
@@ -141,11 +156,13 @@ class ConfirmOfficePaymentOrder
                         'scope' => 'application',
                         'fee_rule_id' => $rule->id,
                         'fee_rule_version' => $this->feeRuleVersion($rule),
+                        'exact_once_key' => data_get($rule->metadata, 'exact_once_key', 'fee-rule-'.$rule->id),
                         'office_code' => $work->office_code,
                         'office_label' => $work->office_label,
-                        'default_amount_minor' => $rule->amount_cents,
+                        'default_amount_minor' => $defaultAmount,
                         'determined_amount_minor' => $amount,
                         'variance_minor' => $variance,
+                        'calculation' => $calculation,
                         'reason' => $reason,
                         'authority' => $authority,
                         'determined_by_id' => $actor->id,

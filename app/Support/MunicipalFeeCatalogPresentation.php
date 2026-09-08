@@ -72,6 +72,7 @@ final class MunicipalFeeCatalogPresentation
                 'basis' => match ($feeRule->basis) {
                     'declared_gross_sales' => 'Based on gross sales',
                     'capital_investment' => 'Based on capital investment',
+                    'business_area_square_meters' => 'Based on business area',
                     default => 'Tiered fee',
                 },
             ];

@@ -9,12 +9,19 @@ type Option = {
     name: string;
     default_amount_cents: number;
     account_code?: string | null;
+    exact_once_key?: string | null;
+    calculation?: {
+        explanation?: string | null;
+        rule_signature?: string;
+    };
 };
 type Item = {
     fee_rule_id: number;
     code: string;
     name: string;
     amount_cents: number;
+    exact_once_key?: string | null;
+    calculation?: { explanation?: string | null; rule_signature?: string };
 };
 
 const props = defineProps<{ options: Option[]; modelValue: Item[] }>();
@@ -24,6 +31,9 @@ const amount = ref<number | undefined>();
 
 const subtotal = computed(() =>
     props.modelValue.reduce((sum, item) => sum + item.amount_cents, 0),
+);
+const selectedOption = computed(() =>
+    props.options.find((candidate) => candidate.id === selectedId.value),
 );
 
 function choose(): void {
@@ -49,6 +59,8 @@ function add(): void {
             code: option.code,
             name: option.name,
             amount_cents: amount.value,
+            exact_once_key: option.exact_once_key,
+            calculation: option.calculation,
         },
     ]);
     selectedId.value = null;
@@ -98,6 +110,12 @@ function money(cents: number): string {
                 >Add Item</Button
             >
         </div>
+        <p
+            v-if="selectedOption?.calculation?.explanation"
+            class="text-xs font-medium text-muted-foreground"
+        >
+            {{ selectedOption.calculation.explanation }}
+        </p>
         <div v-if="modelValue.length" class="grid gap-1 text-sm">
             <div
                 v-for="item in modelValue"

@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Assessment\AssessmentCalculator;
 use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCategory;
 use App\Enums\PermitApplicationType;
@@ -19,6 +20,7 @@ class AssignTreasuryLinesOfBusiness
     public function __construct(
         private readonly BuildConcernedOfficePaymentOrderSummary $paymentOrderSummary,
         private readonly RefreshBusinessPermitEvaluation $refreshEvaluation,
+        private readonly AssessmentCalculator $assessmentCalculator,
     ) {}
 
     /**
@@ -38,7 +40,11 @@ class AssignTreasuryLinesOfBusiness
             if ($selections === [] || collect($selections)->pluck('line_of_business_id')->duplicates()->isNotEmpty()) {
                 throw new LogicException('Treasury must assign one or more unique canonical Lines of Business.');
             }
-            $selectedFeeIds = collect($selections)->flatMap(fn (array $selection): array => collect($selection['items'] ?? [])->pluck('fee_rule_id')->all());
+            $selections = $this->normalizeApplicationWideItems($selections);
+            $selectedFeeIds = collect($selections)->flatMap(fn (array $selection): array => collect($selection['items'])->pluck('fee_rule_id')->all());
+            if ($selectedFeeIds->isEmpty()) {
+                throw new LogicException('Treasury classification requires at least one confirmed payment item.');
+            }
             if ($selectedFeeIds->duplicates()->isNotEmpty()) {
                 throw new LogicException('Each Treasury payment item may be selected only once.');
             }
@@ -52,6 +58,14 @@ class AssignTreasuryLinesOfBusiness
                 ->map(fn (mixed $id): int => (int) $id);
             if ($selectedFeeIds->intersect($paymentOrderFeeIds)->isNotEmpty()) {
                 throw new LogicException('A fee already determined by a concerned-office Payment Order cannot be added by Treasury.');
+            }
+            $paymentOrderExactOnceKeys = $routingWorks
+                ->flatMap->paymentOrders->whereNull('superseded_at')->flatMap->lines
+                ->map(fn ($line): mixed => data_get($line->source_snapshot, 'exact_once_key'))->filter();
+            $selectedExactOnceKeys = FeeRule::query()->whereIn('id', $selectedFeeIds)->get()
+                ->map(fn (FeeRule $rule): mixed => data_get($rule->metadata, 'exact_once_key'))->filter();
+            if ($selectedExactOnceKeys->intersect($paymentOrderExactOnceKeys)->isNotEmpty()) {
+                throw new LogicException('An application-wide fee already determined by a concerned office cannot be added by Treasury.');
             }
             $paymentOrders = $this->paymentOrderSummary->handle($application);
             if ($paymentOrders['all_finalized'] !== true) {
@@ -92,12 +106,13 @@ class AssignTreasuryLinesOfBusiness
                     'metadata' => ['origin' => 'treasury_municipal_truth', 'treasury_assignment_id' => $assignment->id],
                 ]);
 
-                $configuredItems = $selection['items'] ?? $this->defaultItems($application, $line);
-                if ($configuredItems === []) {
-                    throw new LogicException('Each assigned Line of Business requires at least one confirmed Treasury payment item.');
-                }
+                $configuredItems = $selection['items'];
                 foreach ($configuredItems as $item) {
-                    $rule = FeeRule::query()->with(['currentReconciliation', 'lineOfBusinesses:id'])->findOrFail($item['fee_rule_id']);
+                    $feeRuleId = $item['fee_rule_id'] ?? null;
+                    if (! is_int($feeRuleId)) {
+                        throw new LogicException('A Treasury payment item requires a canonical fee rule.');
+                    }
+                    $rule = FeeRule::query()->with(['currentReconciliation', 'lineOfBusinesses:id'])->findOrFail($feeRuleId);
                     if ($rule->line_of_business_id !== $line->id && ! $rule->lineOfBusinesses->contains('id', $line->id)) {
                         throw new LogicException('Treasury LOB payment items must belong to the selected canonical Line of Business.');
                     }
@@ -114,7 +129,11 @@ class AssignTreasuryLinesOfBusiness
                         || ($rule->effective_until !== null && $rule->effective_until->year < $application->application_year)) {
                         throw new LogicException('The Treasury payment item must be active for the Application year and have a non-negative amount.');
                     }
-                    $variance = $amount - $rule->amount_cents;
+                    $calculation = data_get($rule->metadata, 'manual_amount_required') === true
+                        ? ['basis_amount_cents' => 0, 'amount_cents' => $rule->amount_cents, 'range_id' => null, 'rule_snapshot' => null]
+                        : $this->assessmentCalculator->calculate($rule, null, $application);
+                    $defaultAmount = $calculation['amount_cents'];
+                    $variance = $amount - $defaultAmount;
                     $reason = $item['reason'] ?? null;
                     $authority = $item['authority'] ?? null;
                     if ($variance !== 0) {
@@ -129,7 +148,7 @@ class AssignTreasuryLinesOfBusiness
                         'determined_by_id' => $actor->id,
                         'code' => $rule->code,
                         'name' => $rule->name,
-                        'default_amount_cents' => $rule->amount_cents,
+                        'default_amount_cents' => $defaultAmount,
                         'determined_amount_cents' => $amount,
                         'variance_cents' => $variance,
                         'currency' => 'PHP',
@@ -139,9 +158,12 @@ class AssignTreasuryLinesOfBusiness
                             'permit_application_line_id' => $applicationLine->id,
                             'fee_rule_id' => $rule->id,
                             'fee_rule_version' => $this->feeRuleVersion($rule),
-                            'default_amount_minor' => $rule->amount_cents,
+                            'scope' => $rule->scope->value,
+                            'exact_once_key' => data_get($rule->metadata, 'exact_once_key', 'fee-rule-'.$rule->id),
+                            'default_amount_minor' => $defaultAmount,
                             'determined_amount_minor' => $amount,
                             'variance_minor' => $variance,
+                            'calculation' => $calculation,
                             'reason' => $reason,
                             'authority' => $authority,
                             'determined_by_id' => $actor->id,
@@ -158,22 +180,57 @@ class AssignTreasuryLinesOfBusiness
         });
     }
 
-    /** @return list<array{fee_rule_id: int, amount_cents: int}> */
-    private function defaultItems(PermitApplication $application, LineOfBusiness $line): array
+    /**
+     * @param  list<array{line_of_business_id: int, items?: list<array<string, mixed>>}>  $selections
+     * @return list<array{line_of_business_id: int, items: list<array<string, mixed>>}>
+     */
+    private function normalizeApplicationWideItems(array $selections): array
     {
-        return array_values(FeeRule::query()
-            ->where(fn ($query) => $query->where('line_of_business_id', $line->id)
-                ->orWhereHas('lineOfBusinesses', fn ($query) => $query->whereKey($line->id)))
-            ->where('is_active', true)
-            ->where('effective_from', '<=', "{$application->application_year}-12-31")
-            ->where(fn ($query) => $query->whereNull('effective_until')->orWhere('effective_until', '>=', "{$application->application_year}-01-01"))
-            ->where('category', '!=', FeeRuleCategory::Tax->value)
-            ->where('determination_channel', FeeDeterminationChannel::TreasuryLineOfBusiness->value)
-            ->where('calculation_type', 'fixed')
-            ->orderBy('code')->get()
-            ->map(fn (FeeRule $rule): array => ['fee_rule_id' => $rule->id, 'amount_cents' => $rule->amount_cents])
-            ->values()
-            ->all());
+        $feeIds = collect($selections)->flatMap(fn (array $selection): array => collect($selection['items'] ?? [])->pluck('fee_rule_id')->all());
+        $rules = FeeRule::query()->with('ranges')->whereIn('id', $feeIds)->get()->keyBy('id');
+        $seen = [];
+
+        foreach ($selections as &$selection) {
+            $normalizedItems = [];
+            foreach ($selection['items'] ?? [] as $item) {
+                $rule = $rules->get($item['fee_rule_id']);
+                if (! $rule instanceof FeeRule || $rule->scope->value !== 'application') {
+                    $normalizedItems[] = $item;
+
+                    continue;
+                }
+
+                $key = (string) data_get($rule->metadata, 'exact_once_key', 'fee-rule-'.$rule->id);
+                $signature = $this->applicationWideRuleSignature($rule);
+                if (isset($seen[$key])) {
+                    if ($seen[$key] !== $signature) {
+                        throw new LogicException("Conflicting application-wide fee rules require explicit municipal resolution [{$key}].");
+                    }
+
+                    continue;
+                }
+
+                $seen[$key] = $signature;
+                $normalizedItems[] = $item;
+            }
+            $selection['items'] = $normalizedItems;
+        }
+        unset($selection);
+
+        return $selections;
+    }
+
+    private function applicationWideRuleSignature(FeeRule $rule): string
+    {
+        return hash('sha256', json_encode([
+            'name' => $rule->name,
+            'calculation_type' => $rule->calculation_type->value,
+            'basis' => $rule->basis,
+            'basis_unit' => data_get($rule->metadata, 'basis_unit'),
+            'unit_amount_minor' => data_get($rule->metadata, 'unit_amount_minor'),
+            'amount_cents' => $rule->amount_cents,
+            'ranges' => $rule->ranges->map->only(['min_basis_cents', 'max_basis_cents', 'amount_cents', 'rate_basis_points'])->values()->all(),
+        ], JSON_THROW_ON_ERROR));
     }
 
     private function feeRuleVersion(FeeRule $rule): string

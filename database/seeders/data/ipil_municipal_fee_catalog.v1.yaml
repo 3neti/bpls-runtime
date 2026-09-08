@@ -5,6 +5,7 @@ catalog:
   effective_from: '2025-01-01'
   effective_until: null
   authority_reference: 'Authenticated legacy Ipil operational catalogue and municipal Payment Order specimens received 2026-09-08'
+  evidence_reference: 'LIVE-APP-001 · checksum-bound production snapshot · project-owner operational clarification 2026-09-08'
 business_divisions:
   -
     code: DIV-EDD6388C02DAE431
@@ -8788,8 +8789,12 @@ fees:
     determination_channel: concerned_office_payment_order
     office_code: health
     office_name: 'Municipal Health Office'
+    scope: application
+    exact_once_key: health-certificate
     calculation_type: formula
-    basis: none
+    basis: employee_count
+    basis_unit: employee
+    unit_amount_minor: 10000
     amount_minor: 0
     formula: 'numberOfEmployees * 100'
     ranges: {}
@@ -9632,8 +9637,12 @@ fees:
       - LOB-2C55C8D7D2870D21
       - LOB-23279F17A878D855
     determination_channel: treasury_lob
+    scope: application
+    exact_once_key: laminated-id
     calculation_type: formula
-    basis: none
+    basis: employee_count
+    basis_unit: employee
+    unit_amount_minor: 2500
     amount_minor: 0
     formula: 'numberOfEmployees * 25'
     ranges: {}
@@ -12751,8 +12760,12 @@ fees:
       - LOB-2C55C8D7D2870D21
       - LOB-23279F17A878D855
     determination_channel: treasury_lob
+    scope: application
+    exact_once_key: occupation-fee
     calculation_type: formula
-    basis: none
+    basis: employee_count
+    basis_unit: employee
+    unit_amount_minor: 10000
     amount_minor: 0
     formula: 'numberOfEmployees * 100'
     ranges: {}
@@ -14045,8 +14058,11 @@ fees:
     determination_channel: concerned_office_payment_order
     office_code: health
     office_name: 'Municipal Health Office'
+    scope: application
+    exact_once_key: sanitary-permit-fee
     calculation_type: range
-    basis: legacy_unresolved
+    basis: business_area_square_meters
+    basis_unit: centi_square_meter
     amount_minor: 0
     ranges:
       -
@@ -15302,8 +15318,11 @@ fees:
     determination_channel: concerned_office_payment_order
     office_code: menro
     office_name: MENRO
+    scope: application
+    exact_once_key: solid-waste-management
     calculation_type: range
-    basis: legacy_unresolved
+    basis: business_area_square_meters
+    basis_unit: centi_square_meter
     amount_minor: 0
     ranges:
       -

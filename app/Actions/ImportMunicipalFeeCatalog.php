@@ -127,7 +127,7 @@ final class ImportMunicipalFeeCatalog
                     'category' => $category->fee_rule_category,
                     'fee_category_id' => $category->id,
                     'revenue_account_id' => $account?->id,
-                    'scope' => ($lineIds === []) ? FeeRuleScope::Application : FeeRuleScope::LineOfBusiness,
+                    'scope' => $item['scope'] ?? (($lineIds === []) ? FeeRuleScope::Application : FeeRuleScope::LineOfBusiness),
                     'determination_channel' => $item['determination_channel'],
                     'calculation_type' => $item['calculation_type'],
                     'basis' => $item['basis'],
@@ -143,7 +143,11 @@ final class ImportMunicipalFeeCatalog
                         'source_name' => $item['name'],
                         'application_types' => $item['application_types'] ?? [],
                         'formula' => $item['formula'] ?? null,
-                        'manual_amount_required' => $item['calculation_type'] !== FeeRuleCalculationType::Fixed->value || ($item['amount_minor'] === 0),
+                        'basis_unit' => $item['basis_unit'] ?? null,
+                        'unit_amount_minor' => $item['unit_amount_minor'] ?? null,
+                        'exact_once_key' => $item['exact_once_key'] ?? null,
+                        'evidence_reference' => $catalogData['evidence_reference'] ?? null,
+                        'manual_amount_required' => ! $this->hasExecutableCalculation($item),
                         'responsible_office_code' => $item['office_code'] ?? null,
                         'price_list_source_classification' => 'migrated_legacy_uat',
                     ],
@@ -212,7 +216,11 @@ final class ImportMunicipalFeeCatalog
             'fees.*.fee_category_code' => ['required', 'string'],
             'fees.*.determination_channel' => ['required', Rule::enum(FeeDeterminationChannel::class)],
             'fees.*.calculation_type' => ['required', Rule::enum(FeeRuleCalculationType::class)],
+            'fees.*.scope' => ['sometimes', Rule::enum(FeeRuleScope::class)],
             'fees.*.basis' => ['required', 'string'],
+            'fees.*.basis_unit' => ['sometimes', 'string'],
+            'fees.*.unit_amount_minor' => ['sometimes', 'integer', 'min:0'],
+            'fees.*.exact_once_key' => ['sometimes', 'string'],
             'fees.*.amount_minor' => ['required', 'integer', 'min:0'],
             'fees.*.status' => ['required', Rule::in(['active', 'incomplete', 'inactive'])],
         ]);
@@ -243,6 +251,25 @@ final class ImportMunicipalFeeCatalog
     private function mapping(mixed $value): array
     {
         return is_array($value) ? $value : [];
+    }
+
+    /** @param array<string, mixed> $item */
+    private function hasExecutableCalculation(array $item): bool
+    {
+        if ($item['calculation_type'] === FeeRuleCalculationType::Fixed->value) {
+            return $item['amount_minor'] > 0;
+        }
+
+        if ($item['calculation_type'] === FeeRuleCalculationType::Formula->value) {
+            return $item['basis'] === 'employee_count'
+                && ($item['basis_unit'] ?? null) === 'employee'
+                && is_int($item['unit_amount_minor'] ?? null);
+        }
+
+        return $item['calculation_type'] === FeeRuleCalculationType::Range->value
+            && $item['basis'] === 'business_area_square_meters'
+            && ($item['basis_unit'] ?? null) === 'centi_square_meter'
+            && $this->rows($item['ranges'] ?? []) !== [];
     }
 
     /** @return list<array<string, mixed>> */

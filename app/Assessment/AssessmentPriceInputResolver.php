@@ -40,7 +40,7 @@ final class AssessmentPriceInputResolver
             $this->appendTreasuryLobFacts($application, $components, $modifiers);
         } elseif (is_array($evaluationProjection)) {
             foreach ($evaluationProjection['projected_charges'] as $charge) {
-                $components->push($this->feeRuleComponent($charge));
+                $components->push($this->feeRuleComponent($charge, $application));
             }
             $this->appendPaymentOrderFacts($application, $evaluationProjection, $components, $modifiers);
         } else {
@@ -114,9 +114,9 @@ final class AssessmentPriceInputResolver
                             'paperless_payment_order_id' => $order->id,
                             'paperless_payment_order_line_id' => $line->id,
                             'category' => FeeRuleCategory::Fee->value,
-                            'calculation_type' => 'fixed',
-                            'basis' => 'concerned_office_payment_order',
-                            'basis_amount_minor' => $default,
+                            'calculation_type' => data_get($line->source_snapshot, 'calculation.rule_snapshot.calculation_type', 'fixed'),
+                            'basis' => data_get($line->source_snapshot, 'calculation.rule_snapshot.basis', 'concerned_office_payment_order'),
+                            'basis_amount_minor' => data_get($line->source_snapshot, 'calculation.basis_amount_cents', $default),
                             'rule_snapshot' => [...$line->source_snapshot, 'financial_source' => 'concerned_office_payment_order'],
                         ],
                     ));
@@ -145,20 +145,25 @@ final class AssessmentPriceInputResolver
                 if ($item->feeRule->category === FeeRuleCategory::Tax) {
                     throw new LogicException('Business Tax is prohibited for New Applications.');
                 }
-                $key = "treasury_line_item:{$item->id}";
+                $applicationWide = data_get($item->source_snapshot, 'scope') === FeeRuleScope::Application->value;
+                $key = $applicationWide
+                    ? 'treasury_application_fee:'.data_get($item->source_snapshot, 'exact_once_key', $item->id)
+                    : "treasury_line_item:{$item->id}";
                 $components->push(new AssessmentPriceComponentInput(
-                    key: $item->code, type: 'treasury_lob_fee', label: $item->name, scope: 'line_of_business',
-                    permit_application_line_id: data_get($item->source_snapshot, 'permit_application_line_id'),
-                    line_of_business_id: $item->assignment->line_of_business_id,
-                    line_of_business_name: $item->assignment->lineOfBusiness->name,
+                    key: $item->code, type: 'treasury_lob_fee', label: $item->name,
+                    scope: $applicationWide ? FeeRuleScope::Application->value : FeeRuleScope::LineOfBusiness->value,
+                    permit_application_line_id: $applicationWide ? null : data_get($item->source_snapshot, 'permit_application_line_id'),
+                    line_of_business_id: $applicationWide ? null : $item->assignment->line_of_business_id,
+                    line_of_business_name: $applicationWide ? null : $item->assignment->lineOfBusiness->name,
                     responsible_office: null, currency: $item->currency,
                     amount_minor: $item->default_amount_cents, source_type: 'treasury_line_item', source_identity: (string) $item->id,
                     source_version: (string) data_get($item->source_snapshot, 'fee_rule_version'), exact_once_key: $key,
                     legal_basis: $item->feeRule->legal_basis,
                     explanation: [
                         'fee_rule_id' => $item->fee_rule_id, 'category' => FeeRuleCategory::Fee->value,
-                        'calculation_type' => 'fixed', 'basis' => 'treasury_lob_determination',
-                        'basis_amount_minor' => $item->default_amount_cents,
+                        'calculation_type' => data_get($item->source_snapshot, 'calculation.rule_snapshot.calculation_type', 'fixed'),
+                        'basis' => data_get($item->source_snapshot, 'calculation.rule_snapshot.basis', 'treasury_lob_determination'),
+                        'basis_amount_minor' => data_get($item->source_snapshot, 'calculation.basis_amount_cents', $item->default_amount_cents),
                         'rule_snapshot' => [...$item->source_snapshot, 'financial_source' => 'treasury_lob_component'],
                     ],
                 ));
@@ -174,7 +179,7 @@ final class AssessmentPriceInputResolver
     }
 
     /** @param array<string, mixed> $charge */
-    private function feeRuleComponent(array $charge): AssessmentPriceComponentInput
+    private function feeRuleComponent(array $charge, PermitApplication $application): AssessmentPriceComponentInput
     {
         $feeRule = $charge['fee_rule'];
         if (! $feeRule instanceof FeeRule) {
@@ -185,6 +190,7 @@ final class AssessmentPriceInputResolver
         $calculation = $this->calculator->calculate(
             $feeRule,
             $applicationLine instanceof PermitApplicationLine ? $applicationLine : null,
+            $application,
         );
         if ($calculation['amount_cents'] !== $charge['amount_cents']
             || $calculation['rule_snapshot'] !== $charge['rule_snapshot']) {
@@ -329,25 +335,28 @@ final class AssessmentPriceInputResolver
     {
         $rules = $this->applicableFeeRuleQuery->forPermitApplication($application);
         foreach ($rules->where('scope', FeeRuleScope::Application) as $rule) {
-            $components->push($this->feeRuleComponentFromModels($rule));
+            $components->push($this->feeRuleComponentFromModels($rule, $application));
         }
         foreach ($application->lines as $line) {
             foreach ($rules->where('scope', FeeRuleScope::LineOfBusiness)->where('line_of_business_id', $line->line_of_business_id) as $rule) {
-                $components->push($this->feeRuleComponentFromModels($rule, $line));
+                $components->push($this->feeRuleComponentFromModels($rule, $application, $line));
             }
         }
     }
 
-    private function feeRuleComponentFromModels(FeeRule $rule, ?PermitApplicationLine $line = null): AssessmentPriceComponentInput
-    {
-        $calculation = $this->calculator->calculate($rule, $line);
+    private function feeRuleComponentFromModels(
+        FeeRule $rule,
+        PermitApplication $application,
+        ?PermitApplicationLine $line = null,
+    ): AssessmentPriceComponentInput {
+        $calculation = $this->calculator->calculate($rule, $line, $application);
 
         return $this->feeRuleComponent([
             'fee_rule' => $rule,
             'application_line' => $line,
             'amount_cents' => $calculation['amount_cents'],
             'rule_snapshot' => $calculation['rule_snapshot'],
-        ]);
+        ], $application);
     }
 
     /** @param Collection<int, AssessmentPriceComponentInput> $components */

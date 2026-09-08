@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\CreateAssessmentForPermitApplication;
+use App\Assessment\AssessmentCalculator;
 use App\Enums\AssessmentStatus;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
@@ -14,8 +15,65 @@ use App\Models\FeeRuleRange;
 use App\Models\FeeRuleReconciliation;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
+use App\Models\PermitApplicationDeclaration;
 use App\Models\PermitApplicationLine;
 use App\Models\User;
+
+it('calculates accepted employee and business-area fees from the frozen declaration', function (): void {
+    $application = PermitApplication::factory()->create(['application_year' => 2025]);
+    PermitApplicationDeclaration::factory()->for($application)->create([
+        'snapshot' => [
+            'schema_version' => 1,
+            'establishment' => [
+                'total_employees' => null,
+                'male_employees' => 3,
+                'female_employees' => 4,
+                'business_area_square_meters' => '84.50',
+            ],
+        ],
+    ]);
+    $laminatedId = FeeRule::factory()->create([
+        'code' => 'LAMINATED-ID',
+        'scope' => FeeRuleScope::Application,
+        'calculation_type' => FeeRuleCalculationType::Formula,
+        'basis' => 'employee_count',
+        'amount_cents' => 0,
+        'effective_from' => '2025-01-01',
+        'metadata' => ['basis_unit' => 'employee', 'unit_amount_minor' => 2_500, 'exact_once_key' => 'laminated-id'],
+    ]);
+    $sanitaryPermit = FeeRule::factory()->create([
+        'code' => 'SANITARY-PERMIT',
+        'scope' => FeeRuleScope::Application,
+        'calculation_type' => FeeRuleCalculationType::Range,
+        'basis' => 'business_area_square_meters',
+        'amount_cents' => 0,
+        'effective_from' => '2025-01-01',
+        'metadata' => ['basis_unit' => 'centi_square_meter', 'exact_once_key' => 'sanitary-permit-fee'],
+    ]);
+    foreach ([[100, 2_500, 20_000], [2_600, 5_000, 30_000], [5_100, 10_000, 40_000]] as [$minimum, $maximum, $amount]) {
+        FeeRuleRange::factory()->for($sanitaryPermit)->create([
+            'min_basis_cents' => $minimum,
+            'max_basis_cents' => $maximum,
+            'amount_cents' => $amount,
+        ]);
+    }
+
+    $application->business->update([
+        'male_employee_count' => 99,
+        'female_employee_count' => 99,
+        'business_area_square_meters' => '999.00',
+    ]);
+    $calculator = app(AssessmentCalculator::class);
+    $employeeCalculation = $calculator->calculate($laminatedId, null, $application);
+    $areaCalculation = $calculator->calculate($sanitaryPermit, null, $application);
+
+    expect($employeeCalculation['basis_amount_cents'])->toBe(7)
+        ->and($employeeCalculation['amount_cents'])->toBe(17_500)
+        ->and($employeeCalculation['rule_snapshot']['basis_unit'])->toBe('employee')
+        ->and($areaCalculation['basis_amount_cents'])->toBe(8_450)
+        ->and($areaCalculation['amount_cents'])->toBe(40_000)
+        ->and($areaCalculation['rule_snapshot']['basis_unit'])->toBe('centi_square_meter');
+});
 
 it('creates an explainable assessment snapshot from fixed and bracketed fee rules', function () {
     $application = PermitApplication::factory()->create([

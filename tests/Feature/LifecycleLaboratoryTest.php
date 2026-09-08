@@ -49,7 +49,7 @@ use App\Models\TreasuryCollection;
 use App\Models\User;
 use App\Models\XChangePayment;
 use App\Models\XChangePaymentAttempt;
-use Database\Seeders\NelsonTreasuryLobFeeCatalogSeeder;
+use Database\Seeders\MunicipalFeeCatalogSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
@@ -875,6 +875,7 @@ test('cleanroom citizen form lodges through canonical draft and submit actions i
 });
 
 test('nelson cleanroom assigns routed Payment Order work without requiring an applicant Line of Business', function () {
+    $this->seed(MunicipalFeeCatalogSeeder::class);
     $management = previewAccount(StakeholderPreviewPersona::Management);
     $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'), [
         'ceremony' => LifecycleCleanroomRun::CeremonyNelsonReconciliationV1,
@@ -939,11 +940,8 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     $engineeringActor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.engineering.user_id'));
     $healthActor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.health.user_id'));
     $unroutedHealthActor = User::factory()->for($healthActor->role)->create();
-    $healthFee = FeeRule::query()
-        ->where('metadata->responsible_office_code', 'health')
-        ->where('metadata->application_year', $application->application_year)
-        ->firstOrFail();
-    $healthItems = [['fee_rule_id' => $healthFee->id, 'amount_cents' => $healthFee->amount_cents]];
+    $healthFee = FeeRule::query()->where('code', 'IPIL-LEGACY-99C7F1CE5E8189C8')->sole();
+    $healthItems = [['fee_rule_id' => $healthFee->id, 'amount_cents' => 70_000]];
 
     expect(fn () => app(ConfirmOfficePaymentOrder::class)->handle(
         $healthWork,
@@ -972,16 +970,23 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         ->and(data_get($managementTask, 'financial_editor.authorized_payment_order_office_codes'))->toBe([]);
 
     foreach ($application->fresh()->bploRoutingDetermination->works as $work) {
-        $fees = FeeRule::query()
-            ->where('metadata->responsible_office_code', $work->office_code)
-            ->where('metadata->application_year', $application->application_year)
-            ->orderBy('code')
-            ->get();
+        $fees = match ($work->office_code) {
+            'health' => collect(data_get($engineeringTask, 'financial_editor.office_fee_options.health'))
+                ->whereIn('code', ['IPIL-LEGACY-99C7F1CE5E8189C8', 'IPIL-LEGACY-04845A0127A00E12']),
+            'menro' => collect(data_get($engineeringTask, 'financial_editor.office_fee_options.menro'))
+                ->where('code', 'IPIL-LEGACY-98CDCAD9D28055FB'),
+            'engineering' => collect(data_get($engineeringTask, 'financial_editor.office_fee_options.engineering'))
+                ->where('code', 'FEE-C2E404D2D1B97545')
+                ->map(fn (array $fee): array => [...$fee, 'default_amount_cents' => 15_000]),
+            'assessor' => collect(data_get($engineeringTask, 'financial_editor.office_fee_options.assessor'))
+                ->where('code', 'LAB-IPIL-ASSESSOR-CERTIFICATION')
+                ->map(fn (array $fee): array => [...$fee, 'default_amount_cents' => 20_000]),
+        };
         app(ConfirmOfficePaymentOrder::class)->handle(
             $work,
-            $fees->map(fn (FeeRule $fee): array => [
-                'fee_rule_id' => $fee->id,
-                'amount_cents' => $fee->amount_cents,
+            $fees->map(fn (array $fee): array => [
+                'fee_rule_id' => $fee['id'],
+                'amount_cents' => $fee['default_amount_cents'],
             ])->all(),
             User::query()->findOrFail(data_get($run->actor_manifest, 'actors.'.$work->office_code.'.user_id')),
             UploadedFile::fake()->image($work->office_code.'-payment-order-signature.png'),
@@ -1022,23 +1027,20 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         ->and(data_get($state, 'progress.completed_steps'))->toBe(8)
         ->and(data_get($state, 'progress.total_steps'))->toBe(24)
         ->and(data_get($cleanroom, 'active.concerned_office_payment_orders.status'))->toBe('finalized')
-        ->and(data_get($cleanroom, 'active.concerned_office_payment_orders.finalized_subtotal_amount_cents'))->toBe(32_000)
-        ->and(data_get($pageTwo, 'page_2_assessment.concerned_office_payment_orders.finalized_subtotal_amount_cents'))->toBe(32_000)
+        ->and(data_get($cleanroom, 'active.concerned_office_payment_orders.finalized_subtotal_amount_cents'))->toBe(495_000)
+        ->and(data_get($pageTwo, 'page_2_assessment.concerned_office_payment_orders.finalized_subtotal_amount_cents'))->toBe(495_000)
         ->and(data_get($pageTwo, 'page_2_assessment.treasury_lines_of_business'))->toBe([]);
 
-    $this->seed(NelsonTreasuryLobFeeCatalogSeeder::class);
-    $lines = LineOfBusiness::query()->where('code', 'like', 'LAB-NELSON-LOB-%')->orderBy('code')->get();
-    $selections = $lines->map(function (LineOfBusiness $line) use ($application): array {
-        $fee = FeeRule::query()
-            ->where('line_of_business_id', $line->id)
-            ->whereYear('effective_from', $application->application_year)
-            ->sole();
-
-        return [
-            'line_of_business_id' => $line->id,
-            'items' => [['fee_rule_id' => $fee->id, 'amount_cents' => $fee->amount_cents]],
-        ];
-    })->all();
+    $line = LineOfBusiness::query()->where('code', ResolveLegacyCitizenPermitApplicationLabPool::CatalogCode)->sole();
+    $treasuryDefaults = collect(data_get($engineeringTask, 'financial_editor.line_of_business_options'))
+        ->firstWhere('code', ResolveLegacyCitizenPermitApplicationLabPool::CatalogCode)['default_items'];
+    $selections = [[
+        'line_of_business_id' => $line->id,
+        'items' => collect($treasuryDefaults)
+            ->whereIn('code', ['IPIL-LEGACY-A9B730041C0AE6F6', 'IPIL-LEGACY-FEE443B6D6004315'])
+            ->map(fn (array $item): array => ['fee_rule_id' => $item['fee_rule_id'], 'amount_cents' => $item['amount_cents']])
+            ->values()->all(),
+    ]];
     app(AssignTreasuryLinesOfBusiness::class)->handle(
         $application,
         $selections,
@@ -1047,10 +1049,10 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
 
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     $pageTwo = app(BuildExecutablePermitApplicationDocument::class)->handle($application->fresh(), $management);
-    expect($lines)->toHaveCount(3)
+    expect($selections[0]['items'])->toHaveCount(2)
         ->and(data_get($state, 'progress.next_step.key'))->toBe('assessment_prepared')
         ->and(data_get($state, 'progress.next_step.actor'))->toBe('assessment_officer')
-        ->and(data_get($pageTwo, 'page_2_assessment.treasury_lines_of_business'))->toHaveCount(3);
+        ->and(data_get($pageTwo, 'page_2_assessment.treasury_lines_of_business'))->toHaveCount(1);
 
     $assessment = app(CreateAssessmentForPermitApplication::class)->handle(
         $application->fresh(),
@@ -1058,9 +1060,10 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     );
     $applicationData = app(ApplicationDataResolver::class)->resolve($application->fresh(), $management)->toArray();
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
+    $requiredReceiptGroupCount = count(data_get($applicationData, 'schedule_of_payment.groups'));
     expect(data_get($state, 'progress.next_step.key'))->toBe('treasury_counter_check')
-        ->and($assessment->total_amount_cents)->toBe(84_500)
-        ->and(data_get($applicationData, 'schedule_of_payment.groups'))->toHaveCount(7)
+        ->and($assessment->total_amount_cents)->toBe(582_500)
+        ->and($requiredReceiptGroupCount)->toBe(5)
         ->and(data_get($applicationData, 'schedule_of_payment.grand_total_minor'))->toBe($assessment->total_amount_cents)
         ->and(data_get($applicationData, 'schedule_of_payment.price_report_total_minor'))->toBe($assessment->total_amount_cents);
 
@@ -1106,7 +1109,7 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     $payment->refresh();
     $simulatedApplicationData = app(ApplicationDataResolver::class)->resolve($application->fresh(), $management)->toArray();
     $receiptGroups = $collection->allocations->pluck('receipt_group_key')->unique()->sort()->values();
-    expect($receiptGroups)->toHaveCount(7)
+    expect($receiptGroups)->toHaveCount($requiredReceiptGroupCount)
         ->and($collection->channel)->toBe(TreasuryCollectionChannel::Online)
         ->and($collection->method)->toBe(TreasuryCollectionMethod::QrPh)
         ->and($collection->allocations->sum('amount_cents'))->toBe($collection->amount_cents)
@@ -1145,7 +1148,7 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
             $pendingReceiptData = app(ApplicationDataResolver::class)->resolve($application->fresh(), $cashier)->toArray();
             expect(data_get($pendingReceiptData, 'payment.reconciliation.status'))->toBe('pending_receipts')
                 ->and(data_get($pendingReceiptData, 'payment.reconciliation.issued_receipt_group_count'))->toBe(1)
-                ->and(data_get($pendingReceiptData, 'payment.reconciliation.required_receipt_group_count'))->toBe(7)
+                ->and(data_get($pendingReceiptData, 'payment.reconciliation.required_receipt_group_count'))->toBe($requiredReceiptGroupCount)
                 ->and(data_get($pendingReceiptData, 'payment.reconciliation.totals_reconciled'))->toBeFalse()
                 ->and(data_get($pendingReceiptData, 'payment.reconciliation.unreceipted_amount_cents'))->toBeGreaterThan(0);
         }
@@ -1155,7 +1158,7 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     $cleanroom = app(BuildLifecycleCleanroom::class)->handle($management);
     expect($collection->status)->toBe(TreasuryCollectionStatus::Receipted)
         ->and($collection->receipts()->sum('amount_cents'))->toBe($collection->amount_cents)
-        ->and(data_get($cleanroom, 'active.payment_simulation.receipt_ids'))->toHaveCount(7)
+        ->and(data_get($cleanroom, 'active.payment_simulation.receipt_ids'))->toHaveCount($requiredReceiptGroupCount)
         ->and(data_get($cleanroom, 'active.payment_simulation.receipt_coverage_complete'))->toBeTrue()
         ->and(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))->toBe('post_payment_certifications_commissioned');
 
@@ -1200,8 +1203,8 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         ->and(data_get($finalState, 'progress.completed_steps'))->toBe(24)
         ->and(data_get($finalData, 'identity.status'))->toBe(PermitApplicationStatus::Released->value)
         ->and($parityTotals)->each->toBe($assessment->total_amount_cents)
-        ->and(data_get($finalData, 'official_receipts'))->toHaveCount(7)
-        ->and(data_get($finalData, 'permit.official_receipts'))->toHaveCount(7)
+        ->and(data_get($finalData, 'official_receipts'))->toHaveCount($requiredReceiptGroupCount)
+        ->and(data_get($finalData, 'permit.official_receipts'))->toHaveCount($requiredReceiptGroupCount)
         ->and(data_get($finalData, 'permit.official_receipt_bound'))->toBeTrue()
         ->and(data_get($finalData, 'permit.issued'))->toBeTrue()
         ->and(data_get($finalData, 'permit.released'))->toBeTrue()
@@ -1212,14 +1215,14 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         ->and(data_get($finalData, 'payment.reconciliation.approved_amount_cents'))->toBe($assessment->total_amount_cents)
         ->and(data_get($finalData, 'payment.reconciliation.collected_amount_cents'))->toBe($collection->amount_cents)
         ->and(data_get($finalData, 'payment.reconciliation.remaining_balance_cents'))->toBe(0)
-        ->and(data_get($finalData, 'payment.reconciliation.receipt_groups'))->toHaveCount(7)
-        ->and(data_get($finalData, 'payment.reconciliation.issued_receipt_group_count'))->toBe(7)
+        ->and(data_get($finalData, 'payment.reconciliation.receipt_groups'))->toHaveCount($requiredReceiptGroupCount)
+        ->and(data_get($finalData, 'payment.reconciliation.issued_receipt_group_count'))->toBe($requiredReceiptGroupCount)
         ->and(data_get($finalData, 'payment.reconciliation.total_receipted_cents'))->toBe($collection->amount_cents)
         ->and(data_get($finalData, 'payment.reconciliation.unreceipted_amount_cents'))->toBe(0)
         ->and(data_get($finalData, 'payment.reconciliation.status'))->toBe('fully_reconciled')
         ->and(data_get($finalData, 'payment.reconciliation.totals_reconciled'))->toBeTrue()
-        ->and(data_get($finalDocument, 'official_receipt_packet.receipts'))->toHaveCount(7)
-        ->and(data_get($finalDocument, 'official_receipt_packet.required_receipt_group_count'))->toBe(7)
+        ->and(data_get($finalDocument, 'official_receipt_packet.receipts'))->toHaveCount($requiredReceiptGroupCount)
+        ->and(data_get($finalDocument, 'official_receipt_packet.required_receipt_group_count'))->toBe($requiredReceiptGroupCount)
         ->and(data_get($finalDocument, 'official_receipt_packet.totals_reconciled'))->toBeTrue()
         ->and(collect(data_get($finalDocument, 'official_receipt_packet.receipts'))->every(
             fn (array $receipt): bool => is_string(data_get($receipt, 'links.view')),
@@ -1227,7 +1230,7 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         ->and($applicationFormPdf)->toContain('X-CHANGE PAYMENT CONFIRMATION')
         ->and($applicationFormPdf)->toContain('OFFICIAL RECEIPT PACKET - AF NO. 51')
         ->and($applicationFormPdf)->toContain('FULLY RECONCILED');
-    foreach (range(7_100_001, 7_100_007) as $receiptNumber) {
+    foreach (range(7_100_001, 7_100_000 + $requiredReceiptGroupCount) as $receiptNumber) {
         expect($applicationFormPdf)->toContain((string) $receiptNumber);
     }
     $this->get(data_get($finalData, 'permit.verification.url'))

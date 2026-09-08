@@ -83,6 +83,11 @@ type BploRoutingTask = {
                 code: string;
                 name: string;
                 default_amount_cents: number;
+                exact_once_key?: string | null;
+                calculation?: {
+                    explanation?: string | null;
+                    rule_signature?: string;
+                };
             }[]
         >;
         line_of_business_options: {
@@ -94,6 +99,11 @@ type BploRoutingTask = {
                 code: string;
                 name: string;
                 amount_cents: number;
+                exact_once_key?: string | null;
+                calculation?: {
+                    explanation?: string | null;
+                    rule_signature?: string;
+                };
             }[];
         }[];
         treasury_assignments: {
@@ -127,6 +137,11 @@ const officeItems = reactive<
             code: string;
             name: string;
             amount_cents: number;
+            exact_once_key?: string | null;
+            calculation?: {
+                explanation?: string | null;
+                rule_signature?: string;
+            };
         }[]
     >
 >({});
@@ -139,6 +154,11 @@ const treasurySelections = ref<
             code: string;
             name: string;
             amount_cents: number;
+            exact_once_key?: string | null;
+            calculation?: {
+                explanation?: string | null;
+                rule_signature?: string;
+            };
         }[];
     }[]
 >([]);
@@ -356,9 +376,23 @@ function addTreasuryLob(): void {
         return;
     }
 
+    const existingItems = treasurySelections.value.flatMap(
+        (selection) => selection.items,
+    );
     treasurySelections.value.push({
         line_of_business_id: option.id,
-        items: option.default_items.map((item) => ({ ...item })),
+        items: option.default_items
+            .filter(
+                (item) =>
+                    !item.exact_once_key ||
+                    !existingItems.some(
+                        (existing) =>
+                            existing.exact_once_key === item.exact_once_key &&
+                            existing.calculation?.rule_signature ===
+                                item.calculation?.rule_signature,
+                    ),
+            )
+            .map((item) => ({ ...item })),
     });
     selectedTreasuryLob.value = null;
     treasuryLobSearch.value = '';
@@ -391,6 +425,8 @@ function treasuryFeeOptions(lineOfBusinessId: number) {
         code: item.code,
         name: item.name,
         default_amount_cents: item.amount_cents,
+        exact_once_key: item.exact_once_key,
+        calculation: item.calculation,
     }));
 }
 
@@ -401,7 +437,7 @@ function actorLabel(name: string): string {
 const treasurySelectionsReady = computed(
     () =>
         treasurySelections.value.length > 0 &&
-        treasurySelections.value.every(
+        treasurySelections.value.some(
             (selection) => selection.items.length > 0,
         ),
 );

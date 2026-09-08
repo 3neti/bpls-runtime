@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Assessment\AssessmentCalculator;
 use App\Data\Application\BploRoutingTaskData;
 use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCategory;
@@ -23,6 +24,7 @@ class BuildBploRoutingTask
         private readonly ConcernedOfficeReference $concernedOffices,
         private readonly BuildConcernedOfficePaymentOrderSummary $paymentOrderSummary,
         private readonly AuthorizeRoutedOfficeActor $authorizeRoutedOfficeActor,
+        private readonly AssessmentCalculator $assessmentCalculator,
     ) {}
 
     public function handle(PermitApplication $permitApplication, ?User $viewer): BploRoutingTaskData
@@ -144,7 +146,7 @@ class BuildBploRoutingTask
         $periodStart = $application->application_year.'-01-01';
         $periodEnd = $application->application_year.'-12-31';
         $catalogFees = FeeRule::query()
-            ->with(['lineOfBusinesses:id', 'officeAssignments', 'revenueAccount'])
+            ->with(['lineOfBusinesses:id', 'officeAssignments', 'revenueAccount', 'ranges'])
             ->where('is_active', true)
             ->where('category', '!=', FeeRuleCategory::Tax->value)
             ->whereDate('effective_from', '<=', $periodEnd)
@@ -174,13 +176,20 @@ class BuildBploRoutingTask
                         : $explicitOfficeMatch || data_get($fee->metadata, 'responsible_office_code') === $office['code'];
                 });
 
-                return [$office['code'] => $fees->map(fn (FeeRule $fee): array => [
-                    'id' => $fee->id,
-                    'code' => $fee->code,
-                    'name' => $this->catalogOptionName($fee),
-                    'default_amount_cents' => $fee->amount_cents,
-                    'account_code' => $fee->revenueAccount->code ?? data_get($fee->metadata, 'municipal_account_code'),
-                ])->values()->all()];
+                return [$office['code'] => $fees->map(function (FeeRule $fee) use ($application): array {
+                    $calculation = $this->catalogCalculation($fee, $application);
+
+                    return [
+                        'id' => $fee->id,
+                        'code' => $fee->code,
+                        'name' => $this->catalogOptionName($fee),
+                        'default_amount_cents' => $calculation['amount_cents'],
+                        'calculation' => $calculation,
+                        'scope' => $fee->scope->value,
+                        'exact_once_key' => data_get($fee->metadata, 'exact_once_key'),
+                        'account_code' => $fee->revenueAccount->code ?? data_get($fee->metadata, 'municipal_account_code'),
+                    ];
+                })->values()->all()];
             })->all(),
             'line_of_business_options' => LineOfBusiness::query()->availableToMunicipalCatalog()->orderBy('name')->get()
                 ->map(fn (LineOfBusiness $line): array => [
@@ -188,12 +197,19 @@ class BuildBploRoutingTask
                     'code' => $line->code,
                     'name' => $line->name,
                     'default_items' => $catalogFees->filter(fn (FeeRule $fee): bool => $fee->determination_channel === FeeDeterminationChannel::TreasuryLineOfBusiness
-                        && ($fee->line_of_business_id === $line->id || $fee->lineOfBusinesses->contains('id', $line->id)))->map(fn (FeeRule $fee): array => [
-                            'fee_rule_id' => $fee->id,
-                            'code' => $fee->code,
-                            'name' => $this->catalogOptionName($fee),
-                            'amount_cents' => $fee->amount_cents,
-                        ])->values()->all(),
+                        && ($fee->line_of_business_id === $line->id || $fee->lineOfBusinesses->contains('id', $line->id)))->map(function (FeeRule $fee) use ($application): array {
+                            $calculation = $this->catalogCalculation($fee, $application);
+
+                            return [
+                                'fee_rule_id' => $fee->id,
+                                'code' => $fee->code,
+                                'name' => $this->catalogOptionName($fee),
+                                'amount_cents' => $calculation['amount_cents'],
+                                'calculation' => $calculation,
+                                'scope' => $fee->scope->value,
+                                'exact_once_key' => data_get($fee->metadata, 'exact_once_key'),
+                            ];
+                        })->values()->all(),
                 ])->values()->all(),
             'treasury_assignments' => $application->treasuryLineOfBusinessAssignments->whereNull('removed_at')->map(fn (TreasuryLineOfBusinessAssignment $assignment): array => [
                 'id' => $assignment->id,
@@ -226,5 +242,49 @@ class BuildBploRoutingTask
         return is_string($division) && trim($division) !== ''
             ? $fee->name.' — '.str($division)->lower()->headline()->toString()
             : $fee->name;
+    }
+
+    /** @return array{amount_cents: int, basis_value: int|null, basis_unit: string|null, explanation: string|null, rule_signature: string} */
+    private function catalogCalculation(FeeRule $fee, PermitApplication $application): array
+    {
+        if (data_get($fee->metadata, 'manual_amount_required') === true) {
+            return [
+                'amount_cents' => $fee->amount_cents,
+                'basis_value' => null,
+                'basis_unit' => null,
+                'explanation' => null,
+                'rule_signature' => $this->ruleSignature($fee),
+            ];
+        }
+
+        $calculation = $this->assessmentCalculator->calculate($fee, null, $application);
+        $basisUnit = data_get($fee->metadata, 'basis_unit');
+        $basis = $calculation['basis_amount_cents'];
+        $explanation = match ($basisUnit) {
+            'employee' => $basis.' employees × ₱'.number_format(((int) data_get($fee->metadata, 'unit_amount_minor')) / 100, 2).' = ₱'.number_format($calculation['amount_cents'] / 100, 2),
+            'centi_square_meter' => number_format($basis / 100, 2).' m² · applicable area bracket = ₱'.number_format($calculation['amount_cents'] / 100, 2),
+            default => null,
+        };
+
+        return [
+            'amount_cents' => $calculation['amount_cents'],
+            'basis_value' => $basis,
+            'basis_unit' => is_string($basisUnit) ? $basisUnit : null,
+            'explanation' => $explanation,
+            'rule_signature' => $this->ruleSignature($fee),
+        ];
+    }
+
+    private function ruleSignature(FeeRule $fee): string
+    {
+        return hash('sha256', json_encode([
+            'name' => $fee->name,
+            'calculation_type' => $fee->calculation_type->value,
+            'basis' => $fee->basis,
+            'basis_unit' => data_get($fee->metadata, 'basis_unit'),
+            'unit_amount_minor' => data_get($fee->metadata, 'unit_amount_minor'),
+            'amount_cents' => $fee->amount_cents,
+            'ranges' => $fee->ranges->map->only(['min_basis_cents', 'max_basis_cents', 'amount_cents', 'rate_basis_points'])->values()->all(),
+        ], JSON_THROW_ON_ERROR));
     }
 }

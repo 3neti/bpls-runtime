@@ -8,6 +8,8 @@ use App\Exceptions\UnsupportedAssessmentPolicy;
 use App\Models\FeeRule;
 use App\Models\FeeRuleRange;
 use App\Models\FeeRuleReconciliation;
+use App\Models\PermitApplication;
+use App\Models\PermitApplicationDeclaration;
 use App\Models\PermitApplicationLine;
 
 class AssessmentCalculator
@@ -20,24 +22,23 @@ class AssessmentCalculator
      *     rule_snapshot: array<string, mixed>
      * }
      */
-    public function calculate(FeeRule $feeRule, ?PermitApplicationLine $applicationLine = null): array
-    {
+    public function calculate(
+        FeeRule $feeRule,
+        ?PermitApplicationLine $applicationLine = null,
+        ?PermitApplication $permitApplication = null,
+    ): array {
         $this->assertExecutableReconciliation($feeRule);
 
-        $basisAmountCents = $this->basisAmountCents($feeRule, $applicationLine);
+        $basisAmountCents = $this->basisAmountCents($feeRule, $applicationLine, $permitApplication);
         $range = null;
 
         if ($feeRule->calculation_type === FeeRuleCalculationType::Range) {
             $range = $this->matchingRange($feeRule, $basisAmountCents);
             $amountCents = $range->amount_cents;
         } else {
-            if ($feeRule->calculation_type === FeeRuleCalculationType::Formula) {
-                throw new UnsupportedAssessmentPolicy(
-                    "Formula assessment policy is not implemented for fee rule [{$feeRule->code}]."
-                );
-            }
-
-            $amountCents = $feeRule->amount_cents;
+            $amountCents = $feeRule->calculation_type === FeeRuleCalculationType::Formula
+                ? $this->formulaAmountCents($feeRule, $basisAmountCents)
+                : $feeRule->amount_cents;
         }
 
         return [
@@ -69,10 +70,17 @@ class AssessmentCalculator
         }
     }
 
-    private function basisAmountCents(FeeRule $feeRule, ?PermitApplicationLine $applicationLine): int
-    {
+    private function basisAmountCents(
+        FeeRule $feeRule,
+        ?PermitApplicationLine $applicationLine,
+        ?PermitApplication $permitApplication,
+    ): int {
         if ($feeRule->basis === 'none') {
             return 0;
+        }
+
+        if (in_array($feeRule->basis, ['employee_count', 'business_area_square_meters'], true)) {
+            return $this->applicationBasis($feeRule, $permitApplication);
         }
 
         if (! $applicationLine instanceof PermitApplicationLine) {
@@ -88,6 +96,83 @@ class AssessmentCalculator
                 "Assessment basis [{$feeRule->basis}] is not implemented for fee rule [{$feeRule->code}]."
             ),
         };
+    }
+
+    private function applicationBasis(FeeRule $feeRule, ?PermitApplication $permitApplication): int
+    {
+        if (! $permitApplication instanceof PermitApplication) {
+            throw new UnsupportedAssessmentPolicy(
+                "Fee rule [{$feeRule->code}] requires frozen Application basis [{$feeRule->basis}]."
+            );
+        }
+
+        $declaration = $permitApplication->declaration()->first();
+        if (! $declaration instanceof PermitApplicationDeclaration) {
+            throw new UnsupportedAssessmentPolicy(
+                "Fee rule [{$feeRule->code}] requires a frozen applicant declaration."
+            );
+        }
+
+        if ($feeRule->basis === 'employee_count') {
+            $recordedTotal = data_get($declaration->snapshot, 'establishment.total_employees');
+            if ($this->isNonNegativeInteger($recordedTotal)) {
+                return (int) $recordedTotal;
+            }
+
+            $male = data_get($declaration->snapshot, 'establishment.male_employees');
+            $female = data_get($declaration->snapshot, 'establishment.female_employees');
+            if (! $this->isNonNegativeInteger($male) || ! $this->isNonNegativeInteger($female)) {
+                throw new UnsupportedAssessmentPolicy(
+                    "Fee rule [{$feeRule->code}] requires complete frozen employee counts."
+                );
+            }
+
+            return (int) $male + (int) $female;
+        }
+
+        return $this->centiSquareMeters(
+            data_get($declaration->snapshot, 'establishment.business_area_square_meters'),
+            $feeRule,
+        );
+    }
+
+    private function formulaAmountCents(FeeRule $feeRule, int $basisValue): int
+    {
+        $unitAmount = data_get($feeRule->metadata, 'unit_amount_minor');
+        if ($feeRule->basis !== 'employee_count'
+            || data_get($feeRule->metadata, 'basis_unit') !== 'employee'
+            || ! is_int($unitAmount)
+            || $unitAmount < 0) {
+            throw new UnsupportedAssessmentPolicy(
+                "Formula assessment policy is not implemented for fee rule [{$feeRule->code}]."
+            );
+        }
+
+        return $basisValue * $unitAmount;
+    }
+
+    private function centiSquareMeters(mixed $value, FeeRule $feeRule): int
+    {
+        if (! is_int($value) && ! is_float($value) && ! is_string($value)) {
+            throw new UnsupportedAssessmentPolicy(
+                "Fee rule [{$feeRule->code}] requires frozen business area."
+            );
+        }
+
+        $normalized = trim((string) $value);
+        if (preg_match('/^(\d+)(?:\.(\d{1,2}))?$/', $normalized, $matches) !== 1) {
+            throw new UnsupportedAssessmentPolicy(
+                "Fee rule [{$feeRule->code}] requires business area with at most two decimal places."
+            );
+        }
+
+        return ((int) $matches[1] * 100) + (int) str_pad($matches[2] ?? '', 2, '0');
+    }
+
+    private function isNonNegativeInteger(mixed $value): bool
+    {
+        return is_int($value) && $value >= 0
+            || is_string($value) && preg_match('/^\d+$/', $value) === 1;
     }
 
     private function matchingRange(FeeRule $feeRule, int $basisAmountCents): FeeRuleRange
@@ -127,6 +212,9 @@ class AssessmentCalculator
             'scope' => $feeRule->scope->value,
             'calculation_type' => $feeRule->calculation_type->value,
             'basis' => $feeRule->basis,
+            'basis_unit' => data_get($feeRule->metadata, 'basis_unit'),
+            'unit_amount_minor' => data_get($feeRule->metadata, 'unit_amount_minor'),
+            'exact_once_key' => data_get($feeRule->metadata, 'exact_once_key'),
             'amount_cents' => $feeRule->amount_cents,
             'rate_basis_points' => $feeRule->rate_basis_points,
             'effective_from' => $feeRule->effective_from->toDateString(),
