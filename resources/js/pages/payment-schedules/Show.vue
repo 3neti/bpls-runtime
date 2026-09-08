@@ -13,6 +13,7 @@ import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Staf
 import { store as receiptStore } from '@/actions/App/Http/Controllers/Staff/CollectionReceiptController';
 import { store as collectionStore } from '@/actions/App/Http/Controllers/Staff/PaymentScheduleCollectionController';
 import { show as assessmentShow } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
+import { show as permitApplicationShow } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import {
     initiate as initiateQrPh,
     status as qrPhStatus,
@@ -23,8 +24,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import WorkflowSectionHeader from '@/components/workflow/WorkflowSectionHeader.vue';
-import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
@@ -197,6 +196,42 @@ const balanceDueCents = computed(
         props.paymentSchedule.paid_amount_cents,
 );
 
+const pendingReceiptCount = computed(() =>
+    props.paymentSchedule.collections.reduce(
+        (count, collection) => count + pendingReceiptGroups(collection).length,
+        0,
+    ),
+);
+
+const canGenerateQr = computed(
+    () =>
+        props.paymentSchedule.online_payment_boundary.can_pay_online &&
+        props.paymentSchedule.status !== 'paid' &&
+        balanceDueCents.value > 0,
+);
+
+const workspaceState = computed(() => {
+    if (props.paymentSchedule.status === 'paid') {
+        return pendingReceiptCount.value > 0
+            ? 'Receipts required'
+            : 'Payment complete';
+    }
+
+    if (qrAttempt.value !== null && secondsRemaining.value > 0) {
+        return 'Awaiting QR Ph payment';
+    }
+
+    if (canGenerateQr.value) {
+        return 'Ready for QR Ph';
+    }
+
+    if (props.can.record_collections && balanceDueCents.value > 0) {
+        return 'Ready for collection';
+    }
+
+    return 'Payment review';
+});
+
 const initiateRequest = useHttp({});
 const statusRequest = useHttp({});
 const qrAttempt = ref<QrPhAttempt | null>(null);
@@ -350,9 +385,11 @@ onBeforeUnmount(stopQrChecks);
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head :title="`Payment Schedule #${paymentSchedule.sequence}`" />
 
-        <main class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-                <div class="flex flex-col gap-1">
+        <main
+            class="mx-auto flex h-full w-full max-w-[1500px] flex-1 flex-col gap-4 overflow-x-hidden p-4"
+        >
+            <header class="flex flex-wrap items-end justify-between gap-3">
+                <div class="grid gap-1">
                     <Button
                         as-child
                         variant="ghost"
@@ -365,283 +402,437 @@ onBeforeUnmount(stopQrChecks);
                             "
                         >
                             <ArrowLeft />
-                            Back
+                            Back to Assessment
                         </Link>
                     </Button>
-                    <h1 class="text-xl font-semibold text-foreground">
-                        Payment Schedule #{{ paymentSchedule.sequence }}
-                    </h1>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h1 class="text-xl font-semibold text-foreground">
+                            Payment Schedule #{{ paymentSchedule.sequence }}
+                        </h1>
+                        <Badge variant="outline">{{ workspaceState }}</Badge>
+                    </div>
                     <p class="text-sm text-muted-foreground">
                         {{ paymentSchedule.permit_application.business_name }}
                         · {{ paymentSchedule.permit_application.owner_name }}
                     </p>
                 </div>
-            </div>
-
-            <WorkflowStageSummary
-                eyebrow="Current Treasury record"
-                :title="`Balance ${money(balanceDueCents)}`"
-                description="The payment schedule, collection, and receipt are recorded separately."
-                :items="[
-                    {
-                        label: 'Schedule status',
-                        value: label(paymentSchedule.status),
-                        detail: `Total ${money(paymentSchedule.total_amount_cents)} · Paid ${money(paymentSchedule.paid_amount_cents)}`,
-                    },
-                    {
-                        label: 'Application',
-                        value:
-                            paymentSchedule.permit_application
-                                .application_number ??
-                            `Application #${paymentSchedule.permit_application.id}`,
-                        detail: `${paymentSchedule.permit_application.type} · ${paymentSchedule.permit_application.application_year}`,
-                    },
-                    {
-                        label: 'Payment mode',
-                        value: label(paymentSchedule.payment_mode),
-                        detail: paymentSchedule.due_on ?? 'No due date set',
-                    },
-                    {
-                        label: 'Current task',
-                        value:
-                            can.record_collections && balanceDueCents > 0
-                                ? 'Record over-the-counter collection'
-                                : can.issue_receipts &&
-                                    paymentSchedule.collections.some(
-                                        (collection) =>
-                                            collection.status ===
-                                                'pending_receipt' &&
-                                            collection.receipt === null,
-                                    )
-                                  ? 'Issue pending receipt'
-                                  : 'Review collection evidence',
-                        detail: `Prepared by ${paymentSchedule.prepared_by ?? 'System'}`,
-                    },
-                ]"
-            />
-
-            <section
-                v-if="can.record_collections && balanceDueCents > 0"
-                class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
-            >
-                <WorkflowSectionHeader
-                    class="mb-4"
-                    eyebrow="Current authorized task"
-                    title="Record collection"
-                    :description="`Over-the-counter collection only. The current balance is ${money(balanceDueCents)}; receipt issuance remains a separate action below.`"
-                />
-
-                <Form
-                    v-bind="collectionStore.form(paymentSchedule.id)"
-                    v-slot="{ errors, processing }"
-                    class="grid gap-4 md:grid-cols-5"
+                <Link
+                    :href="
+                        permitApplicationShow(
+                            paymentSchedule.permit_application.id,
+                        )
+                    "
+                    class="text-sm font-medium text-primary hover:underline"
                 >
-                    <div class="grid gap-2">
-                        <Label for="amount_pesos">Amount</Label>
-                        <Input
-                            id="amount_pesos"
-                            name="amount_pesos"
-                            type="number"
-                            min="0.01"
-                            step="0.01"
-                            :max="(balanceDueCents / 100).toFixed(2)"
-                            required
-                        />
-                        <InputError :message="errors.amount_pesos" />
-                    </div>
-                    <div class="grid gap-2">
-                        <Label for="method">Method</Label>
-                        <select
-                            id="method"
-                            name="method"
-                            required
-                            class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <option
-                                v-for="method in collectionMethods"
-                                :key="method.value"
-                                :value="method.value"
-                            >
-                                {{ method.label }}
-                            </option>
-                        </select>
-                        <InputError :message="errors.method" />
-                    </div>
-                    <div class="grid gap-2">
-                        <Label for="payer_name">Payer</Label>
-                        <Input id="payer_name" name="payer_name" />
-                        <InputError :message="errors.payer_name" />
-                    </div>
-                    <div class="grid gap-2">
-                        <Label for="reference_number">Reference</Label>
-                        <Input id="reference_number" name="reference_number" />
-                        <InputError :message="errors.reference_number" />
-                    </div>
-                    <div class="grid gap-2">
-                        <Label for="remarks">Remarks</Label>
-                        <Input id="remarks" name="remarks" />
-                        <InputError :message="errors.remarks" />
-                    </div>
-                    <div class="md:col-span-5">
-                        <Button type="submit" :disabled="processing">
-                            <Banknote />
-                            {{
-                                processing
-                                    ? 'Recording...'
-                                    : 'Record Collection'
-                            }}
-                        </Button>
-                    </div>
-                </Form>
-            </section>
+                    {{
+                        paymentSchedule.permit_application.application_number ??
+                        `Application #${paymentSchedule.permit_application.id}`
+                    }}
+                </Link>
+            </header>
 
-            <section
-                class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
-            >
-                <div class="mb-4 flex items-center gap-2">
-                    <Banknote class="size-4 text-muted-foreground" />
-                    <div>
-                        <h2 class="text-sm font-semibold text-foreground">
-                            Payment options
-                        </h2>
-                        <p class="text-xs text-muted-foreground">
-                            Installments, statutory due dates, surcharge,
-                            interest, PIL, and deficiency-tax behavior remain
-                            subject to municipal confirmation.
-                        </p>
-                    </div>
-                </div>
-                <dl class="grid gap-3 text-sm md:grid-cols-4">
-                    <div>
-                        <dt class="text-xs text-muted-foreground">Status</dt>
-                        <dd class="capitalize">
-                            {{
-                                paymentSchedule.payment_policy_boundary.status.replace(
-                                    '_',
-                                    ' ',
-                                ) === 'blocked'
-                                    ? 'Not available in this preview'
-                                    : paymentSchedule.payment_policy_boundary.status.replace(
-                                          '_',
-                                          ' ',
-                                      )
-                            }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">
-                            Installments
-                        </dt>
-                        <dd>
-                            {{
-                                paymentSchedule.payment_policy_boundary
-                                    .can_split_installments
-                                    ? 'Configured'
-                                    : 'Not available in this preview'
-                            }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">
-                            Statutory due dates
-                        </dt>
-                        <dd>
-                            {{
-                                paymentSchedule.payment_policy_boundary
-                                    .can_assign_statutory_due_dates
-                                    ? 'Configured'
-                                    : 'Not yet confirmed'
-                            }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">Surcharge</dt>
-                        <dd>
-                            {{
-                                paymentSchedule.payment_policy_boundary
-                                    .can_calculate_surcharge
-                                    ? 'Calculated'
-                                    : 'Not yet confirmed'
-                            }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">Interest</dt>
-                        <dd>
-                            {{
-                                paymentSchedule.payment_policy_boundary
-                                    .can_calculate_interest
-                                    ? 'Calculated'
-                                    : 'Not yet confirmed'
-                            }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">
-                            PIL validation
-                        </dt>
-                        <dd>
-                            {{
-                                paymentSchedule.payment_policy_boundary
-                                    .can_validate_pil
-                                    ? 'Active'
-                                    : 'Not yet confirmed'
-                            }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs text-muted-foreground">
-                            Deficiency tax
-                        </dt>
-                        <dd>
-                            {{
-                                paymentSchedule.payment_policy_boundary
-                                    .can_calculate_deficiency_tax
-                                    ? 'Active'
-                                    : 'Not yet confirmed'
-                            }}
-                        </dd>
-                    </div>
-                    <div class="md:col-span-2">
-                        <dt class="text-xs text-muted-foreground">
-                            Supported payment modes
-                        </dt>
-                        <dd class="mt-2 flex flex-wrap gap-2">
-                            <Badge
-                                v-for="mode in paymentSchedule
-                                    .payment_policy_boundary
-                                    .supported_payment_modes"
-                                :key="mode"
-                                variant="outline"
-                                class="capitalize"
+            <div class="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+                <div
+                    class="order-2 grid min-w-0 content-start gap-4 xl:order-1"
+                >
+                    <section
+                        data-testid="payment-schedule-items"
+                        class="overflow-hidden rounded-xl border bg-background"
+                    >
+                        <div
+                            class="flex flex-wrap items-end justify-between gap-4 border-b p-4"
+                        >
+                            <div>
+                                <p class="text-xs text-muted-foreground">
+                                    Payment items
+                                </p>
+                                <h2 class="text-base font-semibold">
+                                    Approved municipal charges
+                                </h2>
+                            </div>
+                            <dl class="flex gap-5 text-right text-sm">
+                                <div>
+                                    <dt class="text-xs text-muted-foreground">
+                                        Total
+                                    </dt>
+                                    <dd class="font-semibold tabular-nums">
+                                        {{
+                                            money(
+                                                paymentSchedule.total_amount_cents,
+                                            )
+                                        }}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="text-xs text-muted-foreground">
+                                        Paid
+                                    </dt>
+                                    <dd class="font-semibold tabular-nums">
+                                        {{
+                                            money(
+                                                paymentSchedule.paid_amount_cents,
+                                            )
+                                        }}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="text-xs text-muted-foreground">
+                                        Balance
+                                    </dt>
+                                    <dd class="font-semibold tabular-nums">
+                                        {{ money(balanceDueCents) }}
+                                    </dd>
+                                </div>
+                            </dl>
+                        </div>
+
+                        <div class="hidden sm:block">
+                            <table class="w-full text-sm">
+                                <thead
+                                    class="border-b bg-muted/30 text-left text-xs text-muted-foreground"
+                                >
+                                    <tr>
+                                        <th class="px-4 py-3 font-medium">
+                                            Payment item
+                                        </th>
+                                        <th class="px-4 py-3 font-medium">
+                                            Source / Line of Business
+                                        </th>
+                                        <th
+                                            class="px-4 py-3 text-right font-medium"
+                                        >
+                                            Amount
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr
+                                        v-for="line in paymentSchedule.lines"
+                                        :key="line.id"
+                                        class="border-b last:border-b-0"
+                                    >
+                                        <td class="px-4 py-3 font-medium">
+                                            {{ line.name }}
+                                        </td>
+                                        <td
+                                            class="px-4 py-3 text-muted-foreground"
+                                        >
+                                            {{
+                                                line.line_of_business ??
+                                                'Application-wide'
+                                            }}
+                                        </td>
+                                        <td
+                                            class="px-4 py-3 text-right font-medium tabular-nums"
+                                        >
+                                            {{ money(line.amount_cents) }}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="divide-y sm:hidden">
+                            <div
+                                v-for="line in paymentSchedule.lines"
+                                :key="line.id"
+                                class="grid grid-cols-[minmax(0,1fr)_auto] gap-3 p-4"
                             >
-                                {{ label(mode) }}
-                            </Badge>
-                        </dd>
-                    </div>
-                    <div class="md:col-span-2">
-                        <dt class="text-xs text-muted-foreground">
-                            Calculations not active
-                        </dt>
-                        <dd class="mt-2 flex flex-wrap gap-2">
-                            <Badge
-                                v-for="calculation in paymentSchedule
-                                    .payment_policy_boundary
-                                    .blocked_calculations"
-                                :key="calculation"
-                                variant="secondary"
-                                class="capitalize"
+                                <div class="min-w-0">
+                                    <p class="font-medium">{{ line.name }}</p>
+                                    <p class="text-xs text-muted-foreground">
+                                        {{
+                                            line.line_of_business ??
+                                            'Application-wide'
+                                        }}
+                                    </p>
+                                </div>
+                                <p class="font-medium tabular-nums">
+                                    {{ money(line.amount_cents) }}
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section
+                        v-if="paymentSchedule.collections.length > 0"
+                        class="rounded-xl border bg-background p-4"
+                    >
+                        <div class="mb-4 flex items-center gap-2">
+                            <ReceiptText class="size-4 text-muted-foreground" />
+                            <h2 class="text-sm font-semibold">
+                                Collections and Official Receipts
+                            </h2>
+                        </div>
+                        <div class="grid gap-3">
+                            <article
+                                v-for="collection in paymentSchedule.collections"
+                                :key="collection.id"
+                                class="rounded-lg border p-3"
                             >
-                                {{ label(calculation) }}
-                            </Badge>
-                        </dd>
-                    </div>
-                    <div class="md:col-span-2">
-                        <dt class="text-xs text-muted-foreground">
-                            Needs municipal confirmation
-                        </dt>
-                        <dd class="mt-2">
-                            <ul class="grid gap-1">
+                                <div
+                                    class="flex flex-wrap items-start justify-between gap-3"
+                                >
+                                    <div>
+                                        <p class="font-medium tabular-nums">
+                                            {{ money(collection.amount_cents) }}
+                                        </p>
+                                        <p
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            {{ label(collection.method) }} ·
+                                            {{ collection.received_at }}
+                                        </p>
+                                    </div>
+                                    <Badge variant="outline" class="capitalize">
+                                        {{ label(collection.status) }}
+                                    </Badge>
+                                </div>
+
+                                <div
+                                    v-if="collection.receipts.length > 0"
+                                    class="mt-3 grid gap-2"
+                                >
+                                    <div
+                                        v-for="receipt in collection.receipts"
+                                        :key="receipt.id"
+                                        class="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/30 px-3 py-2 text-sm"
+                                    >
+                                        <span>
+                                            {{ receipt.receipt_group_label }} ·
+                                            {{ money(receipt.amount_cents) }}
+                                        </span>
+                                        <Link
+                                            v-if="can.view_receipts"
+                                            :href="receiptShow(receipt.id)"
+                                            class="font-mono text-xs text-primary hover:underline"
+                                        >
+                                            OR {{ receipt.receipt_number }}
+                                        </Link>
+                                        <span v-else class="font-mono text-xs">
+                                            OR {{ receipt.receipt_number }}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <Form
+                                    v-for="group in can.issue_receipts
+                                        ? pendingReceiptGroups(collection)
+                                        : []"
+                                    :key="group.key"
+                                    v-bind="receiptStore.form(collection.id)"
+                                    v-slot="{ errors, processing }"
+                                    class="mt-3 grid gap-2 rounded-md border p-3"
+                                >
+                                    <input
+                                        type="hidden"
+                                        name="receipt_group_key"
+                                        :value="group.key"
+                                    />
+                                    <Label
+                                        :for="`receipt_number_${collection.id}_${group.key}`"
+                                    >
+                                        {{ group.label }} ·
+                                        {{ money(group.amount_cents) }}
+                                    </Label>
+                                    <div class="flex gap-2">
+                                        <Input
+                                            :id="`receipt_number_${collection.id}_${group.key}`"
+                                            name="receipt_number"
+                                            inputmode="numeric"
+                                            pattern="[0-9]{7}"
+                                            minlength="7"
+                                            maxlength="7"
+                                            placeholder="0000000"
+                                            required
+                                        />
+                                        <Button
+                                            type="submit"
+                                            size="sm"
+                                            :disabled="processing"
+                                        >
+                                            <ReceiptText />
+                                            {{
+                                                processing
+                                                    ? 'Issuing...'
+                                                    : 'Issue'
+                                            }}
+                                        </Button>
+                                    </div>
+                                    <InputError
+                                        :message="errors.receipt_number"
+                                    />
+                                </Form>
+                            </article>
+                        </div>
+                    </section>
+
+                    <details
+                        data-testid="payment-details"
+                        class="rounded-xl border bg-background p-4"
+                    >
+                        <summary class="cursor-pointer text-sm font-medium">
+                            Payment details
+                        </summary>
+                        <dl class="mt-4 grid gap-4 text-sm sm:grid-cols-2">
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Schedule status
+                                </dt>
+                                <dd class="capitalize">
+                                    {{ label(paymentSchedule.status) }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Payment mode
+                                </dt>
+                                <dd class="capitalize">
+                                    {{ label(paymentSchedule.payment_mode) }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Due date
+                                </dt>
+                                <dd>
+                                    {{ paymentSchedule.due_on ?? 'Not set' }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Prepared by
+                                </dt>
+                                <dd>
+                                    {{
+                                        paymentSchedule.prepared_by ?? 'System'
+                                    }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Assessment
+                                </dt>
+                                <dd>
+                                    <Link
+                                        :href="
+                                            assessmentShow(
+                                                paymentSchedule.assessment.id,
+                                            )
+                                        "
+                                        class="text-primary hover:underline"
+                                    >
+                                        Assessment #{{
+                                            paymentSchedule.assessment.sequence
+                                        }}
+                                    </Link>
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Transaction
+                                </dt>
+                                <dd class="capitalize">
+                                    {{
+                                        paymentSchedule.permit_application.type
+                                    }}
+                                    ·
+                                    {{
+                                        paymentSchedule.permit_application
+                                            .application_year
+                                    }}
+                                </dd>
+                            </div>
+                        </dl>
+                        <div class="mt-4 overflow-x-auto">
+                            <table class="w-full min-w-[560px] text-xs">
+                                <thead
+                                    class="border-b text-left text-muted-foreground"
+                                >
+                                    <tr>
+                                        <th class="py-2 pr-3 font-medium">
+                                            Code
+                                        </th>
+                                        <th class="py-2 pr-3 font-medium">
+                                            Category
+                                        </th>
+                                        <th class="py-2 pr-3 font-medium">
+                                            Status
+                                        </th>
+                                        <th class="py-2 text-right font-medium">
+                                            Paid
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr
+                                        v-for="line in paymentSchedule.lines"
+                                        :key="line.id"
+                                        class="border-b last:border-0"
+                                    >
+                                        <td class="py-2 pr-3 font-mono">
+                                            {{ line.code }}
+                                        </td>
+                                        <td class="py-2 pr-3 capitalize">
+                                            {{ line.category }}
+                                        </td>
+                                        <td class="py-2 pr-3 capitalize">
+                                            {{ label(line.status) }}
+                                        </td>
+                                        <td
+                                            class="py-2 text-right tabular-nums"
+                                        >
+                                            {{ money(line.paid_amount_cents) }}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+
+                    <details
+                        data-testid="payment-policy"
+                        class="rounded-xl border bg-background p-4"
+                    >
+                        <summary class="cursor-pointer text-sm font-medium">
+                            Payment policy
+                        </summary>
+                        <div class="mt-4 grid gap-4 text-sm">
+                            <div>
+                                <p class="text-xs text-muted-foreground">
+                                    Supported payment modes
+                                </p>
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    <Badge
+                                        v-for="mode in paymentSchedule
+                                            .payment_policy_boundary
+                                            .supported_payment_modes"
+                                        :key="mode"
+                                        variant="outline"
+                                        class="capitalize"
+                                    >
+                                        {{ label(mode) }}
+                                    </Badge>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="text-xs text-muted-foreground">
+                                    Calculations not active
+                                </p>
+                                <div class="mt-2 flex flex-wrap gap-2">
+                                    <Badge
+                                        v-for="calculation in paymentSchedule
+                                            .payment_policy_boundary
+                                            .blocked_calculations"
+                                        :key="calculation"
+                                        variant="secondary"
+                                        class="capitalize"
+                                    >
+                                        {{ label(calculation) }}
+                                    </Badge>
+                                </div>
+                            </div>
+                            <ul class="grid gap-1 text-muted-foreground">
                                 <li
                                     v-for="gap in paymentSchedule
                                         .payment_policy_boundary
@@ -651,22 +842,18 @@ onBeforeUnmount(stopQrChecks);
                                     {{ gap }}
                                 </li>
                             </ul>
-                        </dd>
-                    </div>
-                </dl>
-                <p class="mt-3 text-sm text-muted-foreground">
-                    This preview uses the payment arrangement recorded for this
-                    sample. Other payment arrangements remain unavailable until
-                    the municipality confirms how they should work.
-                </p>
-            </section>
+                        </div>
+                    </details>
+                </div>
 
-            <section
-                data-testid="staff-qr-ph-payment"
-                class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
-            >
-                <div class="grid gap-5 md:grid-cols-[minmax(0,1fr)_auto]">
-                    <div class="grid content-start gap-4">
+                <aside
+                    data-testid="payment-action-rail"
+                    class="order-1 grid content-start gap-4 xl:sticky xl:top-4 xl:order-2"
+                >
+                    <section
+                        data-testid="staff-qr-ph-payment"
+                        class="rounded-xl border border-primary/30 bg-background p-4 shadow-sm"
+                    >
                         <div class="flex items-start gap-3">
                             <div
                                 class="rounded-full bg-primary/10 p-2 text-primary"
@@ -679,394 +866,179 @@ onBeforeUnmount(stopQrChecks);
                             </div>
                             <div>
                                 <p
-                                    class="text-xs font-medium tracking-wide text-primary uppercase"
+                                    class="text-xs font-medium text-primary uppercase"
                                 >
-                                    Online payment
+                                    Current task
                                 </p>
-                                <h2
-                                    class="text-lg font-semibold text-foreground"
-                                >
-                                    QR Ph payment request
+                                <h2 class="font-semibold">
+                                    {{ workspaceState }}
                                 </h2>
-                                <p class="mt-1 text-sm text-muted-foreground">
-                                    One QR for the exact unpaid Payment
-                                    Schedule. Generating it does not record
-                                    payment or issue an Official Receipt.
-                                </p>
                             </div>
                         </div>
 
-                        <dl class="grid gap-3 text-sm sm:grid-cols-3">
-                            <div>
-                                <dt class="text-xs text-muted-foreground">
-                                    Amount
-                                </dt>
-                                <dd
-                                    data-testid="staff-qr-ph-amount"
-                                    :data-amount-cents="balanceDueCents"
-                                    class="font-semibold tabular-nums"
-                                >
-                                    {{ money(balanceDueCents) }}
-                                </dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs text-muted-foreground">
-                                    Request
-                                </dt>
-                                <dd class="capitalize">
-                                    {{
-                                        paymentSchedule.online_payment_boundary
-                                            .attempt_status
-                                            ? label(
-                                                  paymentSchedule
-                                                      .online_payment_boundary
-                                                      .attempt_status,
-                                              )
-                                            : paymentSchedule
-                                                    .online_payment_boundary
-                                                    .can_pay_online
-                                              ? 'Ready to generate'
-                                              : label(
-                                                    paymentSchedule
-                                                        .online_payment_boundary
-                                                        .status,
-                                                )
-                                    }}
-                                </dd>
-                            </div>
-                            <div>
-                                <dt class="text-xs text-muted-foreground">
-                                    Collection
-                                </dt>
-                                <dd>
-                                    {{
-                                        paymentSchedule.status === 'paid'
-                                            ? 'Confirmed'
-                                            : 'Not yet recorded'
-                                    }}
-                                </dd>
-                            </div>
-                        </dl>
+                        <div
+                            class="mt-5 rounded-lg bg-muted/30 p-4 text-center"
+                        >
+                            <p class="text-xs text-muted-foreground">Balance</p>
+                            <p
+                                data-testid="staff-qr-ph-amount"
+                                :data-amount-cents="balanceDueCents"
+                                class="text-3xl font-semibold tabular-nums"
+                            >
+                                {{ money(balanceDueCents) }}
+                            </p>
+                        </div>
 
                         <p
                             v-if="qrMessage"
                             data-testid="staff-qr-ph-message"
-                            class="rounded-md border border-border bg-muted/30 p-3 text-sm text-foreground"
+                            class="mt-4 rounded-md border bg-muted/30 p-3 text-sm"
                         >
                             {{ qrMessage }}
                         </p>
 
-                        <div
+                        <Button
                             v-if="
-                                paymentSchedule.online_payment_boundary
-                                    .can_pay_online &&
-                                paymentSchedule.status !== 'paid'
+                                canGenerateQr &&
+                                (qrAttempt === null || secondsRemaining === 0)
                             "
-                            class="flex flex-wrap items-center gap-3"
+                            type="button"
+                            class="mt-4 w-full"
+                            :disabled="initiateRequest.processing"
+                            data-testid="staff-qr-ph-generate"
+                            @click="generateQrPh"
                         >
-                            <Button
-                                v-if="
-                                    qrAttempt === null || secondsRemaining === 0
-                                "
-                                type="button"
-                                :disabled="initiateRequest.processing"
-                                data-testid="staff-qr-ph-generate"
-                                @click="generateQrPh"
-                            >
-                                <RefreshCw
-                                    v-if="qrAttempt && secondsRemaining === 0"
-                                />
-                                <QrCode v-else />
-                                {{
-                                    initiateRequest.processing
-                                        ? 'Preparing QR…'
-                                        : qrAttempt && secondsRemaining === 0
-                                          ? 'Generate fresh QR'
-                                          : 'Generate QR Ph'
-                                }}
-                            </Button>
-                            <span class="text-xs text-muted-foreground">
-                                Citizen and staff use the same payment request.
-                            </span>
+                            <RefreshCw
+                                v-if="qrAttempt && secondsRemaining === 0"
+                            />
+                            <QrCode v-else />
+                            {{
+                                initiateRequest.processing
+                                    ? 'Preparing QR…'
+                                    : qrAttempt && secondsRemaining === 0
+                                      ? 'Generate fresh QR'
+                                      : 'Generate QR Ph'
+                            }}
+                        </Button>
+
+                        <div
+                            v-if="qrAttempt"
+                            class="mt-4 grid justify-items-center gap-2 rounded-lg border bg-white p-3"
+                        >
+                            <img
+                                data-testid="staff-qr-ph-image"
+                                :src="qrAttempt.qr_data_url"
+                                alt="QR Ph payment code"
+                                class="aspect-square w-full object-contain"
+                            />
+                            <p class="text-sm font-medium text-slate-900">
+                                Expires in
+                                <span class="tabular-nums">{{
+                                    countdown
+                                }}</span>
+                            </p>
+                            <p class="text-center text-xs text-slate-600">
+                                Awaiting payment confirmation
+                            </p>
                         </div>
 
                         <p
-                            v-else-if="paymentSchedule.status !== 'paid'"
-                            class="text-sm text-muted-foreground"
+                            v-else-if="
+                                !canGenerateQr &&
+                                paymentSchedule.status !== 'paid'
+                            "
+                            class="mt-4 text-sm text-muted-foreground"
                         >
                             {{
                                 paymentSchedule.online_payment_boundary
                                     .artifact_statement
                             }}
                         </p>
-                    </div>
 
-                    <div
-                        v-if="qrAttempt"
-                        class="grid w-full justify-items-center gap-2 rounded-lg border bg-white p-3 md:w-72"
+                        <p
+                            v-if="canGenerateQr && qrAttempt === null"
+                            class="mt-3 text-xs text-muted-foreground"
+                        >
+                            Generates a request only. Collection and Official
+                            Receipts remain separate records.
+                        </p>
+                    </section>
+
+                    <details
+                        v-if="can.record_collections && balanceDueCents > 0"
+                        class="rounded-xl border bg-background p-4"
                     >
-                        <img
-                            data-testid="staff-qr-ph-image"
-                            :src="qrAttempt.qr_data_url"
-                            alt="QR Ph payment code"
-                            class="aspect-square w-full object-contain"
-                        />
-                        <p class="text-sm font-medium text-slate-900">
-                            Expires in
-                            <span class="tabular-nums">{{ countdown }}</span>
-                        </p>
-                        <p class="text-center text-xs text-slate-600">
-                            Waiting for authoritative payment confirmation
-                        </p>
-                    </div>
-                </div>
-            </section>
-
-            <section
-                class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
-            >
-                <div class="overflow-x-auto">
-                    <table class="w-full min-w-[920px] text-sm">
-                        <thead
-                            class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
+                        <summary class="cursor-pointer text-sm font-medium">
+                            Record over-the-counter payment
+                        </summary>
+                        <Form
+                            v-bind="collectionStore.form(paymentSchedule.id)"
+                            v-slot="{ errors, processing }"
+                            class="mt-4 grid gap-3"
                         >
-                            <tr>
-                                <th class="px-4 py-3 font-medium">Code</th>
-                                <th class="px-4 py-3 font-medium">Item</th>
-                                <th class="px-4 py-3 font-medium">Category</th>
-                                <th class="px-4 py-3 font-medium">Status</th>
-                                <th class="px-4 py-3 text-right font-medium">
-                                    Paid
-                                </th>
-                                <th class="px-4 py-3 text-right font-medium">
-                                    Amount
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr
-                                v-for="line in paymentSchedule.lines"
-                                :key="line.id"
-                                class="border-b last:border-b-0"
-                            >
-                                <td
-                                    class="px-4 py-3 align-top font-mono text-xs"
+                            <div class="grid gap-2">
+                                <Label for="amount_pesos">Amount</Label>
+                                <Input
+                                    id="amount_pesos"
+                                    name="amount_pesos"
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    :max="(balanceDueCents / 100).toFixed(2)"
+                                    required
+                                />
+                                <InputError :message="errors.amount_pesos" />
+                            </div>
+                            <div class="grid gap-2">
+                                <Label for="method">Method</Label>
+                                <select
+                                    id="method"
+                                    name="method"
+                                    required
+                                    class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
                                 >
-                                    {{ line.code }}
-                                </td>
-                                <td class="px-4 py-3 align-top">
-                                    <div class="font-medium">
-                                        {{ line.name }}
-                                    </div>
-                                    <div class="text-xs text-muted-foreground">
-                                        {{
-                                            line.line_of_business ??
-                                            'Application-wide'
-                                        }}
-                                    </div>
-                                </td>
-                                <td class="px-4 py-3 align-top capitalize">
-                                    {{ line.category }}
-                                </td>
-                                <td class="px-4 py-3 align-top">
-                                    <Badge variant="outline" class="capitalize">
-                                        {{ line.status.replace('_', ' ') }}
-                                    </Badge>
-                                </td>
-                                <td class="px-4 py-3 text-right align-top">
-                                    {{ money(line.paid_amount_cents) }}
-                                </td>
-                                <td
-                                    class="px-4 py-3 text-right align-top font-medium"
-                                >
-                                    {{ money(line.amount_cents) }}
-                                </td>
-                            </tr>
-                            <tr v-if="paymentSchedule.lines.length === 0">
-                                <td
-                                    colspan="6"
-                                    class="px-4 py-10 text-center text-muted-foreground"
-                                >
-                                    No payment schedule lines have been
-                                    prepared.
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <section
-                v-if="
-                    can.view_collections ||
-                    can.record_collections ||
-                    can.view_receipts ||
-                    can.issue_receipts
-                "
-                class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
-            >
-                <div class="border-b px-4 py-3">
-                    <WorkflowSectionHeader
-                        eyebrow="Recorded after scheduling"
-                        title="Collection and receipt evidence"
-                        description="Review recorded collections and use the existing receipt action only where it is available."
-                    />
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full min-w-[820px] text-sm">
-                        <thead
-                            class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
-                        >
-                            <tr>
-                                <th class="px-4 py-3 font-medium">Date</th>
-                                <th class="px-4 py-3 font-medium">Status</th>
-                                <th class="px-4 py-3 font-medium">Method</th>
-                                <th class="px-4 py-3 font-medium">Payer</th>
-                                <th class="px-4 py-3 font-medium">Reference</th>
-                                <th class="px-4 py-3 font-medium">
-                                    Received by
-                                </th>
-                                <th class="px-4 py-3 font-medium">Receipt</th>
-                                <th class="px-4 py-3 text-right font-medium">
-                                    Amount
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr
-                                v-for="collection in paymentSchedule.collections"
-                                :key="collection.id"
-                                class="border-b last:border-b-0"
-                            >
-                                <td class="px-4 py-3 align-top">
-                                    {{ collection.received_at }}
-                                </td>
-                                <td class="px-4 py-3 align-top">
-                                    <Badge variant="outline" class="capitalize">
-                                        {{
-                                            collection.status.replace('_', ' ')
-                                        }}
-                                    </Badge>
-                                </td>
-                                <td class="px-4 py-3 align-top capitalize">
-                                    {{ collection.method.replace('_', ' ') }}
-                                </td>
-                                <td class="px-4 py-3 align-top">
-                                    {{
-                                        collection.payer_name ?? 'Not recorded'
-                                    }}
-                                </td>
-                                <td class="px-4 py-3 align-top">
-                                    {{
-                                        collection.reference_number ??
-                                        'Not recorded'
-                                    }}
-                                </td>
-                                <td class="px-4 py-3 align-top">
-                                    {{ collection.received_by ?? 'System' }}
-                                </td>
-                                <td class="px-4 py-3 align-top">
-                                    <div
-                                        v-for="receipt in collection.receipts"
-                                        :key="receipt.id"
-                                        class="mb-2 border-b pb-2 last:border-0"
+                                    <option
+                                        v-for="method in collectionMethods"
+                                        :key="method.value"
+                                        :value="method.value"
                                     >
-                                        <div class="text-xs font-medium">
-                                            {{ receipt.receipt_group_label }} ·
-                                            {{ money(receipt.amount_cents) }}
-                                        </div>
-                                        <Link
-                                            v-if="can.view_receipts"
-                                            :href="receiptShow(receipt.id)"
-                                            class="block w-fit font-mono text-xs text-primary hover:underline"
-                                        >
-                                            OR {{ receipt.receipt_number
-                                            }}<span v-if="receipt.series">
-                                                · {{ receipt.series }}</span
-                                            >
-                                        </Link>
-                                        <div v-else class="font-mono text-xs">
-                                            OR {{ receipt.receipt_number }}
-                                        </div>
-                                    </div>
-                                    <Form
-                                        v-for="group in can.issue_receipts
-                                            ? pendingReceiptGroups(collection)
-                                            : []"
-                                        :key="group.key"
-                                        v-bind="
-                                            receiptStore.form(collection.id)
-                                        "
-                                        v-slot="{ errors, processing }"
-                                        class="mb-3 grid min-w-72 gap-2"
-                                    >
-                                        <input
-                                            type="hidden"
-                                            name="receipt_group_key"
-                                            :value="group.key"
-                                        />
-                                        <Label
-                                            :for="`receipt_number_${collection.id}_${group.key}`"
-                                        >
-                                            {{ group.label }} ·
-                                            {{ money(group.amount_cents) }}
-                                        </Label>
-                                        <div class="flex gap-2">
-                                            <Input
-                                                :id="`receipt_number_${collection.id}_${group.key}`"
-                                                name="receipt_number"
-                                                inputmode="numeric"
-                                                pattern="[0-9]{7}"
-                                                minlength="7"
-                                                maxlength="7"
-                                                placeholder="0000000"
-                                                required
-                                            />
-                                            <Button
-                                                type="submit"
-                                                size="sm"
-                                                :disabled="processing"
-                                            >
-                                                <ReceiptText />
-                                                {{
-                                                    processing
-                                                        ? 'Issuing...'
-                                                        : 'Issue'
-                                                }}
-                                            </Button>
-                                        </div>
-                                        <InputError
-                                            :message="errors.receipt_number"
-                                        />
-                                    </Form>
-                                    <span
-                                        v-if="
-                                            collection.receipts.length === 0 &&
-                                            !can.issue_receipts
-                                        "
-                                        class="text-xs text-muted-foreground"
-                                    >
-                                        Pending receipt
-                                    </span>
-                                </td>
-                                <td
-                                    class="px-4 py-3 text-right align-top font-medium"
-                                >
-                                    {{ money(collection.amount_cents) }}
-                                </td>
-                            </tr>
-                            <tr v-if="paymentSchedule.collections.length === 0">
-                                <td
-                                    colspan="8"
-                                    class="px-4 py-10 text-center text-muted-foreground"
-                                >
-                                    No collections have been recorded.
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+                                        {{ method.label }}
+                                    </option>
+                                </select>
+                                <InputError :message="errors.method" />
+                            </div>
+                            <div class="grid gap-2">
+                                <Label for="payer_name">Payer</Label>
+                                <Input id="payer_name" name="payer_name" />
+                                <InputError :message="errors.payer_name" />
+                            </div>
+                            <div class="grid gap-2">
+                                <Label for="reference_number">Reference</Label>
+                                <Input
+                                    id="reference_number"
+                                    name="reference_number"
+                                />
+                                <InputError
+                                    :message="errors.reference_number"
+                                />
+                            </div>
+                            <div class="grid gap-2">
+                                <Label for="remarks">Remarks</Label>
+                                <Input id="remarks" name="remarks" />
+                                <InputError :message="errors.remarks" />
+                            </div>
+                            <Button type="submit" :disabled="processing">
+                                <Banknote />
+                                {{
+                                    processing
+                                        ? 'Recording...'
+                                        : 'Record Collection'
+                                }}
+                            </Button>
+                        </Form>
+                    </details>
+                </aside>
+            </div>
         </main>
     </AppLayout>
 </template>

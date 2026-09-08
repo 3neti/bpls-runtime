@@ -195,6 +195,21 @@ test('staff users with view permission can review a payment schedule', function 
         );
 });
 
+test('staff payment schedule makes QR Ph the primary payable action and collapses policy detail', function () {
+    $page = file_get_contents(resource_path('js/pages/payment-schedules/Show.vue'));
+
+    expect($page)
+        ->toContain('data-testid="payment-action-rail"')
+        ->toContain('data-testid="staff-qr-ph-generate"')
+        ->toContain("return 'Ready for QR Ph';")
+        ->toContain('data-testid="payment-details"')
+        ->toContain('data-testid="payment-policy"')
+        ->toContain('Source / Line of Business')
+        ->not->toContain('WorkflowStageSummary')
+        ->not->toContain('Review collection evidence')
+        ->not->toContain('Current Treasury record');
+});
+
 test('staff users with view permission can search and filter payment schedule queue', function () {
     $user = userWithPermissions([
         UserPermission::AccessStaff,
