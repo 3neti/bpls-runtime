@@ -2,13 +2,18 @@
 
 use App\Actions\BuildBploRoutingTask;
 use App\Actions\BuildConcernedOfficePaymentOrderSummary;
+use App\Enums\UserPermission;
 use App\Models\BploRoutingDetermination;
 use App\Models\BploRoutingWork;
 use App\Models\PaperlessPaymentOrder;
 use App\Models\PaperlessPaymentOrderLine;
 use App\Models\PermitApplication;
+use App\Models\SignatureEvidence;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 test('issued concerned-office Payment Orders finalize independently of Treasury LOB classification', function () {
+    Storage::fake('local');
     $application = PermitApplication::factory()->create([
         'type' => 'new',
         'application_year' => 2025,
@@ -40,10 +45,20 @@ test('issued concerned-office Payment Orders finalize independently of Treasury 
             'name' => $officeLabel.' fee',
             'amount_cents' => $amount,
         ]);
+        $signature = SignatureEvidence::factory()->create([
+            'signer_id' => $order->issued_by_id,
+            'signable_type' => $order->getMorphClass(),
+            'signable_id' => $order->id,
+            'purpose' => 'concerned_office_payment_order_confirmation',
+        ]);
+        $signature->addMedia(UploadedFile::fake()->image($officeCode.'-signature.png'))
+            ->toMediaCollection(SignatureEvidence::FacsimileCollection, 'local');
     }
 
     $summary = app(BuildConcernedOfficePaymentOrderSummary::class)->handle($application->fresh());
-    $routingTask = app(BuildBploRoutingTask::class)->handle($application->fresh(), null)->toArray();
+    $treasury = userWithPermissions([UserPermission::CorrectEvaluationLinesOfBusiness]);
+    $routingTask = app(BuildBploRoutingTask::class)->handle($application->fresh(), $treasury)->toArray();
+    $restrictedTask = app(BuildBploRoutingTask::class)->handle($application->fresh(), null)->toArray();
 
     expect($application->treasuryLineOfBusinessAssignments()->count())->toBe(0)
         ->and($summary['status'])->toBe('finalized')
@@ -55,6 +70,10 @@ test('issued concerned-office Payment Orders finalize independently of Treasury 
         ->and($summary['assessment_total_amount_cents'])->toBeNull()
         ->and($summary['next_stage'])->toBe('treasury_lob_classification')
         ->and(data_get($routingTask, 'financial_editor.concerned_office_payment_orders'))->toBe($summary)
+        ->and(collect(data_get($routingTask, 'routing.works'))->pluck('payment_orders')->flatten(1)->pluck('signature_facsimile_data_url')->every(
+            fn (?string $facsimile): bool => str_starts_with((string) $facsimile, 'data:image/png;base64,'),
+        ))->toBeTrue()
+        ->and(collect(data_get($restrictedTask, 'routing.works'))->pluck('payment_orders')->flatten(1)->pluck('signature_facsimile_data_url')->filter())->toBeEmpty()
         ->and(collect($summary['offices'])->pluck('total_amount_cents')->all())->toBe([12_500, 9_500, 4_000, 6_000])
         ->and(collect($summary['offices'])->flatMap(fn (array $office): array => $office['lines'])->pluck('code')->all())->toBe([
             'TEST-ENGINEERING',
@@ -127,6 +146,8 @@ test('Nelson assessment presentation uses the Payment Order stage and honest Tre
         ->and($routingTask)->toContain('treasury-payment-order-reference')
         ->and($routingTask)->toContain('treasury-routing-decision')
         ->and($routingTask)->toContain('Routing decision')
+        ->and($routingTask)->toContain('signature_facsimile_data_url')
+        ->and($routingTask)->toContain('Captured signature facsimile')
         ->and($routingTask)->not->toContain('treasury-routing-evidence')
         ->and($routingTask)->not->toContain('BPLO routing details')
         ->and($documentReference)->toContain('Applicant documents')

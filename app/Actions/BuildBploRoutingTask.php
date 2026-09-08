@@ -9,10 +9,13 @@ use App\Enums\UserPermission;
 use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
+use App\Models\SignatureEvidence;
 use App\Models\TreasuryLineItem;
 use App\Models\TreasuryLineOfBusinessAssignment;
 use App\Models\User;
 use App\References\ConcernedOfficeReference;
+use Illuminate\Support\Facades\Storage;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 class BuildBploRoutingTask
 {
@@ -32,11 +35,13 @@ class BuildBploRoutingTask
             'bploRoutingDetermination.works.lineOfBusiness',
             'bploRoutingDetermination.works.paymentOrders.issuedBy',
             'bploRoutingDetermination.works.paymentOrders.lines',
+            'bploRoutingDetermination.works.paymentOrders.signatureEvidences.media',
             'treasuryLineOfBusinessAssignments.lineOfBusiness',
             'treasuryLineOfBusinessAssignments.items',
         ]);
         $determination = $application->bploRoutingDetermination;
         $suggestion = $application->bploRoutingSuggestion;
+        $canViewPaymentOrderReference = $viewer?->can(UserPermission::CorrectEvaluationLinesOfBusiness->value) ?? false;
 
         return new BploRoutingTaskData(
             schema_version: 'bpls.bplo-routing-task.v1',
@@ -71,20 +76,28 @@ class BuildBploRoutingTask
                     'situational_reason' => $work->situational_reason,
                     'required_work' => $work->required_work,
                     'line_of_business_name' => $work->lineOfBusiness?->name,
-                    'payment_orders' => $work->paymentOrders->sortBy('sequence')->values()->map(fn ($order): array => [
-                        'id' => $order->id,
-                        'sequence' => $order->sequence,
-                        'status' => $order->superseded_at === null ? $order->status : 'superseded',
-                        'total_amount_cents' => $order->total_amount_cents,
-                        'issued_by' => $order->issuedBy->name,
-                        'issued_at' => $order->issued_at->toIso8601String(),
-                        'lines' => $order->lines->map(fn ($line): array => [
-                            'id' => $line->id,
-                            'code' => $line->code,
-                            'name' => $line->name,
-                            'amount_cents' => $line->amount_cents,
-                        ])->all(),
-                    ])->all(),
+                    'payment_orders' => $work->paymentOrders->sortBy('sequence')->values()->map(function ($order) use ($canViewPaymentOrderReference): array {
+                        $signature = $order->signatureEvidences
+                            ->firstWhere('purpose', 'concerned_office_payment_order_confirmation');
+
+                        return [
+                            'id' => $order->id,
+                            'sequence' => $order->sequence,
+                            'status' => $order->superseded_at === null ? $order->status : 'superseded',
+                            'total_amount_cents' => $order->total_amount_cents,
+                            'issued_by' => $order->issuedBy->name,
+                            'issued_at' => $order->issued_at->toIso8601String(),
+                            'signature_facsimile_data_url' => $canViewPaymentOrderReference && $signature instanceof SignatureEvidence
+                                ? $this->signatureFacsimileDataUrl($signature->getFirstMedia(SignatureEvidence::FacsimileCollection))
+                                : null,
+                            'lines' => $order->lines->map(fn ($line): array => [
+                                'id' => $line->id,
+                                'code' => $line->code,
+                                'name' => $line->name,
+                                'amount_cents' => $line->amount_cents,
+                            ])->all(),
+                        ];
+                    })->all(),
                 ])->all(),
             ],
             suggestion: $suggestion === null ? null : [
@@ -108,6 +121,21 @@ class BuildBploRoutingTask
             manual_confirmation_required: data_get($application->metadata, 'lifecycle_cleanroom.semantic_classification') === 'synthetic_only'
                 && data_get($application->metadata, 'lifecycle_cleanroom.production_liability') === false,
         );
+    }
+
+    private function signatureFacsimileDataUrl(?Media $media): ?string
+    {
+        if ($media === null || ! in_array($media->mime_type, ['image/png', 'image/jpeg'], true)) {
+            return null;
+        }
+
+        $disk = Storage::disk($media->disk);
+        $path = $media->getPathRelativeToRoot();
+        if (! $disk->exists($path)) {
+            return null;
+        }
+
+        return 'data:'.$media->mime_type.';base64,'.base64_encode($disk->get($path));
     }
 
     /** @return array<string, mixed> */

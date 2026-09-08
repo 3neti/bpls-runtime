@@ -36,6 +36,7 @@ type RoutingWork = SuggestedWork & {
         total_amount_cents: number;
         issued_by: string;
         issued_at: string;
+        signature_facsimile_data_url: string | null;
     }[];
 };
 
@@ -732,18 +733,33 @@ const treasurySelectionsReady = computed(
                         <div
                             v-for="order in work.payment_orders"
                             :key="order.id"
-                            class="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1"
+                            class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem] sm:items-center"
                         >
-                            <span>Payment Order {{ order.sequence }}</span>
-                            <span class="font-semibold">{{
-                                money(order.total_amount_cents)
-                            }}</span>
-                            <span
-                                class="col-span-2 text-xs text-muted-foreground"
+                            <div
+                                class="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1"
                             >
-                                Signed by {{ actorLabel(order.issued_by) }} ·
-                                {{ dateTime(order.issued_at) }}
-                            </span>
+                                <span>Payment Order {{ order.sequence }}</span>
+                                <span class="font-semibold">{{
+                                    money(order.total_amount_cents)
+                                }}</span>
+                                <span
+                                    class="col-span-2 text-xs text-muted-foreground"
+                                >
+                                    Signed by
+                                    {{ actorLabel(order.issued_by) }} ·
+                                    {{ dateTime(order.issued_at) }}
+                                </span>
+                            </div>
+                            <figure
+                                v-if="order.signature_facsimile_data_url"
+                                class="flex h-16 items-center justify-center rounded-md border bg-white px-2 py-1"
+                            >
+                                <img
+                                    :src="order.signature_facsimile_data_url"
+                                    :alt="`Captured signature facsimile of ${actorLabel(order.issued_by)}`"
+                                    class="max-h-14 max-w-full object-contain"
+                                />
+                            </figure>
                         </div>
                         <span
                             v-if="work.payment_orders.length === 0"

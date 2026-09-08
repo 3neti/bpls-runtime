@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use LogicException;
@@ -75,6 +76,12 @@ class PaperlessPaymentOrder extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(PaperlessPaymentOrderLine::class)->orderBy('id');
+    }
+
+    /** @return MorphMany<SignatureEvidence, $this> */
+    public function signatureEvidences(): MorphMany
+    {
+        return $this->morphMany(SignatureEvidence::class, 'signable');
     }
 
     protected function casts(): array
