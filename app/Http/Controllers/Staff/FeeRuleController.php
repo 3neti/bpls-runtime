@@ -22,6 +22,7 @@ use App\Models\FeeRuleRange;
 use App\Models\RevenueCodeProvision;
 use App\Models\RevenueCodeProvisionClause;
 use App\Models\RevenueCodeProvisionRow;
+use App\Support\MunicipalFeeCatalogPresentation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -33,6 +34,7 @@ class FeeRuleController extends Controller
 {
     public function __construct(
         private readonly AnalyzeRevenueCodeSchedule $analyzeRevenueCodeSchedule,
+        private readonly MunicipalFeeCatalogPresentation $catalogPresentation,
     ) {}
 
     public function index(Request $request): Response
@@ -50,10 +52,11 @@ class FeeRuleController extends Controller
             'application_type' => ['nullable', Rule::in(['new', 'renewal'])],
             'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
             'status' => ['nullable', Rule::in(['active', 'incomplete', 'inactive', 'superseded'])],
+            'revenue_code' => ['nullable', Rule::in(['recorded', 'missing'])],
         ]);
 
         $feeRules = FeeRule::query()
-            ->with(['lineOfBusiness', 'lineOfBusinesses', 'businessDivision', 'feeCategory', 'revenueAccount', 'officeAssignments', 'catalogVersion', 'currentReconciliation'])
+            ->with(['lineOfBusiness', 'lineOfBusinesses', 'businessDivision', 'feeCategory', 'revenueAccount', 'officeAssignments', 'catalogVersion', 'currentReconciliation', 'ranges'])
             ->withCount('ranges')
             ->when($filters['q'] ?? null, function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
@@ -89,6 +92,7 @@ class FeeRuleController extends Controller
             ->when(($filters['status'] ?? null) === 'incomplete', fn ($query) => $query->where('metadata->catalog_status', 'incomplete'))
             ->when(($filters['status'] ?? null) === 'inactive', fn ($query) => $query->where('is_active', false)->where(fn ($query) => $query->whereNull('metadata->catalog_status')->orWhere('metadata->catalog_status', '!=', 'incomplete')))
             ->when(($filters['status'] ?? null) === 'superseded', fn ($query) => $query->whereHas('catalogVersion', fn ($query) => $query->where('status', FeeCatalogVersionStatus::Superseded)))
+            ->when($filters['revenue_code'] ?? null, fn ($query, string $status) => $status === 'recorded' ? $query->whereNotNull('revenue_account_id') : $query->whereNull('revenue_account_id'))
             ->orderByRaw('case when fee_catalog_version_id is null then 0 else 1 end')
             ->orderByRaw('case when fee_catalog_version_id is null then code end')
             ->orderByRaw('business_division_id is null')
@@ -110,6 +114,7 @@ class FeeRuleController extends Controller
                 'application_type' => $filters['application_type'] ?? '',
                 'year' => $filters['year'] ?? '',
                 'status' => $filters['status'] ?? 'active',
+                'revenue_code' => $filters['revenue_code'] ?? '',
             ],
             'feeRules' => $feeRules,
             'revenueCodeProvisions' => RevenueCodeProvision::query()
@@ -160,7 +165,7 @@ class FeeRuleController extends Controller
             'categories' => $this->options(FeeRuleCategory::cases()),
             'scopes' => $this->options(FeeRuleScope::cases()),
             'calculationTypes' => $this->options(FeeRuleCalculationType::cases()),
-            'businessDivisions' => BusinessDivision::query()->where('is_active', true)->orderBy('name')->get(['code', 'name'])->map(fn (BusinessDivision $division): array => ['value' => $division->code, 'label' => str($division->name)->lower()->headline()->toString()])->all(),
+            'businessDivisions' => BusinessDivision::query()->where('is_active', true)->orderBy('name')->get(['code', 'name'])->map(fn (BusinessDivision $division): array => ['value' => $division->code, 'label' => $division->name])->all(),
             'offices' => FeeRuleOfficeAssignment::query()->select(['office_code', 'office_label'])->distinct()->orderBy('office_label')->get()->map(fn ($office): array => ['value' => $office->office_code, 'label' => $office->office_label])->all(),
             'determinationChannels' => collect(FeeDeterminationChannel::cases())->map(fn (FeeDeterminationChannel $channel): array => ['value' => $channel->value, 'label' => match ($channel) {
                 FeeDeterminationChannel::ConcernedOfficePaymentOrder => 'Concerned office',
@@ -249,6 +254,8 @@ class FeeRuleController extends Controller
      */
     private function feeRulePayload(FeeRule $feeRule): array
     {
+        $amountAndBasis = $this->catalogPresentation->amountAndBasis($feeRule);
+
         return [
             'id' => $feeRule->id,
             'code' => $feeRule->code,
@@ -269,11 +276,24 @@ class FeeRuleController extends Controller
             'legal_basis' => $feeRule->legal_basis,
             'legacy_source_id' => $feeRule->legacy_source_id,
             'revenue_code' => $feeRule->revenueAccount?->code,
-            'business_division' => $feeRule->businessDivision ? ['code' => $feeRule->businessDivision->code, 'name' => str($feeRule->businessDivision->name)->lower()->headline()->toString()] : null,
-            'lines_of_business' => $feeRule->lineOfBusinesses->map(fn ($line): array => ['id' => $line->id, 'code' => $line->code, 'name' => $line->name])->values()->all(),
+            'source_name' => data_get($feeRule->metadata, 'source_name', $feeRule->name),
+            'business_division' => $feeRule->businessDivision ? [
+                'code' => $feeRule->businessDivision->code,
+                'name' => $feeRule->businessDivision->name,
+                'source_name' => data_get($feeRule->businessDivision->metadata, 'source_name', $feeRule->businessDivision->name),
+            ] : null,
+            'lines_of_business' => $feeRule->lineOfBusinesses->map(fn ($line): array => [
+                'id' => $line->id,
+                'code' => $line->code,
+                'name' => $line->name,
+                'source_name' => data_get($line->metadata, 'source_name', $line->name),
+            ])->values()->all(),
+            'applies_to' => $this->catalogPresentation->appliesTo($feeRule),
             'owner' => $this->owner($feeRule),
             'determination_channel' => $feeRule->determination_channel->value,
-            'amount_basis' => $this->amountBasis($feeRule),
+            'amount_display' => $amountAndBasis['value'],
+            'amount_basis' => $amountAndBasis['basis'],
+            'raw_formula' => data_get($feeRule->metadata, 'formula') ?? data_get($feeRule->metadata, 'legacy_formula'),
             'display_status' => match (true) {
                 $feeRule->catalogVersion?->status === FeeCatalogVersionStatus::Superseded => 'Superseded',
                 data_get($feeRule->metadata, 'catalog_status') === 'incomplete' => 'Incomplete',
@@ -307,34 +327,6 @@ class FeeRuleController extends Controller
                 'decided_at' => $feeRule->currentReconciliation->decided_at?->toIso8601String(),
             ] : null,
         ];
-    }
-
-    private function amountBasis(FeeRule $feeRule): string
-    {
-        if ($feeRule->calculation_type === FeeRuleCalculationType::Fixed && $feeRule->amount_cents > 0) {
-            return 'Fixed amount';
-        }
-        if ($feeRule->calculation_type === FeeRuleCalculationType::Range) {
-            return match ($feeRule->basis) {
-                'declared_gross_sales' => 'Tiered by gross sales',
-                'capital_investment' => 'Tiered by capital investment',
-                default => 'Tiered amount entered during review',
-            };
-        }
-        if ($feeRule->calculation_type === FeeRuleCalculationType::Formula) {
-            $formula = strtolower((string) (data_get($feeRule->metadata, 'formula') ?? data_get($feeRule->metadata, 'legacy_formula')));
-
-            return match (true) {
-                str_contains($formula, 'employee') => 'Based on employees',
-                str_contains($formula, 'area') => 'Based on business area',
-                default => 'Formula amount entered during review',
-            };
-        }
-
-        $assignment = $feeRule->officeAssignments->first();
-        $office = $assignment instanceof FeeRuleOfficeAssignment ? $assignment->office_label : null;
-
-        return $office === null ? 'Amount entered during review' : "Amount entered by {$office}";
     }
 
     private function owner(FeeRule $feeRule): string

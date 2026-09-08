@@ -25,7 +25,14 @@ test('the versioned municipal YAML deterministically builds the normalized fee c
         ->and(FeeRule::query()->whereBelongsTo($version, 'catalogVersion')->count())->toBe(171)
         ->and(FeeRule::query()->whereBelongsTo($version, 'catalogVersion')->where('determination_channel', FeeDeterminationChannel::ConcernedOfficePaymentOrder)->count())->toBe(77)
         ->and(FeeRule::query()->whereBelongsTo($version, 'catalogVersion')->where('determination_channel', FeeDeterminationChannel::TreasuryLineOfBusiness)->count())->toBe(86)
-        ->and(FeeRule::query()->whereBelongsTo($version, 'catalogVersion')->where('determination_channel', FeeDeterminationChannel::ReferenceOnly)->count())->toBe(8);
+        ->and(FeeRule::query()->whereBelongsTo($version, 'catalogVersion')->where('determination_channel', FeeDeterminationChannel::ReferenceOnly)->count())->toBe(8)
+        ->and(BusinessDivision::query()->where('code', 'DIV-EDD6388C02DAE431')->sole()->name)->toBe('Banking Services')
+        ->and(BusinessDivision::query()->where('code', 'DIV-EDD6388C02DAE431')->sole()->metadata['source_name'])->toBe('BANKING SERVICES')
+        ->and(LineOfBusiness::query()->where('code', 'LOB-EDD6388C02DAE431')->sole()->name)->toBe('Banking Services')
+        ->and(LineOfBusiness::query()->where('code', 'LOB-EDD6388C02DAE431')->sole()->metadata['source_name'])->toBe('BANKING SERVICES')
+        ->and(BusinessDivision::query()->where('code', 'DIV-72BA48EE08E75420')->sole()->name)->toBe('LPG Dealer')
+        ->and(BusinessDivision::query()->where('code', 'DIV-FF529405F0153E4C')->sole()->name)->toBe('For Hospital and Clinic')
+        ->and(FeeRule::query()->where('code', 'IPIL-LEGACY-F8EC2C47251FB9FA')->sole()->name)->toBe('Laminated ID');
 });
 
 test('staff can search and filter by submitted revenue code and owning office', function (): void {
@@ -59,4 +66,41 @@ test('submitted revenue codes are first class and fee ownership channels never o
         ->and($buildingPermit->officeAssignments->sole()->office_code)->toBe('engineering')
         ->and($treasuryRulesWithOfficeOwnership)->toBe(0)
         ->and(FeeRule::query()->where('code', 'like', 'IPIL-LEGACY-%')->whereNotNull('revenue_account_id')->count())->toBe(0);
+});
+
+test('staff catalogue presents consistent applicability ranges formulas and missing revenue codes', function (): void {
+    $this->seed(MunicipalFeeCatalogSeeder::class);
+    $user = userWithPermissions([UserPermission::AccessStaff, UserPermission::ViewFeeRules], UserRole::Bplo);
+
+    $this->actingAs($user)
+        ->get(route('staff.fee-rules.index', [
+            'q' => 'IPIL-LEGACY-8933D52998E06BD1',
+            'business_division' => 'DIV-EDD6388C02DAE431',
+            'status' => 'active',
+        ]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('feeRules.data', 1)
+            ->where('feeRules.data.0.business_division.name', 'Banking Services')
+            ->where('feeRules.data.0.business_division.source_name', 'BANKING SERVICES')
+            ->where('feeRules.data.0.applies_to.0', 'All Banking Services')
+            ->where('feeRules.data.0.amount_display', '0.5775% of gross sales')
+            ->where('feeRules.data.0.amount_basis', 'Formula')
+            ->where('feeRules.data.0.raw_formula', 'grossSales * 0.01 * .5775'));
+
+    $this->actingAs($user)
+        ->get(route('staff.fee-rules.index', ['q' => 'IPIL-LEGACY-96FF6E27890C2EBB', 'status' => 'active']))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('feeRules.data', 1)
+            ->where('feeRules.data.0.amount_display', '₱11.33–₱6,294.75')
+            ->where('feeRules.data.0.amount_basis', 'Based on gross sales')
+            ->where('feeRules.data.0.range_count', 23));
+
+    $this->actingAs($user)
+        ->get(route('staff.fee-rules.index', ['revenue_code' => 'missing', 'status' => 'active']))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('filters.revenue_code', 'missing')
+            ->where('feeRules.data.0.revenue_code', null));
 });

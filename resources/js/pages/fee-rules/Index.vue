@@ -39,11 +39,24 @@ type FeeRule = {
     legal_basis: string | null;
     legacy_source_id: string | null;
     revenue_code: string | null;
-    business_division: { code: string; name: string } | null;
-    lines_of_business: { id: number; code: string | null; name: string }[];
+    source_name: string;
+    business_division: {
+        code: string;
+        name: string;
+        source_name: string;
+    } | null;
+    lines_of_business: {
+        id: number;
+        code: string | null;
+        name: string;
+        source_name: string;
+    }[];
+    applies_to: string[];
     owner: string;
     determination_channel: string;
+    amount_display: string;
     amount_basis: string;
+    raw_formula: string | null;
     display_status: string;
     line_of_business: {
         id: number;
@@ -158,6 +171,7 @@ const props = defineProps<{
         application_type: string;
         year: string | number;
         status: string;
+        revenue_code: string;
     };
     feeRules: {
         data: FeeRule[];
@@ -199,6 +213,7 @@ const determinationChannel = ref(props.filters.determination_channel);
 const applicationType = ref(props.filters.application_type);
 const year = ref(props.filters.year ? String(props.filters.year) : '');
 const status = ref(props.filters.status);
+const revenueCode = ref(props.filters.revenue_code);
 const activeScheduleCode = ref('MRC-2A-02-B-WHOLESALERS');
 const activeScheduleMatrix = computed(
     () =>
@@ -226,6 +241,7 @@ function query(): Record<string, string | undefined> {
         application_type: applicationType.value || undefined,
         year: year.value || undefined,
         status: status.value || undefined,
+        revenue_code: revenueCode.value || undefined,
     };
 }
 
@@ -251,6 +267,7 @@ function clearFilters(): void {
     applicationType.value = '';
     year.value = '';
     status.value = 'active';
+    revenueCode.value = '';
     router.get(
         index.url({ query: query() }),
         {},
@@ -266,12 +283,6 @@ function money(amountCents: number): string {
         style: 'currency',
         currency: 'PHP',
     }).format(amountCents / 100);
-}
-
-function amountDisplay(rule: FeeRule): string {
-    return rule.calculation_type === 'fixed' && rule.amount_cents > 0
-        ? money(rule.amount_cents)
-        : rule.amount_basis;
 }
 
 function candidateBasis(row: RevenueCodeScheduleRow): string {
@@ -540,6 +551,24 @@ function decodePaginationLabel(value: string): string {
                         >
                             {{ option.label }}
                         </option>
+                    </select>
+                </div>
+                <div class="grid gap-2">
+                    <label
+                        for="fee_rule_revenue_code"
+                        class="text-xs font-medium text-muted-foreground uppercase"
+                    >
+                        Revenue code
+                    </label>
+                    <select
+                        id="fee_rule_revenue_code"
+                        v-model="revenueCode"
+                        name="revenue_code"
+                        class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    >
+                        <option value="">Recorded and missing</option>
+                        <option value="recorded">Recorded</option>
+                        <option value="missing">Missing</option>
                     </select>
                 </div>
                 <div class="grid gap-2">
@@ -1311,53 +1340,39 @@ function decodePaginationLabel(value: string): string {
                                     </div>
                                 </td>
                                 <td class="px-3 py-3 align-top">
-                                    {{ rule.revenue_code ?? 'Not recorded' }}
+                                    {{ rule.revenue_code ?? '—' }}
                                 </td>
                                 <td class="px-3 py-3 align-top">
                                     {{ rule.business_division?.name ?? '—' }}
                                 </td>
                                 <td class="px-3 py-3 align-top">
-                                    <template
-                                        v-if="rule.lines_of_business.length"
-                                    >
+                                    <template v-if="rule.applies_to.length">
                                         <span
                                             v-for="(
-                                                line, index
-                                            ) in rule.lines_of_business.slice(
-                                                0,
-                                                2,
-                                            )"
-                                            :key="line.id"
+                                                appliesTo, index
+                                            ) in rule.applies_to.slice(0, 2)"
+                                            :key="appliesTo"
                                         >
                                             {{ index ? ' · ' : ''
-                                            }}{{ line.name }}
+                                            }}{{ appliesTo }}
                                         </span>
                                         <span
-                                            v-if="
-                                                rule.lines_of_business.length >
-                                                2
-                                            "
+                                            v-if="rule.applies_to.length > 2"
                                             class="text-xs text-muted-foreground"
                                         >
-                                            +{{
-                                                rule.lines_of_business.length -
-                                                2
-                                            }}
+                                            +{{ rule.applies_to.length - 2 }}
                                             more
                                         </span>
                                     </template>
                                     <span v-else>Application-wide</span>
                                 </td>
                                 <td class="px-3 py-3 align-top font-medium">
-                                    {{ amountDisplay(rule) }}
+                                    {{ rule.amount_display }}
                                     <div
-                                        v-if="
-                                            rule.calculation_type !== 'fixed' ||
-                                            rule.amount_cents === 0
-                                        "
+                                        v-if="rule.amount_basis"
                                         class="mt-1 text-xs font-normal text-muted-foreground"
                                     >
-                                        Set during application review
+                                        {{ rule.amount_basis }}
                                     </div>
                                 </td>
                                 <td class="px-3 py-3 align-top">
@@ -1387,7 +1402,7 @@ function decodePaginationLabel(value: string): string {
                                     >
                                         <Link
                                             :href="show(rule.id)"
-                                            :aria-label="`View ${rule.code}`"
+                                            :aria-label="`View ${rule.name}`"
                                         >
                                             View
                                         </Link>

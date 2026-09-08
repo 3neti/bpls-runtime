@@ -14,13 +14,17 @@ use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
 use App\Models\RevenueAccount;
 use App\References\MunicipalFeeCatalog;
+use App\Support\MunicipalFeeCatalogPresentation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 final class ImportMunicipalFeeCatalog
 {
-    public function __construct(private readonly MunicipalFeeCatalog $catalog) {}
+    public function __construct(
+        private readonly MunicipalFeeCatalog $catalog,
+        private readonly MunicipalFeeCatalogPresentation $presentation,
+    ) {}
 
     /** @return array<string, int|string> */
     public function handle(?string $path = null): array
@@ -51,7 +55,11 @@ final class ImportMunicipalFeeCatalog
             $divisions = collect($this->rows($source['business_divisions']))->mapWithKeys(function (array $item): array {
                 $division = BusinessDivision::query()->updateOrCreate(
                     ['code' => $item['code']],
-                    ['name' => $item['name'], 'is_active' => $item['status'] === 'active', 'metadata' => $item['metadata'] ?? null],
+                    [
+                        'name' => $this->presentation->canonicalName($item['name']),
+                        'is_active' => $item['status'] === 'active',
+                        'metadata' => [...$this->mapping($item['metadata'] ?? []), 'source_name' => $item['name']],
+                    ],
                 );
 
                 return [$item['code'] => $division];
@@ -79,11 +87,11 @@ final class ImportMunicipalFeeCatalog
                     ->first() ?? new LineOfBusiness;
                 $line->fill([
                     'code' => $item['code'],
-                    'name' => $item['name'],
+                    'name' => $this->presentation->canonicalName($item['name']),
                     'major_category' => $item['major_category'] ?? null,
                     'is_active' => $item['status'] === 'active',
                     'legacy_source_id' => $item['source_key'],
-                    'metadata' => ['catalog_version' => $catalogData['code']],
+                    'metadata' => ['catalog_version' => $catalogData['code'], 'source_name' => $item['name']],
                 ])->save();
                 $line->businessDivisions()->sync(collect($this->strings($item['business_division_codes'] ?? []))->mapWithKeys(
                     fn (string $code): array => [$divisions->get($code)->id => []],
@@ -115,7 +123,7 @@ final class ImportMunicipalFeeCatalog
                     'line_of_business_id' => $lineIds[0] ?? null,
                     'business_division_id' => $division?->id,
                     'code' => $item['code'],
-                    'name' => $item['name'],
+                    'name' => $this->presentation->canonicalName($item['name']),
                     'category' => $category->fee_rule_category,
                     'fee_category_id' => $category->id,
                     'revenue_account_id' => $account?->id,
@@ -132,6 +140,7 @@ final class ImportMunicipalFeeCatalog
                     'metadata' => [
                         'catalog_status' => $item['status'],
                         'catalog_version' => $catalogData['code'],
+                        'source_name' => $item['name'],
                         'application_types' => $item['application_types'] ?? [],
                         'formula' => $item['formula'] ?? null,
                         'manual_amount_required' => $item['calculation_type'] !== FeeRuleCalculationType::Fixed->value || ($item['amount_minor'] === 0),

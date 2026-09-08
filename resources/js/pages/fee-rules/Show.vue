@@ -59,8 +59,23 @@ type FeeRule = {
     legal_basis: string | null;
     legacy_source_id: string | null;
     revenue_code: string | null;
+    source_name: string;
+    business_division: {
+        code: string;
+        name: string;
+        source_name: string;
+    } | null;
+    lines_of_business: {
+        id: number;
+        code: string | null;
+        name: string;
+        source_name: string;
+    }[];
+    applies_to: string[];
     owner: string;
+    amount_display: string;
     amount_basis: string;
+    raw_formula: string | null;
     display_status: string;
     line_of_business: {
         id: number;
@@ -212,8 +227,8 @@ function basisRange(range: FeeRuleRange): string {
                         class="mt-1 max-w-4xl text-sm break-words text-muted-foreground"
                     >
                         Revenue code:
-                        {{ feeRule.revenue_code ?? 'Not recorded' }} ·
-                        {{ feeRule.owner }} · {{ feeRule.amount_basis }}
+                        {{ feeRule.revenue_code ?? '—' }} ·
+                        {{ feeRule.owner }} · {{ feeRule.amount_display }}
                     </p>
                 </div>
 
@@ -588,10 +603,16 @@ function basisRange(range: FeeRuleRange): string {
                         </div>
                         <div>
                             <dt class="text-xs text-muted-foreground uppercase">
-                                Amount
+                                Amount / Basis
                             </dt>
                             <dd class="mt-1 font-medium">
-                                {{ money(feeRule.amount_cents) }}
+                                {{ feeRule.amount_display }}
+                                <span
+                                    v-if="feeRule.amount_basis"
+                                    class="ml-1 font-normal text-muted-foreground"
+                                >
+                                    · {{ feeRule.amount_basis }}
+                                </span>
                             </dd>
                         </div>
                         <div>
@@ -630,19 +651,18 @@ function basisRange(range: FeeRuleRange): string {
                     <dl class="mt-4 grid gap-4">
                         <div>
                             <dt class="text-xs text-muted-foreground uppercase">
-                                Line of Business
+                                Business Division
                             </dt>
                             <dd class="mt-1 break-words">
-                                {{
-                                    feeRule.line_of_business?.name ??
-                                    'Application-wide'
-                                }}
+                                {{ feeRule.business_division?.name ?? '—' }}
                             </dd>
-                            <dd
-                                v-if="feeRule.line_of_business?.code"
-                                class="mt-1 text-xs text-muted-foreground"
-                            >
-                                {{ feeRule.line_of_business.code }}
+                        </div>
+                        <div>
+                            <dt class="text-xs text-muted-foreground uppercase">
+                                Applies To
+                            </dt>
+                            <dd class="mt-1 break-words">
+                                {{ feeRule.applies_to.join(' · ') }}
                             </dd>
                         </div>
                         <div>
@@ -661,17 +681,65 @@ function basisRange(range: FeeRuleRange): string {
                                 {{ feeRule.legal_basis ?? '-' }}
                             </dd>
                         </div>
-                        <div>
-                            <dt class="text-xs text-muted-foreground uppercase">
-                                Technical Source Reference
-                            </dt>
-                            <dd class="mt-1 break-words">
-                                {{ feeRule.legacy_source_id ?? '-' }}
-                            </dd>
-                        </div>
                     </dl>
                 </div>
             </section>
+
+            <details
+                class="rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
+            >
+                <summary class="cursor-pointer px-4 py-3 font-semibold">
+                    Fee details
+                </summary>
+                <dl class="grid gap-4 border-t p-4 text-sm sm:grid-cols-2">
+                    <div>
+                        <dt class="text-xs text-muted-foreground uppercase">
+                            Source fee name
+                        </dt>
+                        <dd class="mt-1 break-words">
+                            {{ feeRule.source_name }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground uppercase">
+                            Source Business Division
+                        </dt>
+                        <dd class="mt-1 break-words">
+                            {{ feeRule.business_division?.source_name ?? '—' }}
+                        </dd>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <dt class="text-xs text-muted-foreground uppercase">
+                            Source Lines of Business
+                        </dt>
+                        <dd class="mt-1 break-words">
+                            {{
+                                feeRule.lines_of_business.length
+                                    ? feeRule.lines_of_business
+                                          .map((line) => line.source_name)
+                                          .join(' · ')
+                                    : 'Application-wide'
+                            }}
+                        </dd>
+                    </div>
+                    <div v-if="feeRule.raw_formula">
+                        <dt class="text-xs text-muted-foreground uppercase">
+                            Recorded formula
+                        </dt>
+                        <dd class="mt-1 font-mono break-words">
+                            {{ feeRule.raw_formula }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-muted-foreground uppercase">
+                            Technical Source Reference
+                        </dt>
+                        <dd class="mt-1 break-words">
+                            {{ feeRule.legacy_source_id ?? '—' }}
+                        </dd>
+                    </div>
+                </dl>
+            </details>
 
             <section
                 v-if="
