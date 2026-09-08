@@ -85,8 +85,8 @@ class AssignTreasuryLinesOfBusiness
                     throw new LogicException('Each assigned Line of Business requires at least one confirmed Treasury payment item.');
                 }
                 foreach ($configuredItems as $item) {
-                    $rule = FeeRule::query()->with('currentReconciliation')->findOrFail($item['fee_rule_id']);
-                    if ($rule->line_of_business_id !== $line->id) {
+                    $rule = FeeRule::query()->with(['currentReconciliation', 'lineOfBusinesses:id'])->findOrFail($item['fee_rule_id']);
+                    if ($rule->line_of_business_id !== $line->id && ! $rule->lineOfBusinesses->contains('id', $line->id)) {
                         throw new LogicException('Treasury LOB payment items must belong to the selected canonical Line of Business.');
                     }
                     if ($rule->category === FeeRuleCategory::Tax) {
@@ -147,7 +147,8 @@ class AssignTreasuryLinesOfBusiness
     private function defaultItems(PermitApplication $application, LineOfBusiness $line): array
     {
         return array_values(FeeRule::query()
-            ->where('line_of_business_id', $line->id)
+            ->where(fn ($query) => $query->where('line_of_business_id', $line->id)
+                ->orWhereHas('lineOfBusinesses', fn ($query) => $query->whereKey($line->id)))
             ->where('is_active', true)
             ->where('effective_from', '<=', "{$application->application_year}-12-31")
             ->where(fn ($query) => $query->whereNull('effective_until')->orWhere('effective_until', '>=', "{$application->application_year}-01-01"))

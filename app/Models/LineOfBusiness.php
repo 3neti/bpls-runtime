@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
@@ -31,6 +32,14 @@ class LineOfBusiness extends Model
     public function feeRules(): HasMany
     {
         return $this->hasMany(FeeRule::class);
+    }
+
+    /** @return BelongsToMany<FeeRule, $this> */
+    public function applicableFeeRules(): BelongsToMany
+    {
+        return $this->belongsToMany(FeeRule::class, 'fee_rule_line_of_business')
+            ->withPivot(['source', 'metadata'])
+            ->withTimestamps();
     }
 
     /** @return HasMany<PermitApplicationLine, $this> */

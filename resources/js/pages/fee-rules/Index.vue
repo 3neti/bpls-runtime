@@ -332,6 +332,11 @@ function decodePaginationLabel(value: string): string {
                         effective versions, municipal authority, and history.
                     </p>
                 </div>
+                <Button as-child variant="outline">
+                    <Link :href="index.url() + '/legacy-candidates'">
+                        Legacy candidates
+                    </Link>
+                </Button>
             </section>
 
             <AdministrationScopePanel

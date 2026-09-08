@@ -33,6 +33,7 @@ use App\Http\Controllers\Staff\CollectionReceiptController;
 use App\Http\Controllers\Staff\DailyCollectionReportController;
 use App\Http\Controllers\Staff\FeeMatrixController;
 use App\Http\Controllers\Staff\FeeRuleController;
+use App\Http\Controllers\Staff\LegacyFeeCatalogController;
 use App\Http\Controllers\Staff\MunicipalityConfigurationController;
 use App\Http\Controllers\Staff\MunicipalServiceCatalogController;
 use App\Http\Controllers\Staff\OfficePaymentOrderController;
@@ -246,6 +247,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.documents.download');
         Route::get('fee-rules', [FeeRuleController::class, 'index'])
             ->name('fee-rules.index');
+        Route::get('fee-rules/legacy-candidates', [LegacyFeeCatalogController::class, 'index'])
+            ->name('fee-rules.legacy-candidates.index');
+        Route::post('fee-rules/legacy-candidates/{legacyFeeRuleReconciliation}', [LegacyFeeCatalogController::class, 'reconcile'])
+            ->name('fee-rules.legacy-candidates.reconcile');
         Route::get('fee-matrix', FeeMatrixController::class)
             ->name('fee-matrix.index');
         Route::get('fee-rules/{feeRule}', [FeeRuleController::class, 'show'])

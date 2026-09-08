@@ -47,7 +47,7 @@ class ConfirmOfficePaymentOrder
                 throw new LogicException('A confirmed Assessment must be returned before a new Payment Order can be issued.');
             }
 
-            $rules = FeeRule::query()->with('currentReconciliation')->whereIn('id', collect($items)->pluck('fee_rule_id'))->get()->keyBy('id');
+            $rules = FeeRule::query()->with(['currentReconciliation', 'officeAssignments'])->whereIn('id', collect($items)->pluck('fee_rule_id'))->get()->keyBy('id');
             if ($rules->count() !== count($items)) {
                 throw new LogicException('Every Payment Order item must reference the Municipal Schedule of Fees.');
             }
@@ -86,12 +86,17 @@ class ConfirmOfficePaymentOrder
                     throw new LogicException('Concerned-office Payment Orders cannot determine Business Tax.');
                 }
                 $configuredOffice = data_get($rule->metadata, 'responsible_office_code');
+                $assignedOffices = $rule->officeAssignments->pluck('office_code');
+                if ($assignedOffices->isNotEmpty() && ! $assignedOffices->contains($work->office_code)) {
+                    throw new LogicException('The selected fee does not belong to this concerned office.');
+                }
                 if (is_string($configuredOffice) && $configuredOffice !== $work->office_code) {
                     throw new LogicException('The selected fee does not belong to this concerned office.');
                 }
                 if (data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true) {
                     $office = collect($this->concernedOffices->items())->firstWhere('code', $work->office_code);
-                    if (! is_array($office) || ! in_array($rule->code, $office['fee_rule_codes'] ?? [], true)) {
+                    if (! is_array($office) || (! in_array($rule->code, $office['fee_rule_codes'] ?? [], true)
+                        && ! $assignedOffices->contains($work->office_code))) {
                         throw new LogicException('The selected fee is not in this concerned office’s configured Nelson fee menu.');
                     }
 

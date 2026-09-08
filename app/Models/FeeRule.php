@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
@@ -55,6 +56,26 @@ class FeeRule extends Model
     public function lineOfBusiness(): BelongsTo
     {
         return $this->belongsTo(LineOfBusiness::class);
+    }
+
+    /** @return BelongsToMany<LineOfBusiness, $this> */
+    public function lineOfBusinesses(): BelongsToMany
+    {
+        return $this->belongsToMany(LineOfBusiness::class, 'fee_rule_line_of_business')
+            ->withPivot(['source', 'metadata'])
+            ->withTimestamps();
+    }
+
+    /** @return HasMany<FeeRuleLineOfBusiness, $this> */
+    public function lineOfBusinessAssignments(): HasMany
+    {
+        return $this->hasMany(FeeRuleLineOfBusiness::class);
+    }
+
+    /** @return HasMany<FeeRuleOfficeAssignment, $this> */
+    public function officeAssignments(): HasMany
+    {
+        return $this->hasMany(FeeRuleOfficeAssignment::class);
     }
 
     /** @return HasMany<FeeRuleRange, $this> */

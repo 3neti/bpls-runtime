@@ -144,6 +144,7 @@ class BuildBploRoutingTask
         $periodStart = $application->application_year.'-01-01';
         $periodEnd = $application->application_year.'-12-31';
         $fixedFees = FeeRule::query()
+            ->with(['lineOfBusinesses:id', 'officeAssignments'])
             ->where('is_active', true)
             ->where('calculation_type', FeeRuleCalculationType::Fixed->value)
             ->where('category', '!=', FeeRuleCategory::Tax->value)
@@ -160,10 +161,14 @@ class BuildBploRoutingTask
             'office_fee_options' => $offices->mapWithKeys(function (array $office) use ($application, $fixedFees): array {
                 $configuredCodes = collect($office['fee_rule_codes'] ?? []);
                 $commissionedPath = data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true;
-                $fees = $fixedFees->filter(fn (FeeRule $fee): bool => $commissionedPath
-                    ? $configuredCodes->contains($fee->code)
-                    : data_get($fee->metadata, 'responsible_office_code') === $office['code']
-                        && data_get($fee->metadata, 'assessment_selection') !== 'concerned_office_payment_order_only');
+                $fees = $fixedFees->filter(function (FeeRule $fee) use ($commissionedPath, $configuredCodes, $office): bool {
+                    $explicitOfficeMatch = $fee->officeAssignments->contains('office_code', $office['code']);
+
+                    return $commissionedPath
+                        ? $configuredCodes->contains($fee->code) || $explicitOfficeMatch
+                        : ($explicitOfficeMatch || data_get($fee->metadata, 'responsible_office_code') === $office['code'])
+                            && data_get($fee->metadata, 'assessment_selection') !== 'concerned_office_payment_order_only';
+                });
 
                 return [$office['code'] => $fees->map(fn (FeeRule $fee): array => [
                     'id' => $fee->id,
@@ -178,12 +183,13 @@ class BuildBploRoutingTask
                     'id' => $line->id,
                     'code' => $line->code,
                     'name' => $line->name,
-                    'default_items' => $fixedFees->where('line_of_business_id', $line->id)->map(fn (FeeRule $fee): array => [
-                        'fee_rule_id' => $fee->id,
-                        'code' => $fee->code,
-                        'name' => $fee->name,
-                        'amount_cents' => $fee->amount_cents,
-                    ])->values()->all(),
+                    'default_items' => $fixedFees->filter(fn (FeeRule $fee): bool => $fee->line_of_business_id === $line->id
+                        || $fee->lineOfBusinesses->contains('id', $line->id))->map(fn (FeeRule $fee): array => [
+                            'fee_rule_id' => $fee->id,
+                            'code' => $fee->code,
+                            'name' => $fee->name,
+                            'amount_cents' => $fee->amount_cents,
+                        ])->values()->all(),
                 ])->values()->all(),
             'treasury_assignments' => $application->treasuryLineOfBusinessAssignments->whereNull('removed_at')->map(fn (TreasuryLineOfBusinessAssignment $assignment): array => [
                 'id' => $assignment->id,
