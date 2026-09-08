@@ -17,6 +17,7 @@ use App\Models\Role;
 use App\Models\TreasuryCollection;
 use App\Models\User;
 use App\StakeholderPreview\StakeholderPreviewSafety;
+use Database\Seeders\MunicipalFeeCatalogSeeder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -34,6 +35,11 @@ beforeEach(function () {
     Route::middleware('web')->group(base_path('routes/web.php'));
     Route::getRoutes()->refreshNameLookups();
     Route::getRoutes()->refreshActionLookups();
+    LineOfBusiness::factory()->create([
+        'code' => ResolveLegacyCitizenPermitApplicationLabPool::CatalogCode,
+        'name' => 'REC- SARISARI STORE',
+        'metadata' => [],
+    ]);
 });
 
 test('safe preview configuration registers an intentional launcher without credentials', function () {
@@ -70,11 +76,12 @@ test('safe preview configuration registers an intentional launcher without crede
 
 test('approved preview citizen receives the deterministic Ipil application helper while ordinary citizens do not', function () {
     Artisan::call('bpls:install');
+    $this->seed(MunicipalFeeCatalogSeeder::class);
     $previewCitizen = User::query()
         ->where('email', StakeholderPreviewPersona::Citizen->approvedEmail())
         ->sole();
     $catalogLine = LineOfBusiness::query()
-        ->where('code', 'MRC-2A-02-B-WHOLESALE-RETAIL')
+        ->where('code', ResolveLegacyCitizenPermitApplicationLabPool::CatalogCode)
         ->sole();
 
     $this->actingAs($previewCitizen)
@@ -118,11 +125,6 @@ test('authorized legacy review requires a preview login and exposes the exact si
     Route::getRoutes()->refreshNameLookups();
     Route::getRoutes()->refreshActionLookups();
 
-    LineOfBusiness::factory()->create([
-        'code' => 'MRC-2A-02-B-WHOLESALE-RETAIL',
-        'name' => 'Wholesalers, Retailers, Dealers or Distributors',
-        'metadata' => [],
-    ]);
     $accounts = createStakeholderPreviewAccounts();
 
     $this->get('/')->assertRedirect(route('login'));
@@ -906,7 +908,7 @@ function authorizedLegacyReviewSpecimens(): array
                 'applicant_printed_name' => 'Authorized Reviewer',
             ],
             'activity' => [
-                'line_of_business_code' => 'MRC-2A-02-B-WHOLESALE-RETAIL',
+                'line_of_business_code' => ResolveLegacyCitizenPermitApplicationLabPool::CatalogCode,
                 'quantity' => 1,
                 'capital_investment_pesos' => '100000.00',
                 'essential_gross_sales_pesos' => '0.00',

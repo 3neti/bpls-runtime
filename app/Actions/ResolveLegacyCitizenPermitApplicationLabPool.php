@@ -33,7 +33,7 @@ class ResolveLegacyCitizenPermitApplicationLabPool
 
     private const string DefaultTablesPath = 'app/private/legacy-migrations/convex-snapshots/'.self::SourceSnapshot.'/tables';
 
-    public const string CatalogCode = 'MRC-2A-02-B-WHOLESALE-RETAIL';
+    public const string CatalogCode = 'LOB-F4F644287B2E8261';
 
     /** @var list<string> */
     public const array SourceBusinessCategories = [

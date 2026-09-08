@@ -4,6 +4,7 @@ use App\Actions\ApplyDueBploRoutingSuggestions;
 use App\Actions\ArmBploRoutingSentinel;
 use App\Actions\CancelPermitApplication;
 use App\Actions\RecordBploRoutingDetermination;
+use App\Actions\ResolveLegacyCitizenPermitApplicationLabPool;
 use App\Actions\SubmitCitizenPermitApplication;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
@@ -38,6 +39,11 @@ beforeEach(function (): void {
         'bplo.routing_sentinel.clock' => 'elapsed',
     ]);
     Artisan::call('bpls:install');
+    LineOfBusiness::factory()->create([
+        'code' => ResolveLegacyCitizenPermitApplicationLabPool::CatalogCode,
+        'name' => 'REC- SARISARI STORE',
+        'metadata' => [],
+    ]);
     Carbon::setTestNow('2026-09-03 10:00:00');
 });
 
@@ -88,7 +94,7 @@ test('canonical citizen lodging automatically arms the routing sentinel', functi
         ]);
     PermitApplicationLine::factory()->for($application)->create([
         'line_of_business_id' => LineOfBusiness::query()
-            ->where('code', 'MRC-2A-02-B-WHOLESALE-RETAIL')
+            ->where('code', ResolveLegacyCitizenPermitApplicationLabPool::CatalogCode)
             ->sole()
             ->id,
     ]);
@@ -254,7 +260,7 @@ function sariSariApplication(): PermitApplication
         ]);
     PermitApplicationLine::factory()->for($application)->create([
         'line_of_business_id' => LineOfBusiness::query()
-            ->where('code', 'MRC-2A-02-B-WHOLESALE-RETAIL')
+            ->where('code', ResolveLegacyCitizenPermitApplicationLabPool::CatalogCode)
             ->sole()
             ->id,
         'declared_gross_sales_cents' => 48_000_000,

@@ -2,6 +2,7 @@
 
 use App\Actions\BuildCitizenBusinessDetail;
 use App\Actions\InspectBplsInstallation;
+use App\Actions\ResolveLegacyCitizenPermitApplicationLabPool;
 use App\Enums\StakeholderPreviewPersona;
 use App\Enums\UserPermission;
 use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
@@ -133,14 +134,20 @@ test('Scenario 01 persist is idempotent, explicitly owned, and visible through i
             ->has('lineOfBusinesses', 1)
             ->where('lineOfBusinesses.0.code', 'MRC-2A-02-B-WHOLESALE-RETAIL'));
 
+    LineOfBusiness::factory()->create([
+        'code' => ResolveLegacyCitizenPermitApplicationLabPool::CatalogCode,
+        'name' => 'REC- SARISARI STORE',
+        'metadata' => [],
+    ]);
+
     $this->actingAs($previewCitizen)
         ->get(route('citizen.permit-applications.create'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('registry.linked', false)
             ->has('registry.businesses', 0)
-            ->has('lineOfBusinesses', 1)
-            ->where('lineOfBusinesses.0.code', 'MRC-2A-02-B-WHOLESALE-RETAIL'));
+            ->has('lineOfBusinesses', 2)
+            ->where('lineOfBusinesses.0.code', ResolveLegacyCitizenPermitApplicationLabPool::CatalogCode));
 });
 
 test('Scenario 01 then Scenario 02 persist one coherent 2025 to 2026 product-lab chronology', function () {

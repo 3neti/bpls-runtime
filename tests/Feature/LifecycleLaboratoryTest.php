@@ -21,6 +21,7 @@ use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
 use App\Actions\RecordPostPaymentOfficeCertification;
 use App\Actions\ReleaseSyntheticLifecyclePermit;
 use App\Actions\RenderApplicationFormPdf;
+use App\Actions\ResolveLegacyCitizenPermitApplicationLabPool;
 use App\Actions\ResolveLifecycleCleanroomState;
 use App\Actions\SimulateLifecycleQrPhPayment;
 use App\Actions\SubmitCitizenPermitApplication;
@@ -64,6 +65,11 @@ beforeEach(function () {
     Route::getRoutes()->refreshActionLookups();
     Storage::fake('local');
     Artisan::call('bpls:install');
+    LineOfBusiness::factory()->create([
+        'code' => ResolveLegacyCitizenPermitApplicationLabPool::CatalogCode,
+        'name' => 'REC- SARISARI STORE',
+        'metadata' => [],
+    ]);
 });
 
 test('laboratory is fail closed to guests and arbitrary preview accounts', function () {
@@ -412,7 +418,7 @@ test('cleanroom citizen intake accepts an active municipal catalog activity offe
 
     expect($intake['applicant_printed_name'])->toBe($intake['owner_name']);
     $municipalRetail = LineOfBusiness::query()
-        ->where('code', 'MRC-2A-02-B-WHOLESALE-RETAIL')
+        ->where('code', ResolveLegacyCitizenPermitApplicationLabPool::CatalogCode)
         ->sole();
     $intake['lines'] = [[
         ...$intake['lines'][0],
@@ -470,7 +476,7 @@ test('source backed registry specimen advances through the complete synthetic pe
     $run = LifecycleCleanroomRun::query()->sole();
     $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run));
     $intake = app(BuildLifecycleCleanroomIntake::class)->handle($run);
-    $municipalRetail = LineOfBusiness::query()->where('code', 'MRC-2A-02-B-WHOLESALE-RETAIL')->sole();
+    $municipalRetail = LineOfBusiness::query()->where('code', ResolveLegacyCitizenPermitApplicationLabPool::CatalogCode)->sole();
     $intake['lines'] = [[...$intake['lines'][0], 'line_of_business_id' => $municipalRetail->id]];
     $this->post(route('citizen.permit-applications.store'), [...$intake, 'type' => 'new'])->assertSessionHasNoErrors();
     $run->refresh();

@@ -52,7 +52,7 @@ fields:
     emergency_contact_mobile: 0999-000-0000
     emergency_contact_email: sample.emergency@example.test
 activities:
-    - line_of_business_code: MRC-2A-02-B-WHOLESALE-RETAIL
+    - line_of_business_code: LOB-F4F644287B2E8261
       quantity: 1
       capital_investment_pesos: '250000.00'
       essential_gross_sales_pesos: '0.00'

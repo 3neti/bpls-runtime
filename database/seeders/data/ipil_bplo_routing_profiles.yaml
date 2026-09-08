@@ -12,7 +12,7 @@ profiles:
       - REC- SCHOOL SUPPLIES
       - RNEC- HARDWARE RETAILER
     line_of_business_codes:
-      - MRC-2A-02-B-WHOLESALE-RETAIL
+      - LOB-F4F644287B2E8261
     offices:
       - code: engineering
         label: Engineering
