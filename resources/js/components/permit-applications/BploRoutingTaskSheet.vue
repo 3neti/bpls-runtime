@@ -390,6 +390,10 @@ function treasuryFeeOptions(lineOfBusinessId: number) {
     }));
 }
 
+function actorLabel(name: string): string {
+    return name.replace(/^Cleanroom\s+\S+\s+/, '');
+}
+
 const treasurySelectionsReady = computed(
     () =>
         treasurySelections.value.length > 0 &&
@@ -708,7 +712,8 @@ const treasurySelectionsReady = computed(
                     <span>
                         Payment Order reference
                         <span class="ml-1 text-muted-foreground">
-                            {{ finalizedOfficeCount }} orders ·
+                            {{ finalizedOfficeCount }} of
+                            {{ task.routing.works.length }} finalized ·
                             {{ money(paymentOrderTotal) }}
                         </span>
                     </span>
@@ -717,53 +722,84 @@ const treasurySelectionsReady = computed(
                         aria-hidden="true"
                     />
                 </summary>
-                <dl class="grid gap-2 border-t p-3 text-sm">
-                    <div
+                <div class="grid gap-3 border-t p-3 text-sm">
+                    <article
                         v-for="work in task.routing.works"
                         :key="work.id"
-                        class="flex justify-between gap-3"
+                        class="grid gap-2 rounded-md border p-3"
                     >
-                        <dt>{{ work.office_label }}</dt>
-                        <dd class="font-semibold">
-                            {{
-                                work.payment_orders.length
-                                    ? money(
-                                          work.payment_orders.reduce(
-                                              (total, order) =>
-                                                  total +
-                                                  order.total_amount_cents,
-                                              0,
-                                          ),
-                                      )
-                                    : 'Pending'
-                            }}
-                        </dd>
-                    </div>
-                </dl>
+                        <strong>{{ work.office_label }}</strong>
+                        <div
+                            v-for="order in work.payment_orders"
+                            :key="order.id"
+                            class="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1"
+                        >
+                            <span>Payment Order {{ order.sequence }}</span>
+                            <span class="font-semibold">{{
+                                money(order.total_amount_cents)
+                            }}</span>
+                            <span
+                                class="col-span-2 text-xs text-muted-foreground"
+                            >
+                                Signed by {{ actorLabel(order.issued_by) }} ·
+                                {{ dateTime(order.issued_at) }}
+                            </span>
+                        </div>
+                        <span
+                            v-if="work.payment_orders.length === 0"
+                            class="text-muted-foreground"
+                        >
+                            Pending
+                        </span>
+                    </article>
+                </div>
             </details>
 
             <details
                 v-if="isTreasuryActor && task.application.commissioned_path"
                 class="group rounded-lg border bg-background"
-                data-testid="treasury-routing-evidence"
+                data-testid="treasury-routing-decision"
             >
                 <summary
                     class="flex cursor-pointer list-none items-center justify-between gap-3 p-3 text-sm font-medium"
                 >
-                    Evidence
+                    <span>
+                        Routing decision
+                        <span class="ml-1 text-muted-foreground">
+                            {{ task.routing.works.length }} concerned offices
+                            selected by BPLO
+                        </span>
+                    </span>
                     <ChevronRight
-                        class="size-4 transition-transform group-open:rotate-90"
+                        class="size-4 shrink-0 transition-transform group-open:rotate-90"
                         aria-hidden="true"
                     />
                 </summary>
-                <div class="grid gap-1 border-t p-3 text-sm">
-                    <strong>Routing record</strong>
-                    <span class="text-muted-foreground">
-                        Recorded by BPLO · {{ task.routing.works.length }}
-                        concerned offices ·
-                        {{ dateTime(task.routing.determined_at) }}
-                    </span>
-                </div>
+                <dl class="grid gap-3 border-t p-3 text-sm">
+                    <div class="grid gap-1">
+                        <dt class="font-semibold">Selected offices</dt>
+                        <dd class="text-muted-foreground">
+                            {{
+                                task.routing.works
+                                    .map((work) => work.office_label)
+                                    .join(' · ')
+                            }}
+                        </dd>
+                    </div>
+                    <div class="grid gap-1">
+                        <dt class="font-semibold">Recorded by</dt>
+                        <dd class="text-muted-foreground">
+                            {{ actorLabel(task.routing.determined_by) }} ·
+                            {{ dateTime(task.routing.determined_at) }}
+                        </dd>
+                    </div>
+                    <div class="grid gap-1">
+                        <dt class="font-semibold">Reason</dt>
+                        <dd class="text-muted-foreground">
+                            {{ task.routing.situational_context }}
+                        </dd>
+                    </div>
+                </dl>
             </details>
 
             <div

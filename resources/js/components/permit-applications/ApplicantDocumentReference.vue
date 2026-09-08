@@ -92,13 +92,17 @@ function fileSize(sizeBytes: number): string {
                             :alt="`Thumbnail of ${document.label}`"
                             class="size-full object-cover"
                         />
-                        <iframe
+                        <span
                             v-else-if="isPdf(document)"
-                            :src="`${document.view_url}#toolbar=0&navpanes=0&scrollbar=0`"
-                            :title="`Thumbnail of ${document.label}`"
-                            tabindex="-1"
-                            class="pointer-events-none size-full bg-white"
-                        />
+                            class="flex size-full flex-col items-center justify-center gap-2 bg-white text-slate-500 dark:bg-slate-950 dark:text-slate-400"
+                        >
+                            <FileText class="size-10" aria-hidden="true" />
+                            <span
+                                class="text-[10px] font-black tracking-[0.18em] uppercase"
+                            >
+                                PDF
+                            </span>
+                        </span>
                         <FileText
                             v-else
                             class="size-10 text-muted-foreground"
