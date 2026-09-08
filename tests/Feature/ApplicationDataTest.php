@@ -266,6 +266,7 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
         ->and($navigator)->toContain('data-testid="application-form-page-3-tab"')
         ->and($navigator)->toContain('Applicant Declaration')
         ->and($navigator)->toContain('Municipal Processing')
+        ->and($navigator)->toContain('processingSummary')
         ->and($navigator)->toContain('totalLabel')
         ->and($component)->toContain("'Current total'")
         ->and($navigator)->toContain('sticky top-0')

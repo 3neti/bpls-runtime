@@ -133,6 +133,7 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         ->and(data_get($applicationData, 'signature_evidence.0.purpose'))->toBe('applicant_lodging')
         ->and(data_get($applicationData, 'signature_evidence.0.facsimile_data_url'))->toStartWith('data:image/png;base64,')
         ->and(data_get($executableDocument, 'commissioned_path'))->toBeTrue()
+        ->and(data_get($executableDocument, 'page_2_assessment.processing_summary'))->toBe('Awaiting BPLO routing')
         ->and(data_get($executableDocument, 'page_2_assessment.total_label'))->toBe('Current total')
         ->and(data_get($executableDocument, 'page_2_assessment.total_source'))->toBe('pending_canonical_inputs')
         ->and(data_get($executableDocument, 'page_2_assessment.emerging_total_amount_cents'))->toBeNull()
@@ -166,11 +167,18 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
             'fee_rule_id' => $fee->id,
             'amount_cents' => $fee->amount_cents + ($officeIndex === 0 ? 100 : 0),
         ]], User::query()->findOrFail(data_get($run->actor_manifest, 'actors.'.$work->office_code.'.user_id')), UploadedFile::fake()->image("{$work->office_code}-signature.png"));
+        if ($officeIndex === 0) {
+            $partialDocument = app(BuildExecutablePermitApplicationDocument::class)->handle($application->fresh(), $treasurer);
+            expect(data_get($partialDocument, 'page_2_assessment.processing_summary'))->toBe('Payment Orders · 1 of 2');
+        }
     }
     $editedOfficeLine = $application->paperlessPaymentOrders()->with('lines')->oldest('id')->firstOrFail()->lines->sole();
     expect(data_get($editedOfficeLine->source_snapshot, 'variance_minor'))->toBe(100)
         ->and(data_get($editedOfficeLine->source_snapshot, 'reason'))->toBe('Amount edited in the Nelson financial line-item editor.')
         ->and(data_get($editedOfficeLine->source_snapshot, 'authority'))->toContain('business_permit_evaluations.contribute');
+    $paymentOrdersCompleteDocument = app(BuildExecutablePermitApplicationDocument::class)->handle($application->fresh(), $treasurer);
+    expect(data_get($paymentOrdersCompleteDocument, 'page_2_assessment.processing_summary'))
+        ->toBe('Awaiting Treasury classification · 2 Payment Orders');
 
     $lobSelections = [];
     foreach ([
@@ -216,6 +224,7 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
     $currentDocument = app(BuildExecutablePermitApplicationDocument::class)->handle($application->fresh(), $treasurer);
     $currentTotal = $paymentOrderSubtotal + $treasurySubtotal;
     expect(data_get($currentDocument, 'page_2_assessment.total_label'))->toBe('Current total')
+        ->and(data_get($currentDocument, 'page_2_assessment.processing_summary'))->toBe('Ready for Assessment · 2 Payment Orders · 3 Lines of Business')
         ->and(data_get($currentDocument, 'page_2_assessment.total_source'))->toBe('canonical_price_projection')
         ->and(data_get($currentDocument, 'page_2_assessment.emerging_total_amount_cents'))->toBe($currentTotal)
         ->and($application->assessments()->count())->toBe(0);
@@ -225,6 +234,7 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
     $report = $assessment->price_report_snapshot;
     $scheduleOfPayment = app(BuildScheduleOfPayment::class)->handle($assessment, $report)->toArray();
     expect($assessment->total_amount_cents)->toBe($currentTotal)
+        ->and(data_get($assessedDocument, 'page_2_assessment.processing_summary'))->toBe('Assessment prepared · ₱'.number_format($currentTotal / 100, 2))
         ->and(data_get($assessedDocument, 'page_2_assessment.total_label'))->toBe('Assessment total')
         ->and(data_get($assessedDocument, 'page_2_assessment.total_source'))->toBe('assessment')
         ->and(data_get($assessedDocument, 'page_2_assessment.emerging_total_amount_cents'))->toBe($assessment->total_amount_cents)
@@ -234,12 +244,18 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         ->and($scheduleOfPayment['assessment_total_minor'])->toBe($assessment->total_amount_cents);
 
     app(RecordAssessmentDecision::class)->handle($assessment, $treasurer, AssessmentDecisionAction::Approved);
+    $approvedDocument = app(BuildExecutablePermitApplicationDocument::class)->handle($application->fresh(), $treasurer);
+    expect(data_get($approvedDocument, 'page_2_assessment.processing_summary'))
+        ->toBe('Treasurer approved · ₱'.number_format($currentTotal / 100, 2));
     $paymentSchedule = app(CreatePaymentScheduleForAssessment::class)->handle($assessment->fresh(), $treasurer);
     $collection = app(RecordPaymentScheduleCollection::class)->handle($paymentSchedule, [
         'amount_cents' => $paymentSchedule->total_amount_cents,
         'method' => 'cash',
         'payer_name' => 'Nelson Cleanroom Applicant',
     ], $cashier);
+    $paidDocument = app(BuildExecutablePermitApplicationDocument::class)->handle($application->fresh(), $treasurer);
+    expect(data_get($paidDocument, 'page_2_assessment.processing_summary'))
+        ->toBe('Payment complete · ₱'.number_format($currentTotal / 100, 2));
     $groups = $collection->allocations->pluck('receipt_group_key')->unique()->sort()->values();
     expect($groups)->toHaveCount(5);
 

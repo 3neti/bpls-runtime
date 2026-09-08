@@ -94,6 +94,7 @@ type DocumentProjection = {
         status: string;
         statement: string;
         populated_from_canonical_assessment: boolean;
+        processing_summary: string | null;
         total_label: string;
         total_source: string;
         emerging_total_amount_cents: number | null;

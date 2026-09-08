@@ -9,6 +9,7 @@ defineProps<{
     resolvedDeterminationCount: number;
     requiredDeterminationCount: number;
     paymentOrderCount: number;
+    processingSummary: string | null;
     totalLabel: string;
     emergingTotalAmountCents: number | null;
     unresolvedChargeCount: number;
@@ -98,11 +99,16 @@ function money(amountCents: number | null): string {
                 <span
                     class="mt-1 block text-[10px] font-bold uppercase sm:text-xs"
                 >
-                    Living · {{ officeCount }} offices ·
-                    {{ resolvedDeterminationCount }}/{{
-                        requiredDeterminationCount
-                    }}
-                    determinations
+                    <template v-if="processingSummary">
+                        {{ processingSummary }}
+                    </template>
+                    <template v-else>
+                        Living · {{ officeCount }} offices ·
+                        {{ resolvedDeterminationCount }}/{{
+                            requiredDeterminationCount
+                        }}
+                        determinations
+                    </template>
                 </span>
             </button>
 

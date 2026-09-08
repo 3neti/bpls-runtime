@@ -328,6 +328,7 @@ const page2Summary = computed(() => {
                 ),
             0,
         ),
+        processingSummary: projection?.processing_summary ?? null,
         totalLabel:
             projection?.total_label ??
             (props.application.financial?.assessment
@@ -697,6 +698,7 @@ function permitBlockerLabel(blocker: string): string {
                         page2Summary.requiredDeterminationCount
                     "
                     :payment-order-count="page2Summary.paymentOrderCount"
+                    :processing-summary="page2Summary.processingSummary"
                     :total-label="page2Summary.totalLabel"
                     :emerging-total-amount-cents="
                         page2Summary.emergingTotalAmountCents

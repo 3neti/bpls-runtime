@@ -60,6 +60,7 @@ type DocumentProjection = {
         }[];
     };
     page_2_assessment: {
+        processing_summary: string | null;
         total_label: string;
         total_source: string;
         emerging_total_amount_cents: number | null;

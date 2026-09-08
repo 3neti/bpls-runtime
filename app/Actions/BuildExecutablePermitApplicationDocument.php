@@ -41,6 +41,8 @@ final class BuildExecutablePermitApplicationDocument
             ?? ($commissionedPath
                 ? $projectedTotal
                 : data_get($application, 'financial.evaluation.working_paper.grand_total_amount_cents'));
+        $treasuryLines = data_get($application, 'business.treasury_assigned_lines_of_business', []);
+        $treasuryLines = is_array($treasuryLines) ? $treasuryLines : [];
         $offices = [];
         $officePayloads = is_array($application['offices'] ?? null) ? $application['offices'] : [];
         foreach ($officePayloads as $office) {
@@ -119,6 +121,15 @@ final class BuildExecutablePermitApplicationDocument
                     ? 'The canonical Assessment has been prepared from completed municipal determinations.'
                     : (data_get($application, 'routing.status') === 'pending' ? 'Awaiting the mandatory BPLO routing determination.' : 'Page 2 is the living municipal processing projection.'),
                 'populated_from_canonical_assessment' => $assessment !== null,
+                'processing_summary' => $this->processingSummary(
+                    commissionedPath: $commissionedPath,
+                    routingStatus: (string) data_get($application, 'routing.status', 'pending'),
+                    paymentOrders: $officePaymentOrders,
+                    treasuryLineCount: count($treasuryLines),
+                    assessment: is_array($assessment) ? $assessment : null,
+                    decision: is_array($decision) ? $decision : null,
+                    payment: is_array($payment) ? $payment : [],
+                ),
                 'total_label' => $assessment !== null ? 'Assessment total' : 'Current total',
                 'total_source' => $assessment !== null
                     ? 'assessment'
@@ -129,7 +140,7 @@ final class BuildExecutablePermitApplicationDocument
                 'required_unresolved_charge_count' => (int) data_get($application, 'financial.evaluation.working_paper.required_unresolved_charge_count', 0),
                 'offices' => $offices,
                 'concerned_office_payment_orders' => $officePaymentOrders,
-                'treasury_lines_of_business' => data_get($application, 'business.treasury_assigned_lines_of_business', []),
+                'treasury_lines_of_business' => $treasuryLines,
             ],
             'computation_assessment_slip' => $assessment === null ? null : [
                 'assessment_id' => $assessment['id'],
@@ -177,5 +188,65 @@ final class BuildExecutablePermitApplicationDocument
                 ...($syntheticLifecycle ? ['production_authority' => false] : []),
             ],
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $paymentOrders
+     * @param  array<string, mixed>|null  $assessment
+     * @param  array<string, mixed>|null  $decision
+     * @param  array<string, mixed>  $payment
+     */
+    private function processingSummary(
+        bool $commissionedPath,
+        string $routingStatus,
+        ?array $paymentOrders,
+        int $treasuryLineCount,
+        ?array $assessment,
+        ?array $decision,
+        array $payment,
+    ): ?string {
+        if (! $commissionedPath) {
+            return null;
+        }
+
+        if ($routingStatus === 'pending' || $paymentOrders === null) {
+            return 'Awaiting BPLO routing';
+        }
+
+        $finalizedOrders = (int) data_get($paymentOrders, 'finalized_office_count', 0);
+        $requiredOrders = (int) data_get($paymentOrders, 'required_office_count', 0);
+        if (data_get($paymentOrders, 'all_finalized') !== true) {
+            return "Payment Orders · {$finalizedOrders} of {$requiredOrders}";
+        }
+
+        if ($treasuryLineCount === 0) {
+            return "Awaiting Treasury classification · {$finalizedOrders} Payment Orders";
+        }
+
+        if ($assessment === null) {
+            return "Ready for Assessment · {$finalizedOrders} Payment Orders · {$treasuryLineCount} Lines of Business";
+        }
+
+        $amount = $this->pesos((int) $assessment['total_amount_cents']);
+        $paymentStatus = data_get($payment, 'payable.status');
+        if ($paymentStatus === 'paid') {
+            return "Payment complete · {$amount}";
+        }
+        if ($paymentStatus === 'partially_paid') {
+            $paid = $this->pesos((int) data_get($payment, 'payable.paid_amount_cents', 0));
+
+            return "Payment in progress · {$paid} of {$amount}";
+        }
+
+        if (data_get($decision, 'action') === 'approved') {
+            return "Treasurer approved · {$amount}";
+        }
+
+        return "Assessment prepared · {$amount}";
+    }
+
+    private function pesos(int $amountCents): string
+    {
+        return '₱'.number_format($amountCents / 100, 2);
     }
 }
