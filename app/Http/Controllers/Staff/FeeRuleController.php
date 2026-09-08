@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Staff;
 
 use App\Actions\AnalyzeRevenueCodeSchedule;
 use App\Actions\ProposeFeeRuleRevision;
+use App\Enums\FeeCatalogVersionStatus;
+use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleExecutionStatus;
@@ -12,8 +14,10 @@ use App\Enums\RevenueCodeProvisionStatus;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ProposeFeeRuleRevisionRequest;
+use App\Models\BusinessDivision;
 use App\Models\FeeRule;
 use App\Models\FeeRuleAuditEvent;
+use App\Models\FeeRuleOfficeAssignment;
 use App\Models\FeeRuleRange;
 use App\Models\RevenueCodeProvision;
 use App\Models\RevenueCodeProvisionClause;
@@ -40,11 +44,16 @@ class FeeRuleController extends Controller
             'category' => ['nullable', Rule::enum(FeeRuleCategory::class)],
             'scope' => ['nullable', Rule::enum(FeeRuleScope::class)],
             'calculation_type' => ['nullable', Rule::enum(FeeRuleCalculationType::class)],
-            'status' => ['nullable', Rule::in(['active', 'inactive'])],
+            'business_division' => ['nullable', 'string', 'max:80'],
+            'office' => ['nullable', 'string', 'max:80'],
+            'determination_channel' => ['nullable', Rule::enum(FeeDeterminationChannel::class)],
+            'application_type' => ['nullable', Rule::in(['new', 'renewal'])],
+            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+            'status' => ['nullable', Rule::in(['active', 'incomplete', 'inactive', 'superseded'])],
         ]);
 
         $feeRules = FeeRule::query()
-            ->with(['lineOfBusiness', 'currentReconciliation'])
+            ->with(['lineOfBusiness', 'lineOfBusinesses', 'businessDivision', 'feeCategory', 'revenueAccount', 'officeAssignments', 'catalogVersion', 'currentReconciliation'])
             ->withCount('ranges')
             ->when($filters['q'] ?? null, function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
@@ -53,6 +62,12 @@ class FeeRuleController extends Controller
                         ->orWhere('name', 'like', "%{$search}%")
                         ->orWhere('legal_basis', 'like', "%{$search}%")
                         ->orWhere('legacy_source_id', 'like', "%{$search}%")
+                        ->orWhereHas('revenueAccount', fn ($query) => $query->where('code', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%"))
+                        ->orWhereHas('businessDivision', fn ($query) => $query->where('name', 'like', "%{$search}%"))
+                        ->orWhereHas('officeAssignments', fn ($query) => $query->where('office_label', 'like', "%{$search}%"))
+                        ->orWhereHas('lineOfBusinesses', function ($query) use ($search): void {
+                            $query->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%");
+                        })
                         ->orWhereHas('lineOfBusiness', function ($query) use ($search): void {
                             $query
                                 ->where('name', 'like', "%{$search}%")
@@ -63,9 +78,22 @@ class FeeRuleController extends Controller
             ->when($filters['category'] ?? null, fn ($query, string $category) => $query->where('category', $category))
             ->when($filters['scope'] ?? null, fn ($query, string $scope) => $query->where('scope', $scope))
             ->when($filters['calculation_type'] ?? null, fn ($query, string $calculationType) => $query->where('calculation_type', $calculationType))
-            ->when(($filters['status'] ?? null) === 'active', fn ($query) => $query->where('is_active', true))
-            ->when(($filters['status'] ?? null) === 'inactive', fn ($query) => $query->where('is_active', false))
-            ->orderBy('code')
+            ->when($filters['business_division'] ?? null, fn ($query, string $code) => $query->whereHas('businessDivision', fn ($query) => $query->where('code', $code)))
+            ->when($filters['office'] ?? null, fn ($query, string $code) => $query->whereHas('officeAssignments', fn ($query) => $query->where('office_code', $code)))
+            ->when($filters['determination_channel'] ?? null, fn ($query, string $channel) => $query->where('determination_channel', $channel))
+            ->when($filters['application_type'] ?? null, fn ($query, string $type) => $query->whereJsonContains('metadata->application_types', $type))
+            ->when($filters['year'] ?? null, fn ($query, int $year) => $query->whereDate('effective_from', '<=', "{$year}-12-31")->where(fn ($query) => $query->whereNull('effective_until')->orWhereDate('effective_until', '>=', "{$year}-01-01")))
+            ->when(($filters['status'] ?? null) === 'active', fn ($query) => $query->where('is_active', true)
+                ->where(fn ($query) => $query->whereNull('metadata->catalog_status')->orWhere('metadata->catalog_status', '!=', 'incomplete'))
+                ->where(fn ($query) => $query->whereNull('fee_catalog_version_id')->orWhereHas('catalogVersion', fn ($query) => $query->where('status', FeeCatalogVersionStatus::Active))))
+            ->when(($filters['status'] ?? null) === 'incomplete', fn ($query) => $query->where('metadata->catalog_status', 'incomplete'))
+            ->when(($filters['status'] ?? null) === 'inactive', fn ($query) => $query->where('is_active', false)->where(fn ($query) => $query->whereNull('metadata->catalog_status')->orWhere('metadata->catalog_status', '!=', 'incomplete')))
+            ->when(($filters['status'] ?? null) === 'superseded', fn ($query) => $query->whereHas('catalogVersion', fn ($query) => $query->where('status', FeeCatalogVersionStatus::Superseded)))
+            ->orderByRaw('case when fee_catalog_version_id is null then 0 else 1 end')
+            ->orderByRaw('case when fee_catalog_version_id is null then code end')
+            ->orderByRaw('business_division_id is null')
+            ->orderBy('business_division_id')
+            ->orderBy('name')
             ->paginate(25)
             ->withQueryString()
             ->through(fn (FeeRule $feeRule): array => $this->feeRulePayload($feeRule));
@@ -76,6 +104,11 @@ class FeeRuleController extends Controller
                 'category' => $filters['category'] ?? '',
                 'scope' => $filters['scope'] ?? '',
                 'calculation_type' => $filters['calculation_type'] ?? '',
+                'business_division' => $filters['business_division'] ?? '',
+                'office' => $filters['office'] ?? '',
+                'determination_channel' => $filters['determination_channel'] ?? '',
+                'application_type' => $filters['application_type'] ?? '',
+                'year' => $filters['year'] ?? '',
                 'status' => $filters['status'] ?? 'active',
             ],
             'feeRules' => $feeRules,
@@ -127,6 +160,14 @@ class FeeRuleController extends Controller
             'categories' => $this->options(FeeRuleCategory::cases()),
             'scopes' => $this->options(FeeRuleScope::cases()),
             'calculationTypes' => $this->options(FeeRuleCalculationType::cases()),
+            'businessDivisions' => BusinessDivision::query()->where('is_active', true)->orderBy('name')->get(['code', 'name'])->map(fn (BusinessDivision $division): array => ['value' => $division->code, 'label' => str($division->name)->lower()->headline()->toString()])->all(),
+            'offices' => FeeRuleOfficeAssignment::query()->select(['office_code', 'office_label'])->distinct()->orderBy('office_label')->get()->map(fn ($office): array => ['value' => $office->office_code, 'label' => $office->office_label])->all(),
+            'determinationChannels' => collect(FeeDeterminationChannel::cases())->map(fn (FeeDeterminationChannel $channel): array => ['value' => $channel->value, 'label' => match ($channel) {
+                FeeDeterminationChannel::ConcernedOfficePaymentOrder => 'Concerned office',
+                FeeDeterminationChannel::TreasuryLineOfBusiness => 'Treasury LOB',
+                FeeDeterminationChannel::AutomaticAssessment => 'Automatic assessment',
+                FeeDeterminationChannel::ReferenceOnly => 'Reference only',
+            }])->all(),
         ]);
     }
 
@@ -136,6 +177,12 @@ class FeeRuleController extends Controller
 
         $feeRule->load([
             'lineOfBusiness',
+            'lineOfBusinesses',
+            'businessDivision',
+            'feeCategory',
+            'revenueAccount',
+            'officeAssignments',
+            'catalogVersion',
             'currentReconciliation',
             'ranges' => fn ($query) => $query->orderBy('min_basis_cents'),
             'revisions.proposedBy',
@@ -221,6 +268,18 @@ class FeeRuleController extends Controller
             'is_active' => $feeRule->is_active,
             'legal_basis' => $feeRule->legal_basis,
             'legacy_source_id' => $feeRule->legacy_source_id,
+            'revenue_code' => $feeRule->revenueAccount?->code,
+            'business_division' => $feeRule->businessDivision ? ['code' => $feeRule->businessDivision->code, 'name' => str($feeRule->businessDivision->name)->lower()->headline()->toString()] : null,
+            'lines_of_business' => $feeRule->lineOfBusinesses->map(fn ($line): array => ['id' => $line->id, 'code' => $line->code, 'name' => $line->name])->values()->all(),
+            'owner' => $this->owner($feeRule),
+            'determination_channel' => $feeRule->determination_channel->value,
+            'amount_basis' => $this->amountBasis($feeRule),
+            'display_status' => match (true) {
+                $feeRule->catalogVersion?->status === FeeCatalogVersionStatus::Superseded => 'Superseded',
+                data_get($feeRule->metadata, 'catalog_status') === 'incomplete' => 'Incomplete',
+                $feeRule->is_active => 'Active',
+                default => 'Inactive',
+            },
             'line_of_business' => $feeRule->lineOfBusiness ? [
                 'id' => $feeRule->lineOfBusiness->id,
                 'code' => $feeRule->lineOfBusiness->code,
@@ -248,6 +307,49 @@ class FeeRuleController extends Controller
                 'decided_at' => $feeRule->currentReconciliation->decided_at?->toIso8601String(),
             ] : null,
         ];
+    }
+
+    private function amountBasis(FeeRule $feeRule): string
+    {
+        if ($feeRule->calculation_type === FeeRuleCalculationType::Fixed && $feeRule->amount_cents > 0) {
+            return 'Fixed amount';
+        }
+        if ($feeRule->calculation_type === FeeRuleCalculationType::Range) {
+            return match ($feeRule->basis) {
+                'declared_gross_sales' => 'Tiered by gross sales',
+                'capital_investment' => 'Tiered by capital investment',
+                default => 'Tiered amount entered during review',
+            };
+        }
+        if ($feeRule->calculation_type === FeeRuleCalculationType::Formula) {
+            $formula = strtolower((string) (data_get($feeRule->metadata, 'formula') ?? data_get($feeRule->metadata, 'legacy_formula')));
+
+            return match (true) {
+                str_contains($formula, 'employee') => 'Based on employees',
+                str_contains($formula, 'area') => 'Based on business area',
+                default => 'Formula amount entered during review',
+            };
+        }
+
+        $assignment = $feeRule->officeAssignments->first();
+        $office = $assignment instanceof FeeRuleOfficeAssignment ? $assignment->office_label : null;
+
+        return $office === null ? 'Amount entered during review' : "Amount entered by {$office}";
+    }
+
+    private function owner(FeeRule $feeRule): string
+    {
+        $assignment = $feeRule->officeAssignments->first();
+        if ($assignment instanceof FeeRuleOfficeAssignment) {
+            return $assignment->office_label;
+        }
+
+        return match ($feeRule->determination_channel) {
+            FeeDeterminationChannel::TreasuryLineOfBusiness => 'Municipal Treasury',
+            FeeDeterminationChannel::AutomaticAssessment => 'Assessment',
+            FeeDeterminationChannel::ReferenceOnly => 'Reference only',
+            default => 'Concerned office',
+        };
     }
 
     /** @return array<int, array<string, mixed>> */

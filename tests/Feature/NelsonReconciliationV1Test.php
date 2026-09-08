@@ -21,6 +21,7 @@ use App\Actions\StorePermitApplicationDocument;
 use App\Actions\SubmitCitizenPermitApplication;
 use App\Data\Application\ApplicationDataResolver;
 use App\Enums\AssessmentDecisionAction;
+use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
@@ -192,6 +193,7 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
             'code' => 'NELSON-LOB-'.$lob->id,
             'name' => $name.' permit component',
             'scope' => FeeRuleScope::LineOfBusiness,
+            'determination_channel' => FeeDeterminationChannel::TreasuryLineOfBusiness,
             'calculation_type' => FeeRuleCalculationType::Fixed,
             'category' => FeeRuleCategory::Fee,
             'amount_cents' => $amount,

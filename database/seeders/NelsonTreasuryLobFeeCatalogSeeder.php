@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
@@ -45,6 +46,7 @@ class NelsonTreasuryLobFeeCatalogSeeder extends Seeder
                             'name' => $item['label'],
                             'category' => FeeRuleCategory::Fee,
                             'scope' => FeeRuleScope::LineOfBusiness,
+                            'determination_channel' => FeeDeterminationChannel::TreasuryLineOfBusiness,
                             'calculation_type' => FeeRuleCalculationType::Fixed,
                             'basis' => 'none',
                             'amount_cents' => $item['default_amount_minor'],

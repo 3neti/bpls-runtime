@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCategory;
 use App\Enums\UserPermission;
 use App\Models\BploRoutingWork;
@@ -86,6 +87,9 @@ class ConfirmOfficePaymentOrder
                 }
                 if ($rule->category === FeeRuleCategory::Tax) {
                     throw new LogicException('Concerned-office Payment Orders cannot determine Business Tax.');
+                }
+                if ($rule->determination_channel !== FeeDeterminationChannel::ConcernedOfficePaymentOrder) {
+                    throw new LogicException('The selected fee is not owned by the concerned-office Payment Order channel.');
                 }
                 $configuredOffice = data_get($rule->metadata, 'responsible_office_code');
                 $assignedOffices = $rule->officeAssignments->pluck('office_code');

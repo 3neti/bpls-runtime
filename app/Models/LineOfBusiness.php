@@ -42,6 +42,12 @@ class LineOfBusiness extends Model
             ->withTimestamps();
     }
 
+    /** @return BelongsToMany<BusinessDivision, $this> */
+    public function businessDivisions(): BelongsToMany
+    {
+        return $this->belongsToMany(BusinessDivision::class, 'business_division_line_of_business')->withTimestamps();
+    }
+
     /** @return HasMany<PermitApplicationLine, $this> */
     public function permitApplicationLines(): HasMany
     {

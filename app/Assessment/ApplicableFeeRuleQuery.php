@@ -2,6 +2,7 @@
 
 namespace App\Assessment;
 
+use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleScope;
 use App\Enums\PermitApplicationType;
 use App\Models\FeeRule;
@@ -61,10 +62,7 @@ class ApplicableFeeRuleQuery
 
     private function appliesToApplicationType(FeeRule $feeRule, PermitApplicationType $applicationType): bool
     {
-        if (in_array(data_get($feeRule->metadata, 'assessment_selection'), [
-            'concerned_office_payment_order_only',
-            'treasury_lob_determination_only',
-        ], true)) {
+        if ($feeRule->determination_channel !== FeeDeterminationChannel::AutomaticAssessment) {
             return false;
         }
 

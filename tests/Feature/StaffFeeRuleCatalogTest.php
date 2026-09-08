@@ -455,9 +455,10 @@ it('presents accepted fee evidence separately from reconciliation-required polic
     $detailPage = file_get_contents(resource_path('js/pages/fee-rules/Show.vue'));
 
     expect($indexPage)
-        ->toContain('AdministrationScopePanel')
-        ->toContain('Only a municipally confirmed rule can affect an assessment')
-        ->toContain('activating an unconfirmed rule')
+        ->toContain('Business Division')
+        ->toContain('Revenue code')
+        ->toContain('Amount / basis')
+        ->not->toContain('IPIL-LEGACY-')
         ->and($detailPage)
         ->toContain('AdministrationScopePanel')
         ->toContain('The source text, municipal decision, and whether the rule may be used are recorded separately')

@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Data\Application\BploRoutingTaskData;
+use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCategory;
 use App\Enums\UserPermission;
 use App\Models\FeeRule;
@@ -143,7 +144,7 @@ class BuildBploRoutingTask
         $periodStart = $application->application_year.'-01-01';
         $periodEnd = $application->application_year.'-12-31';
         $catalogFees = FeeRule::query()
-            ->with(['lineOfBusinesses:id', 'officeAssignments'])
+            ->with(['lineOfBusinesses:id', 'officeAssignments', 'revenueAccount'])
             ->where('is_active', true)
             ->where('category', '!=', FeeRuleCategory::Tax->value)
             ->whereDate('effective_from', '<=', $periodEnd)
@@ -160,12 +161,17 @@ class BuildBploRoutingTask
                 $configuredCodes = collect($office['fee_rule_codes'] ?? []);
                 $commissionedPath = data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true;
                 $fees = $catalogFees->filter(function (FeeRule $fee) use ($commissionedPath, $configuredCodes, $office): bool {
+                    if ($fee->determination_channel !== FeeDeterminationChannel::ConcernedOfficePaymentOrder) {
+                        return false;
+                    }
+                    if (! $commissionedPath && data_get($fee->metadata, 'semantic_classification') === 'synthetic_only') {
+                        return false;
+                    }
                     $explicitOfficeMatch = $fee->officeAssignments->contains('office_code', $office['code']);
 
                     return $commissionedPath
                         ? $configuredCodes->contains($fee->code) || $explicitOfficeMatch
-                        : ($explicitOfficeMatch || data_get($fee->metadata, 'responsible_office_code') === $office['code'])
-                            && data_get($fee->metadata, 'assessment_selection') !== 'concerned_office_payment_order_only';
+                        : $explicitOfficeMatch || data_get($fee->metadata, 'responsible_office_code') === $office['code'];
                 });
 
                 return [$office['code'] => $fees->map(fn (FeeRule $fee): array => [
@@ -173,7 +179,7 @@ class BuildBploRoutingTask
                     'code' => $fee->code,
                     'name' => $this->catalogOptionName($fee),
                     'default_amount_cents' => $fee->amount_cents,
-                    'account_code' => data_get($fee->metadata, 'municipal_account_code'),
+                    'account_code' => $fee->revenueAccount->code ?? data_get($fee->metadata, 'municipal_account_code'),
                 ])->values()->all()];
             })->all(),
             'line_of_business_options' => LineOfBusiness::query()->availableToMunicipalCatalog()->orderBy('name')->get()
@@ -181,8 +187,8 @@ class BuildBploRoutingTask
                     'id' => $line->id,
                     'code' => $line->code,
                     'name' => $line->name,
-                    'default_items' => $catalogFees->filter(fn (FeeRule $fee): bool => $fee->line_of_business_id === $line->id
-                        || $fee->lineOfBusinesses->contains('id', $line->id))->map(fn (FeeRule $fee): array => [
+                    'default_items' => $catalogFees->filter(fn (FeeRule $fee): bool => $fee->determination_channel === FeeDeterminationChannel::TreasuryLineOfBusiness
+                        && ($fee->line_of_business_id === $line->id || $fee->lineOfBusinesses->contains('id', $line->id)))->map(fn (FeeRule $fee): array => [
                             'fee_rule_id' => $fee->id,
                             'code' => $fee->code,
                             'name' => $this->catalogOptionName($fee),

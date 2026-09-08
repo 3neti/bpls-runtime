@@ -6,7 +6,6 @@ import {
     index,
     show,
 } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
-import AdministrationScopePanel from '@/components/administration/AdministrationScopePanel.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +38,13 @@ type FeeRule = {
     is_active: boolean;
     legal_basis: string | null;
     legacy_source_id: string | null;
+    revenue_code: string | null;
+    business_division: { code: string; name: string } | null;
+    lines_of_business: { id: number; code: string | null; name: string }[];
+    owner: string;
+    determination_channel: string;
+    amount_basis: string;
+    display_status: string;
     line_of_business: {
         id: number;
         code: string | null;
@@ -146,6 +152,11 @@ const props = defineProps<{
         category: string;
         scope: string;
         calculation_type: string;
+        business_division: string;
+        office: string;
+        determination_channel: string;
+        application_type: string;
+        year: string | number;
         status: string;
     };
     feeRules: {
@@ -173,12 +184,20 @@ const props = defineProps<{
     categories: Option[];
     scopes: Option[];
     calculationTypes: Option[];
+    businessDivisions: Option[];
+    offices: Option[];
+    determinationChannels: Option[];
 }>();
 
 const search = ref(props.filters.q);
 const category = ref(props.filters.category);
 const scope = ref(props.filters.scope);
 const calculationType = ref(props.filters.calculation_type);
+const businessDivision = ref(props.filters.business_division);
+const office = ref(props.filters.office);
+const determinationChannel = ref(props.filters.determination_channel);
+const applicationType = ref(props.filters.application_type);
+const year = ref(props.filters.year ? String(props.filters.year) : '');
 const status = ref(props.filters.status);
 const activeScheduleCode = ref('MRC-2A-02-B-WHOLESALERS');
 const activeScheduleMatrix = computed(
@@ -201,6 +220,11 @@ function query(): Record<string, string | undefined> {
         category: category.value || undefined,
         scope: scope.value || undefined,
         calculation_type: calculationType.value || undefined,
+        business_division: businessDivision.value || undefined,
+        office: office.value || undefined,
+        determination_channel: determinationChannel.value || undefined,
+        application_type: applicationType.value || undefined,
+        year: year.value || undefined,
         status: status.value || undefined,
     };
 }
@@ -221,6 +245,11 @@ function clearFilters(): void {
     category.value = '';
     scope.value = '';
     calculationType.value = '';
+    businessDivision.value = '';
+    office.value = '';
+    determinationChannel.value = '';
+    applicationType.value = '';
+    year.value = '';
     status.value = 'active';
     router.get(
         index.url({ query: query() }),
@@ -237,6 +266,12 @@ function money(amountCents: number): string {
         style: 'currency',
         currency: 'PHP',
     }).format(amountCents / 100);
+}
+
+function amountDisplay(rule: FeeRule): string {
+    return rule.calculation_type === 'fixed' && rule.amount_cents > 0
+        ? money(rule.amount_cents)
+        : rule.amount_basis;
 }
 
 function candidateBasis(row: RevenueCodeScheduleRow): string {
@@ -288,18 +323,6 @@ function label(value: string | null): string {
     return value ? value.replaceAll('_', ' ') : '-';
 }
 
-function availabilityLabel(status: string | null): string {
-    if (status === 'executable') {
-        return 'Available for assessment';
-    }
-
-    if (status === 'blocked') {
-        return 'Not yet confirmed';
-    }
-
-    return status ? label(status) : 'Availability not recorded';
-}
-
 function applicability(applicationTypes: string[] | null): string {
     if (!applicationTypes || applicationTypes.length === 0) {
         return 'All application types';
@@ -328,8 +351,8 @@ function decodePaginationLabel(value: string): string {
                         Municipal Fees
                     </h1>
                     <p class="text-sm text-muted-foreground">
-                        Govern application-wide and Line-of-Business fees,
-                        effective versions, municipal authority, and history.
+                        Search the active municipal catalogue by division,
+                        owner, and applicability.
                     </p>
                 </div>
                 <Button as-child variant="outline">
@@ -339,17 +362,11 @@ function decodePaginationLabel(value: string): string {
                 </Button>
             </section>
 
-            <AdministrationScopePanel
-                available="Search recorded fee rules, review how each amount is calculated, and see whether it is available for assessment."
-                evidence="The source and legal basis remain visible. Only a municipally confirmed rule can affect an assessment."
-                unavailable="Editing rates, activating an unconfirmed rule, or choosing an interpretation for unresolved Revenue Code provisions."
-            />
-
             <form
-                class="grid gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 lg:grid-cols-6 dark:border-sidebar-border"
+                class="grid gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 dark:border-sidebar-border"
                 @submit.prevent="applyFilters"
             >
-                <div class="grid gap-2 lg:col-span-2">
+                <div class="grid gap-2 sm:col-span-2">
                     <label
                         for="fee_rule_search"
                         class="text-xs font-medium text-muted-foreground uppercase"
@@ -386,6 +403,98 @@ function decodePaginationLabel(value: string): string {
                             {{ option.label }}
                         </option>
                     </select>
+                </div>
+                <div class="grid gap-2">
+                    <label
+                        for="fee_rule_division"
+                        class="text-xs font-medium text-muted-foreground uppercase"
+                        >Business Division</label
+                    >
+                    <select
+                        id="fee_rule_division"
+                        v-model="businessDivision"
+                        class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                    >
+                        <option value="">All divisions</option>
+                        <option
+                            v-for="option in businessDivisions"
+                            :key="option.value"
+                            :value="option.value"
+                        >
+                            {{ option.label }}
+                        </option>
+                    </select>
+                </div>
+                <div class="grid gap-2">
+                    <label
+                        for="fee_rule_owner"
+                        class="text-xs font-medium text-muted-foreground uppercase"
+                        >Owner</label
+                    >
+                    <select
+                        id="fee_rule_owner"
+                        v-model="office"
+                        class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                    >
+                        <option value="">All offices</option>
+                        <option
+                            v-for="option in offices"
+                            :key="option.value"
+                            :value="option.value"
+                        >
+                            {{ option.label }}
+                        </option>
+                    </select>
+                </div>
+                <div class="grid gap-2">
+                    <label
+                        for="fee_rule_channel"
+                        class="text-xs font-medium text-muted-foreground uppercase"
+                        >Workflow</label
+                    >
+                    <select
+                        id="fee_rule_channel"
+                        v-model="determinationChannel"
+                        class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                    >
+                        <option value="">All workflows</option>
+                        <option
+                            v-for="option in determinationChannels"
+                            :key="option.value"
+                            :value="option.value"
+                        >
+                            {{ option.label }}
+                        </option>
+                    </select>
+                </div>
+                <div class="grid gap-2">
+                    <label
+                        for="fee_rule_application_type"
+                        class="text-xs font-medium text-muted-foreground uppercase"
+                        >Application</label
+                    >
+                    <select
+                        id="fee_rule_application_type"
+                        v-model="applicationType"
+                        class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                    >
+                        <option value="">New and renewal</option>
+                        <option value="new">New</option>
+                        <option value="renewal">Renewal</option>
+                    </select>
+                </div>
+                <div class="grid gap-2">
+                    <label
+                        for="fee_rule_year"
+                        class="text-xs font-medium text-muted-foreground uppercase"
+                        >Effective year</label
+                    >
+                    <Input
+                        id="fee_rule_year"
+                        v-model="year"
+                        inputmode="numeric"
+                        placeholder="2025"
+                    />
                 </div>
                 <div class="grid gap-2">
                     <label
@@ -447,11 +556,15 @@ function decodePaginationLabel(value: string): string {
                         class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                     >
                         <option value="active">Active</option>
+                        <option value="incomplete">Incomplete</option>
                         <option value="inactive">Inactive</option>
+                        <option value="superseded">Superseded</option>
                         <option value="">All statuses</option>
                     </select>
                 </div>
-                <div class="flex gap-2 lg:col-span-6">
+                <div
+                    class="flex gap-2 sm:col-span-2 lg:col-span-4 xl:col-span-5"
+                >
                     <Button type="submit">
                         <Search />
                         Apply
@@ -1132,48 +1245,37 @@ function decodePaginationLabel(value: string): string {
             </details>
 
             <section
-                class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
-            >
-                <p class="font-medium">Municipal confirmation required</p>
-                <p class="mt-1">
-                    This page shows recorded fee rules for review. It does not
-                    authorize rate changes, choose unresolved formula meaning,
-                    settle PIL terminology, or declare the Revenue Code list
-                    complete.
-                </p>
-            </section>
-
-            <section
                 class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
             >
                 <div class="overflow-x-auto">
-                    <table class="w-full min-w-[920px] table-fixed text-sm">
+                    <table class="w-full min-w-[1100px] table-fixed text-sm">
                         <thead
                             class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
                         >
                             <tr>
-                                <th class="w-[22%] px-3 py-3 font-medium">
-                                    Rule
+                                <th class="w-[19%] px-3 py-3 font-medium">
+                                    Fee
+                                </th>
+                                <th class="w-[13%] px-3 py-3 font-medium">
+                                    Revenue code
+                                </th>
+                                <th class="w-[13%] px-3 py-3 font-medium">
+                                    Business Division
+                                </th>
+                                <th class="w-[18%] px-3 py-3 font-medium">
+                                    Applies to
+                                </th>
+                                <th class="w-[15%] px-3 py-3 font-medium">
+                                    Amount / basis
                                 </th>
                                 <th class="w-[12%] px-3 py-3 font-medium">
-                                    Category
+                                    Owner
                                 </th>
-                                <th class="w-[16%] px-3 py-3 font-medium">
-                                    Applicability
-                                </th>
-                                <th class="w-[14%] px-3 py-3 font-medium">
-                                    Calculation
+                                <th class="w-[6%] px-3 py-3 font-medium">
+                                    Status
                                 </th>
                                 <th
-                                    class="w-[11%] px-3 py-3 text-right font-medium"
-                                >
-                                    Amount
-                                </th>
-                                <th class="w-[20%] px-3 py-3 font-medium">
-                                    Source and legal basis
-                                </th>
-                                <th
-                                    class="w-[5%] px-3 py-3 text-right font-medium"
+                                    class="w-[4%] px-3 py-3 text-right font-medium"
                                 >
                                     Action
                                 </th>
@@ -1182,7 +1284,7 @@ function decodePaginationLabel(value: string): string {
                         <tbody>
                             <tr v-if="feeRules.data.length === 0">
                                 <td
-                                    colspan="7"
+                                    colspan="8"
                                     class="px-3 py-8 text-center text-muted-foreground"
                                 >
                                     No fee rules match the current filters.
@@ -1195,78 +1297,12 @@ function decodePaginationLabel(value: string): string {
                             >
                                 <td class="px-3 py-3 align-top">
                                     <div class="font-medium break-words">
-                                        {{ rule.code }}
+                                        {{ rule.name }}
                                     </div>
                                     <div
                                         class="mt-1 text-xs break-words text-muted-foreground"
                                     >
-                                        {{ rule.name }}
-                                    </div>
-                                    <div class="mt-2 flex flex-wrap gap-1">
-                                        <Badge
-                                            :variant="
-                                                rule.is_active
-                                                    ? 'default'
-                                                    : 'outline'
-                                            "
-                                        >
-                                            {{
-                                                rule.is_active
-                                                    ? 'Active'
-                                                    : 'Inactive'
-                                            }}
-                                        </Badge>
-                                        <Badge
-                                            v-if="rule.catalog_status"
-                                            variant="outline"
-                                        >
-                                            {{ label(rule.catalog_status) }}
-                                        </Badge>
-                                        <Badge
-                                            v-if="rule.current_reconciliation"
-                                            :variant="
-                                                rule.current_reconciliation
-                                                    .execution_status ===
-                                                'executable'
-                                                    ? 'default'
-                                                    : 'destructive'
-                                            "
-                                        >
-                                            {{
-                                                availabilityLabel(
-                                                    rule.current_reconciliation
-                                                        .execution_status,
-                                                )
-                                            }}
-                                        </Badge>
-                                    </div>
-                                </td>
-                                <td class="px-3 py-3 align-top">
-                                    <Badge variant="outline">
-                                        {{ label(rule.category) }}
-                                    </Badge>
-                                    <div
-                                        class="mt-2 text-xs text-muted-foreground"
-                                    >
-                                        {{ label(rule.scope) }}
-                                    </div>
-                                </td>
-                                <td class="px-3 py-3 align-top">
-                                    <div>
-                                        {{
-                                            rule.line_of_business?.name ??
-                                            'Application-wide'
-                                        }}
-                                    </div>
-                                    <div
-                                        v-if="rule.line_of_business?.code"
-                                        class="mt-1 text-xs text-muted-foreground"
-                                    >
-                                        {{ rule.line_of_business.code }}
-                                    </div>
-                                    <div
-                                        class="mt-2 text-xs text-muted-foreground"
-                                    >
+                                        {{ label(rule.category) }} ·
                                         {{
                                             applicability(
                                                 rule.application_types,
@@ -1275,66 +1311,73 @@ function decodePaginationLabel(value: string): string {
                                     </div>
                                 </td>
                                 <td class="px-3 py-3 align-top">
-                                    <div>
-                                        {{ label(rule.calculation_type) }}
-                                    </div>
-                                    <div
-                                        class="mt-1 text-xs text-muted-foreground"
-                                    >
-                                        Basis: {{ label(rule.basis) }}
-                                    </div>
-                                    <div
-                                        v-if="rule.range_count > 0"
-                                        class="mt-1 text-xs text-muted-foreground"
-                                    >
-                                        Ranges: {{ rule.range_count }}
-                                    </div>
-                                    <div
-                                        v-if="rule.rate_basis_points !== null"
-                                        class="mt-1 text-xs text-muted-foreground"
-                                    >
-                                        Rate bps:
-                                        {{ rule.rate_basis_points }}
-                                    </div>
-                                </td>
-                                <td
-                                    class="px-3 py-3 text-right align-top font-medium"
-                                >
-                                    {{ money(rule.amount_cents) }}
+                                    {{ rule.revenue_code ?? 'Not recorded' }}
                                 </td>
                                 <td class="px-3 py-3 align-top">
-                                    <div class="break-words">
-                                        {{ rule.legal_basis ?? '-' }}
-                                    </div>
-                                    <div
-                                        v-if="rule.policy_note"
-                                        class="mt-2 text-xs text-amber-700 dark:text-amber-200"
-                                    >
-                                        {{ rule.policy_note }}
-                                    </div>
-                                    <details
-                                        v-if="rule.legacy_source_id"
-                                        class="mt-2 text-xs text-muted-foreground"
-                                    >
-                                        <summary class="cursor-pointer">
-                                            Technical source reference
-                                        </summary>
-                                        <p class="mt-1 break-words">
-                                            {{ rule.legacy_source_id }}
-                                        </p>
-                                    </details>
-                                    <div
-                                        v-if="rule.policy_boundaries.length > 0"
-                                        class="mt-2 flex flex-wrap gap-1"
+                                    {{ rule.business_division?.name ?? '—' }}
+                                </td>
+                                <td class="px-3 py-3 align-top">
+                                    <template
+                                        v-if="rule.lines_of_business.length"
                                     >
                                         <span
-                                            v-for="boundary in rule.policy_boundaries"
-                                            :key="boundary"
-                                            class="rounded-md border border-sidebar-border/70 px-2 py-0.5 text-xs leading-snug break-words whitespace-normal text-muted-foreground dark:border-sidebar-border"
+                                            v-for="(
+                                                line, index
+                                            ) in rule.lines_of_business.slice(
+                                                0,
+                                                2,
+                                            )"
+                                            :key="line.id"
                                         >
-                                            {{ label(boundary) }}
+                                            {{ index ? ' · ' : ''
+                                            }}{{ line.name }}
                                         </span>
+                                        <span
+                                            v-if="
+                                                rule.lines_of_business.length >
+                                                2
+                                            "
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            +{{
+                                                rule.lines_of_business.length -
+                                                2
+                                            }}
+                                            more
+                                        </span>
+                                    </template>
+                                    <span v-else>Application-wide</span>
+                                </td>
+                                <td class="px-3 py-3 align-top font-medium">
+                                    {{ amountDisplay(rule) }}
+                                    <div
+                                        v-if="
+                                            rule.calculation_type !== 'fixed' ||
+                                            rule.amount_cents === 0
+                                        "
+                                        class="mt-1 text-xs font-normal text-muted-foreground"
+                                    >
+                                        Set during application review
                                     </div>
+                                </td>
+                                <td class="px-3 py-3 align-top">
+                                    {{ rule.owner }}
+                                    <div
+                                        class="mt-1 text-xs text-muted-foreground"
+                                    >
+                                        {{ label(rule.determination_channel) }}
+                                    </div>
+                                </td>
+                                <td class="px-3 py-3 align-top">
+                                    <Badge
+                                        :variant="
+                                            rule.display_status === 'Active'
+                                                ? 'default'
+                                                : 'outline'
+                                        "
+                                    >
+                                        {{ rule.display_status }}
+                                    </Badge>
                                 </td>
                                 <td class="px-3 py-3 text-right align-top">
                                     <Button

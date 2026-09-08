@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCategory;
 use App\Enums\PermitApplicationType;
 use App\Enums\UserPermission;
@@ -27,7 +28,7 @@ class AssignTreasuryLinesOfBusiness
     public function handle(PermitApplication $permitApplication, array $selections, User $actor): array
     {
         return DB::transaction(function () use ($permitApplication, $selections, $actor): array {
-            $application = PermitApplication::query()->with(['bploRoutingDetermination.works.paymentOrders'])->lockForUpdate()->findOrFail($permitApplication->id);
+            $application = PermitApplication::query()->with(['bploRoutingDetermination.works.paymentOrders.lines'])->lockForUpdate()->findOrFail($permitApplication->id);
             if (! $actor->can(UserPermission::CorrectEvaluationLinesOfBusiness->value)) {
                 throw new LogicException('Only an authorized Treasury actor may assign official Lines of Business.');
             }
@@ -40,6 +41,17 @@ class AssignTreasuryLinesOfBusiness
             $selectedFeeIds = collect($selections)->flatMap(fn (array $selection): array => collect($selection['items'] ?? [])->pluck('fee_rule_id')->all());
             if ($selectedFeeIds->duplicates()->isNotEmpty()) {
                 throw new LogicException('Each Treasury payment item may be selected only once.');
+            }
+            $routingWorks = $application->bploRoutingDetermination->works ?? collect();
+            $paymentOrderFeeIds = $routingWorks
+                ->flatMap->paymentOrders
+                ->whereNull('superseded_at')
+                ->flatMap->lines
+                ->map(fn ($line): mixed => data_get($line->source_snapshot, 'fee_rule_id'))
+                ->filter()
+                ->map(fn (mixed $id): int => (int) $id);
+            if ($selectedFeeIds->intersect($paymentOrderFeeIds)->isNotEmpty()) {
+                throw new LogicException('A fee already determined by a concerned-office Payment Order cannot be added by Treasury.');
             }
             $paymentOrders = $this->paymentOrderSummary->handle($application);
             if ($paymentOrders['all_finalized'] !== true) {
@@ -91,6 +103,9 @@ class AssignTreasuryLinesOfBusiness
                     }
                     if ($rule->category === FeeRuleCategory::Tax) {
                         throw new LogicException('Business Tax is prohibited for New Applications.');
+                    }
+                    if ($rule->determination_channel !== FeeDeterminationChannel::TreasuryLineOfBusiness) {
+                        throw new LogicException('Treasury may add only fees owned by the Treasury Line of Business channel.');
                     }
                     $amount = $item['amount_cents'];
                     if ($amount < 0
@@ -153,6 +168,7 @@ class AssignTreasuryLinesOfBusiness
             ->where('effective_from', '<=', "{$application->application_year}-12-31")
             ->where(fn ($query) => $query->whereNull('effective_until')->orWhere('effective_until', '>=', "{$application->application_year}-01-01"))
             ->where('category', '!=', FeeRuleCategory::Tax->value)
+            ->where('determination_channel', FeeDeterminationChannel::TreasuryLineOfBusiness->value)
             ->where('calculation_type', 'fixed')
             ->orderBy('code')->get()
             ->map(fn (FeeRule $rule): array => ['fee_rule_id' => $rule->id, 'amount_cents' => $rule->amount_cents])

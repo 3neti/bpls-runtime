@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
@@ -39,6 +40,7 @@ class NelsonConcernedOfficeFeeCatalogSeeder extends Seeder
                         'name' => $fee['label'],
                         'category' => FeeRuleCategory::Fee,
                         'scope' => FeeRuleScope::Application,
+                        'determination_channel' => FeeDeterminationChannel::ConcernedOfficePaymentOrder,
                         'calculation_type' => FeeRuleCalculationType::Fixed,
                         'basis' => 'none',
                         'amount_cents' => $fee['default_amount_minor'],

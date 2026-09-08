@@ -58,6 +58,10 @@ type FeeRule = {
     is_active: boolean;
     legal_basis: string | null;
     legacy_source_id: string | null;
+    revenue_code: string | null;
+    owner: string;
+    amount_basis: string;
+    display_status: string;
     line_of_business: {
         id: number;
         code: string | null;
@@ -126,7 +130,7 @@ const breadcrumbs: BreadcrumbItem[] = [
         href: index(),
     },
     {
-        title: props.feeRule.code,
+        title: props.feeRule.name,
         href: show(props.feeRule.id),
     },
 ];
@@ -167,7 +171,7 @@ function basisRange(range: FeeRuleRange): string {
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbs">
-        <Head :title="feeRule.code" />
+        <Head :title="feeRule.name" />
 
         <main class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
             <section class="flex flex-wrap items-start justify-between gap-3">
@@ -176,12 +180,12 @@ function basisRange(range: FeeRuleRange): string {
                         <h1
                             class="text-xl font-semibold break-words text-foreground"
                         >
-                            {{ feeRule.code }}
+                            {{ feeRule.name }}
                         </h1>
                         <Badge
                             :variant="feeRule.is_active ? 'default' : 'outline'"
                         >
-                            {{ feeRule.is_active ? 'Active' : 'Inactive' }}
+                            {{ feeRule.display_status }}
                         </Badge>
                         <Badge v-if="feeRule.catalog_status" variant="outline">
                             {{ label(feeRule.catalog_status) }}
@@ -207,7 +211,9 @@ function basisRange(range: FeeRuleRange): string {
                     <p
                         class="mt-1 max-w-4xl text-sm break-words text-muted-foreground"
                     >
-                        {{ feeRule.name }}
+                        Revenue code:
+                        {{ feeRule.revenue_code ?? 'Not recorded' }} ·
+                        {{ feeRule.owner }} · {{ feeRule.amount_basis }}
                     </p>
                 </div>
 

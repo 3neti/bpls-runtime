@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
@@ -18,11 +19,14 @@ use Illuminate\Support\Collection;
 
 /**
  * @property int $id
+ * @property int|null $fee_catalog_version_id
  * @property int|null $line_of_business_id
+ * @property int|null $business_division_id
  * @property string $code
  * @property string $name
  * @property FeeRuleCategory $category
  * @property FeeRuleScope $scope
+ * @property FeeDeterminationChannel $determination_channel
  * @property FeeRuleCalculationType $calculation_type
  * @property string $basis
  * @property int $amount_cents
@@ -36,11 +40,15 @@ use Illuminate\Support\Collection;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read LineOfBusiness|null $lineOfBusiness
+ * @property-read FeeCatalogVersion|null $catalogVersion
+ * @property-read BusinessDivision|null $businessDivision
+ * @property-read FeeCategory|null $feeCategory
+ * @property-read RevenueAccount|null $revenueAccount
  * @property-read Collection<int, FeeRuleRange> $ranges
  * @property-read Collection<int, FeeRuleReconciliation> $reconciliations
  * @property-read FeeRuleReconciliation|null $currentReconciliation
  */
-#[Fillable(['line_of_business_id', 'code', 'name', 'category', 'scope', 'calculation_type', 'basis', 'amount_cents', 'rate_basis_points', 'effective_from', 'effective_until', 'legal_basis', 'is_active', 'legacy_source_id', 'metadata'])]
+#[Fillable(['fee_catalog_version_id', 'line_of_business_id', 'business_division_id', 'code', 'name', 'category', 'fee_category_id', 'revenue_account_id', 'scope', 'determination_channel', 'calculation_type', 'basis', 'amount_cents', 'rate_basis_points', 'effective_from', 'effective_until', 'legal_basis', 'is_active', 'legacy_source_id', 'metadata'])]
 class FeeRule extends Model
 {
     /** @use HasFactory<FeeRuleFactory> */
@@ -56,6 +64,30 @@ class FeeRule extends Model
     public function lineOfBusiness(): BelongsTo
     {
         return $this->belongsTo(LineOfBusiness::class);
+    }
+
+    /** @return BelongsTo<FeeCatalogVersion, $this> */
+    public function catalogVersion(): BelongsTo
+    {
+        return $this->belongsTo(FeeCatalogVersion::class, 'fee_catalog_version_id');
+    }
+
+    /** @return BelongsTo<BusinessDivision, $this> */
+    public function businessDivision(): BelongsTo
+    {
+        return $this->belongsTo(BusinessDivision::class);
+    }
+
+    /** @return BelongsTo<FeeCategory, $this> */
+    public function feeCategory(): BelongsTo
+    {
+        return $this->belongsTo(FeeCategory::class);
+    }
+
+    /** @return BelongsTo<RevenueAccount, $this> */
+    public function revenueAccount(): BelongsTo
+    {
+        return $this->belongsTo(RevenueAccount::class);
     }
 
     /** @return BelongsToMany<LineOfBusiness, $this> */
@@ -116,6 +148,7 @@ class FeeRule extends Model
         return [
             'category' => FeeRuleCategory::class,
             'scope' => FeeRuleScope::class,
+            'determination_channel' => FeeDeterminationChannel::class,
             'calculation_type' => FeeRuleCalculationType::class,
             'effective_from' => 'date',
             'effective_until' => 'date',
