@@ -12,6 +12,7 @@ use App\Actions\ProjectSyntheticPermitCalendar;
 use App\Actions\ResolveOfficialReceiptProfile;
 use App\Actions\ResolvePermitBusinessAddress;
 use App\Assessment\Price\HistoricalPriceReport;
+use App\Enums\PermitApplicationStatus;
 use App\Enums\ReceiptStatus;
 use App\Enums\UserPermission;
 use App\Evaluation\BusinessPermitEvaluationResolver;
@@ -128,7 +129,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 tracking_reference: $application->tracking_reference,
                 application_year: $application->application_year,
                 type: $application->type->value,
-                status: $application->status->value,
+                status: $this->projectedApplicationStatus($application),
             ),
             applicant: [
                 'business_owner_id' => $application->business->owner->id,
@@ -293,6 +294,18 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 ['key' => 'permit', 'label' => 'Permit'],
             ],
         );
+    }
+
+    private function projectedApplicationStatus(PermitApplication $application): string
+    {
+        $syntheticPermit = $application->provisionalUatPermitCompletion;
+
+        if ($syntheticPermit?->released_at !== null
+            && $syntheticPermit->semantic_classification === 'synthetic_only') {
+            return PermitApplicationStatus::Released->value;
+        }
+
+        return $application->status->value;
     }
 
     private function signatureFacsimileDataUrl(?Media $media): ?string

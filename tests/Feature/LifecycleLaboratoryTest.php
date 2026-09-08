@@ -29,6 +29,7 @@ use App\Data\Application\ApplicationDataResolver;
 use App\Enums\AssessmentDecisionAction;
 use App\Enums\BusinessPermitEvaluationApplicability;
 use App\Enums\BusinessPermitEvaluationSource;
+use App\Enums\PermitApplicationStatus;
 use App\Enums\StakeholderPreviewPersona;
 use App\Enums\TreasuryCollectionChannel;
 use App\Enums\TreasuryCollectionMethod;
@@ -1197,6 +1198,7 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     ];
     expect(data_get($finalState, 'progress.complete'))->toBeTrue()
         ->and(data_get($finalState, 'progress.completed_steps'))->toBe(24)
+        ->and(data_get($finalData, 'identity.status'))->toBe(PermitApplicationStatus::Released->value)
         ->and($parityTotals)->each->toBe($assessment->total_amount_cents)
         ->and(data_get($finalData, 'official_receipts'))->toHaveCount(7)
         ->and(data_get($finalData, 'permit.official_receipts'))->toHaveCount(7)
