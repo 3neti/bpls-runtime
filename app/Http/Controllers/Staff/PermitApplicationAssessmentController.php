@@ -213,6 +213,7 @@ class PermitApplicationAssessmentController extends Controller
             ],
             'can' => [
                 'prepare_payment_schedule' => auth()->user()?->can(UserPermission::PreparePaymentSchedules->value) ?? false,
+                'counter_check_assessment' => auth()->user()?->can(UserPermission::CounterCheckBusinessPermitEvaluations->value) ?? false,
                 'approve_assessment' => $decisionAvailable
                     && (auth()->user()?->can(UserPermission::ApproveAssessments->value) ?? false),
                 'view_payment_schedules' => auth()->user()?->can(UserPermission::ViewPaymentSchedules->value) ?? false,
@@ -489,6 +490,11 @@ class PermitApplicationAssessmentController extends Controller
 
         if ($assessment->decision?->action === AssessmentDecisionAction::ReturnedForCorrection) {
             return 'Returned for correction';
+        }
+
+        if ($assessment->business_permit_evaluation_version_id !== null
+            && $assessment->treasuryCounterCheck === null) {
+            return 'Awaiting Treasury counter-check';
         }
 
         return 'Awaiting Municipal Treasurer approval';

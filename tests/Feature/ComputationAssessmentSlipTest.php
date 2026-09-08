@@ -51,7 +51,9 @@ test('the executable slip component contains no browser-side calculator', functi
 
     expect($component)->toContain('SCHEDULE OF PAYMENTS')
         ->and($component)->toContain('quarter.section')
-        ->and($component)->toContain('BLOCKED — MUNICIPAL FISCAL DECISION')
+        ->and($component)->toContain('Schedule pending municipal fiscal decision')
+        ->and($component)->toContain('Payment schedule policy')
+        ->and($component)->not->toContain('Acknowledged By:')
         ->and($component)->not->toContain('/ 4')
         ->and($component)->not->toContain('reduce(');
 });

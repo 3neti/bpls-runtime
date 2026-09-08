@@ -119,11 +119,10 @@ function dateTime(value: string | null): string {
             <div
                 class="mt-2 text-xs sm:absolute sm:top-6 sm:right-8 sm:text-right"
             >
-                <p class="font-bold">Reference: not officially assigned</p>
-                <p>
-                    Internal Assessment sequence
-                    {{ slip.reference.assessment_sequence }}
+                <p class="font-bold">
+                    Assessment #{{ slip.reference.assessment_sequence }}
                 </p>
+                <p>Official reference pending</p>
             </div>
         </header>
 
@@ -186,8 +185,9 @@ function dateTime(value: string | null): string {
                                     {{
                                         charge.source_type ===
                                         'paperless_payment_order'
-                                            ? `${charge.paperless_payment_order?.office_label} Paperless Payment Order`
-                                            : 'Governed canonical pricing'
+                                            ? charge.paperless_payment_order
+                                                  ?.office_label
+                                            : 'Treasury'
                                     }}
                                 </p>
                             </div>
@@ -251,14 +251,14 @@ function dateTime(value: string | null): string {
                     }}</em>
                 </p>
                 <p
-                    class="mt-1 text-[10px]"
+                    class="mt-1 text-xs font-bold"
                     :class="
                         slip.reconciles ? 'text-emerald-700' : 'text-red-700'
                     "
                 >
                     {{
                         slip.reconciles
-                            ? 'Reconciled: LOB subtotals + application-wide subtotal = Grand Total.'
+                            ? 'Reconciled'
                             : 'RECONCILIATION FAILURE'
                     }}
                 </p>
@@ -278,7 +278,16 @@ function dateTime(value: string | null): string {
                     <strong>Mode of Payment:</strong>
                     {{ slip.schedule_of_payments.payment_mode.toUpperCase() }}
                 </p>
-                <div class="mt-3 overflow-x-auto">
+                <p
+                    v-if="
+                        slip.schedule_of_payments.allocation_status ===
+                        'blocked_municipal_fiscal_decision'
+                    "
+                    class="mt-3 rounded border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+                >
+                    Schedule pending municipal fiscal decision
+                </p>
+                <div v-else class="mt-3 overflow-x-auto">
                     <table
                         class="w-full min-w-[520px] border-collapse text-left text-sm"
                     >
@@ -315,13 +324,20 @@ function dateTime(value: string | null): string {
                         </tbody>
                     </table>
                 </div>
-                <p
-                    class="mt-3 border border-amber-400 bg-amber-50 p-3 text-xs text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+                <details
+                    v-if="
+                        slip.schedule_of_payments.allocation_status ===
+                        'blocked_municipal_fiscal_decision'
+                    "
+                    class="mt-3 text-xs"
                 >
-                    <strong>BLOCKED — MUNICIPAL FISCAL DECISION.</strong>
-                    {{ slip.schedule_of_payments.allocation_note }} No Grand
-                    Total ÷ 4 assumption is used.
-                </p>
+                    <summary class="cursor-pointer font-bold">
+                        Payment schedule policy
+                    </summary>
+                    <p class="mt-2 text-stone-600 dark:text-stone-300">
+                        {{ slip.schedule_of_payments.allocation_note }}
+                    </p>
+                </details>
             </section>
 
             <footer class="grid gap-8 pt-4 text-sm sm:grid-cols-2">
@@ -351,14 +367,6 @@ function dateTime(value: string | null): string {
                         Municipal Treasurer ·
                         {{ dateTime(slip.approved_by?.approved_at ?? null) }}
                     </p>
-                </div>
-                <div class="sm:col-start-2">
-                    <p>Acknowledged By:</p>
-                    <p class="mt-5 border-b border-stone-900 pb-1">
-                        Not yet available
-                    </p>
-                    <p class="text-xs">{{ slip.acknowledgement_note }}</p>
-                    <p class="mt-3">Date: —</p>
                 </div>
             </footer>
         </div>

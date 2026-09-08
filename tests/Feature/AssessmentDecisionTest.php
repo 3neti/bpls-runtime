@@ -14,6 +14,9 @@ use App\Enums\UserRole;
 use App\Models\Assessment;
 use App\Models\AssessmentDecision;
 use App\Models\AssessmentLine;
+use App\Models\BusinessPermitEvaluation;
+use App\Models\BusinessPermitEvaluationCounterCheck;
+use App\Models\BusinessPermitEvaluationVersion;
 use App\Models\FeeRule;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
@@ -203,6 +206,62 @@ test('an assessment detail clearly separates preparation from Treasurer decision
             ->where('assessment.decision.total_amount_cents', 45_000)
             ->where('assessment.payment_schedule_available', true)
         );
+});
+
+test('an evaluation-bound assessment names Treasury counter-check before Municipal Treasurer approval', function () {
+    [, $assessment] = preparedAssessmentFixture();
+    $evaluation = BusinessPermitEvaluation::factory()
+        ->for($assessment->permitApplication)
+        ->create();
+    $version = BusinessPermitEvaluationVersion::factory()
+        ->for($evaluation, 'evaluation')
+        ->create();
+    $assessment->update([
+        'business_permit_evaluation_version_id' => $version->id,
+        'business_permit_evaluation_fingerprint' => $version->fingerprint,
+    ]);
+    $treasury = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewPermitApplications,
+        UserPermission::CounterCheckBusinessPermitEvaluations,
+        UserPermission::ApproveAssessments,
+    ], UserRole::Treasury);
+
+    $this->actingAs($treasury)
+        ->get(route('staff.permit-applications.assessments.show', $assessment))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('assessment.display_status', 'Awaiting Treasury counter-check')
+            ->where('can.counter_check_assessment', true)
+            ->where('can.approve_assessment', false)
+        );
+
+    BusinessPermitEvaluationCounterCheck::factory()
+        ->for($version, 'version')
+        ->for($assessment)
+        ->for($treasury, 'checkedBy')
+        ->create([
+            'assessment_snapshot_hash' => assessmentSnapshotHash($assessment),
+        ]);
+
+    $this->actingAs($treasury)
+        ->get(route('staff.permit-applications.assessments.show', $assessment))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('assessment.display_status', 'Awaiting Municipal Treasurer approval')
+            ->where('can.approve_assessment', true)
+        );
+});
+
+test('the assessment detail uses one slip, one action rail, and collapsed evidence', function () {
+    $page = file_get_contents(resource_path('js/pages/permit-applications/Assessments/Show.vue'));
+
+    expect($page)->toContain('assessment-action-rail')
+        ->and($page)->toContain('assessment-evidence')
+        ->and($page)->toContain('Open Treasury counter-check')
+        ->and($page)->not->toContain('WorkflowStageSummary')
+        ->and($page)->not->toContain('assessment-financial-working-paper')
+        ->and($page)->not->toContain('Recorded assessment');
 });
 
 test('an assessment snapshot accepts only one immutable Treasurer decision', function () {
