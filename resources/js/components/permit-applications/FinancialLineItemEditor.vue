@@ -85,10 +85,6 @@ function money(cents: number): string {
                     :value="option.id"
                 >
                     {{ option.name }}
-                    <template v-if="option.account_code">
-                        · {{ option.account_code }}</template
-                    >
-                    · {{ money(option.default_amount_cents) }}
                 </option>
             </select>
             <Input

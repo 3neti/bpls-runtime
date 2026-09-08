@@ -100,7 +100,9 @@ test('Payment Order editor keeps preview provenance concise and explains an empt
     expect($taskSheet)->toContain('Ipil source-backed fee menu')
         ->not->toContain('Synthetic preview fee menu · awaiting Nelson source')
         ->and($editor)->toContain('No preview fee menu is configured for this office. Awaiting the')
-        ->and($editor)->toContain('Nelson schedule.');
+        ->and($editor)->toContain('Nelson schedule.')
+        ->and($editor)->not->toContain('option.account_code')
+        ->and($editor)->not->toContain('money(option.default_amount_cents)');
 });
 
 test('Nelson presentation separates applicant description from Treasury classification', function () {
