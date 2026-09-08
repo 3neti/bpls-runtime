@@ -40,7 +40,7 @@ final class BuildFeeMatrixQuickLook
                 'catalogVersion',
                 'currentReconciliation',
                 'lineOfBusiness',
-                'lineOfBusinesses:id',
+                'lineOfBusinesses',
                 'officeAssignments',
                 'revenueAccount',
             ])

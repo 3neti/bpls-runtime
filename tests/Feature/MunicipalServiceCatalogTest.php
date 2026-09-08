@@ -1,15 +1,18 @@
 <?php
 
+use App\Actions\BuildFeeMatrixQuickLook;
 use App\Actions\BuildMunicipalPriceList;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Assessment\ApplicableFeeRuleQuery;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleExecutionStatus;
 use App\Enums\FeeRulePublicationSource;
+use App\Enums\FeeRuleScope;
 use App\Enums\PermitApplicationType;
 use App\Enums\UserPermission;
 use App\Models\FeeRule;
 use App\Models\FeeRuleReconciliation;
+use App\Models\LineOfBusiness;
 use App\Models\OfficeChargeContribution;
 use App\Models\PermitApplication;
 use App\Models\User;
@@ -24,6 +27,20 @@ function municipalPriceList(bool $internal = false): array
         asOf: Carbon::parse('2026-08-28'),
     );
 }
+
+it('keeps Line of Business names when building application fee catalogue labels', function () {
+    $lineOfBusiness = LineOfBusiness::factory()->create(['name' => 'BANKING SERVICES']);
+    $feeRule = FeeRule::factory()->create(['scope' => FeeRuleScope::LineOfBusiness]);
+    $feeRule->lineOfBusinesses()->attach($lineOfBusiness);
+
+    $matrix = app(BuildFeeMatrixQuickLook::class)->handle(feeRuleId: $feeRule->id);
+    $fee = collect($matrix['line_of_businesses'])->flatMap(
+        fn (array $group): array => $group['fees'],
+    )->sole();
+
+    expect($fee['applies_to_label'])->toBe('Banking Services')
+        ->and($fee['line_of_business_ids'])->toBe([$lineOfBusiness->id]);
+});
 
 it('publishes exactly the five approved BPLS service offerings and only New can start online', function () {
     $this->seed(RevenueCodeFeeCatalogSeeder::class);
