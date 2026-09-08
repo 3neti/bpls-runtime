@@ -240,6 +240,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('permit-applications.clearances.complete');
         Route::post('permit-applications/{permitApplication}/documents', [PermitApplicationDocumentController::class, 'store'])
             ->name('permit-applications.documents.store');
+        Route::get('permit-applications/{permitApplication}/documents/{document}/view', [PermitApplicationDocumentController::class, 'view'])
+            ->name('permit-applications.documents.view');
         Route::get('permit-applications/{permitApplication}/documents/{document}/download', [PermitApplicationDocumentController::class, 'download'])
             ->name('permit-applications.documents.download');
         Route::get('fee-rules', [FeeRuleController::class, 'index'])

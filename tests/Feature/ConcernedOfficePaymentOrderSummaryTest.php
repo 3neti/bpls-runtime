@@ -110,6 +110,8 @@ test('missing or conflicting current orders withhold the finalized subtotal and 
 test('Nelson assessment presentation uses the Payment Order stage and honest Treasury boundary copy', function () {
     $page = file_get_contents(resource_path('js/pages/business-permit-evaluations/Show.vue'));
     $summary = file_get_contents(resource_path('js/components/permit-applications/ConcernedOfficePaymentOrderSummary.vue'));
+    $routingTask = file_get_contents(resource_path('js/components/permit-applications/BploRoutingTaskSheet.vue'));
+    $documentReference = file_get_contents(resource_path('js/components/permit-applications/ApplicantDocumentReference.vue'));
 
     expect($page)->toContain('!officeWorkspace && !isNelsonPath')
         ->and($page)->toContain("isNelsonPath ? 'Payment Orders' : 'Evaluation'")
@@ -119,6 +121,13 @@ test('Nelson assessment presentation uses the Payment Order stage and honest Tre
         ->and($page)->toContain('Application details')
         ->and($page)->toContain('Municipal facts')
         ->and($summary)->toContain('Payment Order summary')
+        ->and($routingTask)->toContain('treasury-classification-workspace')
+        ->and($routingTask)->toContain('Assign official Lines of Business')
+        ->and($routingTask)->toContain('Payment items for selected LOB')
+        ->and($routingTask)->toContain('treasury-payment-order-reference')
+        ->and($routingTask)->toContain('treasury-routing-evidence')
+        ->and($documentReference)->toContain('Applicant documents')
+        ->and($documentReference)->toContain('View ${document.label}')
         ->and($summary)->toContain('Office Payment Order subtotal')
         ->and($summary)->not->toContain('Assessment total')
         ->and($summary)->toContain("'TBD'")

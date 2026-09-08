@@ -52,6 +52,24 @@ class BusinessPermitEvaluationController extends Controller
         $evaluation = $permitApplication->businessPermitEvaluation()->first();
         $routingTask = $buildRoutingTask->handle($permitApplication, auth()->user())->toArray();
 
+        $applicationData = $applicationDataResolver->resolve($permitApplication, auth()->user())->toArray();
+        $documentPayload = $applicationData['applicant_documents'] ?? [];
+        $applicantDocuments = [];
+        if (is_array($documentPayload)) {
+            foreach ($documentPayload as $document) {
+                if (! is_array($document) || ! is_int($document['document_id'] ?? null)) {
+                    continue;
+                }
+
+                $applicantDocuments[] = [
+                    ...$document,
+                    'view_url' => route('staff.permit-applications.documents.view', [$permitApplication, $document['document_id']], false),
+                    'download_url' => route('staff.permit-applications.documents.download', [$permitApplication, $document['document_id']], false),
+                ];
+            }
+        }
+        $applicationData['applicant_documents'] = $applicantDocuments;
+
         return Inertia::render('business-permit-evaluations/Show', [
             'evaluation' => $evaluation instanceof BusinessPermitEvaluation
                 ? $describe->handle($evaluation, auth()->user(), 'internal')
@@ -61,7 +79,7 @@ class BusinessPermitEvaluationController extends Controller
             'routingSuggestion' => $routingTask['suggestion'],
             'routingOfficeOptions' => $routingTask['office_options'],
             'routingTask' => $routingTask,
-            'applicationData' => $applicationDataResolver->resolve($permitApplication, auth()->user())->toArray(),
+            'applicationData' => $applicationData,
             'applicationDocument' => $buildExecutableDocument->handle($permitApplication, auth()->user()),
             'lineOfBusinesses' => LineOfBusiness::query()->availableToMunicipalCatalog()->orderBy('name')->get(['id', 'code', 'name']),
             'can' => $this->capabilities(),

@@ -2,6 +2,7 @@
 import { router, useHttp } from '@inertiajs/vue3';
 import { ExternalLink, Printer, QrCode, ReceiptText } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import type { ApplicantDocumentReferenceItem } from '@/components/permit-applications/ApplicantDocumentReference.vue';
 import ApplicationAttachmentRail from '@/components/permit-applications/ApplicationAttachmentRail.vue';
 import ApplicationDocumentNavigator from '@/components/permit-applications/ApplicationDocumentNavigator.vue';
 import ApplicationWorkNote from '@/components/permit-applications/ApplicationWorkNote.vue';
@@ -98,7 +99,7 @@ type ApplicationData = {
     post_payment: Record<string, any>;
     permit: PermitPresentation;
     documents: Record<string, any>[];
-    applicant_documents: Record<string, any>[];
+    applicant_documents: ApplicantDocumentReferenceItem[];
     signature_evidence: Record<string, any>[];
     schedule_of_fees: MunicipalScheduleOfFees;
     attachments: Attachment[];
@@ -230,7 +231,25 @@ const officePaymentOrderNote = computed<WorkNote | null>(() => {
 const officeApplicationNote = computed(
     () => officePaymentOrderNote.value ?? currentWorkNote.value,
 );
+const officeTaskLabel = computed(() =>
+    props.routingTask?.financial_editor?.can_assign_treasury_lobs
+        ? 'Treasury Classification'
+        : 'Payment Order',
+);
 const applicationStatusLabel = computed(() => {
+    if (
+        props.mode === 'office' &&
+        props.routingTask?.financial_editor?.can_assign_treasury_lobs
+    ) {
+        const count =
+            props.routingTask.financial_editor.treasury_assignments?.length ??
+            0;
+
+        return count
+            ? `${count} ${count === 1 ? 'Line of Business' : 'Lines of Business'}`
+            : 'Treasury classification pending';
+    }
+
     if (props.mode === 'office' && props.routingTask?.routing?.works) {
         const works = props.routingTask.routing.works as {
             payment_orders: unknown[];
@@ -573,7 +592,7 @@ function permitBlockerLabel(blocker: string): string {
                 class="rounded-md px-3 py-2 text-sm font-bold"
                 @click="officeMobileView = 'payment-order'"
             >
-                Payment Order
+                {{ officeTaskLabel }}
             </button>
         </div>
 
@@ -1275,6 +1294,7 @@ function permitBlockerLabel(blocker: string): string {
                     activeTab === 'processing'
                 "
                 :task="routingTask"
+                :documents="application.applicant_documents"
                 mode="sheet"
                 class="self-start lg:sticky lg:top-4"
                 :class="{

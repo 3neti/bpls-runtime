@@ -4,6 +4,8 @@ import { Check, ChevronRight, FileClock, Route } from '@lucide/vue';
 import { useNow } from '@vueuse/core';
 import { computed, reactive, ref } from 'vue';
 import { store as recordBploRouting } from '@/actions/App/Http/Controllers/Staff/BploRoutingDeterminationController';
+import ApplicantDocumentReference from '@/components/permit-applications/ApplicantDocumentReference.vue';
+import type { ApplicantDocumentReferenceItem } from '@/components/permit-applications/ApplicantDocumentReference.vue';
 import FinancialLineItemEditor from '@/components/permit-applications/FinancialLineItemEditor.vue';
 import SignatureFacsimileCapture from '@/components/SignatureFacsimileCapture.vue';
 import { Badge } from '@/components/ui/badge';
@@ -108,8 +110,9 @@ const props = withDefaults(
     defineProps<{
         task: BploRoutingTask;
         mode?: 'embedded' | 'sheet';
+        documents?: ApplicantDocumentReferenceItem[];
     }>(),
-    { mode: 'sheet' },
+    { mode: 'sheet', documents: () => [] },
 );
 
 const page = usePage();
@@ -234,6 +237,27 @@ const finalizedOfficeCount = computed(
         (props.task.routing?.works ?? []).filter(
             (work) => work.payment_orders.length > 0,
         ).length,
+);
+const isTreasuryActor = computed(
+    () => props.task.financial_editor.can_assign_treasury_lobs,
+);
+const paymentOrderTotal = computed(() =>
+    (props.task.routing?.works ?? []).reduce(
+        (total, work) =>
+            total +
+            work.payment_orders.reduce(
+                (officeTotal, order) => officeTotal + order.total_amount_cents,
+                0,
+            ),
+        0,
+    ),
+);
+const allPaymentOrdersFinalized = computed(
+    () =>
+        (props.task.routing?.works.length ?? 0) > 0 &&
+        (props.task.routing?.works ?? []).every(
+            (work) => work.payment_orders.length > 0,
+        ),
 );
 const clock = useNow({ interval: 1_000 });
 const countdown = computed(() => {
@@ -410,9 +434,11 @@ const treasurySelectionsReady = computed(
             <h2 id="bplo-routing-task-title" class="mt-1 text-xl font-black">
                 {{
                     task.application.commissioned_path && task.routing
-                        ? authorizedPaymentOrderWorkIds.size
-                            ? `${displayedRoutingWorks[0].office_label} Payment Order`
-                            : 'Payment Orders'
+                        ? isTreasuryActor
+                            ? 'Treasury classification'
+                            : authorizedPaymentOrderWorkIds.size
+                              ? `${displayedRoutingWorks[0].office_label} Payment Order`
+                              : 'Payment Orders'
                         : task.routing
                           ? task.application.commissioned_path
                               ? 'Routing confirmed'
@@ -431,8 +457,17 @@ const treasurySelectionsReady = computed(
                 <template
                     v-if="task.application.commissioned_path && task.routing"
                 >
-                    {{ finalizedOfficeCount }} of
-                    {{ task.routing.works.length }} finalized
+                    <template v-if="isTreasuryActor">
+                        {{
+                            task.financial_editor.treasury_assignments.length
+                                ? `${task.financial_editor.treasury_assignments.length} Lines of Business assigned`
+                                : 'Assign official Lines of Business'
+                        }}
+                    </template>
+                    <template v-else>
+                        {{ finalizedOfficeCount }} of
+                        {{ task.routing.works.length }} finalized
+                    </template>
                 </template>
                 <template v-else>
                     {{ task.application.business_name }} ·
@@ -496,7 +531,243 @@ const treasurySelectionsReady = computed(
                 </p>
             </details>
 
+            <section
+                v-if="isTreasuryActor && task.application.commissioned_path"
+                class="grid gap-5 rounded-xl border-2 border-primary/40 bg-primary/5 p-4 sm:p-5"
+                aria-labelledby="treasury-classification-heading"
+                data-testid="treasury-classification-workspace"
+            >
+                <div>
+                    <p
+                        class="text-xs font-bold tracking-[0.16em] text-primary uppercase"
+                    >
+                        Current task
+                    </p>
+                    <h3
+                        id="treasury-classification-heading"
+                        class="mt-1 text-xl font-black"
+                    >
+                        Assign official Lines of Business
+                    </h3>
+                    <p class="mt-2 text-sm leading-6 text-muted-foreground">
+                        Classify the applicant’s frozen business description,
+                        then review the payment items for each selected Line of
+                        Business.
+                    </p>
+                </div>
+
+                <div class="rounded-lg border bg-background p-4">
+                    <p
+                        class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                    >
+                        Applicant’s frozen business description
+                    </p>
+                    <p class="mt-2 text-sm leading-6 font-medium">
+                        {{
+                            task.application.business_activity_description ??
+                            'Not recorded'
+                        }}
+                    </p>
+                </div>
+
+                <ApplicantDocumentReference :documents="documents" />
+
+                <div
+                    v-if="task.financial_editor.treasury_assignments.length"
+                    class="grid gap-3"
+                >
+                    <h4 class="font-bold">Assigned Lines of Business</h4>
+                    <article
+                        v-for="assignment in task.financial_editor
+                            .treasury_assignments"
+                        :key="assignment.id"
+                        class="rounded-lg border bg-background p-4"
+                    >
+                        <strong>{{ assignment.name }}</strong>
+                        <p
+                            v-for="item in assignment.items"
+                            :key="item.name"
+                            class="mt-2 flex justify-between gap-3 text-sm"
+                        >
+                            <span>{{ item.name }}</span>
+                            <span class="font-semibold">{{
+                                money(item.amount_cents)
+                            }}</span>
+                        </p>
+                    </article>
+                </div>
+
+                <template v-else-if="allPaymentOrdersFinalized">
+                    <div class="grid gap-2">
+                        <label
+                            for="treasury-line-of-business"
+                            class="font-bold"
+                        >
+                            Select Line of Business
+                        </label>
+                        <div class="flex flex-col gap-2 sm:flex-row">
+                            <select
+                                id="treasury-line-of-business"
+                                v-model="selectedTreasuryLob"
+                                class="h-11 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
+                            >
+                                <option :value="null">
+                                    Choose an official classification
+                                </option>
+                                <option
+                                    v-for="line in task.financial_editor
+                                        .line_of_business_options"
+                                    :key="line.id"
+                                    :value="line.id"
+                                >
+                                    {{ line.name }}
+                                </option>
+                            </select>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                class="h-11"
+                                :disabled="selectedTreasuryLob === null"
+                                @click="addTreasuryLob"
+                            >
+                                Add Line of Business
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div
+                        v-if="treasurySelections.length"
+                        class="grid gap-3 border-t border-primary/20 pt-5"
+                    >
+                        <h4 class="text-lg font-black">
+                            Payment items for selected LOB
+                        </h4>
+                        <article
+                            v-for="selection in treasurySelections"
+                            :key="selection.line_of_business_id"
+                            class="grid gap-3 rounded-lg border bg-background p-4"
+                        >
+                            <div class="flex items-start justify-between gap-3">
+                                <strong>{{
+                                    task.financial_editor.line_of_business_options.find(
+                                        (line) =>
+                                            line.id ===
+                                            selection.line_of_business_id,
+                                    )?.name
+                                }}</strong>
+                                <button
+                                    type="button"
+                                    class="shrink-0 text-xs font-semibold text-destructive"
+                                    @click="
+                                        removeTreasuryLob(
+                                            selection.line_of_business_id,
+                                        )
+                                    "
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                            <FinancialLineItemEditor
+                                v-model="selection.items"
+                                :options="
+                                    treasuryFeeOptions(
+                                        selection.line_of_business_id,
+                                    )
+                                "
+                            />
+                        </article>
+                    </div>
+
+                    <Button
+                        type="button"
+                        size="lg"
+                        :disabled="!treasurySelectionsReady"
+                        @click="confirmTreasuryLobs"
+                    >
+                        Confirm Treasury Classification
+                    </Button>
+                </template>
+
+                <div
+                    v-else
+                    class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+                >
+                    Treasury classification becomes available after every
+                    concerned office finalizes its Payment Order.
+                </div>
+            </section>
+
+            <details
+                v-if="isTreasuryActor && task.application.commissioned_path"
+                class="group rounded-lg border bg-background"
+                data-testid="treasury-payment-order-reference"
+            >
+                <summary
+                    class="flex cursor-pointer list-none items-center justify-between gap-3 p-3 text-sm font-medium"
+                >
+                    <span>
+                        Payment Order reference
+                        <span class="ml-1 text-muted-foreground">
+                            {{ finalizedOfficeCount }} orders ·
+                            {{ money(paymentOrderTotal) }}
+                        </span>
+                    </span>
+                    <ChevronRight
+                        class="size-4 shrink-0 transition-transform group-open:rotate-90"
+                        aria-hidden="true"
+                    />
+                </summary>
+                <dl class="grid gap-2 border-t p-3 text-sm">
+                    <div
+                        v-for="work in task.routing.works"
+                        :key="work.id"
+                        class="flex justify-between gap-3"
+                    >
+                        <dt>{{ work.office_label }}</dt>
+                        <dd class="font-semibold">
+                            {{
+                                work.payment_orders.length
+                                    ? money(
+                                          work.payment_orders.reduce(
+                                              (total, order) =>
+                                                  total +
+                                                  order.total_amount_cents,
+                                              0,
+                                          ),
+                                      )
+                                    : 'Pending'
+                            }}
+                        </dd>
+                    </div>
+                </dl>
+            </details>
+
+            <details
+                v-if="isTreasuryActor && task.application.commissioned_path"
+                class="group rounded-lg border bg-background"
+                data-testid="treasury-routing-evidence"
+            >
+                <summary
+                    class="flex cursor-pointer list-none items-center justify-between gap-3 p-3 text-sm font-medium"
+                >
+                    Evidence
+                    <ChevronRight
+                        class="size-4 transition-transform group-open:rotate-90"
+                        aria-hidden="true"
+                    />
+                </summary>
+                <div class="grid gap-1 border-t p-3 text-sm">
+                    <strong>Routing record</strong>
+                    <span class="text-muted-foreground">
+                        Recorded by BPLO · {{ task.routing.works.length }}
+                        concerned offices ·
+                        {{ dateTime(task.routing.determined_at) }}
+                    </span>
+                </div>
+            </details>
+
             <div
+                v-if="!isTreasuryActor || !task.application.commissioned_path"
                 data-testid="recorded-concerned-office-list"
                 :class="
                     task.application.commissioned_path
@@ -624,13 +895,13 @@ const treasurySelectionsReady = computed(
             </div>
 
             <details
-                v-if="task.application.commissioned_path"
+                v-if="task.application.commissioned_path && !isTreasuryActor"
                 class="group rounded-lg border bg-background"
             >
                 <summary
                     class="flex cursor-pointer list-none items-center justify-between gap-3 p-3 text-sm font-medium"
                 >
-                    BPLO routing details
+                    Routing record
                     <ChevronRight
                         class="size-4 transition-transform group-open:rotate-90"
                         aria-hidden="true"
@@ -645,6 +916,7 @@ const treasurySelectionsReady = computed(
 
             <section
                 v-if="
+                    !task.application.commissioned_path &&
                     task.financial_editor.can_assign_treasury_lobs &&
                     task.routing.works.every(
                         (work) => work.payment_orders.length > 0,

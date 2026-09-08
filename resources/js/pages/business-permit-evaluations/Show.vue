@@ -907,7 +907,11 @@ function submitPrepareAssessment(): void {
                     :financial-lock="evaluation.financial_lock"
                 />
                 <div
-                    v-if="!officeWorkspace && isNelsonPath"
+                    v-if="
+                        !officeWorkspace &&
+                        isNelsonPath &&
+                        !routingTask.financial_editor.can_assign_treasury_lobs
+                    "
                     class="grid min-w-0 gap-5 lg:grid-cols-2"
                 >
                     <ConcernedOfficePaymentOrderSummary
@@ -1810,9 +1814,10 @@ function submitPrepareAssessment(): void {
                     v-if="
                         !officeWorkspace &&
                         (!showExecutableOfficeWorkspace ||
-                            can.counter_check ||
-                            can.prepare_assessment ||
-                            latestAssessment)
+                            latestAssessment ||
+                            (can.prepare_assessment &&
+                                !routingTask.financial_editor
+                                    .can_assign_treasury_lobs))
                     "
                     class="grid min-w-0 gap-4 xl:grid-cols-2"
                 >

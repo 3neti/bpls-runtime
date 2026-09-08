@@ -144,7 +144,18 @@ test('authorized staff can download only documents belonging to the requested ap
         ->assertOk()
         ->assertDownload('evidence.pdf');
 
+    $viewResponse = $this->actingAs($user)
+        ->get(route('staff.permit-applications.documents.view', [$application, $document]))
+        ->assertOk()
+        ->assertHeader('content-type', 'application/pdf');
+
+    expect($viewResponse->headers->get('content-disposition'))->toContain('inline');
+
     $this->actingAs($user)
         ->get(route('staff.permit-applications.documents.download', [$otherApplication, $document]))
+        ->assertNotFound();
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.documents.view', [$otherApplication, $document]))
         ->assertNotFound();
 });

@@ -2,6 +2,7 @@
 
 use App\Actions\DefineBusinessPermitEvaluationItem;
 use App\Actions\InitializeBusinessPermitEvaluation;
+use App\Actions\StorePermitApplicationDocument;
 use App\Enums\BusinessPermitEvaluationApplicability;
 use App\Enums\BusinessPermitEvaluationItemType;
 use App\Enums\BusinessPermitEvaluationSource;
@@ -13,6 +14,8 @@ use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
 function httpEvaluationFixture(?User $submitter = null): array
@@ -35,7 +38,13 @@ function httpEvaluationFixture(?User $submitter = null): array
 }
 
 it('renders the same typed Evaluator product surface through an authorized staff lens', function () {
+    Storage::fake('local');
     $fixture = httpEvaluationFixture();
+    $document = app(StorePermitApplicationDocument::class)->handle($fixture['application'], [
+        'label' => 'DTI registration',
+        'document_type' => 'dti_registration',
+        'file' => UploadedFile::fake()->create('dti-registration.pdf', 24, 'application/pdf'),
+    ], $fixture['submitter']);
     $viewer = userWithPermissions([
         UserPermission::AccessStaff,
         UserPermission::ViewBusinessPermitEvaluations,
@@ -52,6 +61,9 @@ it('renders the same typed Evaluator product surface through an authorized staff
             ->where('evaluation.applicant_declaration.0.line_of_business_name', 'Retail')
             ->where('evaluation.version.fingerprint_current', true)
             ->where('applicationData.identity.application_id', $fixture['application']->id)
+            ->where('applicationData.applicant_documents.0.document_id', $document->id)
+            ->where('applicationData.applicant_documents.0.view_url', route('staff.permit-applications.documents.view', [$fixture['application'], $document], false))
+            ->where('applicationData.applicant_documents.0.download_url', route('staff.permit-applications.documents.download', [$fixture['application'], $document], false))
             ->where('applicationDocument.identity.application_id', $fixture['application']->id)
             ->where('can.correct_lines_of_business', false));
 });
