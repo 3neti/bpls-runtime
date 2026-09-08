@@ -59,6 +59,8 @@ class NelsonConcernedOfficeFeeCatalogSeeder extends Seeder
                             'currency' => $catalog['currency'],
                             'application_year' => $period['application_year'],
                             'responsible_office_code' => $fee['office_code'],
+                            'municipal_account_code' => $fee['account_code'],
+                            'source_reference_status' => 'provisional_transcription',
                             'assessment_selection' => 'concerned_office_payment_order_only',
                             'inspection_in_scope' => false,
                         ],

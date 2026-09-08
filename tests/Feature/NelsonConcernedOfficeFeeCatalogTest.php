@@ -25,7 +25,7 @@ test('versioned Nelson preview catalog materializes idempotent year-bound FeeRul
         ->orderBy('code')
         ->get();
 
-    expect($rules)->toHaveCount(10)
+    expect($rules)->toHaveCount(46)
         ->and($rules->pluck('effective_from')->map->format('Y')->unique()->values()->all())->toBe(['2025', '2026'])
         ->and($rules->every(fn (FeeRule $rule): bool => $rule->effective_until?->year === $rule->effective_from->year))->toBeTrue()
         ->and($rules->every(fn (FeeRule $rule): bool => data_get($rule->metadata, 'classification') === 'synthetic_preview'))->toBeTrue()
@@ -33,7 +33,7 @@ test('versioned Nelson preview catalog materializes idempotent year-bound FeeRul
         ->and($rules->every(fn (FeeRule $rule): bool => strlen((string) data_get($rule->metadata, 'catalog_digest_sha256')) === 64))->toBeTrue()
         ->and(app(ApplicableFeeRuleQuery::class)->forApplicationFacts(PermitApplicationType::New, 2025)
             ->pluck('code')->intersect($rules->pluck('code'))->isEmpty())->toBeTrue()
-        ->and(app(InspectBplsInstallation::class)->handle()['price_list']['synthetic_preview_payment_order_fee_rule_count'])->toBe(10);
+        ->and(app(InspectBplsInstallation::class)->handle()['price_list']['synthetic_preview_payment_order_fee_rule_count'])->toBe(46);
 });
 
 test('concerned offices receive only their current application-year preview fee options', function () {
@@ -50,10 +50,12 @@ test('concerned offices receive only their current application-year preview fee 
     ]);
     $historicalEditor = app(BuildBploRoutingTask::class)->handle($historicalApplication, null)->toArray()['financial_editor'];
 
-    expect($editor['catalog_status'])->toBe('awaiting_nelson_source')
-        ->and(collect($editor['office_fee_options']['engineering'])->pluck('code')->all())->toBe([
+    expect($editor['catalog_status'])->toBe('source_reference_received_pending_validation')
+        ->and(collect($editor['office_fee_options']['engineering'])->pluck('code')->all())->toContain(
             'LAB-NELSON-ENGINEERING-REGULATORY',
-        ])
+            'LAB-IPIL-ENGINEERING-BUILDING-PERMIT',
+            'LAB-IPIL-ENGINEERING-ELECTRICAL-PERMIT',
+        )
         ->and(collect($editor['office_fee_options']['health'])->pluck('code')->all())->toBe([
             'LAB-NELSON-HEALTH-CERTIFICATE',
             'LAB-NELSON-HEALTH-SANITARY',
@@ -61,10 +63,13 @@ test('concerned offices receive only their current application-year preview fee 
         ->and(collect($editor['office_fee_options']['menro'])->pluck('code')->all())->toBe([
             'LAB-NELSON-MENRO-SOLID-WASTE',
         ])
-        ->and(collect($editor['office_fee_options']['assessor'])->pluck('code')->all())->toBe([
+        ->and(collect($editor['office_fee_options']['assessor'])->pluck('code')->all())->toContain(
             'LAB-NELSON-ASSESSOR-WEIGHTS-MEASURES',
-        ])
-        ->and(collect($editor['office_fee_options'])->flatten(1))->toHaveCount(5);
+            'LAB-IPIL-ASSESSOR-CERTIFICATION',
+            'LAB-IPIL-ASSESSOR-TRUE-COPY-TAX-DECLARATION',
+        )
+        ->and(collect($editor['office_fee_options']['engineering'])->firstWhere('code', 'LAB-IPIL-ENGINEERING-BUILDING-PERMIT')['account_code'])->toBe('4-02-01-010-06')
+        ->and(collect($editor['office_fee_options'])->flatten(1))->toHaveCount(23);
     expect(collect($historicalEditor['office_fee_options'])->flatten(1))->toBeEmpty();
 });
 
@@ -92,7 +97,7 @@ test('Payment Order editor keeps preview provenance concise and explains an empt
     $taskSheet = file_get_contents(resource_path('js/components/permit-applications/BploRoutingTaskSheet.vue'));
     $editor = file_get_contents(resource_path('js/components/permit-applications/FinancialLineItemEditor.vue'));
 
-    expect($taskSheet)->toContain('Preview fee menu')
+    expect($taskSheet)->toContain('Ipil source-backed fee menu')
         ->not->toContain('Synthetic preview fee menu · awaiting Nelson source')
         ->and($editor)->toContain('No preview fee menu is configured for this office. Awaiting the')
         ->and($editor)->toContain('Nelson schedule.');

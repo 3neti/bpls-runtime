@@ -29,7 +29,7 @@ final class NelsonConcernedOfficeFeeCatalog
             || ! $this->nonEmptyString($catalog['catalog_version'] ?? null)
             || ($catalog['classification'] ?? null) !== 'synthetic_preview'
             || ($catalog['production_authority'] ?? null) !== false
-            || ($catalog['production_catalog_status'] ?? null) !== 'awaiting_nelson_source'
+            || ($catalog['production_catalog_status'] ?? null) !== 'source_reference_received_pending_validation'
             || ($catalog['currency'] ?? null) !== 'PHP') {
             throw new UnexpectedValueException('The Nelson concerned-office preview fee catalog boundary is invalid.');
         }
@@ -83,7 +83,7 @@ final class NelsonConcernedOfficeFeeCatalog
         return $periods;
     }
 
-    /** @return list<array{code: string, label: string, office_code: string, default_amount_minor: int}> */
+    /** @return list<array{code: string, label: string, office_code: string, default_amount_minor: int, account_code: ?string}> */
     private function fees(mixed $configured): array
     {
         if (! is_array($configured) || ! array_is_list($configured) || $configured === []) {
@@ -98,7 +98,8 @@ final class NelsonConcernedOfficeFeeCatalog
                 || ! $this->nonEmptyString($fee['label'] ?? null)
                 || ! $this->nonEmptyString($fee['office_code'] ?? null)
                 || ! is_int($fee['default_amount_minor'] ?? null)
-                || $fee['default_amount_minor'] < 0) {
+                || $fee['default_amount_minor'] < 0
+                || (array_key_exists('account_code', $fee) && ! $this->nonEmptyString($fee['account_code']))) {
                 throw new UnexpectedValueException('Each preview fee requires a code, label, office, and non-negative integer minor amount.');
             }
 
@@ -121,13 +122,14 @@ final class NelsonConcernedOfficeFeeCatalog
                 'label' => $fee['label'],
                 'office_code' => $fee['office_code'],
                 'default_amount_minor' => $fee['default_amount_minor'],
+                'account_code' => isset($fee['account_code']) ? (string) $fee['account_code'] : null,
             ];
         }
 
         return $fees;
     }
 
-    /** @param list<array{code: string, label: string, office_code: string, default_amount_minor: int}> $fees */
+    /** @param list<array{code: string, label: string, office_code: string, default_amount_minor: int, account_code: ?string}> $fees */
     private function assertOfficeMappings(array $fees): void
     {
         $feeOwners = [];

@@ -2,8 +2,29 @@ schema_version: 1
 catalog_version: nelson-concerned-office-preview-v1
 classification: synthetic_preview
 production_authority: false
-production_catalog_status: awaiting_nelson_source
+production_catalog_status: source_reference_received_pending_validation
 currency: PHP
+source_reference:
+  received_on: '2026-09-08'
+  authority: Municipality of Ipil paper Payment Order specimens supplied for walkthrough
+  transcription_status: provisional
+  amount_authority: handwritten specimen amounts are not catalog defaults
+  reference_only_offices:
+    mpdc:
+      - { label: MPDC Certification, account_code: 4-02-01-040-05-13 }
+      - { label: Zoning Certification, account_code: 4-02-01-040-05-13-1 }
+      - { label: Locational Clearance, account_code: 4-02-01-040-05-13-2 }
+      - { label: MPDC Inspection, account_code: 4-02-01-100-02 }
+      - { label: Verification Fee, account_code: 4-02-01-110-06 }
+      - { label: Processing Fee, account_code: 4-02-130-07 }
+      - { label: Approval of Subdivision and Projects, account_code: 4-02-01-010-11-10 }
+      - { label: Land Use Reclassification, account_code: 4-02-01-010-11-10 }
+    treasury:
+      - CTC Difference
+      - Sanitary Permit Fee
+      - Mayors Permit Fee
+      - Solid Waste Management Fee
+      - Weight and Measure
 periods:
   - application_year: 2025
     effective_from: '2025-01-01'
@@ -16,6 +37,42 @@ fees:
     label: Engineering Regulatory Fee
     office_code: engineering
     default_amount_minor: 12500
+    account_code: 4-02-01-040-05-3
+  - code: LAB-IPIL-ENGINEERING-BUILDING-PERMIT
+    label: Building Permit
+    office_code: engineering
+    default_amount_minor: 0
+    account_code: 4-02-01-010-06
+  - code: LAB-IPIL-ENGINEERING-FENCING-PERMIT
+    label: Fencing Permit
+    office_code: engineering
+    default_amount_minor: 0
+    account_code: 4-02-01-010-06-1
+  - code: LAB-IPIL-ENGINEERING-CERTIFICATE-OCCUPANCY
+    label: Certificate of Occupancy
+    office_code: engineering
+    default_amount_minor: 0
+    account_code: 4-02-01-010-06-2
+  - code: LAB-IPIL-ENGINEERING-ELECTRONIC-PERMIT
+    label: Electronic Permit
+    office_code: engineering
+    default_amount_minor: 0
+    account_code: 4-02-01-010-26-3-1
+  - code: LAB-IPIL-ENGINEERING-ELECTRICAL-PERMIT
+    label: Electrical Permit
+    office_code: engineering
+    default_amount_minor: 0
+    account_code: 4-02-01-010-06-3-2
+  - code: LAB-IPIL-ENGINEERING-MECHANICAL-PERMIT
+    label: Mechanical Permit
+    office_code: engineering
+    default_amount_minor: 0
+    account_code: 4-02-01-010-06-3-3
+  - code: LAB-IPIL-ENGINEERING-SIGNAGE-STREAMER
+    label: Signage / Streamer
+    office_code: engineering
+    default_amount_minor: 0
+    account_code: 4-02-01-010-06-4
   - code: LAB-NELSON-HEALTH-SANITARY
     label: Sanitary Permit Fee
     office_code: health
@@ -32,3 +89,58 @@ fees:
     label: Weights and Measures Fee
     office_code: assessor
     default_amount_minor: 6000
+  - code: LAB-IPIL-ASSESSOR-CERTIFICATION
+    label: Assessor Certification
+    office_code: assessor
+    default_amount_minor: 0
+    account_code: 4-02-01-040-05-5-1
+  - code: LAB-IPIL-ASSESSOR-TRUE-COPY-TAX-DECLARATION
+    label: True Copy of Tax Declaration
+    office_code: assessor
+    default_amount_minor: 0
+    account_code: 4-02-01-040-05-5-1-1
+  - code: LAB-IPIL-ASSESSOR-AGGREGATE-LANDHOLDING
+    label: Certificate of Aggregate Landholding
+    office_code: assessor
+    default_amount_minor: 0
+    account_code: 4-02-01-040-05-5-2
+  - code: LAB-IPIL-ASSESSOR-NO-REGISTERED-PROPERTY
+    label: Certificate of No Registered Property
+    office_code: assessor
+    default_amount_minor: 0
+    account_code: 4-02-01-040-05-5-3
+  - code: LAB-IPIL-ASSESSOR-NO-IMPROVEMENT
+    label: Certificate of No Improvement
+    office_code: assessor
+    default_amount_minor: 0
+    account_code: 4-02-01-040-05-5-4
+  - code: LAB-IPIL-ASSESSOR-IMPROVEMENT
+    label: Certificate of Improvement
+    office_code: assessor
+    default_amount_minor: 0
+    account_code: 4-02-01-040-05-5-5
+  - code: LAB-IPIL-ASSESSOR-SERVICE-FEE
+    label: Assessor Service Fee
+    office_code: assessor
+    default_amount_minor: 0
+    account_code: 4-02-01-090-01
+  - code: LAB-IPIL-ASSESSOR-TAX-DECLARATION
+    label: Issuance of Tax Declaration
+    office_code: assessor
+    default_amount_minor: 0
+    account_code: 4-02-01-110-01
+  - code: LAB-IPIL-ASSESSOR-VERIFICATION
+    label: Assessor Verification
+    office_code: assessor
+    default_amount_minor: 0
+    account_code: 4-02-01-110-05
+  - code: LAB-IPIL-ASSESSOR-AUTHENTICATION
+    label: Assessor Authentication
+    office_code: assessor
+    default_amount_minor: 0
+    account_code: 4-02-01-110-09
+  - code: LAB-IPIL-ASSESSOR-ARCHIVAL
+    label: Assessor Archival
+    office_code: assessor
+    default_amount_minor: 0
+    account_code: 4-02-01-990-13

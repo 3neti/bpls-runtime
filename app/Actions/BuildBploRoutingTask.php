@@ -170,6 +170,7 @@ class BuildBploRoutingTask
                     'code' => $fee->code,
                     'name' => $fee->name,
                     'default_amount_cents' => $fee->amount_cents,
+                    'account_code' => data_get($fee->metadata, 'municipal_account_code'),
                 ])->values()->all()];
             })->all(),
             'line_of_business_options' => LineOfBusiness::query()->availableToMunicipalCatalog()->orderBy('name')->get()

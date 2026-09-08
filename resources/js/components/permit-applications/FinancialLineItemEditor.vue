@@ -8,6 +8,7 @@ type Option = {
     code: string;
     name: string;
     default_amount_cents: number;
+    account_code?: string | null;
 };
 type Item = {
     fee_rule_id: number;
@@ -83,7 +84,11 @@ function money(cents: number): string {
                     :key="option.id"
                     :value="option.id"
                 >
-                    {{ option.name }} · {{ money(option.default_amount_cents) }}
+                    {{ option.name }}
+                    <template v-if="option.account_code">
+                        · {{ option.account_code }}</template
+                    >
+                    · {{ money(option.default_amount_cents) }}
                 </option>
             </select>
             <Input

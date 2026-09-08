@@ -910,14 +910,10 @@ const treasurySelectionsReady = computed(
                         class="mt-4 grid gap-3 border-t pt-4"
                     >
                         <p
-                            v-if="
-                                task.application.commissioned_path &&
-                                task.financial_editor.catalog_status ===
-                                    'awaiting_nelson_source'
-                            "
+                            v-if="task.application.commissioned_path"
                             class="text-xs font-semibold text-muted-foreground"
                         >
-                            Preview fee menu
+                            Ipil source-backed fee menu
                         </p>
                         <FinancialLineItemEditor
                             v-model="officeItems[work.id]"

@@ -40,11 +40,18 @@ return [
     ],
     'concerned_offices' => [
         'schema_version' => 'ipil.concerned-offices.preview.v1',
-        'production_catalog_status' => 'awaiting_nelson_source',
+        'production_catalog_status' => 'source_reference_received_pending_validation',
         // Replace this ordered list when Nelson supplies the production routing offices.
         'items' => [
             ['code' => 'engineering', 'label' => 'Municipal Engineering Office', 'fee_rule_codes' => [
                 'LAB-NELSON-ENGINEERING-REGULATORY',
+                'LAB-IPIL-ENGINEERING-BUILDING-PERMIT',
+                'LAB-IPIL-ENGINEERING-FENCING-PERMIT',
+                'LAB-IPIL-ENGINEERING-CERTIFICATE-OCCUPANCY',
+                'LAB-IPIL-ENGINEERING-ELECTRONIC-PERMIT',
+                'LAB-IPIL-ENGINEERING-ELECTRICAL-PERMIT',
+                'LAB-IPIL-ENGINEERING-MECHANICAL-PERMIT',
+                'LAB-IPIL-ENGINEERING-SIGNAGE-STREAMER',
             ]],
             ['code' => 'health', 'label' => 'Municipal Health Office', 'fee_rule_codes' => [
                 'LAB-NELSON-HEALTH-SANITARY',
@@ -55,6 +62,17 @@ return [
             ]],
             ['code' => 'assessor', 'label' => 'Municipal Assessor', 'fee_rule_codes' => [
                 'LAB-NELSON-ASSESSOR-WEIGHTS-MEASURES',
+                'LAB-IPIL-ASSESSOR-CERTIFICATION',
+                'LAB-IPIL-ASSESSOR-TRUE-COPY-TAX-DECLARATION',
+                'LAB-IPIL-ASSESSOR-AGGREGATE-LANDHOLDING',
+                'LAB-IPIL-ASSESSOR-NO-REGISTERED-PROPERTY',
+                'LAB-IPIL-ASSESSOR-NO-IMPROVEMENT',
+                'LAB-IPIL-ASSESSOR-IMPROVEMENT',
+                'LAB-IPIL-ASSESSOR-SERVICE-FEE',
+                'LAB-IPIL-ASSESSOR-TAX-DECLARATION',
+                'LAB-IPIL-ASSESSOR-VERIFICATION',
+                'LAB-IPIL-ASSESSOR-AUTHENTICATION',
+                'LAB-IPIL-ASSESSOR-ARCHIVAL',
             ]],
         ],
     ],
