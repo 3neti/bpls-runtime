@@ -45,6 +45,13 @@ test('staff can search and filter by submitted revenue code and owning office', 
         ->assertInertia(fn (Assert $page) => $page
             ->where('filters.q', 'Building Permit')
             ->where('filters.office', 'engineering')
+            ->where('summary.catalogue_fees', 171)
+            ->where('summary.available_fees', 163)
+            ->where('summary.incomplete_fees', 8)
+            ->where('summary.payment_order_fees', 77)
+            ->where('summary.treasury_lob_fees', 86)
+            ->where('summary.revenue_code_recorded', 27)
+            ->where('summary.revenue_code_missing', 144)
             ->has('feeRules.data', 1)
             ->where('feeRules.data.0.name', 'Building Permit')
             ->where('feeRules.data.0.revenue_code', '4-02-01-010-06')

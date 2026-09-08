@@ -184,8 +184,15 @@ const props = defineProps<{
     revenueCodeScheduleMatrices: RevenueCodeScheduleMatrix[];
     revenueCodePolicyBoundaries: RevenueCodePolicyBoundary[];
     summary: {
-        total_rules: number;
-        active_rules: number;
+        catalogue_fees: number;
+        available_fees: number;
+        incomplete_fees: number;
+        payment_order_fees: number;
+        treasury_lob_fees: number;
+        revenue_code_recorded: number;
+        revenue_code_missing: number;
+    };
+    technicalSummary: {
         mrc_rules: number;
         blocked_policy_count: number;
         executable_rule_count: number;
@@ -617,50 +624,76 @@ function decodePaginationLabel(value: string): string {
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
                     <div class="text-xs text-muted-foreground uppercase">
-                        Total Rules
+                        Catalogue Fees
                     </div>
                     <div class="mt-2 text-2xl font-semibold">
-                        {{ summary.total_rules }}
+                        {{ summary.catalogue_fees }}
                     </div>
                 </div>
                 <div
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
                     <div class="text-xs text-muted-foreground uppercase">
-                        Active
+                        Available
                     </div>
                     <div class="mt-2 text-2xl font-semibold">
-                        {{ summary.active_rules }}
+                        {{ summary.available_fees }}
                     </div>
                 </div>
                 <div
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
                     <div class="text-xs text-muted-foreground uppercase">
-                        Revenue Code
+                        Incomplete
                     </div>
                     <div class="mt-2 text-2xl font-semibold">
-                        {{ summary.mrc_rules }}
+                        {{ summary.incomplete_fees }}
                     </div>
                 </div>
                 <div
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
                     <div class="text-xs text-muted-foreground uppercase">
-                        Awaiting confirmation
+                        Payment Order Fees
                     </div>
                     <div class="mt-2 text-2xl font-semibold">
-                        {{ summary.blocked_policy_count }}
+                        {{ summary.payment_order_fees }}
                     </div>
                 </div>
                 <div
                     class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
                 >
                     <div class="text-xs text-muted-foreground uppercase">
-                        Available for assessment
+                        Treasury LOB Fees
                     </div>
                     <div class="mt-2 text-2xl font-semibold">
-                        {{ summary.executable_rule_count }}
+                        {{ summary.treasury_lob_fees }}
+                    </div>
+                </div>
+            </section>
+
+            <section
+                class="grid gap-3 sm:grid-cols-2"
+                aria-label="Revenue code coverage"
+            >
+                <div
+                    class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+                >
+                    <div class="text-xs text-muted-foreground uppercase">
+                        With Revenue Code
+                    </div>
+                    <div class="mt-2 text-2xl font-semibold">
+                        {{ summary.revenue_code_recorded }}
+                    </div>
+                </div>
+                <div
+                    class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
+                >
+                    <div class="text-xs text-muted-foreground uppercase">
+                        Without Revenue Code
+                    </div>
+                    <div class="mt-2 text-2xl font-semibold">
+                        {{ summary.revenue_code_missing }}
                     </div>
                 </div>
             </section>
@@ -674,6 +707,41 @@ function decodePaginationLabel(value: string): string {
                     Technical Revenue Code review details
                 </summary>
                 <div class="grid gap-4 border-t p-4">
+                    <section
+                        class="grid gap-3 sm:grid-cols-3"
+                        aria-label="Technical fee reconciliation summary"
+                    >
+                        <div class="rounded-lg border p-3">
+                            <div
+                                class="text-xs text-muted-foreground uppercase"
+                            >
+                                Revenue Code evidence rules
+                            </div>
+                            <div class="mt-1 text-xl font-semibold">
+                                {{ technicalSummary.mrc_rules }}
+                            </div>
+                        </div>
+                        <div class="rounded-lg border p-3">
+                            <div
+                                class="text-xs text-muted-foreground uppercase"
+                            >
+                                Awaiting confirmation
+                            </div>
+                            <div class="mt-1 text-xl font-semibold">
+                                {{ technicalSummary.blocked_policy_count }}
+                            </div>
+                        </div>
+                        <div class="rounded-lg border p-3">
+                            <div
+                                class="text-xs text-muted-foreground uppercase"
+                            >
+                                Available for assessment
+                            </div>
+                            <div class="mt-1 text-xl font-semibold">
+                                {{ technicalSummary.executable_rule_count }}
+                            </div>
+                        </div>
+                    </section>
                     <section
                         class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
                         aria-labelledby="revenue-code-coverage-heading"
@@ -697,16 +765,19 @@ function decodePaginationLabel(value: string): string {
                             </div>
                             <div class="flex flex-wrap gap-2 text-xs">
                                 <Badge variant="outline">
-                                    {{ summary.provisions_recorded }} recorded
+                                    {{ technicalSummary.provisions_recorded }}
+                                    recorded
                                 </Badge>
                                 <Badge variant="destructive">
                                     {{
-                                        summary.provisions_requiring_reconciliation
+                                        technicalSummary.provisions_requiring_reconciliation
                                     }}
                                     require reconciliation
                                 </Badge>
                                 <Badge variant="outline">
-                                    {{ summary.provisions_linked_to_rules }}
+                                    {{
+                                        technicalSummary.provisions_linked_to_rules
+                                    }}
                                     linked to rules
                                 </Badge>
                             </div>
@@ -900,12 +971,14 @@ function decodePaginationLabel(value: string): string {
                             </div>
                             <div class="flex flex-wrap gap-2 text-xs">
                                 <Badge variant="outline">
-                                    {{ summary.policy_boundary_clauses }}
+                                    {{
+                                        technicalSummary.policy_boundary_clauses
+                                    }}
                                     clauses
                                 </Badge>
                                 <Badge variant="destructive">
                                     {{
-                                        summary.policy_boundary_clauses_requiring_reconciliation
+                                        technicalSummary.policy_boundary_clauses_requiring_reconciliation
                                     }}
                                     non-executable
                                 </Badge>

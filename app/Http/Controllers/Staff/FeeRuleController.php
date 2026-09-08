@@ -102,6 +102,9 @@ class FeeRuleController extends Controller
             ->withQueryString()
             ->through(fn (FeeRule $feeRule): array => $this->feeRulePayload($feeRule));
 
+        $currentCatalogueRules = FeeRule::query()
+            ->whereHas('catalogVersion', fn ($query) => $query->where('status', FeeCatalogVersionStatus::Active));
+
         return Inertia::render('fee-rules/Index', [
             'filters' => [
                 'q' => $filters['q'] ?? '',
@@ -143,8 +146,18 @@ class FeeRuleController extends Controller
             'revenueCodeScheduleMatrices' => $this->scheduleMatricesPayload(),
             'revenueCodePolicyBoundaries' => $this->policyBoundaryPayload(),
             'summary' => [
-                'total_rules' => FeeRule::query()->count(),
-                'active_rules' => FeeRule::query()->where('is_active', true)->count(),
+                'catalogue_fees' => (clone $currentCatalogueRules)->count(),
+                'available_fees' => (clone $currentCatalogueRules)
+                    ->where('is_active', true)
+                    ->where(fn ($query) => $query->whereNull('metadata->catalog_status')->orWhere('metadata->catalog_status', '!=', 'incomplete'))
+                    ->count(),
+                'incomplete_fees' => (clone $currentCatalogueRules)->where('metadata->catalog_status', 'incomplete')->count(),
+                'payment_order_fees' => (clone $currentCatalogueRules)->where('determination_channel', FeeDeterminationChannel::ConcernedOfficePaymentOrder)->count(),
+                'treasury_lob_fees' => (clone $currentCatalogueRules)->where('determination_channel', FeeDeterminationChannel::TreasuryLineOfBusiness)->count(),
+                'revenue_code_recorded' => (clone $currentCatalogueRules)->whereNotNull('revenue_account_id')->count(),
+                'revenue_code_missing' => (clone $currentCatalogueRules)->whereNull('revenue_account_id')->count(),
+            ],
+            'technicalSummary' => [
                 'mrc_rules' => FeeRule::query()->where('legacy_source_id', 'like', 'LEGAL-MRC-001%')->count(),
                 'blocked_policy_count' => FeeRule::query()
                     ->whereHas('currentReconciliation', fn ($query) => $query->where('execution_status', FeeRuleExecutionStatus::Blocked))
