@@ -64,6 +64,29 @@ test('private CAL specimen supplies only source inputs for a reconstructed 2025 
         ->lines->toBe([]);
 });
 
+test('synthetic preview uses a calibration-compatible identity when the private specimen is unavailable', function () {
+    config()->set([
+        'stakeholder_preview.mode' => true,
+        'stakeholder_preview.profile' => StakeholderPreviewSafety::Profile,
+        'stakeholder_preview.data_classification' => 'synthetic_only',
+        'stakeholder_preview.pii_mode' => 'synthetic_only',
+        'stakeholder_preview.production_migration_enabled' => false,
+        'stakeholder_preview.production_integrations' => 'disabled',
+        'stakeholder_preview.source_backed_2025_specimen_path' => sys_get_temp_dir().'/missing-cal-2026-001.json',
+    ]);
+
+    $intake = app(BuildSourceBackedNewApplicationIntake::class)->handle();
+
+    expect($intake)
+        ->owner_name->toBe('Classic Laboratory Citizen')
+        ->business_name->toBe('CAL-2026-001 Fresh Fish Retail Laboratory')
+        ->total_employee_count->toBe(1)
+        ->business_area_square_meters->toBe('12.00')
+        ->source_specimen->classification->toBe('synthetic_calibration_projection_2025_transaction')
+        ->source_specimen->identity_classification->toBe('synthetic_calibration_projection')
+        ->source_specimen->production_liability->toBeFalse();
+});
+
 test('cleanroom intake selects the private source specimen only when the run explicitly requests it', function () {
     $sourceIntake = [
         'application_year' => 2025,

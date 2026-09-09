@@ -4,6 +4,7 @@ namespace App\Actions;
 
 use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\Models\LineOfBusiness;
+use App\StakeholderPreview\StakeholderPreviewSafety;
 use JsonException;
 use RuntimeException;
 
@@ -12,6 +13,8 @@ class BuildSourceBackedNewApplicationIntake
     public const string SpecimenId = 'cal-2026-001-2025-new';
 
     private const string DefaultPrivatePath = 'app/private/lifecycle-laboratory/'.self::SpecimenId.'.json';
+
+    public function __construct(private readonly StakeholderPreviewSafety $previewSafety) {}
 
     /** @return array<string, mixed> */
     public function handle(): array
@@ -22,6 +25,10 @@ class BuildSourceBackedNewApplicationIntake
             : storage_path(self::DefaultPrivatePath);
 
         if (! app()->environment(['local', 'testing']) || ! is_file($path)) {
+            if ($this->previewSafety->isEnabled() && ! $this->previewSafety->allowsAuthorizedLegacySpecimens()) {
+                return $this->syntheticCalibrationProjection();
+            }
+
             throw new RuntimeException('The private CAL-2026-001 source-backed 2025 specimen is unavailable.');
         }
 
@@ -82,6 +89,65 @@ class BuildSourceBackedNewApplicationIntake
                 'source_snapshot_sha256' => $specimen['source_snapshot_sha256'] ?? null,
                 'chronology' => 'reconstructed_2025_new_application',
                 'expected_treasury_line_of_business_code' => $expected['line_of_business_code'],
+                'external_payment_simulation_only' => true,
+                'production_liability' => false,
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function syntheticCalibrationProjection(): array
+    {
+        $intake = [
+            'application_year' => NewApplicationHappyPathDefinition::ApplicationYear,
+            'type' => 'new',
+            'owner_name' => 'Classic Laboratory Citizen',
+            'owner_first_name' => 'Classic',
+            'owner_last_name' => 'Laboratory Citizen',
+            'owner_address' => 'Synthetic Don Andres address, Ipil, Zamboanga Sibugay',
+            'business_name' => 'CAL-2026-001 Fresh Fish Retail Laboratory',
+            'business_address' => 'Synthetic Don Andres market address, Ipil, Zamboanga Sibugay',
+            'barangay' => 'Don Andres',
+            'business_barangay_psgc_code' => '0908305006',
+            'business_activity_description' => 'Retail sale of fresh fish at the Ipil public market.',
+            'ownership_type' => 'sole-proprietorship',
+            'date_of_application' => '2025-01-15',
+            'mode_of_payment' => 'annually',
+            'business_city_municipality' => 'Ipil',
+            'business_province' => 'Zamboanga Sibugay',
+            'owner_city_municipality' => 'Ipil',
+            'owner_province' => 'Zamboanga Sibugay',
+            'occupancy' => 'rented',
+            'business_area_square_meters' => '12.00',
+            'male_employee_count' => 1,
+            'female_employee_count' => 0,
+            'total_employee_count' => 1,
+            'employees_residing_in_lgu' => 1,
+            'monthly_rental_pesos' => '0.00',
+            'emergency_contact_name' => 'Classic Laboratory Contact',
+            'emergency_contact_mobile' => '09990000000',
+            'applicant_printed_name' => 'Classic Laboratory Citizen',
+            'position_title' => 'Owner',
+            'undertaking_accepted' => true,
+            'lines' => [],
+        ];
+
+        LineOfBusiness::query()
+            ->availableToMunicipalCatalog()
+            ->where('code', 'LOB-3A9A93CA46967768')
+            ->sole();
+
+        return [
+            ...$intake,
+            'source_specimen' => [
+                'id' => self::SpecimenId,
+                'calibration_id' => 'CAL-2026-001',
+                'source_specimen_sha256' => hash('sha256', json_encode($intake, JSON_THROW_ON_ERROR)),
+                'classification' => 'synthetic_calibration_projection_2025_transaction',
+                'source_snapshot_sha256' => null,
+                'identity_classification' => 'synthetic_calibration_projection',
+                'chronology' => 'reconstructed_2025_new_application',
+                'expected_treasury_line_of_business_code' => 'LOB-3A9A93CA46967768',
                 'external_payment_simulation_only' => true,
                 'production_liability' => false,
             ],

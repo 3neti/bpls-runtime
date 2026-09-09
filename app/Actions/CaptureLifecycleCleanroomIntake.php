@@ -58,7 +58,7 @@ class CaptureLifecycleCleanroomIntake
             'scenario_id' => $scenarioId,
             'semantic_classification' => 'synthetic_only',
             'identity_classification' => $lockedRun->usesSourceBackedNewApplication()
-                ? 'source_backed'
+                ? data_get($lockedRun->actor_manifest, 'source_specimen.identity_classification', 'source_backed')
                 : 'synthetic',
             'chronology_classification' => $lockedRun->usesSourceBackedNewApplication()
                 ? 'reconstructed_2025_new_application'
