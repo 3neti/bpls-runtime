@@ -25,6 +25,7 @@ use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
+use App\Enums\PermitApplicationType;
 use App\Enums\TreasuryCollectionStatus;
 use App\Enums\UserPermission;
 use App\Enums\UserRole;
@@ -220,6 +221,31 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         ->and(data_get($assignments[0]->items->sole()->source_snapshot, 'reason'))->toBe('Amount edited in the Nelson financial line-item editor.')
         ->and(data_get($assignments[0]->items->sole()->source_snapshot, 'authority'))->toContain('business_permit_evaluations.correct_lines_of_business')
         ->and($application->refresh()->business_activity_description)->toBe('General merchandise store selling household goods and liquor, with a small coffee shop.');
+
+    $renewal = $application->replicate();
+    $renewal->forceFill([
+        'type' => PermitApplicationType::Renewal,
+        'status' => 'draft',
+        'application_year' => $application->application_year,
+        'application_number' => null,
+        'tracking_reference' => null,
+        'assessed_at' => null,
+    ])->save();
+    $renewalRouting = app(RecordBploRoutingDetermination::class)->handle($renewal, $bplo, '', [
+        ['office_code' => 'engineering', 'office_label' => 'Engineering', 'situational_reason' => '', 'required_work' => ''],
+        ['office_code' => 'health', 'office_label' => 'Health', 'situational_reason' => '', 'required_work' => ''],
+    ]);
+    foreach ($renewalRouting->works as $work) {
+        $fee = FeeRule::query()
+            ->where('metadata->responsible_office_code', $work->office_code)
+            ->where('metadata->application_year', now()->year)
+            ->firstOrFail();
+        app(ConfirmOfficePaymentOrder::class)->handle($work, [[
+            'fee_rule_id' => $fee->id,
+            'amount_cents' => $fee->amount_cents,
+        ]], User::query()->findOrFail(data_get($run->actor_manifest, 'actors.'.$work->office_code.'.user_id')), UploadedFile::fake()->image("renewal-{$work->office_code}-signature.png"));
+    }
+    expect(app(AssignTreasuryLinesOfBusiness::class)->handle($renewal, $lobSelections, $treasurer))->toHaveCount(3);
 
     $paymentOrderSubtotal = (int) $application->paperlessPaymentOrders()->whereNull('superseded_at')->sum('total_amount_cents');
     $treasurySubtotal = (int) collect($assignments)->flatMap->items->sum('determined_amount_cents');

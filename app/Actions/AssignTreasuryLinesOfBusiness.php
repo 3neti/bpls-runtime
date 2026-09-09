@@ -34,8 +34,9 @@ class AssignTreasuryLinesOfBusiness
             if (! $actor->can(UserPermission::CorrectEvaluationLinesOfBusiness->value)) {
                 throw new LogicException('Only an authorized Treasury actor may assign official Lines of Business.');
             }
-            if ($application->type !== PermitApplicationType::New || data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') !== true) {
-                throw new LogicException('Treasury multi-LOB classification in this wave is commissioned only for Nelson-grounded New Applications.');
+            if (! in_array($application->type, [PermitApplicationType::New, PermitApplicationType::Renewal], true)
+                || data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') !== true) {
+                throw new LogicException('Treasury multi-LOB classification is commissioned only for Nelson-grounded New and Renewal Applications.');
             }
             if ($selections === [] || collect($selections)->pluck('line_of_business_id')->duplicates()->isNotEmpty()) {
                 throw new LogicException('Treasury must assign one or more unique canonical Lines of Business.');
