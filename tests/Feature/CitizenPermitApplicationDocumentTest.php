@@ -8,7 +8,6 @@ use App\Models\Permission;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationDocument;
 use App\Models\Role;
-use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -145,7 +144,7 @@ test('citizen document access is permission and ownership scoped', function () {
         UserPermission::ViewOwnPermitApplications,
         UserPermission::ViewOwnPermitApplicationDocuments,
     ], UserRole::Citizen);
-    $otherCitizen = User::factory()->create(['role_id' => $citizen->role_id]);
+    $otherCitizen = userWithRole($citizen->primaryRole());
     $otherApplication = PermitApplication::factory()->for($otherCitizen, 'submittedBy')->create([
         'application_number' => null,
         'status' => PermitApplicationStatus::Draft,
@@ -171,7 +170,7 @@ test('citizen document access is permission and ownership scoped', function () {
     $citizenOnlyRole->permissions()->attach(
         Permission::query()->where('code', UserPermission::AccessCitizen->value)->sole(),
     );
-    $citizenWithoutDocumentPermissions = User::factory()->for($citizenOnlyRole)->create();
+    $citizenWithoutDocumentPermissions = userWithRole($citizenOnlyRole);
     $ownedApplication = PermitApplication::factory()->for($citizenWithoutDocumentPermissions, 'submittedBy')->create([
         'application_number' => null,
         'status' => PermitApplicationStatus::Draft,

@@ -21,21 +21,23 @@ class EnsureCitizenRole
             UserPermission::ViewOwnPermitApplicationDocuments,
             UserPermission::ViewOwnPermitApplicationFinancials,
         ])->map(fn (UserPermission $permission): Permission => Permission::query()->firstOrCreate(
-            ['code' => $permission->value],
+            ['name' => $permission->value, 'guard_name' => 'web'],
             [
-                'name' => str($permission->value)->replace(['.', '_'], ' ')->title()->toString(),
+                'code' => $permission->value,
+                'display_name' => str($permission->value)->replace(['.', '_'], ' ')->title()->toString(),
                 'description' => null,
             ],
         ));
 
         $citizenRole = Role::query()->firstOrCreate(
-            ['code' => UserRole::Citizen->value],
+            ['name' => UserRole::Citizen->value, 'guard_name' => 'web'],
             [
-                'name' => 'Citizen',
+                'code' => UserRole::Citizen->value,
+                'display_name' => 'Citizen',
                 'description' => 'Authenticated citizen permit applicant.',
             ],
         );
-        $citizenRole->permissions()->syncWithoutDetaching($permissions->pluck('id')->all());
+        $citizenRole->syncPermissions($permissions);
 
         return $citizenRole;
     }

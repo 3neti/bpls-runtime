@@ -27,7 +27,7 @@ final class ScenarioActorResolver
         }
 
         $user = User::query()
-            ->with('role.permissions')
+            ->with('roles.permissions')
             ->where('email', $email)
             ->first();
 

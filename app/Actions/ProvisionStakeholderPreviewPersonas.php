@@ -36,7 +36,7 @@ class ProvisionStakeholderPreviewPersonas
 
                     $user->forceFill([
                         'name' => $persona->accountName(),
-                        'role_id' => $role->id,
+                        'access_status' => 'active',
                         'email_verified_at' => $user->email_verified_at ?? now(),
                         'two_factor_secret' => null,
                         'two_factor_recovery_codes' => null,
@@ -51,7 +51,9 @@ class ProvisionStakeholderPreviewPersonas
                         $user->save();
                     }
 
-                    return [$persona->value => $user->refresh()->load('role.permissions')];
+                    $user->syncRoles([$role]);
+
+                    return [$persona->value => $user->refresh()->load('roles.permissions')];
                 })
                 ->all();
         });
@@ -60,22 +62,24 @@ class ProvisionStakeholderPreviewPersonas
     private function previewRole(StakeholderPreviewPersona $persona): Role
     {
         $role = Role::query()->updateOrCreate(
-            ['code' => $persona->roleCode()],
+            ['name' => $persona->roleCode(), 'guard_name' => 'web'],
             [
-                'name' => 'Preview '.$persona->label(),
+                'code' => $persona->roleCode(),
+                'display_name' => 'Preview '.$persona->label(),
                 'description' => 'Synthetic Stakeholder Preview access infrastructure; not a named municipal official, authority-position assignment, production commissioning, or scenario actor.',
             ],
         );
         $permissionIds = collect($persona->permissions())->map(function (UserPermission $permission): int {
             return Permission::query()->firstOrCreate(
-                ['code' => $permission->value],
+                ['name' => $permission->value, 'guard_name' => 'web'],
                 [
-                    'name' => str($permission->value)->replace(['.', '_'], ' ')->title()->toString(),
+                    'code' => $permission->value,
+                    'display_name' => str($permission->value)->replace(['.', '_'], ' ')->title()->toString(),
                     'description' => null,
                 ],
             )->id;
         });
-        $role->permissions()->sync($permissionIds->all());
+        $role->syncPermissions($permissionIds->all());
 
         return $role;
     }

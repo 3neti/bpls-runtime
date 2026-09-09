@@ -42,7 +42,7 @@ final class BuildBusinessPermitEvaluationPricePreview
         $authorizedActorId = data_get($item->metadata, 'authorized_actor_id');
         if (! $viewer->hasRole(UserRole::Admin)
             && $authorizedActorId !== $viewer->id
-            && $item->responsible_party !== $viewer->role?->code) {
+            && ! $viewer->hasRole($item->responsible_party)) {
             throw new LogicException("This Evaluation responsibility belongs to [{$item->responsible_party}].");
         }
 

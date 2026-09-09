@@ -326,7 +326,7 @@ test('citizen draft editing is ownership and permission scoped', function () {
         UserPermission::EditOwnPermitApplications,
         UserPermission::ViewOwnPermitApplications,
     ], UserRole::Citizen);
-    $otherCitizen = User::factory()->create(['role_id' => $citizen->role_id]);
+    $otherCitizen = userWithRole($citizen->primaryRole());
     $application = PermitApplication::factory()->for($otherCitizen, 'submittedBy')->create([
         'application_number' => null,
         'status' => PermitApplicationStatus::Draft,
@@ -338,12 +338,8 @@ test('citizen draft editing is ownership and permission scoped', function () {
         ->get(route('citizen.permit-applications.edit', $application))
         ->assertNotFound();
 
-    $citizen->role->permissions()
-        ->where('code', UserPermission::EditOwnPermitApplications->value)
-        ->detach();
-    $citizenWithoutEditPermission = User::factory()->create([
-        'role_id' => $citizen->role_id,
-    ]);
+    $citizen->primaryRole()->revokePermissionTo(UserPermission::EditOwnPermitApplications->value);
+    $citizenWithoutEditPermission = userWithRole($citizen->primaryRole());
     $ownedApplication = PermitApplication::factory()->for($citizenWithoutEditPermission, 'submittedBy')->create([
         'application_number' => null,
         'status' => PermitApplicationStatus::Draft,
@@ -479,9 +475,7 @@ test('citizen application lists and details are scoped to the authenticated port
         UserPermission::AccessCitizen,
         UserPermission::ViewOwnPermitApplications,
     ], UserRole::Citizen);
-    $otherCitizen = User::factory()->create([
-        'role_id' => $citizen->role_id,
-    ]);
+    $otherCitizen = userWithRole($citizen->primaryRole());
     $ownedApplication = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
         'application_number' => null,
         'status' => PermitApplicationStatus::Draft,

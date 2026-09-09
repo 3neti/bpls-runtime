@@ -123,7 +123,7 @@ it('lets the assigned concerned office complete only its own provisional respons
         UserPermission::ViewBusinessPermitEvaluations,
         UserPermission::ContributeBusinessPermitEvaluations,
     ]);
-    $otherOffice = User::factory()->create(['role_id' => $engineering->role_id]);
+    $otherOffice = userWithRole($engineering->primaryRole());
     $item = app(DefineBusinessPermitEvaluationItem::class)->handle(
         $fixture['evaluation'],
         'engineering.charge',
@@ -284,7 +284,7 @@ it('uses the same Evaluator surface for the owning Citizen and rejects another C
         UserPermission::CorrectOwnEvaluationDeclarations,
     ], UserRole::Citizen);
     $fixture = httpEvaluationFixture($citizen);
-    $otherCitizen = User::factory()->create(['role_id' => $citizen->role_id]);
+    $otherCitizen = userWithRole($citizen->primaryRole());
     $this->withoutVite();
 
     $this->actingAs($citizen)

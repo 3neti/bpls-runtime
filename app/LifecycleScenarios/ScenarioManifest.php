@@ -30,7 +30,7 @@ final class ScenarioManifest
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $this->maskEmail($user->email),
-                    'role' => $user->role?->code,
+                    'roles' => $user->roleCodes(),
                 ])
                 ->all(),
             'resources' => [],

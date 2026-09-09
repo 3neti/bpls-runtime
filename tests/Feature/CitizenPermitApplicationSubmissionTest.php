@@ -74,9 +74,7 @@ test('formal citizen submission is idempotent for the same application', functio
 test('citizen submission requires explicit permission and an owned registry-linked draft', function () {
     Notification::fake();
     [$citizen, $application] = citizenSubmissionDraft();
-    $citizen->role->permissions()
-        ->where('code', UserPermission::SubmitOwnPermitApplications->value)
-        ->detach();
+    $citizen->primaryRole()->revokePermissionTo(UserPermission::SubmitOwnPermitApplications->value);
 
     $this->actingAs($citizen)
         ->post(route('citizen.permit-applications.submit', $application), ['undertaking_accepted' => '1'])
@@ -89,7 +87,7 @@ test('citizen submission requires explicit permission and an owned registry-link
             UserPermission::SubmitOwnPermitApplications->value,
         ])
         ->pluck('id'));
-    $otherCitizen = User::factory()->create(['role_id' => $otherRole->id]);
+    $otherCitizen = userWithRole($otherRole);
 
     $this->actingAs($otherCitizen)
         ->post(route('citizen.permit-applications.submit', $application), ['undertaking_accepted' => '1'])

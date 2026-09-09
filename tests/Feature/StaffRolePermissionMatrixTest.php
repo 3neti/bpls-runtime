@@ -4,7 +4,6 @@ use App\Enums\UserPermission;
 use App\Enums\UserRole;
 use App\Models\Permission;
 use App\Models\Role;
-use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('authorized staff sees effective role access and permission catalog drift', function () {
@@ -16,12 +15,12 @@ test('authorized staff sees effective role access and permission catalog drift',
         'name' => 'Admin',
         'code' => UserRole::Admin->value,
     ]);
-    User::factory()->create(['role_id' => $adminRole->id]);
+    userWithRole($adminRole);
     $unknownPermission = Permission::factory()->create([
         'name' => 'Legacy Unknown',
         'code' => 'legacy.unknown',
     ]);
-    $operator->role->permissions()->attach($unknownPermission);
+    $operator->primaryRole()->givePermissionTo($unknownPermission);
 
     $this->actingAs($operator)
         ->get(route('staff.roles.index'))
@@ -64,7 +63,7 @@ test('admin effective access does not depend on assigned permission rows', funct
         'name' => 'Admin',
         'code' => UserRole::Admin->value,
     ]);
-    $admin = User::factory()->create(['role_id' => $adminRole->id]);
+    $admin = userWithRole($adminRole);
 
     expect($adminRole->permissions()->count())->toBe(0)
         ->and($admin->can(UserPermission::ViewRoles->value))->toBeTrue();

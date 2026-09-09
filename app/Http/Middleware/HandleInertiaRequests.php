@@ -50,7 +50,8 @@ class HandleInertiaRequests extends Middleware
             'name' => config('app.name'),
             'auth' => [
                 'user' => $user,
-                'role' => $user?->role?->code,
+                'role' => $user?->primaryRole()?->code,
+                'roles' => $user?->roleCodes() ?? [],
                 'can_access_staff' => $user?->can('staff.access') ?? false,
                 'can_access_citizen' => $user?->can('citizen.access') ?? false,
                 'can_view_permit_applications' => $user?->can('permit_applications.view') ?? false,
@@ -72,6 +73,9 @@ class HandleInertiaRequests extends Middleware
                 ]) ?? false,
                 'can_manage_fee_rules' => $user?->can('fee_rules.manage') ?? false,
                 'can_view_users' => $user?->can('users.view') ?? false,
+                'can_provision_users' => $user?->can('users.provision') ?? false,
+                'can_manage_user_access' => $user?->can('users.access.manage') ?? false,
+                'can_provision_laboratory_actors' => $user?->can('laboratory.actors.provision') ?? false,
                 'can_view_roles' => $user?->can('roles.view') ?? false,
                 'can_view_municipality_configuration' => $user?->can('municipality_configuration.view') ?? false,
             ],
@@ -99,7 +103,7 @@ class HandleInertiaRequests extends Middleware
 
         foreach (LifecycleCleanroomRun::query()->where('status', 'active')->latest('id')->limit(10)->get() as $run) {
             foreach (data_get($run->actor_manifest, 'actors', []) as $key => $actor) {
-                if (($actor['user_id'] ?? null) === $user->id && ($actor['role_id'] ?? null) === $user->role_id) {
+                if (($actor['user_id'] ?? null) === $user->id && $user->roles->contains('id', $actor['role_id'] ?? null)) {
                     return ['run_id' => $run->id, 'public_id' => $run->public_id, 'key' => $key, 'label' => $actor['label']];
                 }
             }

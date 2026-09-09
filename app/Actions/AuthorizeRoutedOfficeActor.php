@@ -41,6 +41,6 @@ class AuthorizeRoutedOfficeActor
             return $explicitlyAuthorizedActorId === $actor->id;
         }
 
-        return $actor->role?->code === $officeCode;
+        return $actor->hasRole($officeCode);
     }
 }

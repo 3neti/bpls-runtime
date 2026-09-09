@@ -111,13 +111,15 @@ function weekendPreviewPersona(StakeholderPreviewPersona $persona): User
         )->id,
     ));
 
-    return User::factory()->create([
+    $user = User::factory()->create([
         'name' => $persona->accountName(),
         'email' => $persona->approvedEmail(),
         'email_verified_at' => now(),
-        'role_id' => $role->id,
         'two_factor_secret' => null,
         'two_factor_recovery_codes' => null,
         'two_factor_confirmed_at' => null,
     ]);
+    $user->assignRole($role);
+
+    return $user;
 }

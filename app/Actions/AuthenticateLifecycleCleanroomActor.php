@@ -33,10 +33,9 @@ class AuthenticateLifecycleCleanroomActor
             404,
         );
         $user = User::query()
-            ->with('role.permissions')
+            ->with('roles.permissions')
             ->whereKey($actor['user_id'])
-            ->where('role_id', $actor['role_id'])
-            ->whereHas('role', fn ($query) => $query->where('code', 'lifecycle-cleanroom-'.$actorKey))
+            ->whereHas('roles', fn ($query) => $query->whereKey($actor['role_id']))
             ->first();
         abort_unless($user instanceof User, 404);
 

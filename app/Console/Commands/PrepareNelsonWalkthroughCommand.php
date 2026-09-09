@@ -35,7 +35,7 @@ class PrepareNelsonWalkthroughCommand extends Command
                 $approverEmail,
                 'Nelson Walkthrough Municipal Treasurer',
                 $password,
-                Role::query()->findOrFail($operator->role_id),
+                $operator->primaryRole() ?? throw new RuntimeException('The walkthrough operator has no role.'),
             );
             $citizen = $this->prepareCitizen($citizenEmail, $password, $ensureCitizenRole);
             $this->configureScenario($operator, $approver, $citizen, $password);
@@ -101,20 +101,22 @@ class PrepareNelsonWalkthroughCommand extends Command
     {
         $permissions = collect(UserPermission::cases())
             ->map(fn (UserPermission $permission): Permission => Permission::query()->firstOrCreate(
-                ['code' => $permission->value],
+                ['name' => $permission->value, 'guard_name' => 'web'],
                 [
-                    'name' => str($permission->value)->replace(['.', '_'], ' ')->title()->toString(),
+                    'code' => $permission->value,
+                    'display_name' => str($permission->value)->replace(['.', '_'], ' ')->title()->toString(),
                     'description' => null,
                 ],
             ));
         $adminRole = Role::query()->firstOrCreate(
-            ['code' => UserRole::Admin->value],
+            ['name' => UserRole::Admin->value, 'guard_name' => 'web'],
             [
-                'name' => 'Admin',
+                'code' => UserRole::Admin->value,
+                'display_name' => 'Admin',
                 'description' => 'Local administrative scenario role.',
             ],
         );
-        $adminRole->permissions()->syncWithoutDetaching($permissions->pluck('id')->all());
+        $adminRole->syncPermissions($permissions);
 
         return $this->prepareUser($email, 'Nelson Walkthrough Operator', $password, $adminRole);
     }
@@ -129,15 +131,16 @@ class PrepareNelsonWalkthroughCommand extends Command
         $user = User::query()->firstOrNew(['email' => $email]);
         $user->forceFill([
             'name' => $name,
-            'role_id' => $role->id,
             'password' => Hash::make($password),
             'email_verified_at' => $user->email_verified_at ?? now(),
+            'access_status' => 'active',
             'two_factor_secret' => null,
             'two_factor_recovery_codes' => null,
             'two_factor_confirmed_at' => null,
         ])->save();
+        $user->syncRoles([$role]);
 
-        return $user->refresh();
+        return $user->refresh()->load('roles');
     }
 
     private function configureScenario(User $operator, User $approver, User $citizen, string $password): void

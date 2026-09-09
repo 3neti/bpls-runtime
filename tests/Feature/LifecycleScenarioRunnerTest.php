@@ -1481,7 +1481,7 @@ test('user directory scenario preserves aggregate-only canonical and browser evi
         ->and($firstManifest['resources']['verified_user_count'])->toBe(2)
         ->and($firstManifest['resources']['linked_owner_count'])->toBe(0)
         ->and($firstManifest['resources']['role_distribution'])->toMatchArray([
-            $operator->role->code => 1,
+            $operator->primaryRole()->code => 1,
             'scenario_treasury' => 1,
         ])
         ->and($prepare)->not->toHaveKey('users')
@@ -3125,8 +3125,7 @@ function configuredScenarioUser(string $email): User
     $role = Role::factory()->create();
     $role->permissions()->sync($permissions->all());
 
-    $user = User::factory()->create([
-        'role_id' => $role->id,
+    $user = userWithRole($role, [
         'email' => $email,
     ]);
 
@@ -3155,8 +3154,7 @@ function configuredAssessmentApprover(): User
     $role = Role::factory()->create(['code' => 'scenario_treasury']);
     $role->permissions()->sync($permissionIds->all());
 
-    return User::factory()->create([
-        'role_id' => $role->id,
+    return userWithRole($role, [
         'email' => $email,
         'name' => 'Scenario Municipal Treasurer',
     ]);
@@ -3181,8 +3179,7 @@ function configuredCitizenScenarioUser(string $email): User
     ]);
     $role->permissions()->sync($permissions->all());
 
-    return User::factory()->create([
-        'role_id' => $role->id,
+    return userWithRole($role, [
         'email' => $email,
     ]);
 }

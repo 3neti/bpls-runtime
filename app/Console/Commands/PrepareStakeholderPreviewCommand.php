@@ -234,7 +234,7 @@ class PrepareStakeholderPreviewCommand extends Command
             'accounts' => collect($accounts)->map(fn (User $user): array => [
                 'name' => $user->name,
                 'email' => $user->email,
-                'role_code' => $user->role?->code,
+                'role_code' => $user->primaryRole()?->code,
             ])->all(),
             'urls' => [
                 'report_catalog' => route('staff.reports.index', absolute: false),

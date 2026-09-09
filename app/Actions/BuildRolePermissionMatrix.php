@@ -20,9 +20,9 @@ class BuildRolePermissionMatrix
         $canonicalCodes = $canonicalPermissions->map(fn (UserPermission $permission): string => $permission->value);
 
         $roles = Role::query()
-            ->with(['permissions:id,code', 'users:id,role_id'])
+            ->with(['permissions:id,code', 'users:id'])
             ->orderByRaw("case code when 'admin' then 1 when 'bplo' then 2 when 'treasury' then 3 when 'citizen' then 4 else 5 end")
-            ->orderBy('name')
+            ->orderBy('display_name')
             ->get()
             ->map(function (Role $role) use ($canonicalPermissions): array {
                 $assignedCodes = $role->permissions->pluck('code');
@@ -30,7 +30,7 @@ class BuildRolePermissionMatrix
 
                 return [
                     'id' => $role->id,
-                    'name' => $role->name,
+                    'name' => $role->display_name,
                     'code' => $role->code,
                     'description' => $role->description,
                     'user_count' => $role->users->count(),
@@ -67,7 +67,7 @@ class BuildRolePermissionMatrix
                 return [
                     'code' => $permission->value,
                     'name' => $isStored
-                        ? $stored->name
+                        ? $stored->display_name
                         : str($permission->value)->replace(['.', '_'], ' ')->title()->toString(),
                     'description' => $isStored ? $stored->description : null,
                     'area' => str($permission->value)->before('.')->replace('_', ' ')->title()->toString(),

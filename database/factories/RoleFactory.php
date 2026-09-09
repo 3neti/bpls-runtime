@@ -17,9 +17,13 @@ class RoleFactory extends Factory
      */
     public function definition(): array
     {
+        $code = fake()->unique()->slug(2);
+
         return [
-            'name' => fake()->unique()->jobTitle(),
-            'code' => fake()->unique()->slug(2),
+            'name' => $code,
+            'code' => $code,
+            'display_name' => fake()->unique()->jobTitle(),
+            'guard_name' => 'web',
             'description' => fake()->sentence(),
         ];
     }

@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Data\Application\ApplicationDataResolver;
 use App\Data\Application\EloquentApplicationDataResolver;
 use App\Enums\UserPermission;
+use App\Enums\UserRole;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -56,6 +57,14 @@ class AppServiceProvider extends ServiceProvider
         );
 
         RateLimiter::for('stakeholder-preview', fn (Request $request): Limit => Limit::perMinute(240)->by($request->ip()));
+
+        Gate::before(function (User $user): ?bool {
+            if (! $user->hasActiveAccess()) {
+                return false;
+            }
+
+            return $user->hasRole(UserRole::Admin) ? true : null;
+        });
 
         foreach (UserPermission::cases() as $permission) {
             Gate::define($permission->value, fn (User $user): bool => $user->hasPermission($permission));

@@ -54,10 +54,12 @@ use App\Http\Controllers\Staff\TopEstablishmentTaxDueReportController;
 use App\Http\Controllers\Staff\TotalCapitalGrossSummaryReportController;
 use App\Http\Controllers\Staff\TreasuryLineOfBusinessController;
 use App\Http\Controllers\Staff\UnpaidEstablishmentReportController;
+use App\Http\Controllers\Staff\UserAccessController;
 use App\Http\Controllers\Staff\UserDirectoryController;
 use App\Http\Controllers\StakeholderPreviewController;
 use App\Http\Controllers\StakeholderPreviewSpecimenController;
 use App\Http\Controllers\StakeholderPreviewWorkflowController;
+use App\Http\Middleware\EnsureActiveUserAccess;
 use App\Http\Middleware\EnsureLifecycleLaboratoryOperator;
 use App\Http\Middleware\EnsureStakeholderPreviewIsSafe;
 use App\Http\Middleware\EnsureStakeholderPreviewReviewer;
@@ -73,6 +75,7 @@ if ($stakeholderPreviewSafety->isEnabled()) {
         $stakeholderPreviewMiddleware = [
             'auth',
             'verified',
+            EnsureActiveUserAccess::class,
             EnsureStakeholderPreviewReviewer::class,
             ...$stakeholderPreviewMiddleware,
         ];
@@ -89,9 +92,9 @@ if ($stakeholderPreviewSafety->isEnabled()) {
         Route::post('stakeholder-preview/specimens/{lifecycleScenarioSpecimen}/enter-citizen', StakeholderPreviewSpecimenController::class)
             ->name('stakeholder-preview.specimens.enter-citizen');
         Route::post('stakeholder-preview/switch/{persona}', [StakeholderPreviewController::class, 'switch'])
-            ->middleware(['auth', 'verified'])
+            ->middleware(['auth', 'verified', EnsureActiveUserAccess::class])
             ->name('stakeholder-preview.switch');
-        Route::middleware(['auth', 'verified'])->group(function () {
+        Route::middleware(['auth', 'verified', EnsureActiveUserAccess::class])->group(function () {
             Route::middleware(EnsureLifecycleLaboratoryOperator::class)->group(function () {
                 Route::get('stakeholder-preview/lifecycle-laboratory', [LifecycleLaboratoryController::class, 'index'])
                     ->name('stakeholder-preview.lifecycle-laboratory.index');
@@ -158,7 +161,7 @@ Route::middleware($restrictedReviewMiddleware)->group(function () {
         ->name('services-and-fees.index');
 });
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', EnsureActiveUserAccess::class])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
 
     Route::prefix('citizen')->name('citizen.')->middleware('can:citizen.access')->group(function () {
@@ -259,6 +262,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('fee-rules.revisions.store');
         Route::get('users', [UserDirectoryController::class, 'index'])
             ->name('users.index');
+        Route::post('users', [UserAccessController::class, 'store'])
+            ->name('users.store');
+        Route::patch('users/{user}/access', [UserAccessController::class, 'update'])
+            ->name('users.access.update');
+        Route::post('users/provision-laboratory', [UserAccessController::class, 'provisionLaboratory'])
+            ->name('users.provision-laboratory');
         Route::get('roles', [RolePermissionController::class, 'index'])
             ->name('roles.index');
         Route::get('municipality-configuration', [MunicipalityConfigurationController::class, 'index'])

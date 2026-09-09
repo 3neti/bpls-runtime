@@ -945,7 +945,7 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     $healthWork = $works->get('health');
     $engineeringActor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.engineering.user_id'));
     $healthActor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.health.user_id'));
-    $unroutedHealthActor = User::factory()->for($healthActor->role)->create();
+    $unroutedHealthActor = userWithRole($healthActor->primaryRole());
     $healthFee = FeeRule::query()->where('code', 'IPIL-LEGACY-99C7F1CE5E8189C8')->sole();
     $healthItems = [['fee_rule_id' => $healthFee->id, 'amount_cents' => 10_000]];
 

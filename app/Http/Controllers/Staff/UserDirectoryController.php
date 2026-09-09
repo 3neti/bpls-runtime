@@ -21,9 +21,18 @@ class UserDirectoryController extends Controller
             'role' => ['nullable', 'string', 'max:80'],
         ]);
 
-        return Inertia::render('users/Index', $buildUserDirectory->handle(
-            search: str($filters['q'] ?? '')->trim()->toString(),
-            roleCode: $filters['role'] ?? null,
-        ));
+        return Inertia::render('users/Access', [
+            ...$buildUserDirectory->handle(
+                search: str($filters['q'] ?? '')->trim()->toString(),
+                roleCode: $filters['role'] ?? null,
+            ),
+            'capabilities' => [
+                'provision_users' => $request->user()->can(UserPermission::ProvisionUsers->value),
+                'manage_user_access' => $request->user()->can(UserPermission::ManageUserAccess->value),
+                'provision_laboratory_actors' => $request->user()->can(UserPermission::ProvisionLaboratoryActors->value)
+                    && config('bpls_installation.seed_laboratory_actors') === true
+                    && ! app()->isProduction(),
+            ],
+        ]);
     }
 }

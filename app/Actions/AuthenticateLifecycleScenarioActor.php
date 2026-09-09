@@ -73,9 +73,9 @@ final class AuthenticateLifecycleScenarioActor
             : 'scenario-02';
 
         return User::query()
-            ->with('role.permissions')
+            ->with('roles.permissions')
             ->whereKey($actorIds)
-            ->whereHas('role', fn ($query) => $query
+            ->whereHas('roles', fn ($query) => $query
                 ->whereKey($roleIds)
                 ->where('code', $prefix.'-'.$actor['role_suffix']))
             ->first();

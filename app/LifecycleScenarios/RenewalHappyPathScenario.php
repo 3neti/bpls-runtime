@@ -717,29 +717,29 @@ final class RenewalHappyPathScenario
     {
         $actorPrefix = $key === 'citizen' ? 'scenario-01' : 'scenario-02';
         $role = Role::query()->firstOrCreate(
-            ['code' => $actorPrefix.'-'.$key],
-            ['name' => $name, 'description' => 'Synthetic product-lab role; not a production municipal assignment.'],
+            ['name' => $actorPrefix.'-'.$key, 'guard_name' => 'web'],
+            ['code' => $actorPrefix.'-'.$key, 'display_name' => $name, 'description' => 'Synthetic product-lab role; not a production municipal assignment.'],
         );
         $permissionIds = collect($permissions)->map(function (UserPermission $permission): int {
             return Permission::query()->firstOrCreate(
-                ['code' => $permission->value],
-                ['name' => str($permission->value)->replace('.', ' ')->title()->toString()],
+                ['name' => $permission->value, 'guard_name' => 'web'],
+                ['code' => $permission->value, 'display_name' => str($permission->value)->replace('.', ' ')->title()->toString()],
             )->id;
         });
-        $role->permissions()->sync($permissionIds);
+        $role->syncPermissions($permissionIds);
 
         $user = User::query()->firstOrCreate(
             ['email' => ($key === 'citizen' ? 'scenario-citizen' : 'scenario-02-'.$key).'@example.test'],
             [
-                'role_id' => $role->id,
                 'name' => $name,
                 'password' => Hash::make('scenario-02-not-a-login-credential'),
                 'email_verified_at' => now(),
             ],
         );
-        $this->assert($user->role_id === $role->id, "Synthetic actor identity [{$key}] is occupied by another role.");
+        $user->syncRoles([$role]);
+        $this->assert($user->hasRole($role), "Synthetic actor identity [{$key}] is occupied by another role.");
 
-        return $user->load('role.permissions');
+        return $user->load('roles.permissions');
     }
 
     /** @return array<string, LineOfBusiness> */
@@ -820,8 +820,8 @@ final class RenewalHappyPathScenario
             ],
             'actor_capabilities' => collect($actors)->map(fn (User $actor): array => [
                 'user_id' => $actor->id,
-                'role_code' => $actor->role?->code,
-                'permissions' => $actor->role?->permissions->pluck('code')->sort()->values()->all() ?? [],
+                'role_code' => $actor->primaryRole()?->code,
+                'permissions' => $actor->getAllPermissions()->pluck('code')->sort()->values()->all(),
                 'classification' => 'synthetic_scenario_actor',
             ])->all(),
             'reference_data' => [

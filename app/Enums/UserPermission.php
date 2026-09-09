@@ -42,7 +42,11 @@ enum UserPermission: string
     case VoidReceipts = 'receipts.void';
     case ViewReports = 'reports.view';
     case ViewUsers = 'users.view';
+    case ProvisionUsers = 'users.provision';
+    case ManageUserAccess = 'users.access.manage';
     case ViewRoles = 'roles.view';
+    case ManageRoles = 'roles.manage';
+    case ProvisionLaboratoryActors = 'laboratory.actors.provision';
     case ViewMunicipalityConfiguration = 'municipality_configuration.view';
     case ManageStoryboards = 'storyboards.manage';
 }

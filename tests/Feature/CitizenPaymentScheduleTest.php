@@ -18,7 +18,6 @@ use App\Models\PaymentScheduleLine;
 use App\Models\PermitApplication;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
-use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('citizen payment detail requires authentication and financial permission', function () {
@@ -146,7 +145,7 @@ test('citizen payment detail does not reveal another applicants schedule', funct
         UserPermission::AccessCitizen,
         UserPermission::ViewOwnPermitApplicationFinancials,
     ], UserRole::Citizen);
-    $otherCitizen = User::factory()->create(['role_id' => $citizen->role_id]);
+    $otherCitizen = userWithRole($citizen->primaryRole());
     $otherApplication = PermitApplication::factory()->for($otherCitizen, 'submittedBy')->create();
     $otherSchedule = PaymentSchedule::factory()->for($otherApplication, 'permitApplication')->create();
 

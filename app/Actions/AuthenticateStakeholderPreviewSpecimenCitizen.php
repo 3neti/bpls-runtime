@@ -90,8 +90,8 @@ class AuthenticateStakeholderPreviewSpecimenCitizen
         }
 
         $citizens = User::query()
-            ->select(['id', 'role_id', 'business_owner_id', 'name', 'email', 'email_verified_at'])
-            ->with('role.permissions')
+            ->select(['id', 'business_owner_id', 'name', 'email', 'email_verified_at', 'access_status', 'access_expires_at'])
+            ->with('roles.permissions')
             ->whereKey($actorIds)
             ->where('business_owner_id', $application->business->business_owner_id)
             ->get()

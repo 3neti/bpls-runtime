@@ -17,7 +17,7 @@ class BuildComputationAssessmentSlip
     {
         $assessment->loadMissing([
             'assessedBy',
-            'decision.decidedBy.role',
+            'decision.decidedBy.roles',
             'permitApplication.declaration',
             'permitApplication.business.owner',
             'permitApplication.lines.lineOfBusiness',

@@ -3,7 +3,6 @@
 use App\Enums\UserPermission;
 use App\Enums\UserRole;
 use App\Models\Role;
-use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('authorized staff can inspect municipality identity and explicit authority status', function () {
@@ -138,7 +137,7 @@ test('admin can inspect municipality configuration through the runtime role over
         'name' => 'Admin',
         'code' => UserRole::Admin->value,
     ]);
-    $admin = User::factory()->create(['role_id' => $adminRole->id]);
+    $admin = userWithRole($adminRole);
 
     expect($adminRole->permissions()->count())->toBe(0)
         ->and($admin->can(UserPermission::ViewMunicipalityConfiguration->value))->toBeTrue();

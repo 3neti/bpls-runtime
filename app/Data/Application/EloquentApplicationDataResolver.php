@@ -64,7 +64,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         $application = PermitApplication::query()->with([
             'declaration.signatureEvidences.media',
             'business.owner',
-            'submittedBy.role.permissions',
+            'submittedBy.roles.permissions',
             'lines.lineOfBusiness',
             'documents.media',
             'treasuryLineOfBusinessAssignments.lineOfBusiness',
@@ -281,7 +281,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             actor_context: new ActorContextData(
                 actor_id: $viewer?->id,
                 actor_label: $this->actorLabel($application, $viewer),
-                role_code: $viewer?->role?->code,
+                role_code: $viewer?->primaryRole()?->code,
                 current_tasks: $tasks,
                 available_affordances: $affordances,
                 work_notes: $workNotes,
@@ -1433,7 +1433,6 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         }
 
         $tasks = [];
-        $roleCode = $viewer->role?->code;
         $isApplicant = $viewer->business_owner_id !== null && $viewer->business_owner_id === $application->business->business_owner_id;
         $assessment = $application->assessments->first();
         $schedule = $application->paymentSchedules->sortByDesc('sequence')->first();
@@ -1450,7 +1449,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             $projectionItems = is_array($projection['items'] ?? null) ? $projection['items'] : [];
             collect($projectionItems)
                 ->filter(fn (array $item): bool => $item['resolution'] !== 'resolved'
-                    && ($item['responsible_party'] === $roleCode || data_get($item, 'metadata.authorized_actor_id') === $viewer->id))
+                    && ($viewer->hasRole($item['responsible_party']) || data_get($item, 'metadata.authorized_actor_id') === $viewer->id))
                 ->each(function (array $item) use (&$tasks, $application): void {
                     $tasks[] = $this->task(
                         'responsibility_'.$item['id'],

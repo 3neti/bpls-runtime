@@ -3,7 +3,6 @@
 use App\Enums\UserPermission;
 use App\Enums\UserRole;
 use App\Models\Role;
-use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('authorized staff can open the report catalog', function () {
@@ -36,7 +35,7 @@ test('admin can open the report catalog through the runtime role override', func
         'name' => 'Admin',
         'code' => UserRole::Admin->value,
     ]);
-    $admin = User::factory()->create(['role_id' => $adminRole->id]);
+    $admin = userWithRole($adminRole);
 
     expect($admin->can(UserPermission::ViewReports->value))->toBeTrue();
 

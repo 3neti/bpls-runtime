@@ -98,7 +98,7 @@ class StakeholderPreviewSafety
 
         $readyPersonaKeys = collect(StakeholderPreviewPersona::cases())
             ->filter(function (StakeholderPreviewPersona $persona): bool {
-                $user = User::query()->with('role.permissions')->where('email', $persona->approvedEmail())->first();
+                $user = User::query()->with('roles.permissions')->where('email', $persona->approvedEmail())->first();
 
                 return $user instanceof User && $this->matchesPersona($user, $persona);
             })
@@ -128,7 +128,7 @@ class StakeholderPreviewSafety
         $this->ensureEnabled();
 
         $user = User::query()
-            ->with('role.permissions')
+            ->with('roles.permissions')
             ->where('email', $persona->approvedEmail())
             ->first();
 
@@ -238,13 +238,13 @@ class StakeholderPreviewSafety
 
     public function matchesPersona(User $user, StakeholderPreviewPersona $persona): bool
     {
-        $actualPermissions = $user->role?->permissions->pluck('code')->sort()->values()->all() ?? [];
+        $actualPermissions = $user->getAllPermissions()->pluck('code')->sort()->values()->all();
         $expectedPermissions = collect($persona->permissions())->map->value->sort()->values()->all();
 
         return $user->email === $persona->approvedEmail()
             && $user->name === $persona->accountName()
             && $user->email_verified_at !== null
-            && $user->role?->code === $persona->roleCode()
+            && $user->hasRole($persona->roleCode())
             && $user->two_factor_secret === null
             && $user->two_factor_recovery_codes === null
             && $user->two_factor_confirmed_at === null

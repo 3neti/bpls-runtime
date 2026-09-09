@@ -31,11 +31,13 @@ class CreateNewUser implements CreatesNewUsers
 
         $citizenRole = $this->ensureCitizenRole->handle();
 
-        return User::create([
-            'role_id' => $citizenRole->id,
+        $user = User::create([
             'name' => $input['name'],
             'email' => $input['email'],
             'password' => $input['password'],
         ]);
+        $user->assignRole($citizenRole);
+
+        return $user;
     }
 }

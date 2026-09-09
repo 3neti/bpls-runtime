@@ -102,9 +102,7 @@ test('approved preview citizen receives the deterministic Ipil application helpe
             ->missing('labIntakeFixtures.0.fields.business_id')
             ->missing('labIntakeFixtures.0.fields.application_number'));
 
-    $ordinaryCitizen = User::factory()->create([
-        'role_id' => Role::query()->where('code', 'citizen')->sole()->id,
-    ]);
+    $ordinaryCitizen = userWithRole(Role::query()->where('code', 'citizen')->sole());
 
     $this->actingAs($ordinaryCitizen)
         ->get(route('citizen.permit-applications.create'))
@@ -732,9 +730,7 @@ test('entry fails closed when the exact synthetic identity is altered', function
     $management = $accounts['management'];
 
     if (isset($changes['permission'])) {
-        $management->role?->permissions()->detach(
-            Permission::query()->where('code', $changes['permission'])->value('id'),
-        );
+        $management->primaryRole()?->revokePermissionTo($changes['permission']);
     } else {
         $management->forceFill($changes)->save();
     }
@@ -853,11 +849,11 @@ function createStakeholderPreviewAccounts(): array
                 'name' => $persona->accountName(),
                 'email' => $persona->approvedEmail(),
                 'email_verified_at' => now(),
-                'role_id' => $role->id,
                 'two_factor_secret' => null,
                 'two_factor_recovery_codes' => null,
                 'two_factor_confirmed_at' => null,
             ]);
+            $user->assignRole($role);
 
             return [$persona->value => $user];
         })

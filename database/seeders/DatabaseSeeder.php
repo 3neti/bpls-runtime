@@ -2,23 +2,22 @@
 
 namespace Database\Seeders;
 
-use App\Actions\EnsureCitizenRole;
-use App\Enums\UserPermission;
-use App\Enums\UserRole;
-use App\Models\Permission;
-use App\Models\Role;
-use App\Models\User;
+use App\Actions\EnsureBplsInstitution;
+use App\Actions\InspectInstallationReadiness;
+use App\Actions\ProvisionLifecycleLaboratoryActors;
+use App\Actions\ProvisionStakeholderPreviewPersonas;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
 
     public function __construct(
-        private readonly EnsureCitizenRole $ensureCitizenRole,
+        private readonly EnsureBplsInstitution $ensureBplsInstitution,
+        private readonly ProvisionLifecycleLaboratoryActors $provisionLaboratoryActors,
+        private readonly ProvisionStakeholderPreviewPersonas $provisionPreviewPersonas,
+        private readonly InspectInstallationReadiness $inspectReadiness,
     ) {}
 
     /**
@@ -26,42 +25,18 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call(RevenueCodeFeeCatalogSeeder::class);
+        $this->call(MunicipalFeeCatalogSeeder::class);
         $this->call(NelsonConcernedOfficeFeeCatalogSeeder::class);
         $this->call(NelsonTreasuryLobFeeCatalogSeeder::class);
-        $this->call(MunicipalFeeCatalogSeeder::class);
+        $this->call(RevenueCodeFeeCatalogSeeder::class);
 
-        $permissions = collect(UserPermission::cases())
-            ->mapWithKeys(fn (UserPermission $permission): array => [
-                $permission->value => Permission::firstOrCreate(
-                    ['code' => $permission->value],
-                    [
-                        'name' => str($permission->value)->replace(['.', '_'], ' ')->title()->toString(),
-                        'description' => null,
-                    ],
-                ),
-            ]);
+        $this->ensureBplsInstitution->handle();
+        $this->provisionPreviewPersonas->handle();
 
-        $adminRole = Role::firstOrCreate(
-            ['code' => UserRole::Admin->value],
-            [
-                'name' => 'Admin',
-                'description' => 'Local administrative scenario role.',
-            ],
-        );
-        $adminRole->permissions()->syncWithoutDetaching($permissions->pluck('id')->all());
-
-        $this->ensureCitizenRole->handle();
-
-        $user = User::query()->firstOrNew(['email' => 'test@example.com']);
-
-        if (! $user->exists) {
-            $user->name = 'Test User';
-            $user->password = Hash::make(Str::password(40));
-            $user->email_verified_at = now();
+        if (config('bpls_installation.seed_laboratory_actors') === true) {
+            $this->provisionLaboratoryActors->handle();
         }
 
-        $user->role_id = $adminRole->id;
-        $user->save();
+        $this->inspectReadiness->handle();
     }
 }

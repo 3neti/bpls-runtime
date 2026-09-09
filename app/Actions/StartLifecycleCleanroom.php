@@ -4,12 +4,9 @@ namespace App\Actions;
 
 use App\LifecycleScenarios\LifecycleCleanroomDefinition;
 use App\Models\LifecycleCleanroomRun;
-use App\Models\Permission;
-use App\Models\Role;
 use App\Models\User;
 use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class StartLifecycleCleanroom
@@ -19,6 +16,7 @@ class StartLifecycleCleanroom
         private readonly LifecycleCleanroomDefinition $definition,
         private readonly EnsureProductLabLineOfBusinessCatalog $ensureCatalog,
         private readonly BuildSourceBackedNewApplicationIntake $buildSourceBackedIntake,
+        private readonly ProvisionLifecycleLaboratoryActors $provisionActors,
     ) {}
 
     public function handle(
@@ -55,25 +53,11 @@ class StartLifecycleCleanroom
             }
 
             $publicId = (string) Str::ulid();
+            /** @var array<string, array{label: string, user_id: int, role_id: int}> $actors */
             $actors = [];
-            foreach ($this->definition->actors() as $key => $definition) {
-                $role = Role::query()->firstOrCreate(
-                    ['code' => 'lifecycle-cleanroom-'.$key],
-                    ['name' => 'Cleanroom '.$definition['label'], 'description' => 'Synthetic Lifecycle Laboratory role; never a production municipal assignment.'],
-                );
-                $role->permissions()->sync(collect($definition['permissions'])->map(
-                    fn ($permission): int => Permission::query()->firstOrCreate(
-                        ['code' => $permission->value],
-                        ['name' => str($permission->value)->replace('.', ' ')->title()->toString()],
-                    )->id,
-                ));
-                $user = User::query()->create([
-                    'role_id' => $role->id,
-                    'name' => 'Cleanroom '.Str::substr($publicId, -6).' '.$definition['label'],
-                    'email' => 'cleanroom-'.Str::lower($publicId).'-'.$key.'@example.test',
-                    'password' => Hash::make(Str::random(48)),
-                ]);
-                $user->forceFill(['email_verified_at' => now()])->save();
+            foreach ($this->provisionActors->handle() as $key => $user) {
+                $definition = $this->definition->actors()[$key];
+                $role = $user->primaryRole() ?? throw new \RuntimeException("Lifecycle laboratory actor [{$key}] has no role.");
                 $actors[$key] = [
                     'label' => $definition['label'],
                     'user_id' => $user->id,
@@ -98,7 +82,8 @@ class StartLifecycleCleanroom
                 'owned_resource_manifest' => [
                     'ceremony' => $ceremony,
                     'source_specimen_id' => $sourceSpecimenId,
-                    'user_ids' => collect($actors)->pluck('user_id')->sort()->values()->all(),
+                    'user_ids' => [],
+                    'provisioned_actor_user_ids' => collect($actors)->pluck('user_id')->sort()->values()->all(),
                     'business_owner_ids' => [],
                     'business_ids' => [],
                     'permit_application_ids' => [],

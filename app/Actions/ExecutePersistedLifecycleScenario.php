@@ -149,7 +149,7 @@ final class ExecutePersistedLifecycleScenario
             'receipt_ids' => [],
             'provisional_permit_completion_ids' => $application->provisionalUatPermitCompletion()->pluck('id')->sort()->values()->all(),
             'actor_user_ids' => $this->actorUserIds($result),
-            'actor_role_ids' => User::query()->whereKey($this->actorUserIds($result))->pluck('role_id')->filter()->unique()->sort()->values()->all(),
+            'actor_role_ids' => User::query()->whereKey($this->actorUserIds($result))->with('roles:id')->get()->flatMap->roles->pluck('id')->unique()->sort()->values()->all(),
             'semantic_classification' => 'synthetic_only',
             'production_liability' => false,
         ];

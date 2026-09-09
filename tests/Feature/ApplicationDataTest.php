@@ -26,8 +26,8 @@ test('ApplicationData V1 contains typed canonical facts without Eloquent models 
     app(ExecutePersistedLifecycleScenario::class)->handle(NewApplicationHappyPathDefinition::Id);
     $specimen = LifecycleScenarioSpecimen::query()->where('scenario_id', NewApplicationHappyPathDefinition::Id)->sole();
     $application = $specimen->permitApplication;
-    $citizen = User::query()->with('role.permissions')->where('email', 'scenario-citizen@example.test')->sole();
-    $health = User::query()->with('role.permissions')->where('email', 'scenario-01-health@example.test')->sole();
+    $citizen = User::query()->with('roles.permissions')->where('email', 'scenario-citizen@example.test')->sole();
+    $health = User::query()->with('roles.permissions')->where('email', 'scenario-01-health@example.test')->sole();
     $resolver = app(ApplicationDataResolver::class);
 
     $citizenData = $resolver->resolve($application, $citizen)->toArray();
@@ -118,7 +118,7 @@ test('Official Receipt projection requires canonical Receipt truth and permit va
     app(ExecutePersistedLifecycleScenario::class)->handle(NewApplicationHappyPathDefinition::Id);
     $application = PermitApplication::query()->sole();
     $schedule = $application->paymentSchedules()->sole();
-    $collector = User::query()->with('role.permissions')->where('email', 'scenario-01-treasury-counter-check@example.test')->sole();
+    $collector = User::query()->with('roles.permissions')->where('email', 'scenario-01-treasury-counter-check@example.test')->sole();
     $collection = app(RecordPaymentScheduleCollection::class)->handle($schedule, [
         'amount_cents' => $schedule->total_amount_cents,
         'method' => 'cash',
@@ -146,7 +146,7 @@ test('Official Receipt projection requires canonical Receipt truth and permit va
     ], $collector);
     $afterReceipt = app(ApplicationDataResolver::class)->resolve($application->fresh())->toArray();
     $receiptViewer = User::query()
-        ->with('role.permissions')
+        ->with('roles.permissions')
         ->where('email', 'stakeholder.preview.cashier@example.test')
         ->sole();
     $authorizedReceipt = app(ApplicationDataResolver::class)->resolve($application->fresh(), $receiptViewer)->toArray();

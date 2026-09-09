@@ -40,7 +40,7 @@ class RecordAssessmentDecision
                 ->firstOrFail();
 
             $lockedAssessment->load(['decision', 'treasuryCounterCheck', 'lines' => fn ($query) => $query->orderBy('id')]);
-            $decidedBy->loadMissing('role');
+            $decidedBy->loadMissing('roles.permissions');
 
             $this->assertDecisionMayBeRecorded($lockedAssessment, $permitApplication, $decidedBy);
 
@@ -72,7 +72,7 @@ class RecordAssessmentDecision
                         'actor' => [
                             'user_id' => $decidedBy->id,
                             'name' => $decidedBy->name,
-                            'role_code' => $decidedBy->role?->code,
+                            'role_code' => $decidedBy->primaryRole()?->code,
                         ],
                         'decided_at' => $decidedAt->toIso8601String(),
                         'reason' => $normalizedReason,

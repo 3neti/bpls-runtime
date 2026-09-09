@@ -55,7 +55,7 @@ class DescribeBusinessPermitEvaluation
         $activeAssessment = $evaluation->permitApplication->assessments->firstWhere('superseded_at', null);
         $myItems = collect($projection['items'])->filter(function (array $item) use ($viewer): bool {
             return data_get($item, 'metadata.authorized_actor_id') === $viewer->id
-                || $item['responsible_party'] === $viewer->role?->code;
+                || $viewer->hasRole($item['responsible_party']);
         })->pluck('id')->all();
 
         return new BusinessPermitEvaluationData(

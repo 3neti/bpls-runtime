@@ -51,8 +51,8 @@ test('bpls install establishes a coherent zero-transaction institutional baselin
         ->and(Role::query()->count())->toBe(15)
         ->and(Permission::query()->count())->toBe(count(UserPermission::cases()))
         ->and(InstitutionalPosition::query()->count())->toBe(13)
-        ->and($admin->role_id)->toBe($adminRole->id)
-        ->and($adminRole->name)->toBe('BPLS Super User')
+        ->and($admin->roles->pluck('id')->all())->toContain($adminRole->id)
+        ->and($adminRole->display_name)->toBe('BPLS Super User')
         ->and(InstitutionalPosition::query()->where('code', 'super_user')->exists())->toBeFalse()
         ->and($first['commissioning_administrator']['provisioning_status'])->toBe('linked_password_reset_required')
         ->and($second['fingerprints'])->toBe($first['fingerprints'])
@@ -85,25 +85,25 @@ test('preview enabled install provisions only the canonical launcher identities 
     $first = app(InstallBplsBaseline::class)->handle();
     $firstAccounts = User::query()
         ->whereIn('email', collect(StakeholderPreviewPersona::cases())->map->approvedEmail())
-        ->with('role.permissions')
+        ->with('roles.permissions')
         ->get()
         ->mapWithKeys(fn (User $user): array => [$user->email => [
             'id' => $user->id,
             'password' => $user->password,
-            'role' => $user->role?->code,
-            'permissions' => $user->role?->permissions->pluck('code')->sort()->values()->all(),
+            'roles' => $user->roleCodes(),
+            'permissions' => $user->getAllPermissions()->pluck('code')->sort()->values()->all(),
         ]])
         ->all();
     $second = app(InstallBplsBaseline::class)->handle();
     $secondAccounts = User::query()
         ->whereIn('email', collect(StakeholderPreviewPersona::cases())->map->approvedEmail())
-        ->with('role.permissions')
+        ->with('roles.permissions')
         ->get()
         ->mapWithKeys(fn (User $user): array => [$user->email => [
             'id' => $user->id,
             'password' => $user->password,
-            'role' => $user->role?->code,
-            'permissions' => $user->role?->permissions->pluck('code')->sort()->values()->all(),
+            'roles' => $user->roleCodes(),
+            'permissions' => $user->getAllPermissions()->pluck('code')->sort()->values()->all(),
         ]])
         ->all();
 

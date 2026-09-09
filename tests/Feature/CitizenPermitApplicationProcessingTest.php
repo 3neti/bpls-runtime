@@ -17,7 +17,6 @@ use App\Models\PermitApplication;
 use App\Models\PermitClearance;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
-use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('citizens can view authoritative assessment and payment state for an owned application', function () {
@@ -248,7 +247,7 @@ test('citizens cannot view another applicants processing or financial state', fu
         UserPermission::ViewOwnPermitApplications,
         UserPermission::ViewOwnPermitApplicationFinancials,
     ], UserRole::Citizen);
-    $otherCitizen = User::factory()->create(['role_id' => $citizen->role_id]);
+    $otherCitizen = userWithRole($citizen->primaryRole());
     $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->for($otherCitizen, 'submittedBy')->create([
         'status' => PermitApplicationStatus::PendingPayment,
     ]);

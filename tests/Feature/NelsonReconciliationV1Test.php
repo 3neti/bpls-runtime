@@ -55,20 +55,20 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         UserPermission::IssueReceipts,
     ];
     $bplo = userWithPermissions($staffPermissions, UserRole::Bplo);
-    $engineering = User::factory()->for($bplo->role)->create();
-    $health = User::factory()->for($bplo->role)->create();
-    $assessor = User::factory()->for($bplo->role)->create();
-    $treasurer = User::factory()->for($bplo->role)->create();
-    $cashier = User::factory()->for($bplo->role)->create();
-    $permitIssuer = User::factory()->for($bplo->role)->create();
-    $releasingOfficer = User::factory()->for($bplo->role)->create();
+    $engineering = userWithRole($bplo->primaryRole());
+    $health = userWithRole($bplo->primaryRole());
+    $assessor = userWithRole($bplo->primaryRole());
+    $treasurer = userWithRole($bplo->primaryRole());
+    $cashier = userWithRole($bplo->primaryRole());
+    $permitIssuer = userWithRole($bplo->primaryRole());
+    $releasingOfficer = userWithRole($bplo->primaryRole());
     $run = LifecycleCleanroomRun::factory()->for($bplo, 'startedBy')->create([
         'actor_manifest' => [
             'actors' => [
-                'engineering' => ['label' => 'Engineering', 'user_id' => $engineering->id, 'role_id' => $engineering->role_id],
-                'health' => ['label' => 'Health', 'user_id' => $health->id, 'role_id' => $health->role_id],
-                'permit_issuer' => ['label' => 'Mayor\'s Office', 'user_id' => $permitIssuer->id, 'role_id' => $permitIssuer->role_id],
-                'releasing_officer' => ['label' => 'Releasing Officer', 'user_id' => $releasingOfficer->id, 'role_id' => $releasingOfficer->role_id],
+                'engineering' => ['label' => 'Engineering', 'user_id' => $engineering->id, 'role_id' => $engineering->primaryRole()->id],
+                'health' => ['label' => 'Health', 'user_id' => $health->id, 'role_id' => $health->primaryRole()->id],
+                'permit_issuer' => ['label' => 'Mayor\'s Office', 'user_id' => $permitIssuer->id, 'role_id' => $permitIssuer->primaryRole()->id],
+                'releasing_officer' => ['label' => 'Releasing Officer', 'user_id' => $releasingOfficer->id, 'role_id' => $releasingOfficer->primaryRole()->id],
             ],
             'semantic_classification' => 'synthetic_only',
             'production_liability' => false,

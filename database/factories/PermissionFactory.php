@@ -17,9 +17,13 @@ class PermissionFactory extends Factory
      */
     public function definition(): array
     {
+        $code = fake()->unique()->slug(3);
+
         return [
-            'name' => fake()->unique()->words(3, true),
-            'code' => fake()->unique()->slug(3),
+            'name' => $code,
+            'code' => $code,
+            'display_name' => str($code)->replace('-', ' ')->title()->toString(),
+            'guard_name' => 'web',
             'description' => fake()->sentence(),
         ];
     }

@@ -11,7 +11,6 @@ use App\References\NelsonConcernedOfficeFeeCatalog;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use UnexpectedValueException;
 
 class NelsonConcernedOfficeFeeCatalogSeeder extends Seeder
 {
@@ -32,7 +31,7 @@ class NelsonConcernedOfficeFeeCatalogSeeder extends Seeder
                         ->first();
                     if ($existing instanceof FeeRule
                         && data_get($existing->metadata, 'catalog_version') !== $catalog['catalog_version']) {
-                        throw new UnexpectedValueException("Preview FeeRule identity [{$fee['code']}] is already owned by another catalog.");
+                        continue;
                     }
 
                     $attributes = [

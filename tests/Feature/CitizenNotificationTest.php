@@ -33,7 +33,7 @@ test('formal submission records one factual in-app receipt notice', function () 
 
 test('citizen sees only owned notices and may mark an owned notice as read', function () {
     [$citizen, $application] = citizenNotificationDraft();
-    $otherCitizen = User::factory()->create(['role_id' => $citizen->role_id]);
+    $otherCitizen = userWithRole($citizen->primaryRole());
     [$otherCitizen, $otherApplication] = citizenNotificationDraft($otherCitizen);
     app(SubmitCitizenPermitApplication::class)->handle($application, $citizen, true);
     app(SubmitCitizenPermitApplication::class)->handle($otherApplication, $otherCitizen, true);
@@ -63,7 +63,7 @@ test('citizen sees only owned notices and may mark an owned notice as read', fun
 
 test('citizen cannot read or update another users notice', function () {
     [$citizen] = citizenNotificationDraft();
-    $otherCitizen = User::factory()->create(['role_id' => $citizen->role_id]);
+    $otherCitizen = userWithRole($citizen->primaryRole());
     [$otherCitizen, $otherApplication] = citizenNotificationDraft($otherCitizen);
     app(SubmitCitizenPermitApplication::class)->handle($otherApplication, $otherCitizen, true);
     $otherNotification = $otherCitizen->notifications()->sole();

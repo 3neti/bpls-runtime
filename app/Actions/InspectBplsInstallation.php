@@ -66,8 +66,11 @@ class InspectBplsInstallation
         $paymentOrderPreviewRules = $feeRules
             ->filter(fn (FeeRule $rule): bool => data_get($rule->metadata, 'assessment_selection') === 'concerned_office_payment_order_only'
                 && data_get($rule->metadata, 'production_authority') === false);
+        $treasuryPreviewRules = $feeRules
+            ->filter(fn (FeeRule $rule): bool => str_starts_with($rule->code, 'LAB-NELSON-LOB-')
+                && data_get($rule->metadata, 'semantic_classification') === 'synthetic_only');
         $syntheticRules = $feeRules
-            ->whereNotIn('id', $paymentOrderPreviewRules->modelKeys())
+            ->whereNotIn('id', $paymentOrderPreviewRules->merge($treasuryPreviewRules)->modelKeys())
             ->filter(fn (FeeRule $rule): bool => in_array(
                 FeeRulePublicationSource::forRule($rule),
                 [
@@ -372,7 +375,7 @@ class InspectBplsInstallation
         }
 
         $isLinked = User::query()->where('email', mb_strtolower(trim($email)))
-            ->whereHas('role', fn ($query) => $query->where('code', UserRole::Admin->value))
+            ->whereHas('roles', fn ($query) => $query->where('code', UserRole::Admin->value))
             ->exists();
 
         return ['status' => $isLinked ? 'linked_password_reset_required' : 'configured_identity_missing'];

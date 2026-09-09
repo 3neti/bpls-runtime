@@ -121,7 +121,7 @@ class PermitApplicationAssessmentController extends Controller
 
         $assessment->load([
             'assessedBy',
-            'decision.decidedBy.role',
+            'decision.decidedBy.roles',
             'permitApplication.business.owner',
             'permitApplication.lines.lineOfBusiness',
             'lines.lineOfBusiness',
@@ -182,7 +182,7 @@ class PermitApplicationAssessmentController extends Controller
                     'action' => $assessment->decision->action->value,
                     'decided_at' => $assessment->decision->decided_at->toIso8601String(),
                     'decided_by' => $assessment->decision->decidedBy?->name,
-                    'decided_by_role' => $assessment->decision->decidedBy?->role?->name,
+                    'decided_by_role' => $assessment->decision->decidedBy?->primaryRole()?->display_name,
                     'reason' => $assessment->decision->reason,
                     'assessment_snapshot_hash' => $assessment->decision->assessment_snapshot_hash,
                     'total_amount_cents' => $assessment->decision->total_amount_cents,
@@ -388,7 +388,7 @@ class PermitApplicationAssessmentController extends Controller
 
             return $items
                 ->filter(fn (array $item): bool => $item['resolution'] !== 'resolved'
-                    && ($item['responsible_party'] === $user->role?->code
+                    && ($user->hasRole($item['responsible_party'])
                         || data_get($item, 'metadata.authorized_actor_id') === $user->id))
                 ->map(fn (array $item): array => [
                     'label' => (string) data_get($item, 'metadata.label', str($item['key'])->headline()),

@@ -5,32 +5,37 @@ namespace App\Models;
 use Database\Factories\RoleFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Spatie\Permission\Models\Role as SpatieRole;
 
 /**
  * @property int $id
- * @property string $name
+ * @property string $name Canonical machine name.
  * @property string $code
+ * @property string $display_name
  * @property string|null $description
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'code', 'description'])]
-class Role extends Model
+#[Fillable(['name', 'code', 'display_name', 'description', 'guard_name'])]
+class Role extends SpatieRole
 {
     /** @use HasFactory<RoleFactory> */
     use HasFactory;
 
-    public function users(): HasMany
+    public function label(): string
     {
-        return $this->hasMany(User::class);
+        return $this->display_name;
     }
 
-    public function permissions(): BelongsToMany
+    protected static function booted(): void
     {
-        return $this->belongsToMany(Permission::class)->withTimestamps();
+        static::saving(function (Role $role): void {
+            $role->display_name ??= $role->name !== $role->code
+                ? $role->name
+                : str($role->code)->replace('_', ' ')->title()->toString();
+            $role->name = $role->code;
+            $role->guard_name = 'web';
+        });
     }
 }

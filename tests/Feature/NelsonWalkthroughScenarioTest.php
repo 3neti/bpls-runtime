@@ -79,8 +79,8 @@ test('local preparation creates runtime-only demo credentials and a resumable wa
 
     expect(Hash::check($password, $citizen->password))->toBeTrue()
         ->and(Hash::check($password, $operator->password))->toBeTrue()
-        ->and($citizen->role?->code)->toBe('citizen')
-        ->and($operator->role?->code)->toBe('admin')
+        ->and($citizen->primaryRole()?->code)->toBe('citizen')
+        ->and($operator->primaryRole()?->code)->toBe('admin')
         ->and($approver->id)->not->toBe($operator->id)
         ->and($manifest['resources']['assessment_approved_by_id'])->toBe($approver->id)
         ->and($manifest['resources']['assessment_prepared_by_id'])->toBe($operator->id)

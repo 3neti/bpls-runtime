@@ -43,7 +43,7 @@ final class RolePermissionMatrixVisibilityScenario
 
         $manifest['resources'] = [
             'record_type' => 'authorization_matrix',
-            'record_id' => $operator->role_id,
+            'record_id' => $operator->primaryRole()?->id,
             'public_reference' => 'Current role and permission matrix',
             'matrix_url' => route('staff.roles.index', absolute: false),
             'role_count' => data_get($matrix, 'summary.role_count'),

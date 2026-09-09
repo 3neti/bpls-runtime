@@ -33,10 +33,9 @@ class CompleteBusinessPermitEvaluationResponsibility
         ?string $authority = null,
     ): BusinessPermitEvaluationItemRevision {
         $authorizedActorId = data_get($item->metadata, 'authorized_actor_id');
-        $actorRole = $actor->role?->code;
         if (! $actor->hasRole(UserRole::Admin)
             && $authorizedActorId !== $actor->id
-            && $item->responsible_party !== $actorRole) {
+            && ! $actor->hasRole($item->responsible_party)) {
             throw new LogicException("This Evaluation responsibility belongs to [{$item->responsible_party}].");
         }
 

@@ -168,7 +168,7 @@ test('Citizen Profile surface requires Citizen application visibility and return
     $accessOnlyRole->permissions()->attach(
         Permission::query()->where('code', UserPermission::AccessCitizen->value)->sole(),
     );
-    $citizenWithoutVisibility = User::factory()->create(['role_id' => $accessOnlyRole->id]);
+    $citizenWithoutVisibility = userWithRole($accessOnlyRole);
 
     $this->actingAs($citizenWithoutVisibility)
         ->get(route('citizen.profile.show'))

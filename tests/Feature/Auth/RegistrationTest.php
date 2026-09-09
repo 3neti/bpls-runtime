@@ -24,7 +24,7 @@ test('new users can register', function () {
 
     $this->assertAuthenticated();
     $response->assertRedirect(route('dashboard', absolute: false));
-    expect(auth()->user()->role->code)->toBe(UserRole::Citizen->value)
+    expect(auth()->user()->hasRole(UserRole::Citizen))->toBeTrue()
         ->and(auth()->user()->can(UserPermission::AccessCitizen->value))->toBeTrue()
         ->and(auth()->user()->can(UserPermission::CreateOwnPermitApplications->value))->toBeTrue()
         ->and(auth()->user()->can(UserPermission::EditOwnPermitApplications->value))->toBeTrue()

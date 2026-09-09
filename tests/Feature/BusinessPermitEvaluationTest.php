@@ -833,7 +833,7 @@ function businessPermitEvaluatorPreviewActors(): array
 
     return [
         'citizen' => User::factory()->create(),
-        'bplo' => User::factory()->for($bploRole)->create(),
+        'bplo' => userWithRole($bploRole),
         'assessment_officer' => User::factory()->create(),
         'treasury' => User::factory()->create(),
         'municipal_treasurer' => User::factory()->create(),

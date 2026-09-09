@@ -61,20 +61,32 @@ function something()
 function userWithPermissions(array $permissions, UserRole $roleCode = UserRole::Bplo): User
 {
     $role = Role::factory()->create([
-        'name' => str($roleCode->value)->replace('_', ' ')->title()->toString(),
+        'name' => $roleCode->value,
         'code' => $roleCode->value,
+        'display_name' => str($roleCode->value)->replace('_', ' ')->title()->toString(),
     ]);
 
     $role->permissions()->sync(collect($permissions)
         ->map(fn (\App\Enums\UserPermission|string $permission) => Permission::factory()->create([
-            'name' => str($permission instanceof UserPermission ? $permission->value : $permission)->replace('.', ' ')->title()->toString(),
+            'name' => $permission instanceof UserPermission ? $permission->value : $permission,
             'code' => $permission instanceof UserPermission ? $permission->value : $permission,
+            'display_name' => str($permission instanceof UserPermission ? $permission->value : $permission)->replace('.', ' ')->title()->toString(),
         ])->id)
         ->all());
 
-    return User::factory()->create([
-        'role_id' => $role->id,
-    ]);
+    $user = User::factory()->create();
+    $user->assignRole($role);
+
+    return $user;
+}
+
+/** @param array<string, mixed> $attributes */
+function userWithRole(Role $role, array $attributes = []): User
+{
+    $user = User::factory()->create($attributes);
+    $user->assignRole($role);
+
+    return $user->load('roles.permissions');
 }
 
 function linkPortalUserToApplicationOwner(User $citizen, PermitApplication $application): void

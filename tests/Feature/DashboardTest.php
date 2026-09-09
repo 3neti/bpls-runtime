@@ -96,7 +96,7 @@ test('admin navigation permissions reflect the existing runtime override', funct
         'name' => 'Admin',
         'code' => UserRole::Admin->value,
     ]);
-    $admin = User::factory()->create(['role_id' => $adminRole->id]);
+    $admin = userWithRole($adminRole);
 
     expect($adminRole->permissions()->count())->toBe(0);
 

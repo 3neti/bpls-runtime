@@ -23,20 +23,18 @@ class EnsureBplsInstitution
             $permissions = collect(UserPermission::cases())
                 ->mapWithKeys(fn (UserPermission $permission): array => [
                     $permission->value => Permission::query()->updateOrCreate(
-                        ['code' => $permission->value],
-                        ['name' => str($permission->value)->replace(['.', '_'], ' ')->title()->toString(), 'description' => null],
+                        ['name' => $permission->value, 'guard_name' => 'web'],
+                        ['code' => $permission->value, 'display_name' => str($permission->value)->replace(['.', '_'], ' ')->title()->toString(), 'description' => null],
                     ),
                 ]);
 
             $roles = collect($this->roleDefinitions())
                 ->mapWithKeys(function (array $definition, string $code) use ($permissions): array {
                     $role = Role::query()->updateOrCreate(
-                        ['code' => $code],
-                        ['name' => $definition['name'], 'description' => $definition['description']],
+                        ['name' => $code, 'guard_name' => 'web'],
+                        ['code' => $code, 'display_name' => $definition['name'], 'description' => $definition['description']],
                     );
-                    $role->permissions()->sync(
-                        $permissions->only($definition['permissions'])->pluck('id')->all(),
-                    );
+                    $role->syncPermissions($permissions->only($definition['permissions'])->values());
 
                     return [$code => $role];
                 });
@@ -152,17 +150,17 @@ class EnsureBplsInstitution
         }
 
         $user = User::query()->where('email', $email)->first();
-        if ($user instanceof User && $user->role_id !== $adminRole->id) {
+        if ($user instanceof User && ! $user->hasRole($adminRole)) {
             throw new RuntimeException("Commissioning administrator email [{$email}] belongs to a non-administrative account.");
         }
 
         if (! $user instanceof User) {
             $user = User::query()->create([
-                'role_id' => $adminRole->id,
                 'name' => (string) config('bpls_installation.commissioning_administrator.name'),
                 'email' => $email,
                 'password' => Hash::make(Str::random(64)),
             ]);
+            $user->assignRole($adminRole);
         }
 
         return ['status' => 'linked_password_reset_required', 'email' => $email, 'user_id' => $user->id];
