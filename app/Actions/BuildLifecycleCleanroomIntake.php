@@ -17,17 +17,17 @@ class BuildLifecycleCleanroomIntake
     public function handle(LifecycleCleanroomRun $run): array
     {
         $ownerName = 'Cleanroom Synthetic Owner '.str($run->public_id)->substr(-6)->upper();
-        if ($run->isNelsonReconciliationV1()) {
+        if ($run->usesNelsonReconciliationProfile()) {
             if ($run->usesSourceBackedNewApplication()) {
                 return [
                     ...$this->buildSourceBackedIntake->handle(),
-                    'ceremony' => LifecycleCleanroomRun::CeremonyNelsonReconciliationV1,
+                    'ceremony' => data_get($run->actor_manifest, 'ceremony'),
                     'run_id' => $run->public_id,
                 ];
             }
 
             return [
-                'ceremony' => LifecycleCleanroomRun::CeremonyNelsonReconciliationV1,
+                'ceremony' => data_get($run->actor_manifest, 'ceremony'),
                 'run_id' => $run->public_id,
                 'application_year' => NewApplicationHappyPathDefinition::ApplicationYear,
                 'owner_name' => $ownerName,

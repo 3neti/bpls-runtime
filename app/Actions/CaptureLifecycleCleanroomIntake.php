@@ -48,7 +48,7 @@ class CaptureLifecycleCleanroomIntake
         }
 
         $metadata = $application->metadata ?? [];
-        $scenarioId = $lockedRun->isNelsonReconciliationV1()
+        $scenarioId = $lockedRun->usesNelsonReconciliationProfile()
             ? LifecycleCleanroomRun::CeremonyNelsonReconciliationV1
             : 'new-application-happy-path';
         $metadata['lifecycle_cleanroom'] = [

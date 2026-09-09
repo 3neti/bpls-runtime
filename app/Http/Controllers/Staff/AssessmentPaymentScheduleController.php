@@ -10,6 +10,7 @@ use App\Enums\TreasuryCollectionMethod;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Models\Assessment;
+use App\Models\LifecycleCleanroomRun;
 use App\Models\PaymentSchedule;
 use App\Models\TreasuryCollection;
 use Illuminate\Http\RedirectResponse;
@@ -96,6 +97,15 @@ class AssessmentPaymentScheduleController extends Controller
         $canIssueReceipts = auth()->user()?->can(UserPermission::IssueReceipts->value) ?? false;
         $canViewReceipts = auth()->user()?->can(UserPermission::ViewReceipts->value) ?? false;
 
+        $runId = data_get($paymentSchedule->permitApplication->metadata, 'lifecycle_cleanroom.run_id');
+        $classicRun = is_string($runId)
+            ? LifecycleCleanroomRun::query()->where('public_id', $runId)->first()
+            : null;
+        $canSimulateClassicPayment = $classicRun instanceof LifecycleCleanroomRun
+            && $classicRun->isClassicLifecycleV1()
+            && $classicRun->status === 'active'
+            && data_get($classicRun->actor_manifest, 'actors.cashier.user_id') === auth()->id();
+
         $paymentSchedule->load([
             'preparedBy',
             'assessment',
@@ -128,7 +138,11 @@ class AssessmentPaymentScheduleController extends Controller
                 'view_collections' => $canViewCollections,
                 'issue_receipts' => $canIssueReceipts,
                 'view_receipts' => $canViewReceipts,
+                'simulate_classic_payment' => $canSimulateClassicPayment,
             ],
+            'classicPaymentSimulationUrl' => $canSimulateClassicPayment
+                ? route('staff.payment-schedules.classic-payment-simulation.store', $paymentSchedule, false)
+                : null,
         ]);
     }
 
@@ -256,8 +270,8 @@ class AssessmentPaymentScheduleController extends Controller
                             'receipt_group_key' => $allocation->receipt_group_key,
                             'receipt_group_label' => $allocation->receipt_group_label,
                             'receipt_id' => $allocation->receipt_id,
-                        ]),
-                ]),
+                        ])->all(),
+                ])->all(),
             'payment_policy_boundary' => $this->describePaymentPolicyBoundary->handle($paymentSchedule),
             'online_payment_boundary' => $this->describeOnlinePaymentBoundary->handle($paymentSchedule),
         ];

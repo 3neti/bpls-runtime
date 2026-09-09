@@ -2,16 +2,20 @@
 
 namespace App\Providers;
 
+use App\Actions\RecordClassicLifecycleCeremonyEvent;
 use App\Data\Application\ApplicationDataResolver;
 use App\Data\Application\EloquentApplicationDataResolver;
 use App\Enums\UserPermission;
 use App\Enums\UserRole;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -33,6 +37,21 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->configureClassicLifecycleObservation();
+    }
+
+    private function configureClassicLifecycleObservation(): void
+    {
+        Event::listen(Login::class, function (Login $event): void {
+            if ($event->user instanceof User) {
+                app(RecordClassicLifecycleCeremonyEvent::class)->forUser($event->user, 'logged_in', 'login.store');
+            }
+        });
+        Event::listen(Logout::class, function (Logout $event): void {
+            if ($event->user instanceof User) {
+                app(RecordClassicLifecycleCeremonyEvent::class)->forUser($event->user, 'logged_out', 'logout');
+            }
+        });
     }
 
     /**

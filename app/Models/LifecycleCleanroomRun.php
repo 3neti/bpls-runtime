@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -31,11 +33,23 @@ class LifecycleCleanroomRun extends Model
 
     public const CeremonyNelsonReconciliationV1 = 'nelson_reconciliation_v1';
 
+    public const CeremonyClassicLifecycleV1 = 'classic_lifecycle_v1';
+
     public const SourceSpecimenCal2026001New2025 = 'cal-2026-001-2025-new';
 
     public function isNelsonReconciliationV1(): bool
     {
         return data_get($this->actor_manifest, 'ceremony') === self::CeremonyNelsonReconciliationV1;
+    }
+
+    public function isClassicLifecycleV1(): bool
+    {
+        return data_get($this->actor_manifest, 'ceremony') === self::CeremonyClassicLifecycleV1;
+    }
+
+    public function usesNelsonReconciliationProfile(): bool
+    {
+        return $this->isNelsonReconciliationV1() || $this->isClassicLifecycleV1();
     }
 
     public function usesSourceBackedNewApplication(): bool
@@ -59,6 +73,18 @@ class LifecycleCleanroomRun extends Model
     public function renewalApplication(): BelongsTo
     {
         return $this->belongsTo(PermitApplication::class, 'renewal_application_id');
+    }
+
+    /** @return HasOne<LifecycleCleanroomRegistrationInvitation, $this> */
+    public function registrationInvitation(): HasOne
+    {
+        return $this->hasOne(LifecycleCleanroomRegistrationInvitation::class);
+    }
+
+    /** @return HasMany<LifecycleCleanroomCeremonyEvent, $this> */
+    public function ceremonyEvents(): HasMany
+    {
+        return $this->hasMany(LifecycleCleanroomCeremonyEvent::class);
     }
 
     /** @return array<string, array{label: string, user_id: int, role_id: int}> */

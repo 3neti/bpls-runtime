@@ -180,7 +180,9 @@ const props = defineProps<{
         view_collections: boolean;
         issue_receipts: boolean;
         view_receipts: boolean;
+        simulate_classic_payment: boolean;
     };
+    classicPaymentSimulationUrl: string | null;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -941,6 +943,33 @@ onBeforeUnmount(stopQrChecks);
                                 Awaiting payment confirmation
                             </p>
                         </div>
+
+                        <Form
+                            v-if="
+                                can.simulate_classic_payment &&
+                                classicPaymentSimulationUrl &&
+                                qrAttempt
+                            "
+                            :action="classicPaymentSimulationUrl"
+                            method="post"
+                            v-slot="{ processing }"
+                            class="mt-3"
+                        >
+                            <Button
+                                type="submit"
+                                variant="secondary"
+                                class="w-full"
+                                :disabled="processing"
+                                data-testid="classic-payment-simulate"
+                            >
+                                <Banknote />
+                                {{
+                                    processing
+                                        ? 'Recording payment…'
+                                        : 'Simulate QR Ph payment'
+                                }}
+                            </Button>
+                        </Form>
 
                         <p
                             v-else-if="

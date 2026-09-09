@@ -15,6 +15,7 @@ use App\Actions\ReleaseSyntheticLifecyclePermit;
 use App\Actions\ResolveLifecycleCleanroomState;
 use App\Actions\SimulateLifecycleOfficeReviews;
 use App\Actions\SimulateLifecycleQrPhPayment;
+use App\Actions\StartClassicLifecycleCleanroom;
 use App\Actions\StartLifecycleCleanroom;
 use App\Data\Application\ApplicationDataResolver;
 use App\Enums\StakeholderPreviewPersona;
@@ -25,6 +26,7 @@ use App\Models\PermitApplication;
 use App\Models\PostPaymentOfficeCertification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
 use LogicException;
@@ -49,8 +51,11 @@ class LifecycleCleanroomController extends Controller
         ]);
     }
 
-    public function start(Request $request, StartLifecycleCleanroom $start): RedirectResponse
-    {
+    public function start(
+        Request $request,
+        StartLifecycleCleanroom $start,
+        StartClassicLifecycleCleanroom $startClassic,
+    ): RedirectResponse {
         $ceremony = $request->string('ceremony')->toString();
         if ($ceremony === '') {
             $ceremony = LifecycleCleanroomRun::CeremonyLegacyRegression;
@@ -58,7 +63,17 @@ class LifecycleCleanroomController extends Controller
         abort_unless(in_array($ceremony, [
             LifecycleCleanroomRun::CeremonyLegacyRegression,
             LifecycleCleanroomRun::CeremonyNelsonReconciliationV1,
+            LifecycleCleanroomRun::CeremonyClassicLifecycleV1,
         ], true), 422);
+
+        if ($ceremony === LifecycleCleanroomRun::CeremonyClassicLifecycleV1) {
+            $classic = $startClassic->handle($request->user());
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->to($classic['registration_url']);
+        }
 
         $sourceSpecimenId = $request->string('source_specimen_id')->toString();
         if ($sourceSpecimenId === '') {
@@ -135,6 +150,11 @@ class LifecycleCleanroomController extends Controller
         AdvanceLifecycleCleanroom $advance,
         AuthenticateLifecycleCleanroomActor $authenticate,
     ): RedirectResponse {
+        if ($lifecycleCleanroomRun->isClassicLifecycleV1()) {
+            return to_route('stakeholder-preview.lifecycle-laboratory.index')
+                ->withErrors(['cleanroom' => 'Classic mode requires normal sign-in, Inbox selection, and sign-out. Automatic actor switching is disabled.']);
+        }
+
         $state = $resolveState->handle($lifecycleCleanroomRun);
         if (is_string($blocker = data_get($state, 'progress.blocker'))) {
             return to_route('stakeholder-preview.lifecycle-laboratory.index')->withErrors(['cleanroom' => $blocker]);
@@ -170,6 +190,11 @@ class LifecycleCleanroomController extends Controller
         AdvanceLifecycleCleanroom $advance,
         AuthenticateLifecycleCleanroomActor $authenticate,
     ): RedirectResponse {
+        if ($lifecycleCleanroomRun->isClassicLifecycleV1()) {
+            return to_route('stakeholder-preview.lifecycle-laboratory.index')
+                ->withErrors(['cleanroom' => 'Classic mode cannot advance through Laboratory controls.']);
+        }
+
         $target = $request->string('step_key')->toString();
         $lifecycleCleanroomRun->update(['target_step' => $target]);
         $initialState = $resolveState->handle($lifecycleCleanroomRun->fresh());
@@ -203,6 +228,8 @@ class LifecycleCleanroomController extends Controller
 
     public function enterActor(Request $request, LifecycleCleanroomRun $lifecycleCleanroomRun, string $actor, AuthenticateLifecycleCleanroomActor $authenticate): RedirectResponse
     {
+        abort_if($lifecycleCleanroomRun->isClassicLifecycleV1(), 404);
+
         return redirect()->to($authenticate->handle($request, $lifecycleCleanroomRun, $actor, 'stakeholder-preview.lifecycle-cleanroom-application.show'));
     }
 

@@ -9,6 +9,7 @@ use App\Enums\TreasuryCollectionStatus;
 use App\Models\Assessment;
 use App\Models\BploRoutingWork;
 use App\Models\InstitutionalPositionAssignment;
+use App\Models\LifecycleCleanroomRun;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use App\Models\PostPaymentOfficeCertification;
@@ -290,6 +291,17 @@ final class BuildMunicipalWorkInbox
      */
     private function item(PermitApplication $application, string $type, string $label, string $office, mixed $receivedAt, string $routeName, ?int $sourceId = null, array $routeParameters = []): array
     {
+        $runId = data_get($application->metadata, 'lifecycle_cleanroom.run_id');
+        $classicRun = is_string($runId)
+            ? LifecycleCleanroomRun::query()->where('public_id', $runId)->first()
+            : null;
+        if ($classicRun instanceof LifecycleCleanroomRun
+            && $classicRun->isClassicLifecycleV1()
+            && in_array($type, ['post_payment_certification', 'permit_issuance', 'permit_release'], true)) {
+            $routeName = 'stakeholder-preview.lifecycle-cleanroom-application.show';
+            $routeParameters = [$classicRun];
+        }
+
         $url = route($routeName, $routeParameters === [] ? $application : $routeParameters, false);
         $receivedAtIso = $receivedAt instanceof \DateTimeInterface
             ? Carbon::instance($receivedAt)->toIso8601String()

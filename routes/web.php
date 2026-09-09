@@ -27,6 +27,7 @@ use App\Http\Controllers\Staff\BploRoutingDeterminationController;
 use App\Http\Controllers\Staff\BspReportController;
 use App\Http\Controllers\Staff\BusinessPermitEvaluationController;
 use App\Http\Controllers\Staff\BusinessTaxByMajorTypeReportController;
+use App\Http\Controllers\Staff\ClassicLifecyclePaymentController;
 use App\Http\Controllers\Staff\CmciLdcsReportController;
 use App\Http\Controllers\Staff\CollectiblesReportController;
 use App\Http\Controllers\Staff\CollectionReceiptController;
@@ -304,6 +305,8 @@ Route::middleware(['auth', 'verified', EnsureActiveUserAccess::class])->group(fu
             ->name('payment-schedules.qr-ph.status');
         Route::post('payment-schedules/{paymentSchedule}/collections', [PaymentScheduleCollectionController::class, 'store'])
             ->name('payment-schedules.collections.store');
+        Route::post('payment-schedules/{paymentSchedule}/classic-payment-simulation', [ClassicLifecyclePaymentController::class, 'store'])
+            ->name('payment-schedules.classic-payment-simulation.store');
         Route::post('collections/{collection}/receipt', [CollectionReceiptController::class, 'store'])
             ->name('collections.receipt.store');
         Route::get('receipts', [ReceiptController::class, 'index'])

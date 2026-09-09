@@ -116,7 +116,7 @@ class PermitApplicationController extends Controller
         try {
             if (is_string($cleanroomRunId)) {
                 $cleanroom = app(ResolveLifecycleCleanroomIntake::class)->handle($request);
-                if ($cleanroom?->isNelsonReconciliationV1()) {
+                if ($cleanroom?->usesNelsonReconciliationProfile()) {
                     $permitApplication = $createDraft->handle($request, $request->validatedForPersistence(), $documents);
 
                     if ($documents !== []) {
@@ -226,7 +226,7 @@ class PermitApplicationController extends Controller
         $cleanroomRunId = data_get($application->metadata, 'lifecycle_cleanroom.run_id');
         if (is_string($cleanroomRunId)) {
             $cleanroom = LifecycleCleanroomRun::query()->where('public_id', $cleanroomRunId)->first();
-            if ($cleanroom?->isNelsonReconciliationV1()) {
+            if ($cleanroom?->usesNelsonReconciliationProfile()) {
                 return to_route('stakeholder-preview.lifecycle-cleanroom-application.show', $cleanroom)
                     ->with('status', 'Application declaration, document manifest, and signature evidence frozen at lodging.');
             }

@@ -142,6 +142,19 @@ type CleanroomState = {
         receipt_coverage_complete: boolean;
         status: 'not_ready' | 'awaiting_simulation' | 'collected';
     };
+    classic_ceremony: {
+        registration_claimed: boolean;
+        event_count: number;
+        events: Array<{
+            sequence: number;
+            actor_key: string | null;
+            event: string;
+            route_name: string | null;
+            canonical_step: string | null;
+            completed_stage_count: number | null;
+            occurred_at: string | null;
+        }>;
+    } | null;
 };
 
 type LifecycleStage = {
@@ -194,6 +207,9 @@ const currentApplicationData = computed(
 );
 const nextCleanroomActor = computed(
     () => props.cleanroom.active?.actors.find((actor) => actor.is_next) ?? null,
+);
+const isClassicCleanroom = computed(
+    () => props.cleanroom.active?.run.ceremony === 'classic_lifecycle_v1',
 );
 const selectedActorKey = ref(nextCleanroomActor.value?.key ?? 'citizen');
 const selectedApplicationTab = ref<string | null>(null);
@@ -404,6 +420,15 @@ function startCleanroom(): void {
     );
 }
 
+function startClassicCleanroom(): void {
+    working.value = 'cleanroom:start-classic';
+    router.post(
+        startCleanroomRoute().url,
+        { ceremony: 'classic_lifecycle_v1' },
+        { onFinish: () => (working.value = null) },
+    );
+}
+
 function runCleanroomNext(): void {
     if (!props.cleanroom.active) {
         return;
@@ -574,15 +599,24 @@ function simulateQrPhPayment(): void {
                             }}
                         </h2>
                     </div>
-                    <button
-                        v-if="!cleanroom.active"
-                        type="button"
-                        :disabled="working !== null"
-                        class="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-zinc-950 px-5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-amber-300 dark:text-amber-950"
-                        @click="startCleanroom"
-                    >
-                        <FlaskConical class="size-4" /> Start laboratory
-                    </button>
+                    <div v-if="!cleanroom.active" class="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            :disabled="working !== null"
+                            class="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-zinc-950 px-5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-amber-300 dark:text-amber-950"
+                            @click="startCleanroom"
+                        >
+                            <FlaskConical class="size-4" /> Start laboratory
+                        </button>
+                        <button
+                            type="button"
+                            :disabled="working !== null"
+                            class="inline-flex h-11 shrink-0 items-center justify-center rounded-lg border border-zinc-300 px-5 text-sm font-semibold disabled:opacity-50 dark:border-zinc-700"
+                            @click="startClassicCleanroom"
+                        >
+                            Start classic ceremony
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -623,7 +657,10 @@ function simulateQrPhPayment(): void {
                                 </p>
                             </div>
                             <button
-                                v-if="!cleanroom.active.progress.complete"
+                                v-if="
+                                    !cleanroom.active.progress.complete &&
+                                    !isClassicCleanroom
+                                "
                                 type="button"
                                 :disabled="
                                     working !== null ||
@@ -641,6 +678,15 @@ function simulateQrPhPayment(): void {
                                           : 'Continue'
                                 }}
                             </button>
+                            <div
+                                v-else-if="!cleanroom.active.progress.complete"
+                                class="max-w-sm rounded-lg border border-white/20 px-4 py-3 text-sm"
+                            >
+                                Sign in normally as
+                                <strong>{{ nextCleanroomActor?.label }}</strong
+                                >, open the Inbox, complete the task, then sign
+                                out.
+                            </div>
                             <div v-else class="flex flex-wrap gap-2">
                                 <button
                                     type="button"
@@ -870,6 +916,7 @@ function simulateQrPhPayment(): void {
                             </button>
                         </div>
                         <details
+                            v-if="!isClassicCleanroom"
                             class="rounded-lg border border-zinc-200 dark:border-zinc-800"
                         >
                             <summary
@@ -909,7 +956,7 @@ function simulateQrPhPayment(): void {
                                 </button>
                             </div>
                         </details>
-                        <div class="space-y-2">
+                        <div v-if="!isClassicCleanroom" class="space-y-2">
                             <label
                                 for="cleanroom-actor"
                                 class="text-sm font-semibold"
@@ -943,6 +990,43 @@ function simulateQrPhPayment(): void {
                                 </button>
                             </div>
                         </div>
+                        <details
+                            v-if="isClassicCleanroom"
+                            class="rounded-lg border border-zinc-200 dark:border-zinc-800"
+                        >
+                            <summary
+                                class="cursor-pointer px-3 py-2 text-sm font-semibold"
+                            >
+                                Classic ceremony activity ·
+                                {{
+                                    cleanroom.active.classic_ceremony
+                                        ?.event_count ?? 0
+                                }}
+                            </summary>
+                            <ol class="grid gap-2 border-t p-3 text-xs">
+                                <li
+                                    v-for="event in cleanroom.active
+                                        .classic_ceremony?.events ?? []"
+                                    :key="event.sequence"
+                                    class="flex justify-between gap-3"
+                                >
+                                    <span
+                                        >{{ event.actor_key ?? 'system' }} ·
+                                        {{
+                                            event.event.replaceAll('_', ' ')
+                                        }}</span
+                                    >
+                                    <span
+                                        >{{
+                                            event.completed_stage_count ?? 0
+                                        }}/{{
+                                            cleanroom.active.progress
+                                                .total_steps
+                                        }}</span
+                                    >
+                                </li>
+                            </ol>
+                        </details>
                         <button
                             type="button"
                             :disabled="working !== null"

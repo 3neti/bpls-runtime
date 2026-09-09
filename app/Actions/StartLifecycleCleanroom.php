@@ -28,7 +28,10 @@ class StartLifecycleCleanroom
         $this->ensureCatalog->handle();
 
         if ($sourceSpecimenId !== null
-            && ($ceremony !== LifecycleCleanroomRun::CeremonyNelsonReconciliationV1
+            && (! in_array($ceremony, [
+                LifecycleCleanroomRun::CeremonyNelsonReconciliationV1,
+                LifecycleCleanroomRun::CeremonyClassicLifecycleV1,
+            ], true)
                 || $sourceSpecimenId !== LifecycleCleanroomRun::SourceSpecimenCal2026001New2025)) {
             throw new \InvalidArgumentException('The requested lifecycle source specimen is unsupported.');
         }

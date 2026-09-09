@@ -60,7 +60,7 @@ class ResolveLifecycleCleanroomState
         $renewalProfile = $this->profile($renewalApplication);
 
         $stepDefinitions = collect($this->definition->steps());
-        if ($run->isNelsonReconciliationV1()) {
+        if ($run->usesNelsonReconciliationProfile()) {
             $stepDefinitions = $stepDefinitions->flatMap(function (array $step): array {
                 if ($step['key'] === 'citizen_intake') {
                     return [[
@@ -131,7 +131,7 @@ class ResolveLifecycleCleanroomState
                 'complete' => $next === null,
                 'blocked' => is_string($blocker),
                 'blocker' => $blocker,
-                'profile_kind' => $newProfile['kind'] ?? ($run->isNelsonReconciliationV1() ? 'nelson_reconciliation_v1' : 'pending_intake'),
+                'profile_kind' => $newProfile['kind'] ?? ($run->usesNelsonReconciliationProfile() ? 'nelson_reconciliation_v1' : 'pending_intake'),
                 'profile_statement' => $newProfile['statement'] ?? null,
                 'completion_message' => $run->usesSourceBackedNewApplication()
                     || ($newProfile['scope'] ?? null) === 'single_source_application'

@@ -12,6 +12,7 @@ import { store } from '@/routes/register';
 
 defineProps<{
     passwordRules: string;
+    classicCleanroomInvitation: string | null;
 }>();
 
 defineOptions({
@@ -31,6 +32,22 @@ defineOptions({
         v-slot="{ errors, processing }"
         class="flex flex-col gap-6"
     >
+        <input
+            v-if="classicCleanroomInvitation"
+            type="hidden"
+            name="classic_cleanroom_invitation"
+            :value="classicCleanroomInvitation"
+        />
+        <div
+            v-if="classicCleanroomInvitation"
+            class="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm"
+        >
+            <p class="font-medium">Classic Lifecycle Laboratory</p>
+            <p class="mt-1 text-muted-foreground">
+                Create the Citizen account that will lodge this cleanroom
+                Application.
+            </p>
+        </div>
         <div class="grid gap-6">
             <div class="grid gap-2">
                 <Label for="name">Name</Label>
@@ -87,6 +104,7 @@ defineOptions({
                     :passwordrules="passwordRules"
                 />
                 <InputError :message="errors.password_confirmation" />
+                <InputError :message="errors.classic_cleanroom_invitation" />
             </div>
 
             <Button

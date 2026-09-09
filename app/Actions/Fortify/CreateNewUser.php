@@ -2,10 +2,12 @@
 
 namespace App\Actions\Fortify;
 
+use App\Actions\ClaimClassicLifecycleRegistration;
 use App\Actions\EnsureCitizenRole;
 use App\Concerns\PasswordValidationRules;
 use App\Concerns\ProfileValidationRules;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
 
@@ -15,6 +17,7 @@ class CreateNewUser implements CreatesNewUsers
 
     public function __construct(
         private readonly EnsureCitizenRole $ensureCitizenRole,
+        private readonly ClaimClassicLifecycleRegistration $claimClassicRegistration,
     ) {}
 
     /**
@@ -27,17 +30,22 @@ class CreateNewUser implements CreatesNewUsers
         Validator::make($input, [
             ...$this->profileRules(),
             'password' => $this->passwordRules(),
+            'classic_cleanroom_invitation' => ['nullable', 'string', 'size:64'],
         ])->validate();
 
-        $citizenRole = $this->ensureCitizenRole->handle();
+        return DB::transaction(function () use ($input): User {
+            $citizenRole = $this->ensureCitizenRole->handle();
+            $user = User::create([
+                'name' => $input['name'],
+                'email' => $input['email'],
+                'password' => $input['password'],
+            ]);
+            $user->assignRole($citizenRole);
+            if (is_string($input['classic_cleanroom_invitation'] ?? null)) {
+                $this->claimClassicRegistration->handle($user, $input['classic_cleanroom_invitation']);
+            }
 
-        $user = User::create([
-            'name' => $input['name'],
-            'email' => $input['email'],
-            'password' => $input['password'],
-        ]);
-        $user->assignRole($citizenRole);
-
-        return $user;
+            return $user;
+        }, 3);
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Data\Application\ApplicationDataResolver;
+use App\Models\LifecycleCleanroomCeremonyEvent;
 use App\Models\LifecycleCleanroomRun;
 use App\Models\PermitApplication;
 use App\Models\User;
@@ -27,6 +28,21 @@ class BuildLifecycleCleanroom
             : null;
         $application = is_int($applicationId) ? PermitApplication::query()->find($applicationId) : null;
         if (is_array($activeState)) {
+            $activeState['classic_ceremony'] = $active->isClassicLifecycleV1()
+                ? [
+                    'registration_claimed' => $active->registrationInvitation()->whereNotNull('claimed_at')->exists(),
+                    'event_count' => $active->ceremonyEvents()->count(),
+                    'events' => $active->ceremonyEvents()->latest('sequence')->limit(20)->get()->reverse()->values()->map(fn (LifecycleCleanroomCeremonyEvent $event): array => [
+                        'sequence' => $event->sequence,
+                        'actor_key' => $event->actor_key,
+                        'event' => $event->event,
+                        'route_name' => $event->route_name,
+                        'canonical_step' => $event->canonical_step,
+                        'completed_stage_count' => $event->completed_stage_count,
+                        'occurred_at' => $event->occurred_at->toIso8601String(),
+                    ])->all(),
+                ]
+                : null;
             $activeState['application_data'] = $application instanceof PermitApplication
                 ? $this->applicationDataResolver->resolve($application, $viewer)->toArray()
                 : null;
