@@ -331,10 +331,13 @@ class LifecycleCleanroomController extends Controller
 
     public function close(LifecycleCleanroomRun $lifecycleCleanroomRun): RedirectResponse
     {
-        if ($lifecycleCleanroomRun->status !== 'active') {
+        if (! in_array($lifecycleCleanroomRun->status, ['active', 'closed'], true)) {
             throw new LogicException('Only an active cleanroom may be closed.');
         }
-        $lifecycleCleanroomRun->update(['status' => 'closed', 'closed_at' => now(), 'target_step' => null]);
+
+        if ($lifecycleCleanroomRun->status === 'active') {
+            $lifecycleCleanroomRun->update(['status' => 'closed', 'closed_at' => now(), 'target_step' => null]);
+        }
 
         return to_route('stakeholder-preview.lifecycle-laboratory.index')->with('success', 'Cleanroom closed. Its synthetic evidence was retained; nothing was deleted.');
     }

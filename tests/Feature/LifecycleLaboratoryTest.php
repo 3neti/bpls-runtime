@@ -870,9 +870,22 @@ test('cleanroom citizen form lodges through canonical draft and submit actions i
         ->and($run->fresh()->owned_resource_manifest['permit_application_declaration_ids'])->toBe([$application->declaration()->sole()->id])
         ->and(PermitApplication::query()->count())->toBe(1);
 
-    $this->actingAs($management)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.close', $run));
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.close', $run))
+        ->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.index'));
     expect($run->fresh()->status)->toBe('closed')
+        ->and($run->fresh()->closed_at)->not->toBeNull()
         ->and(PermitApplication::query()->whereKey($application)->exists())->toBeTrue();
+
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.close', $run))
+        ->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.index'));
+    $this->actingAs($management)
+        ->get(route('stakeholder-preview.lifecycle-laboratory.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('cleanroom.active', null)
+            ->where('cleanroom.history.0.public_id', $run->public_id));
 });
 
 test('nelson cleanroom assigns routed Payment Order work without requiring an applicant Line of Business', function () {

@@ -499,12 +499,7 @@ async function focusApplication(tab: string): Promise<void> {
 }
 
 function closeCleanroom(): void {
-    if (
-        !props.cleanroom.active ||
-        !window.confirm(
-            'Close this cleanroom and retain all synthetic evidence? Nothing will be deleted.',
-        )
-    ) {
+    if (!props.cleanroom.active) {
         return;
     }
 
