@@ -268,7 +268,10 @@ class PermitApplicationController extends Controller
         $permitArtifact = ($authorityReview['ready_for_authority_review'] ?? false)
             ? $this->describePermitArtifact->handle($application)
             : null;
+        $syntheticPermitCompletion = $application->provisionalUatPermitCompletion;
         $currentProcessingStage = match (true) {
+            $syntheticPermitCompletion?->released_at !== null => PermitApplicationStatus::Released->value,
+            $syntheticPermitCompletion?->issued_at !== null => 'issued',
             (bool) ($authorityReview['ready_for_authority_review'] ?? false) => 'ready_for_authority_review',
             $latestReceipt?->status->value === 'issued' => 'municipal_review_in_progress',
             $latestPaymentSchedule?->status->value === 'paid' => 'municipal_review_in_progress',

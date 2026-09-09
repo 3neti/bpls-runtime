@@ -79,6 +79,9 @@ test('synthetic preview uses a calibration-compatible identity when the private 
 
     expect($intake)
         ->owner_name->toBe('Classic Laboratory Citizen')
+        ->owner_first_name->toBe('Classic')
+        ->owner_middle_name->toBe('Laboratory')
+        ->owner_last_name->toBe('Citizen')
         ->business_name->toBe('CAL-2026-001 Fresh Fish Retail Laboratory')
         ->total_employee_count->toBe(1)
         ->business_area_square_meters->toBe('12.00')

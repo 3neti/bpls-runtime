@@ -39,6 +39,8 @@ test('the municipal fee editor resolves accepted employee and area defaults exac
     $sariSari = collect(data_get($task, 'financial_editor.line_of_business_options'))
         ->firstWhere('code', 'LOB-F4F644287B2E8261');
     $treasuryItems = collect($sariSari['default_items']);
+    $freshFishItems = collect(data_get($task, 'financial_editor.line_of_business_options'))
+        ->firstWhere('code', 'LOB-3A9A93CA46967768')['default_items'];
 
     expect($healthOptions->firstWhere('code', 'IPIL-LEGACY-99C7F1CE5E8189C8')['default_amount_cents'])->toBe(70_000)
         ->and($healthOptions->firstWhere('code', 'IPIL-LEGACY-04845A0127A00E12')['default_amount_cents'])->toBe(40_000)
@@ -46,7 +48,10 @@ test('the municipal fee editor resolves accepted employee and area defaults exac
         ->and($treasuryItems->firstWhere('code', 'IPIL-LEGACY-A9B730041C0AE6F6')['amount_cents'])->toBe(17_500)
         ->and($treasuryItems->firstWhere('code', 'IPIL-LEGACY-FEE443B6D6004315')['amount_cents'])->toBe(70_000)
         ->and($treasuryItems->where('exact_once_key', 'laminated-id'))->toHaveCount(1)
-        ->and($treasuryItems->where('exact_once_key', 'occupation-fee'))->toHaveCount(1);
+        ->and($treasuryItems->where('exact_once_key', 'occupation-fee'))->toHaveCount(1)
+        ->and(collect($freshFishItems)->where('name', "Mayor's Permit Fee"))->toHaveCount(1)
+        ->and(collect($freshFishItems)->pluck('code'))->toContain('IPIL-LEGACY-5F028B76EEBEF485')
+        ->not->toContain('IPIL-LEGACY-D39CD82C3AEAE153');
 });
 
 test('the versioned municipal YAML deterministically builds the normalized fee catalogue', function (): void {

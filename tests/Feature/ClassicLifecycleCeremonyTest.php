@@ -335,6 +335,11 @@ test('classic ceremony completes the canonical lifecycle through each municipal 
         ->and(data_get($data, 'permit.issued'))->toBeTrue()
         ->and(data_get($data, 'permit.released'))->toBeTrue()
         ->and(data_get($data, 'payment.reconciliation.status'))->toBe('fully_reconciled');
+    $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.show', $application))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('permitApplication.processing.current_stage', PermitApplicationStatus::Released->value));
     $this->get(data_get($data, 'permit.verification.url'))
         ->assertSuccessful()
         ->assertJsonPath('permit.permit_number', $permit->permit_number);

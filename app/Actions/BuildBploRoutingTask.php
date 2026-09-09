@@ -153,7 +153,8 @@ class BuildBploRoutingTask
             ->where(fn ($query) => $query
                 ->whereNull('effective_until')
                 ->orWhereDate('effective_until', '>=', $periodStart))
-            ->orderBy('name')->get();
+            ->orderBy('name')->get()
+            ->filter(fn (FeeRule $fee): bool => $this->appliesToApplicationType($fee, $application));
         $offices = collect($this->concernedOffices->items());
 
         return [
@@ -233,6 +234,15 @@ class BuildBploRoutingTask
                     ->pluck('office_code')->unique()->values()->all() ?? [],
             'can_assign_treasury_lobs' => $viewer?->can(UserPermission::CorrectEvaluationLinesOfBusiness->value) ?? false,
         ];
+    }
+
+    private function appliesToApplicationType(FeeRule $fee, PermitApplication $application): bool
+    {
+        $applicationTypes = data_get($fee->metadata, 'application_types');
+
+        return ! is_array($applicationTypes)
+            || $applicationTypes === []
+            || in_array($application->type->value, $applicationTypes, true);
     }
 
     private function catalogOptionName(FeeRule $fee): string
