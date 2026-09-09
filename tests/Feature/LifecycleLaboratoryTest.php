@@ -167,6 +167,8 @@ test('laboratory segregates interactive work from collapsed automated reference 
         ->toContain(':title="`${label(permitApplication.type)} · ${applicationHeadlineStatus()}`"')
         ->not->toContain('`${money(permitApplication.latest_payment_schedule.total_amount_cents - permitApplication.latest_payment_schedule.paid_amount_cents)} pending payment`');
     expect($intake)
+        ->toContain('const usesStagedCitizenIntake = computed')
+        ->toContain('props.cleanroomIntake?.staged_citizen_intake === true')
         ->toContain('name="lifecycle_cleanroom_run_id"')
         ->toContain("? 'Lodge application'")
         ->toContain("? 'Lodging application...'")
@@ -344,6 +346,7 @@ test('interactive Nelson ceremony drafts before documents and signed lodging', f
         ->assertInertia(fn (Assert $page) => $page
             ->component('permit-applications/Create')
             ->where('cleanroomIntake.ceremony', LifecycleCleanroomRun::CeremonyNelsonReconciliationV1)
+            ->where('cleanroomIntake.staged_citizen_intake', true)
             ->where('cleanroomIntake.business_activity_description', 'General merchandise store selling household goods and liquor, with a small coffee shop.')
             ->where('cleanroomIntake.business_barangay_psgc_code', '0908305023')
             ->missing('cleanroomIntake.lines')

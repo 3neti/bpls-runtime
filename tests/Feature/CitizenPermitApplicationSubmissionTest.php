@@ -183,11 +183,11 @@ test('nelson application form explains every disabled submission prerequisite', 
         ->toContain('submissionForm.undertaking_accepted');
 });
 
-test('nelson draft save leaves undertaking optional while sign and submit keeps both lodging gates', function () {
+test('commissioned draft save leaves undertaking optional while sign and submit keeps both lodging gates', function () {
     $component = file_get_contents(resource_path('js/pages/permit-applications/Create.vue'));
 
     expect($component)
-        ->toContain(':required="!isNelsonApplication"')
+        ->toContain(':required="!isCommissionedApplication"')
         ->toContain('!submissionForm.undertaking_accepted ||')
         ->toContain('!submissionForm.signature_facsimile')
         ->toContain('submissionForm.post(citizenSubmit.url(props.draft.id)');

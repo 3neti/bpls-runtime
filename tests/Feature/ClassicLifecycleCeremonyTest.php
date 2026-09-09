@@ -120,7 +120,13 @@ test('classic ceremony records normal Citizen and BPLO login inbox Application a
         'classic_cleanroom_invitation' => $token,
     ]);
     $intake = app(BuildLifecycleCleanroomIntake::class)->handle($run->fresh());
-    $this->get(route('citizen.permit-applications.create'))->assertOk();
+    $this->get(route('citizen.permit-applications.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Create')
+            ->where('cleanroomIntake.ceremony', LifecycleCleanroomRun::CeremonyClassicLifecycleV1)
+            ->where('cleanroomIntake.staged_citizen_intake', true)
+            ->where('cleanroomIntake.run_id', $run->public_id));
     $this->post(route('citizen.permit-applications.store'), [
         ...$intake,
         'type' => 'new',

@@ -114,6 +114,7 @@ type Draft = {
 };
 type CleanroomIntake = Record<string, unknown> & {
     ceremony?: string;
+    staged_citizen_intake?: boolean;
     run_id: string;
     application_year: number;
     lines?: Activity[];
@@ -156,12 +157,14 @@ const props = defineProps<{
 }>();
 
 const isCitizen = computed(() => props.intakeAudience === 'citizen');
-const isNelsonCleanroom = computed(
-    () => props.cleanroomIntake?.ceremony === 'nelson_reconciliation_v1',
+const usesStagedCitizenIntake = computed(
+    () => props.cleanroomIntake?.staged_citizen_intake === true,
 );
 const isEditing = computed(() => props.draft !== undefined);
-const isNelsonApplication = computed(
-    () => isNelsonCleanroom.value || props.draft?.commissioned_path === true,
+const isCommissionedApplication = computed(
+    () =>
+        usesStagedCitizenIntake.value ||
+        props.draft?.commissioned_path === true,
 );
 const supportsApplicantDocuments = computed(() => isCitizen.value);
 const pendingDocuments = ref<PendingDocument[]>([]);
@@ -561,7 +564,7 @@ async function loadSelectedSpecimen(event: MouseEvent): Promise<void> {
         replaceControl(form, name, fixture.fields[name] ?? null);
     });
 
-    if (!isNelsonCleanroom.value) {
+    if (!usesStagedCitizenIntake.value) {
         activities.value = fixture.lines.map((line) => ({
             ...line,
             key: nextKey++,
@@ -918,7 +921,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 {{ labIntakeFixture.source_reference }} ·
                                 {{ labIntakeFixture.source_business_category }}
                             </p>
-                            <p v-if="isNelsonCleanroom">
+                            <p v-if="usesStagedCitizenIntake">
                                 Business activity is entered manually.
                             </p>
                             <p
@@ -2016,7 +2019,9 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         >
                             <label class="flex items-start gap-3 text-sm"
                                 ><input
-                                    v-if="isEditing && isNelsonApplication"
+                                    v-if="
+                                        isEditing && isCommissionedApplication
+                                    "
                                     v-model="
                                         submissionForm.undertaking_accepted
                                     "
@@ -2032,7 +2037,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                     :checked="
                                         nested('undertaking.accepted') === true
                                     "
-                                    :required="!isNelsonApplication"
+                                    :required="!isCommissionedApplication"
                                     class="mt-1"
                                 /><span
                                     ><strong>Oath of Undertaking:</strong> I
@@ -2080,7 +2085,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             <SignatureFacsimileCapture
                                 v-if="
                                     isEditing &&
-                                    isNelsonApplication &&
+                                    isCommissionedApplication &&
                                     canSubmit
                                 "
                                 :required="false"
@@ -2101,7 +2106,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                 >
                     <p class="text-xs text-stone-600 dark:text-stone-300">
                         {{
-                            isNelsonApplication
+                            isCommissionedApplication
                                 ? isEditing
                                     ? 'Save any changed fields, then Sign & Submit this Application here.'
                                     : 'Save the draft to keep working and enable Sign & Submit on this Page 1 form.'
@@ -2114,7 +2119,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         <div
                             v-if="
                                 isEditing &&
-                                isNelsonApplication &&
+                                isCommissionedApplication &&
                                 canSubmit &&
                                 submissionBlockers.length > 0
                             "
@@ -2144,15 +2149,20 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                         lineOfBusinesses.length === 0)
                                 "
                                 ><Send
-                                    v-if="cleanroomIntake && !isNelsonCleanroom"
+                                    v-if="
+                                        cleanroomIntake &&
+                                        !usesStagedCitizenIntake
+                                    "
                                 /><Save v-else />{{
                                     processing
-                                        ? cleanroomIntake && !isNelsonCleanroom
+                                        ? cleanroomIntake &&
+                                          !usesStagedCitizenIntake
                                             ? 'Lodging application...'
                                             : 'Saving document...'
-                                        : cleanroomIntake && !isNelsonCleanroom
+                                        : cleanroomIntake &&
+                                            !usesStagedCitizenIntake
                                           ? 'Lodge application'
-                                          : isNelsonApplication
+                                          : isCommissionedApplication
                                             ? 'Save application draft'
                                             : isEditing
                                               ? 'Save document changes'
@@ -2164,7 +2174,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             <Button
                                 v-if="
                                     isEditing &&
-                                    isNelsonApplication &&
+                                    isCommissionedApplication &&
                                     canSubmit
                                 "
                                 type="button"

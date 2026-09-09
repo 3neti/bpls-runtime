@@ -22,12 +22,14 @@ class BuildLifecycleCleanroomIntake
                 return [
                     ...$this->buildSourceBackedIntake->handle(),
                     'ceremony' => data_get($run->actor_manifest, 'ceremony'),
+                    'staged_citizen_intake' => true,
                     'run_id' => $run->public_id,
                 ];
             }
 
             return [
                 'ceremony' => data_get($run->actor_manifest, 'ceremony'),
+                'staged_citizen_intake' => true,
                 'run_id' => $run->public_id,
                 'application_year' => NewApplicationHappyPathDefinition::ApplicationYear,
                 'owner_name' => $ownerName,
@@ -70,6 +72,7 @@ class BuildLifecycleCleanroomIntake
             ->keyBy('code');
 
         return [
+            'staged_citizen_intake' => false,
             'run_id' => $run->public_id,
             'application_year' => NewApplicationHappyPathDefinition::ApplicationYear,
             'owner_name' => $ownerName,
