@@ -7,6 +7,7 @@ use App\Actions\BuildExecutablePermitApplicationDocument;
 use App\Actions\BuildLaboratoryAssessmentReconciliation;
 use App\Actions\BuildLifecycleCleanroom;
 use App\Actions\BuildLifecycleCleanroomIntake;
+use App\Actions\BuildMunicipalWorkInbox;
 use App\Actions\CaptureSignatureEvidence;
 use App\Actions\CommissionPostPaymentOfficeCertifications;
 use App\Actions\CompleteBusinessPermitEvaluationResponsibility;
@@ -899,11 +900,14 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         'undertaking_accepted' => '1',
         'signature_facsimile' => UploadedFile::fake()->image('applicant-signature.png'),
     ])->assertSessionHasNoErrors();
+    $intakeActor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.intake.user_id'));
     expect($application->lines()->count())->toBe(0)
         ->and($application->business->name)->toBe('Source Business')
         ->and($application->business->owner->name)->toBe('Source Owner')
         ->and(data_get($application->metadata, 'lifecycle_cleanroom.source_specimen.id'))
-        ->toBe(LifecycleCleanroomRun::SourceSpecimenCal2026001New2025);
+        ->toBe(LifecycleCleanroomRun::SourceSpecimenCal2026001New2025)
+        ->and(app(BuildMunicipalWorkInbox::class)->handle($intakeActor)['items']->pluck('task_type')->all())
+        ->toBe(['bplo_routing']);
 
     app(RecordBploRoutingDetermination::class)->handle(
         $application->fresh(),
@@ -973,7 +977,9 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     $engineeringTask = app(BuildBploRoutingTask::class)->handle($application->fresh(), $engineeringActor)->toArray();
     $managementTask = app(BuildBploRoutingTask::class)->handle($application->fresh(), $management)->toArray();
     expect(data_get($engineeringTask, 'financial_editor.authorized_payment_order_office_codes'))->toBe(['engineering'])
-        ->and(data_get($managementTask, 'financial_editor.authorized_payment_order_office_codes'))->toBe([]);
+        ->and(data_get($managementTask, 'financial_editor.authorized_payment_order_office_codes'))->toBe([])
+        ->and(app(BuildMunicipalWorkInbox::class)->handle($engineeringActor)['items']->pluck('task_type')->all())->toBe(['payment_order'])
+        ->and(app(BuildMunicipalWorkInbox::class)->handle($healthActor)['items']->pluck('task_type')->all())->toBe(['payment_order']);
 
     foreach ($application->fresh()->bploRoutingDetermination->works as $work) {
         $fees = match ($work->office_code) {
@@ -1035,7 +1041,9 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         ->and(data_get($cleanroom, 'active.concerned_office_payment_orders.status'))->toBe('finalized')
         ->and(data_get($cleanroom, 'active.concerned_office_payment_orders.finalized_subtotal_amount_cents'))->toBe(305_000)
         ->and(data_get($pageTwo, 'page_2_assessment.concerned_office_payment_orders.finalized_subtotal_amount_cents'))->toBe(305_000)
-        ->and(data_get($pageTwo, 'page_2_assessment.treasury_lines_of_business'))->toBe([]);
+        ->and(data_get($pageTwo, 'page_2_assessment.treasury_lines_of_business'))->toBe([])
+        ->and(app(BuildMunicipalWorkInbox::class)->handle(User::query()->findOrFail(data_get($run->actor_manifest, 'actors.treasury.user_id')))['items']->pluck('task_type')->all())
+        ->toBe(['treasury_classification']);
 
     $line = LineOfBusiness::query()->where('code', 'LOB-3A9A93CA46967768')->sole();
     $treasuryDefaults = collect(data_get($engineeringTask, 'financial_editor.line_of_business_options'))
@@ -1063,7 +1071,9 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     expect($selections[0]['items'])->toHaveCount(3)
         ->and(data_get($state, 'progress.next_step.key'))->toBe('assessment_prepared')
         ->and(data_get($state, 'progress.next_step.actor'))->toBe('assessment_officer')
-        ->and(data_get($pageTwo, 'page_2_assessment.treasury_lines_of_business'))->toHaveCount(1);
+        ->and(data_get($pageTwo, 'page_2_assessment.treasury_lines_of_business'))->toHaveCount(1)
+        ->and(app(BuildMunicipalWorkInbox::class)->handle(User::query()->findOrFail(data_get($run->actor_manifest, 'actors.assessment_officer.user_id')))['items']->pluck('task_type')->all())
+        ->toBe(['assessment_preparation']);
 
     $assessment = app(CreateAssessmentForPermitApplication::class)->handle(
         $application->fresh(),
@@ -1076,19 +1086,27 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         ->and($assessment->total_amount_cents)->toBe(417_500)
         ->and($requiredReceiptGroupCount)->toBe(6)
         ->and(data_get($applicationData, 'schedule_of_payment.grand_total_minor'))->toBe($assessment->total_amount_cents)
-        ->and(data_get($applicationData, 'schedule_of_payment.price_report_total_minor'))->toBe($assessment->total_amount_cents);
+        ->and(data_get($applicationData, 'schedule_of_payment.price_report_total_minor'))->toBe($assessment->total_amount_cents)
+        ->and(app(BuildMunicipalWorkInbox::class)->handle(User::query()->findOrFail(data_get($run->actor_manifest, 'actors.treasury.user_id')))['items']->pluck('task_type')->all())
+        ->toBe(['treasury_counter_check']);
 
     $treasury = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.treasury.user_id'));
     $assessmentOfficer = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.assessment_officer.user_id'));
     app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($assessment, $treasury);
+    expect(app(BuildMunicipalWorkInbox::class)->handle(User::query()->findOrFail(data_get($run->actor_manifest, 'actors.municipal_treasurer.user_id')))['items']->pluck('task_type')->all())
+        ->toBe(['treasurer_decision']);
     app(RecordAssessmentDecision::class)->handle(
         $assessment,
         User::query()->findOrFail(data_get($run->actor_manifest, 'actors.municipal_treasurer.user_id')),
         AssessmentDecisionAction::Approved,
     );
+    expect(app(BuildMunicipalWorkInbox::class)->handle($assessmentOfficer)['items']->pluck('task_type')->all())
+        ->toBe(['payment_schedule']);
     $schedule = app(CreatePaymentScheduleForAssessment::class)->handle($assessment, $assessmentOfficer);
     expect($schedule->total_amount_cents)->toBe($assessment->total_amount_cents)
-        ->and(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))->toBe('qr_payment_collected');
+        ->and(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))->toBe('qr_payment_collected')
+        ->and(app(BuildMunicipalWorkInbox::class)->handle(User::query()->findOrFail(data_get($run->actor_manifest, 'actors.cashier.user_id')))['items']->pluck('task_type')->all())
+        ->toBe(['collection']);
 
     $payment = XChangePayment::query()->create([
         'payment_schedule_id' => $schedule->id,
@@ -1179,6 +1197,8 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         $healthCertification,
         $engineeringActor,
     ))->toThrow(LogicException::class, 'authorized routed [health] office actor');
+    expect(app(BuildMunicipalWorkInbox::class)->handle($healthActor)['items']->pluck('task_type')->all())
+        ->toBe(['post_payment_certification']);
     foreach ($application->fresh()->postPaymentOfficeCertifications as $certification) {
         app(RecordPostPaymentOfficeCertification::class)->handle(
             $certification,
@@ -1187,15 +1207,22 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     }
     expect(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))->toBe('permit_issued');
 
+    $permitIssuer = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.permit_issuer.user_id'));
+    expect(app(BuildMunicipalWorkInbox::class)->handle($permitIssuer)['items']->pluck('task_type')->all())
+        ->toBe(['permit_issuance']);
+
     $issuedPermit = app(IssueSyntheticLifecyclePermit::class)->handle(
         $application->fresh(),
-        User::query()->findOrFail(data_get($run->actor_manifest, 'actors.permit_issuer.user_id')),
+        $permitIssuer,
     );
     expect($issuedPermit->issued_at)->not->toBeNull()
         ->and($issuedPermit->released_at)->toBeNull();
+    $releasingOfficer = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.releasing_officer.user_id'));
+    expect(app(BuildMunicipalWorkInbox::class)->handle($releasingOfficer)['items']->pluck('task_type')->all())
+        ->toBe(['permit_release']);
     app(ReleaseSyntheticLifecyclePermit::class)->handle(
         $application->fresh(),
-        User::query()->findOrFail(data_get($run->actor_manifest, 'actors.releasing_officer.user_id')),
+        $releasingOfficer,
     );
 
     $finalState = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
@@ -1241,7 +1268,8 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         ))->toBeTrue()
         ->and($applicationFormPdf)->toContain('X-CHANGE PAYMENT CONFIRMATION')
         ->and($applicationFormPdf)->toContain('OFFICIAL RECEIPT PACKET - AF NO. 51')
-        ->and($applicationFormPdf)->toContain('FULLY RECONCILED');
+        ->and($applicationFormPdf)->toContain('FULLY RECONCILED')
+        ->and(app(BuildMunicipalWorkInbox::class)->handle($releasingOfficer)['items'])->toBeEmpty();
     foreach (range(7_100_001, 7_100_000 + $requiredReceiptGroupCount) as $receiptNumber) {
         expect($applicationFormPdf)->toContain((string) $receiptNumber);
     }

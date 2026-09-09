@@ -61,6 +61,12 @@ class User extends Authenticatable implements PasskeyUser
         return $this->hasMany(UserAccessAudit::class, 'subject_user_id');
     }
 
+    /** @return HasMany<InstitutionalPositionAssignment, $this> */
+    public function institutionalPositionAssignments(): HasMany
+    {
+        return $this->hasMany(InstitutionalPositionAssignment::class);
+    }
+
     public function hasPermission(UserPermission $permission): bool
     {
         if (! $this->hasActiveAccess()) {

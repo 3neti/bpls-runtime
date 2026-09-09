@@ -7,6 +7,7 @@ import {
     ChartColumn,
     Coins,
     FileText,
+    Inbox,
     LayoutDashboard,
     ReceiptText,
     ShieldCheck,
@@ -21,13 +22,13 @@ import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/St
 import { index as billingGroupIndex } from '@/actions/App/Http/Controllers/Staff/BillingGroupController';
 import { index as feeRuleIndex } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
 import { index as municipalityConfigurationIndex } from '@/actions/App/Http/Controllers/Staff/MunicipalityConfigurationController';
+import { index as municipalWorkInboxIndex } from '@/actions/App/Http/Controllers/Staff/MunicipalWorkInboxController';
 import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import { index as permitApplicationIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
 import { index as reportCatalogIndex } from '@/actions/App/Http/Controllers/Staff/ReportCatalogController';
 import { index as rolePermissionIndex } from '@/actions/App/Http/Controllers/Staff/RolePermissionController';
 import { index as userDirectoryIndex } from '@/actions/App/Http/Controllers/Staff/UserDirectoryController';
-import { index as previewWorkflowIndex } from '@/actions/App/Http/Controllers/StakeholderPreviewWorkflowController';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -59,31 +60,16 @@ const staffSections = computed<NavSection[]>(() => {
         },
     ];
 
-    if (
-        page.props.stakeholder_preview?.current_persona &&
-        [
-            'engineering',
-            'mpdo',
-            'assessor',
-            'health',
-            'menro',
-            'mayor_office',
-            'releasing',
-        ].includes(page.props.stakeholder_preview.current_persona)
-    ) {
-        sections.push({
-            title: 'My Work',
-            items: [
-                {
-                    title:
-                        page.props.stakeholder_preview.current_label ??
-                        'Office Workspace',
-                    href: previewWorkflowIndex(),
-                    icon: Building2,
-                },
-            ],
-        });
-    }
+    sections.push({
+        title: 'My Work',
+        items: [
+            {
+                title: 'Inbox',
+                href: municipalWorkInboxIndex(),
+                icon: Inbox,
+            },
+        ],
+    });
 
     if (page.props.auth.can_view_permit_applications) {
         sections.push({

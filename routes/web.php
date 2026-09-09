@@ -36,6 +36,7 @@ use App\Http\Controllers\Staff\FeeRuleController;
 use App\Http\Controllers\Staff\LegacyFeeCatalogController;
 use App\Http\Controllers\Staff\MunicipalityConfigurationController;
 use App\Http\Controllers\Staff\MunicipalServiceCatalogController;
+use App\Http\Controllers\Staff\MunicipalWorkInboxController;
 use App\Http\Controllers\Staff\OfficePaymentOrderController;
 use App\Http\Controllers\Staff\PaidEstablishmentReportController;
 use App\Http\Controllers\Staff\PaymentScheduleCollectionController;
@@ -315,6 +316,8 @@ Route::middleware(['auth', 'verified', EnsureActiveUserAccess::class])->group(fu
             ->name('receipts.void');
         Route::get('reports', [ReportCatalogController::class, 'index'])
             ->name('reports.index');
+        Route::get('work', [MunicipalWorkInboxController::class, 'index'])
+            ->name('work.index');
         Route::get('reports/assessment-summary', [AssessmentSummaryReportController::class, 'index'])
             ->name('reports.assessment-summary.index');
         Route::get('reports/assessment-summary/download', [AssessmentSummaryReportController::class, 'download'])

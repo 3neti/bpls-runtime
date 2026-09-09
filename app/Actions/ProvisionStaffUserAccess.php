@@ -13,7 +13,10 @@ use Illuminate\Validation\ValidationException;
 
 class ProvisionStaffUserAccess
 {
-    public function __construct(private readonly EnsureBplsInstitution $institution) {}
+    public function __construct(
+        private readonly EnsureBplsInstitution $institution,
+        private readonly SyncUserInstitutionalPositions $syncPositions,
+    ) {}
 
     /** @param list<string> $roleCodes */
     public function create(User $performedBy, string $name, string $email, string $password, array $roleCodes, string $reason, ?Carbon $expiresAt = null): User
@@ -28,6 +31,7 @@ class ProvisionStaffUserAccess
                 'access_expires_at' => $expiresAt,
             ]);
             $user->syncRoles($this->roles($roleCodes));
+            $this->syncPositions->handle($user, $performedBy, $reason);
             $user->load('roles');
             $this->audit($performedBy, $user, 'staff_account_provisioned', $reason, null);
 
@@ -49,6 +53,7 @@ class ProvisionStaffUserAccess
 
             $user->forceFill(['access_status' => $accessStatus, 'access_expires_at' => $expiresAt])->save();
             $user->syncRoles($roles);
+            $this->syncPositions->handle($user, $performedBy, $reason);
             $user->load('roles');
             $this->audit($performedBy, $user, 'staff_access_updated', $reason, $before);
 

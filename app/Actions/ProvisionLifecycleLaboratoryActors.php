@@ -15,6 +15,7 @@ class ProvisionLifecycleLaboratoryActors
     public function __construct(
         private readonly EnsureBplsInstitution $ensureInstitution,
         private readonly LifecycleCleanroomDefinition $definition,
+        private readonly SyncUserInstitutionalPositions $syncPositions,
     ) {}
 
     /** @return array<string, User> */
@@ -50,6 +51,7 @@ class ProvisionLifecycleLaboratoryActors
                 }
                 $user->save();
                 $user->syncRoles([$role]);
+                $this->syncPositions->handle($user, $performedBy, $reason);
                 $user->load('roles.permissions');
 
                 if ($performedBy instanceof User) {

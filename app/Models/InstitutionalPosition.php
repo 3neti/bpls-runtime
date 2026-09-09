@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['code', 'name', 'capability_role_id', 'authority_classification', 'assignment_status', 'metadata'])]
 class InstitutionalPosition extends Model
@@ -18,6 +19,12 @@ class InstitutionalPosition extends Model
     public function capabilityRole(): BelongsTo
     {
         return $this->belongsTo(Role::class, 'capability_role_id');
+    }
+
+    /** @return HasMany<InstitutionalPositionAssignment, $this> */
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(InstitutionalPositionAssignment::class);
     }
 
     /** @return array<string, string> */
