@@ -10,7 +10,10 @@ return new class extends Migration
     {
         Schema::create('lifecycle_cleanroom_registration_invitations', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('lifecycle_cleanroom_run_id')->unique()->constrained()->cascadeOnDelete();
+            $table->foreignId('lifecycle_cleanroom_run_id')
+                ->constrained(indexName: 'cleanroom_registration_run_foreign')
+                ->cascadeOnDelete();
+            $table->unique('lifecycle_cleanroom_run_id', 'cleanroom_registration_run_unique');
             $table->char('token_hash', 64)->unique();
             $table->foreignId('claimed_by_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('expires_at');
