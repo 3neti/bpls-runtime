@@ -24,7 +24,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Citizen\StorePermitApplicationRequest;
 use App\Http\Requests\Citizen\SubmitPermitApplicationRequest;
 use App\Http\Requests\Citizen\UpdatePermitApplicationRequest;
-use App\Models\LifecycleCleanroomRun;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\StakeholderPreview\StakeholderPreviewSafety;
@@ -121,7 +120,8 @@ class PermitApplicationController extends Controller
 
                     if ($documents !== []) {
                         return to_route('citizen.permit-applications.edit', $permitApplication)
-                            ->with('status', 'Application draft saved and applicant document added.');
+                            ->with('status', 'Application draft saved and applicant document added.')
+                            ->with('lodging_ceremony_notice', 'Review the final document set, then accept the Oath and sign this Application.');
                     }
 
                     return to_route('citizen.permit-applications.edit', $permitApplication)
@@ -180,6 +180,7 @@ class PermitApplicationController extends Controller
             'canSubmit' => $request->user()->can(UserPermission::SubmitOwnPermitApplications->value)
                 && $this->isSubmittableDraft($application, $request->user()->business_owner_id),
             'applicationDocumentTypes' => $documentTypeCatalog->options(),
+            'lodgingCeremonyNotice' => $request->session()->get('lodging_ceremony_notice'),
         ]);
     }
 
@@ -198,7 +199,8 @@ class PermitApplicationController extends Controller
 
         if (data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true) {
             return to_route('citizen.permit-applications.edit', $application)
-                ->with('status', 'Permit application draft updated.');
+                ->with('status', 'Permit application draft updated.')
+                ->with('lodging_ceremony_notice', 'Application details changed. Review the final Application, then accept the Oath and sign again.');
         }
 
         return to_route('citizen.permit-applications.show', $application)
@@ -223,17 +225,12 @@ class PermitApplicationController extends Controller
             return back()->withErrors(['submission' => $exception->getMessage()]);
         }
 
-        $cleanroomRunId = data_get($application->metadata, 'lifecycle_cleanroom.run_id');
-        if (is_string($cleanroomRunId)) {
-            $cleanroom = LifecycleCleanroomRun::query()->where('public_id', $cleanroomRunId)->first();
-            if ($cleanroom?->usesNelsonReconciliationProfile()) {
-                return to_route('stakeholder-preview.lifecycle-cleanroom-application.show', $cleanroom)
-                    ->with('status', 'Application declaration, document manifest, and signature evidence frozen at lodging.');
-            }
-        }
+        $status = data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true
+            ? 'Application declaration, document manifest, and signature evidence frozen at lodging.'
+            : 'Permit application submitted and received for municipal processing.';
 
         return to_route('citizen.permit-applications.show', $application)
-            ->with('status', 'Permit application submitted and received for municipal processing.');
+            ->with('status', $status);
     }
 
     public function show(Request $request, int $permitApplication, ApplicationDocumentTypeCatalog $documentTypeCatalog): Response|RedirectResponse

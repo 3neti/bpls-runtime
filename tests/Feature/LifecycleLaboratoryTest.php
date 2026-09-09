@@ -403,7 +403,7 @@ test('interactive Nelson ceremony drafts before documents and signed lodging', f
     $this->post(route('citizen.permit-applications.submit', $application), [
         'undertaking_accepted' => '1',
         'signature_facsimile' => UploadedFile::fake()->image('applicant-signature.png'),
-    ])->assertRedirect(route('stakeholder-preview.lifecycle-cleanroom-application.show', $run));
+    ])->assertRedirect(route('citizen.permit-applications.show', $application));
 
     $application->refresh();
     $declaration = $application->declaration()->sole();

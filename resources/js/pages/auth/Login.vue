@@ -23,6 +23,7 @@ defineOptions({
 defineProps<{
     status?: string;
     canResetPassword: boolean;
+    lodgingSessionExpired?: boolean;
 }>();
 </script>
 
@@ -34,6 +35,16 @@ defineProps<{
         class="mb-4 text-center text-sm font-medium text-green-600"
     >
         {{ status }}
+    </div>
+
+    <div
+        v-if="lodgingSessionExpired"
+        role="alert"
+        data-testid="lodging-session-expired"
+        class="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+    >
+        Your session expired before the Application was submitted. Log in again
+        to return to your Draft, then review, sign, and submit it.
     </div>
 
     <PasskeyVerify />

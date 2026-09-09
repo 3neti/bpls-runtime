@@ -46,7 +46,8 @@ class PermitApplicationDocumentController extends Controller
                 : 'citizen.permit-applications.show',
             $application,
         )
-            ->with('status', 'Supporting document added to your draft.');
+            ->with('status', 'Supporting document added to your draft.')
+            ->with('lodging_ceremony_notice', 'Applicant documents changed. Review the final document set, then accept the Oath and sign again.');
     }
 
     public function download(Request $request, int $permitApplication, int $document): StreamedResponse
@@ -88,7 +89,8 @@ class PermitApplicationDocumentController extends Controller
                 : 'citizen.permit-applications.show',
             $application,
         )
-            ->with('status', 'Applicant document removed from the draft.');
+            ->with('status', 'Applicant document removed from the draft.')
+            ->with('lodging_ceremony_notice', 'Applicant documents changed. Review the final document set, then accept the Oath and sign again.');
     }
 
     private function ownedApplication(Request $request, int $permitApplication): PermitApplication

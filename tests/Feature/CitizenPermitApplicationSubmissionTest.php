@@ -193,6 +193,18 @@ test('commissioned draft save leaves undertaking optional while sign and submit 
         ->toContain('submissionForm.post(citizenSubmit.url(props.draft.id)');
 });
 
+test('commissioned application form makes document and request invalidation visible', function () {
+    $component = file_get_contents(resource_path('js/pages/permit-applications/Create.vue'));
+
+    expect($component)
+        ->toContain('data-testid="lodging-ceremony-notice"')
+        ->toContain('data-testid="lodging-request-failure"')
+        ->toContain('onHttpException: (response) =>')
+        ->toContain('response.status === 401 || response.status === 419')
+        ->toContain('onNetworkError: () =>')
+        ->toContain('Log in and return to this Draft');
+});
+
 /**
  * @return array{User, PermitApplication}
  */

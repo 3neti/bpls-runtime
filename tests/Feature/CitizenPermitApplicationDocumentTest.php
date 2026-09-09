@@ -33,7 +33,11 @@ test('citizens can add and download private supporting evidence for an owned dra
             'document_type' => 'dti_registration',
             'file' => UploadedFile::fake()->create('registration.pdf', 120, 'application/pdf'),
         ])
-        ->assertRedirect(route('citizen.permit-applications.show', $application));
+        ->assertRedirect(route('citizen.permit-applications.show', $application))
+        ->assertSessionHas(
+            'lodging_ceremony_notice',
+            'Applicant documents changed. Review the final document set, then accept the Oath and sign again.',
+        );
 
     $document = PermitApplicationDocument::query()->sole();
 

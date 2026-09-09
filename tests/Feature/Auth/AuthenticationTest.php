@@ -1,7 +1,9 @@
 <?php
 
+use App\Models\PermitApplication;
 use App\Models\User;
 use Illuminate\Support\Facades\RateLimiter;
+use Inertia\Testing\AssertableInertia as Assert;
 use Laravel\Fortify\Features;
 
 test('login screen can be rendered', function () {
@@ -20,6 +22,31 @@ test('users can authenticate using the login screen', function () {
 
     $this->assertAuthenticated();
     $response->assertRedirect(route('dashboard', absolute: false));
+});
+
+test('expired lodging authentication explains the failure and returns the citizen to the draft after login', function () {
+    $user = User::factory()->create();
+    $application = PermitApplication::factory()->for($user, 'submittedBy')->create();
+    $loginUrl = route('login', [
+        'lodging_session_expired' => 1,
+        'permit_application' => $application->id,
+    ]);
+
+    $this->post(route('citizen.permit-applications.submit', $application))
+        ->assertRedirect($loginUrl);
+
+    $this->get($loginUrl)
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('auth/Login')
+            ->where('lodgingSessionExpired', true));
+
+    expect(session('url.intended'))->toBe(route('citizen.permit-applications.edit', $application));
+
+    $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ])->assertRedirect(route('citizen.permit-applications.edit', $application));
 });
 
 test('users with two factor enabled are redirected to two factor challenge', function () {

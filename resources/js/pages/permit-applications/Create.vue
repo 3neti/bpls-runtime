@@ -27,6 +27,7 @@ import ApplicationDocumentPillbox from '@/components/permit-applications/Applica
 import IpilField from '@/components/permit-applications/IpilField.vue';
 import SignatureFacsimileCapture from '@/components/SignatureFacsimileCapture.vue';
 import { Button } from '@/components/ui/button';
+import { login as loginRoute } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 
 type Option = { label: string; value: string };
@@ -154,6 +155,7 @@ const props = defineProps<{
     labIntakeFixtures?: LabIntakeFixture[];
     applicationDocumentTypes?: ApplicationDocumentType[];
     canSubmit?: boolean;
+    lodgingCeremonyNotice?: string;
 }>();
 
 const isCitizen = computed(() => props.intakeAudience === 'citizen');
@@ -172,6 +174,15 @@ const submissionForm = useForm({
     undertaking_accepted: false,
     signature_facsimile: null as File | null,
 });
+const submissionRequestFailure = ref('');
+const lodgingLoginUrl = computed(() =>
+    loginRoute.url({
+        query: {
+            lodging_session_expired: 1,
+            permit_application: props.draft?.id,
+        },
+    }),
+);
 const submissionBlockers = computed(() => {
     const blockers: string[] = [];
 
@@ -226,9 +237,29 @@ function submitDraft(): void {
         return;
     }
 
+    submissionRequestFailure.value = '';
     submissionForm.post(citizenSubmit.url(props.draft.id), {
         forceFormData: true,
         preserveScroll: true,
+        onHttpException: (response) => {
+            if (response.status === 401 || response.status === 419) {
+                submissionRequestFailure.value =
+                    'Your session expired before the Application was submitted. Log in again to return to this Draft, then review, sign, and submit it.';
+
+                return false;
+            }
+
+            submissionRequestFailure.value =
+                'The Application could not be submitted. Your Draft was kept. Please try again or contact BPLO if the problem continues.';
+
+            return false;
+        },
+        onNetworkError: () => {
+            submissionRequestFailure.value =
+                'The Application could not reach BPLS. Your Draft was kept. Check your connection and try again.';
+
+            return false;
+        },
     });
 }
 
@@ -2097,6 +2128,29 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 "
                             />
                             <InputError :message="submissionBoundaryError()" />
+                            <div
+                                v-if="lodgingCeremonyNotice"
+                                role="status"
+                                data-testid="lodging-ceremony-notice"
+                                class="rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-xs text-blue-950 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-100"
+                            >
+                                {{ lodgingCeremonyNotice }}
+                            </div>
+                            <div
+                                v-if="submissionRequestFailure"
+                                role="alert"
+                                data-testid="lodging-request-failure"
+                                class="grid gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-950 dark:border-red-800 dark:bg-red-950/30 dark:text-red-100"
+                            >
+                                <p>{{ submissionRequestFailure }}</p>
+                                <Link
+                                    v-if="draft"
+                                    :href="lodgingLoginUrl"
+                                    class="font-semibold underline underline-offset-2"
+                                >
+                                    Log in and return to this Draft
+                                </Link>
+                            </div>
                         </section>
                     </div>
                 </article>

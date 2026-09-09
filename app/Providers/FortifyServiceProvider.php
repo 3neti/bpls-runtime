@@ -48,10 +48,23 @@ class FortifyServiceProvider extends ServiceProvider
      */
     private function configureViews(): void
     {
-        Fortify::loginView(fn (Request $request) => Inertia::render('auth/Login', [
-            'canResetPassword' => Features::enabled(Features::resetPasswords()),
-            'status' => $request->session()->get('status'),
-        ]));
+        Fortify::loginView(function (Request $request) {
+            $lodgingSessionExpired = $request->boolean('lodging_session_expired');
+            $permitApplication = $request->integer('permit_application');
+
+            if ($lodgingSessionExpired && $permitApplication > 0) {
+                $request->session()->put(
+                    'url.intended',
+                    route('citizen.permit-applications.edit', $permitApplication),
+                );
+            }
+
+            return Inertia::render('auth/Login', [
+                'canResetPassword' => Features::enabled(Features::resetPasswords()),
+                'status' => $request->session()->get('status'),
+                'lodgingSessionExpired' => $lodgingSessionExpired,
+            ]);
+        });
 
         Fortify::resetPasswordView(fn (Request $request) => Inertia::render('auth/ResetPassword', [
             'email' => $request->email,

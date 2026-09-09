@@ -138,7 +138,8 @@ test('classic ceremony records normal Citizen and BPLO login inbox Application a
     $this->post(route('citizen.permit-applications.submit', $application), [
         'undertaking_accepted' => '1',
         'signature_facsimile' => UploadedFile::fake()->image('applicant-signature.png'),
-    ])->assertSessionHasNoErrors();
+    ])->assertSessionHasNoErrors()
+        ->assertRedirect(route('citizen.permit-applications.show', $application));
     $this->post(route('logout'));
 
     $this->post(route('login.store'), ['email' => 'intake@bpls-runtime.test', 'password' => 'password'])
@@ -190,7 +191,8 @@ test('classic ceremony completes the canonical lifecycle through each municipal 
     $this->post(route('citizen.permit-applications.submit', $application), [
         'undertaking_accepted' => '1',
         'signature_facsimile' => UploadedFile::fake()->image('applicant-signature.png'),
-    ])->assertSessionHasNoErrors();
+    ])->assertSessionHasNoErrors()
+        ->assertRedirect(route('citizen.permit-applications.show', $application));
 
     $actor = fn (string $key): User => User::query()->findOrFail(data_get($run->actor_manifest, 'actors.'.$key.'.user_id'));
     $assertInbox = function (string $actorKey, string $taskType) use ($actor, $application): array {
