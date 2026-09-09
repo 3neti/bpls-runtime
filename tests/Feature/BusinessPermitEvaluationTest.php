@@ -422,6 +422,13 @@ it('prepares an idempotent substantial provisional UAT Evaluator inventory with 
     configureBusinessPermitEvaluatorPreviewSafety();
     $actors = businessPermitEvaluatorPreviewActors();
     $prepare = app(PrepareBusinessPermitEvaluatorUatDataset::class);
+    $inactiveRetail = LineOfBusiness::query()->create([
+        'code' => 'EVAL-UAT-RETAIL',
+        'name' => 'Stale Evaluator UAT retail',
+        'major_category' => 'Synthetic UAT',
+        'is_active' => false,
+        'metadata' => ['semantic_classification' => 'provisional_uat'],
+    ]);
 
     $first = $prepare->handle('evaluator-test-run', $actors);
     $countsBeforeRetry = [
@@ -433,6 +440,7 @@ it('prepares an idempotent substantial provisional UAT Evaluator inventory with 
     $secondRetry = $prepare->handle('evaluator-test-run', $actors);
 
     expect($first['semantic_classification'])->toBe('provisional_uat')
+        ->and($inactiveRetail->fresh()->is_active)->toBeTrue()
         ->and($first['production_liability'])->toBeFalse()
         ->and($first['cases'])->toHaveCount(15)
         ->and(array_keys($first['cases']))->toContain(

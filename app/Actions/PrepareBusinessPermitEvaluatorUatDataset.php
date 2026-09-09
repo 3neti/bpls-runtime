@@ -162,7 +162,21 @@ class PrepareBusinessPermitEvaluatorUatDataset
 
     private function lineOfBusiness(string $code, string $name): LineOfBusiness
     {
-        return LineOfBusiness::query()->firstOrCreate(['code' => $code], ['name' => $name, 'major_category' => 'Synthetic UAT', 'is_active' => true, 'metadata' => ['semantic_classification' => 'provisional_uat']]);
+        $lineOfBusiness = LineOfBusiness::query()->where('code', $code)->first();
+        if ($lineOfBusiness instanceof LineOfBusiness
+            && data_get($lineOfBusiness->metadata, 'semantic_classification') !== 'provisional_uat') {
+            throw new RuntimeException("The Evaluator UAT Line of Business identity [{$code}] is occupied by a non-preview record.");
+        }
+
+        $lineOfBusiness ??= new LineOfBusiness(['code' => $code]);
+        $lineOfBusiness->fill([
+            'name' => $name,
+            'major_category' => 'Synthetic UAT',
+            'is_active' => true,
+            'metadata' => ['semantic_classification' => 'provisional_uat'],
+        ])->save();
+
+        return $lineOfBusiness;
     }
 
     private function scenarioFeeRule(string $runId): FeeRule
