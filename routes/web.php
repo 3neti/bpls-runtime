@@ -50,6 +50,7 @@ use App\Http\Controllers\Staff\ReportCatalogController;
 use App\Http\Controllers\Staff\RevenueSourceReportController;
 use App\Http\Controllers\Staff\RolePermissionController;
 use App\Http\Controllers\Staff\StoryboardController;
+use App\Http\Controllers\Staff\TaxpayerAccountCardReportController;
 use App\Http\Controllers\Staff\TopEstablishmentTaxDueReportController;
 use App\Http\Controllers\Staff\TotalCapitalGrossSummaryReportController;
 use App\Http\Controllers\Staff\TreasuryLineOfBusinessController;
@@ -364,6 +365,8 @@ Route::middleware(['auth', 'verified', EnsureActiveUserAccess::class])->group(fu
             ->name('reports.top-establishments-tax-due.index');
         Route::get('reports/top-establishments-tax-due/download', [TopEstablishmentTaxDueReportController::class, 'download'])
             ->name('reports.top-establishments-tax-due.download');
+        Route::get('reports/taxpayer-account-card', [TaxpayerAccountCardReportController::class, 'index'])
+            ->name('reports.taxpayer-account-card.index');
         Route::post('storyboards/{storyboard}/exports/pdf', [StoryboardController::class, 'exportPdf'])
             ->name('storyboards.exports.pdf');
         Route::post('storyboards/{storyboard}/exports/video', [StoryboardController::class, 'exportVideo'])

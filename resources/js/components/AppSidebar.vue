@@ -10,7 +10,6 @@ import {
     LayoutDashboard,
     ReceiptText,
     ShieldCheck,
-    TableProperties,
     Users,
     WalletCards,
 } from '@lucide/vue';
@@ -41,7 +40,6 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { reportCatalog } from '@/lib/reportCatalog';
 import { dashboard } from '@/routes';
 import type { NavItem, NavSection } from '@/types';
 
@@ -52,22 +50,6 @@ const overviewItem: NavItem = {
     href: dashboard(),
     icon: LayoutDashboard,
 };
-
-const reportItems = Object.fromEntries(
-    reportCatalog
-        .filter((report) => report.navigation)
-        .map((report) => [
-            report.key,
-            {
-                title: report.navigationTitle,
-                href: report.href,
-                icon:
-                    report.family === 'authority_pending'
-                        ? TableProperties
-                        : ChartColumn,
-            },
-        ]),
-) as Record<string, NavItem>;
 
 const staffSections = computed<NavSection[]>(() => {
     const sections: NavSection[] = [
@@ -140,13 +122,6 @@ const staffSections = computed<NavSection[]>(() => {
         });
     }
 
-    if (page.props.auth.can_view_reports) {
-        treasuryItems.push(
-            reportItems['daily-collections'],
-            reportItems['revenue-sources'],
-        );
-    }
-
     if (treasuryItems.length > 0) {
         sections.push({
             title: 'Treasury',
@@ -156,46 +131,16 @@ const staffSections = computed<NavSection[]>(() => {
     }
 
     if (page.props.auth.can_view_reports) {
-        sections.push(
-            {
-                title: 'Reports · Operational',
-                collapsible: true,
-                items: [
-                    {
-                        title: 'Report Catalog',
-                        href: reportCatalogIndex(),
-                        icon: ChartColumn,
-                    },
-                    reportItems['daily-collections'],
-                    reportItems['revenue-sources'],
-                    reportItems.collectibles,
-                    reportItems['paid-establishments'],
-                    reportItems['unpaid-establishments'],
-                ],
-            },
-            {
-                title: 'Reports · Management',
-                collapsible: true,
-                items: [
-                    reportItems['assessment-summary'],
-                    reportItems['payment-summary'],
-                    reportItems['business-tax-by-major-type'],
-                    reportItems['total-capital-gross-summary'],
-                    reportItems['top-establishments-tax-due'],
-                ],
-            },
-            {
-                title: 'Reports · Authority Pending',
-                collapsible: true,
-                items: [
-                    reportItems['all-abstract'],
-                    reportItems['cmci-ldcs'],
-                    reportItems.plds,
-                    reportItems.bsp,
-                    reportItems['annex-c-dnfbp'],
-                ],
-            },
-        );
+        sections.push({
+            title: 'Reports',
+            items: [
+                {
+                    title: 'Report Templates',
+                    href: reportCatalogIndex(),
+                    icon: ChartColumn,
+                },
+            ],
+        });
     }
 
     const administrationItems: NavItem[] = [];

@@ -12,6 +12,7 @@ import { index as paidEstablishmentReportIndex } from '@/actions/App/Http/Contro
 import { index as paymentSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/PaymentSummaryReportController';
 import { index as pldsReportIndex } from '@/actions/App/Http/Controllers/Staff/PldsReportController';
 import { index as revenueSourceReportIndex } from '@/actions/App/Http/Controllers/Staff/RevenueSourceReportController';
+import { index as taxpayerAccountCardReportIndex } from '@/actions/App/Http/Controllers/Staff/TaxpayerAccountCardReportController';
 import { index as topEstablishmentTaxDueReportIndex } from '@/actions/App/Http/Controllers/Staff/TopEstablishmentTaxDueReportController';
 import { index as totalCapitalGrossSummaryReportIndex } from '@/actions/App/Http/Controllers/Staff/TotalCapitalGrossSummaryReportController';
 import { index as unpaidEstablishmentReportIndex } from '@/actions/App/Http/Controllers/Staff/UnpaidEstablishmentReportController';
@@ -28,6 +29,7 @@ export type ReportCatalogItem = {
     availability: ReportAvailability;
     href: NonNullable<InertiaLinkProps['href']>;
     navigation: boolean;
+    legacyTemplate: boolean;
 };
 
 export const reportFamilyDetails: Record<
@@ -35,19 +37,17 @@ export const reportFamilyDetails: Record<
     { title: string; description: string }
 > = {
     operational: {
-        title: 'Operational reports',
-        description:
-            'Day-to-day permit, collection, receipt, and outstanding-balance records available in this preview.',
+        title: 'Collections and accounts',
+        description: 'Current collection, receipt, and account records.',
     },
     management: {
-        title: 'Management reports',
-        description:
-            'Recorded assessment, payment, declaration, and tax information organized for review and monitoring.',
+        title: 'Management summaries',
+        description: 'Assessment, payment, declaration, and tax summaries.',
     },
     authority_pending: {
-        title: 'Reports awaiting confirmation',
+        title: 'Official templates',
         description:
-            'Official reports that remain unavailable until the municipality confirms the required authority, classifications, and reporting rules.',
+            'Templates that still need accepted municipal reporting rules.',
     },
 };
 
@@ -62,6 +62,7 @@ export const reportCatalog: ReportCatalogItem[] = [
         availability: 'working',
         href: dailyCollectionReportIndex(),
         navigation: true,
+        legacyTemplate: false,
     },
     {
         key: 'revenue-sources',
@@ -73,39 +74,43 @@ export const reportCatalog: ReportCatalogItem[] = [
         availability: 'working',
         href: revenueSourceReportIndex(),
         navigation: true,
+        legacyTemplate: false,
     },
     {
         key: 'collectibles',
-        title: 'Breakdown of Collectibles',
-        navigationTitle: 'Breakdown of Collectibles',
+        title: 'Collectibles',
+        navigationTitle: 'Collectibles',
         description:
             'Outstanding permit schedules grouped by recorded due-date quarters, with unscheduled balances kept visible.',
         family: 'operational',
         availability: 'working',
         href: collectiblesReportIndex(),
         navigation: true,
+        legacyTemplate: true,
     },
     {
         key: 'paid-establishments',
-        title: 'Paid Establishments',
-        navigationTitle: 'Paid Establishments',
+        title: 'Paid Masterlist',
+        navigationTitle: 'Paid Masterlist',
         description:
             'Paid permit-schedule establishments without implying permit issuance, release, or current legal validity.',
         family: 'operational',
         availability: 'working',
         href: paidEstablishmentReportIndex(),
         navigation: true,
+        legacyTemplate: true,
     },
     {
         key: 'unpaid-establishments',
-        title: 'Unpaid Establishments',
-        navigationTitle: 'Unpaid Establishments',
+        title: 'Unpaid Masterlist',
+        navigationTitle: 'Unpaid Masterlist',
         description:
             'Pending and partially paid permit schedules without declaring delinquency, penalties, or enforceability.',
         family: 'operational',
         availability: 'working',
         href: unpaidEstablishmentReportIndex(),
         navigation: true,
+        legacyTemplate: true,
     },
     {
         key: 'assessment-summary',
@@ -117,6 +122,7 @@ export const reportCatalog: ReportCatalogItem[] = [
         availability: 'working',
         href: assessmentSummaryReportIndex(),
         navigation: true,
+        legacyTemplate: false,
     },
     {
         key: 'payment-summary',
@@ -128,50 +134,55 @@ export const reportCatalog: ReportCatalogItem[] = [
         availability: 'working',
         href: paymentSummaryReportIndex(),
         navigation: true,
+        legacyTemplate: false,
     },
     {
         key: 'business-tax-by-major-type',
-        title: 'Business Tax by Major Type',
-        navigationTitle: 'Business Tax by Major Type',
+        title: 'Business Tax by Major',
+        navigationTitle: 'Business Tax by Major',
         description:
             'Receipted Tax allocations grouped by the first declared business-activity major category.',
         family: 'management',
         availability: 'working',
         href: businessTaxByMajorTypeReportIndex(),
         navigation: true,
+        legacyTemplate: true,
     },
     {
         key: 'total-capital-gross-summary',
-        title: 'Total Capital and Gross Summary',
-        navigationTitle: 'Total Capital and Gross Summary',
+        title: 'Total Capital and Gross',
+        navigationTitle: 'Total Capital and Gross',
         description:
             'Recorded declaration totals, receipted payments, balances, and latest receipt information.',
         family: 'management',
         availability: 'working',
         href: totalCapitalGrossSummaryReportIndex(),
         navigation: true,
+        legacyTemplate: true,
     },
     {
         key: 'top-establishments-tax-due',
-        title: 'Top Establishments by Tax Due',
-        navigationTitle: 'Top Establishments by Tax Due',
+        title: 'Top 100 Tax Due',
+        navigationTitle: 'Top 100 Tax Due',
         description:
             'Recorded assessment tax-line totals for management review; this does not determine delinquency, penalties, or a final taxpayer ranking.',
         family: 'management',
         availability: 'working',
         href: topEstablishmentTaxDueReportIndex(),
         navigation: true,
+        legacyTemplate: true,
     },
     {
         key: 'all-abstract',
-        title: 'All Abstract of Collection',
-        navigationTitle: 'All Abstract',
+        title: 'All Abstract Report',
+        navigationTitle: 'All Abstract Report',
         description:
             'Unavailable until Treasury confirms complete collection coverage and reporting rules.',
         family: 'authority_pending',
         availability: 'policy_bound',
         href: allAbstractReportIndex(),
         navigation: true,
+        legacyTemplate: true,
     },
     {
         key: 'billing-group-abstract',
@@ -183,39 +194,43 @@ export const reportCatalog: ReportCatalogItem[] = [
         availability: 'policy_bound',
         href: billingGroupIndex(),
         navigation: false,
+        legacyTemplate: false,
     },
     {
         key: 'cmci-ldcs',
-        title: 'CMCI LDCS Annex B',
-        navigationTitle: 'CMCI LDCS Annex B',
+        title: 'CMCI LDCS',
+        navigationTitle: 'CMCI LDCS',
         description:
             'Unavailable until permit issuance, numbering, signatory, classification, and municipal information are confirmed.',
         family: 'authority_pending',
         availability: 'policy_bound',
         href: cmciLdcsReportIndex(),
         navigation: true,
+        legacyTemplate: true,
     },
     {
         key: 'plds',
-        title: 'PLDS',
-        navigationTitle: 'PLDS',
+        title: 'PLDS Template',
+        navigationTitle: 'PLDS Template',
         description:
             'Unavailable while permit authority, issue date, classifications, and required fields remain unconfirmed.',
         family: 'authority_pending',
         availability: 'policy_bound',
         href: pldsReportIndex(),
         navigation: true,
+        legacyTemplate: true,
     },
     {
         key: 'bsp',
-        title: 'BSP Non-Bank Entities',
-        navigationTitle: 'BSP Non-Bank Entities',
+        title: 'BSP Report',
+        navigationTitle: 'BSP Report',
         description:
             'Unavailable until permit authority and regulated non-bank classifications are confirmed.',
         family: 'authority_pending',
         availability: 'policy_bound',
         href: bspReportIndex(),
         navigation: true,
+        legacyTemplate: true,
     },
     {
         key: 'annex-c-dnfbp',
@@ -227,6 +242,19 @@ export const reportCatalog: ReportCatalogItem[] = [
         availability: 'policy_bound',
         href: annexCDnfbpReportIndex(),
         navigation: true,
+        legacyTemplate: true,
+    },
+    {
+        key: 'taxpayer-account-card',
+        title: 'Taxpayer Account Card',
+        navigationTitle: 'Taxpayer Account Card',
+        description:
+            'Annual assessment, quarterly payment, receipt, fine, and regulatory-fee history for one taxpayer account.',
+        family: 'authority_pending',
+        availability: 'policy_bound',
+        href: taxpayerAccountCardReportIndex(),
+        navigation: true,
+        legacyTemplate: true,
     },
 ];
 
