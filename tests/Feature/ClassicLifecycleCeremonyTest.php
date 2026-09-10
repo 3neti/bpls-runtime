@@ -5,7 +5,6 @@ use App\Actions\AssignTreasuryLinesOfBusiness;
 use App\Actions\BuildBploRoutingTask;
 use App\Actions\BuildLifecycleCleanroomIntake;
 use App\Actions\BuildMunicipalWorkInbox;
-use App\Actions\ConfirmOfficePaymentOrder;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\IssueManualCollectionReceipt;
@@ -233,15 +232,16 @@ test('classic ceremony completes the canonical lifecycle through each municipal 
                 ->where('code', 'IPIL-LEGACY-E5B97AA20294C7AA')
                 ->map(fn (array $fee): array => [...$fee, 'default_amount_cents' => 10_000]),
         };
-        app(ConfirmOfficePaymentOrder::class)->handle(
-            $work,
-            $fees->map(fn (array $fee): array => [
-                'fee_rule_id' => $fee['id'],
-                'amount_cents' => $fee['default_amount_cents'],
-            ])->values()->all(),
-            $actor($work->office_code),
-            UploadedFile::fake()->image($work->office_code.'-signature.png'),
-        );
+        $this->actingAs($actor($work->office_code))
+            ->post(route('staff.permit-applications.office-payment-orders.store', [$application, $work]), [
+                'items' => $fees->map(fn (array $fee): array => [
+                    'fee_rule_id' => $fee['id'],
+                    'amount_cents' => $fee['default_amount_cents'],
+                ])->values()->all(),
+                'signature_facsimile' => UploadedFile::fake()->image($work->office_code.'-signature.png'),
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
     }
 
     $assertInbox('treasury', 'treasury_classification');

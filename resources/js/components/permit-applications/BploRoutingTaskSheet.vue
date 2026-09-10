@@ -146,6 +146,9 @@ const officeItems = reactive<
     >
 >({});
 const officeSignatures = reactive<Record<number, File | null>>({});
+const officePaymentOrderPending = reactive<Record<number, boolean>>({});
+const officePaymentOrderMessages = reactive<Record<number, string>>({});
+const officePaymentOrderTimers = new Map<number, number>();
 const treasurySelections = ref<
     {
         line_of_business_id: number;
@@ -352,13 +355,61 @@ function confirmPaymentOrder(work: RoutingWork): void {
     const signature = officeSignatures[work.id];
     const items = officeItems[work.id] ?? [];
 
-    if (!signature || items.length === 0) {
+    if (
+        officePaymentOrderPending[work.id] ||
+        !signature ||
+        items.length === 0
+    ) {
         return;
     }
 
-    useForm({ items, signature_facsimile: signature }).post(
+    officePaymentOrderPending[work.id] = true;
+    officePaymentOrderMessages[work.id] = '';
+    officePaymentOrderTimers.set(
+        work.id,
+        window.setTimeout(() => {
+            officePaymentOrderMessages[work.id] =
+                'BPLS is still confirming this Payment Order. Do not submit it again. If this message remains, report the request as incomplete.';
+        }, 15_000),
+    );
+
+    const form = useForm({ items, signature_facsimile: signature });
+    form.post(
         `/staff/permit-applications/${props.task.application.id}/office-payment-orders/${work.id}`,
-        { preserveScroll: true },
+        {
+            preserveScroll: true,
+            onError: (errors) => {
+                officePaymentOrderMessages[work.id] =
+                    Object.values(errors).find(
+                        (message): message is string =>
+                            typeof message === 'string',
+                    ) ??
+                    'The Payment Order could not be confirmed. Review its items and signature.';
+            },
+            onHttpException: (response) => {
+                officePaymentOrderMessages[work.id] =
+                    response.status === 401 || response.status === 419
+                        ? 'Your session expired before the Payment Order was confirmed. Sign in again, review the order, and submit it once.'
+                        : 'BPLS could not confirm the Payment Order. No finalized order was recorded. Please try again or report this task.';
+
+                return false;
+            },
+            onNetworkError: () => {
+                officePaymentOrderMessages[work.id] =
+                    'The Payment Order could not reach BPLS. No finalized order was recorded. Check the connection before trying again.';
+
+                return false;
+            },
+            onFinish: () => {
+                officePaymentOrderPending[work.id] = false;
+                const timer = officePaymentOrderTimers.get(work.id);
+
+                if (timer !== undefined) {
+                    window.clearTimeout(timer);
+                    officePaymentOrderTimers.delete(work.id);
+                }
+            },
+        },
     );
 }
 
@@ -988,14 +1039,26 @@ const filteredTreasuryLobOptions = computed(() => {
                         <Button
                             type="button"
                             :disabled="
+                                officePaymentOrderPending[work.id] ||
                                 !(
                                     officeItems[work.id]?.length &&
                                     officeSignatures[work.id]
                                 )
                             "
                             @click="confirmPaymentOrder(work)"
-                            >Sign & Confirm Payment Order</Button
+                            >{{
+                                officePaymentOrderPending[work.id]
+                                    ? 'Confirming Payment Order…'
+                                    : 'Sign & Confirm Payment Order'
+                            }}</Button
                         >
+                        <p
+                            v-if="officePaymentOrderMessages[work.id]"
+                            role="alert"
+                            class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+                        >
+                            {{ officePaymentOrderMessages[work.id] }}
+                        </p>
                     </div>
                 </article>
             </div>
