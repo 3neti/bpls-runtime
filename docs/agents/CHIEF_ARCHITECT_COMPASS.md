@@ -8,6 +8,8 @@ Latest migration evidence baseline: `eefc5d1`
 
 As of: 2026-09-02
 
+Approved next major rescue/parity program: [`docs/agents/IPIL_RESCUE_AND_PARITY_COMPASS.md`](IPIL_RESCUE_AND_PARITY_COMPASS.md) and [`docs/rescue/IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md`](../rescue/IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md).
+
 ## Direction
 
 Preserve all prior evidence and the resolved Assessment Officer / Municipal Treasurer exact-snapshot facts. The Board-authorized weekend profile is the current reversible executable hypothesis: concerned-office charges and final permit processing are mechanically marked `provisional_uat`, while production authority remains fail-closed. Keep the cloud state frozen while the user relays the independent product-review prompt to the actual Mac Warp/Oz agent.
