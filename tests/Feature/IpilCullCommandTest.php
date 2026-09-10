@@ -202,7 +202,6 @@ test('the Convex adapter is pinned to the approved complete source inventory', f
 
 test('authenticated Convex media retrieval uses bounded retries', function () {
     Http::fakeSequence()
-        ->push(['status' => 'success', 'value' => ['_id' => 'synthetic-user']])
         ->push(['status' => 'success', 'value' => []])
         ->push(['status' => 'success', 'value' => 'https://media.example/object'])
         ->push('temporary', 503)
@@ -221,7 +220,26 @@ test('authenticated Convex media retrieval uses bounded retries', function () {
         'attempts' => 3,
         'error' => null,
     ]);
-    Http::assertSentCount(8);
+    Http::assertSentCount(7);
+});
+
+test('authenticated media preflight uses the exact read-only media permission', function () {
+    Http::fake([
+        'https://synthetic.convex.cloud/api/query' => Http::response([
+            'status' => 'success',
+            'value' => [],
+        ]),
+    ]);
+
+    app(ConvexAuthenticatedMediaRetriever::class)
+        ->assertAuthenticated('https://synthetic.convex.cloud', 'synthetic-secret-token');
+
+    Http::assertSentCount(1);
+    Http::assertSent(fn ($request): bool => $request->data() === [
+        'path' => 'businesses:getDocumentUrls',
+        'args' => ['storageIds' => []],
+        'format' => 'json',
+    ]);
 });
 
 final class SyntheticIpilCullSource implements IpilCullSource

@@ -13,12 +13,6 @@ final class ConvexAuthenticatedMediaRetriever
     public function assertAuthenticated(string $url, string $token): void
     {
         try {
-            $value = $this->query($url, $token, 'users:getCurrentUser', []);
-
-            if ($value === null) {
-                throw new RuntimeException('The configured Convex user token is not authenticated.');
-            }
-
             $probe = $this->query($url, $token, 'businesses:getDocumentUrls', ['storageIds' => []]);
 
             if (! is_array($probe)) {
