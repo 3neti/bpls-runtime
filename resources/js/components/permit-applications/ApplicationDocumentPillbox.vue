@@ -53,6 +53,7 @@ const emit = defineEmits<{
     queue: [document: Omit<PendingDocument, 'key'>];
     'remove-pending': [key: number];
     'save-draft': [];
+    'invalidate-lodging-ceremony': [];
 }>();
 
 const dialog = ref<HTMLDialogElement | null>(null);
@@ -120,6 +121,7 @@ function confirmDocument(): void {
     uploadForm.document_type = definition.code;
     uploadForm.file = selectedFile.value;
     uploadForm.return_to = props.returnTo;
+    emit('invalidate-lodging-ceremony');
     uploadForm.post(store.url({ permitApplication: props.applicationId }), {
         forceFormData: true,
         preserveScroll: true,
@@ -132,6 +134,7 @@ function removeDocument(documentId: number): void {
         return;
     }
 
+    emit('invalidate-lodging-ceremony');
     router.delete(
         destroy.url({
             permitApplication: props.applicationId,

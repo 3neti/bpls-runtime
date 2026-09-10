@@ -195,14 +195,24 @@ test('commissioned draft save leaves undertaking optional while sign and submit 
 
 test('commissioned application form makes document and request invalidation visible', function () {
     $component = file_get_contents(resource_path('js/pages/permit-applications/Create.vue'));
+    $documentControl = file_get_contents(resource_path('js/components/permit-applications/ApplicationDocumentPillbox.vue'));
 
     expect($component)
+        ->toContain('function invalidateLodgingCeremony(): void')
+        ->toContain('submissionForm.undertaking_accepted = false')
+        ->toContain('submissionForm.signature_facsimile = null')
+        ->toContain(':key="lodgingCeremonyRevision"')
+        ->toContain('@invalidate-lodging-ceremony="')
         ->toContain('data-testid="lodging-ceremony-notice"')
         ->toContain('data-testid="lodging-request-failure"')
         ->toContain('onHttpException: (response) =>')
         ->toContain('response.status === 401 || response.status === 419')
         ->toContain('onNetworkError: () =>')
         ->toContain('Log in and return to this Draft');
+
+    expect($documentControl)
+        ->toContain("'invalidate-lodging-ceremony': []")
+        ->toContain("emit('invalidate-lodging-ceremony')");
 });
 
 /**

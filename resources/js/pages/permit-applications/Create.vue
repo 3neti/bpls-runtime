@@ -174,6 +174,7 @@ const submissionForm = useForm({
     undertaking_accepted: false,
     signature_facsimile: null as File | null,
 });
+const lodgingCeremonyRevision = ref(0);
 const submissionRequestFailure = ref('');
 const lodgingLoginUrl = computed(() =>
     loginRoute.url({
@@ -268,7 +269,17 @@ function submissionBoundaryError(): string | undefined {
         .submission;
 }
 
+function invalidateLodgingCeremony(): void {
+    submissionForm.undertaking_accepted = false;
+    submissionForm.signature_facsimile = null;
+    submissionForm.clearErrors();
+    submissionRequestFailure.value = '';
+    lodgingCeremonyRevision.value++;
+}
+
 function queueDocument(document: Omit<PendingDocument, 'key'>): void {
+    invalidateLodgingCeremony();
+
     const definition = props.applicationDocumentTypes?.find(
         (type) => type.code === document.document_type,
     );
@@ -283,6 +294,7 @@ function queueDocument(document: Omit<PendingDocument, 'key'>): void {
 }
 
 function removePendingDocument(key: number): void {
+    invalidateLodgingCeremony();
     pendingDocuments.value = pendingDocuments.value.filter(
         (document) => document.key !== key,
     );
@@ -807,6 +819,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                 id="permit-application-form"
                 :transform="transformApplicationSubmission"
                 class="mx-auto grid w-full max-w-6xl gap-4"
+                @success="invalidateLodgingCeremony"
             >
                 <input
                     v-if="draft"
@@ -2042,6 +2055,9 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 @queue="queueDocument"
                                 @remove-pending="removePendingDocument"
                                 @save-draft="saveDraftWithDocuments"
+                                @invalidate-lodging-ceremony="
+                                    invalidateLodgingCeremony
+                                "
                             />
                         </section>
 
@@ -2119,6 +2135,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                     isCommissionedApplication &&
                                     canSubmit
                                 "
+                                :key="lodgingCeremonyRevision"
                                 :required="false"
                                 :error="
                                     submissionForm.errors.signature_facsimile
