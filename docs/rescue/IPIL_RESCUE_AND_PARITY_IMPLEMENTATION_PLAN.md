@@ -1,6 +1,6 @@
 # Ipil Rescue and Parity Implementation Plan
 
-Status: **APPROVED PROGRAM PLAN — DOCUMENTATION ONLY; IMPLEMENTATION NOT STARTED**
+Status: **APPROVED PROGRAM PLAN — OFFLINE CORPUS CONTRACT SCAFFOLD IMPLEMENTED**
 
 Approved: 2026-09-10
 
@@ -15,6 +15,8 @@ Create a repeatable, auditable local reconstruction of the current Ipil BPLS: so
 This is a rescue and parity program before it is a migration or redesign program. The first durable deliverable is a checksum-bound local rescue corpus. BPLS interpretation, historical projection, parity proof, UI reproduction, and product improvement follow in that order.
 
 This plan does not authorize live access, culling, import, production migration, cutover, deployment, or application changes. Each implementation wave requires its own bounded authorization and evidence.
+
+Implemented foundation as of 2026-09-10: Rescue Corpus V1 manifest and `SourceIdentity` contracts, scaffold-level offline integrity checking behind `ipil:rescue:verify`, fail-closed `ipil:seed` and `ipil:audit` frontiers, and the verify/seed/audit-only `bin/bpls-ipil-rescue-lab` wrapper. Full verification stays fail-closed until subordinate database, media, pricing, and exception contracts can reconcile semantic counts and bytes. This foundation uses synthetic tests, performs no domain writes, and deliberately provides no `ipil:cull` command or live-source capability.
 
 ## Target Flow
 

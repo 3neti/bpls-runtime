@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_directory="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
+repository_root="$(CDPATH='' cd -- "${script_directory}/.." && pwd -P)"
+
+usage() {
+    printf 'Usage: %s <verify|seed|audit> <local-corpus-path> [--json]\n' "$0" >&2
+    printf 'Live acquisition is never available through the local rescue lab.\n' >&2
+}
+
+if [[ "$#" -lt 2 || "$#" -gt 3 ]]; then
+    usage
+    exit 64
+fi
+
+operation="$1"
+corpus_path="$2"
+output_arguments=()
+
+if [[ "$#" -eq 3 ]]; then
+    if [[ "$3" != "--json" ]]; then
+        usage
+        exit 64
+    fi
+
+    output_arguments+=("--json")
+fi
+
+case "${operation}" in
+    verify)
+        command_name="ipil:rescue:verify"
+        ;;
+    seed)
+        command_name="ipil:seed"
+        ;;
+    audit)
+        command_name="ipil:audit"
+        ;;
+    *)
+        usage
+        exit 64
+        ;;
+esac
+
+cd "${repository_root}"
+
+exec php artisan "${command_name}" "${corpus_path}" "${output_arguments[@]}" --no-interaction
