@@ -101,9 +101,64 @@ test('eligible citizen payment detail exposes the QR Ph action without partner i
             ->where('paymentSchedule.online_payment_boundary.status', 'available')
             ->where('paymentSchedule.online_payment_boundary.can_pay_online', true)
             ->where('paymentSchedule.balance_amount_cents', 12_550)
+            ->where('paymentSchedule.current_qr_ph_attempt', null)
             ->missing('paymentSchedule.x_change')
             ->missing('paymentSchedule.online_payment_boundary.pay_code')
             ->missing('paymentSchedule.online_payment_boundary.provider'));
+});
+
+test('citizen payment detail resumes the same current QR Ph attempt after refresh', function () {
+    [$citizen, $schedule] = qrPhScheduleFixture();
+    $png = base64_encode("\x89PNG\r\n\x1a\nresumed");
+    fakeQrPhIssueAndAttempt($schedule, $png);
+
+    $this->actingAs($citizen)
+        ->postJson(route('citizen.payment-schedules.qr-ph.initiate', $schedule))
+        ->assertOk();
+
+    $attempt = XChangePaymentAttempt::query()->sole();
+
+    $this->actingAs($citizen)
+        ->get(route('citizen.payment-schedules.show', $schedule))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('citizen/payment-schedules/Show')
+            ->where('paymentSchedule.current_qr_ph_attempt.amount_cents', 12_550)
+            ->where('paymentSchedule.current_qr_ph_attempt.status', 'awaiting_payment')
+            ->where('paymentSchedule.current_qr_ph_attempt.expires_at', $attempt->expires_at?->toIso8601String())
+            ->where('paymentSchedule.current_qr_ph_attempt.qr_data_url', 'data:image/png;base64,'.$png)
+            ->missing('paymentSchedule.current_qr_ph_attempt.reference')
+            ->missing('paymentSchedule.current_qr_ph_attempt.provider'));
+
+    $this->actingAs($citizen)
+        ->postJson(route('citizen.payment-schedules.qr-ph.initiate', $schedule))
+        ->assertOk()
+        ->assertJsonPath('qr_data_url', 'data:image/png;base64,'.$png);
+
+    expect(XChangePayment::query()->count())->toBe(1)
+        ->and(XChangePaymentAttempt::query()->count())->toBe(1);
+});
+
+test('citizen payment detail offers no expired QR Ph attempt as current', function () {
+    [$citizen, $schedule] = qrPhScheduleFixture();
+    fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nexpired-refresh"));
+
+    $this->actingAs($citizen)
+        ->postJson(route('citizen.payment-schedules.qr-ph.initiate', $schedule))
+        ->assertOk();
+
+    XChangePaymentAttempt::query()->sole()->update([
+        'status' => 'expired',
+        'expires_at' => now()->subMinute(),
+    ]);
+
+    $this->actingAs($citizen)
+        ->get(route('citizen.payment-schedules.show', $schedule))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('citizen/payment-schedules/Show')
+            ->where('paymentSchedule.current_qr_ph_attempt', null)
+            ->where('paymentSchedule.online_payment_boundary.can_pay_online', true));
 });
 
 test('staff payment schedule exposes the same eligible QR Ph request', function () {

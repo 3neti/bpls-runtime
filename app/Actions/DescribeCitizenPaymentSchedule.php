@@ -10,6 +10,7 @@ final class DescribeCitizenPaymentSchedule
     public function __construct(
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly DescribePaymentPolicyBoundary $describePaymentPolicyBoundary,
+        private readonly BuildCitizenCurrentQrPhAttempt $buildCitizenCurrentQrPhAttempt,
     ) {}
 
     /**
@@ -99,6 +100,7 @@ final class DescribeCitizenPaymentSchedule
                 ]),
             'payment_policy_boundary' => $this->describePaymentPolicyBoundary->handle($paymentSchedule),
             'online_payment_boundary' => $this->describeOnlinePaymentBoundary->handle($paymentSchedule),
+            'current_qr_ph_attempt' => $this->buildCitizenCurrentQrPhAttempt->handle($paymentSchedule),
             'artifact_statement' => 'This page reports the authoritative BPLS assessment, schedule, collection, allocation, and receipt evidence. QR Ph confirmation enters the same municipal collection path; reversal and receipt issuance remain separate controlled actions.',
         ];
     }
