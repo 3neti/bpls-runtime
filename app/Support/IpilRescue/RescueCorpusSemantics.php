@@ -76,8 +76,9 @@ final class RescueCorpusSemantics
      * @param  array<string, mixed>  $schema
      * @param  array<string, mixed>  $manifest
      * @param  callable(string): string  $boundFile
+     * @param  (callable(string): string)|null  $boundPath
      */
-    public function verifyDatabase(array $schema, array $manifest, callable $boundFile): int
+    public function verifyDatabase(array $schema, array $manifest, callable $boundFile, ?callable $boundPath = null): int
     {
         $this->exactKeys($schema, [
             'schema_version',
@@ -177,13 +178,19 @@ final class RescueCorpusSemantics
                 throw new InvalidArgumentException("The database manifest repeats dataset {$dataset}.");
             }
 
-            $contents = $boundFile($path);
+            $actualChecksum = $boundPath === null
+                ? hash('sha256', $boundFile($path))
+                : hash_file('sha256', $boundPath($path));
 
-            if (! hash_equals($checksum, hash('sha256', $contents))) {
+            if (! is_string($actualChecksum) || ! hash_equals($checksum, $actualChecksum)) {
                 throw new InvalidArgumentException("The database table checksum does not match {$path}.");
             }
 
-            if ($this->jsonlCount($contents, $path, true) !== $rowCount) {
+            $actualRows = $boundPath === null
+                ? $this->jsonlCount($boundFile($path), $path, true)
+                : $this->jsonlFileCount($boundPath($path), $path);
+
+            if ($actualRows !== $rowCount) {
                 throw new InvalidArgumentException("The database table row count does not match {$path}.");
             }
 
@@ -593,6 +600,33 @@ final class RescueCorpusSemantics
         }
 
         return count($objects);
+    }
+
+    private function jsonlFileCount(string $path, string $label): int
+    {
+        $stream = fopen($path, 'rb');
+
+        if (! is_resource($stream)) {
+            throw new InvalidArgumentException("Unable to read {$label}.");
+        }
+
+        $count = 0;
+
+        try {
+            while (($line = fgets($stream)) !== false) {
+                $payload = json_decode(rtrim($line, "\r\n"), true);
+
+                if (! is_array($payload) || array_is_list($payload)) {
+                    throw new InvalidArgumentException("Invalid JSON object in {$label} line ".($count + 1).'.');
+                }
+
+                $count++;
+            }
+        } finally {
+            fclose($stream);
+        }
+
+        return $count;
     }
 
     /**

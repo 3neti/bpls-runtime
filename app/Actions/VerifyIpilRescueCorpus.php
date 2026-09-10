@@ -80,6 +80,7 @@ final class VerifyIpilRescueCorpus
             $this->readJsonObject($this->localFile($root, 'source/database/schema.json')),
             $this->readJsonObject($this->localFile($root, 'source/database/table-manifest.json')),
             $boundFile,
+            fn (string $relativePath): string => $this->boundPath($root, $relativePath, $manifest),
         );
         $media = $this->semantics->verifyMedia(
             $boundFile('source/media/media-manifest.jsonl'),
@@ -136,17 +137,22 @@ final class VerifyIpilRescueCorpus
 
     private function boundContents(string $root, string $relativePath, RescueCorpusManifest $manifest): string
     {
-        if (! array_key_exists($relativePath, $manifest->bindings)) {
-            throw new RuntimeException("The semantic contract references an unbound file: {$relativePath}.");
-        }
-
-        $contents = file_get_contents($this->localFile($root, $relativePath));
+        $contents = file_get_contents($this->boundPath($root, $relativePath, $manifest));
 
         if ($contents === false) {
             throw new RuntimeException("Unable to read {$relativePath}.");
         }
 
         return $contents;
+    }
+
+    private function boundPath(string $root, string $relativePath, RescueCorpusManifest $manifest): string
+    {
+        if (! array_key_exists($relativePath, $manifest->bindings)) {
+            throw new RuntimeException("The semantic contract references an unbound file: {$relativePath}.");
+        }
+
+        return $this->localFile($root, $relativePath);
     }
 
     private function verifyCompleteInventory(string $root, RescueCorpusManifest $manifest): void
@@ -250,59 +256,57 @@ final class VerifyIpilRescueCorpus
     /** @return array<string, true> */
     private function verifySourceIdentities(string $path, RescueCorpusManifest $manifest): array
     {
-        $contents = file_get_contents($path);
+        $stream = fopen($path, 'rb');
 
-        if ($contents === false) {
+        if (! is_resource($stream)) {
             throw new RuntimeException('Unable to read the source identity registry.');
         }
 
-        if (trim($contents) === '') {
-            return [];
-        }
-
-        $lines = preg_split('/\R/', trim($contents));
-
-        if ($lines === false) {
-            throw new RuntimeException('Unable to parse the source identity registry.');
-        }
-
         $seen = [];
+        $lineNumber = 0;
 
-        foreach ($lines as $lineNumber => $line) {
-            try {
-                $payload = json_decode($line, true, flags: JSON_THROW_ON_ERROR);
-            } catch (JsonException $exception) {
-                throw new RuntimeException(
-                    'Invalid JSON in source identity line '.($lineNumber + 1).'.',
-                    previous: $exception,
-                );
+        try {
+            while (($line = fgets($stream)) !== false) {
+                $lineNumber++;
+                $line = rtrim($line, "\r\n");
+
+                try {
+                    $payload = json_decode($line, true, flags: JSON_THROW_ON_ERROR);
+                } catch (JsonException $exception) {
+                    throw new RuntimeException(
+                        "Invalid JSON in source identity line {$lineNumber}.",
+                        previous: $exception,
+                    );
+                }
+
+                if (! is_array($payload) || array_is_list($payload)) {
+                    throw new RuntimeException('Each source identity line must be a JSON object.');
+                }
+
+                $identity = SourceIdentity::fromArray($payload);
+
+                if (
+                    $identity->corpusId !== $manifest->corpusId
+                    || $identity->sourceSystem !== $manifest->source['system']
+                    || $identity->deploymentIdentitySha256 !== $manifest->source['deployment_identity_sha256']
+                ) {
+                    throw new RuntimeException('A source identity does not belong to this corpus and source.');
+                }
+
+                if (! array_key_exists($identity->rawEvidenceLocator, $manifest->bindings)) {
+                    throw new RuntimeException('A source identity points to evidence that is not checksum bound.');
+                }
+
+                $identityKey = $identity->dataset."\0".$identity->sourceKeySha256;
+
+                if (isset($seen[$identityKey])) {
+                    throw new RuntimeException('The source identity registry contains a duplicate source key.');
+                }
+
+                $seen[$identityKey] = true;
             }
-
-            if (! is_array($payload) || array_is_list($payload)) {
-                throw new RuntimeException('Each source identity line must be a JSON object.');
-            }
-
-            $identity = SourceIdentity::fromArray($payload);
-
-            if (
-                $identity->corpusId !== $manifest->corpusId
-                || $identity->sourceSystem !== $manifest->source['system']
-                || $identity->deploymentIdentitySha256 !== $manifest->source['deployment_identity_sha256']
-            ) {
-                throw new RuntimeException('A source identity does not belong to this corpus and source.');
-            }
-
-            if (! array_key_exists($identity->rawEvidenceLocator, $manifest->bindings)) {
-                throw new RuntimeException('A source identity points to evidence that is not checksum bound.');
-            }
-
-            $identityKey = $identity->dataset."\0".$identity->sourceKeySha256;
-
-            if (isset($seen[$identityKey])) {
-                throw new RuntimeException('The source identity registry contains a duplicate source key.');
-            }
-
-            $seen[$identityKey] = true;
+        } finally {
+            fclose($stream);
         }
 
         return $seen;
