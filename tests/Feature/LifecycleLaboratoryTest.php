@@ -544,7 +544,7 @@ test('source backed registry specimen advances through the complete synthetic pe
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     expect(data_get($state, 'progress.blocked'))->toBeFalse()
         ->and(data_get($state, 'progress.profile_kind'))->toBe('registry_source_replay')
-        ->and(data_get($state, 'progress.total_steps'))->toBe(23)
+        ->and(data_get($state, 'progress.total_steps'))->toBe(24)
         ->and(data_get($state, 'progress.next_step.key'))->toBe('evaluation_initialized');
 
     $this->actingAs($management)
@@ -680,8 +680,15 @@ test('source backed registry specimen advances through the complete synthetic pe
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     expect(data_get($state, 'progress.complete'))->toBeFalse()
         ->and(data_get($state, 'progress.completed_steps'))->toBe(12)
-        ->and(data_get($state, 'progress.next_step.key'))->toBe('qr_payment_collected')
+        ->and(data_get($state, 'progress.next_step.key'))->toBe('qr_payment_requested')
         ->and($run->fresh()->renewal_application_id)->toBeNull();
+
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.next', $run), [
+            'expected_step_key' => 'qr_payment_requested',
+            'expected_actor_key' => 'citizen',
+        ])
+        ->assertRedirect(route('citizen.payment-schedules.show', $schedule));
 
     $collection = TreasuryCollection::factory()->for($application)->for($assessment)->for($schedule)->create([
         'status' => TreasuryCollectionStatus::PendingReceipt,
@@ -692,7 +699,7 @@ test('source backed registry specimen advances through the complete synthetic pe
     $schedule->forceFill(['status' => 'paid', 'paid_amount_cents' => 517_500])->save();
 
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
-    expect(data_get($state, 'progress.completed_steps'))->toBe(13)
+    expect(data_get($state, 'progress.completed_steps'))->toBe(14)
         ->and(data_get($state, 'progress.next_step.key'))->toBe('official_receipt_issued')
         ->and(collect(data_get($state, 'actors'))->where('is_next', true)->pluck('key')->all())->toBe(['cashier'])
         ->and(collect(data_get($state, 'actors'))->firstWhere('key', 'cashier')['relationship'])->toBe('next');
@@ -771,7 +778,7 @@ test('source backed registry specimen advances through the complete synthetic pe
 
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     expect(data_get($state, 'progress.complete'))->toBeTrue()
-        ->and(data_get($state, 'progress.completed_steps'))->toBe(23)
+        ->and(data_get($state, 'progress.completed_steps'))->toBe(24)
         ->and($run->fresh()->renewal_application_id)->toBeNull();
 });
 
@@ -1077,7 +1084,7 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         ->and(data_get($state, 'progress.next_step.mode'))->toBe('product_form')
         ->and(data_get($state, 'progress.next_step.actor'))->toBe('treasury')
         ->and(data_get($state, 'progress.completed_steps'))->toBe(8)
-        ->and(data_get($state, 'progress.total_steps'))->toBe(24)
+        ->and(data_get($state, 'progress.total_steps'))->toBe(25)
         ->and(data_get($cleanroom, 'active.concerned_office_payment_orders.status'))->toBe('finalized')
         ->and(data_get($cleanroom, 'active.concerned_office_payment_orders.finalized_subtotal_amount_cents'))->toBe(305_000)
         ->and(data_get($pageTwo, 'page_2_assessment.concerned_office_payment_orders.finalized_subtotal_amount_cents'))->toBe(305_000)
@@ -1144,7 +1151,7 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         ->toBe(['payment_schedule']);
     $schedule = app(CreatePaymentScheduleForAssessment::class)->handle($assessment, $assessmentOfficer);
     expect($schedule->total_amount_cents)->toBe($assessment->total_amount_cents)
-        ->and(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))->toBe('qr_payment_collected')
+        ->and(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))->toBe('qr_payment_requested')
         ->and(app(BuildMunicipalWorkInbox::class)->handle(User::query()->findOrFail(data_get($run->actor_manifest, 'actors.cashier.user_id')))['items']->pluck('task_type')->all())
         ->toBe(['collection']);
 
@@ -1172,6 +1179,9 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         'amount_cents' => $schedule->total_amount_cents,
         'expires_at' => now()->addMinutes(15),
     ]);
+
+    expect(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))
+        ->toBe('qr_payment_collected');
 
     $cashier = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.cashier.user_id'));
     $collection = app(SimulateLifecycleQrPhPayment::class)->handle($run->fresh());
@@ -1278,7 +1288,7 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         data_get($finalData, 'payment.reconciliation.total_receipted_cents'),
     ];
     expect(data_get($finalState, 'progress.complete'))->toBeTrue()
-        ->and(data_get($finalState, 'progress.completed_steps'))->toBe(24)
+        ->and(data_get($finalState, 'progress.completed_steps'))->toBe(25)
         ->and(data_get($finalState, 'progress.completion_message'))->toBe('The source-backed 2025 registry specimen completes the synthetic Business Permit lifecycle without creating a Renewal.')
         ->and(data_get($finalData, 'identity.status'))->toBe(PermitApplicationStatus::Released->value)
         ->and($parityTotals)->each->toBe($assessment->total_amount_cents)
@@ -1439,7 +1449,7 @@ test('cleanroom remains compatible with the canonical two year action semantics 
 
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     expect(data_get($state, 'progress.complete'))->toBeTrue()
-        ->and(data_get($state, 'progress.completed_steps'))->toBe(34)
+        ->and(data_get($state, 'progress.completed_steps'))->toBe(35)
         ->and(PermitApplication::query()->whereIn('id', [$run->new_application_id, $run->renewal_application_id])->pluck('application_year')->sort()->values()->all())->toBe([2025, 2026])
         ->and(PermitApplication::query()->whereIn('id', [$run->new_application_id, $run->renewal_application_id])->pluck('business_id')->unique())->toHaveCount(1);
 });

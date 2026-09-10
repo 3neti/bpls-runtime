@@ -223,12 +223,30 @@ final class BuildMunicipalWorkInbox
     private function cashierWork(): array
     {
         return PaymentSchedule::query()
-            ->with(['permitApplication.business.owner', 'treasuryCollections'])
+            ->with(['permitApplication.business.owner', 'treasuryCollections', 'xChangePayment.attempts'])
             ->where(function ($query): void {
                 $query->whereIn('status', [PaymentScheduleStatus::Pending, PaymentScheduleStatus::PartiallyPaid])
                     ->orWhereHas('treasuryCollections', fn ($query) => $query->where('status', TreasuryCollectionStatus::PendingReceipt));
             })
             ->get()
+            ->filter(function (PaymentSchedule $schedule): bool {
+                $runId = data_get($schedule->permitApplication->metadata, 'lifecycle_cleanroom.run_id');
+                $run = is_string($runId)
+                    ? LifecycleCleanroomRun::query()->where('public_id', $runId)->first()
+                    : null;
+                if (! $run instanceof LifecycleCleanroomRun || ! $run->isClassicLifecycleV1() || $run->status !== 'active') {
+                    return true;
+                }
+                if ($schedule->treasuryCollections->contains(fn ($collection): bool => $collection->status === TreasuryCollectionStatus::PendingReceipt)) {
+                    return true;
+                }
+
+                $attempt = $schedule->xChangePayment?->attempts->sortByDesc('id')->first();
+
+                return $attempt !== null
+                    && in_array($attempt->status, ['requested', 'awaiting_payment'], true)
+                    && $attempt->expires_at?->isFuture() === true;
+            })
             ->map(function (PaymentSchedule $schedule): array {
                 $pendingReceipts = $schedule->treasuryCollections->contains(fn ($collection): bool => $collection->status === TreasuryCollectionStatus::PendingReceipt);
 

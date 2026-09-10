@@ -6,7 +6,7 @@ use App\Enums\UserPermission;
 
 class LifecycleCleanroomDefinition
 {
-    public const string Revision = 'complete_business_permit_lifecycle_v4';
+    public const string Revision = 'complete_business_permit_lifecycle_v5';
 
     /** @return array<string, array{label: string, permissions: list<UserPermission>}> */
     public function actors(): array
@@ -45,7 +45,8 @@ class LifecycleCleanroomDefinition
             $this->step('treasury_counter_check', 2025, 'Treasury counter-check complete', 'Treasury records no correction against the exact Assessment and source Evaluation version.', 'product_form', 'treasury', 'Treasury'),
             $this->step('treasurer_approved', 2025, 'Municipal Treasurer exact approval', 'The Municipal Treasurer approves the immutable Assessment fingerprint.', 'product_form', 'municipal_treasurer', 'Approval'),
             $this->step('payable_created', 2025, 'Payable created', 'The approved Assessment becomes one pending Payment Schedule.', 'product_form', 'assessment_officer', '2025 approved payable'),
-            $this->step('qr_payment_collected', 2025, 'QR/payment simulated', 'The Citizen generates QR Ph and the cleanroom records one canonical synthetic Collection; no real funds move.', 'product_form', 'citizen', 'QR/payment simulated'),
+            $this->step('qr_payment_requested', 2025, 'QR Ph request generated', 'The Citizen generates the current QR Ph request for the exact payable amount. No Collection exists yet.', 'product_form', 'citizen', 'Generate QR Ph'),
+            $this->step('qr_payment_collected', 2025, 'Synthetic payment confirmed', 'The Cashier receives the current Citizen-generated QR Ph handoff and records one canonical synthetic Collection; no real funds move.', 'product_form', 'cashier', 'Confirm synthetic payment'),
             $this->step('official_receipt_issued', 2025, 'AF No. 51 issued', 'The Cashier issues the AF No. 51 Official Receipt from canonical Collection truth.', 'product_form', 'cashier', 'AF No. 51 issued'),
             $this->step('post_payment_certifications_commissioned', 2025, 'Post-payment certifications commissioned', 'The actual BPLO routing determines the offices asked to review the bound Official Receipt and certify synthetic cleanroom results.', 'system_action', 'intake', 'Post-payment office work'),
             $this->step('assessor_post_payment_certified', 2025, 'Assessor post-payment certification', 'The routed Assessor reviews the bound Official Receipt and records synthetic-only certification evidence.', 'product_form', 'assessor', 'Post-payment certification'),

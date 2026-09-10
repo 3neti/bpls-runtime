@@ -93,7 +93,7 @@ class AuthenticateLifecycleCleanroomActor
         if ($destination === 'staff.permit-applications.assessments.show') {
             return $application->assessments()->whereNull('superseded_at')->sole()->id;
         }
-        if ($destination === 'staff.payment-schedules.show') {
+        if (in_array($destination, ['citizen.payment-schedules.show', 'staff.payment-schedules.show'], true)) {
             return $application->paymentSchedules()->latest('sequence')->sole()->id;
         }
 

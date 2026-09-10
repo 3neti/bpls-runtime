@@ -118,7 +118,22 @@ type QrPhAttempt = {
     amount_cents: number;
     status: string;
     expires_at: string;
-    qr_data_url: string;
+    qr_data_url: string | null;
+};
+
+type ClassicPaymentHandoff = {
+    payment_id: number;
+    pay_code: string | null;
+    external_reference: string;
+    amount_cents: number;
+    currency: string;
+    status: string;
+    is_current: boolean;
+    attempt: QrPhAttempt & {
+        id: number;
+        reference: string | null;
+        provider: string | null;
+    };
 };
 
 type QrPhStatus = {
@@ -180,8 +195,10 @@ const props = defineProps<{
         view_collections: boolean;
         issue_receipts: boolean;
         view_receipts: boolean;
+        initiate_qr_ph: boolean;
         simulate_classic_payment: boolean;
     };
+    classicPaymentHandoff: ClassicPaymentHandoff | null;
     classicPaymentSimulationUrl: string | null;
 }>();
 
@@ -208,6 +225,7 @@ const pendingReceiptCount = computed(() =>
 const canGenerateQr = computed(
     () =>
         props.paymentSchedule.online_payment_boundary.can_pay_online &&
+        props.can.initiate_qr_ph &&
         props.paymentSchedule.status !== 'paid' &&
         balanceDueCents.value > 0,
 );
@@ -236,7 +254,11 @@ const workspaceState = computed(() => {
 
 const initiateRequest = useHttp({});
 const statusRequest = useHttp({});
-const qrAttempt = ref<QrPhAttempt | null>(null);
+const qrAttempt = ref<QrPhAttempt | null>(
+    props.classicPaymentHandoff?.is_current
+        ? props.classicPaymentHandoff.attempt
+        : null,
+);
 const qrMessage = ref<string | null>(null);
 const currentTime = ref(Date.now());
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
@@ -342,7 +364,7 @@ async function checkQrPayment(): Promise<void> {
     }
 }
 
-function startQrChecks(): void {
+function startQrChecks(pollForPayment = true): void {
     stopQrChecks();
     currentTime.value = Date.now();
     countdownTimer = setInterval(() => {
@@ -354,7 +376,10 @@ function startQrChecks(): void {
                 'This QR expired without payment. Generate a fresh QR to continue.';
         }
     }, 1000);
-    pollTimer = setInterval(() => void checkQrPayment(), 4000);
+
+    if (pollForPayment) {
+        pollTimer = setInterval(() => void checkQrPayment(), 4000);
+    }
 }
 
 async function generateQrPh(): Promise<void> {
@@ -378,6 +403,10 @@ async function generateQrPh(): Promise<void> {
         qrMessage.value =
             'QR Ph is temporarily unavailable. The Payment Schedule is unchanged.';
     }
+}
+
+if (qrAttempt.value !== null) {
+    startQrChecks(props.classicPaymentHandoff === null);
 }
 
 onBeforeUnmount(stopQrChecks);
@@ -928,6 +957,7 @@ onBeforeUnmount(stopQrChecks);
                             class="mt-4 grid justify-items-center gap-2 rounded-lg border bg-white p-3"
                         >
                             <img
+                                v-if="qrAttempt.qr_data_url"
                                 data-testid="staff-qr-ph-image"
                                 :src="qrAttempt.qr_data_url"
                                 alt="QR Ph payment code"
@@ -944,11 +974,58 @@ onBeforeUnmount(stopQrChecks);
                             </p>
                         </div>
 
+                        <dl
+                            v-if="classicPaymentHandoff"
+                            data-testid="classic-payment-handoff"
+                            class="mt-3 grid gap-2 rounded-lg border bg-muted/20 p-3 text-sm sm:grid-cols-2"
+                        >
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Pay Code
+                                </dt>
+                                <dd class="font-medium">
+                                    {{ classicPaymentHandoff.pay_code ?? '—' }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Provider / rail
+                                </dt>
+                                <dd class="font-medium">
+                                    {{
+                                        classicPaymentHandoff.attempt
+                                            .provider ?? 'QR Ph'
+                                    }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    External reference
+                                </dt>
+                                <dd class="font-medium break-all">
+                                    {{
+                                        classicPaymentHandoff.external_reference
+                                    }}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-muted-foreground">
+                                    Attempt reference
+                                </dt>
+                                <dd class="font-medium break-all">
+                                    {{
+                                        classicPaymentHandoff.attempt
+                                            .reference ?? '—'
+                                    }}
+                                </dd>
+                            </div>
+                        </dl>
+
                         <Form
                             v-if="
                                 can.simulate_classic_payment &&
                                 classicPaymentSimulationUrl &&
-                                qrAttempt
+                                classicPaymentHandoff?.is_current
                             "
                             :action="classicPaymentSimulationUrl"
                             method="post"

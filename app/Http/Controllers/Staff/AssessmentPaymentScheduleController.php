@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Staff;
 
+use App\Actions\BuildClassicCashierQrPhHandoff;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Actions\DescribePaymentPolicyBoundary;
@@ -23,6 +24,7 @@ use Inertia\Response;
 class AssessmentPaymentScheduleController extends Controller
 {
     public function __construct(
+        private readonly BuildClassicCashierQrPhHandoff $buildClassicCashierQrPhHandoff,
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly DescribePaymentPolicyBoundary $describePaymentPolicyBoundary,
     ) {}
@@ -101,10 +103,9 @@ class AssessmentPaymentScheduleController extends Controller
         $classicRun = is_string($runId)
             ? LifecycleCleanroomRun::query()->where('public_id', $runId)->first()
             : null;
-        $canSimulateClassicPayment = $classicRun instanceof LifecycleCleanroomRun
+        $isActiveClassicRun = $classicRun instanceof LifecycleCleanroomRun
             && $classicRun->isClassicLifecycleV1()
-            && $classicRun->status === 'active'
-            && data_get($classicRun->actor_manifest, 'actors.cashier.user_id') === auth()->id();
+            && $classicRun->status === 'active';
 
         $paymentSchedule->load([
             'preparedBy',
@@ -112,6 +113,8 @@ class AssessmentPaymentScheduleController extends Controller
             'permitApplication.business.owner',
             'lines.lineOfBusiness',
         ]);
+        $classicPaymentHandoff = $this->buildClassicCashierQrPhHandoff->handle($paymentSchedule, auth()->user());
+        $canSimulateClassicPayment = data_get($classicPaymentHandoff, 'is_current') === true;
 
         if ($canRecordCollections || $canViewCollections || $canIssueReceipts || $canViewReceipts) {
             $paymentSchedule->load([
@@ -138,8 +141,10 @@ class AssessmentPaymentScheduleController extends Controller
                 'view_collections' => $canViewCollections,
                 'issue_receipts' => $canIssueReceipts,
                 'view_receipts' => $canViewReceipts,
+                'initiate_qr_ph' => ! $isActiveClassicRun,
                 'simulate_classic_payment' => $canSimulateClassicPayment,
             ],
+            'classicPaymentHandoff' => $classicPaymentHandoff,
             'classicPaymentSimulationUrl' => $canSimulateClassicPayment
                 ? route('staff.payment-schedules.classic-payment-simulation.store', $paymentSchedule, false)
                 : null,

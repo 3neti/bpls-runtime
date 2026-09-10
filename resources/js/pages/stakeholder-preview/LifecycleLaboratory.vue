@@ -311,7 +311,11 @@ const lifecycleStages = computed<LifecycleStage[]>(() => {
             summary: application?.payment?.reconciliation
                 ? `${pesos(application.payment.reconciliation.collected_amount_cents)} collected · ${application.payment.reconciliation.issued_receipt_group_count ?? 0} receipts`
                 : 'Pending',
-            steps: ['qr_payment_collected', 'official_receipt_issued'],
+            steps: [
+                'qr_payment_requested',
+                'qr_payment_collected',
+                'official_receipt_issued',
+            ],
         },
         {
             key: 'certification',
@@ -865,8 +869,9 @@ function simulateQrPhPayment(): void {
                     >
                         <div
                             v-if="
+                                !isClassicCleanroom &&
                                 cleanroom.active.payment_simulation.status !==
-                                'not_ready'
+                                    'not_ready'
                             "
                             class="rounded-xl border border-sky-300 bg-sky-50 p-4 text-sky-950 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-100"
                             data-testid="laboratory-payment-simulator"

@@ -11,6 +11,7 @@ use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use LogicException;
 
 class ClassicLifecyclePaymentController extends Controller
 {
@@ -34,7 +35,11 @@ class ClassicLifecyclePaymentController extends Controller
             abort(403, 'Only the commissioned Classic Lifecycle cashier may simulate this payment.');
         }
 
-        $collection = $simulatePayment->handle($run);
+        try {
+            $simulatePayment->handle($run);
+        } catch (LogicException $exception) {
+            return back()->withErrors(['payment' => $exception->getMessage()]);
+        }
 
         return to_route('staff.payment-schedules.show', $paymentSchedule)
             ->with('success', 'Synthetic QR Ph payment recorded. Issue every required Official Receipt to continue.');

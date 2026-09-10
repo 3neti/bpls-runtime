@@ -39,6 +39,7 @@ class ResolveLifecycleCleanroomState
             'newApplication.assessments.decision',
             'newApplication.assessments.treasuryCounterCheck',
             'newApplication.paymentSchedules',
+            'newApplication.paymentSchedules.xChangePayment.attempts',
             'newApplication.paymentSchedules.treasuryCollections.receipt',
             'newApplication.postPaymentOfficeCertifications',
             'newApplication.provisionalUatPermitCompletion',
@@ -211,7 +212,7 @@ class ResolveLifecycleCleanroomState
             'bplo_routing' => ['tab' => 'processing', 'focus' => 'bplo-routing'],
             'assessment_prepared' => ['tab' => 'processing', 'focus' => $baseStep],
             'treasury_counter_check', 'treasurer_approved', 'payable_created' => ['tab' => 'assessment', 'focus' => $baseStep],
-            'qr_payment_collected', 'official_receipt_issued' => ['tab' => 'payment', 'focus' => $baseStep],
+            'qr_payment_requested', 'qr_payment_collected', 'official_receipt_issued' => ['tab' => 'payment', 'focus' => $baseStep],
             'post_payment_certifications_commissioned', 'assessor_post_payment_certified', 'engineering_post_payment_certified', 'health_post_payment_certified', 'menro_post_payment_certified' => ['tab' => 'processing', 'focus' => $baseStep],
             'permit_ready', 'permit_issued', 'permit_released', 'public_verification' => ['tab' => 'permit', 'focus' => $baseStep],
             default => ['tab' => 'processing', 'focus' => $baseStep],
@@ -286,6 +287,16 @@ class ResolveLifecycleCleanroomState
             'treasury_counter_check' => $application?->assessments->whereNull('superseded_at')->first()?->treasuryCounterCheck !== null,
             'treasurer_approved' => $application?->assessments->whereNull('superseded_at')->first()?->decision?->action === AssessmentDecisionAction::Approved,
             'payable_created' => $application?->paymentSchedules->isNotEmpty() ?? false,
+            'qr_payment_requested' => $application?->paymentSchedules->contains(function ($schedule): bool {
+                if ($schedule->treasuryCollections->isNotEmpty()) {
+                    return true;
+                }
+                $attempt = $schedule->xChangePayment?->attempts->sortByDesc('id')->first();
+
+                return $attempt !== null
+                    && in_array($attempt->status, ['requested', 'awaiting_payment'], true)
+                    && $attempt->expires_at?->isFuture() === true;
+            }) ?? false,
             'qr_payment_collected' => $application?->paymentSchedules->flatMap(fn ($schedule) => $schedule->treasuryCollections)->isNotEmpty() ?? false,
             'official_receipt_issued' => $application instanceof PermitApplication
                 && ($profile['kind'] ?? null) === LifecycleCleanroomRun::CeremonyNelsonReconciliationV1
@@ -488,6 +499,7 @@ class ResolveLifecycleCleanroomState
             'treasury_counter_check' => ['Treasury result' => 'Pending → No correction'],
             'treasurer_approved' => ['Assessment decision' => 'Pending → Approved'],
             'payable_created' => ['Payable balance' => $isRegistryProfile ? '₱0 → reconciled Assessment' : '₱0 → ₱1,220'],
+            'qr_payment_requested' => ['QR Ph request' => 'Pending → Citizen generated'],
             'qr_payment_collected' => ['Collection' => 'Pending → Canonical synthetic Collection'],
             'official_receipt_issued' => ($profile['kind'] ?? null) === LifecycleCleanroomRun::CeremonyNelsonReconciliationV1
                 ? ['Official Receipt groups' => 'Pending → Fully receipted', 'OR totals' => 'Pending → Collection reconciled']

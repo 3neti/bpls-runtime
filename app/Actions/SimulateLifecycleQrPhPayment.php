@@ -47,6 +47,10 @@ class SimulateLifecycleQrPhPayment
         if (! $attempt instanceof XChangePaymentAttempt) {
             throw new LogicException('The Pay Code has no QR Ph attempt to simulate.');
         }
+        if (! in_array($attempt->status, ['requested', 'awaiting_payment'], true)
+            || $attempt->expires_at?->isPast() !== false) {
+            throw new LogicException('The current QR Ph attempt has expired. The Citizen must generate a fresh QR Ph request.');
+        }
         $cashierId = data_get($run->actor_manifest, 'actors.cashier.user_id');
         $cashier = is_int($cashierId) ? User::query()->find($cashierId) : null;
         $inquiry = $this->successfulInquiry($payment);

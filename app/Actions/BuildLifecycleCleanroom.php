@@ -54,7 +54,7 @@ class BuildLifecycleCleanroom
                     ? $this->paymentOrderSummary->handle($application)
                     : null;
             $schedule = $application?->paymentSchedules()->with([
-                'xChangePayment',
+                'xChangePayment.attempts',
                 'treasuryCollections.receipts',
                 'treasuryCollections.allocations',
             ])->latest('sequence')->first();
@@ -62,8 +62,12 @@ class BuildLifecycleCleanroom
             $receiptIds = $collection?->receipts->pluck('id')->values()->all() ?? [];
             $requiredReceiptGroups = $collection?->allocations->pluck('receipt_group_key')->filter()->unique()->values() ?? collect();
             $issuedReceiptGroups = $collection?->receipts->pluck('receipt_group_key')->filter()->unique()->values() ?? collect();
+            $latestAttempt = $schedule?->xChangePayment?->attempts->sortByDesc('id')->first();
+            $currentAttempt = $latestAttempt !== null
+                && in_array($latestAttempt->status, ['requested', 'awaiting_payment'], true)
+                && $latestAttempt->expires_at?->isFuture() === true;
             $activeState['payment_simulation'] = [
-                'available' => $schedule?->xChangePayment?->pay_code !== null && $schedule->treasuryCollections->isEmpty(),
+                'available' => $currentAttempt && $schedule->treasuryCollections->isEmpty(),
                 'pay_code' => $schedule?->xChangePayment?->pay_code,
                 'collection_id' => $collection?->id,
                 'receipt_ids' => $receiptIds,
@@ -71,7 +75,7 @@ class BuildLifecycleCleanroom
                     && $requiredReceiptGroups->isNotEmpty()
                     && $requiredReceiptGroups->diff($issuedReceiptGroups)->isEmpty()
                     && $collection->receipts->sum('amount_cents') === $collection->amount_cents,
-                'status' => $schedule?->treasuryCollections->isNotEmpty() ? 'collected' : ($schedule?->xChangePayment?->pay_code !== null ? 'awaiting_simulation' : 'not_ready'),
+                'status' => $schedule?->treasuryCollections->isNotEmpty() ? 'collected' : ($currentAttempt ? 'awaiting_simulation' : 'not_ready'),
             ];
         }
 

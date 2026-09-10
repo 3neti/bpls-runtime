@@ -127,6 +127,10 @@ class LifecycleCleanroomController extends Controller
         AuthenticateLifecycleCleanroomActor $authenticateCleanroomActor,
         AuthenticateStakeholderPreviewPersona $authenticatePreviewPersona,
     ): RedirectResponse {
+        if ($lifecycleCleanroomRun->isClassicLifecycleV1()) {
+            abort(403, 'Classic Lifecycle payment confirmation must be performed by its commissioned Cashier.');
+        }
+
         try {
             $collection = $simulatePayment->handle($lifecycleCleanroomRun);
         } catch (LogicException $exception) {
@@ -359,10 +363,10 @@ class LifecycleCleanroomController extends Controller
         if (str_contains($step, 'payable_created')) {
             return 'staff.permit-applications.assessments.show';
         }
-        if (str_contains($step, 'qr_payment_collected')) {
+        if (str_contains($step, 'qr_payment_requested')) {
             return 'citizen.payment-schedules.show';
         }
-        if (str_contains($step, 'official_receipt_issued')) {
+        if (str_contains($step, 'qr_payment_collected') || str_contains($step, 'official_receipt_issued')) {
             return 'staff.payment-schedules.show';
         }
         if (str_contains($step, 'post_payment_certified') || in_array($step, ['permit_ready', 'permit_issued', 'permit_released', 'public_verification'], true)) {

@@ -25,14 +25,16 @@ use App\Models\LifecycleCleanroomCeremonyEvent;
 use App\Models\LifecycleCleanroomRegistrationInvitation;
 use App\Models\LifecycleCleanroomRun;
 use App\Models\LineOfBusiness;
+use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use App\Models\User;
-use App\Models\XChangePayment;
-use App\Models\XChangePaymentAttempt;
 use App\StakeholderPreview\StakeholderPreviewSafety;
 use Database\Seeders\MunicipalFeeCatalogSeeder;
+use Illuminate\Http\Client\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
@@ -47,6 +49,19 @@ beforeEach(function () {
     ]);
     Artisan::call('bpls:install');
     $this->seed(MunicipalFeeCatalogSeeder::class);
+    config()->set('cache.default', 'array');
+    config()->set('services.x_change', [
+        'base_url' => 'https://x-change.example.test',
+        'token_endpoint' => '/oauth/token',
+        'client_id' => 'synthetic-client',
+        'client_secret' => 'synthetic-secret',
+        'scope' => 'pay-codes:estimate pay-codes:issue pay-codes:read pay-codes:pay',
+        'settlement_rail' => 'INSTAPAY',
+        'token_refresh_leeway_seconds' => 60,
+        'connect_timeout_seconds' => 2,
+        'timeout_seconds' => 5,
+    ]);
+    Cache::flush();
 });
 
 test('classic cleanroom begins with one-time Citizen registration and disables actor switching', function () {
@@ -269,33 +284,54 @@ test('classic ceremony completes the canonical lifecycle through each municipal 
     $assertInbox('assessment_officer', 'payment_schedule');
     $schedule = app(CreatePaymentScheduleForAssessment::class)->handle($assessment, $actor('assessment_officer'));
 
-    XChangePayment::query()->create([
-        'payment_schedule_id' => $schedule->id,
-        'assessment_id' => $assessment->id,
-        'external_reference' => 'classic-ps-'.$schedule->id,
-        'issue_idempotency_key' => 'classic-issue-'.$schedule->id,
-        'terms_hash' => str_repeat('a', 64),
-        'amount_cents' => $schedule->total_amount_cents,
-        'currency' => 'PHP',
-        'binding_secret' => 'classic-binding-secret',
-        'status' => 'awaiting_payment',
-        'pay_code' => 'CLSC',
-        'consumer_status' => 'payable',
-        'provider_status' => 'awaiting_payment',
-        'target_amount_cents' => $schedule->total_amount_cents,
-    ]);
-    $payment = XChangePayment::query()->where('payment_schedule_id', $schedule->id)->sole();
-    XChangePaymentAttempt::query()->create([
-        'x_change_payment_id' => $payment->id,
-        'idempotency_key' => 'classic-attempt-'.$schedule->id,
-        'reference' => 'SYNTHETIC-CLASSIC-'.$schedule->id,
-        'status' => 'awaiting_payment',
-        'provider' => 'netbank',
-        'amount_cents' => $schedule->total_amount_cents,
-        'expires_at' => now()->addMinutes(15),
-    ]);
+    expect(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))
+        ->toBe('qr_payment_requested')
+        ->and(app(BuildMunicipalWorkInbox::class)->handle($actor('cashier'))['items']->pluck('task_type')->all())
+        ->not->toContain('collection');
+
+    $this->actingAs($actor('cashier'))
+        ->postJson(route('staff.payment-schedules.qr-ph.initiate', $schedule))
+        ->assertForbidden();
+    $this->actingAs($management)
+        ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.simulate-qr-ph-payment', $run))
+        ->assertForbidden();
+    expect($schedule->treasuryCollections()->count())->toBe(0);
+
+    fakeClassicQrPhIssue($schedule);
+    $this->actingAs($citizen)
+        ->postJson(route('citizen.payment-schedules.qr-ph.initiate', $schedule))
+        ->assertOk()
+        ->assertJsonPath('amount_cents', $schedule->total_amount_cents)
+        ->assertJsonPath('status', 'awaiting_payment');
+
+    $expiredAttempt = $schedule->refresh()->xChangePayment->attempts()->sole();
+    $expiredAttempt->update(['status' => 'expired', 'expires_at' => now()->subMinute()]);
+    expect(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))
+        ->toBe('qr_payment_requested')
+        ->and(app(BuildMunicipalWorkInbox::class)->handle($actor('cashier'))['items']->pluck('task_type')->all())
+        ->not->toContain('collection');
+
+    $this->actingAs($citizen)
+        ->postJson(route('citizen.payment-schedules.qr-ph.initiate', $schedule))
+        ->assertOk()
+        ->assertJsonPath('amount_cents', $schedule->total_amount_cents);
+    expect($schedule->refresh()->xChangePayment->attempts()->count())->toBe(2);
+
+    expect(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))
+        ->toBe('qr_payment_collected');
 
     $assertInbox('cashier', 'collection');
+    $this->actingAs($actor('cashier'))
+        ->get(route('staff.payment-schedules.show', $schedule))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('can.initiate_qr_ph', false)
+            ->where('can.simulate_classic_payment', true)
+            ->where('classicPaymentHandoff.pay_code', 'CLSC')
+            ->where('classicPaymentHandoff.external_reference', fn (string $reference): bool => $reference !== '')
+            ->where('classicPaymentHandoff.attempt.reference', 'SYNTHETIC-CLASSIC-'.$schedule->id.'-2')
+            ->where('classicPaymentHandoff.attempt.provider', 'netbank')
+            ->where('classicPaymentHandoff.amount_cents', $schedule->total_amount_cents));
     $this->actingAs($actor('cashier'))
         ->post(route('staff.payment-schedules.classic-payment-simulation.store', $schedule))
         ->assertRedirect(route('staff.payment-schedules.show', $schedule));
@@ -335,7 +371,7 @@ test('classic ceremony completes the canonical lifecycle through each municipal 
         $collection->amount_cents,
         $collection->receipts()->sum('amount_cents'),
     ];
-    expect(data_get($state, 'progress.completed_steps'))->toBe(24)
+    expect(data_get($state, 'progress.completed_steps'))->toBe(25)
         ->and(data_get($state, 'progress.complete'))->toBeTrue()
         ->and($parity)->each->toBe(417_500)
         ->and($receiptGroups)->toHaveCount(6)
@@ -357,4 +393,43 @@ test('classic ceremony completes the canonical lifecycle through each municipal 
 function classicPreviewAccount(StakeholderPreviewPersona $persona): User
 {
     return User::query()->where('email', $persona->approvedEmail())->sole();
+}
+
+function fakeClassicQrPhIssue(PaymentSchedule $schedule): void
+{
+    $attemptNumber = 0;
+
+    Http::fake(function (Request $request) use ($schedule, &$attemptNumber) {
+        if (str_ends_with($request->url(), '/oauth/token')) {
+            return Http::response(['expires_in' => 900, 'access_token' => 'synthetic-token']);
+        }
+
+        if (str_ends_with($request->url(), '/payment-attempts')) {
+            $attemptNumber++;
+
+            return Http::response([
+                'data' => ['attempt' => [
+                    'reference' => 'SYNTHETIC-CLASSIC-'.$schedule->id.'-'.$attemptNumber,
+                    'status' => 'awaiting_payment',
+                    'provider' => 'netbank',
+                    'amount_minor' => $schedule->total_amount_cents,
+                    'expires_at' => now()->addMinutes(15)->toIso8601String(),
+                    'qr_code' => [
+                        'mime_type' => 'image/png',
+                        'base64_payload' => base64_encode("\x89PNG\r\n\x1a\nclassic"),
+                    ],
+                ]],
+            ], 201);
+        }
+
+        return Http::response([
+            'data' => [
+                'voucher_id' => 283,
+                'code' => 'CLSC',
+                'external_reference' => $request['external_reference'],
+                'consumer_status' => 'payable',
+                'links' => ['pay' => 'https://x-change.example.test/x/pay/CLSC'],
+            ],
+        ], 201);
+    });
 }
