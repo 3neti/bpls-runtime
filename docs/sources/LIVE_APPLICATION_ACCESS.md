@@ -60,6 +60,15 @@ Authenticated production snapshot intake on 2026-08-17:
 - privacy: raw rows, stored objects, source identifiers, operator identity, and detailed collision evidence remain in checksum-bound private storage outside Git
 - authority: snapshot acquisition and read-only reconciliation do not authorize migration execution, financial reinterpretation, record repair, or production cutover
 
+Read-only media retrieval closure on 2026-09-10:
+
+- the representative DTI metadata relationship was located through generic list pagination and its existing Download control; no private identifier was submitted through search
+- the authenticated `businesses.getDocumentUrl` -> `ctx.storage.getUrl` path returned a 4,675-byte JPEG whose size, MIME, and SHA-256 exactly matched the private August storage index; the browser decoded a 500 x 410 image
+- a platform-logo sample independently matched two archived objects by size and SHA-256, proving duplicate content while preserving distinct storage identities
+- all 19 previously unassociated indexed objects are privately inventoried as `UNRESOLVED`, not confirmed orphans, and default to retain-and-attempt-rescue
+- real bytes, source/storage identifiers, filenames, content hashes tied to taxpayer evidence, generated URLs, and credentials remain outside Git
+- result: `CULL READINESS: YES` for a separate implementation wave; no culler or production acquisition was performed
+
 Observed high-level surfaces:
 
 - Dashboard

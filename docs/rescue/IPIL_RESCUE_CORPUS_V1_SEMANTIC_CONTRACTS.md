@@ -6,6 +6,8 @@ Effective: 2026-09-10
 
 Evidence basis: [Ipil Source Reconnaissance](IPIL_SOURCE_RECONNAISSANCE_2026_09_10.md)
 
+Media closure: [Ipil Media Cull Readiness Closure](IPIL_MEDIA_CULL_READINESS_CLOSURE_2026_09_10.md)
+
 Gate: [Cull Readiness Report](IPIL_CULL_READINESS_REPORT_2026_09_10.md)
 
 ## Purpose
@@ -92,15 +94,19 @@ Each `source/media/media-manifest.jsonl` line uses `bpls.ipil-rescue-media-entry
 
 - source dataset/key and storage-identifier SHA-256 values;
 - database relationship path;
+- evidence role `metadata-relationship` or `storage-object`;
 - documentary type and original filename when known;
 - declared/detected MIME and declared/rescued sizes;
 - private object relative path and content SHA-256 when bytes were acquired;
 - retrieval-attempt count and transfer-verification flag;
+- association state independent of byte disposition;
 - disposition and finding codes.
 
-Approved dispositions are `rescued`, `source-missing`, `access-denied`, `corrupt`, `zero-byte`, `duplicate-content`, `orphan-metadata`, and `orphan-byte`.
+Approved association states are `ASSOCIATED`, `PROBABLE_ASSOCIATION`, `UNRESOLVED`, and `ORPHAN_CONFIRMED`. Unknown association is not orphan evidence.
 
-Object paths are mandatory for acquired bytes and forbidden as placeholders for absent bytes. `rescued` requires a bound object, exact length/hash agreement, and `bytes_verified: true`. Root `media_metadata` counts all lines except `orphan-byte`; root `media_bytes` counts distinct bound object paths. Duplicate-content relationships may share an object path while retaining separate manifest lines.
+Approved dispositions are `rescued`, `source-missing`, `access-denied`, `corrupt`, `zero-byte`, `duplicate-content`, `orphan-metadata`, `unassociated-byte`, and `orphan-byte`. `unassociated-byte` requires `PROBABLE_ASSOCIATION` or `UNRESOLVED`; `orphan-byte` requires `ORPHAN_CONFIRMED`.
+
+Object paths are mandatory for acquired bytes and forbidden as placeholders for absent bytes. `rescued` requires a bound object, exact length/hash agreement, and `bytes_verified: true`. `unassociated-byte` and `orphan-byte` require role `storage-object`; `orphan-metadata` requires `metadata-relationship`. Root `media_metadata` counts only `metadata-relationship` entries, including explicit source-missing/access-denied cases. Root `media_bytes` counts distinct bound object paths, including acquired storage-only entries. Duplicate-content relationships may share an object path while retaining separate manifest lines.
 
 SEC, DTI, BIR, and unexpected documentary labels remain literal source facts. The manifest does not normalize them to a current document type.
 
@@ -135,7 +141,7 @@ The verifier deliberately rejects a pricing manifest that claims `canonical` act
 `provenance/source-identities.jsonl` retains `bpls.ipil-source-identity.v1`. Verification requires corpus/source agreement, bound evidence locators, and uniqueness of dataset plus source-key hash. The expected count is:
 
 ```text
-database rows + media manifest entries (including orphan bytes) + interpreted pricing records
+database rows + media manifest entries (including unassociated and orphan bytes) + interpreted pricing records
 ```
 
 Identity does not imply a mapping. The existing state grammar remains `observed -> inferred -> proposed -> accepted -> rehearsed -> production-applied`.
@@ -153,7 +159,7 @@ Each `verification/exceptions.jsonl` line uses `bpls.ipil-rescue-finding.v1`:
 
 Approved finding codes are:
 
-`access-denied`, `ambiguous-mapping`, `checksum-mismatch`, `contradictory-source-evidence`, `corrupt-media`, `duplicate-content`, `missing-required-field`, `orphan-byte`, `orphan-metadata`, `source-missing`, `unresolved-reference`, `unsupported-source-value`, and `zero-byte`.
+`access-denied`, `ambiguous-mapping`, `checksum-mismatch`, `contradictory-source-evidence`, `corrupt-media`, `duplicate-content`, `missing-required-field`, `unassociated-byte`, `orphan-byte`, `orphan-metadata`, `source-missing`, `unresolved-reference`, `unsupported-source-value`, and `zero-byte`.
 
 `accepted` or `waived` records a decision; it never makes missing evidence present. New vocabulary requires a schema version or compatible reviewed extension, not a free-form spelling.
 
@@ -179,6 +185,7 @@ The committed tests construct a private synthetic corpus containing one database
 - unbound payloads;
 - false row counts even after rebinding checksums;
 - media length mismatch;
+- an unresolved byte mislabeled as a confirmed orphan;
 - attempted canonical price activation;
 - partial, remote, public, Git-contained, and unapproved repository corpora.
 

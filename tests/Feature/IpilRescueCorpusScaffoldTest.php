@@ -81,6 +81,50 @@ test('verification rejects media whose declared rescued size does not match its 
         ->toThrow(InvalidArgumentException::class, 'Media object integrity');
 });
 
+test('verification preserves unresolved unassociated bytes without declaring them orphaned', function () {
+    createSyntheticIpilRescueCorpus($this->ipilRescueTestRoot);
+    $path = $this->ipilRescueTestRoot.'/source/media/media-manifest.jsonl';
+    $entry = json_decode(trim(File::get($path)), true, flags: JSON_THROW_ON_ERROR);
+    $entry['evidence_role'] = 'storage-object';
+    $entry['association_state'] = 'UNRESOLVED';
+    $entry['disposition'] = 'unassociated-byte';
+    $entry['finding_codes'] = ['unassociated-byte'];
+
+    $result = (new RescueCorpusSemantics)->verifyMedia(
+        CanonicalJson::encode($entry)."\n",
+        fn (string $relativePath): string => File::get($this->ipilRescueTestRoot.'/'.$relativePath),
+    );
+
+    expect($result)->toMatchArray([
+        'metadata' => 0,
+        'bytes' => 1,
+    ]);
+
+    $accessDenied = $entry;
+    $accessDenied['rescued_size_bytes'] = null;
+    $accessDenied['object_relative_path'] = null;
+    $accessDenied['sha256'] = null;
+    $accessDenied['bytes_verified'] = false;
+    $accessDenied['disposition'] = 'access-denied';
+    $accessDenied['finding_codes'] = ['access-denied'];
+
+    expect((new RescueCorpusSemantics)->verifyMedia(
+        CanonicalJson::encode($accessDenied)."\n",
+        fn (string $relativePath): string => File::get($this->ipilRescueTestRoot.'/'.$relativePath),
+    ))->toMatchArray([
+        'metadata' => 0,
+        'bytes' => 0,
+    ]);
+
+    $entry['disposition'] = 'orphan-byte';
+    $entry['finding_codes'] = ['orphan-byte'];
+
+    expect(fn () => (new RescueCorpusSemantics)->verifyMedia(
+        CanonicalJson::encode($entry)."\n",
+        fn (string $relativePath): string => File::get($this->ipilRescueTestRoot.'/'.$relativePath),
+    ))->toThrow(InvalidArgumentException::class, 'confirmed orphan classification');
+});
+
 test('verification keeps interpreted pricing candidate only and rejects canonical activation', function () {
     createSyntheticIpilRescueCorpus($this->ipilRescueTestRoot);
     $path = $this->ipilRescueTestRoot.'/source/pricing/pricing-manifest.json';
@@ -247,6 +291,7 @@ function createSyntheticIpilRescueCorpus(string $root, ?Closure $mutateManifest 
         'source_key_sha256' => hash('sha256', 'synthetic-media-source'),
         'storage_identifier_sha256' => hash('sha256', 'synthetic-storage-id'),
         'relationship' => 'businesses.documents[0].storageId',
+        'evidence_role' => 'metadata-relationship',
         'document_type' => 'DTI Certificate',
         'original_filename' => 'synthetic-dti.txt',
         'declared_mime' => 'text/plain',
@@ -257,6 +302,7 @@ function createSyntheticIpilRescueCorpus(string $root, ?Closure $mutateManifest 
         'sha256' => hash('sha256', $mediaBytes),
         'retrieval_attempts' => 1,
         'bytes_verified' => true,
+        'association_state' => 'ASSOCIATED',
         'disposition' => 'rescued',
         'finding_codes' => [],
     ];

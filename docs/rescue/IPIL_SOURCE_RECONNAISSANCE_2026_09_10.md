@@ -9,6 +9,7 @@ Governing documents:
 - [Ipil Rescue and Parity Compass](../agents/IPIL_RESCUE_AND_PARITY_COMPASS.md)
 - [Ipil Rescue and Parity Implementation Plan](IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md)
 - [Rescue Corpus V1 Semantic Contracts](IPIL_RESCUE_CORPUS_V1_SEMANTIC_CONTRACTS.md)
+- [Ipil Media Cull Readiness Closure](IPIL_MEDIA_CULL_READINESS_CLOSURE_2026_09_10.md)
 - [Cull Readiness Report](IPIL_CULL_READINESS_REPORT_2026_09_10.md)
 
 ## Scope and Method
@@ -210,9 +211,9 @@ The snapshot contains one business with one document metadata row:
 - indexed SHA-256: present;
 - archive entry locator: present.
 
-The storage index proves that the original authenticated backup contained and checksum-verified the matching bytes. A public direct storage path correctly returned `InvalidStoragePath`; retrieval requires `ctx.storage.getUrl`. During this wave, the normalized private intake no longer had the original `snapshot.zip` or extracted `_storage` bytes beside it, so the indexed object could not be re-hashed locally. The live portal's first safely sampled business had no document. An end-to-end signed retrieval of the DTI object was therefore **not re-proven** in this wave.
+The storage index proves that the original authenticated backup contained and checksum-verified the matching bytes. The follow-on media closure located the same live business through generic pagination, invoked its existing authenticated Download control, and retrieved the generated `ctx.storage.getUrl` response privately. The 4,675-byte JPEG exactly matched the archived size, MIME, and SHA-256 and decoded as a 500 x 410 image. Raw storage identity and generated retrieval token remain distinct.
 
-No SEC or BIR metadata row was present in the 2026-08-16 snapshot. Their source-to-byte paths are declared/unknown respectively, not empirically verified.
+No SEC or BIR metadata row was present in the 2026-08-16 snapshot. SEC and related corporate documents are supported by the implemented path but their source bytes are missing in the observed scope. Exhaustive schema/backend/upload-component review found no dedicated BIR relationship, but the generic `documentType` string can carry unexpected labels. BIR therefore remains ambiguous, and unidentified byte contents must not be relabeled.
 
 ### Stored-object inventory and orphans
 
@@ -228,7 +229,9 @@ The index contains 34 objects / 44,093,196 bytes:
 
 The expanded source-backed storage relationship catalog finds 15 distinct, resolved typed references: one business document, one permit-layout background, three platform-setting images, and ten report-export CSVs. Every one of those 15 resolves to the storage index; none is metadata-without-index.
 
-This supersedes the older 12-resolved/22-unassociated characterization. Under the expanded catalog, **19 objects remain unassociated**. Owner avatar and user profile fields are strings/URLs rather than typed `_storage` fields; none of their observed final path segments matches the 34 indexed storage identities. A missing typed association is not authority to delete an object. All 19 remain `orphan-byte` candidates pending source-use and retention decisions.
+This supersedes the older 12-resolved/22-unassociated characterization. Under the expanded catalog, **19 objects / 18,704,021 bytes remain unassociated**: one PDF, 15 JPEGs, two PNGs, and one WebP. Owner avatar and user profile fields are strings/URLs rather than typed `_storage` fields; none of their observed final path segments matches the 34 indexed storage identities. All 19 are privately inventoried as `UNRESOLVED`, with zero `ORPHAN_CONFIRMED`, and carry `RETAIN_AND_ATTEMPT_RESCUE`. Business-document removal deliberately retains bytes and user profile-photo replacement can retain earlier bytes, so lack of a current typed relationship is not orphan proof.
+
+The normalized intake currently contains 52 of 53 manifested table payloads; `activity_logs.jsonl` is absent even though its manifest entry and prior staging count remain. Consequently that copy cannot be used to search historical document-upload/removal logs for the 19 objects. A fresh cull must reacquire this dataset; the gap cannot justify deletion or invented association.
 
 Because the byte archive is not currently beside the normalized intake, this wave cannot independently reclassify zero-byte, truncated, or corrupt content. The prior intake reported all 34 objects passing size and SHA-256 checks; that remains historical verification evidence, not a fresh byte verification.
 
@@ -267,8 +270,10 @@ Rescue Corpus V1 therefore requires three separate fingerprints:
 | schedule/payment with absent parent | preserve/quarantine as historical financial evidence | established | Missing target is proven; substitution by amount/application similarity is forbidden |
 | legacy permit without owner/business | non-operational historical permit evidence | established | Ten permit owner and business edges are absent; identity must not be invented |
 | business DTI metadata -> media object | preserve exact relationship | established | One metadata row has one exact indexed storage object |
-| SEC document bytes | preserve if encountered | unknown | Declared source document class but no representative snapshot row/byte |
-| BIR document bytes | preserve unexpected type/object if encountered | unknown | No BIR class or observed row found; absence is not proven globally |
+| SEC document bytes | preserve literal metadata/bytes if encountered; preserve absence otherwise | established | Implemented document class/path; no source bytes in observed scope |
+| BIR document bytes | preserve literal evidence if encountered; retain unidentified bytes without relabeling | unknown | No dedicated BIR field/class/path or observed row, but generic document labels prevent proof of global absence |
+| unassociated storage object | retain as `unassociated-byte` | established | 19/19 privately inventoried `UNRESOLVED`; zero confirmed orphans |
+| source business document -> target Application | propose only after accepted relationship evidence | ambiguous | Source relationship is business-scoped; target collection is Application-scoped |
 | raw fee hierarchy/rules -> current `Price` | candidate-only pricing knowledge | ambiguous | Structure is recoverable; fiscal authority, effective dates, and one override parent remain unresolved |
 | historical receipt field -> canonical receipt | historical receipt evidence only | probable | Receipt number exists on payment; no standalone source receipt ledger proves issuance semantics |
 | saved report/layout -> parity target | later `MATCH`/`ADAPT` candidate | probable | Structures and source fields are known; official acceptance and visual parity are not yet tested |
@@ -278,10 +283,10 @@ Rescue Corpus V1 therefore requires three separate fingerprints:
 1. Database transport is structurally feasible and lossless JSONL already proved for the bounded snapshot.
 2. Current live activity means the August snapshot is evidence, not a current cull substitute.
 3. The database contains known historical referential gaps; a correct culler preserves them rather than failing the entire acquisition or repairing them.
-4. Media metadata-to-storage linkage is deterministic for the one observed DTI record, but current byte retrieval has not been re-proven.
-5. The normalized intake retained the storage index but not a locally re-verifiable byte archive. Future acquisition must close both manifest and bytes atomically.
-6. Nineteen stored objects remain unassociated after expanding the typed-reference catalog. Preserve them privately until retention and ownership are decided.
-7. SEC is declared but unobserved; BIR is neither declared nor observed in this evidence set.
+4. Media metadata-to-storage linkage and current authenticated byte retrieval are proven for the observed DTI record.
+5. The normalized intake retained the storage index but not the byte archive and is missing the activity-log payload. Future acquisition must close every table, manifest, and byte atomically.
+6. Nineteen stored objects remain unassociated after expanding the typed-reference catalog. Preserve and retrieval-attempt all of them as unresolved; do not call them orphans without proof.
+7. SEC and related document classes are implemented but have no observed bytes. BIR has no dedicated document-storage relationship and remains ambiguous.
 8. The pricing corpus is identifiable and independently fingerprinted, but interpreted pricing remains candidate-only.
 9. No canonical owner, business, LOB, PSGC, status, receipt, permit, report, or price mappings are authorized by this report.
 

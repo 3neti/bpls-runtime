@@ -31,7 +31,22 @@ final class RescueCorpusSemantics
         'zero-byte',
         'duplicate-content',
         'orphan-metadata',
+        'unassociated-byte',
         'orphan-byte',
+    ];
+
+    /** @var list<string> */
+    public const MediaAssociationStates = [
+        'ASSOCIATED',
+        'PROBABLE_ASSOCIATION',
+        'UNRESOLVED',
+        'ORPHAN_CONFIRMED',
+    ];
+
+    /** @var list<string> */
+    public const MediaEvidenceRoles = [
+        'metadata-relationship',
+        'storage-object',
     ];
 
     /** @var list<string> */
@@ -43,6 +58,7 @@ final class RescueCorpusSemantics
         'corrupt-media',
         'duplicate-content',
         'missing-required-field',
+        'unassociated-byte',
         'orphan-byte',
         'orphan-metadata',
         'source-missing',
@@ -199,6 +215,7 @@ final class RescueCorpusSemantics
                 'source_key_sha256',
                 'storage_identifier_sha256',
                 'relationship',
+                'evidence_role',
                 'document_type',
                 'original_filename',
                 'declared_mime',
@@ -209,6 +226,7 @@ final class RescueCorpusSemantics
                 'sha256',
                 'retrieval_attempts',
                 'bytes_verified',
+                'association_state',
                 'disposition',
                 'finding_codes',
             ], 'media manifest entry');
@@ -218,6 +236,13 @@ final class RescueCorpusSemantics
             $sourceIdentities[] = $sourceDataset."\0".$sourceKey;
             $this->sha256($entry['storage_identifier_sha256'] ?? null, 'media storage_identifier_sha256');
             $this->nonEmptyString($entry['relationship'] ?? null, 'media relationship');
+
+            $evidenceRole = $entry['evidence_role'] ?? null;
+
+            if (! in_array($evidenceRole, self::MediaEvidenceRoles, true)) {
+                throw new InvalidArgumentException('A media evidence role is unsupported.');
+            }
+
             $this->nullableString($entry['document_type'] ?? null, 'media document_type');
             $this->nullableString($entry['original_filename'] ?? null, 'media original_filename');
             $this->nullableString($entry['declared_mime'] ?? null, 'media declared_mime');
@@ -225,6 +250,12 @@ final class RescueCorpusSemantics
             $this->nullableNonNegativeInteger($entry['declared_size_bytes'] ?? null, 'media declared_size_bytes');
             $this->nonNegativeInteger($entry['retrieval_attempts'] ?? null, 'media retrieval_attempts');
             $this->boolean($entry['bytes_verified'] ?? null, 'media bytes_verified');
+
+            $associationState = $entry['association_state'] ?? null;
+
+            if (! in_array($associationState, self::MediaAssociationStates, true)) {
+                throw new InvalidArgumentException('A media association state is unsupported.');
+            }
 
             $disposition = $entry['disposition'] ?? null;
 
@@ -234,7 +265,7 @@ final class RescueCorpusSemantics
 
             $this->findingCodes($entry['finding_codes'] ?? null, 'media finding_codes');
             $hasObject = $entry['object_relative_path'] !== null;
-            $requiresObject = in_array($disposition, ['rescued', 'corrupt', 'zero-byte', 'duplicate-content', 'orphan-byte'], true);
+            $requiresObject = in_array($disposition, ['rescued', 'corrupt', 'zero-byte', 'duplicate-content', 'unassociated-byte', 'orphan-byte'], true);
 
             if ($requiresObject !== $hasObject) {
                 throw new InvalidArgumentException('The media disposition and object presence are inconsistent.');
@@ -267,7 +298,23 @@ final class RescueCorpusSemantics
                 throw new InvalidArgumentException('A zero-byte object cannot be classified as rescued.');
             }
 
-            if ($disposition !== 'orphan-byte') {
+            if ($disposition === 'unassociated-byte' && ! in_array($associationState, ['PROBABLE_ASSOCIATION', 'UNRESOLVED'], true)) {
+                throw new InvalidArgumentException('An unassociated byte must remain probable or unresolved.');
+            }
+
+            if ($disposition === 'orphan-byte' && $associationState !== 'ORPHAN_CONFIRMED') {
+                throw new InvalidArgumentException('An orphan byte requires a confirmed orphan classification.');
+            }
+
+            if (in_array($disposition, ['unassociated-byte', 'orphan-byte'], true) && $evidenceRole !== 'storage-object') {
+                throw new InvalidArgumentException('An unassociated or orphan byte must originate from storage inventory evidence.');
+            }
+
+            if ($disposition === 'orphan-metadata' && $evidenceRole !== 'metadata-relationship') {
+                throw new InvalidArgumentException('Orphan metadata must originate from a metadata relationship.');
+            }
+
+            if ($evidenceRole === 'metadata-relationship') {
                 $metadata++;
             }
         }

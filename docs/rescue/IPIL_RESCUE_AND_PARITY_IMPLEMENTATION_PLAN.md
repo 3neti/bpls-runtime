@@ -1,12 +1,12 @@
 # Ipil Rescue and Parity Implementation Plan
 
-Status: **APPROVED PROGRAM PLAN — SOURCE RECONNAISSANCE AND CORPUS SEMANTICS V1 COMPLETE; CULL GATE CLOSED**
+Status: **APPROVED PROGRAM PLAN — CULL READINESS PASSED; IMPLEMENTATION NOT STARTED**
 
 Approved: 2026-09-10
 
 Governing compass: [`docs/agents/IPIL_RESCUE_AND_PARITY_COMPASS.md`](../agents/IPIL_RESCUE_AND_PARITY_COMPASS.md)
 
-Current evidence: [source reconnaissance](IPIL_SOURCE_RECONNAISSANCE_2026_09_10.md), [Rescue Corpus V1 semantic contracts](IPIL_RESCUE_CORPUS_V1_SEMANTIC_CONTRACTS.md), and [Cull Readiness Report](IPIL_CULL_READINESS_REPORT_2026_09_10.md).
+Current evidence: [source reconnaissance](IPIL_SOURCE_RECONNAISSANCE_2026_09_10.md), [media readiness closure](IPIL_MEDIA_CULL_READINESS_CLOSURE_2026_09_10.md), [Rescue Corpus V1 semantic contracts](IPIL_RESCUE_CORPUS_V1_SEMANTIC_CONTRACTS.md), and [Cull Readiness Report](IPIL_CULL_READINESS_REPORT_2026_09_10.md).
 
 ## Objective
 
@@ -18,7 +18,7 @@ This is a rescue and parity program before it is a migration or redesign program
 
 This plan does not authorize live access, culling, import, production migration, cutover, deployment, or application changes. Each implementation wave requires its own bounded authorization and evidence.
 
-Implemented foundation as of 2026-09-10: Rescue Corpus V1 root, database, media, pricing, acquisition/tool provenance, `SourceIdentity`, and finding contracts; full offline semantic/integrity verification behind `ipil:rescue:verify`; fail-closed `ipil:seed` and `ipil:audit` frontiers; and the verify/seed/audit-only `bin/bpls-ipil-rescue-lab` wrapper. Synthetic tests reconcile semantic counts and bytes without real taxpayer data. The cull gate remains closed because authenticated media-byte retrieval and complete media-scope proof are not yet established. There is deliberately no `ipil:cull` command or live-source client.
+Implemented foundation as of 2026-09-10: Rescue Corpus V1 root, database, media, pricing, acquisition/tool provenance, `SourceIdentity`, and finding contracts; full offline semantic/integrity verification behind `ipil:rescue:verify`; fail-closed `ipil:seed` and `ipil:audit` frontiers; and the verify/seed/audit-only `bin/bpls-ipil-rescue-lab` wrapper. Synthetic tests reconcile semantic counts and bytes without real taxpayer data. Authenticated DTI-byte retrieval and the 19-object retain/unresolved policy now pass the Cull Readiness gate. There is still deliberately no `ipil:cull` command or live-source client; those require a separate bounded implementation wave.
 
 ## Target Flow
 
@@ -172,7 +172,7 @@ Capture every authorized dataset/field, including unknown fields. Preserve IDs, 
 
 For every media metadata row—including SEC, DTI, and BIR—acquire or explicitly fail to acquire its bytes. The private media manifest records source identity/relationship/key, original filename, declared/detected MIME, size/dates, rescued object identity/path, SHA-256, available source checksum, attempts, verified bytes, and disposition.
 
-Dispositions include `rescued`, `source-missing`, `access-denied`, `corrupt`, `zero-byte`, `duplicate-content`, `orphan-metadata`, and `orphan-byte`. Missing bytes get no placeholders and do not count as parity. Content may be deduplicated only if every original relationship and content hash remains provable.
+Dispositions include `rescued`, `source-missing`, `access-denied`, `corrupt`, `zero-byte`, `duplicate-content`, `orphan-metadata`, `unassociated-byte`, and `orphan-byte`. Association state is independently `ASSOCIATED`, `PROBABLE_ASSOCIATION`, `UNRESOLVED`, or `ORPHAN_CONFIRMED`; only the last permits `orphan-byte`. Missing bytes get no placeholders and do not count as parity. Content may be deduplicated only if every original relationship and content hash remains provable.
 
 ### Recovered pricing corpus
 
@@ -315,6 +315,6 @@ The program completes only when an authorized immutable corpus accounts for the 
 
 ## Active Frontier and Stop Conditions
 
-The active frontier is **Wave 0 reconnaissance and the Wave 2 synthetic corpus contract**, subject to separate authorization for live inspection. Stop for a decision when read-only authority/scope/credentials are missing; consistency is unprovable; media access exceeds authority; private evidence could enter Git/public/Cloud storage; checksums/counts/totals fail; mapping requires identity/policy/lifecycle inference; history must become operational; reports require current price calculation; UI lacks audited corpus/capture/disposition; or any step would redesign, deploy, cut over, or write to production before its gate.
+The active frontier is the completed **Cull Readiness gate**. A later separately authorized wave may implement Wave 3's explicit network-only culler and synthetic dry acquisition, but this wave stops before that implementation. Stop for a decision when read-only authority/scope/credentials are missing; consistency is unprovable; media access exceeds authority; private evidence could enter Git/public/Cloud storage; checksums/counts/totals fail; mapping requires identity/policy/lifecycle inference; history must become operational; reports require current price calculation; UI lacks audited corpus/capture/disposition; or any step would redesign, deploy, cut over, or write to production before its gate.
 
 Future agents must not jump from reconnaissance or partial seeding into UI redesign. The fixed order is: verified corpus, deterministic reconstruction, quantitative audit, read-only/report parity, UI capture, parity scaffolding, side-by-side acceptance, then improvement.

@@ -1,12 +1,14 @@
 # Ipil Rescue and Parity Compass
 
-Status: **GOVERNING — CORPUS SEMANTICS V1 VERIFIED; CULL READINESS BLOCKED ON MEDIA PROOF**
+Status: **GOVERNING — CULL READINESS PASSED; CULLER IMPLEMENTATION NOT STARTED**
 
 As of: 2026-09-10
 
 Implementation plan: [`docs/rescue/IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md`](../rescue/IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md)
 
 Current gate: [Cull Readiness Report](../rescue/IPIL_CULL_READINESS_REPORT_2026_09_10.md)
+
+Media evidence: [Ipil Media Cull Readiness Closure](../rescue/IPIL_MEDIA_CULL_READINESS_CLOSURE_2026_09_10.md)
 
 ## North Star
 
@@ -33,7 +35,7 @@ The new Nelson Executable Application lifecycle remains the forward operational 
 
 ## Active Frontier
 
-Source/database reconnaissance and the synthetic Rescue Corpus V1 contract are complete. The active frontier is a separately authorized media-retrieval and cull-safety proof. `ipil:cull` must not be added until authenticated byte retrieval, complete media scope, and orphan-retention defaults are evidenced.
+Source/database reconnaissance, the synthetic Rescue Corpus V1 contract, authenticated DTI retrieval, and the unassociated-byte retention boundary are complete. `CULL READINESS: YES`. The active frontier stops here; a separately authorized wave may implement the explicit network-only culler and synthetic dry acquisition. It may not perform a real cull, seed, map, import, deploy, or start UI parity without its own authority and gates.
 
 Advance only in this order:
 
