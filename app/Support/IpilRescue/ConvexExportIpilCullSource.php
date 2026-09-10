@@ -120,7 +120,7 @@ final class ConvexExportIpilCullSource implements IpilCullSource
             $process->run();
 
             if (! $process->isSuccessful() || ! is_file($archivePath)) {
-                throw new RuntimeException('The authenticated read-only Convex export failed.');
+                throw new RuntimeException($this->exportFailureMessage($process));
             }
         }
 
@@ -132,6 +132,26 @@ final class ConvexExportIpilCullSource implements IpilCullSource
 
         $this->archive = $archive;
         $this->indexArchive();
+    }
+
+    private function exportFailureMessage(Process $process): string
+    {
+        $diagnostic = trim($process->getErrorOutput());
+
+        if ($diagnostic === '') {
+            $diagnostic = trim($process->getOutput());
+        }
+
+        if ($diagnostic === '') {
+            return 'The authenticated read-only Convex export failed without a CLI diagnostic.';
+        }
+
+        $diagnostic = str_replace($this->requiredConfig('source.deploy_key'), '[REDACTED]', $diagnostic);
+        $diagnostic = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $diagnostic) ?? '';
+        $diagnostic = preg_replace('/\e\[[0-9;]*m/', '', $diagnostic) ?? '';
+        $diagnostic = mb_substr($diagnostic, 0, 1000);
+
+        return 'The authenticated read-only Convex export failed: '.$diagnostic;
     }
 
     public function datasets(): array

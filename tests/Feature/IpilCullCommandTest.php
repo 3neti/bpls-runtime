@@ -248,15 +248,21 @@ test('Convex export relies on the deployment-scoped key instead of an unsupporte
     $argumentsPath = $workingDirectory.'/arguments.txt';
     $cliPath = $workingDirectory.'/synthetic-convex';
     File::ensureDirectoryExists($workingDirectory);
-    File::put($cliPath, "#!/bin/sh\nprintf '%s\\n' \"\$@\" > ".escapeshellarg($argumentsPath)."\nexit 1\n");
+    File::put($cliPath, "#!/bin/sh\nprintf '%s\\n' \"\$@\" > ".escapeshellarg($argumentsPath)."\nprintf 'Synthetic export diagnostic for %s\\n' \"\$CONVEX_DEPLOY_KEY\" >&2\nexit 1\n");
     chmod($cliPath, 0700);
 
     config()->set('ipil_rescue.source.convex_cli', $cliPath);
     config()->set('ipil_rescue.source.deploy_key', 'prod:synthetic|secret');
     config()->set('ipil_rescue.source.project_path', $workingDirectory);
 
-    expect(fn () => app(ConvexExportIpilCullSource::class)->begin($workingDirectory))
-        ->toThrow(RuntimeException::class, 'The authenticated read-only Convex export failed.');
+    try {
+        app(ConvexExportIpilCullSource::class)->begin($workingDirectory);
+        test()->fail('The synthetic Convex export should fail.');
+    } catch (RuntimeException $exception) {
+        expect($exception->getMessage())
+            ->toContain('Synthetic export diagnostic for [REDACTED]')
+            ->not->toContain('prod:synthetic|secret');
+    }
 
     expect(File::lines($argumentsPath)->map(fn (string $argument): string => trim($argument))->filter()->values()->all())->toBe([
         'export',
