@@ -38,8 +38,8 @@ There is deliberately no `--force-production`, `--skip-verification`, `--ignore-
 
 The production adapter uses two independently authenticated read paths:
 
-1. a pinned Convex CLI executes `convex export --include-file-storage` against the exact configured deployment, producing one consistent private ZIP containing all table JSONL and `_storage` evidence;
-2. a configured user bearer token proves `users:getCurrentUser` and empty `businesses:getDocumentUrls` access, then retrieves each storage object through the established `businesses:getDocumentUrl` -> `ctx.storage.getUrl` path.
+1. a pinned Convex CLI executes `convex export --include-file-storage` using the deployment-scoped key, producing one consistent private ZIP containing all table JSONL and `_storage` evidence;
+2. a configured user bearer token proves the exact empty `businesses:getDocumentUrls` read permission, then retrieves each storage object through the established `businesses:getDocumentUrl` -> `ctx.storage.getUrl` path.
 
 The adapter invokes only export and query/download operations. It has no mutation/import/deploy call. The export ZIP remains in the snapshot's private control directory for safe resume; that control directory is deleted only after verified atomic finalization. Secrets, signed URLs, cookies, source identifiers, taxpayer names, and document filenames are never written to ordinary console output.
 

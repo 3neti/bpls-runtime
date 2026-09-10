@@ -1,12 +1,12 @@
 # Ipil Rescue and Parity Implementation Plan
 
-Status: **APPROVED PROGRAM PLAN — GATE 2 CULLER SYNTHETICALLY CERTIFIED; BULK RESCUE NOT RUN**
+Status: **APPROVED PROGRAM PLAN — GATE 3 CORPUS FINALIZED; MAPPING REVIEW NEXT**
 
 Approved: 2026-09-10
 
 Governing compass: [`docs/agents/IPIL_RESCUE_AND_PARITY_COMPASS.md`](../agents/IPIL_RESCUE_AND_PARITY_COMPASS.md)
 
-Current evidence: [source reconnaissance](IPIL_SOURCE_RECONNAISSANCE_2026_09_10.md), [media readiness closure](IPIL_MEDIA_CULL_READINESS_CLOSURE_2026_09_10.md), [Rescue Corpus V1 semantic contracts](IPIL_RESCUE_CORPUS_V1_SEMANTIC_CONTRACTS.md), [Cull Readiness Report](IPIL_CULL_READINESS_REPORT_2026_09_10.md), and [Gate 2 `ipil:cull` implementation](IPIL_RESCUE_GATE_2_IPIL_CULL_IMPLEMENTATION.md).
+Current evidence: [source reconnaissance](IPIL_SOURCE_RECONNAISSANCE_2026_09_10.md), [media readiness closure](IPIL_MEDIA_CULL_READINESS_CLOSURE_2026_09_10.md), [Rescue Corpus V1 semantic contracts](IPIL_RESCUE_CORPUS_V1_SEMANTIC_CONTRACTS.md), [Cull Readiness Report](IPIL_CULL_READINESS_REPORT_2026_09_10.md), [Gate 2 `ipil:cull` implementation](IPIL_RESCUE_GATE_2_IPIL_CULL_IMPLEMENTATION.md), and the [Gate 3 first full corpus report](IPIL_RESCUE_GATE_3_FIRST_FULL_CORPUS_2026_09_10.md).
 
 ## Objective
 
@@ -16,9 +16,9 @@ Create a repeatable, auditable local reconstruction of the current Ipil BPLS: so
 
 This is a rescue and parity program before it is a migration or redesign program. The first durable deliverable is a checksum-bound local rescue corpus. BPLS interpretation, historical projection, parity proof, UI reproduction, and product improvement follow in that order.
 
-This plan is governing sequence, not standing execution authority. Gate 2 separately authorized implementation and synthetic certification of the culler; live bulk rescue, import, production migration, cutover, deployment, and later application changes still require their own bounded authorization and evidence.
+This plan is governing sequence, not standing execution authority. Gate 3 separately authorized and completed the first full read-only rescue. Mapping decisions, canonical import, production migration, cutover, deployment, and later application changes still require their own bounded authorization and evidence.
 
-Implemented foundation as of 2026-09-10: Rescue Corpus V1 contracts and offline verification; fail-closed `ipil:seed` and `ipil:audit`; the verify/seed/audit-only rescue lab; and the explicit, dual-confirmed `ipil:cull` command with Convex export, authenticated media retrieval, deterministic manifests, resume checkpoints, bounded retries, findings, verification, and immutable finalization. Synthetic certification uses no real taxpayer data. No real-source smoke test or full bulk rescue has run.
+Implemented foundation as of 2026-09-10: Rescue Corpus V1 contracts and production-scale streaming offline verification; fail-closed `ipil:seed` and `ipil:audit`; the verify/seed/audit-only rescue lab; and the explicit, dual-confirmed `ipil:cull` command with Convex export, authenticated media retrieval, deterministic manifests, resume checkpoints, bounded retries, findings, verification, and immutable finalization. The first full corpus `ipil-20260910t153224z-2ab19c17` is finalized locally and verified. No canonical interpretation or BPLS import has run.
 
 ## Target Flow
 

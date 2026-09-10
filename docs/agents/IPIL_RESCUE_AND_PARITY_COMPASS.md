@@ -1,12 +1,12 @@
 # Ipil Rescue and Parity Compass
 
-Status: **GOVERNING — GATE 2 CULLER SYNTHETICALLY CERTIFIED; BULK RESCUE NOT AUTHORIZED**
+Status: **GOVERNING — GATE 3 RESCUE CORPUS FINALIZED; MAPPING REVIEW NEXT**
 
 As of: 2026-09-10
 
 Implementation plan: [`docs/rescue/IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md`](../rescue/IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md)
 
-Current gate: [Cull Readiness Report](../rescue/IPIL_CULL_READINESS_REPORT_2026_09_10.md)
+Current gate: [Gate 3 First Full Rescue Corpus](../rescue/IPIL_RESCUE_GATE_3_FIRST_FULL_CORPUS_2026_09_10.md)
 
 Gate 2 implementation: [`ipil:cull` Implementation](../rescue/IPIL_RESCUE_GATE_2_IPIL_CULL_IMPLEMENTATION.md)
 
@@ -37,7 +37,7 @@ The new Nelson Executable Application lifecycle remains the forward operational 
 
 ## Active Frontier
 
-Source/database reconnaissance, Rescue Corpus V1, authenticated media retrieval, unassociated-byte retention, and the explicit `ipil:cull` transport are complete and synthetically certified. The active frontier is the **Bulk Rescue authorization gate**. No full real-source cull has run. A later explicit authorization may execute the first full private snapshot; it does not authorize seeding, mapping, import, deployment, or UI parity.
+Source/database reconnaissance, Rescue Corpus V1, authenticated media retrieval, unassociated-byte retention, and the explicit `ipil:cull` transport are complete. The first full corpus, `ipil-20260910t153224z-2ab19c17`, is finalized and independently verified. The active frontier is **Gate 4 mapping design and disposition review** operating only from that immutable local corpus. Gate 3 does not authorize canonical seeding, Spatie import, deployment, reporting/UI parity, or redesign.
 
 Advance only in this order:
 
