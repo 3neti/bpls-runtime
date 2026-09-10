@@ -9,7 +9,7 @@ use Illuminate\Console\Command;
 use Throwable;
 
 #[Signature('ipil:rescue:verify {corpus : Local rescue corpus path} {--json : Emit JSON}')]
-#[Description('Run offline scaffold integrity checks and fail closed before full corpus verification.')]
+#[Description('Verify Rescue Corpus V1 integrity and semantic contracts offline.')]
 final class IpilRescueVerifyCommand extends Command
 {
     public function handle(VerifyIpilRescueCorpus $verify): int
@@ -23,19 +23,18 @@ final class IpilRescueVerifyCommand extends Command
         if ($this->option('json')) {
             $this->line($this->json($result->toArray()));
 
-            return self::FAILURE;
+            return self::SUCCESS;
         }
 
-        $this->warn("Ipil rescue corpus {$result->corpusId} passed scaffold-level integrity checks.");
+        $this->info("Ipil rescue corpus {$result->corpusId} passed integrity and semantic verification.");
         $this->line("Fingerprint: {$result->corpusFingerprint}");
         $this->line("Files verified: {$result->verifiedFileCount}");
         $this->line("Source identities: {$result->sourceIdentityCount}");
         $this->line('Network access: none');
         $this->line('Evidence repair: none');
         $this->line('Domain writes: none');
-        $this->error('Full corpus verification remains unavailable until subordinate database, media, pricing, and exception contracts are approved.');
 
-        return self::FAILURE;
+        return self::SUCCESS;
     }
 
     private function failure(Throwable $exception): int

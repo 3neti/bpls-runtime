@@ -20,13 +20,13 @@ final class IpilSeedCommand extends Command
             return $this->failure($exception);
         }
 
-        $message = "Corpus {$result->corpusId} passed scaffold integrity, but ipil:seed is intentionally unavailable until full corpus verification plus mapper and disposition contracts are approved.";
+        $message = "Corpus {$result->corpusId} passed Rescue Corpus V1 verification, but ipil:seed is intentionally unavailable until canonical mapper and disposition contracts are approved.";
 
         if ($this->option('json')) {
             $this->line($this->json([
                 'passed' => false,
                 'corpus_integrity_passed' => true,
-                'verified' => false,
+                'verified' => true,
                 'seeded' => false,
                 'offline' => true,
                 'domain_writes' => false,

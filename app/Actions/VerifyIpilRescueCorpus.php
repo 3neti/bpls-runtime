@@ -4,12 +4,15 @@ namespace App\Actions;
 
 use App\Support\IpilRescue\CorpusVerification;
 use App\Support\IpilRescue\RescueCorpusManifest;
+use App\Support\IpilRescue\RescueCorpusSemantics;
 use App\Support\IpilRescue\SourceIdentity;
 use JsonException;
 use RuntimeException;
 
 final class VerifyIpilRescueCorpus
 {
+    public function __construct(private readonly RescueCorpusSemantics $semantics) {}
+
     public function handle(string $corpusPath): CorpusVerification
     {
         if (str_contains($corpusPath, '://')) {
@@ -65,26 +68,85 @@ final class VerifyIpilRescueCorpus
             }
         }
 
-        $sourceIdentityCount = $this->verifySourceIdentities(
+        $boundFile = fn (string $relativePath): string => $this->boundContents($root, $relativePath, $manifest);
+        $this->semantics->verifyAcquisition(
+            $this->readJsonObject($this->localFile($root, 'provenance/acquisition.json')),
+            $manifest,
+        );
+        $this->semantics->verifyTools(
+            $this->readJsonObject($this->localFile($root, 'provenance/tools.json')),
+        );
+        $databaseRows = $this->semantics->verifyDatabase(
+            $this->readJsonObject($this->localFile($root, 'source/database/schema.json')),
+            $this->readJsonObject($this->localFile($root, 'source/database/table-manifest.json')),
+            $boundFile,
+        );
+        $media = $this->semantics->verifyMedia(
+            $boundFile('source/media/media-manifest.jsonl'),
+            $boundFile,
+        );
+        $pricing = $this->semantics->verifyPricing(
+            $this->readJsonObject($this->localFile($root, 'source/pricing/pricing-manifest.json')),
+            $boundFile,
+        );
+        $findings = $this->semantics->verifyFindings(
+            $boundFile('verification/exceptions.jsonl'),
+        );
+
+        $semanticCounts = [
+            'database_rows' => $databaseRows,
+            'media_metadata' => $media['metadata'],
+            'media_bytes' => $media['bytes'],
+            'pricing_records' => $pricing['count'],
+            'exceptions' => $findings['count'],
+        ];
+
+        if ($semanticCounts !== $manifest->counts) {
+            throw new RuntimeException('The subordinate semantic counts do not match the corpus manifest.');
+        }
+
+        $sourceIdentities = $this->verifySourceIdentities(
             $this->localFile($root, 'provenance/source-identities.jsonl'),
             $manifest,
         );
         $expectedSourceIdentities = $manifest->counts['database_rows']
-            + $manifest->counts['media_metadata']
+            + count($media['source_identities'])
             + $manifest->counts['pricing_records'];
 
-        if ($sourceIdentityCount !== $expectedSourceIdentities) {
+        if (count($sourceIdentities) !== $expectedSourceIdentities) {
             throw new RuntimeException(
-                "Source identity count {$sourceIdentityCount} does not match the manifest count {$expectedSourceIdentities}.",
+                'Source identity count '.count($sourceIdentities)." does not match the manifest count {$expectedSourceIdentities}.",
             );
+        }
+
+        foreach ([...$media['source_identities'], ...$pricing['source_identities'], ...$findings['source_identities']] as $identityKey) {
+            if (! isset($sourceIdentities[$identityKey])) {
+                throw new RuntimeException('A semantic record references a source identity that is absent from the registry.');
+            }
         }
 
         return new CorpusVerification(
             $manifest->corpusId,
             $manifest->fingerprint(),
             count($manifest->bindings),
-            $sourceIdentityCount,
+            count($sourceIdentities),
+            $semanticCounts,
         );
+    }
+
+    private function boundContents(string $root, string $relativePath, RescueCorpusManifest $manifest): string
+    {
+        if (! array_key_exists($relativePath, $manifest->bindings)) {
+            throw new RuntimeException("The semantic contract references an unbound file: {$relativePath}.");
+        }
+
+        $contents = file_get_contents($this->localFile($root, $relativePath));
+
+        if ($contents === false) {
+            throw new RuntimeException("Unable to read {$relativePath}.");
+        }
+
+        return $contents;
     }
 
     private function verifyCompleteInventory(string $root, RescueCorpusManifest $manifest): void
@@ -185,7 +247,8 @@ final class VerifyIpilRescueCorpus
         return $checksums;
     }
 
-    private function verifySourceIdentities(string $path, RescueCorpusManifest $manifest): int
+    /** @return array<string, true> */
+    private function verifySourceIdentities(string $path, RescueCorpusManifest $manifest): array
     {
         $contents = file_get_contents($path);
 
@@ -194,7 +257,7 @@ final class VerifyIpilRescueCorpus
         }
 
         if (trim($contents) === '') {
-            return 0;
+            return [];
         }
 
         $lines = preg_split('/\R/', trim($contents));
@@ -242,7 +305,7 @@ final class VerifyIpilRescueCorpus
             $seen[$identityKey] = true;
         }
 
-        return count($lines);
+        return $seen;
     }
 
     private function localFile(string $root, string $relativePath): string

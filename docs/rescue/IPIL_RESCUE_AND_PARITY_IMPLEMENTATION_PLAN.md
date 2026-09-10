@@ -1,10 +1,12 @@
 # Ipil Rescue and Parity Implementation Plan
 
-Status: **APPROVED PROGRAM PLAN — OFFLINE CORPUS CONTRACT SCAFFOLD IMPLEMENTED**
+Status: **APPROVED PROGRAM PLAN — SOURCE RECONNAISSANCE AND CORPUS SEMANTICS V1 COMPLETE; CULL GATE CLOSED**
 
 Approved: 2026-09-10
 
 Governing compass: [`docs/agents/IPIL_RESCUE_AND_PARITY_COMPASS.md`](../agents/IPIL_RESCUE_AND_PARITY_COMPASS.md)
+
+Current evidence: [source reconnaissance](IPIL_SOURCE_RECONNAISSANCE_2026_09_10.md), [Rescue Corpus V1 semantic contracts](IPIL_RESCUE_CORPUS_V1_SEMANTIC_CONTRACTS.md), and [Cull Readiness Report](IPIL_CULL_READINESS_REPORT_2026_09_10.md).
 
 ## Objective
 
@@ -16,7 +18,7 @@ This is a rescue and parity program before it is a migration or redesign program
 
 This plan does not authorize live access, culling, import, production migration, cutover, deployment, or application changes. Each implementation wave requires its own bounded authorization and evidence.
 
-Implemented foundation as of 2026-09-10: Rescue Corpus V1 manifest and `SourceIdentity` contracts, scaffold-level offline integrity checking behind `ipil:rescue:verify`, fail-closed `ipil:seed` and `ipil:audit` frontiers, and the verify/seed/audit-only `bin/bpls-ipil-rescue-lab` wrapper. Full verification stays fail-closed until subordinate database, media, pricing, and exception contracts can reconcile semantic counts and bytes. This foundation uses synthetic tests, performs no domain writes, and deliberately provides no `ipil:cull` command or live-source capability.
+Implemented foundation as of 2026-09-10: Rescue Corpus V1 root, database, media, pricing, acquisition/tool provenance, `SourceIdentity`, and finding contracts; full offline semantic/integrity verification behind `ipil:rescue:verify`; fail-closed `ipil:seed` and `ipil:audit` frontiers; and the verify/seed/audit-only `bin/bpls-ipil-rescue-lab` wrapper. Synthetic tests reconcile semantic counts and bytes without real taxpayer data. The cull gate remains closed because authenticated media-byte retrieval and complete media-scope proof are not yet established. There is deliberately no `ipil:cull` command or live-source client.
 
 ## Target Flow
 

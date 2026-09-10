@@ -28,6 +28,8 @@ Every agent reads:
 
 Then read the canonical documents named in the role handoff. Do not substitute this summary for the underlying architecture, Board decision, evidence, or ledger.
 
+For any Ipil rescue, corpus, historical-parity, or cull-safety packet, also read the [Ipil Rescue and Parity Compass](IPIL_RESCUE_AND_PARITY_COMPASS.md) and follow its links to the implementation plan, source reconnaissance, semantic contracts, and current gate report before scaffolding.
+
 ## Source Precedence
 
 When statements appear to conflict, use this order:

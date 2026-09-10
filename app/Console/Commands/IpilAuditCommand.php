@@ -20,13 +20,13 @@ final class IpilAuditCommand extends Command
             return $this->failure($exception);
         }
 
-        $message = "Corpus {$result->corpusId} passed scaffold integrity, but ipil:audit is intentionally unavailable until full corpus verification and deterministic historical projections exist.";
+        $message = "Corpus {$result->corpusId} passed Rescue Corpus V1 verification, but ipil:audit is intentionally unavailable until deterministic historical projections exist.";
 
         if ($this->option('json')) {
             $this->line($this->json([
                 'passed' => false,
                 'corpus_integrity_passed' => true,
-                'verified' => false,
+                'verified' => true,
                 'audited' => false,
                 'offline' => true,
                 'domain_writes' => false,

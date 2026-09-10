@@ -9,15 +9,18 @@ final readonly class CorpusVerification
         public string $corpusFingerprint,
         public int $verifiedFileCount,
         public int $sourceIdentityCount,
+        /** @var array{database_rows: int, media_metadata: int, media_bytes: int, pricing_records: int, exceptions: int} */
+        public array $semanticCounts,
     ) {}
 
-    /** @return array<string, bool|int|string> */
+    /** @return array<string, mixed> */
     public function toArray(): array
     {
         return [
-            'passed' => false,
+            'passed' => true,
             'integrity_passed' => true,
-            'verification_complete' => false,
+            'semantic_contracts_passed' => true,
+            'verification_complete' => true,
             'offline' => true,
             'healed' => false,
             'domain_writes' => false,
@@ -25,6 +28,7 @@ final readonly class CorpusVerification
             'corpus_fingerprint' => $this->corpusFingerprint,
             'verified_file_count' => $this->verifiedFileCount,
             'source_identity_count' => $this->sourceIdentityCount,
+            'counts' => $this->semanticCounts,
         ];
     }
 }

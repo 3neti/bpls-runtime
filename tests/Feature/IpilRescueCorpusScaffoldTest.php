@@ -3,6 +3,7 @@
 use App\Actions\VerifyIpilRescueCorpus;
 use App\Support\IpilRescue\CanonicalJson;
 use App\Support\IpilRescue\RescueCorpusManifest;
+use App\Support\IpilRescue\RescueCorpusSemantics;
 use App\Support\IpilRescue\SourceIdentity;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
@@ -17,7 +18,7 @@ afterEach(function () {
     File::deleteDirectory($this->ipilRescueTestRoot);
 });
 
-test('a complete synthetic corpus passes stable integrity checks while full verification stays fail closed', function () {
+test('a complete synthetic corpus passes stable integrity and semantic contract checks', function () {
     createSyntheticIpilRescueCorpus($this->ipilRescueTestRoot);
     $verify = app(VerifyIpilRescueCorpus::class);
 
@@ -27,27 +28,68 @@ test('a complete synthetic corpus passes stable integrity checks while full veri
     expect($first->toArray())
         ->toBe($second->toArray())
         ->and($first->corpusFingerprint)->toMatch('/^[a-f0-9]{64}$/')
-        ->and($first->verifiedFileCount)->toBe(9)
-        ->and($first->sourceIdentityCount)->toBe(1);
+        ->and($first->verifiedFileCount)->toBe(11)
+        ->and($first->sourceIdentityCount)->toBe(3)
+        ->and($first->semanticCounts)->toBe([
+            'database_rows' => 1,
+            'media_metadata' => 1,
+            'media_bytes' => 1,
+            'pricing_records' => 1,
+            'exceptions' => 1,
+        ]);
 
     expect(Artisan::call('ipil:rescue:verify', [
         'corpus' => $this->ipilRescueTestRoot,
         '--json' => true,
-    ]))->toBe(1);
+    ]))->toBe(0);
 
     $output = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
 
     expect($output)
         ->toMatchArray([
-            'passed' => false,
+            'passed' => true,
             'integrity_passed' => true,
-            'verification_complete' => false,
+            'semantic_contracts_passed' => true,
+            'verification_complete' => true,
             'offline' => true,
             'healed' => false,
             'domain_writes' => false,
-            'verified_file_count' => 9,
-            'source_identity_count' => 1,
+            'verified_file_count' => 11,
+            'source_identity_count' => 3,
         ]);
+});
+
+test('verification rejects semantically false row counts even when every checksum is rebound', function () {
+    createSyntheticIpilRescueCorpus($this->ipilRescueTestRoot);
+    $path = $this->ipilRescueTestRoot.'/source/database/table-manifest.json';
+    $manifest = json_decode(File::get($path), true, flags: JSON_THROW_ON_ERROR);
+    $manifest['tables'][0]['row_count'] = 2;
+    replaceBoundSyntheticFile($this->ipilRescueTestRoot, 'source/database/table-manifest.json', CanonicalJson::encode($manifest)."\n");
+
+    expect(fn () => app(VerifyIpilRescueCorpus::class)->handle($this->ipilRescueTestRoot))
+        ->toThrow(InvalidArgumentException::class, 'row count does not match');
+});
+
+test('verification rejects media whose declared rescued size does not match its bound bytes', function () {
+    createSyntheticIpilRescueCorpus($this->ipilRescueTestRoot);
+    $path = $this->ipilRescueTestRoot.'/source/media/media-manifest.jsonl';
+    $entry = json_decode(trim(File::get($path)), true, flags: JSON_THROW_ON_ERROR);
+    $entry['rescued_size_bytes']++;
+    replaceBoundSyntheticFile($this->ipilRescueTestRoot, 'source/media/media-manifest.jsonl', CanonicalJson::encode($entry)."\n");
+
+    expect(fn () => app(VerifyIpilRescueCorpus::class)->handle($this->ipilRescueTestRoot))
+        ->toThrow(InvalidArgumentException::class, 'Media object integrity');
+});
+
+test('verification keeps interpreted pricing candidate only and rejects canonical activation', function () {
+    createSyntheticIpilRescueCorpus($this->ipilRescueTestRoot);
+    $path = $this->ipilRescueTestRoot.'/source/pricing/pricing-manifest.json';
+    $manifest = json_decode(File::get($path), true, flags: JSON_THROW_ON_ERROR);
+    $manifest['interpretation_state'] = 'canonical';
+    replaceBoundSyntheticFile($this->ipilRescueTestRoot, 'source/pricing/pricing-manifest.json', CanonicalJson::encode($manifest)."\n");
+
+    expect(fn () => app(VerifyIpilRescueCorpus::class)->handle($this->ipilRescueTestRoot))
+        ->toThrow(InvalidArgumentException::class, 'candidate-only');
 });
 
 test('verification detects changed bytes and never heals them', function () {
@@ -127,11 +169,11 @@ test('seed and audit verify locally then remain fail closed', function () {
     expect($seed)->toMatchArray([
         'passed' => false,
         'corpus_integrity_passed' => true,
-        'verified' => false,
+        'verified' => true,
         'seeded' => false,
         'offline' => true,
         'domain_writes' => false,
-    ])->and($seed['error'])->toContain('intentionally unavailable until full corpus verification plus mapper and disposition contracts are approved');
+    ])->and($seed['error'])->toContain('intentionally unavailable until canonical mapper and disposition contracts are approved');
 
     expect(Artisan::call('ipil:audit', [
         'corpus' => $this->ipilRescueTestRoot,
@@ -143,11 +185,11 @@ test('seed and audit verify locally then remain fail closed', function () {
     expect($audit)->toMatchArray([
         'passed' => false,
         'corpus_integrity_passed' => true,
-        'verified' => false,
+        'verified' => true,
         'audited' => false,
         'offline' => true,
         'domain_writes' => false,
-    ])->and($audit['error'])->toContain('intentionally unavailable until full corpus verification and deterministic historical projections exist');
+    ])->and($audit['error'])->toContain('intentionally unavailable until deterministic historical projections exist');
 });
 
 test('the local rescue lab exposes only offline scaffold operations', function () {
@@ -169,11 +211,12 @@ test('the local rescue lab exposes only offline scaffold operations', function (
     $process->run();
     $output = json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
 
-    expect($process->getExitCode())->toBe(1)
+    expect($process->getExitCode())->toBe(0)
         ->and($output)->toMatchArray([
-            'passed' => false,
+            'passed' => true,
             'integrity_passed' => true,
-            'verification_complete' => false,
+            'semantic_contracts_passed' => true,
+            'verification_complete' => true,
             'offline' => true,
             'domain_writes' => false,
         ]);
@@ -186,25 +229,130 @@ function createSyntheticIpilRescueCorpus(string $root, ?Closure $mutateManifest 
 {
     $deploymentIdentity = hash('sha256', 'synthetic-ipil-deployment');
     $corpusId = 'synthetic-corpus-'.substr(hash('sha256', $root), 0, 12);
-    $files = [
-        'source/database/schema.json' => "{\"tables\":[\"applications\"]}\n",
-        'source/database/table-manifest.json' => "{\"applications\":{\"rows\":1}}\n",
-        'source/media/media-manifest.jsonl' => '',
-        'source/pricing/pricing-manifest.json' => "{\"records\":0}\n",
-        'source/pricing/records.jsonl' => '',
-        'provenance/acquisition.json' => "{\"mode\":\"synthetic\",\"network\":false}\n",
-        'provenance/tools.json' => "{\"generator\":\"test\"}\n",
-        'verification/exceptions.jsonl' => '',
+    $databaseBytes = CanonicalJson::encode(['_id' => 'synthetic-application-1', 'status' => 'Draft'])."\n";
+    $mediaBytes = 'synthetic-media-bytes';
+    $pricingRecord = [
+        'schema_version' => RescueCorpusSemantics::PricingRecordVersion,
+        'source_dataset' => 'pricing-knowledge',
+        'source_key_sha256' => hash('sha256', 'synthetic-price-source'),
+        'knowledge_kind' => 'fee-rule-candidate',
+        'candidate_payload_sha256' => hash('sha256', 'synthetic-price-candidate'),
+        'confidence' => 'probable',
+        'evidence' => ['source' => 'synthetic fee table'],
     ];
-    $identity = SourceIdentity::fromArray([
+    $pricingBytes = CanonicalJson::encode($pricingRecord)."\n";
+    $mediaEntry = [
+        'schema_version' => RescueCorpusSemantics::MediaEntryVersion,
+        'source_dataset' => 'media-documents',
+        'source_key_sha256' => hash('sha256', 'synthetic-media-source'),
+        'storage_identifier_sha256' => hash('sha256', 'synthetic-storage-id'),
+        'relationship' => 'businesses.documents[0].storageId',
+        'document_type' => 'DTI Certificate',
+        'original_filename' => 'synthetic-dti.txt',
+        'declared_mime' => 'text/plain',
+        'detected_mime' => 'text/plain',
+        'declared_size_bytes' => strlen($mediaBytes),
+        'rescued_size_bytes' => strlen($mediaBytes),
+        'object_relative_path' => 'source/media/objects/synthetic-media.bin',
+        'sha256' => hash('sha256', $mediaBytes),
+        'retrieval_attempts' => 1,
+        'bytes_verified' => true,
+        'disposition' => 'rescued',
+        'finding_codes' => [],
+    ];
+    $databaseSchema = [
+        'schema_version' => RescueCorpusSemantics::DatabaseSchemaVersion,
+        'source_engine' => 'convex',
+        'source_engine_version' => null,
+        'source_schema_sha256' => hash('sha256', 'synthetic-schema'),
+        'datasets' => [[
+            'name' => 'applications',
+            'identity_field' => '_id',
+            'fields_sha256' => hash('sha256', 'synthetic-application-fields'),
+            'relationships' => [],
+        ]],
+    ];
+    $databaseManifest = [
+        'schema_version' => RescueCorpusSemantics::DatabaseManifestVersion,
+        'format' => 'jsonl',
+        'consistency_method' => 'synthetic immutable fixture',
+        'tables' => [[
+            'dataset' => 'applications',
+            'relative_path' => 'source/database/tables/applications.jsonl',
+            'row_count' => 1,
+            'sha256' => hash('sha256', $databaseBytes),
+        ]],
+    ];
+    $pricingManifest = [
+        'schema_version' => RescueCorpusSemantics::PricingManifestVersion,
+        'evidence_class' => 'interpreted-pricing-knowledge',
+        'raw_database_fingerprint_sha256' => hash('sha256', $databaseBytes),
+        'records_relative_path' => 'source/pricing/records.jsonl',
+        'records_sha256' => hash('sha256', $pricingBytes),
+        'record_count' => 1,
+        'interpreter' => 'synthetic-characterizer',
+        'interpreter_version' => '1.0.0',
+        'interpretation_state' => 'candidate-only',
+        'source_datasets' => [[
+            'dataset' => 'applications',
+            'row_count' => 1,
+            'sha256' => hash('sha256', $databaseBytes),
+        ]],
+    ];
+    $finding = [
+        'schema_version' => RescueCorpusSemantics::FindingVersion,
+        'finding_id' => 'synthetic-finding-001',
+        'evidence_class' => 'database',
+        'code' => 'unresolved-reference',
+        'severity' => 'warning',
+        'status' => 'open',
+        'source_key_sha256' => hash('sha256', 'synthetic-application-source'),
+        'dataset' => 'applications',
+        'message' => 'Synthetic unresolved reference retained as evidence.',
+        'details' => ['synthetic' => true],
+        'disposition' => 'preserve',
+        'authority' => null,
+    ];
+    $files = [
+        'source/database/schema.json' => CanonicalJson::encode($databaseSchema)."\n",
+        'source/database/table-manifest.json' => CanonicalJson::encode($databaseManifest)."\n",
+        'source/database/tables/applications.jsonl' => $databaseBytes,
+        'source/media/media-manifest.jsonl' => CanonicalJson::encode($mediaEntry)."\n",
+        'source/media/objects/synthetic-media.bin' => $mediaBytes,
+        'source/pricing/pricing-manifest.json' => CanonicalJson::encode($pricingManifest)."\n",
+        'source/pricing/records.jsonl' => $pricingBytes,
+        'provenance/acquisition.json' => CanonicalJson::encode([
+            'schema_version' => RescueCorpusSemantics::AcquisitionVersion,
+            'run_id' => 'synthetic-run-001',
+            'source_system' => 'ipil-synthetic',
+            'deployment_identity_sha256' => $deploymentIdentity,
+            'mode' => 'synthetic',
+            'started_at' => '2000-01-01T00:00:00Z',
+            'completed_at' => '2000-01-01T00:00:01Z',
+            'consistency_method' => 'synthetic immutable fixture',
+            'read_only' => true,
+            'write_back' => false,
+            'destination_class' => 'local-private',
+        ])."\n",
+        'provenance/tools.json' => CanonicalJson::encode([
+            'schema_version' => RescueCorpusSemantics::ToolsVersion,
+            'tools' => [[
+                'name' => 'synthetic-generator',
+                'version' => '1.0.0',
+                'sha256' => hash('sha256', 'synthetic-generator'),
+            ]],
+        ])."\n",
+        'verification/exceptions.jsonl' => CanonicalJson::encode($finding)."\n",
+    ];
+    $identities = [[
         'schema_version' => SourceIdentity::SchemaVersion,
         'source_system' => 'ipil-synthetic',
         'deployment_identity_sha256' => $deploymentIdentity,
         'corpus_id' => $corpusId,
         'dataset' => 'applications',
-        'source_key_sha256' => hash('sha256', 'synthetic-application-1'),
-        'canonical_payload_sha256' => hash('sha256', '{"id":"synthetic-application-1"}'),
-        'raw_evidence_locator' => 'source/database/table-manifest.json',
+        'source_key_sha256' => hash('sha256', 'synthetic-application-source'),
+        'canonical_payload_sha256' => hash('sha256', trim($databaseBytes)),
+        'raw_evidence_locator' => 'source/database/tables/applications.jsonl',
         'entity_kind' => 'application',
         'mapping_state' => 'observed',
         'mapper_version' => null,
@@ -213,8 +361,44 @@ function createSyntheticIpilRescueCorpus(string $root, ?Closure $mutateManifest 
         'authority' => null,
         'target_reference' => null,
         'flags' => ['synthetic'],
-    ]);
-    $files['provenance/source-identities.jsonl'] = CanonicalJson::encode($identity->toArray())."\n";
+    ], [
+        'schema_version' => SourceIdentity::SchemaVersion,
+        'source_system' => 'ipil-synthetic',
+        'deployment_identity_sha256' => $deploymentIdentity,
+        'corpus_id' => $corpusId,
+        'dataset' => 'media-documents',
+        'source_key_sha256' => hash('sha256', 'synthetic-media-source'),
+        'canonical_payload_sha256' => hash('sha256', CanonicalJson::encode($mediaEntry)),
+        'raw_evidence_locator' => 'source/media/media-manifest.jsonl',
+        'entity_kind' => 'document',
+        'mapping_state' => 'observed',
+        'mapper_version' => null,
+        'disposition' => 'preserve',
+        'evidence' => [],
+        'authority' => null,
+        'target_reference' => null,
+        'flags' => ['synthetic'],
+    ], [
+        'schema_version' => SourceIdentity::SchemaVersion,
+        'source_system' => 'ipil-synthetic',
+        'deployment_identity_sha256' => $deploymentIdentity,
+        'corpus_id' => $corpusId,
+        'dataset' => 'pricing-knowledge',
+        'source_key_sha256' => hash('sha256', 'synthetic-price-source'),
+        'canonical_payload_sha256' => hash('sha256', CanonicalJson::encode($pricingRecord)),
+        'raw_evidence_locator' => 'source/pricing/records.jsonl',
+        'entity_kind' => 'pricing-candidate',
+        'mapping_state' => 'proposed',
+        'mapper_version' => 'synthetic-characterizer@1.0.0',
+        'disposition' => 'defer',
+        'evidence' => [],
+        'authority' => null,
+        'target_reference' => null,
+        'flags' => ['synthetic'],
+    ]];
+    $files['provenance/source-identities.jsonl'] = collect($identities)
+        ->map(fn (array $identity): string => CanonicalJson::encode(SourceIdentity::fromArray($identity)->toArray()))
+        ->implode("\n")."\n";
 
     foreach ($files as $relativePath => $contents) {
         File::ensureDirectoryExists(dirname($root.'/'.$relativePath));
@@ -243,10 +427,10 @@ function createSyntheticIpilRescueCorpus(string $root, ?Closure $mutateManifest 
         'parent_corpus_id' => null,
         'counts' => [
             'database_rows' => 1,
-            'media_metadata' => 0,
-            'media_bytes' => 0,
-            'pricing_records' => 0,
-            'exceptions' => 0,
+            'media_metadata' => 1,
+            'media_bytes' => 1,
+            'pricing_records' => 1,
+            'exceptions' => 1,
         ],
         'bindings' => $bindings,
     ];
@@ -263,4 +447,19 @@ function createSyntheticIpilRescueCorpus(string $root, ?Closure $mutateManifest 
             ->implode("\n")."\n",
     );
     File::put($root.'/corpus.json', CanonicalJson::encode($manifest)."\n");
+}
+
+function replaceBoundSyntheticFile(string $root, string $relativePath, string $contents): void
+{
+    File::put($root.'/'.$relativePath, $contents);
+    $manifest = json_decode(File::get($root.'/corpus.json'), true, flags: JSON_THROW_ON_ERROR);
+    $manifest['bindings'][$relativePath] = hash('sha256', $contents);
+    ksort($manifest['bindings']);
+    File::put($root.'/corpus.json', CanonicalJson::encode($manifest)."\n");
+    File::put(
+        $root.'/verification/checksums.sha256',
+        collect($manifest['bindings'])
+            ->map(fn (string $checksum, string $path): string => "{$checksum}  {$path}")
+            ->implode("\n")."\n",
+    );
 }
