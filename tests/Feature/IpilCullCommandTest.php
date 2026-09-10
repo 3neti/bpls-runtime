@@ -4,6 +4,7 @@ use App\Actions\CullIpilRescueCorpus;
 use App\Contracts\IpilCullSource;
 use App\Support\IpilRescue\CanonicalJson;
 use App\Support\IpilRescue\ConvexAuthenticatedMediaRetriever;
+use App\Support\IpilRescue\ConvexExportIpilCullSource;
 use App\Support\IpilRescue\RescueCorpusSemantics;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
@@ -239,6 +240,29 @@ test('authenticated media preflight uses the exact read-only media permission', 
         'path' => 'businesses:getDocumentUrls',
         'args' => ['storageIds' => []],
         'format' => 'json',
+    ]);
+});
+
+test('Convex export relies on the deployment-scoped key instead of an unsupported selector', function () {
+    $workingDirectory = $this->cullRoot.'/export-command-contract';
+    $argumentsPath = $workingDirectory.'/arguments.txt';
+    $cliPath = $workingDirectory.'/synthetic-convex';
+    File::ensureDirectoryExists($workingDirectory);
+    File::put($cliPath, "#!/bin/sh\nprintf '%s\\n' \"\$@\" > ".escapeshellarg($argumentsPath)."\nexit 1\n");
+    chmod($cliPath, 0700);
+
+    config()->set('ipil_rescue.source.convex_cli', $cliPath);
+    config()->set('ipil_rescue.source.deploy_key', 'prod:synthetic|secret');
+    config()->set('ipil_rescue.source.project_path', $workingDirectory);
+
+    expect(fn () => app(ConvexExportIpilCullSource::class)->begin($workingDirectory))
+        ->toThrow(RuntimeException::class, 'The authenticated read-only Convex export failed.');
+
+    expect(File::lines($argumentsPath)->map(fn (string $argument): string => trim($argument))->filter()->values()->all())->toBe([
+        'export',
+        '--include-file-storage',
+        '--path',
+        $workingDirectory.'/source-export.zip',
     ]);
 });
 

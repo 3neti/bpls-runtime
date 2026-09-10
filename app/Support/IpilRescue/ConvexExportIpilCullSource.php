@@ -110,8 +110,6 @@ final class ConvexExportIpilCullSource implements IpilCullSource
             $process = new Process([
                 $this->requiredConfig('source.convex_cli'),
                 'export',
-                '--deployment',
-                $this->requiredConfig('source.deployment'),
                 '--include-file-storage',
                 '--path',
                 $archivePath,
