@@ -967,6 +967,7 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     $healthActor = User::query()->findOrFail(data_get($run->actor_manifest, 'actors.health.user_id'));
     $unroutedHealthActor = userWithRole($healthActor->primaryRole());
     $healthFee = FeeRule::query()->where('code', 'IPIL-LEGACY-99C7F1CE5E8189C8')->sole();
+    $sanitaryFee = FeeRule::query()->where('code', 'IPIL-LEGACY-04845A0127A00E12')->sole();
     $healthItems = [['fee_rule_id' => $healthFee->id, 'amount_cents' => 10_000]];
 
     expect(fn () => app(ConfirmOfficePaymentOrder::class)->handle(
@@ -989,6 +990,24 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         ))->toThrow(LogicException::class, 'authorized routed [health] office actor')
         ->and($application->paperlessPaymentOrders()->count())->toBe(0)
         ->and(SignatureEvidence::query()->where('purpose', 'concerned_office_payment_order_confirmation')->count())->toBe(0);
+
+    foreach ([$healthFee, $sanitaryFee] as $fee) {
+        $fee->update(['metadata' => [...$fee->metadata, 'exact_once_key' => 'duplicate-health-fee']]);
+    }
+    expect(fn () => app(ConfirmOfficePaymentOrder::class)->handle(
+        $healthWork,
+        [
+            ['fee_rule_id' => $healthFee->id, 'amount_cents' => 10_000],
+            ['fee_rule_id' => $sanitaryFee->id, 'amount_cents' => 20_000],
+        ],
+        $healthActor,
+        UploadedFile::fake()->image('duplicate-health-fees.png'),
+    ))->toThrow(LogicException::class, 'application-wide fee may appear only once')
+        ->and($application->paperlessPaymentOrders()->count())->toBe(0)
+        ->and(SignatureEvidence::query()->where('purpose', 'concerned_office_payment_order_confirmation')->count())->toBe(0);
+    foreach ([$healthFee, $sanitaryFee] as $fee) {
+        $fee->update(['metadata' => [...$fee->metadata, 'exact_once_key' => null]]);
+    }
 
     $engineeringTask = app(BuildBploRoutingTask::class)->handle($application->fresh(), $engineeringActor)->toArray();
     $managementTask = app(BuildBploRoutingTask::class)->handle($application->fresh(), $management)->toArray();
@@ -1022,8 +1041,13 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
     }
 
     $engineeringOrder = $engineeringWork->paymentOrders()->sole();
+    $healthOrder = $healthWork->paymentOrders()->with('lines')->sole();
     expect($engineeringOrder->issued_by_id)->toBe($engineeringActor->id)
-        ->and($healthWork->paymentOrders()->sole()->issued_by_id)->toBe($healthActor->id)
+        ->and($healthOrder->issued_by_id)->toBe($healthActor->id)
+        ->and($healthOrder->total_amount_cents)->toBe(30_000)
+        ->and($healthOrder->lines)->toHaveCount(2)
+        ->and($healthOrder->lines->pluck('source_snapshot')->map(fn (array $snapshot): string => $snapshot['exact_once_key'])->sort()->values()->all())
+        ->toBe(collect([$healthFee, $sanitaryFee])->map(fn (FeeRule $fee): string => 'fee-rule-'.$fee->id)->sort()->values()->all())
         ->and(data_get(
             SignatureEvidence::query()
                 ->where('signable_type', $engineeringOrder->getMorphClass())

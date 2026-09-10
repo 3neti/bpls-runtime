@@ -53,14 +53,23 @@ class ConfirmOfficePaymentOrder
             if ($rules->count() !== count($items)) {
                 throw new LogicException('Every Payment Order item must reference the Municipal Schedule of Fees.');
             }
-            $exactOnceKeys = $rules->map(fn (FeeRule $rule): string => (string) data_get($rule->metadata, 'exact_once_key', 'fee-rule-'.$rule->id));
+            $exactOnceKeys = $rules->map(fn (FeeRule $rule): string => $this->exactOnceKey($rule));
             if ($exactOnceKeys->duplicates()->isNotEmpty()) {
                 throw new LogicException('An application-wide fee may appear only once in a Payment Order.');
             }
             $existingExactOnceKeys = $application->paperlessPaymentOrders()
                 ->where('status', 'issued')->whereNull('superseded_at')
                 ->with('lines')->get()->flatMap->lines
-                ->map(fn ($line): mixed => data_get($line->source_snapshot, 'exact_once_key'))
+                ->map(function ($line): ?string {
+                    $configuredKey = data_get($line->source_snapshot, 'exact_once_key');
+                    if (filled($configuredKey)) {
+                        return (string) $configuredKey;
+                    }
+
+                    $feeRuleId = data_get($line->source_snapshot, 'fee_rule_id');
+
+                    return is_numeric($feeRuleId) ? 'fee-rule-'.$feeRuleId : null;
+                })
                 ->filter();
             if ($exactOnceKeys->intersect($existingExactOnceKeys)->isNotEmpty()) {
                 throw new LogicException('An application-wide fee has already been determined for this Application.');
@@ -156,7 +165,7 @@ class ConfirmOfficePaymentOrder
                         'scope' => 'application',
                         'fee_rule_id' => $rule->id,
                         'fee_rule_version' => $this->feeRuleVersion($rule),
-                        'exact_once_key' => data_get($rule->metadata, 'exact_once_key', 'fee-rule-'.$rule->id),
+                        'exact_once_key' => $this->exactOnceKey($rule),
                         'office_code' => $work->office_code,
                         'office_label' => $work->office_label,
                         'default_amount_minor' => $defaultAmount,
@@ -185,6 +194,13 @@ class ConfirmOfficePaymentOrder
 
             return $order->load(['lines', 'issuedBy']);
         });
+    }
+
+    private function exactOnceKey(FeeRule $rule): string
+    {
+        $configuredKey = data_get($rule->metadata, 'exact_once_key');
+
+        return filled($configuredKey) ? (string) $configuredKey : 'fee-rule-'.$rule->id;
     }
 
     private function feeRuleVersion(FeeRule $rule): string
