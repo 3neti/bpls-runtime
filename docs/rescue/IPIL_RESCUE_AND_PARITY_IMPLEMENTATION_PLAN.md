@@ -6,7 +6,7 @@ Approved: 2026-09-10
 
 Governing compass: [`docs/agents/IPIL_RESCUE_AND_PARITY_COMPASS.md`](../agents/IPIL_RESCUE_AND_PARITY_COMPASS.md)
 
-Current evidence: [source reconnaissance](IPIL_SOURCE_RECONNAISSANCE_2026_09_10.md), [media readiness closure](IPIL_MEDIA_CULL_READINESS_CLOSURE_2026_09_10.md), [Rescue Corpus V1 semantic contracts](IPIL_RESCUE_CORPUS_V1_SEMANTIC_CONTRACTS.md), [Cull Readiness Report](IPIL_CULL_READINESS_REPORT_2026_09_10.md), [Gate 2 `ipil:cull` implementation](IPIL_RESCUE_GATE_2_IPIL_CULL_IMPLEMENTATION.md), and the [Gate 3 first full corpus report](IPIL_RESCUE_GATE_3_FIRST_FULL_CORPUS_2026_09_10.md).
+Current evidence: [source reconnaissance](IPIL_SOURCE_RECONNAISSANCE_2026_09_10.md), [media readiness closure](IPIL_MEDIA_CULL_READINESS_CLOSURE_2026_09_10.md), [Rescue Corpus V1 semantic contracts](IPIL_RESCUE_CORPUS_V1_SEMANTIC_CONTRACTS.md), [Cull Readiness Report](IPIL_CULL_READINESS_REPORT_2026_09_10.md), [Gate 2 `ipil:cull` implementation](IPIL_RESCUE_GATE_2_IPIL_CULL_IMPLEMENTATION.md), the [Gate 3 first full corpus report](IPIL_RESCUE_GATE_3_FIRST_FULL_CORPUS_2026_09_10.md), and Gate 4's [normative mapping specification](IPIL_SOURCE_TO_BPLS_MAPPING_SPECIFICATION_V1.md), [aggregate findings](IPIL_MAPPING_FINDINGS_2026_09_11.md), and [decision register](IPIL_MAPPING_DECISION_REGISTER.md).
 
 ## Objective
 
@@ -16,7 +16,7 @@ Create a repeatable, auditable local reconstruction of the current Ipil BPLS: so
 
 This is a rescue and parity program before it is a migration or redesign program. The first durable deliverable is a checksum-bound local rescue corpus. BPLS interpretation, historical projection, parity proof, UI reproduction, and product improvement follow in that order.
 
-This plan is governing sequence, not standing execution authority. Gate 3 separately authorized and completed the first full read-only rescue. Mapping decisions, canonical import, production migration, cutover, deployment, and later application changes still require their own bounded authorization and evidence.
+This plan is governing sequence, not standing execution authority. Gate 3 separately authorized and completed the first full read-only rescue. Gate 4 completed the design-only mapping profile; implementing or executing it, canonical import, production migration, cutover, deployment, and later application changes still require their own bounded authorization and evidence.
 
 Implemented foundation as of 2026-09-10: Rescue Corpus V1 contracts and production-scale streaming offline verification; fail-closed `ipil:seed` and `ipil:audit`; the verify/seed/audit-only rescue lab; and the explicit, dual-confirmed `ipil:cull` command with Convex export, authenticated media retrieval, deterministic manifests, resume checkpoints, bounded retries, findings, verification, and immutable finalization. The first full corpus `ipil-20260910t153224z-2ab19c17` is finalized locally and verified. No canonical interpretation or BPLS import has run.
 
@@ -317,6 +317,6 @@ The program completes only when an authorized immutable corpus accounts for the 
 
 ## Active Frontier and Stop Conditions
 
-The active frontier is the **Bulk Rescue authorization gate**. Wave 3's transport is implemented and synthetically certified, but no full source snapshot has been executed. Stop for a decision when bulk acquisition is not explicitly authorized; read-only authority/scope/credentials are missing; consistency is unprovable; media access exceeds authority; private evidence could enter Git/public/Cloud storage; checksums/counts/totals fail; mapping requires identity/policy/lifecycle inference; history must become operational; reports require current price calculation; UI lacks audited corpus/capture/disposition; or any step would redesign, deploy, cut over, or write to production before its gate.
+The active frontier is **Gate 5 seed implementation review**. The canonical full corpus is finalized and verified, and Gate 4 mapping profile `ipil-rescue-mapping-v1.0.0` accounts for all source tables and concepts. Gate 5 may design and implement fail-closed, offline, synthetic-first planning against that specification, but Gate 4 does not authorize a real seed execution or canonical write. Stop for a decision when the exact corpus/profile cannot be bound; checksums/counts/totals fail; a row or embedded item lacks a disposition; mapping requires identity/policy/lifecycle inference; non-cent evidence would be rounded; source secrets would be staged; history must become operational; media could be copied or uploaded without authority; reports require current price calculation; UI lacks audited corpus/capture/disposition; or any step would redesign, deploy, cut over, or write to production before its gate.
 
 Future agents must not jump from reconnaissance or partial seeding into UI redesign. The fixed order is: verified corpus, deterministic reconstruction, quantitative audit, read-only/report parity, UI capture, parity scaffolding, side-by-side acceptance, then improvement.

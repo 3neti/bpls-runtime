@@ -1,12 +1,14 @@
 # Ipil Rescue and Parity Compass
 
-Status: **GOVERNING — GATE 3 RESCUE CORPUS FINALIZED; MAPPING REVIEW NEXT**
+Status: **GOVERNING — GATE 4 MAPPING SPECIFICATION COMPLETE; SEED IMPLEMENTATION REVIEW NEXT**
 
 As of: 2026-09-10
 
 Implementation plan: [`docs/rescue/IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md`](../rescue/IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md)
 
-Current gate: [Gate 3 First Full Rescue Corpus](../rescue/IPIL_RESCUE_GATE_3_FIRST_FULL_CORPUS_2026_09_10.md)
+Current gate: [Gate 4 Mapping Findings](../rescue/IPIL_MAPPING_FINDINGS_2026_09_11.md)
+
+Normative mapping authority: [Source-to-BPLS Mapping Specification V1](../rescue/IPIL_SOURCE_TO_BPLS_MAPPING_SPECIFICATION_V1.md) and [Mapping Decision Register](../rescue/IPIL_MAPPING_DECISION_REGISTER.md)
 
 Gate 2 implementation: [`ipil:cull` Implementation](../rescue/IPIL_RESCUE_GATE_2_IPIL_CULL_IMPLEMENTATION.md)
 
@@ -37,7 +39,7 @@ The new Nelson Executable Application lifecycle remains the forward operational 
 
 ## Active Frontier
 
-Source/database reconnaissance, Rescue Corpus V1, authenticated media retrieval, unassociated-byte retention, and the explicit `ipil:cull` transport are complete. The first full corpus, `ipil-20260910t153224z-2ab19c17`, is finalized and independently verified. The active frontier is **Gate 4 mapping design and disposition review** operating only from that immutable local corpus. Gate 3 does not authorize canonical seeding, Spatie import, deployment, reporting/UI parity, or redesign.
+Source/database reconnaissance, Rescue Corpus V1, authenticated media retrieval, unassociated-byte retention, the explicit `ipil:cull` transport, the first full corpus, and Gate 4's complete source-to-BPLS disposition design are complete. The active frontier is **Gate 5 seed implementation review** bound to mapping profile `ipil-rescue-mapping-v1.0.0` and the immutable corpus `ipil-20260910t153224z-2ab19c17`. Gate 4 authorizes no real seed execution, canonical migration, Spatie import, deployment, reporting/UI parity, or redesign. Gate 5 must begin with fail-closed planning and synthetic verification and must stop before executing against real taxpayer evidence unless separately authorized.
 
 Advance only in this order:
 

@@ -37,3 +37,7 @@ Use these labels in derived evidence notes and later discovery artifacts:
 - IMPLEMENTATION DECISION
 
 Do not silently reconcile disagreements among ordinance, TOR, legacy source, and observed production behavior.
+
+## Derived Rescue Evidence
+
+The canonical source remains `RESCUE-IPIL-001`. Its approved interpretation boundary is documented by the [Gate 4 Source-to-BPLS Mapping Specification V1](../rescue/IPIL_SOURCE_TO_BPLS_MAPPING_SPECIFICATION_V1.md), [aggregate mapping findings](../rescue/IPIL_MAPPING_FINDINGS_2026_09_11.md), and [mapping decision register](../rescue/IPIL_MAPPING_DECISION_REGISTER.md). These derived documents do not alter the source corpus or confer seed, fiscal, lifecycle, media-import, deployment, or migration authority.
