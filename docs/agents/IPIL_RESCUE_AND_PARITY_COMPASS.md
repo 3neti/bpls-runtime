@@ -1,12 +1,14 @@
 # Ipil Rescue and Parity Compass
 
-Status: **GOVERNING — CULL READINESS PASSED; CULLER IMPLEMENTATION NOT STARTED**
+Status: **GOVERNING — GATE 2 CULLER SYNTHETICALLY CERTIFIED; BULK RESCUE NOT AUTHORIZED**
 
 As of: 2026-09-10
 
 Implementation plan: [`docs/rescue/IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md`](../rescue/IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md)
 
 Current gate: [Cull Readiness Report](../rescue/IPIL_CULL_READINESS_REPORT_2026_09_10.md)
+
+Gate 2 implementation: [`ipil:cull` Implementation](../rescue/IPIL_RESCUE_GATE_2_IPIL_CULL_IMPLEMENTATION.md)
 
 Media evidence: [Ipil Media Cull Readiness Closure](../rescue/IPIL_MEDIA_CULL_READINESS_CLOSURE_2026_09_10.md)
 
@@ -35,7 +37,7 @@ The new Nelson Executable Application lifecycle remains the forward operational 
 
 ## Active Frontier
 
-Source/database reconnaissance, the synthetic Rescue Corpus V1 contract, authenticated DTI retrieval, and the unassociated-byte retention boundary are complete. `CULL READINESS: YES`. The active frontier stops here; a separately authorized wave may implement the explicit network-only culler and synthetic dry acquisition. It may not perform a real cull, seed, map, import, deploy, or start UI parity without its own authority and gates.
+Source/database reconnaissance, Rescue Corpus V1, authenticated media retrieval, unassociated-byte retention, and the explicit `ipil:cull` transport are complete and synthetically certified. The active frontier is the **Bulk Rescue authorization gate**. No full real-source cull has run. A later explicit authorization may execute the first full private snapshot; it does not authorize seeding, mapping, import, deployment, or UI parity.
 
 Advance only in this order:
 

@@ -243,8 +243,7 @@ test('the local rescue lab exposes only offline scaffold operations', function (
     $contents = File::get($script);
 
     expect($commands)
-        ->toHaveKeys(['ipil:rescue:verify', 'ipil:seed', 'ipil:audit'])
-        ->not->toHaveKey('ipil:cull')
+        ->toHaveKeys(['ipil:cull', 'ipil:rescue:verify', 'ipil:seed', 'ipil:audit'])
         ->and(is_executable($script))->toBeTrue()
         ->and($contents)->toContain('set -euo pipefail')
         ->and($contents)->toContain('<verify|seed|audit>')

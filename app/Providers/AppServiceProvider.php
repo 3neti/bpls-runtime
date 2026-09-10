@@ -3,11 +3,13 @@
 namespace App\Providers;
 
 use App\Actions\RecordClassicLifecycleCeremonyEvent;
+use App\Contracts\IpilCullSource;
 use App\Data\Application\ApplicationDataResolver;
 use App\Data\Application\EloquentApplicationDataResolver;
 use App\Enums\UserPermission;
 use App\Enums\UserRole;
 use App\Models\User;
+use App\Support\IpilRescue\ConvexExportIpilCullSource;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
@@ -29,6 +31,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(ApplicationDataResolver::class, EloquentApplicationDataResolver::class);
+        $this->app->bind(IpilCullSource::class, ConvexExportIpilCullSource::class);
     }
 
     /**

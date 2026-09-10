@@ -1,6 +1,6 @@
 # Ipil Rescue Corpus V1 Semantic Contracts
 
-Status: **APPROVED FOR SYNTHETIC VERIFICATION — NO CULLER OR SEED AUTHORITY**
+Status: **APPROVED AND IMPLEMENTED FOR CULL/VERIFY — NO SEED OR BULK-RUN AUTHORITY**
 
 Effective: 2026-09-10
 
@@ -14,7 +14,7 @@ Gate: [Cull Readiness Report](IPIL_CULL_READINESS_REPORT_2026_09_10.md)
 
 These contracts let `ipil:rescue:verify` prove, offline, that a completed Rescue Corpus V1 is structurally self-consistent and checksum-bound. They describe transport evidence without assigning canonical Laravel meaning.
 
-They do not authorize `ipil:cull`, mapping acceptance, `ipil:seed`, historical projections, price activation, report parity, UI work, Cloud upload, or production use.
+They govern the implemented `ipil:cull` output and offline verification. They do not authorize a bulk run, mapping acceptance, `ipil:seed`, historical projections, price activation, report parity, UI work, Cloud upload, or production use.
 
 ## Governing Semantics
 
@@ -104,7 +104,7 @@ Each `source/media/media-manifest.jsonl` line uses `bpls.ipil-rescue-media-entry
 
 Approved association states are `ASSOCIATED`, `PROBABLE_ASSOCIATION`, `UNRESOLVED`, and `ORPHAN_CONFIRMED`. Unknown association is not orphan evidence.
 
-Approved dispositions are `rescued`, `source-missing`, `access-denied`, `corrupt`, `zero-byte`, `duplicate-content`, `orphan-metadata`, `unassociated-byte`, and `orphan-byte`. `unassociated-byte` requires `PROBABLE_ASSOCIATION` or `UNRESOLVED`; `orphan-byte` requires `ORPHAN_CONFIRMED`.
+Approved dispositions are `rescued`, `source-missing`, `access-denied`, `retrieval-failed`, `corrupt`, `zero-byte`, `duplicate-content`, `orphan-metadata`, `unassociated-byte`, and `orphan-byte`. `unassociated-byte` requires `PROBABLE_ASSOCIATION` or `UNRESOLVED`; `orphan-byte` requires `ORPHAN_CONFIRMED`.
 
 Object paths are mandatory for acquired bytes and forbidden as placeholders for absent bytes. `rescued` requires a bound object, exact length/hash agreement, and `bytes_verified: true`. `unassociated-byte` and `orphan-byte` require role `storage-object`; `orphan-metadata` requires `metadata-relationship`. Root `media_metadata` counts only `metadata-relationship` entries, including explicit source-missing/access-denied cases. Root `media_bytes` counts distinct bound object paths, including acquired storage-only entries. Duplicate-content relationships may share an object path while retaining separate manifest lines.
 
@@ -159,7 +159,7 @@ Each `verification/exceptions.jsonl` line uses `bpls.ipil-rescue-finding.v1`:
 
 Approved finding codes are:
 
-`access-denied`, `ambiguous-mapping`, `checksum-mismatch`, `contradictory-source-evidence`, `corrupt-media`, `duplicate-content`, `missing-required-field`, `unassociated-byte`, `orphan-byte`, `orphan-metadata`, `source-missing`, `unresolved-reference`, `unsupported-source-value`, and `zero-byte`.
+`access-denied`, `ambiguous-mapping`, `checksum-mismatch`, `contradictory-source-evidence`, `corrupt-media`, `duplicate-content`, `duplicate-source-identity`, `missing-required-field`, `relationship-inconsistency`, `retrieval-failed`, `source-shape-loss`, `unassociated-byte`, `orphan-byte`, `orphan-metadata`, `source-missing`, `unresolved-reference`, `unsupported-source-value`, and `zero-byte`.
 
 `accepted` or `waived` records a decision; it never makes missing evidence present. New vocabulary requires a schema version or compatible reviewed extension, not a free-form spelling.
 
@@ -202,4 +202,4 @@ No real taxpayer or media data is used.
 | Finance | Source values preserved exactly; totals audited later in integer centavos; no current-price recalculation |
 | Reports/UI | No claim at this gate; later parity uses `MATCH`/`ADAPT`/`IMPROVE`/`DEFER` |
 
-The verifier implements only this contract. It contains no live-source client and there is still no `ipil:cull` command.
+The verifier implements only this contract and remains offline. The separate `ipil:cull` command now produces this contract through explicit authenticated transport; verification never gains a live-source dependency.

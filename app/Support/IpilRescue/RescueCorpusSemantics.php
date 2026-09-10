@@ -31,6 +31,7 @@ final class RescueCorpusSemantics
         'zero-byte',
         'duplicate-content',
         'orphan-metadata',
+        'retrieval-failed',
         'unassociated-byte',
         'orphan-byte',
     ];
@@ -58,6 +59,10 @@ final class RescueCorpusSemantics
         'corrupt-media',
         'duplicate-content',
         'missing-required-field',
+        'duplicate-source-identity',
+        'relationship-inconsistency',
+        'retrieval-failed',
+        'source-shape-loss',
         'unassociated-byte',
         'orphan-byte',
         'orphan-metadata',
@@ -325,6 +330,7 @@ final class RescueCorpusSemantics
     /**
      * @param  array<string, mixed>  $manifest
      * @param  callable(string): string  $boundFile
+     * @return array{count: int, source_identities: list<string>}
      */
     public function verifyPricing(array $manifest, callable $boundFile): array
     {
@@ -489,6 +495,7 @@ final class RescueCorpusSemantics
         }
     }
 
+    /** @return array{count: int, source_identities: list<string>} */
     public function verifyFindings(string $contents): array
     {
         $findings = $this->jsonlObjects($contents, 'findings');
@@ -588,7 +595,10 @@ final class RescueCorpusSemantics
         return count($objects);
     }
 
-    /** @param  array<mixed>  $payload */
+    /**
+     * @param  array<mixed>  $payload
+     * @param  list<string>  $expected
+     */
     private function exactKeys(array $payload, array $expected, string $label): void
     {
         $actual = array_keys($payload);
@@ -628,7 +638,7 @@ final class RescueCorpusSemantics
 
     private function token(mixed $value, string $label, bool $allowLeadingUnderscore = false): string
     {
-        $pattern = $allowLeadingUnderscore ? '/^_?[a-z][a-z0-9._-]{0,127}$/' : '/^[a-z][a-z0-9._-]{0,127}$/';
+        $pattern = $allowLeadingUnderscore ? '/^_?[A-Za-z][A-Za-z0-9._-]{0,127}$/' : '/^[a-z][A-Za-z0-9._-]{0,127}$/';
 
         if (! is_string($value) || preg_match($pattern, $value) !== 1) {
             throw new InvalidArgumentException("The {$label} is not a safe token.");

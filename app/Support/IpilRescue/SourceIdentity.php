@@ -152,7 +152,7 @@ final readonly class SourceIdentity
 
     private static function safeToken(mixed $value, string $field): string
     {
-        if (! is_string($value) || preg_match('/^[a-z][a-z0-9._-]{0,127}$/', $value) !== 1) {
+        if (! is_string($value) || preg_match('/^[a-z][A-Za-z0-9._-]{0,127}$/', $value) !== 1) {
             throw new InvalidArgumentException("The {$field} value is not a safe token.");
         }
 

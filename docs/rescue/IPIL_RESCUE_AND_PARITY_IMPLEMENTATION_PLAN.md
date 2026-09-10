@@ -1,12 +1,12 @@
 # Ipil Rescue and Parity Implementation Plan
 
-Status: **APPROVED PROGRAM PLAN — CULL READINESS PASSED; IMPLEMENTATION NOT STARTED**
+Status: **APPROVED PROGRAM PLAN — GATE 2 CULLER SYNTHETICALLY CERTIFIED; BULK RESCUE NOT RUN**
 
 Approved: 2026-09-10
 
 Governing compass: [`docs/agents/IPIL_RESCUE_AND_PARITY_COMPASS.md`](../agents/IPIL_RESCUE_AND_PARITY_COMPASS.md)
 
-Current evidence: [source reconnaissance](IPIL_SOURCE_RECONNAISSANCE_2026_09_10.md), [media readiness closure](IPIL_MEDIA_CULL_READINESS_CLOSURE_2026_09_10.md), [Rescue Corpus V1 semantic contracts](IPIL_RESCUE_CORPUS_V1_SEMANTIC_CONTRACTS.md), and [Cull Readiness Report](IPIL_CULL_READINESS_REPORT_2026_09_10.md).
+Current evidence: [source reconnaissance](IPIL_SOURCE_RECONNAISSANCE_2026_09_10.md), [media readiness closure](IPIL_MEDIA_CULL_READINESS_CLOSURE_2026_09_10.md), [Rescue Corpus V1 semantic contracts](IPIL_RESCUE_CORPUS_V1_SEMANTIC_CONTRACTS.md), [Cull Readiness Report](IPIL_CULL_READINESS_REPORT_2026_09_10.md), and [Gate 2 `ipil:cull` implementation](IPIL_RESCUE_GATE_2_IPIL_CULL_IMPLEMENTATION.md).
 
 ## Objective
 
@@ -16,16 +16,16 @@ Create a repeatable, auditable local reconstruction of the current Ipil BPLS: so
 
 This is a rescue and parity program before it is a migration or redesign program. The first durable deliverable is a checksum-bound local rescue corpus. BPLS interpretation, historical projection, parity proof, UI reproduction, and product improvement follow in that order.
 
-This plan does not authorize live access, culling, import, production migration, cutover, deployment, or application changes. Each implementation wave requires its own bounded authorization and evidence.
+This plan is governing sequence, not standing execution authority. Gate 2 separately authorized implementation and synthetic certification of the culler; live bulk rescue, import, production migration, cutover, deployment, and later application changes still require their own bounded authorization and evidence.
 
-Implemented foundation as of 2026-09-10: Rescue Corpus V1 root, database, media, pricing, acquisition/tool provenance, `SourceIdentity`, and finding contracts; full offline semantic/integrity verification behind `ipil:rescue:verify`; fail-closed `ipil:seed` and `ipil:audit` frontiers; and the verify/seed/audit-only `bin/bpls-ipil-rescue-lab` wrapper. Synthetic tests reconcile semantic counts and bytes without real taxpayer data. Authenticated DTI-byte retrieval and the 19-object retain/unresolved policy now pass the Cull Readiness gate. There is still deliberately no `ipil:cull` command or live-source client; those require a separate bounded implementation wave.
+Implemented foundation as of 2026-09-10: Rescue Corpus V1 contracts and offline verification; fail-closed `ipil:seed` and `ipil:audit`; the verify/seed/audit-only rescue lab; and the explicit, dual-confirmed `ipil:cull` command with Convex export, authenticated media retrieval, deterministic manifests, resume checkpoints, bounded retries, findings, verification, and immutable finalization. Synthetic certification uses no real taxpayer data. No real-source smoke test or full bulk rescue has run.
 
 ## Target Flow
 
 ```text
 CURRENT IPIL SOURCE (explicit read-only access)
         |
-        |  ipil:cull --network (never automatic)
+        |  ipil:cull + dual source-access confirmation (never automatic)
         v
 LOCAL IMMUTABLE RESCUE CORPUS
 database + media bytes + pricing evidence + manifests + checksums
@@ -160,7 +160,7 @@ Exit: a synthetic corpus can be produced, verified, rejected when altered, and p
 
 ## Wave 3 — Explicit Network-Only `ipil:cull`
 
-The culler must require an explicit option such as `--network`, authorized source profile, new corpus ID, and operator confirmation; fail outside an allowed local environment; verify read-only posture; acquire into an incomplete directory; finalize only after manifests close; resume without duplication or overwrite; redact logs; record retries/failures; and refuse Git, public, ordinary application, or Cloud/object-upload destinations.
+The implemented culler requires `--accept-source-access` plus `--confirm-source-access`, an authorized source profile, and a unique generated corpus ID; fails outside local/testing; verifies read-only posture; acquires into an incomplete directory; finalizes only after manifests close; resumes without duplication or overwrite; redacts logs; records bounded retries/failures; and refuses Git, public, ordinary application, or Cloud/object-upload destinations.
 
 It is never invoked by migrations, seeds, tests, CI, deploy hooks, schedulers, application boot, developer setup, or `bin/bpls-ipil-rescue-lab`.
 
@@ -172,7 +172,7 @@ Capture every authorized dataset/field, including unknown fields. Preserve IDs, 
 
 For every media metadata row—including SEC, DTI, and BIR—acquire or explicitly fail to acquire its bytes. The private media manifest records source identity/relationship/key, original filename, declared/detected MIME, size/dates, rescued object identity/path, SHA-256, available source checksum, attempts, verified bytes, and disposition.
 
-Dispositions include `rescued`, `source-missing`, `access-denied`, `corrupt`, `zero-byte`, `duplicate-content`, `orphan-metadata`, `unassociated-byte`, and `orphan-byte`. Association state is independently `ASSOCIATED`, `PROBABLE_ASSOCIATION`, `UNRESOLVED`, or `ORPHAN_CONFIRMED`; only the last permits `orphan-byte`. Missing bytes get no placeholders and do not count as parity. Content may be deduplicated only if every original relationship and content hash remains provable.
+Dispositions include `rescued`, `source-missing`, `access-denied`, `retrieval-failed`, `corrupt`, `zero-byte`, `duplicate-content`, `orphan-metadata`, `unassociated-byte`, and `orphan-byte`. Association state is independently `ASSOCIATED`, `PROBABLE_ASSOCIATION`, `UNRESOLVED`, or `ORPHAN_CONFIRMED`; only the last permits `orphan-byte`. Missing bytes get no placeholders and do not count as parity. Content may be deduplicated only if every original relationship and content hash remains provable.
 
 ### Recovered pricing corpus
 
@@ -301,13 +301,15 @@ bin/bpls-ipil-rescue-lab audit <corpus-id>
 bin/bpls-ipil-rescue-lab observe <corpus-id>
 ```
 
-Live acquisition is deliberately absent from that ordinary lab flow:
+Live acquisition remains deliberately absent from that ordinary lab flow. Its implemented explicit interface is:
 
 ```text
-php artisan ipil:cull --network --source=<authorized-profile> --corpus=<new-id>
+php artisan ipil:cull --preflight --accept-source-access
+php artisan ipil:cull --accept-source-access --confirm-source-access
+php artisan ipil:cull --resume=<snapshot-id> --accept-source-access --confirm-source-access
 ```
 
-These are intended interfaces, not implemented commands. Exact flags, confirmations, and private placement are implementation decisions.
+The destination is fixed by configuration below `storage/app/private/ipil-rescue/snapshots`; no command option can redirect evidence to public or Cloud storage.
 
 ## Program Acceptance
 
@@ -315,6 +317,6 @@ The program completes only when an authorized immutable corpus accounts for the 
 
 ## Active Frontier and Stop Conditions
 
-The active frontier is the completed **Cull Readiness gate**. A later separately authorized wave may implement Wave 3's explicit network-only culler and synthetic dry acquisition, but this wave stops before that implementation. Stop for a decision when read-only authority/scope/credentials are missing; consistency is unprovable; media access exceeds authority; private evidence could enter Git/public/Cloud storage; checksums/counts/totals fail; mapping requires identity/policy/lifecycle inference; history must become operational; reports require current price calculation; UI lacks audited corpus/capture/disposition; or any step would redesign, deploy, cut over, or write to production before its gate.
+The active frontier is the **Bulk Rescue authorization gate**. Wave 3's transport is implemented and synthetically certified, but no full source snapshot has been executed. Stop for a decision when bulk acquisition is not explicitly authorized; read-only authority/scope/credentials are missing; consistency is unprovable; media access exceeds authority; private evidence could enter Git/public/Cloud storage; checksums/counts/totals fail; mapping requires identity/policy/lifecycle inference; history must become operational; reports require current price calculation; UI lacks audited corpus/capture/disposition; or any step would redesign, deploy, cut over, or write to production before its gate.
 
 Future agents must not jump from reconnaissance or partial seeding into UI redesign. The fixed order is: verified corpus, deterministic reconstruction, quantitative audit, read-only/report parity, UI capture, parity scaffolding, side-by-side acceptance, then improvement.
