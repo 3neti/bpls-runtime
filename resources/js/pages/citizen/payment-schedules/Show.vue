@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router, setLayoutProps, useHttp } from '@inertiajs/vue3';
 import { ArrowLeft, CheckCircle2, QrCode, RefreshCw } from '@lucide/vue';
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Citizen/PaymentScheduleController';
 import { show as permitApplicationShow } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
 import {
@@ -84,7 +84,7 @@ type QrPhAttempt = {
     amount_cents: number;
     status: string;
     expires_at: string;
-    qr_data_url: string;
+    qr_data_url: string | null;
 };
 
 type QrPhStatus = {
@@ -124,6 +124,7 @@ type PaymentSchedule = {
     collections: TreasuryCollection[];
     payment_policy_boundary: PaymentPolicyBoundary;
     online_payment_boundary: OnlinePaymentBoundary;
+    current_qr_ph_attempt: QrPhAttempt | null;
     artifact_statement: string;
 };
 
@@ -133,7 +134,9 @@ const props = defineProps<{
 
 const initiateRequest = useHttp({});
 const statusRequest = useHttp({});
-const qrAttempt = ref<QrPhAttempt | null>(null);
+const qrAttempt = ref<QrPhAttempt | null>(
+    props.paymentSchedule.current_qr_ph_attempt,
+);
 const paymentMessage = ref<string | null>(null);
 const currentTime = ref(Date.now());
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
@@ -253,6 +256,12 @@ function startPaymentChecks(): void {
     }, 1000);
     pollTimer = setInterval(() => void checkPayment(), 4000);
 }
+
+onMounted(() => {
+    if (qrAttempt.value !== null && secondsRemaining.value > 0) {
+        startPaymentChecks();
+    }
+});
 
 async function generateQrPh(): Promise<void> {
     paymentMessage.value = null;
@@ -598,11 +607,21 @@ onBeforeUnmount(stopPaymentChecks);
 
                 <div v-if="qrAttempt" class="grid justify-items-center gap-3">
                     <img
+                        v-if="qrAttempt.qr_data_url"
                         data-testid="qr-ph-image"
                         :src="qrAttempt.qr_data_url"
                         alt="QR Ph payment code"
                         class="aspect-square w-full max-w-80 bg-white object-contain p-3"
                     />
+                    <p
+                        v-else
+                        data-testid="qr-ph-artifact-unavailable"
+                        class="max-w-xl rounded-md border border-border bg-background p-3 text-center text-sm text-muted-foreground"
+                    >
+                        Your current QR request remains active. Its image is not
+                        available on this device, so wait for confirmation or
+                        generate a fresh QR after this request expires.
+                    </p>
                     <p class="text-sm font-medium text-foreground">
                         QR expires in
                         <span
