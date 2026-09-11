@@ -1,12 +1,14 @@
 # Ipil Rescue and Parity Compass
 
-Status: **GOVERNING — GATE 6 LOCAL MATERIALIZATION AND DETERMINISTIC AUDIT COMPLETE**
+Status: **GOVERNING — GATE 7A REALITY INVENTORY COMPLETE; GATE 8 READ-ONLY PARITY NEXT**
 
-As of: 2026-09-10
+As of: 2026-09-11
 
 Implementation plan: [`docs/rescue/IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md`](../rescue/IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md)
 
-Current gate: [Gate 6 First Local Historical Materialization](../rescue/IPIL_RESCUE_GATE_6_FIRST_LOCAL_MATERIALIZATION_2026_09_11.md)
+Current gate: [Gate 7A Local Reality and Product/Report Parity Inventory](../rescue/IPIL_RESCUE_GATE_7A_REALITY_AND_PRODUCT_PARITY_INVENTORY_2026_09_11.md)
+
+Next bounded backlog: [Gate 8 Prioritized Read-Only Historical Parity Backlog](../rescue/IPIL_RESCUE_GATE_8_PRIORITIZED_BACKLOG.md)
 
 Seed implementation contract: [Ipil Seed Implementation Plan V1](../rescue/IPIL_SEED_IMPLEMENTATION_PLAN_V1.md)
 
@@ -43,7 +45,7 @@ The new Nelson Executable Application lifecycle remains the forward operational 
 
 Source/database reconnaissance, Rescue Corpus V1, `ipil:cull`, the first full corpus, Gate 4 mapping, Gate 5 deterministic planning, and Gate 6's first local PostgreSQL materialization are complete. Two imports and two audits proved exact count/financial parity, zero replay duplication, private associated-media checksums, and zero operational leakage for corpus `ipil-20260910t153224z-2ab19c17` under profile `ipil-rescue-mapping-v1.0.0`.
 
-The active frontier is **Gate 7 reality validation and historical product/report parity**. Gate 6 does not authorize broad UI redesign, cleanup/deduplication, PSGC/LOB acceptance, report rebuilding beyond evidence-led parity, Cloud/R2 movement, UAT/production deployment, cutover, or account claiming.
+Gate 7A validated the exact Gate 6 PostgreSQL materialization through ordinary staff screens and found that the historical store is intact, fast enough for bounded projection, and still completely non-operational. It also proved that ordinary screens and operational reports do not yet project the rescued history. The active frontier is therefore **Gate 8 bounded read-only historical product/report parity**, following the prioritized backlog. Gate 7A does not authorize broad UI redesign, cleanup/deduplication, PSGC/LOB acceptance, historical correction, official-report meaning, Cloud/R2 movement, UAT/production deployment, cutover, or account claiming.
 
 Advance only in this order:
 

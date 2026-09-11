@@ -1,6 +1,6 @@
 # Ipil Rescue and Parity Implementation Plan
 
-Status: **APPROVED PROGRAM PLAN — GATE 6 LOCAL MATERIALIZATION COMPLETE; GATE 7 REALITY/PARITY NEXT**
+Status: **APPROVED PROGRAM PLAN — GATE 7A REALITY INVENTORY COMPLETE; GATE 8 READ-ONLY PARITY NEXT**
 
 Approved: 2026-09-10
 
@@ -18,7 +18,7 @@ This is a rescue and parity program before it is a migration or redesign program
 
 This plan is governing sequence, not standing execution authority. Gate 3 separately authorized and completed the first full read-only rescue. Gate 4 completed the design-only mapping profile; implementing or executing it, canonical import, production migration, cutover, deployment, and later application changes still require their own bounded authorization and evidence.
 
-Implemented foundation as of 2026-09-11: Rescue Corpus V1, explicit `ipil:cull`, offline verification, accepted mapping/profile, deterministic plan, and the bounded local-PostgreSQL `ipil:seed --execute`/`ipil:audit` path. Gate 6 materialized corpus `ipil-20260910t153224z-2ab19c17` twice with zero replay duplication, exact count/media/financial parity, and zero operational leakage. See the [Gate 6 report](IPIL_RESCUE_GATE_6_FIRST_LOCAL_MATERIALIZATION_2026_09_11.md) and [materialization findings](IPIL_LOCAL_MATERIALIZATION_FINDINGS_2026_09_11.md).
+Implemented foundation as of 2026-09-11: Rescue Corpus V1, explicit `ipil:cull`, offline verification, accepted mapping/profile, deterministic plan, and the bounded local-PostgreSQL `ipil:seed --execute`/`ipil:audit` path. Gate 6 materialized corpus `ipil-20260910t153224z-2ab19c17` twice with zero replay duplication, exact count/media/financial parity, and zero operational leakage. Gate 7A then validated ordinary staff screens against that database and inventoried the still-missing historical product/report projections. See the [Gate 6 report](IPIL_RESCUE_GATE_6_FIRST_LOCAL_MATERIALIZATION_2026_09_11.md), [materialization findings](IPIL_LOCAL_MATERIALIZATION_FINDINGS_2026_09_11.md), [Gate 7A inventory](IPIL_RESCUE_GATE_7A_REALITY_AND_PRODUCT_PARITY_INVENTORY_2026_09_11.md), and [Gate 8 backlog](IPIL_RESCUE_GATE_8_PRIORITIZED_BACKLOG.md).
 
 ## Target Flow
 
@@ -317,6 +317,6 @@ The program completes only when an authorized immutable corpus accounts for the 
 
 ## Active Frontier and Stop Conditions
 
-The active frontier is **Gate 7 reality validation and historical product/report parity**. Gate 6 is accepted in the [first local materialization report](IPIL_RESCUE_GATE_6_FIRST_LOCAL_MATERIALIZATION_2026_09_11.md). Stop for a decision when audited counts/anchors drift; a source identity loses provenance; a view implies present liability, approval, permit, OR, or lifecycle authority; search/report semantics require guessed PSGC/LOB/identity links or current-price recalculation; PII could enter Git or public output; or work expands into redesign, cleanup, Cloud/R2 movement, deployment, cutover, or live-source access.
+The active frontier is **Gate 8 bounded read-only historical product/report parity**. Gate 7A is accepted in the [Local Reality and Product/Report Parity Inventory](IPIL_RESCUE_GATE_7A_REALITY_AND_PRODUCT_PARITY_INVENTORY_2026_09_11.md), and work must follow its [prioritized backlog](IPIL_RESCUE_GATE_8_PRIORITIZED_BACKLOG.md). Stop for a decision when audited counts/anchors drift; a source identity loses provenance; a view implies present liability, approval, permit, OR, or lifecycle authority; search/report semantics require guessed PSGC/LOB/identity links or current-price recalculation; PII could enter Git or public output; or work expands into redesign, cleanup, Cloud/R2 movement, deployment, cutover, or live-source access.
 
 Future agents must not jump from reconnaissance or partial seeding into UI redesign. The fixed order is: verified corpus, deterministic reconstruction, quantitative audit, read-only/report parity, UI capture, parity scaffolding, side-by-side acceptance, then improvement.
