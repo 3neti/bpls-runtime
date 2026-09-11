@@ -28,7 +28,7 @@ Every agent reads:
 
 Then read the canonical documents named in the role handoff. Do not substitute this summary for the underlying architecture, Board decision, evidence, or ledger.
 
-For any Ipil rescue, corpus, historical-parity, cull-safety, or seed packet, also read the [Ipil Rescue and Parity Compass](IPIL_RESCUE_AND_PARITY_COMPASS.md) and follow its links to the overall implementation plan, source reconnaissance, semantic contracts, [normative source-to-BPLS mapping specification](../rescue/IPIL_SOURCE_TO_BPLS_MAPPING_SPECIFICATION_V1.md), [mapping decision register](../rescue/IPIL_MAPPING_DECISION_REGISTER.md), [Seed Implementation Plan V1](../rescue/IPIL_SEED_IMPLEMENTATION_PLAN_V1.md), and [current Gate 5 report](../rescue/IPIL_RESCUE_GATE_5_SEED_PLANNER_2026_09_11.md) before scaffolding.
+For any Ipil rescue, corpus, historical-parity, cull-safety, or seed packet, also read the [Ipil Rescue and Parity Compass](IPIL_RESCUE_AND_PARITY_COMPASS.md) and follow its links to the overall implementation plan, source reconnaissance, semantic contracts, [normative source-to-BPLS mapping specification](../rescue/IPIL_SOURCE_TO_BPLS_MAPPING_SPECIFICATION_V1.md), [mapping decision register](../rescue/IPIL_MAPPING_DECISION_REGISTER.md), [Seed Implementation Plan V1](../rescue/IPIL_SEED_IMPLEMENTATION_PLAN_V1.md), [Gate 5 plan report](../rescue/IPIL_RESCUE_GATE_5_SEED_PLANNER_2026_09_11.md), and the [current Gate 6 materialization report](../rescue/IPIL_RESCUE_GATE_6_FIRST_LOCAL_MATERIALIZATION_2026_09_11.md) before scaffolding.
 
 ## Source Precedence
 

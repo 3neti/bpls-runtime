@@ -38,6 +38,14 @@ return [
             'report' => false,
         ],
 
+        'ipil_gate6' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/ipil-rescue/materialized-media'),
+            'serve' => false,
+            'throw' => true,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

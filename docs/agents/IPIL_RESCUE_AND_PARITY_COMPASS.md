@@ -1,12 +1,12 @@
 # Ipil Rescue and Parity Compass
 
-Status: **GOVERNING — GATE 5 OFFLINE SEED PLAN COMPLETE; REAL LOCAL MATERIALIZATION REQUIRES GATE 6**
+Status: **GOVERNING — GATE 6 LOCAL MATERIALIZATION AND DETERMINISTIC AUDIT COMPLETE**
 
 As of: 2026-09-10
 
 Implementation plan: [`docs/rescue/IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md`](../rescue/IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md)
 
-Current gate: [Gate 5 Offline Seed Planner Report](../rescue/IPIL_RESCUE_GATE_5_SEED_PLANNER_2026_09_11.md)
+Current gate: [Gate 6 First Local Historical Materialization](../rescue/IPIL_RESCUE_GATE_6_FIRST_LOCAL_MATERIALIZATION_2026_09_11.md)
 
 Seed implementation contract: [Ipil Seed Implementation Plan V1](../rescue/IPIL_SEED_IMPLEMENTATION_PLAN_V1.md)
 
@@ -41,7 +41,9 @@ The new Nelson Executable Application lifecycle remains the forward operational 
 
 ## Active Frontier
 
-Source/database reconnaissance, Rescue Corpus V1, authenticated media retrieval, unassociated-byte retention, `ipil:cull`, the first full corpus, Gate 4 mapping, and Gate 5's complete deterministic offline plan are complete. The active frontier is **Gate 6 first local materialization review**, bound to corpus `ipil-20260910t153224z-2ab19c17`, profile `ipil-rescue-mapping-v1.0.0`, and the accepted Gate 5 Seed Execution Manifest. Gate 5 authorizes no real seed, canonical write, Spatie import, deployment, report/UI parity, or redesign. A real execution interface does not exist and must not be added or invoked without a separately commissioned Gate 6.
+Source/database reconnaissance, Rescue Corpus V1, `ipil:cull`, the first full corpus, Gate 4 mapping, Gate 5 deterministic planning, and Gate 6's first local PostgreSQL materialization are complete. Two imports and two audits proved exact count/financial parity, zero replay duplication, private associated-media checksums, and zero operational leakage for corpus `ipil-20260910t153224z-2ab19c17` under profile `ipil-rescue-mapping-v1.0.0`.
+
+The active frontier is **Gate 7 reality validation and historical product/report parity**. Gate 6 does not authorize broad UI redesign, cleanup/deduplication, PSGC/LOB acceptance, report rebuilding beyond evidence-led parity, Cloud/R2 movement, UAT/production deployment, cutover, or account claiming.
 
 Advance only in this order:
 

@@ -4,16 +4,19 @@ use App\Actions\PersistIpilSeedPlan;
 use App\Actions\PlanIpilRescueSeed;
 use App\Actions\VerifyIpilRescueCorpus;
 use App\Support\IpilRescue\CanonicalJson;
+use App\Support\IpilRescue\Gate6ExecutionAuthorization;
 use App\Support\IpilRescue\HistoricalAmount;
 use App\Support\IpilRescue\HistoricalApplicationPlan;
 use App\Support\IpilRescue\HistoricalEvidencePlan;
 use App\Support\IpilRescue\HistoricalEvidenceRegistry;
 use App\Support\IpilRescue\IpilSeedMappingProfile;
+use App\Support\IpilRescue\JsonNumericLexeme;
 use App\Support\IpilRescue\RescueCorpusManifest;
 use App\Support\IpilRescue\RescueCorpusSemantics;
 use App\Support\IpilRescue\SourceIdentity;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
 
@@ -211,7 +214,7 @@ test('verification rejects incomplete remote and unsafe corpora', function () {
     }
 });
 
-test('seed and audit verify locally then remain fail closed', function () {
+test('seed and audit require explicit Gate 6 execution artifacts', function () {
     createSyntheticIpilRescueCorpus($this->ipilRescueTestRoot);
 
     expect(Artisan::call('ipil:seed', [
@@ -228,7 +231,7 @@ test('seed and audit verify locally then remain fail closed', function () {
         'seeded' => false,
         'offline' => true,
         'domain_writes' => false,
-    ])->and($seed['error'])->toContain('Real Ipil seed execution remains disabled until Gate 6 authorization');
+    ])->and($seed['error'])->toContain('explicit, fully confirmed --execute interface');
 
     expect(Artisan::call('ipil:audit', [
         'corpus' => $this->ipilRescueTestRoot,
@@ -244,7 +247,24 @@ test('seed and audit verify locally then remain fail closed', function () {
         'audited' => false,
         'offline' => true,
         'domain_writes' => false,
-    ])->and($audit['error'])->toContain('intentionally unavailable until deterministic historical projections exist');
+    ])->and($audit['error'])->toContain('exact accepted Gate 5 Execution Manifest is required');
+});
+
+test('Gate 6 execution refuses a non PostgreSQL target before materialization', function () {
+    createSyntheticIpilRescueCorpus($this->ipilRescueTestRoot);
+
+    expect(Artisan::call('ipil:seed', [
+        'corpus' => $this->ipilRescueTestRoot,
+        '--execute' => true,
+        '--manifest' => storage_path('app/private/ipil-rescue/plans/missing.json'),
+        '--confirm-corpus' => IpilSeedMappingProfile::CanonicalCorpusId,
+        '--confirm-profile' => IpilSeedMappingProfile::Name,
+        '--environment' => 'local-postgresql',
+        '--json' => true,
+    ]))->toBe(1);
+
+    $output = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+    expect($output)->toMatchArray(['passed' => false, 'seeded' => false, 'source_write' => false, 'cloud_writes' => false]);
 });
 
 test('the local rescue lab exposes only offline scaffold operations', function () {
@@ -357,6 +377,30 @@ test('historical application plans are structurally non-operational', function (
         'current_liability' => null,
         'allowed_actions' => [],
     ]);
+});
+
+test('Gate 6 exact JSON numeric extraction preserves the source spelling', function () {
+    $json = '{"whole":12,"fractional":120.3400,"scientific":1.25e+3,"missing":null}';
+
+    expect(JsonNumericLexeme::field($json, 'whole'))->toBe('12')
+        ->and(JsonNumericLexeme::field($json, 'fractional'))->toBe('120.3400')
+        ->and(JsonNumericLexeme::field($json, 'scientific'))->toBe('1.25e+3')
+        ->and(JsonNumericLexeme::field($json, 'missing'))->toBeNull()
+        ->and(JsonNumericLexeme::field($json, 'absent'))->toBeNull();
+});
+
+test('Gate 6 authorization rejects the test environment before any materialization write', function () {
+    expect(fn () => Gate6ExecutionAuthorization::issue('/missing/private/manifest.json', 'local-postgresql'))
+        ->toThrow(RuntimeException::class, 'restricted to the explicit local-postgresql environment');
+});
+
+test('Gate 6 historical tables are structurally separate from operational tables', function () {
+    expect(Schema::hasTable('ipil_rescue_import_runs'))->toBeTrue()
+        ->and(Schema::hasTable('ipil_rescue_phase_checkpoints'))->toBeTrue()
+        ->and(Schema::hasTable('ipil_rescue_source_identities'))->toBeTrue()
+        ->and(Schema::hasTable('ipil_historical_applications'))->toBeTrue()
+        ->and(Schema::hasColumn('ipil_historical_applications', 'operationally_eligible'))->toBeTrue()
+        ->and(Schema::hasColumn('ipil_historical_payment_schedules', 'total_amount_source_lexeme'))->toBeTrue();
 });
 
 test('historical evidence contracts preserve duplicate and orphan claims without operational effects', function () {

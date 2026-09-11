@@ -1,6 +1,6 @@
 # Ipil Seed Implementation Plan V1
 
-Status: **GATE 5 CONTRACT — PLANNING IMPLEMENTED; REAL MATERIALIZATION DISABLED**
+Status: **GATE 5 CONTRACT PRESERVED — GATE 6 MATERIALIZATION EXECUTED UNDER SEPARATE AUTHORIZATION**
 
 Effective: 2026-09-11
 
@@ -12,7 +12,7 @@ Evidence interpretation authority: [Source-to-BPLS Mapping Specification V1](IPI
 
 Gate 5 turns the accepted Gate 4 interpretation into a deterministic offline plan without materializing taxpayer history. `ipil:seed --plan` reads only the immutable local corpus, the accepted mapping profile, and local code/configuration. It verifies first, plans every hashed source identity once, writes a PII-safe aggregate plan and execution manifest below `storage/app/private/ipil-rescue/plans`, and performs no database, domain, media, source, network, or Cloud write.
 
-Calling `ipil:seed` without `--plan` verifies the corpus and fails with: `Real Ipil seed execution remains disabled until Gate 6 authorization.` There is no `--force`, `--execute`, or bypass flag.
+Calling `ipil:seed` without an explicit mode remains fail-closed. Gate 6 added only the fully bound `--execute` path described below; it requires the exact corpus/profile confirmations, unchanged private manifest, `local-postgresql` environment, local disposable database guard, and a separate private authorization artifact. There is no generic force/bypass flag.
 
 ## Fixed Inputs
 
@@ -72,7 +72,7 @@ Bulk insertion is appropriate for immutable raw/provenance ledgers and simple ev
 
 Required indexes include unique corpus/dataset/source identity; import batch/dataset/ordinal; disposition/status; target type/id; owner/business/Application source mappings; exception code/status; and private historical search fields for year, type, status, names, references, barangay literal, and classification. Full-scale performance and JSON/index behavior must be rehearsed on PostgreSQL before any broader environment is considered.
 
-## Proposed Gate 6 Ceremony — Not Authorized by Gate 5
+## Gate 6 Ceremony — Executed Under Separate Owner Authorization
 
 1. Prepare a disposable, private local PostgreSQL database with no Cloud connection.
 2. Record the database identity and prove it is not UAT/production.
@@ -80,7 +80,7 @@ Required indexes include unique corpus/dataset/source identity; import batch/dat
 4. Run `php artisan ipil:rescue:verify storage/app/private/ipil-rescue/snapshots/ipil-20260910t153224z-2ab19c17 --json`.
 5. Regenerate with `php artisan ipil:seed storage/app/private/ipil-rescue/snapshots/ipil-20260910t153224z-2ab19c17 --plan --json`.
 6. Verify the accepted plan and execution-manifest fingerprints and confirm `execution_authorized=false` under the Gate 5 implementation.
-7. Only after a separate Gate 6 code review/authorization, add the following exact proposed interface and invoke it against that disposable database. No option in this command exists in Gate 5:
+7. The separately commissioned Gate 6 added and invoked this explicit interface against the disposable database:
 
    ```text
    php artisan ipil:seed storage/app/private/ipil-rescue/snapshots/ipil-20260910t153224z-2ab19c17 \
@@ -90,7 +90,7 @@ Required indexes include unique corpus/dataset/source identity; import batch/dat
      --confirm-profile=ipil-rescue-mapping-v1.0.0 \
      --environment=local-postgresql
    ```
-8. Immediately run `ipil:audit`, reconcile all row/edge/media/financial anchors, rerun the same seed for a zero-duplicate idempotency proof, and audit again.
+8. `ipil:audit` passed, the identical seed created zero source-derived records, and the second audit reproduced all anchors. Full evidence is in the [Gate 6 report](IPIL_RESCUE_GATE_6_FIRST_LOCAL_MATERIALIZATION_2026_09_11.md).
 9. Stop before UI parity, Cloud upload, deployment, cutover, or production migration.
 
 ## Stop Conditions

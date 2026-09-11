@@ -2,51 +2,60 @@
 
 namespace App\Console\Commands;
 
+use App\Actions\AuditIpilHistoricalMaterialization;
 use App\Actions\VerifyIpilRescueCorpus;
+use App\Support\IpilRescue\Gate6ExecutionAuthorization;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Throwable;
 
-#[Signature('ipil:audit {corpus : Local rescue corpus path} {--json : Emit JSON}')]
-#[Description('Fail-closed entry point for future offline Ipil parity auditing.')]
+#[Signature('ipil:audit {corpus : Local rescue corpus path} {--manifest= : Exact accepted private Execution Manifest path} {--json : Emit JSON}')]
+#[Description('Audit the local PostgreSQL Ipil historical materialization against the accepted corpus and manifest anchors.')]
 final class IpilAuditCommand extends Command
 {
-    public function handle(VerifyIpilRescueCorpus $verify): int
+    public function handle(VerifyIpilRescueCorpus $verify, AuditIpilHistoricalMaterialization $audit): int
     {
+        $verified = false;
+
         try {
             $result = $verify->handle((string) $this->argument('corpus'));
+            $verified = true;
+            $manifestPath = (string) $this->option('manifest');
+            $manifest = is_file($manifestPath) ? json_decode((string) file_get_contents($manifestPath), true, flags: JSON_THROW_ON_ERROR) : null;
+            if (! is_array($manifest) || ! Gate6ExecutionAuthorization::hasAcceptedManifestFingerprint($manifest)) {
+                throw new \RuntimeException('The exact accepted Gate 5 Execution Manifest is required for audit.');
+            }
+            $auditResult = $audit->handle();
         } catch (Throwable $exception) {
-            return $this->failure($exception);
+            return $this->failure($exception, $verified);
         }
 
-        $message = "Corpus {$result->corpusId} passed Rescue Corpus V1 verification, but ipil:audit is intentionally unavailable until deterministic historical projections exist.";
-
         if ($this->option('json')) {
-            $this->line($this->json([
-                'passed' => false,
+            $this->line($this->json($auditResult + [
                 'corpus_integrity_passed' => true,
                 'verified' => true,
-                'audited' => false,
+                'audited' => true,
                 'offline' => true,
                 'domain_writes' => false,
                 'corpus_id' => $result->corpusId,
-                'error' => $message,
             ]));
         } else {
-            $this->error($message);
+            $this->line('IPIL HISTORICAL MATERIALIZATION AUDIT');
+            $this->line($auditResult['passed'] ? 'PASS' : 'FAIL');
+            $this->line('Completed payment anchor: PHP '.$auditResult['anchors']['completed_payments_php']);
         }
 
-        return self::FAILURE;
+        return $auditResult['passed'] ? self::SUCCESS : self::FAILURE;
     }
 
-    private function failure(Throwable $exception): int
+    private function failure(Throwable $exception, bool $verified = false): int
     {
         if ($this->option('json')) {
             $this->line($this->json([
                 'passed' => false,
-                'corpus_integrity_passed' => false,
-                'verified' => false,
+                'corpus_integrity_passed' => $verified,
+                'verified' => $verified,
                 'audited' => false,
                 'offline' => true,
                 'domain_writes' => false,

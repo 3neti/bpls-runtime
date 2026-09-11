@@ -1,6 +1,6 @@
 # Ipil Rescue and Parity Implementation Plan
 
-Status: **APPROVED PROGRAM PLAN — GATE 5 OFFLINE SEED PLAN COMPLETE; GATE 6 REVIEW NEXT**
+Status: **APPROVED PROGRAM PLAN — GATE 6 LOCAL MATERIALIZATION COMPLETE; GATE 7 REALITY/PARITY NEXT**
 
 Approved: 2026-09-10
 
@@ -18,7 +18,7 @@ This is a rescue and parity program before it is a migration or redesign program
 
 This plan is governing sequence, not standing execution authority. Gate 3 separately authorized and completed the first full read-only rescue. Gate 4 completed the design-only mapping profile; implementing or executing it, canonical import, production migration, cutover, deployment, and later application changes still require their own bounded authorization and evidence.
 
-Implemented foundation as of 2026-09-10: Rescue Corpus V1 contracts and production-scale streaming offline verification; fail-closed `ipil:seed` and `ipil:audit`; the verify/seed/audit-only rescue lab; and the explicit, dual-confirmed `ipil:cull` command with Convex export, authenticated media retrieval, deterministic manifests, resume checkpoints, bounded retries, findings, verification, and immutable finalization. The first full corpus `ipil-20260910t153224z-2ab19c17` is finalized locally and verified. No canonical interpretation or BPLS import has run.
+Implemented foundation as of 2026-09-11: Rescue Corpus V1, explicit `ipil:cull`, offline verification, accepted mapping/profile, deterministic plan, and the bounded local-PostgreSQL `ipil:seed --execute`/`ipil:audit` path. Gate 6 materialized corpus `ipil-20260910t153224z-2ab19c17` twice with zero replay duplication, exact count/media/financial parity, and zero operational leakage. See the [Gate 6 report](IPIL_RESCUE_GATE_6_FIRST_LOCAL_MATERIALIZATION_2026_09_11.md) and [materialization findings](IPIL_LOCAL_MATERIALIZATION_FINDINGS_2026_09_11.md).
 
 ## Target Flow
 
@@ -317,6 +317,6 @@ The program completes only when an authorized immutable corpus accounts for the 
 
 ## Active Frontier and Stop Conditions
 
-The active frontier is **Gate 6 first local materialization review**. Gate 5 implemented the fail-closed offline planner documented in [Ipil Seed Implementation Plan V1](IPIL_SEED_IMPLEMENTATION_PLAN_V1.md) and accepted in the [Gate 5 report](IPIL_RESCUE_GATE_5_SEED_PLANNER_2026_09_11.md). Plan `ipil-seed-plan-874d26eb21ed0041` dispositions all 324,873 source identities and binds the finalized corpus/profile without canonical writes. No real execution interface exists. Stop for a decision when the exact corpus/profile/plan/manifest cannot be bound; checksums/counts/totals fail; a source identity lacks exactly one disposition; mapping requires identity/policy/lifecycle inference; non-cent evidence would be rounded; source secrets would be staged; history must become operational; media could be copied or uploaded without authority; reports require current price calculation; UI lacks audited seeded data/capture/disposition; or any step would redesign, deploy, cut over, access live Ipil, or write beyond a separately authorized local Gate 6.
+The active frontier is **Gate 7 reality validation and historical product/report parity**. Gate 6 is accepted in the [first local materialization report](IPIL_RESCUE_GATE_6_FIRST_LOCAL_MATERIALIZATION_2026_09_11.md). Stop for a decision when audited counts/anchors drift; a source identity loses provenance; a view implies present liability, approval, permit, OR, or lifecycle authority; search/report semantics require guessed PSGC/LOB/identity links or current-price recalculation; PII could enter Git or public output; or work expands into redesign, cleanup, Cloud/R2 movement, deployment, cutover, or live-source access.
 
 Future agents must not jump from reconnaissance or partial seeding into UI redesign. The fixed order is: verified corpus, deterministic reconstruction, quantitative audit, read-only/report parity, UI capture, parity scaffolding, side-by-side acceptance, then improvement.
