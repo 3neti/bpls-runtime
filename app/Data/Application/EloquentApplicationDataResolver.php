@@ -104,7 +104,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             ->map(fn (Receipt $receipt): OfficialReceiptData => $this->officialReceipt($receipt, $viewer))
             ->values()
             ->all());
-        $permit = $this->permit($application, $receipts);
+        $permit = $this->permit($application, $receipts, $viewer);
         $scheduleOfFees = $this->scheduleOfFees($application, $assessment);
         $attachments = $this->attachments($application, $assessment, $receipts, $permit);
         $tasks = $this->tasks($application, $viewer, $evaluationProjection);
@@ -1032,7 +1032,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
     }
 
     /** @param list<OfficialReceiptData> $receipts */
-    private function permit(PermitApplication $application, array $receipts): BusinessPermitData
+    private function permit(PermitApplication $application, array $receipts, ?User $viewer): BusinessPermitData
     {
         $verification = $this->verificationBoundary->handle($application);
         $syntheticLifecycle = data_get($application->metadata, 'lifecycle_cleanroom.semantic_classification') === 'synthetic_only';
@@ -1098,7 +1098,9 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'view_url' => $verification['view_url'],
                 'qr_data_url' => $this->buildPermitVerificationQrDataUrl->handle($verification['view_url']),
             ],
-            printable_artifact_url: ! $syntheticLifecycle || $issued
+            printable_artifact_url: (! $syntheticLifecycle || $issued)
+                && ($viewer?->can(UserPermission::AccessStaff->value) ?? false)
+                && $viewer->can(UserPermission::ViewPermitApplications->value)
                 ? route('staff.permit-applications.permit.pdf', $application, false)
                 : null,
             statement: $released
