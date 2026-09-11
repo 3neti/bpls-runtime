@@ -166,6 +166,39 @@ test('active cleanroom actors can revisit read only laboratory status without ch
         ->assertNotFound();
 });
 
+test('registered Classic Citizen status links to application start before draft and to the Application afterward', function () {
+    $management = previewAccount(StakeholderPreviewPersona::Management);
+    $citizen = previewAccount(StakeholderPreviewPersona::Citizen);
+    $role = $citizen->primaryRole() ?? throw new RuntimeException('Expected Citizen preview role.');
+    $run = LifecycleCleanroomRun::factory()->for($management, 'startedBy')->create([
+        'actor_manifest' => [
+            'ceremony' => LifecycleCleanroomRun::CeremonyClassicLifecycleV1,
+            'actors' => [
+                'citizen' => ['label' => 'Classic Citizen', 'user_id' => $citizen->id, 'role_id' => $role->id],
+            ],
+            'semantic_classification' => 'synthetic_only',
+            'production_liability' => false,
+        ],
+    ]);
+    expect($run->new_application_id)->toBeNull();
+
+    $this->actingAs($citizen)
+        ->get(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.status', $run))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('stakeholder-preview/LifecycleCleanroomStatus')
+            ->where('workUrl', route('citizen.permit-applications.create', absolute: false)));
+
+    $application = PermitApplication::factory()->create(['submitted_by_id' => $citizen->id]);
+    $run->update(['new_application_id' => $application->id]);
+
+    $this->get(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.status', $run))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('stakeholder-preview/LifecycleCleanroomStatus')
+            ->where('workUrl', route('citizen.permit-applications.show', $application, false)));
+});
+
 test('retained history remains independently viewable and starting another Classic ceremony preserves prior evidence', function () {
     $management = previewAccount(StakeholderPreviewPersona::Management);
     $application = PermitApplication::factory()->create(['tracking_reference' => 'SUB-RETAINED-EVIDENCE']);

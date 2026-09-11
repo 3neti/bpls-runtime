@@ -354,9 +354,11 @@ class LifecycleCleanroomController extends Controller
         $applicationId = $lifecycleCleanroomRun->renewal_application_id ?? $lifecycleCleanroomRun->new_application_id;
         $actorKey = collect($lifecycleCleanroomRun->actors())
             ->search(fn (array $candidate): bool => $candidate['user_id'] === $user->id);
-        $workUrl = $actorKey === 'citizen' && is_int($applicationId)
-            ? route('citizen.permit-applications.show', $applicationId, false)
-            : route('staff.work.index', absolute: false);
+        $workUrl = match (true) {
+            $actorKey === 'citizen' && is_int($applicationId) => route('citizen.permit-applications.show', $applicationId, false),
+            $actorKey === 'citizen' => route('citizen.permit-applications.create', absolute: false),
+            default => route('staff.work.index', absolute: false),
+        };
 
         return Inertia::render('stakeholder-preview/LifecycleCleanroomStatus', [
             'evidence' => $buildEvidence->handle($lifecycleCleanroomRun),
