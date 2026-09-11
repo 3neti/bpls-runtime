@@ -1,37 +1,26 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-
-type Option = {
-    id: number;
-    code: string;
-    name: string;
-    default_amount_cents: number;
-    account_code?: string | null;
-    exact_once_key?: string | null;
-    calculation?: {
-        explanation?: string | null;
-        rule_signature?: string;
-    };
-};
-type Item = {
-    fee_rule_id: number;
-    code: string;
-    name: string;
-    amount_cents: number;
-    exact_once_key?: string | null;
-    calculation?: { explanation?: string | null; rule_signature?: string };
-};
+import type {
+    FinancialLineItem as Item,
+    FinancialLineItemOption as Option,
+} from '@/lib/financialLineItems';
+import {
+    financialLineItemSubtotal,
+    formatMinorAsPesoInput,
+    parsePesoAmount,
+    removeFinancialLineItem,
+    upsertFinancialLineItem,
+} from '@/lib/financialLineItems';
 
 const props = defineProps<{ options: Option[]; modelValue: Item[] }>();
 const emit = defineEmits<{ 'update:modelValue': [items: Item[]] }>();
 const selectedId = ref<number | null>(null);
-const amount = ref<number | undefined>();
+const amount = ref('');
+const amountError = ref<string | null>(null);
 
-const subtotal = computed(() =>
-    props.modelValue.reduce((sum, item) => sum + item.amount_cents, 0),
-);
+const subtotal = computed(() => financialLineItemSubtotal(props.modelValue));
 const selectedOption = computed(() =>
     props.options.find((candidate) => candidate.id === selectedId.value),
 );
@@ -40,38 +29,47 @@ function choose(): void {
     const option = props.options.find(
         (candidate) => candidate.id === selectedId.value,
     );
-    amount.value = option?.default_amount_cents;
+    amount.value = option
+        ? formatMinorAsPesoInput(option.default_amount_cents)
+        : '';
+    amountError.value = null;
 }
+
+function validateAmount(): void {
+    const parsed = parsePesoAmount(amount.value);
+    amountError.value = amount.value === '' || parsed.ok ? null : parsed.error;
+}
+
+watch(amount, validateAmount);
 
 function add(): void {
     const option = props.options.find(
         (candidate) => candidate.id === selectedId.value,
     );
 
-    if (!option || amount.value === undefined || amount.value < 0) {
+    if (!option) {
         return;
     }
 
-    emit('update:modelValue', [
-        ...props.modelValue.filter((item) => item.fee_rule_id !== option.id),
-        {
-            fee_rule_id: option.id,
-            code: option.code,
-            name: option.name,
-            amount_cents: amount.value,
-            exact_once_key: option.exact_once_key,
-            calculation: option.calculation,
-        },
-    ]);
+    const parsed = parsePesoAmount(amount.value);
+
+    if (!parsed.ok) {
+        amountError.value = parsed.error;
+
+        return;
+    }
+
+    emit(
+        'update:modelValue',
+        upsertFinancialLineItem(props.modelValue, option, parsed.amountCents),
+    );
     selectedId.value = null;
-    amount.value = undefined;
+    amount.value = '';
+    amountError.value = null;
 }
 
 function remove(id: number): void {
-    emit(
-        'update:modelValue',
-        props.modelValue.filter((item) => item.fee_rule_id !== id),
-    );
+    emit('update:modelValue', removeFinancialLineItem(props.modelValue, id));
 }
 
 function money(cents: number): string {
@@ -84,7 +82,7 @@ function money(cents: number): string {
 
 <template>
     <div class="grid gap-3">
-        <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_auto]">
+        <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem_auto]">
             <select
                 v-model="selectedId"
                 class="h-9 min-w-0 rounded-md border bg-background px-3 text-sm"
@@ -99,17 +97,32 @@ function money(cents: number): string {
                     {{ option.name }}
                 </option>
             </select>
-            <Input
-                v-model.number="amount"
-                type="number"
-                min="0"
-                step="1"
-                placeholder="Amount (centavos)"
-            />
-            <Button type="button" variant="outline" @click="add"
+            <div class="relative min-w-0">
+                <span
+                    aria-hidden="true"
+                    class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-semibold text-muted-foreground"
+                    >₱</span
+                >
+                <Input
+                    v-model="amount"
+                    aria-label="Amount in pesos"
+                    class="pl-7 tabular-nums"
+                    inputmode="decimal"
+                    type="text"
+                    placeholder="0.00"
+                />
+            </div>
+            <Button
+                type="button"
+                variant="outline"
+                :disabled="selectedOption === undefined || amount === ''"
+                @click="add"
                 >Add Item</Button
             >
         </div>
+        <p v-if="amountError" role="alert" class="text-xs text-destructive">
+            {{ amountError }}
+        </p>
         <p
             v-if="selectedOption?.calculation?.explanation"
             class="text-xs font-medium text-muted-foreground"
