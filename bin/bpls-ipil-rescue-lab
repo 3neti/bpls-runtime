@@ -6,7 +6,7 @@ script_directory="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
 repository_root="$(CDPATH='' cd -- "${script_directory}/.." && pwd -P)"
 
 usage() {
-    printf 'Usage: %s <verify|seed|audit> <local-corpus-path> [--json]\n' "$0" >&2
+    printf 'Usage: %s <verify|plan|seed|audit> <local-corpus-path> [--json]\n' "$0" >&2
     printf 'Live acquisition is never available through the local rescue lab.\n' >&2
 }
 
@@ -31,6 +31,10 @@ fi
 case "${operation}" in
     verify)
         command_name="ipil:rescue:verify"
+        ;;
+    plan)
+        command_name="ipil:seed"
+        output_arguments+=("--plan")
         ;;
     seed)
         command_name="ipil:seed"

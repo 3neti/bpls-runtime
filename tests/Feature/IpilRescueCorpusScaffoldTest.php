@@ -1,7 +1,14 @@
 <?php
 
+use App\Actions\PersistIpilSeedPlan;
+use App\Actions\PlanIpilRescueSeed;
 use App\Actions\VerifyIpilRescueCorpus;
 use App\Support\IpilRescue\CanonicalJson;
+use App\Support\IpilRescue\HistoricalAmount;
+use App\Support\IpilRescue\HistoricalApplicationPlan;
+use App\Support\IpilRescue\HistoricalEvidencePlan;
+use App\Support\IpilRescue\HistoricalEvidenceRegistry;
+use App\Support\IpilRescue\IpilSeedMappingProfile;
 use App\Support\IpilRescue\RescueCorpusManifest;
 use App\Support\IpilRescue\RescueCorpusSemantics;
 use App\Support\IpilRescue\SourceIdentity;
@@ -16,6 +23,10 @@ beforeEach(function () {
 
 afterEach(function () {
     File::deleteDirectory($this->ipilRescueTestRoot);
+
+    if (isset($this->ipilSeedPlanDirectory)) {
+        File::deleteDirectory($this->ipilSeedPlanDirectory);
+    }
 });
 
 test('a complete synthetic corpus passes stable integrity and semantic contract checks', function () {
@@ -217,7 +228,7 @@ test('seed and audit verify locally then remain fail closed', function () {
         'seeded' => false,
         'offline' => true,
         'domain_writes' => false,
-    ])->and($seed['error'])->toContain('intentionally unavailable until canonical mapper and disposition contracts are approved');
+    ])->and($seed['error'])->toContain('Real Ipil seed execution remains disabled until Gate 6 authorization');
 
     expect(Artisan::call('ipil:audit', [
         'corpus' => $this->ipilRescueTestRoot,
@@ -246,7 +257,7 @@ test('the local rescue lab exposes only offline scaffold operations', function (
         ->toHaveKeys(['ipil:cull', 'ipil:rescue:verify', 'ipil:seed', 'ipil:audit'])
         ->and(is_executable($script))->toBeTrue()
         ->and($contents)->toContain('set -euo pipefail')
-        ->and($contents)->toContain('<verify|seed|audit>')
+        ->and($contents)->toContain('<verify|plan|seed|audit>')
         ->and($contents)->toContain('Live acquisition is never available')
         ->and($contents)->not->toContain('ipil:cull');
 
@@ -263,6 +274,118 @@ test('the local rescue lab exposes only offline scaffold operations', function (
             'offline' => true,
             'domain_writes' => false,
         ]);
+});
+
+test('the offline seed planner deterministically dispositions every verified source identity', function () {
+    createSyntheticIpilRescueCorpus($this->ipilRescueTestRoot);
+    $verification = app(VerifyIpilRescueCorpus::class)->handle($this->ipilRescueTestRoot);
+    $profile = IpilSeedMappingProfile::synthetic($verification->corpusId, $verification->corpusFingerprint, ['applications' => 1], 1, 1);
+    $planner = app(PlanIpilRescueSeed::class);
+
+    $first = $planner->handle($this->ipilRescueTestRoot, $profile);
+    $second = $planner->handle($this->ipilRescueTestRoot, $profile);
+
+    expect($first->fingerprint)->toBe($second->fingerprint)
+        ->and($first->semanticPayload)->toBe($second->semanticPayload)
+        ->and($first->semanticPayload['coverage'])->toMatchArray([
+            'database_rows' => 1,
+            'media_records' => 1,
+            'pricing_records' => 1,
+            'source_identities' => 3,
+            'unplanned_source_identities' => 0,
+            'disposition_counts' => ['PRESERVE_UNINTERPRETED' => 2, 'REFERENCE_DATA' => 1],
+        ])
+        ->and($first->semanticPayload['protections'])->toMatchArray([
+            'database_writes' => false,
+            'domain_models_created' => false,
+            'network_access' => false,
+            'current_pricing_invoked' => false,
+            'historical_is_operational' => false,
+        ]);
+});
+
+test('the planner rejects corpus fingerprint and table inventory drift', function () {
+    createSyntheticIpilRescueCorpus($this->ipilRescueTestRoot);
+    $verification = app(VerifyIpilRescueCorpus::class)->handle($this->ipilRescueTestRoot);
+    $wrongFingerprint = IpilSeedMappingProfile::synthetic($verification->corpusId, str_repeat('a', 64), ['applications' => 1], 1, 1);
+    $wrongInventory = IpilSeedMappingProfile::synthetic($verification->corpusId, $verification->corpusFingerprint, ['unknown' => 1], 1, 1);
+
+    expect(fn () => app(PlanIpilRescueSeed::class)->handle($this->ipilRescueTestRoot, $wrongFingerprint))
+        ->toThrow(RuntimeException::class, 'does not match the mapping profile binding')
+        ->and(fn () => app(PlanIpilRescueSeed::class)->handle($this->ipilRescueTestRoot, $wrongInventory))
+        ->toThrow(RuntimeException::class, 'table inventory or row counts drift');
+});
+
+test('private seed plan artifacts are immutable and contain no materialization authority', function () {
+    createSyntheticIpilRescueCorpus($this->ipilRescueTestRoot);
+    $verification = app(VerifyIpilRescueCorpus::class)->handle($this->ipilRescueTestRoot);
+    $profile = IpilSeedMappingProfile::synthetic($verification->corpusId, $verification->corpusFingerprint, ['applications' => 1], 1, 1);
+    $plan = app(PlanIpilRescueSeed::class)->handle($this->ipilRescueTestRoot, $profile);
+    $artifacts = app(PersistIpilSeedPlan::class)->handle($plan);
+    $this->ipilSeedPlanDirectory = $artifacts['directory'];
+    $again = app(PersistIpilSeedPlan::class)->handle($plan);
+    $manifest = json_decode(File::get($artifacts['execution_manifest']), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($again)->toBe($artifacts)
+        ->and($manifest)->toMatchArray(['execution_authorized' => false, 'domain_writes' => false, 'network_access' => false])
+        ->and($artifacts['directory'])->toStartWith(storage_path('app/private/ipil-rescue/plans/'));
+});
+
+test('historical money preserves exact lexemes and never rounds non-cent evidence', function (string $lexeme, string $decimal, ?string $minorUnits) {
+    $amount = HistoricalAmount::fromLexeme($lexeme);
+
+    expect($amount->sourceLexeme)->toBe($lexeme)
+        ->and($amount->decimal)->toBe($decimal)
+        ->and($amount->minorUnits)->toBe($minorUnits)
+        ->and($amount->isCentExact())->toBe($minorUnits !== null);
+})->with([
+    ['0', '0', '0'],
+    ['001.2300', '1.23', '123'],
+    ['1.234', '1.234', null],
+    ['1e3', '1000', '100000'],
+    ['12.3e-2', '0.123', null],
+    ['-0.010', '-0.01', '-1'],
+]);
+
+test('historical application plans are structurally non-operational', function () {
+    $projection = new HistoricalApplicationPlan(hash('sha256', 'application'), 'Renewal', 'Released', 2025);
+
+    expect($projection->toArray())->toMatchArray([
+        'target_status' => 'historical_evidence',
+        'operationally_eligible' => false,
+        'actor_id' => null,
+        'current_liability' => null,
+        'allowed_actions' => [],
+    ]);
+});
+
+test('historical evidence contracts preserve duplicate and orphan claims without operational effects', function () {
+    $receipt = new HistoricalEvidencePlan('receipt_claim', hash('sha256', 'receipt-one'), 'MAP_AS_HISTORICAL_EVIDENCE', 'ESTABLISHED', ['receipt_number_claim' => 'SYNTHETIC-DUPLICATE']);
+    $duplicate = new HistoricalEvidencePlan('receipt_claim', hash('sha256', 'receipt-two'), 'MAP_AS_HISTORICAL_EVIDENCE', 'ESTABLISHED', ['receipt_number_claim' => 'SYNTHETIC-DUPLICATE']);
+    $permit = new HistoricalEvidencePlan('permit_claim', hash('sha256', 'permit-orphan'), 'PRESERVE_UNINTERPRETED', 'AMBIGUOUS', ['application_source_identity' => null], true);
+
+    expect($receipt->toArray()['facts']['receipt_number_claim'])->toBe($duplicate->toArray()['facts']['receipt_number_claim'])
+        ->and($receipt->sourceIdentitySha256)->not->toBe($duplicate->sourceIdentitySha256)
+        ->and($permit->toArray())->toMatchArray([
+            'orphaned' => true,
+            'historical' => true,
+            'operationally_eligible' => false,
+            'creates_current_user' => false,
+            'creates_current_finance' => false,
+            'creates_current_permit' => false,
+            'creates_spatie_media' => false,
+        ]);
+});
+
+test('synthetic historical materialization intents replay idempotently and reject conflicting targets', function () {
+    $registry = new HistoricalEvidenceRegistry;
+    $sourceIdentity = hash('sha256', 'same-source');
+    $payment = new HistoricalEvidencePlan('payment', $sourceIdentity, 'MAP_AS_HISTORICAL_EVIDENCE', 'ESTABLISHED', ['amount' => HistoricalAmount::fromLexeme('12.34')]);
+    $conflict = new HistoricalEvidencePlan('permit_claim', $sourceIdentity, 'MAP_AS_HISTORICAL_EVIDENCE', 'ESTABLISHED', ['permit_number' => 'SYNTHETIC']);
+
+    expect($registry->record($payment))->toBeTrue()
+        ->and($registry->record($payment))->toBeFalse()
+        ->and(fn () => $registry->record($conflict))->toThrow(RuntimeException::class, 'conflicting historical targets');
 });
 
 /**

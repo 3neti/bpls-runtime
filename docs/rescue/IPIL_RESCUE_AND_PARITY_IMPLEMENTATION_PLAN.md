@@ -1,6 +1,6 @@
 # Ipil Rescue and Parity Implementation Plan
 
-Status: **APPROVED PROGRAM PLAN — GATE 3 CORPUS FINALIZED; MAPPING REVIEW NEXT**
+Status: **APPROVED PROGRAM PLAN — GATE 5 OFFLINE SEED PLAN COMPLETE; GATE 6 REVIEW NEXT**
 
 Approved: 2026-09-10
 
@@ -317,6 +317,6 @@ The program completes only when an authorized immutable corpus accounts for the 
 
 ## Active Frontier and Stop Conditions
 
-The active frontier is **Gate 5 seed implementation review**. The canonical full corpus is finalized and verified, and Gate 4 mapping profile `ipil-rescue-mapping-v1.0.0` accounts for all source tables and concepts. Gate 5 may design and implement fail-closed, offline, synthetic-first planning against that specification, but Gate 4 does not authorize a real seed execution or canonical write. Stop for a decision when the exact corpus/profile cannot be bound; checksums/counts/totals fail; a row or embedded item lacks a disposition; mapping requires identity/policy/lifecycle inference; non-cent evidence would be rounded; source secrets would be staged; history must become operational; media could be copied or uploaded without authority; reports require current price calculation; UI lacks audited corpus/capture/disposition; or any step would redesign, deploy, cut over, or write to production before its gate.
+The active frontier is **Gate 6 first local materialization review**. Gate 5 implemented the fail-closed offline planner documented in [Ipil Seed Implementation Plan V1](IPIL_SEED_IMPLEMENTATION_PLAN_V1.md) and accepted in the [Gate 5 report](IPIL_RESCUE_GATE_5_SEED_PLANNER_2026_09_11.md). Plan `ipil-seed-plan-874d26eb21ed0041` dispositions all 324,873 source identities and binds the finalized corpus/profile without canonical writes. No real execution interface exists. Stop for a decision when the exact corpus/profile/plan/manifest cannot be bound; checksums/counts/totals fail; a source identity lacks exactly one disposition; mapping requires identity/policy/lifecycle inference; non-cent evidence would be rounded; source secrets would be staged; history must become operational; media could be copied or uploaded without authority; reports require current price calculation; UI lacks audited seeded data/capture/disposition; or any step would redesign, deploy, cut over, access live Ipil, or write beyond a separately authorized local Gate 6.
 
 Future agents must not jump from reconnaissance or partial seeding into UI redesign. The fixed order is: verified corpus, deterministic reconstruction, quantitative audit, read-only/report parity, UI capture, parity scaffolding, side-by-side acceptance, then improvement.
