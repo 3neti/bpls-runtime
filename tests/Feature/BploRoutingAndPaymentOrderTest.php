@@ -5,6 +5,7 @@ use App\Actions\ExecutePersistedLifecycleScenario;
 use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\Models\PaperlessPaymentOrder;
 use App\Models\PermitApplication;
+use App\Models\Role;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,51 @@ test('BPLO checklist choices come from the replaceable concerned-office referenc
     expect($task['office_options'])->toBe([
         ['code' => 'nelson-office', 'label' => 'Nelson Reference Office'],
     ])->and(data_get($task, 'financial_editor.catalog_status'))->toBe('board_test_only');
+});
+
+test('cleanroom routing commits once and returns BPLO to the lightweight work inbox', function (): void {
+    $bplo = userWithRole(Role::query()->where('code', 'bplo')->sole());
+    $application = PermitApplication::factory()->create([
+        'submitted_at' => now(),
+        'metadata' => [
+            'nelson_reconciliation_v1' => ['commissioned_path' => true],
+            'lifecycle_cleanroom' => [
+                'semantic_classification' => 'synthetic_only',
+                'production_liability' => false,
+            ],
+        ],
+    ]);
+
+    $response = $this->actingAs($bplo)->post(
+        route('staff.permit-applications.bplo-routing.store', $application),
+        [
+            'situational_context' => 'Concerned offices selected by BPLO checklist.',
+            'selected_work' => [[
+                'office_code' => 'assessor',
+                'office_label' => 'Municipal Assessor',
+                'situational_reason' => 'Selected by BPLO checklist.',
+                'required_work' => 'Prepare office Payment Order.',
+                'permit_application_line_id' => null,
+            ]],
+        ],
+    );
+
+    $response
+        ->assertRedirect(route('staff.work.index'))
+        ->assertSessionHasNoErrors();
+
+    expect($application->bploRoutingDetermination()->count())->toBe(1)
+        ->and($application->bploRoutingDetermination()->sole()->works()->count())->toBe(1);
+});
+
+test('routing submission visibly guards slow and failed post-commit navigation', function (): void {
+    $component = file_get_contents(resource_path('js/components/permit-applications/BploRoutingTaskSheet.vue'));
+
+    expect($component)
+        ->toContain('BPLS is still recording the route. Do not submit it again.')
+        ->toContain('onHttpException: (response) =>')
+        ->toContain('onNetworkError: () =>')
+        ->toContain('v-if="routingMessage"');
 });
 
 test('BPLO owns an explicit post-lodging situational route without changing the applicant declaration', function (): void {

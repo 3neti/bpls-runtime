@@ -323,9 +323,11 @@ class LifecycleCleanroomController extends Controller
             $initialTab = $routingTask === null ? 'application' : 'processing';
         }
 
+        $applicationData = $resolver->resolve($application, $request->user())->toArray();
+
         return Inertia::render('stakeholder-preview/LifecycleApplication', [
-            'application' => $resolver->resolve($application, $request->user())->toArray(),
-            'document' => $buildDocument->handle($application, $request->user()),
+            'application' => $applicationData,
+            'document' => $buildDocument->handle($application, $request->user(), $applicationData),
             'focus' => $routingTask === null ? '' : 'bplo-routing',
             'initialTab' => $initialTab,
             'recentCertificationOffice' => $recentCertificationOffice === '' ? null : $recentCertificationOffice,

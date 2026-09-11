@@ -80,7 +80,11 @@ class BusinessPermitEvaluationController extends Controller
             'routingOfficeOptions' => $routingTask['office_options'],
             'routingTask' => $routingTask,
             'applicationData' => $applicationData,
-            'applicationDocument' => $buildExecutableDocument->handle($permitApplication, auth()->user()),
+            'applicationDocument' => $buildExecutableDocument->handle(
+                $permitApplication,
+                auth()->user(),
+                $applicationData,
+            ),
             'lineOfBusinesses' => LineOfBusiness::query()->availableToMunicipalCatalog()->orderBy('name')->get(['id', 'code', 'name']),
             'can' => $this->capabilities(),
         ]);
