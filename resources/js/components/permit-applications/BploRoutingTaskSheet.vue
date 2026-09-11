@@ -129,6 +129,8 @@ const props = withDefaults(
 
 const page = usePage();
 const pending = ref(false);
+const routingMessage = ref('');
+let routingTimer: number | undefined;
 const officeItems = reactive<
     Record<
         number,
@@ -332,6 +334,11 @@ function submit(): void {
     }
 
     pending.value = true;
+    routingMessage.value = '';
+    routingTimer = window.setTimeout(() => {
+        routingMessage.value =
+            'BPLS is still recording the route. Do not submit it again. The page will continue when the canonical record is available.';
+    }, 10_000);
     useForm({
         situational_context: routingContext.value,
         selected_work: candidates
@@ -345,8 +352,34 @@ function submit(): void {
             })),
     }).post(recordBploRouting(props.task.application.id).url, {
         preserveScroll: true,
+        onError: (errors) => {
+            routingMessage.value =
+                Object.values(errors).find(
+                    (message): message is string => typeof message === 'string',
+                ) ??
+                'The route could not be recorded. Review the selected offices.';
+        },
+        onHttpException: (response) => {
+            routingMessage.value =
+                response.status === 401 || response.status === 419
+                    ? 'Your session expired before routing was recorded. Sign in again, review the checklist, and submit it once.'
+                    : 'BPLS could not record the route. No new determination was created. Please try again or report this task.';
+
+            return false;
+        },
+        onNetworkError: () => {
+            routingMessage.value =
+                'The routing request could not reach BPLS. Check the connection before trying again.';
+
+            return false;
+        },
         onFinish: () => {
             pending.value = false;
+
+            if (routingTimer !== undefined) {
+                window.clearTimeout(routingTimer);
+                routingTimer = undefined;
+            }
         },
     });
 }
@@ -1360,6 +1393,13 @@ const filteredTreasuryLobOptions = computed(() => {
                 class="text-sm text-destructive"
             >
                 {{ page.props.errors.routing }}
+            </p>
+            <p
+                v-if="routingMessage"
+                role="status"
+                class="text-sm text-muted-foreground"
+            >
+                {{ routingMessage }}
             </p>
 
             <div

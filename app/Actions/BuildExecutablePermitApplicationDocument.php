@@ -15,10 +15,16 @@ final class BuildExecutablePermitApplicationDocument
         private readonly ProjectCurrentAssessmentTotal $currentAssessmentTotal,
     ) {}
 
-    /** @return array<string, mixed> */
-    public function handle(PermitApplication $permitApplication, ?User $viewer = null): array
-    {
-        $application = $this->resolver->resolve($permitApplication, $viewer)->toArray();
+    /**
+     * @param  array<string, mixed>|null  $resolvedApplication
+     * @return array<string, mixed>
+     */
+    public function handle(
+        PermitApplication $permitApplication,
+        ?User $viewer = null,
+        ?array $resolvedApplication = null,
+    ): array {
+        $application = $resolvedApplication ?? $this->resolver->resolve($permitApplication, $viewer)->toArray();
         $assessment = data_get($application, 'financial.assessment');
         $counterCheck = data_get($application, 'financial.treasury_counter_check');
         $decision = data_get($application, 'financial.treasurer_decision');
