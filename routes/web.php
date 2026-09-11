@@ -34,6 +34,7 @@ use App\Http\Controllers\Staff\CollectionReceiptController;
 use App\Http\Controllers\Staff\DailyCollectionReportController;
 use App\Http\Controllers\Staff\FeeMatrixController;
 use App\Http\Controllers\Staff\FeeRuleController;
+use App\Http\Controllers\Staff\IpilHistoricalRecordController;
 use App\Http\Controllers\Staff\LegacyFeeCatalogController;
 use App\Http\Controllers\Staff\MunicipalityConfigurationController;
 use App\Http\Controllers\Staff\MunicipalServiceCatalogController;
@@ -209,6 +210,11 @@ Route::middleware(['auth', 'verified', EnsureActiveUserAccess::class])->group(fu
     });
 
     Route::prefix('staff')->name('staff.')->middleware('can:staff.access')->group(function () {
+        Route::get('ipil-history', [IpilHistoricalRecordController::class, 'index'])->name('ipil-history.index');
+        Route::get('ipil-history/owners/{owner}', [IpilHistoricalRecordController::class, 'owner'])->whereNumber('owner')->name('ipil-history.owners.show');
+        Route::get('ipil-history/businesses/{business}', [IpilHistoricalRecordController::class, 'business'])->whereNumber('business')->name('ipil-history.businesses.show');
+        Route::get('ipil-history/applications/{application}', [IpilHistoricalRecordController::class, 'application'])->whereNumber('application')->name('ipil-history.applications.show');
+        Route::get('ipil-history/businesses/{business}/documents/{document}', [IpilHistoricalRecordController::class, 'document'])->whereNumber(['business', 'document'])->name('ipil-history.documents.view');
         Route::get('services-and-fees', [MunicipalServiceCatalogController::class, 'index'])
             ->name('services-and-fees.index');
         Route::get('permit-applications/assessments', [PermitApplicationAssessmentController::class, 'index'])

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import {
+    Archive,
     Bell,
     Building2,
     Calculator,
@@ -21,6 +22,7 @@ import CitizenProfileController from '@/actions/App/Http/Controllers/Citizen/Pro
 import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { index as billingGroupIndex } from '@/actions/App/Http/Controllers/Staff/BillingGroupController';
 import { index as feeRuleIndex } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
+import { index as ipilHistoryIndex } from '@/actions/App/Http/Controllers/Staff/IpilHistoricalRecordController';
 import { index as municipalityConfigurationIndex } from '@/actions/App/Http/Controllers/Staff/MunicipalityConfigurationController';
 import { index as municipalWorkInboxIndex } from '@/actions/App/Http/Controllers/Staff/MunicipalWorkInboxController';
 import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
@@ -85,6 +87,11 @@ const staffSections = computed<NavSection[]>(() => {
                     title: 'Assessments',
                     href: assessmentIndex(),
                     icon: Calculator,
+                },
+                {
+                    title: 'Historical Ipil Records',
+                    href: ipilHistoryIndex(),
+                    icon: Archive,
                 },
             ],
         });
