@@ -22,6 +22,8 @@ use Illuminate\Support\Carbon;
  * @property array<string, mixed> $actor_manifest
  * @property array<string, mixed> $owned_resource_manifest
  * @property Carbon|null $closed_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  */
 #[Fillable(['public_id', 'status', 'target_step', 'started_by_id', 'new_application_id', 'renewal_application_id', 'actor_manifest', 'owned_resource_manifest', 'closed_at'])]
 class LifecycleCleanroomRun extends Model

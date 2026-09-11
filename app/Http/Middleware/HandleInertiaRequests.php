@@ -94,7 +94,7 @@ class HandleInertiaRequests extends Middleware
         ];
     }
 
-    /** @return array{run_id: int, public_id: string, key: string, label: string}|null */
+    /** @return array{run_id: int, public_id: string, key: string, label: string, laboratory_url: string}|null */
     private function cleanroomActor(?User $user, StakeholderPreviewSafety $safety): ?array
     {
         if (! $safety->isEnabled() || ! $user instanceof User) {
@@ -104,7 +104,13 @@ class HandleInertiaRequests extends Middleware
         foreach (LifecycleCleanroomRun::query()->where('status', 'active')->latest('id')->limit(10)->get() as $run) {
             foreach (data_get($run->actor_manifest, 'actors', []) as $key => $actor) {
                 if (($actor['user_id'] ?? null) === $user->id && $user->roles->contains('id', $actor['role_id'] ?? null)) {
-                    return ['run_id' => $run->id, 'public_id' => $run->public_id, 'key' => $key, 'label' => $actor['label']];
+                    return [
+                        'run_id' => $run->id,
+                        'public_id' => $run->public_id,
+                        'key' => $key,
+                        'label' => $actor['label'],
+                        'laboratory_url' => route('stakeholder-preview.lifecycle-laboratory.cleanrooms.status', $run, false),
+                    ];
                 }
             }
         }

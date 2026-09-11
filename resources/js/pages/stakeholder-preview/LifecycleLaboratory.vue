@@ -2,6 +2,7 @@
 import { Head, Link, router } from '@inertiajs/vue3';
 import {
     AlertTriangle,
+    Archive,
     ArrowRight,
     CalendarDays,
     Check,
@@ -29,6 +30,7 @@ import {
 } from '@/actions/App/Http/Controllers/LifecycleLaboratoryController';
 import ExecutableApplication from '@/components/permit-applications/ExecutableApplication.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import type { LifecycleCleanroomEvidence } from '@/types/lifecycle-cleanroom';
 
 type Event = {
     key: string;
@@ -155,6 +157,7 @@ type CleanroomState = {
             occurred_at: string | null;
         }>;
     } | null;
+    evidence_summary: LifecycleCleanroomEvidence;
 };
 
 type LifecycleStage = {
@@ -168,12 +171,7 @@ const props = defineProps<{
     authorizedLegacyReview: boolean;
     cleanroom: {
         active: CleanroomState | null;
-        history: {
-            public_id: string;
-            closed_at: string;
-            new_application_id: number | null;
-            renewal_application_id: number | null;
-        }[];
+        history: Array<LifecycleCleanroomEvidence & { view_url: string }>;
     };
     laboratory: {
         safety: {
@@ -385,6 +383,15 @@ function pesos(amountCents: number | null): string {
     }).format(amountCents / 100);
 }
 
+function evidenceDate(value: string | null): string {
+    return value
+        ? new Intl.DateTimeFormat('en-PH', {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+          }).format(new Date(value))
+        : 'Not recorded';
+}
+
 function runNextStep(): void {
     working.value = 'next';
     router.post(
@@ -586,7 +593,7 @@ function simulateQrPhPayment(): void {
                         <div
                             class="text-xs font-bold tracking-wider text-zinc-500 uppercase"
                         >
-                            Lifecycle control
+                            Current specimen
                         </div>
                         <h2
                             class="mt-1 text-xl font-semibold text-zinc-950 dark:text-white"
@@ -597,6 +604,19 @@ function simulateQrPhPayment(): void {
                                     : 'Executable Application'
                             }}
                         </h2>
+                        <p
+                            v-if="cleanroom.active"
+                            class="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300"
+                        >
+                            <span
+                                class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-900"
+                            >
+                                {{ cleanroom.active.evidence_summary.status }}
+                            </span>
+                            <span class="font-mono text-xs break-all">{{
+                                cleanroom.active.run.public_id
+                            }}</span>
+                        </p>
                     </div>
                     <div v-if="!cleanroom.active" class="flex flex-wrap gap-2">
                         <button
@@ -617,6 +637,14 @@ function simulateQrPhPayment(): void {
                         </button>
                     </div>
                 </div>
+                <p
+                    v-if="!cleanroom.active"
+                    class="mt-3 max-w-3xl text-sm leading-6 text-zinc-600 dark:text-zinc-300"
+                >
+                    No ceremony is active. Retained evidence remains available
+                    below and a fresh Classic ceremony will create a new
+                    specimen without changing earlier Applications.
+                </p>
             </div>
 
             <div
@@ -1035,9 +1063,98 @@ function simulateQrPhPayment(): void {
                         >
                             Close and retain evidence
                         </button>
+                        <p class="text-xs leading-5 text-zinc-500">
+                            Retaining closes this Laboratory run without
+                            deleting or changing its Application. The Laboratory
+                            then returns to idle so another ceremony can start.
+                        </p>
                     </div>
                 </aside>
             </div>
+        </section>
+
+        <section
+            v-if="cleanroom.history.length > 0"
+            data-testid="retained-cleanroom-history"
+            class="order-4 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+            aria-label="Retained evidence history"
+        >
+            <header
+                class="border-b border-zinc-200 p-5 sm:p-6 dark:border-zinc-800"
+            >
+                <div class="flex items-center gap-3">
+                    <Archive class="size-5 text-zinc-500" />
+                    <div>
+                        <p
+                            class="text-xs font-bold tracking-wider text-zinc-500 uppercase"
+                        >
+                            Evidence history
+                        </p>
+                        <h2 class="mt-1 text-xl font-semibold">
+                            Retained cleanrooms
+                        </h2>
+                    </div>
+                </div>
+                <p class="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+                    These read-only specimens remain preserved independently.
+                    Viewing one does not reactivate it.
+                </p>
+            </header>
+            <ul class="divide-y divide-zinc-200 dark:divide-zinc-800">
+                <li
+                    v-for="item in cleanroom.history"
+                    :key="item.public_id"
+                    class="grid gap-4 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-6"
+                >
+                    <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <strong>{{ item.ceremony_label }}</strong>
+                            <span
+                                class="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-bold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                            >
+                                {{ item.status }}
+                            </span>
+                            <span class="text-xs text-zinc-500"
+                                >{{ item.progress.completed_steps }} of
+                                {{ item.progress.total_steps }}</span
+                            >
+                        </div>
+                        <p
+                            class="mt-2 font-mono text-xs break-all text-zinc-500"
+                        >
+                            {{ item.public_id }}
+                        </p>
+                        <p
+                            class="mt-2 text-sm text-zinc-600 dark:text-zinc-300"
+                        >
+                            Application
+                            {{
+                                item.application
+                                    ? `#${item.application.id}`
+                                    : 'not created'
+                            }}
+                            <span v-if="item.application?.tracking_reference">
+                                ·
+                                {{ item.application.tracking_reference }}</span
+                            >
+                        </p>
+                        <p class="mt-1 text-xs text-zinc-500">
+                            Created
+                            {{ evidenceDate(item.timestamps.created_at) }} ·
+                            Completed
+                            {{ evidenceDate(item.timestamps.completed_at) }} ·
+                            Retained
+                            {{ evidenceDate(item.timestamps.retained_at) }}
+                        </p>
+                    </div>
+                    <Link
+                        :href="item.view_url"
+                        class="inline-flex min-h-11 items-center justify-center rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold dark:border-zinc-700"
+                    >
+                        View evidence
+                    </Link>
+                </li>
+            </ul>
         </section>
 
         <section
@@ -1100,7 +1217,7 @@ function simulateQrPhPayment(): void {
 
         <details
             data-testid="certified-regression-evidence"
-            class="group order-4 overflow-hidden rounded-2xl border border-zinc-300 bg-zinc-50 shadow-sm dark:border-zinc-700 dark:bg-zinc-950"
+            class="group order-5 overflow-hidden rounded-2xl border border-zinc-300 bg-zinc-50 shadow-sm dark:border-zinc-700 dark:bg-zinc-950"
         >
             <summary
                 class="flex cursor-pointer list-none flex-col items-start justify-between gap-4 p-5 outline-none marker:hidden focus-visible:ring-2 focus-visible:ring-amber-500 sm:flex-row sm:items-center sm:p-6"

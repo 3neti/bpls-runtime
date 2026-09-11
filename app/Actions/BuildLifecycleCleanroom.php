@@ -15,6 +15,7 @@ class BuildLifecycleCleanroom
         private readonly ApplicationDataResolver $applicationDataResolver,
         private readonly BuildExecutablePermitApplicationDocument $buildDocument,
         private readonly BuildConcernedOfficePaymentOrderSummary $paymentOrderSummary,
+        private readonly BuildLifecycleCleanroomEvidence $buildEvidence,
     ) {}
 
     /** @return array<string, mixed> */
@@ -28,6 +29,7 @@ class BuildLifecycleCleanroom
             : null;
         $application = is_int($applicationId) ? PermitApplication::query()->find($applicationId) : null;
         if (is_array($activeState)) {
+            $activeState['evidence_summary'] = $this->buildEvidence->handle($active);
             $activeState['classic_ceremony'] = $active->isClassicLifecycleV1()
                 ? [
                     'registration_claimed' => $active->registrationInvitation()->whereNotNull('claimed_at')->exists(),
@@ -81,12 +83,19 @@ class BuildLifecycleCleanroom
 
         return [
             'active' => $activeState,
-            'history' => LifecycleCleanroomRun::query()->where('status', 'closed')->latest('id')->limit(5)->get()->map(fn (LifecycleCleanroomRun $run): array => [
-                'public_id' => $run->public_id,
-                'closed_at' => $run->closed_at?->toIso8601String(),
-                'new_application_id' => $run->new_application_id,
-                'renewal_application_id' => $run->renewal_application_id,
-            ])->all(),
+            'history' => LifecycleCleanroomRun::query()
+                ->where('status', 'closed')
+                ->latest('closed_at')
+                ->limit(25)
+                ->get()
+                ->map(function (LifecycleCleanroomRun $run): array {
+                    $evidence = $this->buildEvidence->handle($run);
+
+                    return [
+                        ...$evidence,
+                        'view_url' => route('stakeholder-preview.lifecycle-laboratory.cleanrooms.evidence', $run, false),
+                    ];
+                })->all(),
         ];
     }
 }

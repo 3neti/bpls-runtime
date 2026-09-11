@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import {
     ArrowLeft,
     BadgeCheck,
     FileText,
+    FlaskConical,
     Landmark,
     LockKeyhole,
 } from '@lucide/vue';
@@ -96,6 +97,10 @@ const page = usePage();
 const authorizedLegacyReview = computed(
     () => page.props.stakeholder_preview?.authorized_legacy_review === true,
 );
+const cleanroomReturnUrl = computed(
+    () =>
+        page.props.stakeholder_preview?.cleanroom_actor?.laboratory_url ?? null,
+);
 
 defineProps<{
     verification: VerificationBoundary;
@@ -135,6 +140,14 @@ function goBack(): void {
         <div
             class="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8"
         >
+            <Link
+                v-if="cleanroomReturnUrl"
+                :href="cleanroomReturnUrl"
+                class="inline-flex w-fit items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950"
+                data-testid="public-verification-cleanroom-return"
+            >
+                <FlaskConical class="size-4" /> Back to Lifecycle Laboratory
+            </Link>
             <button
                 type="button"
                 data-testid="permit-verification-back"

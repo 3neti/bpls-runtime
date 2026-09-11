@@ -34,6 +34,7 @@ export type StakeholderPreviewContext = {
         public_id: string;
         key: string;
         label: string;
+        laboratory_url: string;
     } | null;
     personas: StakeholderPreviewPersona[];
     what_to_try: StakeholderPreviewGuidance[];

@@ -2,10 +2,7 @@
 import { router, usePage } from '@inertiajs/vue3';
 import { ArrowRight, ShieldAlert } from '@lucide/vue';
 import { computed, ref } from 'vue';
-import {
-    enterLaboratory,
-    switchMethod,
-} from '@/actions/App/Http/Controllers/StakeholderPreviewController';
+import { switchMethod } from '@/actions/App/Http/Controllers/StakeholderPreviewController';
 
 const page = usePage();
 const switchingTo = ref<string | null>(null);
@@ -33,16 +30,16 @@ function handlePersonaChange(event: Event): void {
 }
 
 function returnToLaboratory(): void {
+    if (!preview.value?.cleanroom_actor?.laboratory_url) {
+        return;
+    }
+
     switchingTo.value = 'laboratory';
-    router.post(
-        enterLaboratory().url,
-        {},
-        {
-            onFinish: () => {
-                switchingTo.value = null;
-            },
+    router.visit(preview.value.cleanroom_actor.laboratory_url, {
+        onFinish: () => {
+            switchingTo.value = null;
         },
-    );
+    });
 }
 </script>
 
