@@ -23,10 +23,12 @@ final class IpilHistoricalMediaEvidence extends Model implements HasMedia
 
     public const GeneratedArtifactsCollection = 'legacy_generated_artifacts';
 
+    public string $historicalMediaDisk = 'ipil_gate6';
+
     public function registerMediaCollections(): void
     {
-        $this->addMediaCollection(self::ApplicationDocumentsCollection)->useDisk('ipil_gate6');
-        $this->addMediaCollection(self::GeneratedArtifactsCollection)->useDisk('ipil_gate6');
+        $this->addMediaCollection(self::ApplicationDocumentsCollection)->useDisk($this->historicalMediaDisk);
+        $this->addMediaCollection(self::GeneratedArtifactsCollection)->useDisk($this->historicalMediaDisk);
     }
 
     protected function casts(): array

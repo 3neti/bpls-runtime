@@ -46,6 +46,18 @@ return [
             'report' => false,
         ],
 
+        'ipil_gate8c' => [
+            'driver' => 's3',
+            'key' => env('IPIL_GATE8C_MEDIA_ACCESS_KEY'),
+            'secret' => env('IPIL_GATE8C_MEDIA_SECRET_KEY'),
+            'region' => 'auto',
+            'bucket' => env('IPIL_GATE8C_MEDIA_BUCKET'),
+            'endpoint' => env('IPIL_GATE8C_MEDIA_ENDPOINT'),
+            'visibility' => 'private',
+            'use_path_style_endpoint' => true,
+            'throw' => true,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

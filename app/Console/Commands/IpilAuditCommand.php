@@ -36,7 +36,7 @@ final class IpilAuditCommand extends Command
                 'corpus_integrity_passed' => true,
                 'verified' => true,
                 'audited' => true,
-                'offline' => true,
+                'offline' => ! app()->environment('historical-uat'),
                 'domain_writes' => false,
                 'corpus_id' => $result->corpusId,
             ]));
@@ -57,7 +57,7 @@ final class IpilAuditCommand extends Command
                 'corpus_integrity_passed' => $verified,
                 'verified' => $verified,
                 'audited' => false,
-                'offline' => true,
+                'offline' => ! app()->environment('historical-uat'),
                 'domain_writes' => false,
                 'error' => $exception->getMessage(),
             ]));

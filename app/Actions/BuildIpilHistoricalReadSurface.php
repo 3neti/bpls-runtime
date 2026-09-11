@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Models\IpilHistoricalMediaEvidence;
+use Brick\Math\BigDecimal;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -218,11 +219,16 @@ final class BuildIpilHistoricalReadSurface
     /** @return array<string, int|string> */
     private function anchors(): array
     {
+        $paid = BigDecimal::zero();
+        foreach (DB::table('ipil_historical_payments')->where('source_status', 'completed')->pluck('amount_decimal') as $amount) {
+            $paid = $paid->plus((string) $amount);
+        }
+
         return [
             'owners' => DB::table('ipil_historical_owners')->count(), 'businesses' => DB::table('ipil_historical_businesses')->count(),
             'applications' => DB::table('ipil_historical_applications')->count(), 'payments' => DB::table('ipil_historical_payments')->count(),
             'receipts' => DB::table('ipil_historical_receipt_claims')->count(), 'permits' => DB::table('ipil_historical_permit_claims')->count(),
-            'clearances' => DB::table('ipil_historical_clearance_claims')->count(), 'completed_payment_total' => '93295317.20',
+            'clearances' => DB::table('ipil_historical_clearance_claims')->count(), 'completed_payment_total' => (string) $paid->toScale(2),
         ];
     }
 }

@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Models\IpilHistoricalMediaEvidence;
 use App\Support\IpilRescue\CanonicalJson;
 use App\Support\IpilRescue\Gate6ExecutionAuthorization;
+use App\Support\IpilRescue\Gate8cExecutionAuthorization;
 use App\Support\IpilRescue\HistoricalAmount;
 use App\Support\IpilRescue\IpilMaterializationResult;
 use App\Support\IpilRescue\IpilSeedMappingProfile;
@@ -13,6 +14,7 @@ use App\Support\IpilRescue\SourceIdentity;
 use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
 use SplFileObject;
@@ -28,7 +30,7 @@ final class MaterializeIpilHistoricalCorpus
     /** @var list<array<string, mixed>> */
     private array $phaseResults = [];
 
-    public function handle(string $corpusPath, Gate6ExecutionAuthorization $authorization): IpilMaterializationResult
+    public function handle(string $corpusPath, Gate6ExecutionAuthorization|Gate8cExecutionAuthorization $authorization): IpilMaterializationResult
     {
         $root = realpath($corpusPath);
         if ($root === false) {
@@ -36,7 +38,8 @@ final class MaterializeIpilHistoricalCorpus
         }
 
         $started = microtime(true);
-        $runId = 'ipil-g6-'.now()->utc()->format('YmdHis').'-'.strtolower(Str::random(8));
+        $cloud = $authorization instanceof Gate8cExecutionAuthorization;
+        $runId = ($cloud ? 'ipil-g8c-' : 'ipil-g6-').now()->utc()->format('YmdHis').'-'.strtolower(Str::random(8));
         $now = now()->utc();
         $profile = IpilSeedMappingProfile::canonical();
         $operationalBaseline = $this->operationalBaseline();
@@ -56,7 +59,7 @@ final class MaterializeIpilHistoricalCorpus
             'execution_manifest_fingerprint_sha256' => Gate6ExecutionAuthorization::ManifestFingerprint,
             'authorization_fingerprint_sha256' => $authorization->fingerprint,
             'code_commit' => $commit,
-            'target_environment' => Gate6ExecutionAuthorization::TargetEnvironment,
+            'target_environment' => $authorization::TargetEnvironment,
             'target_database_identity_sha256' => $authorization->targetDatabaseIdentity,
             'status' => 'RUNNING',
             'started_at' => $now,
@@ -87,7 +90,7 @@ final class MaterializeIpilHistoricalCorpus
             $this->phase($runId, 'G', fn (): array => $this->permitFinance($root));
             $this->phase($runId, 'H', fn (): array => $this->billingEvidence());
             $this->phase($runId, 'I', fn (): array => $this->permitsAndClearances($root));
-            $this->phase($runId, 'J', fn (): array => $this->media($root, $profile));
+            $this->phase($runId, 'J', fn (): array => $this->media($root, $profile, $cloud ? 'ipil_gate8c' : 'ipil_gate6'));
             $this->phase($runId, 'K', fn (): array => $this->readProjectionChecks());
             $this->phase($runId, 'L', fn (): array => ['audit_ready' => true, 'replay_safe' => true]);
 
@@ -588,7 +591,7 @@ final class MaterializeIpilHistoricalCorpus
     }
 
     /** @return array<string, mixed> */
-    private function media(string $root, IpilSeedMappingProfile $profile): array
+    private function media(string $root, IpilSeedMappingProfile $profile, string $disk): array
     {
         $identityMaps = [];
         $createdRows = 0;
@@ -620,8 +623,9 @@ final class MaterializeIpilHistoricalCorpus
         $this->created['media_evidence'] = $createdRows;
 
         foreach (IpilHistoricalMediaEvidence::query()->where('import_accepted', true)->where('spatie_imported', false)->cursor() as $evidence) {
+            $evidence->historicalMediaDisk = $disk;
             $source = $root.'/'.$evidence->object_relative_path;
-            if (! is_file($source) || ! hash_equals($evidence->source_sha256, (string) hash_file('sha256', $source))) {
+            if (! is_file($source) || filesize($source) !== (int) $evidence->source_size_bytes || ! hash_equals($evidence->source_sha256, (string) hash_file('sha256', $source))) {
                 throw new RuntimeException('An accepted historical media source byte failed checksum verification.');
             }
             $collection = $evidence->source_dataset === 'businesses-media'
@@ -645,10 +649,17 @@ final class MaterializeIpilHistoricalCorpus
                     'document_type' => $evidence->document_type,
                     'association_confidence' => $associationConfidence,
                     'mapping_profile' => $profile->name,
-                ])->toMediaCollection($collection, 'ipil_gate6');
-            $managed = $media->getPath();
-            $managedHash = is_file($managed) ? (string) hash_file('sha256', $managed) : '';
-            if (! hash_equals($evidence->source_sha256, $managedHash)) {
+                ])->toMediaCollection($collection, $disk);
+            $path = $media->getPathRelativeToRoot();
+            $stream = Storage::disk($disk)->readStream($path);
+            if (! is_resource($stream)) {
+                throw new RuntimeException('The managed historical media copy cannot be read back.');
+            }
+            $hash = hash_init('sha256');
+            $size = hash_update_stream($hash, $stream);
+            fclose($stream);
+            $managedHash = hash_final($hash);
+            if ($size !== (int) $evidence->source_size_bytes || ! hash_equals($evidence->source_sha256, $managedHash)) {
                 throw new RuntimeException('A managed historical media copy differs from its rescued source bytes.');
             }
             $evidence->forceFill(['spatie_imported' => true, 'managed_copy_sha256' => $managedHash])->save();
@@ -661,7 +672,7 @@ final class MaterializeIpilHistoricalCorpus
         $this->expect($unresolved, 19, 'Unresolved historical media');
         $this->expect($imported, 16, 'Accepted historical media copies');
 
-        return ['source_objects' => $all, 'accepted_imported' => $imported, 'unresolved' => $unresolved, 'unresolved_imported' => 0, 'disk' => 'local-private'];
+        return ['source_objects' => $all, 'accepted_imported' => $imported, 'unresolved' => $unresolved, 'unresolved_imported' => 0, 'disk' => $disk === 'ipil_gate6' ? 'local-private' : 'private-r2'];
     }
 
     /** @return array<string, mixed> */

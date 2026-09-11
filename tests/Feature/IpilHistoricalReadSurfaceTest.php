@@ -68,6 +68,7 @@ test('authorized staff can navigate the historical read surface without source p
 
     $this->actingAs($staff)->get(route('staff.ipil-history.index', ['q' => 'OR-SYNTHETIC-1']))
         ->assertOk()->assertInertia(fn (Assert $page) => $page->component('ipil-history/Index')
+        ->where('anchors.completed_payment_total', '100.00')
         ->where('matches.receipts.0.application_id', $applicationId)->where('matches.receipts.0.is_duplicate_claim', true)
         ->missing('businesses.data.0.source_payload_json'));
     $this->actingAs($staff)->get(route('staff.ipil-history.owners.show', $ownerId))->assertOk()->assertInertia(fn (Assert $page) => $page->component('ipil-history/Owner')->where('owner.operationally_eligible', false)->missing('owner.source_payload_json'));
