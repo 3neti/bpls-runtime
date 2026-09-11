@@ -64,6 +64,13 @@ Assessment Officer prepares/computes persisted assessment
 
 The synthetic Treasury persona receives `assessments.approve`; the BPLO and Citizen personas do not. This is a preview permission bundle, not final municipal role policy. Deterministic data must record an explicit approval fact rather than backfilling or inferring one. Approval does not collect payment, issue a receipt, establish documentary sufficiency, or authorize permit signing, issuance, release, validity, or legal effect.
 
+Current Classic ceremony execution guidance is maintained in:
+
+- [`CLASSIC_LIFECYCLE_UAT_CHEAT_SHEET.md`](../implementation/CLASSIC_LIFECYCLE_UAT_CHEAT_SHEET.md) — the complete 25-stage actor split;
+- [`CLASSIC_LIFECYCLE_UAT_OFFICER_CHECKLIST.md`](../implementation/CLASSIC_LIFECYCLE_UAT_OFFICER_CHECKLIST.md) — the concise actor-by-actor field checklist.
+
+These documents describe UAT procedure only. They do not establish production office selection, fees, document sufficiency, tax treatment, receipt-numbering authority, signatory authority, or legal effect.
+
 ## Recovery
 
 No tester-facing reset route is permitted. The current scenario graph has no proven selective deletion contract, and a general database or migration reset is forbidden.

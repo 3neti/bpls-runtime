@@ -6,6 +6,7 @@ use App\Actions\BuildBploRoutingTask;
 use App\Actions\BuildExecutablePermitApplicationDocument;
 use App\Actions\BuildLaboratoryAssessmentReconciliation;
 use App\Actions\BuildLifecycleCleanroom;
+use App\Actions\BuildLifecycleCleanroomEvidence;
 use App\Actions\BuildLifecycleCleanroomIntake;
 use App\Actions\BuildMunicipalWorkInbox;
 use App\Actions\CaptureSignatureEvidence;
@@ -25,6 +26,7 @@ use App\Actions\RenderApplicationFormPdf;
 use App\Actions\ResolveLegacyCitizenPermitApplicationLabPool;
 use App\Actions\ResolveLifecycleCleanroomState;
 use App\Actions\SimulateLifecycleQrPhPayment;
+use App\Actions\StartClassicLifecycleCleanroom;
 use App\Actions\SubmitCitizenPermitApplication;
 use App\Data\Application\ApplicationDataResolver;
 use App\Enums\AssessmentDecisionAction;
@@ -77,17 +79,212 @@ beforeEach(function () {
 test('laboratory is fail closed to guests and arbitrary preview accounts', function () {
     $this->get(route('stakeholder-preview.lifecycle-laboratory.index'))->assertRedirect(route('login'));
     $this->get('/stakeholder-preview/lifecycle-laboratory/cleanrooms/1/office-reviews-assigned/2025')->assertRedirect(route('login'));
+    $this->get('/stakeholder-preview/lifecycle-laboratory/cleanrooms/1/evidence')->assertRedirect(route('login'));
+    $this->get('/stakeholder-preview/lifecycle-laboratory/cleanrooms/1/status')->assertRedirect(route('login'));
 
     $bplo = previewAccount(StakeholderPreviewPersona::Bplo);
     $this->actingAs($bplo)->get(route('stakeholder-preview.lifecycle-laboratory.index'))->assertNotFound();
     $this->actingAs($bplo)->post(route('stakeholder-preview.lifecycle-laboratory.run-next'))->assertNotFound();
     $this->actingAs($bplo)->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.start'))->assertNotFound();
     $this->actingAs($bplo)->get('/stakeholder-preview/lifecycle-laboratory/cleanrooms/1/office-reviews-assigned/2025')->assertNotFound();
+    $this->actingAs($bplo)->get('/stakeholder-preview/lifecycle-laboratory/cleanrooms/1/evidence')->assertNotFound();
     $this->actingAs($bplo)->post('/stakeholder-preview/lifecycle-laboratory/cleanrooms/1/office-reviews-assigned/2025/confirm-routine-defaults')->assertNotFound();
     $this->actingAs($bplo)->post('/stakeholder-preview/lifecycle-laboratory/cleanrooms/1/office-reviews-assigned/2025/simulate-office-reviews')->assertNotFound();
 
     expect(LifecycleScenarioSpecimen::query()->count())->toBe(0)
         ->and(PermitApplication::query()->count())->toBe(0);
+});
+
+test('cleanroom evidence projects active completed and retained status without changing persistence semantics', function () {
+    $management = previewAccount(StakeholderPreviewPersona::Management);
+    $run = LifecycleCleanroomRun::factory()->for($management, 'startedBy')->create();
+    $active = app(BuildLifecycleCleanroomEvidence::class)->handle($run);
+
+    expect($active['status'])->toBe('Active')
+        ->and($active['progress']['complete'])->toBeFalse()
+        ->and($run->fresh()->status)->toBe('active');
+
+    $resolver = Mockery::mock(ResolveLifecycleCleanroomState::class);
+    $resolver->shouldReceive('handle')->once()->with($run)->andReturn([
+        'progress' => [
+            'complete' => true,
+            'completed_steps' => 25,
+            'total_steps' => 25,
+            'percent' => 100,
+            'blocked' => false,
+            'next_step' => null,
+        ],
+        'actors' => [],
+        'steps' => [],
+    ]);
+    $completed = (new BuildLifecycleCleanroomEvidence($resolver))->handle($run);
+
+    expect($completed['status'])->toBe('Completed')
+        ->and($completed['timestamps']['completed_at'])->not->toBeNull()
+        ->and($run->fresh()->status)->toBe('active');
+
+    $run->update(['status' => 'closed', 'closed_at' => now()]);
+    $retained = app(BuildLifecycleCleanroomEvidence::class)->handle($run->fresh());
+
+    expect($retained['status'])->toBe('Retained')
+        ->and($retained['disposition'])->toContain('evidence retained')
+        ->and($run->fresh()->status)->toBe('closed');
+});
+
+test('active cleanroom actors can revisit read only laboratory status without changing actor or run state', function () {
+    $management = previewAccount(StakeholderPreviewPersona::Management);
+    $actor = previewAccount(StakeholderPreviewPersona::Bplo);
+    $role = $actor->primaryRole() ?? throw new RuntimeException('Expected BPLO preview role.');
+    $run = LifecycleCleanroomRun::factory()->for($management, 'startedBy')->create([
+        'actor_manifest' => [
+            'actors' => [
+                'intake' => ['label' => 'BPLO Intake', 'user_id' => $actor->id, 'role_id' => $role->id],
+            ],
+            'semantic_classification' => 'synthetic_only',
+            'production_liability' => false,
+        ],
+    ]);
+    $updatedAt = $run->updated_at;
+
+    $this->actingAs($actor)
+        ->get(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.status', $run))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('stakeholder-preview/LifecycleCleanroomStatus')
+            ->where('evidence.public_id', $run->public_id)
+            ->where('evidence.status', 'Active')
+            ->where('workUrl', route('staff.work.index', absolute: false)));
+    $this->get(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.status', $run))->assertSuccessful();
+
+    expect(auth()->id())->toBe($actor->id)
+        ->and($run->fresh()->updated_at->equalTo($updatedAt))->toBeTrue()
+        ->and($run->ceremonyEvents()->count())->toBe(0);
+
+    $outsider = previewAccount(StakeholderPreviewPersona::Treasury);
+    $this->actingAs($outsider)
+        ->get(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.status', $run))
+        ->assertNotFound();
+});
+
+test('registered Classic Citizen status links to application start before draft and to the Application afterward', function () {
+    $management = previewAccount(StakeholderPreviewPersona::Management);
+    $citizen = previewAccount(StakeholderPreviewPersona::Citizen);
+    $role = $citizen->primaryRole() ?? throw new RuntimeException('Expected Citizen preview role.');
+    $run = LifecycleCleanroomRun::factory()->for($management, 'startedBy')->create([
+        'actor_manifest' => [
+            'ceremony' => LifecycleCleanroomRun::CeremonyClassicLifecycleV1,
+            'actors' => [
+                'citizen' => ['label' => 'Classic Citizen', 'user_id' => $citizen->id, 'role_id' => $role->id],
+            ],
+            'semantic_classification' => 'synthetic_only',
+            'production_liability' => false,
+        ],
+    ]);
+    expect($run->new_application_id)->toBeNull();
+
+    $this->actingAs($citizen)
+        ->get(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.status', $run))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('stakeholder-preview/LifecycleCleanroomStatus')
+            ->where('workUrl', route('citizen.permit-applications.create', absolute: false)));
+
+    $application = PermitApplication::factory()->create(['submitted_by_id' => $citizen->id]);
+    $run->update(['new_application_id' => $application->id]);
+
+    $this->get(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.status', $run))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('stakeholder-preview/LifecycleCleanroomStatus')
+            ->where('workUrl', route('citizen.permit-applications.show', $application, false)));
+});
+
+test('retained history remains independently viewable and starting another Classic ceremony preserves prior evidence', function () {
+    $management = previewAccount(StakeholderPreviewPersona::Management);
+    $application = PermitApplication::factory()->create(['tracking_reference' => 'SUB-RETAINED-EVIDENCE']);
+    $first = LifecycleCleanroomRun::factory()->for($management, 'startedBy')->create([
+        'status' => 'closed',
+        'new_application_id' => $application->id,
+        'closed_at' => now()->subMinute(),
+    ]);
+    $second = LifecycleCleanroomRun::factory()->for($management, 'startedBy')->create([
+        'status' => 'closed',
+        'closed_at' => now(),
+    ]);
+
+    $this->actingAs($management)
+        ->get(route('stakeholder-preview.lifecycle-laboratory.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('cleanroom.active', null)
+            ->has('cleanroom.history', 2)
+            ->where('cleanroom.history.0.public_id', $second->public_id)
+            ->where('cleanroom.history.0.status', 'Retained')
+            ->where('cleanroom.history.1.application.id', $application->id)
+            ->where('cleanroom.history.1.application.tracking_reference', 'SUB-RETAINED-EVIDENCE'));
+
+    foreach ([$first, $second] as $retainedRun) {
+        $before = $retainedRun->fresh()->updated_at;
+        $this->get(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.evidence', $retainedRun))
+            ->assertSuccessful()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('stakeholder-preview/LifecycleCleanroomEvidence')
+                ->where('evidence.public_id', $retainedRun->public_id)
+                ->where('evidence.status', 'Retained')
+                ->missing('evidence.actors')
+                ->missing('evidence.signatures')
+                ->missing('evidence.documents')
+                ->missing('evidence.receipts'));
+        expect($retainedRun->fresh()->updated_at->equalTo($before))->toBeTrue();
+    }
+
+    config()->set('stakeholder_preview.source_backed_2025_specimen_path', sourceBackedNewApplicationSpecimenFile());
+    LineOfBusiness::factory()->create([
+        'code' => 'LOB-3A9A93CA46967768',
+        'name' => 'REC- Fresh Fish Retailer',
+        'metadata' => [],
+    ]);
+    $fresh = app(StartClassicLifecycleCleanroom::class)->handle($management)['run'];
+
+    expect($fresh->public_id)->not->toBe($first->public_id)
+        ->and($fresh->status)->toBe('active')
+        ->and($first->fresh()->status)->toBe('closed')
+        ->and($first->new_application_id)->toBe($application->id)
+        ->and(PermitApplication::query()->whereKey($application)->exists())->toBeTrue();
+});
+
+test('cleanroom return navigation is shared only with an active exact actor', function () {
+    $management = previewAccount(StakeholderPreviewPersona::Management);
+    $actor = previewAccount(StakeholderPreviewPersona::Bplo);
+    $role = $actor->primaryRole() ?? throw new RuntimeException('Expected BPLO preview role.');
+    $run = LifecycleCleanroomRun::factory()->for($management, 'startedBy')->create([
+        'actor_manifest' => [
+            'actors' => [
+                'intake' => ['label' => 'BPLO Intake', 'user_id' => $actor->id, 'role_id' => $role->id],
+            ],
+            'semantic_classification' => 'synthetic_only',
+            'production_liability' => false,
+        ],
+    ]);
+
+    $this->actingAs($actor)
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('stakeholder_preview.cleanroom_actor.public_id', $run->public_id)
+            ->where('stakeholder_preview.cleanroom_actor.laboratory_url', route('stakeholder-preview.lifecycle-laboratory.cleanrooms.status', $run, false)));
+
+    $run->update(['status' => 'closed', 'closed_at' => now()]);
+    $this->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page->where('stakeholder_preview.cleanroom_actor', null));
+
+    $banner = file_get_contents(resource_path('js/components/StakeholderPreviewBanner.vue'));
+    $publicVerification = file_get_contents(resource_path('js/pages/public/PermitVerification.vue'));
+    expect($banner)
+        ->toContain('preview.value.cleanroom_actor.laboratory_url')
+        ->not->toContain('enterLaboratory().url')
+        ->and($publicVerification)
+        ->toContain('public-verification-cleanroom-return')
+        ->toContain('v-if="cleanroomReturnUrl"');
 });
 
 test('management sees the ordered certified chronology with bounded controls and no reset', function () {
@@ -129,6 +326,10 @@ test('laboratory segregates interactive work from collapsed automated reference 
         ->toContain("label: 'Payment Orders'")
         ->toContain('View technical lifecycle')
         ->toContain('data-testid="current-lifecycle-task"')
+        ->toContain('data-testid="retained-cleanroom-history"')
+        ->toContain('Retained cleanrooms')
+        ->toContain('Close and retain evidence')
+        ->toContain('then returns to idle so another ceremony can start.')
         ->toContain('Open Application As')
         ->toContain("focusApplication('permit')")
         ->toContain('data-testid="laboratory-details"')
@@ -886,10 +1087,14 @@ test('cleanroom citizen form lodges through canonical draft and submit actions i
     expect($run->fresh()->status)->toBe('closed')
         ->and($run->fresh()->closed_at)->not->toBeNull()
         ->and(PermitApplication::query()->whereKey($application)->exists())->toBeTrue();
+    $retainedAt = $run->fresh()->closed_at;
+    $applicationUpdatedAt = $application->fresh()->updated_at;
 
     $this->actingAs($management)
         ->post(route('stakeholder-preview.lifecycle-laboratory.cleanrooms.close', $run))
         ->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.index'));
+    expect($run->fresh()->closed_at->equalTo($retainedAt))->toBeTrue()
+        ->and($application->fresh()->updated_at->equalTo($applicationUpdatedAt))->toBeTrue();
     $this->actingAs($management)
         ->get(route('stakeholder-preview.lifecycle-laboratory.index'))
         ->assertSuccessful()

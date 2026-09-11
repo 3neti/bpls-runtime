@@ -7,6 +7,7 @@ use App\Actions\AuthenticateLifecycleCleanroomActor;
 use App\Actions\AuthenticateStakeholderPreviewPersona;
 use App\Actions\BuildBploRoutingTask;
 use App\Actions\BuildExecutablePermitApplicationDocument;
+use App\Actions\BuildLifecycleCleanroomEvidence;
 use App\Actions\BuildLifecycleOfficeReviewHandoff;
 use App\Actions\ConfirmLifecycleRoutineOfficeDefaults;
 use App\Actions\IssueSyntheticLifecyclePermit;
@@ -330,6 +331,54 @@ class LifecycleCleanroomController extends Controller
             'recentCertificationOffice' => $recentCertificationOffice === '' ? null : $recentCertificationOffice,
             'routingTask' => $routingTask,
             'scenario' => ['id' => 'cleanroom', 'run_id' => $lifecycleCleanroomRun->public_id],
+        ]);
+    }
+
+    public function showStatus(
+        Request $request,
+        LifecycleCleanroomRun $lifecycleCleanroomRun,
+        BuildLifecycleCleanroomEvidence $buildEvidence,
+    ): Response {
+        $user = $request->user();
+        $actor = collect($lifecycleCleanroomRun->actors())
+            ->first(fn (array $actor): bool => $actor['user_id'] === $user->id);
+        abort_unless(
+            $lifecycleCleanroomRun->status === 'active'
+            && data_get($lifecycleCleanroomRun->actor_manifest, 'semantic_classification') === 'synthetic_only'
+            && data_get($lifecycleCleanroomRun->actor_manifest, 'production_liability') === false
+            && is_array($actor)
+            && $user->roles->contains('id', $actor['role_id']),
+            404,
+        );
+
+        $applicationId = $lifecycleCleanroomRun->renewal_application_id ?? $lifecycleCleanroomRun->new_application_id;
+        $actorKey = collect($lifecycleCleanroomRun->actors())
+            ->search(fn (array $candidate): bool => $candidate['user_id'] === $user->id);
+        $workUrl = match (true) {
+            $actorKey === 'citizen' && is_int($applicationId) => route('citizen.permit-applications.show', $applicationId, false),
+            $actorKey === 'citizen' => route('citizen.permit-applications.create', absolute: false),
+            default => route('staff.work.index', absolute: false),
+        };
+
+        return Inertia::render('stakeholder-preview/LifecycleCleanroomStatus', [
+            'evidence' => $buildEvidence->handle($lifecycleCleanroomRun),
+            'workUrl' => $workUrl,
+        ]);
+    }
+
+    public function showEvidence(
+        LifecycleCleanroomRun $lifecycleCleanroomRun,
+        BuildLifecycleCleanroomEvidence $buildEvidence,
+    ): Response {
+        abort_unless(
+            $lifecycleCleanroomRun->status === 'closed'
+            && data_get($lifecycleCleanroomRun->actor_manifest, 'semantic_classification') === 'synthetic_only'
+            && data_get($lifecycleCleanroomRun->actor_manifest, 'production_liability') === false,
+            404,
+        );
+
+        return Inertia::render('stakeholder-preview/LifecycleCleanroomEvidence', [
+            'evidence' => $buildEvidence->handle($lifecycleCleanroomRun),
         ]);
     }
 
