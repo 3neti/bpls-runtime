@@ -31,6 +31,7 @@ test('reviewer provisioning fails closed outside commissioned Cloud configuratio
 });
 
 test('historical media retains private local default and supports explicit isolated destination', function () {
+    expect(Gate8cExecutionAuthorization::Bucket)->toBe('fls-a2b95366-1364-456a-8471-86c4feac19fc');
     $evidence = new IpilHistoricalMediaEvidence;
     $evidence->registerMediaCollections();
     expect($evidence->getRegisteredMediaCollections()->first()->diskName)->toBe('ipil_gate6');
