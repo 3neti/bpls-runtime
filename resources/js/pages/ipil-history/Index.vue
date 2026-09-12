@@ -37,15 +37,18 @@ const props = defineProps<{
     options: Record<string, (string | number)[]>;
     anchors: Record<string, string | number>;
 }>();
+// Laravel serializes an empty filter map as []; copy only its own fields so
+// Array.prototype.sort cannot become the submitted sort value.
+const initialFilters = { ...props.filters };
 const form = ref({
-    q: String(props.filters.q ?? ''),
-    year: String(props.filters.year ?? ''),
-    type: String(props.filters.type ?? ''),
-    status: String(props.filters.status ?? ''),
-    barangay: String(props.filters.barangay ?? ''),
-    classification: String(props.filters.classification ?? ''),
-    sort: String(props.filters.sort ?? 'name'),
-    direction: String(props.filters.direction ?? 'asc'),
+    q: String(initialFilters.q ?? ''),
+    year: String(initialFilters.year ?? ''),
+    type: String(initialFilters.type ?? ''),
+    status: String(initialFilters.status ?? ''),
+    barangay: String(initialFilters.barangay ?? ''),
+    classification: String(initialFilters.classification ?? ''),
+    sort: String(initialFilters.sort ?? 'name'),
+    direction: String(initialFilters.direction ?? 'asc'),
 });
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Historical Ipil Records', href: index() },

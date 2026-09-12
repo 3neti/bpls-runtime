@@ -90,6 +90,25 @@ test('authorized staff can navigate the historical read surface without source p
     }
 });
 
+test('empty filters serialize as an array and invalid inherited sort values redirect the request', function () {
+    $staff = userWithPermissions([UserPermission::AccessStaff, UserPermission::ViewPermitApplications]);
+    $directory = route('staff.ipil-history.index');
+
+    $this->actingAs($staff)->get($directory)->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('filters', []));
+
+    $this->actingAs($staff)->from($directory)->get(route('staff.ipil-history.index', [
+        'q' => 'Synthetic Trading',
+        'sort' => 'function sort() { [native code] }',
+    ]))->assertRedirect($directory)->assertSessionHasErrors('sort');
+
+    $this->actingAs($staff)->get(route('staff.ipil-history.index', [
+        'q' => 'Synthetic Trading', 'sort' => 'name', 'direction' => 'asc',
+    ]))->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->where('filters.q', 'Synthetic Trading')->where('filters.sort', 'name')
+        ->where('matches.businesses.0.name', 'Synthetic Trading'));
+});
+
 test('history requires the existing permit application viewing authority', function () {
     $staffWithoutPermission = userWithPermissions([UserPermission::AccessStaff]);
     $this->actingAs($staffWithoutPermission)->get(route('staff.ipil-history.index'))->assertForbidden();

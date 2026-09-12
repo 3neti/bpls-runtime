@@ -40,7 +40,7 @@ function payload(url) {
         version: 'synthetic-form-test',
         props: {
             errors: {},
-            filters,
+            filters: Object.keys(filters).length ? filters : [],
             businesses: {
                 data: [],
                 from: 1,
@@ -83,6 +83,7 @@ const submit = () => document.querySelector('button[type=submit]').click();
 const query = () => new URLSearchParams(location.search);
 try {
  await until(()=>document.querySelector('#history_q'));
+ check(document.querySelector('select[aria-label="Sort businesses"]').value==='name','empty Laravel filter array uses default sort');
  for (const [kind, [value]] of Object.entries(${JSON.stringify(categories)})) {
    await set('#history_q',value);
    check(new FormData(document.querySelector('form')).get('q')===value,kind+' native GET field is named');
