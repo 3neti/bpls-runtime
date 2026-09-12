@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import ExecutableApplication from '@/components/permit-applications/ExecutableApplication.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+
+const page = usePage();
 
 defineProps<{
     application: any;
@@ -27,6 +29,7 @@ defineOptions({ layout: AppLayout });
     >
         <div class="mb-4">
             <p
+                v-if="page.props.stakeholder_preview?.show_engineering_controls"
                 class="text-xs font-bold tracking-wider text-slate-500 uppercase"
             >
                 Cleanroom

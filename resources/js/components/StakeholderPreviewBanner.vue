@@ -45,7 +45,7 @@ function returnToLaboratory(): void {
 
 <template>
     <section
-        v-if="preview?.enabled"
+        v-if="preview?.show_engineering_controls"
         class="sticky top-0 z-50 border-b border-amber-800 bg-amber-300 px-3 py-2 text-amber-950 shadow-sm dark:border-amber-300 dark:bg-amber-400 dark:text-amber-950"
         aria-label="Stakeholder preview status"
         data-test="stakeholder-preview-banner"

@@ -42,10 +42,9 @@ defineOptions({
             v-if="classicCleanroomInvitation"
             class="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm"
         >
-            <p class="font-medium">Classic Lifecycle Laboratory</p>
+            <p class="font-medium">Business Permit Application</p>
             <p class="mt-1 text-muted-foreground">
-                Create the Citizen account that will lodge this cleanroom
-                Application.
+                Create the Citizen account that will submit your Application.
             </p>
         </div>
         <div class="grid gap-6">

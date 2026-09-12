@@ -43,7 +43,8 @@ class HandleInertiaRequests extends Middleware
 
         $previewSafety = app(StakeholderPreviewSafety::class);
         $previewPersona = $previewSafety->personaFor($user);
-        $cleanroomActor = $this->cleanroomActor($user, $previewSafety);
+        $showEngineeringControls = $previewPersona !== null;
+        $cleanroomActor = $showEngineeringControls ? $this->cleanroomActor($user, $previewSafety) : null;
 
         return [
             ...parent::share($request),
@@ -81,12 +82,13 @@ class HandleInertiaRequests extends Middleware
             ],
             'stakeholder_preview' => $previewSafety->isEnabled() ? [
                 'enabled' => true,
+                'show_engineering_controls' => $showEngineeringControls,
                 'authorized_legacy_review' => $previewSafety->allowsAuthorizedLegacySpecimens(),
                 'access' => $previewSafety->requiresPrivateAuthentication() ? 'private' : 'open',
                 'current_persona' => $previewPersona?->value,
                 'current_label' => $previewPersona?->label(),
                 'cleanroom_actor' => $cleanroomActor,
-                'personas' => $previewSafety->personas(),
+                'personas' => $showEngineeringControls ? $previewSafety->personas() : [],
                 'what_to_try' => $previewSafety->guidanceFor($user),
                 'recovery_message' => 'Preview data can be restored by the preview administrator.',
             ] : null,

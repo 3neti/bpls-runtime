@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import type { FormDataConvertible } from '@inertiajs/core';
-import { Form, Head, Link, setLayoutProps, useForm } from '@inertiajs/vue3';
+import {
+    Form,
+    Head,
+    Link,
+    setLayoutProps,
+    useForm,
+    usePage,
+} from '@inertiajs/vue3';
 import {
     ArrowLeft,
     Eraser,
@@ -141,6 +148,8 @@ type FilledControl = {
     previousChecked: boolean;
     previousValue: string;
 };
+
+const page = usePage();
 
 const props = defineProps<{
     intakeAudience: 'staff' | 'citizen';
@@ -862,7 +871,11 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                 />
 
                 <section
-                    v-if="cleanroomIntake"
+                    v-if="
+                        cleanroomIntake &&
+                        page.props.stakeholder_preview
+                            ?.show_engineering_controls
+                    "
                     data-testid="lifecycle-cleanroom-intake"
                     class="border-l-4 border-emerald-600 bg-emerald-50 p-3 text-sm text-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-100"
                 >
@@ -870,7 +883,12 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     · Draft, add documents, then Sign & Submit.
                 </section>
                 <section
-                    v-if="labIntakeFixtures?.length && !isEditing"
+                    v-if="
+                        labIntakeFixtures?.length &&
+                        !isEditing &&
+                        page.props.stakeholder_preview
+                            ?.show_engineering_controls
+                    "
                     data-testid="permit-application-lab-helper"
                     class="grid gap-3 border border-blue-200 bg-blue-50 p-4 text-blue-950 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100"
                     aria-label="Permit application laboratory helper"
