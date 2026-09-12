@@ -15,8 +15,8 @@ import { Archive, LockKeyhole } from '@lucide/vue';
                 <p class="text-sm leading-6">
                     Rescued source evidence is shown as recorded. It cannot
                     create or continue an application, recalculate fees, issue a
-                    receipt or permit, or change the Nelson operational
-                    lifecycle.
+                    receipt or permit, or change the current business permit
+                    process.
                 </p>
             </div>
             <LockKeyhole class="ml-auto size-5 shrink-0" aria-hidden="true" />

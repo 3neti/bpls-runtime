@@ -83,6 +83,8 @@ const submit = () => document.querySelector('button[type=submit]').click();
 const query = () => new URLSearchParams(location.search);
 try {
  await until(()=>document.querySelector('#history_q'));
+ check(!!document.querySelector('section[aria-label="Historical record totals"]'),'historical totals use municipal accessible wording');
+ check(!document.querySelector('main').textContent.includes('Nelson') && document.querySelector('main').textContent.includes('current business permit'), 'read-only notice uses municipal wording');
  check(document.querySelector('select[aria-label="Sort businesses"]').value==='name','empty Laravel filter array uses default sort');
  for (const [kind, [value]] of Object.entries(${JSON.stringify(categories)})) {
    await set('#history_q',value);

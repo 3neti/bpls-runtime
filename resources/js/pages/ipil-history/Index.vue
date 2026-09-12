@@ -93,7 +93,7 @@ function clear(): void {
             <HistoricalRecordBanner />
             <section
                 class="grid grid-cols-2 gap-2 lg:grid-cols-4"
-                aria-label="Gate 6 evidence anchors"
+                aria-label="Historical record totals"
             >
                 <div
                     v-for="(value, label) in anchors"
