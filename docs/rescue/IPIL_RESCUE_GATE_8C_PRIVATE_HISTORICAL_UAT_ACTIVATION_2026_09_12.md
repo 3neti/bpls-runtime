@@ -1,8 +1,8 @@
 # IPIL RESCUE GATE 8C — PRIVATE HISTORICAL UAT READY FOR NELSON REALITY WALKTHROUGH
 
-Status: **MATERIALIZED AND AUDITED; NOT WALKTHROUGH-READY — SEARCH-FORM ACCEPTANCE BLOCKER**
+Status: **PASS — PRIVATE HISTORICAL UAT READY FOR NELSON**
 
-Date: 2026-09-12 (Asia/Manila). The commissioned heading is not a readiness claim.
+Date: 2026-09-12 (Asia/Manila). Updated after the expressly authorized bounded credential rotation and search-form correction.
 
 Authority: owner's Gate 8C commission and secure-connection continuation from `640afe9d4a55e5d20ee4c11adccb44f923597a32`. Governing evidence: [Compass](../agents/IPIL_RESCUE_AND_PARITY_COMPASS.md), [implementation plan](IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md), [Gate 6](IPIL_RESCUE_GATE_6_FIRST_LOCAL_MATERIALIZATION_2026_09_11.md), and [Gate 8A](IPIL_RESCUE_GATE_8A_HISTORICAL_READ_SURFACE_ACCEPTANCE_2026_09_11.md).
 
@@ -12,7 +12,9 @@ Secure database configuration was corrected without weakening TLS. Deployment su
 
 Exactly **16 accepted associated media objects / 25,399,590 bytes** were privately transferred and independently read back for SHA-256 and size verification. All **19 unresolved objects remain unattached**. The entire rescue corpus was not uploaded. No live Ipil access, workflow-UAT mutation, production migration, reconciliation, cleanup, or Renewal bridge occurred.
 
-Browser acceptance uncovered a product blocker: submitting the unified search form leaves the URL without its query parameters and displays zero unified matches. Reproduced with real business, owner, Application, Permit, and OR examples. Direct authenticated query URLs return the expected Permit and OR matches; the same read-surface service against the target database finds the expected match in all five categories. This is an observed browser submission failure, not evidence of missing imported records. Its precise frontend/build root cause remains unestablished. No product fix was implemented under this continuation's limited configuration scope.
+The initial search-form blocker is now closed by the subsequently authorized bounded continuation. Laravel serializes empty filters as `[]`; reading `filters.sort` inherited JavaScript's Array sort function, which was submitted as an invalid sort value. Request validation redirected without the query. The page now copies only own filter fields before initializing its form, explicitly submits nonempty form state, and resets Clear state. No search service, historical read model, mapping, or access policy changed. All five categories passed through the visible product form on desktop and exactly 390×844.
+
+The existing reviewer bootstrap credential was privately rotated and its replacement hash verified without emitting the replacement. The already-materialized database was not seeded again. The post-correction read-only audit passed all **61 checks**, with its check results identical to the preceding audit, both financial anchors unchanged, and still exactly one completed import run. No cull, remap, media transfer, reprovisioning, or historical-evidence modification occurred in this bounded continuation.
 
 ## Secure PostgreSQL correction
 
@@ -30,8 +32,8 @@ The isolated Cloud connection URL retains **sslmode=verify-full**, with OS roots
 | --- | --- |
 | Historical application | `app-a2b8d56c-d074-4005-82ae-2679e2f60f09` |
 | Historical environment | `env-a2b8d5b4-7ab8-4c99-a711-a88053b7fde5`, historical-ipil-uat-gate8c |
-| Branch / deployed SHA | `agent/migration/ipil-gate8c` / `cfb6f3b2d7ac77a22227b63fdb64b646ce132da2` |
-| Final activation deployment | `depl-a2b96b62-7c9a-44c7-a25c-f5481f38b0de`, deployment.succeeded |
+| Branch / deployed SHA | `agent/migration/ipil-gate8c` / `d1f2c96e7f37348f3fbd01d992084c4f7372fad8` |
+| Final bounded-correction deployment | `depl-a2b98596-0645-4416-bc51-80448e32919d`, deployment.succeeded |
 | PostgreSQL cluster | `twilight-bonus-30025572`, PostgreSQL 17, ap-southeast-1 |
 | Historical database | **1099424**, `bpls_ipil_historical_gate8c` |
 | Private bucket | `fls-a2b95366-1364-456a-8471-86c4feac19fc`; display name bpls-ipil-historical-gate8c |
@@ -91,22 +93,22 @@ Both audits also pass source statuses, additional missing-edge counts, provenanc
 
 The 16 objects comprise one accepted business upload and 15 generated/layout/platform artifacts, retained in separate media collections. The business upload is privately retrievable; its business has no historical Application, and none was fabricated for attachment. Authenticated application streaming avoids public or published signed storage URLs. Independent remote read-back verified exactly 16 objects and 25,399,590 bytes. Anonymous document access returned HTTP 302 to login.
 
-## Restricted access and credential follow-up
+## Restricted access and credential closure
 
 The initial owner-authorized reviewer has only staff-entry and historical-view permissions, not Admin. Ordinary email/password login succeeded before import. Anonymous history redirects to login; the authenticated reviewer requesting operational Applications received 404. The restriction layer admits authentication plus GET/HEAD historical routes, rejects other identities, and excludes registration, preview personas, account claiming, exports, and operational mutations. Private/no-store, no-index and no-referrer policy is covered by focused tests.
 
-**Credential follow-up remains open:** the temporary bootstrap password unexpectedly appeared in a local file-picker preview during sign-in preparation. It was not committed. A rotation attempt was rejected by the safety check pending explicit approval; this was not bypassed. Approval was requested in the task, with no response received before this report closed. Neither password nor reviewer email is reproduced here. Rotate the temporary credential with explicit approval before broader reviewer handoff; do not treat it as a durable shared walkthrough password.
+**Credential follow-up closed:** after explicit owner authorization, the established private mechanism rotated only the existing reviewer's bootstrap credential and cleared its remember token. A hash check verified the replacement; roles remain empty and the same two permissions remain `permit_applications.view` and `staff.access`. Identity, allowlist and historical-only access policy are unchanged. The replacement handoff file has mode 0600 and remains Git-ignored. Neither the replacement nor reviewer email was emitted to chat, reports, Git, logs, Cloud configuration or screenshots. The earlier bootstrap preview incident remains part of the prior report revision; the replacement was not previewed.
 
 ## Required return checklist
 
 | # | Item | Actual result |
 | --- | --- | --- |
 | 1 | Starting SHA | This continuation `640afe9d4a55e5d20ee4c11adccb44f923597a32`; accepted Gate 8A `b851a56390a69ab3845e116f919544ecdc8684ec` |
-| 2 | Final/deployed SHA | `cfb6f3b2d7ac77a22227b63fdb64b646ce132da2`; this later report-only commit is not deployed |
+| 2 | Final/deployed SHA | `d1f2c96e7f37348f3fbd01d992084c4f7372fad8`; this later report-only commit is not deployed |
 | 3 | Historical environment | Separate environment above: deployed and populated |
 | 4 | Workflow separation | Separate application, environment, cluster/database and storage; no workflow mutation |
-| 5 | Deployment | `depl-a2b96b62-7c9a-44c7-a25c-f5481f38b0de`, succeeded with full TLS verification |
-| 6 | Access | Exact restricted reviewer; ordinary sign-in proved; credential rotation pending approval |
+| 5 | Deployment | `depl-a2b98596-0645-4416-bc51-80448e32919d`, succeeded; full TLS verification preserved |
+| 6 | Access | Exact restricted reviewer; credential rotated privately and replacement hash verified; permissions unchanged |
 | 7 | Authorization | New Gate 8C fingerprint above; Gate 6 guard unchanged |
 | 8 | Corpus/profile/plan/manifest | All bindings pass; accepted manifest byte comparison passes |
 | 9 | Import | `ipil-g8c-20260912002534-ycsqqnja`, completed |
@@ -115,33 +117,45 @@ The initial owner-authorized reviewer has only staff-entry and historical-view p
 | 12 | Anomalies | All accepted anomalies preserved |
 | 13 | Media | 16 private objects, full source/destination and independent remote verification pass |
 | 14 | Unresolved media | All 19 unattached; zero imported |
-| 15 | ipil:audit | Immediate and post-inspection audits pass all 61 checks |
+| 15 | ipil:audit | Post-correction read-only audit passes all 61 checks, identical to prior audit; one import run remains |
 | 16 | Operational isolation | Audit zeroes and browser route refusal pass; no continuation actions |
 | 17 | Directory | Real records/anchors visible; page-two pagination verified |
 | 18 | Owner | Owner/business/history navigation works; explicit owner-not-User wording |
 | 19 | Business History | Real Application links and truthful year/type/status; missing evidence explicit |
 | 20 | Historical Application | Finance, schedules, payments, OR, Permit, classifications, clearances, and non-operational state verified |
-| 21 | Search | **FAIL:** on-page submissions drop parameters; five real categories tested. Read-service searches return expected matches |
-| 22 | OR lookup | Direct authenticated query returns the claim; on-page submission fails |
-| 23 | Permit lookup | Direct authenticated query returns the claim; on-page submission fails |
+| 21 | Search | **PASS:** Business, Owner, Application reference, Permit and OR submitted through visible forms on desktop and 390×844; URL query and expected results verified |
+| 22 | OR lookup | Correct claim through visible form on both viewports; direct authenticated URLs retained |
+| 23 | Permit lookup | Correct claim through visible form on both viewports; direct authenticated URLs retained |
 | 24 | Historical document | Private browser image loads (500×410); anonymous request redirects to login |
 | 25 | Priority reports | DEFER per Gate 8A; no new reports exposed. Directory quantitative anchors match audit |
-| 26 | Desktop | Directory/owner/business/Application navigation exercised; 1280×720 owner/directory overflow checks pass. Search form fails |
-| 27 | 390×844 | Directory/owner/Business History/Application/document-link layouts show no document-level horizontal overflow; mobile owner visually inspected. Search form fails |
+| 26 | Desktop | 1280×720: five form searches pass; query, year/type/status/barangay, owner sort, descending direction and page-two state preserved; Clear resets; no overflow |
+| 27 | 390×844 | Exact viewport measured; all five form searches, year/sort/page-two retention and Clear pass. Directory/Owner/Business History/Application/private document show no horizontal overflow |
 | 28 | Console/network | Inspected error log empty; no unexpected history/document server error encountered. Intentional operational 404 and anonymous-document 302 are security outcomes |
 | 29 | Tests | Scoped results below; no new full-suite green claim |
 | 30 | Privacy/Git | Code/tests/aggregate docs only; no real taxpayer rows, media, PII manifests, credentials or dumps committed |
-| 31 | Blockers | Search-form submission defect; temporary credential rotation approval. TLS/import/media are resolved |
-| 32 | Nelson recommendation | **NO** until the bounded defect is corrected/retested and credential handoff secured |
+| 31 | Blockers | None within this commissioned bounded gate; deferred product work remains outside scope |
+| 32 | Nelson recommendation | **YES — private historical UAT ready**, within the existing restricted reviewer policy |
 
 ## Dispositions and next boundary
 
 - **MATCH:** counts, exact totals, statuses, anomalies, provenance and accepted media bytes.
 - **ADAPT:** isolated restricted UAT, certificate-correct provider host with full verification, authenticated private media streaming, non-operational history presentation.
-- **IMPROVE:** separately authorize a bounded search-query propagation correction and regression tests. Recheck all five lookup categories, filter/sort/clear state, and desktop/mobile behavior. No historical data changes are indicated.
+- **IMPROVE:** authorized bounded search-query propagation correction completed, with actual-form regression coverage and desktop/mobile acceptance. No historical data changes were required.
 - **DEFER:** full report reconstruction, PSGC/LOB acceptance, collision/anomaly cleanup, unresolved media, Renewal bridge and production migration.
 
 No reseed is indicated. Retain the audited materialization and use read-only validation in the follow-up. Do not broaden credential rotation into permission changes or public access.
+
+## Bounded correction evidence
+
+Production changes are confined to `resources/js/pages/ipil-history/Index.vue`: own-field normalization, explicit query submission, native form field names/action, accepted-query result visibility, and Clear state reset. The first correction deployment (`depl-a2b981cc-f7d5-4076-80bd-40e01d40baae`) did not resolve the empty-array inherited-sort root cause. The final deployment above closed that same scoped defect. No additional product defect was encountered.
+
+`tests/Frontend/IpilHistoricalSearchForm.browser.mjs` mounts the actual Vue page with actual Inertia navigation and synthetic HTTP responses, including Laravel's empty `[]` filters. Its rendered-form driver passed **30 checks** in the browser: all five categories, field names, filters including classification, sorting, pagination, page reset, and Clear without stale-state resurrection. `tests/Feature/IpilHistoricalSearchFormBrowserTest.php` provides an opt-in browser runner. `tests/Feature/IpilHistoricalReadSurfaceTest.php` additionally reproduces the invalid inherited-sort request and proves the valid request retains the query. This is not solely a read-service test.
+
+Focused PHP validation passed **16 tests / 159 assertions**, with the one optional standalone browser wrapper skipped. This host could not launch separate Chromium under its sandbox; the actual synthetic browser driver was instead executed through the available browser and passed all 30 checks. Type checking, production build, Pint, targeted formatting and whitespace validation passed. No new full-suite green claim is made.
+
+After final deployment, real-record searches in all five categories retained their submitted query and returned the expected category matches on desktop and exactly 390×844. Direct query reload continued to work. Filter/sort/page state and Clear were exercised in the product. Owner, Business History and Historical Application remained explicitly read-only; the Application remained non-operational with schedules, payment/OR, Permit and clearance evidence present. The existing private document rendered successfully at 500×410 natural size. Desktop and mobile error logs were empty; no BPLS-originated console/network error or document-level horizontal overflow was observed. No private examples or screenshots are committed.
+
+The post-correction audit is privately retained as `audit-search-ipil-audit.txt`; its 61 check results compare identically to the earlier audit. The original authorization, manifest, completed import and 16/19 media disposition are unchanged. There was no post-deployment seed or media retransmission.
 
 ## Verification and preservation
 
@@ -153,4 +167,4 @@ Private execution evidence remains in Git-ignored `storage/app/private/ipil-resc
 
 Worktree: `/Users/rli/PhpstormProjects/bpls-gate8c`. Original checkout: `/Users/rli/PhpstormProjects/bpls-runtime`. Its four unrelated guidance edits remain untouched and uncommitted by this task: `.ai/skills/deploying-laravel-cloud/SKILL.md`, `.ai/skills/deploying-laravel-cloud/reference/checklists.md`, `AGENTS.md`, and `CLAUDE.md`.
 
-GATE 8C: FAIL — PRIVATE HISTORICAL UAT NOT READY FOR NELSON
+GATE 8C: PASS — PRIVATE HISTORICAL UAT READY FOR NELSON
