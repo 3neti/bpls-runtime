@@ -1,20 +1,131 @@
 <?php
 
 use App\Actions\BuildBploRoutingTask;
+use App\Actions\ConfirmOfficePaymentOrder;
+use App\Assessment\ConcernedOfficeFeeApplicability;
 use App\Enums\FeeCatalogVersionStatus;
 use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleScope;
 use App\Enums\UserPermission;
 use App\Enums\UserRole;
+use App\Models\BploRoutingDetermination;
+use App\Models\BploRoutingWork;
 use App\Models\BusinessDivision;
 use App\Models\FeeCatalogVersion;
 use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
+use App\Models\PaperlessPaymentOrder;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationDeclaration;
+use App\Models\PermitApplicationLine;
 use App\Models\RevenueAccount;
+use App\Models\SignatureEvidence;
 use Database\Seeders\MunicipalFeeCatalogSeeder;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
+
+test('inapplicable Health confirmation rolls back without altering existing orders or signature authority', function (): void {
+    Storage::fake('local');
+    $this->seed(MunicipalFeeCatalogSeeder::class);
+    $actor = userWithPermissions([UserPermission::ContributeBusinessPermitEvaluations]);
+    $application = PermitApplication::factory()->create(['application_year' => 2026, 'type' => 'new', 'metadata' => []]);
+    $determination = BploRoutingDetermination::factory()->for($application)->create();
+    $work = BploRoutingWork::factory()->for($determination, 'determination')->create([
+        'office_code' => 'health',
+        'context_snapshot' => ['authorized_actor_id' => $actor->id],
+    ]);
+    foreach (['assessor' => 10_000, 'engineering' => 15_000] as $office => $amount) {
+        $existingWork = BploRoutingWork::factory()->for($determination, 'determination')->create(['office_code' => $office]);
+        PaperlessPaymentOrder::factory()->for($existingWork, 'routingWork')->create([
+            'permit_application_id' => $application->id, 'total_amount_cents' => $amount,
+        ]);
+    }
+    $orders = PaperlessPaymentOrder::query()->orderBy('id')->get()->toJson();
+    $rule = FeeRule::query()->where('code', 'IPIL-LEGACY-0C9F4E23DDB45739')->sole();
+    expect(fn () => app(ConfirmOfficePaymentOrder::class)->handle($work, [[
+        'fee_rule_id' => $rule->id, 'amount_cents' => 10_000,
+    ]], $actor, UploadedFile::fake()->image('signature.png')))->toThrow(LogicException::class, 'not applicable');
+    expect(PaperlessPaymentOrder::query()->orderBy('id')->get()->toJson())->toBe($orders)
+        ->and(SignatureEvidence::query()->count())->toBe(0);
+    $stranger = userWithRole($actor->primaryRole());
+    expect(fn () => app(ConfirmOfficePaymentOrder::class)->handle($work, [[
+        'fee_rule_id' => $rule->id, 'amount_cents' => 10_000,
+    ]], $stranger, UploadedFile::fake()->image('signature.png')))->toThrow(LogicException::class, 'authorized routed');
+    expect(SignatureEvidence::query()->count())->toBe(0)
+        ->and(PaperlessPaymentOrder::query()->orderBy('id')->get()->toJson())->toBe($orders);
+});
+
+test('unclassified 2026 applications receive only applicable application-wide Health identities without mutating catalogue evidence', function (): void {
+    $this->seed(MunicipalFeeCatalogSeeder::class);
+    $application = PermitApplication::factory()->create([
+        'application_year' => 2026,
+        'type' => 'new',
+        'metadata' => [],
+    ]);
+    PermitApplicationDeclaration::factory()->for($application)->create([
+        'snapshot' => [
+            'schema_version' => 1,
+            'establishment' => [
+                'male_employees' => 1,
+                'female_employees' => 0,
+                'business_area_square_meters' => '12.00',
+            ],
+        ],
+    ]);
+    $before = FeeRule::query()->orderBy('id')->get()->toJson();
+    $editor = app(BuildBploRoutingTask::class)->handle($application, null)->toArray()['financial_editor'];
+    $health = collect($editor['office_fee_options']['health'])->keyBy('code');
+
+    expect($health->keys()->sort()->values()->all())->toBe([
+        'IPIL-LEGACY-04845A0127A00E12',
+        'IPIL-LEGACY-99C7F1CE5E8189C8',
+    ])
+        ->and($health['IPIL-LEGACY-99C7F1CE5E8189C8']['default_amount_cents'])->toBe(10_000)
+        ->and($health['IPIL-LEGACY-04845A0127A00E12']['default_amount_cents'])->toBe(20_000)
+        ->and(collect($editor['office_fee_options'])->except('health')->flatten(1)->pluck('code')->intersect($health->keys()))->toBeEmpty()
+        ->and(FeeRule::query()->orderBy('id')->get()->toJson())->toBe($before);
+});
+
+test('office applicability preserves distinct eligible identities and rejects unsupported scope type office and version', function (): void {
+    $this->seed(MunicipalFeeCatalogSeeder::class);
+    $application = PermitApplication::factory()->create(['application_year' => 2026, 'type' => 'new', 'metadata' => []]);
+    $applicationRule = FeeRule::query()->where('code', 'IPIL-LEGACY-99C7F1CE5E8189C8')->sole();
+    PermitApplicationDeclaration::factory()->for($application)->create([
+        'snapshot' => ['schema_version' => 1, 'establishment' => [
+            'male_employees' => 1, 'female_employees' => 0, 'business_area_square_meters' => '12.00',
+        ]],
+    ]);
+    $lobRule = FeeRule::query()->where('code', 'IPIL-LEGACY-0C9F4E23DDB45739')->sole();
+    $resolver = app(ConcernedOfficeFeeApplicability::class);
+    expect($resolver->matches($applicationRule, $application, 'health'))->toBeTrue()
+        ->and($resolver->matches($applicationRule, $application, 'engineering'))->toBeFalse()
+        ->and($resolver->matches($lobRule, $application, 'health'))->toBeFalse();
+
+    PermitApplicationLine::factory()->for($application)->create(['line_of_business_id' => $lobRule->line_of_business_id]);
+    $application->unsetRelation('lines');
+    expect($resolver->matches($lobRule, $application, 'health'))->toBeTrue();
+    $fees = collect(app(BuildBploRoutingTask::class)->handle($application, null)->toArray()['financial_editor']['office_fee_options']['health']);
+    expect($fees->pluck('id'))->toContain($applicationRule->id, $lobRule->id)
+        ->and($fees->firstWhere('id', $lobRule->id)['name'])->toContain('Gasoline Station', $lobRule->code)
+        ->and($fees->firstWhere('id', $applicationRule->id)['name'])->toContain($applicationRule->code);
+
+    foreach ([['application_types' => ['renewal']], ['application_types' => 'new']] as $metadata) {
+        $candidate = clone $applicationRule;
+        $candidate->metadata = [...$candidate->metadata, ...$metadata];
+        expect($resolver->matches($candidate, $application, 'health'))->toBeFalse();
+    }
+    foreach (['is_active' => false, 'effective_from' => '2027-01-01', 'effective_until' => '2025-12-31'] as $attribute => $value) {
+        $candidate = clone $applicationRule;
+        $candidate->{$attribute} = $value;
+        expect($resolver->matches($candidate, $application, 'health'))->toBeFalse();
+    }
+    $candidate = clone $applicationRule;
+    $version = clone $applicationRule->catalogVersion;
+    $version->status = FeeCatalogVersionStatus::Superseded;
+    $candidate->setRelation('catalogVersion', $version);
+    expect($resolver->matches($candidate, $application, 'health'))->toBeFalse();
+});
 
 test('the municipal fee editor resolves accepted employee and area defaults exactly once for the application', function (): void {
     $this->seed(MunicipalFeeCatalogSeeder::class);
