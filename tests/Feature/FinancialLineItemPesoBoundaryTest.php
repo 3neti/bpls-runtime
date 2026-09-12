@@ -22,7 +22,7 @@ test('the shared Nelson editor exposes pesos for office and Treasury entry', fun
 
     expect($editor)
         ->toContain('aria-label="Amount in pesos"')
-        ->toContain('placeholder="0.00"')
+        ->toMatch('/\:placeholder="\s*selectedOption\?\.resolution_status === \'unresolved\'\s*\? \'TBD\'\s*\: \'0\.00\'\s*"/')
         ->toContain('parsePesoAmount(amount.value)')
         ->not->toContain('Amount (centavos)')
         ->and(substr_count($taskSheet, '<FinancialLineItemEditor'))->toBe(3);

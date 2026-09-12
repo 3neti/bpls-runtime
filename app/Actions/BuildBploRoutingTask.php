@@ -4,6 +4,7 @@ namespace App\Actions;
 
 use App\Assessment\AssessmentCalculator;
 use App\Assessment\ConcernedOfficeFeeApplicability;
+use App\Assessment\TreasuryFeeResolution;
 use App\Data\Application\BploRoutingTaskData;
 use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCategory;
@@ -27,6 +28,7 @@ class BuildBploRoutingTask
         private readonly AuthorizeRoutedOfficeActor $authorizeRoutedOfficeActor,
         private readonly AssessmentCalculator $assessmentCalculator,
         private readonly ConcernedOfficeFeeApplicability $officeFeeApplicability,
+        private readonly TreasuryFeeResolution $treasuryFeeResolution,
     ) {}
 
     public function handle(PermitApplication $permitApplication, ?User $viewer): BploRoutingTaskData
@@ -210,6 +212,8 @@ class BuildBploRoutingTask
                                 'code' => $fee->code,
                                 'name' => $this->catalogOptionName($fee),
                                 'amount_cents' => $calculation['amount_cents'],
+                                'resolution_status' => $this->treasuryFeeResolution->unresolved($fee, $application) ? 'unresolved' : 'resolved',
+                                'resolution_message' => $this->treasuryFeeResolution->unresolved($fee, $application) ? $this->treasuryFeeResolution->message($fee) : null,
                                 'calculation' => $calculation,
                                 'scope' => $fee->scope->value,
                                 'exact_once_key' => data_get($fee->metadata, 'exact_once_key'),

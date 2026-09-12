@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Assessment\AssessmentCalculator;
+use App\Assessment\TreasuryFeeResolution;
 use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCategory;
 use App\Enums\PermitApplicationType;
@@ -13,6 +14,7 @@ use App\Models\PermitApplication;
 use App\Models\TreasuryLineOfBusinessAssignment;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use LogicException;
 
 class AssignTreasuryLinesOfBusiness
@@ -21,6 +23,7 @@ class AssignTreasuryLinesOfBusiness
         private readonly BuildConcernedOfficePaymentOrderSummary $paymentOrderSummary,
         private readonly RefreshBusinessPermitEvaluation $refreshEvaluation,
         private readonly AssessmentCalculator $assessmentCalculator,
+        private readonly TreasuryFeeResolution $treasuryFeeResolution,
     ) {}
 
     /**
@@ -48,6 +51,29 @@ class AssignTreasuryLinesOfBusiness
             }
             if ($selectedFeeIds->duplicates()->isNotEmpty()) {
                 throw new LogicException('Each Treasury payment item may be selected only once.');
+            }
+            foreach (FeeRule::query()->whereIn('id', $selectedFeeIds)->get() as $rule) {
+                if ($this->treasuryFeeResolution->unresolved($rule, $application)) {
+                    throw ValidationException::withMessages(['selections' => 'Treasury classification is incomplete: an unresolved fee requires municipal classification and authority.']);
+                }
+            }
+            $selectedLobIds = collect($selections)->pluck('line_of_business_id');
+            $defaultRules = FeeRule::query()->where('is_active', true)
+                ->where('determination_channel', FeeDeterminationChannel::TreasuryLineOfBusiness)
+                ->where('category', '!=', FeeRuleCategory::Tax)
+                ->whereDate('effective_from', '<=', $application->application_year.'-12-31')
+                ->where(fn ($query) => $query->whereNull('effective_until')->orWhereDate('effective_until', '>=', $application->application_year.'-01-01'))
+                ->where(fn ($query) => $query->whereIn('line_of_business_id', $selectedLobIds)
+                    ->orWhereHas('lineOfBusinesses', fn ($query) => $query->whereIn('line_of_businesses.id', $selectedLobIds)))
+                ->get();
+            foreach ($defaultRules as $rule) {
+                $types = data_get($rule->metadata, 'application_types');
+                if (is_array($types) && $types !== [] && ! in_array($application->type->value, $types, true)) {
+                    continue;
+                }
+                if ($this->treasuryFeeResolution->unresolved($rule, $application)) {
+                    throw ValidationException::withMessages(['selections' => 'Treasury classification is incomplete: an unresolved catalogue default cannot be omitted.']);
+                }
             }
             $routingWorks = $application->bploRoutingDetermination->works ?? collect();
             $paymentOrderFeeIds = $routingWorks

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import type { FinancialLineItemOption } from '../../resources/js/lib/financialLineItems.ts';
 import {
     financialLineItemSubtotal,
+    financialLineItemsResolved,
     formatMinorAsPesoInput,
     parsePesoAmount,
     removeFinancialLineItem,
@@ -15,6 +16,31 @@ const option: FinancialLineItemOption = {
     name: 'Assessor Service Fee',
     default_amount_cents: 10_050,
 };
+
+test('unresolved financial truth keeps the subtotal partial and readiness false without confusing resolved zero', () => {
+    const unresolved = upsertFinancialLineItem(
+        [],
+        {
+            ...option,
+            resolution_status: 'unresolved',
+            resolution_message: 'TBD — enterprise classification required',
+        },
+        100_000,
+    );
+    assert.equal(financialLineItemsResolved(unresolved), false);
+    assert.equal(financialLineItemSubtotal(unresolved), 0);
+    const known = upsertFinancialLineItem(
+        unresolved,
+        { ...option, id: 43 },
+        2500,
+    );
+    assert.equal(financialLineItemSubtotal(known), 2500);
+    assert.equal(financialLineItemsResolved(known), false);
+    assert.equal(
+        financialLineItemsResolved(upsertFinancialLineItem([], option, 0)),
+        true,
+    );
+});
 
 test('catalog defaults are displayed as peso text', () => {
     assert.equal(formatMinorAsPesoInput(0), '0.00');

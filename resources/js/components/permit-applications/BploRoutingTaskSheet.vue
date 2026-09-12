@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { dateTime, money } from '@/lib/evaluationPresentation';
+import { financialLineItemsResolved } from '@/lib/financialLineItems';
 
 type RoutingLine = {
     id: number | null;
@@ -95,6 +96,8 @@ type BploRoutingTask = {
             code: string;
             name: string;
             default_items: {
+                resolution_status?: 'resolved' | 'unresolved';
+                resolution_message?: string | null;
                 fee_rule_id: number;
                 code: string;
                 name: string;
@@ -155,6 +158,8 @@ const treasurySelections = ref<
     {
         line_of_business_id: number;
         items: {
+            resolution_status?: 'resolved' | 'unresolved';
+            resolution_message?: string | null;
             fee_rule_id: number;
             code: string;
             name: string;
@@ -483,7 +488,7 @@ function addTreasuryLob(): void {
 }
 
 function confirmTreasuryLobs(): void {
-    if (treasurySelections.value.length === 0) {
+    if (!treasurySelectionsReady.value) {
         return;
     }
 
@@ -511,6 +516,8 @@ function treasuryFeeOptions(lineOfBusinessId: number) {
         default_amount_cents: item.amount_cents,
         exact_once_key: item.exact_once_key,
         calculation: item.calculation,
+        resolution_status: item.resolution_status,
+        resolution_message: item.resolution_message,
     }));
 }
 
@@ -521,6 +528,9 @@ function actorLabel(name: string): string {
 const treasurySelectionsReady = computed(
     () =>
         treasurySelections.value.length > 0 &&
+        treasurySelections.value.every((selection) =>
+            financialLineItemsResolved(selection.items),
+        ) &&
         treasurySelections.value.some(
             (selection) => selection.items.length > 0,
         ),
