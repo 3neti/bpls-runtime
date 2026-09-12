@@ -751,6 +751,15 @@ function nested(path: string): unknown {
 function cleanroom(key: string): unknown {
     return props.cleanroomIntake?.[key];
 }
+const occupancy = ref(
+    typeof nested('rental.place_is_rented') === 'boolean'
+        ? nested('rental.place_is_rented')
+            ? 'rented'
+            : 'owned'
+        : (props.draft?.occupancy ?? cleanroom('occupancy')) === 'rented'
+          ? 'rented'
+          : 'owned',
+);
 function text(value: unknown): string | number | null {
     return typeof value === 'string' || typeof value === 'number'
         ? value
@@ -1717,16 +1726,28 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 "
                                 :error="errors.female_employee_count"
                             />
-                            <input
-                                type="hidden"
-                                name="occupancy"
-                                :value="
-                                    nested('rental.place_is_rented') === true ||
-                                    cleanroom('occupancy') === 'rented'
-                                        ? 'rented'
-                                        : 'owned'
-                                "
-                            />
+                            <div class="grid gap-1.5">
+                                <label
+                                    for="occupancy"
+                                    class="text-xs font-bold uppercase"
+                                    >Occupancy</label
+                                >
+                                <select
+                                    id="occupancy"
+                                    v-model="occupancy"
+                                    name="occupancy"
+                                    class="h-10 w-full rounded-md border border-stone-300 bg-white px-3 text-sm text-stone-950 dark:border-stone-700 dark:bg-stone-950 dark:text-stone-50"
+                                    :aria-invalid="Boolean(errors.occupancy)"
+                                    aria-describedby="occupancy-error"
+                                >
+                                    <option value="owned">Owned</option>
+                                    <option value="rented">Rented</option>
+                                </select>
+                                <InputError
+                                    id="occupancy-error"
+                                    :message="errors.occupancy"
+                                />
+                            </div>
                         </section>
 
                         <section
