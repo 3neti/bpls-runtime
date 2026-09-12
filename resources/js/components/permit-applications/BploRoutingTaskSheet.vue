@@ -685,7 +685,7 @@ const filteredTreasuryLobOptions = computed(() => {
 
             <section
                 v-if="isTreasuryActor && task.application.commissioned_path"
-                class="grid gap-5 rounded-xl border-2 border-primary/40 bg-primary/5 p-4 sm:p-5"
+                class="grid w-full min-w-0 grid-cols-1 gap-5 rounded-xl border-2 border-primary/40 bg-primary/5 p-4 sm:p-5"
                 aria-labelledby="treasury-classification-heading"
                 data-testid="treasury-classification-workspace"
             >
@@ -708,7 +708,9 @@ const filteredTreasuryLobOptions = computed(() => {
                     </p>
                 </div>
 
-                <div class="rounded-lg border bg-background p-4">
+                <div
+                    class="min-w-0 rounded-lg border bg-background p-4 break-words"
+                >
                     <p
                         class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
                     >
@@ -722,7 +724,9 @@ const filteredTreasuryLobOptions = computed(() => {
                     </p>
                 </div>
 
-                <ApplicantDocumentReference :documents="documents" />
+                <div class="max-w-full min-w-0">
+                    <ApplicantDocumentReference :documents="documents" />
+                </div>
 
                 <div
                     v-if="task.financial_editor.treasury_assignments.length"
@@ -750,7 +754,7 @@ const filteredTreasuryLobOptions = computed(() => {
                 </div>
 
                 <template v-else-if="allPaymentOrdersFinalized">
-                    <div class="grid gap-2">
+                    <div class="grid min-w-0 grid-cols-1 gap-2">
                         <label
                             for="treasury-line-of-business"
                             class="font-bold"
@@ -763,11 +767,11 @@ const filteredTreasuryLobOptions = computed(() => {
                             placeholder="Search the Ipil Line of Business catalogue"
                             autocomplete="off"
                         />
-                        <div class="flex flex-col gap-2 sm:flex-row">
+                        <div class="flex min-w-0 flex-col gap-2 sm:flex-row">
                             <select
                                 id="treasury-line-of-business"
                                 v-model="selectedTreasuryLob"
-                                class="h-11 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
+                                class="h-11 w-full min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
                             >
                                 <option :value="null">
                                     Choose an official classification
@@ -783,7 +787,7 @@ const filteredTreasuryLobOptions = computed(() => {
                             <Button
                                 type="button"
                                 variant="outline"
-                                class="h-11"
+                                class="h-auto min-h-11 min-w-0 whitespace-normal"
                                 :disabled="selectedTreasuryLob === null"
                                 @click="addTreasuryLob"
                             >
@@ -794,7 +798,7 @@ const filteredTreasuryLobOptions = computed(() => {
 
                     <div
                         v-if="treasurySelections.length"
-                        class="grid gap-3 border-t border-primary/20 pt-5"
+                        class="grid min-w-0 grid-cols-1 gap-3 border-t border-primary/20 pt-5"
                     >
                         <h4 class="text-lg font-black">
                             Payment items for selected LOB
@@ -802,10 +806,12 @@ const filteredTreasuryLobOptions = computed(() => {
                         <article
                             v-for="selection in treasurySelections"
                             :key="selection.line_of_business_id"
-                            class="grid gap-3 rounded-lg border bg-background p-4"
+                            class="grid min-w-0 grid-cols-1 gap-3 rounded-lg border bg-background p-4"
                         >
-                            <div class="flex items-start justify-between gap-3">
-                                <strong>{{
+                            <div
+                                class="flex min-w-0 items-start justify-between gap-3"
+                            >
+                                <strong class="min-w-0 break-words">{{
                                     task.financial_editor.line_of_business_options.find(
                                         (line) =>
                                             line.id ===
@@ -838,6 +844,7 @@ const filteredTreasuryLobOptions = computed(() => {
                     <Button
                         type="button"
                         size="lg"
+                        class="h-auto min-h-11 w-full min-w-0 whitespace-normal"
                         :disabled="!treasurySelectionsReady"
                         @click="confirmTreasuryLobs"
                     >
