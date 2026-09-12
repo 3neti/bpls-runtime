@@ -1,118 +1,156 @@
 # IPIL RESCUE GATE 8C — PRIVATE HISTORICAL UAT READY FOR NELSON REALITY WALKTHROUGH
 
-Status: **BLOCKED — DATABASE TLS HOSTNAME VERIFICATION; NO HISTORICAL DATA TRANSFER**
+Status: **MATERIALIZED AND AUDITED; NOT WALKTHROUGH-READY — SEARCH-FORM ACCEPTANCE BLOCKER**
 
-Date: 2026-09-12 (Asia/Manila)
+Date: 2026-09-12 (Asia/Manila). The commissioned heading is not a readiness claim.
 
-Authority: owner's Gate 8C Private Historical UAT Activation commission. Governing evidence: [Compass](../agents/IPIL_RESCUE_AND_PARITY_COMPASS.md), [implementation plan](IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md), [Gate 6](IPIL_RESCUE_GATE_6_FIRST_LOCAL_MATERIALIZATION_2026_09_11.md), and [Gate 8A](IPIL_RESCUE_GATE_8A_HISTORICAL_READ_SURFACE_ACCEPTANCE_2026_09_11.md). The required heading is the commissioned report title, not a readiness claim.
+Authority: owner's Gate 8C commission and secure-connection continuation from `640afe9d4a55e5d20ee4c11adccb44f923597a32`. Governing evidence: [Compass](../agents/IPIL_RESCUE_AND_PARITY_COMPASS.md), [implementation plan](IPIL_RESCUE_AND_PARITY_IMPLEMENTATION_PLAN.md), [Gate 6](IPIL_RESCUE_GATE_6_FIRST_LOCAL_MATERIALIZATION_2026_09_11.md), and [Gate 8A](IPIL_RESCUE_GATE_8A_HISTORICAL_READ_SURFACE_ACCEPTANCE_2026_09_11.md).
 
-## Actual execution and access gate
+## Actual execution
 
-A separate Cloud application, environment, PostgreSQL 17 cluster/database, and private object-storage bucket were provisioned. Two deployments built successfully but failed at the migration command before creating any database tables. No historical seed, media transfer, or remote historical audit ran. No source connection was made. Accepted source artifacts and the existing local Gate 6 database were not modified.
+Secure database configuration was corrected without weakening TLS. Deployment succeeded, the restricted reviewer authenticated, a new target-bound authorization was issued, and the deterministic historical import completed. The immediate audit and a second read-only audit after browser inspection each passed **all 61 checks**, with zero failures and one completed import run.
 
-The owner supplied the initial reviewer identity. It is configured privately in the isolated environment and is absent from Git and this report. Account provisioning has not run because deployment has not succeeded. The mechanism is existing BPLS/Laravel sign-in with an explicit reviewer allowlist, no public registration, no preview-persona switching, and a historical-only route boundary. The new guarded provisioning command grants only staff entry and historical-view permissions; no taxpayer-derived User is created. A bootstrap credential remains in a local mode-0600, Git-ignored runtime artifact and was not sent to Cloud configuration or emitted in tool output.
+Exactly **16 accepted associated media objects / 25,399,590 bytes** were privately transferred and independently read back for SHA-256 and size verification. All **19 unresolved objects remain unattached**. The entire rescue corpus was not uploaded. No live Ipil access, workflow-UAT mutation, production migration, reconciliation, cleanup, or Renewal bridge occurred.
 
-Local code implements a fail-closed, opt-in middleware bound to the new environment ID. It requires the historical UAT environment classification, disables preview mode, validates the configured reviewer, rejects other authenticated users, admits only authentication and read-only historical routes, and adds private/no-store, no-index, and no-referrer headers. It is not yet deployed or browser-accepted. Default-disabled behavior preserves other environments.
+Browser acceptance uncovered a product blocker: submitting the unified search form leaves the URL without its query parameters and displays zero unified matches. Reproduced with real business, owner, Application, Permit, and OR examples. Direct authenticated query URLs return the expected Permit and OR matches; the same read-surface service against the target database finds the expected match in all five categories. This is an observed browser submission failure, not evidence of missing imported records. Its precise frontend/build root cause remains unestablished. No product fix was implemented under this continuation's limited configuration scope.
 
-## Provisioning evidence and separation
+## Secure PostgreSQL correction
 
-| Resource | Verified identity / state |
+Original Cloud alias: `ep-round-leaf-aosjawvm.c-2.aws-ap-southeast-1.pg.laravel.cloud`.
+
+Certificate-correct endpoint: `ep-round-leaf-aosjawvm.c-2.ap-southeast-1.aws.neon.tech`.
+
+The alias's DNS target identified `c-2.ap-southeast-1.aws.neon.tech`. A PostgreSQL TLS handshake verified the endpoint-preserving canonical hostname against the presented wildcard certificate with OS roots: verification return code zero, TLS 1.3, ISRG Root X1 chain. An authenticated read-only query returned database `bpls_ipil_historical_gate8c` and Neon endpoint `ep-round-leaf-aosjawvm`; there were zero public tables before deployment. The exact cluster identity was checked against the provider control plane.
+
+The isolated Cloud connection URL retains **sslmode=verify-full**, with OS roots at `/etc/ssl/certs/ca-certificates.crt`. The local materializer also uses verify-full and its OS trust bundle. Successful Cloud migrations prove the corrected connection from the runtime. No require/verify-ca downgrade, hostname-verification disablement, insecure flags, or trust bypass was used. Provider context: [Laravel Cloud PostgreSQL](https://laravel.com/cloud/docs/resources/databases/postgres), [Neon secure connections](https://neon.com/docs/connect/connect-securely).
+
+## Exact target separation
+
+| Resource | Verified identity |
 | --- | --- |
-| New Cloud application | `app-a2b8d56c-d074-4005-82ae-2679e2f60f09` — BPLS Ipil Historical Review Gate8C |
-| New environment | `env-a2b8d5b4-7ab8-4c99-a711-a88053b7fde5` — historical-ipil-uat-gate8c |
-| Environment control-plane state | Branch `agent/migration/ipil-gate8c`, database `1099424` attached, automatic push-to-deploy disabled; no successful deployment |
-| New PostgreSQL 17 cluster | `twilight-bonus-30025572` — bpls_ipil_historical_uat_gate8c, available, ap-southeast-1 |
-| Intended historical database | `1099424` — bpls_ipil_historical_gate8c; attached, zero public tables after both failed deployments |
-| Private historical media bucket | `fls-a2b95366-1364-456a-8471-86c4feac19fc` — bpls-ipil-historical-gate8c; no media transfer |
-| Media credential separation | Local materializer read/write key; separate read-only runtime key. Values remain private; no public URLs or whole-corpus upload |
-| Provider-created default database | `1099422` — production; empty/unselected by this task, NOT a production migration target |
-| Protected workflow application ID | `app-a28928ff-2881-48eb-bfbb-f89cfac5f51d` |
-| Protected workflow environment | `env-a2892915-0c8a-4e9d-b974-a1f8adfad1c1`, database `1040718`, branch `release/workflow-handoff-uat-20260911` |
+| Historical application | `app-a2b8d56c-d074-4005-82ae-2679e2f60f09` |
+| Historical environment | `env-a2b8d5b4-7ab8-4c99-a711-a88053b7fde5`, historical-ipil-uat-gate8c |
+| Branch / deployed SHA | `agent/migration/ipil-gate8c` / `cfb6f3b2d7ac77a22227b63fdb64b646ce132da2` |
+| Final activation deployment | `depl-a2b96b62-7c9a-44c7-a25c-f5481f38b0de`, deployment.succeeded |
+| PostgreSQL cluster | `twilight-bonus-30025572`, PostgreSQL 17, ap-southeast-1 |
+| Historical database | **1099424**, `bpls_ipil_historical_gate8c` |
+| Private bucket | `fls-a2b95366-1364-456a-8471-86c4feac19fc`; display name bpls-ipil-historical-gate8c |
+| Provider default database | 1099422: not selected or used |
+| Protected workflow application | `app-a28928ff-2881-48eb-bfbb-f89cfac5f51d`: not modified |
+| Protected workflow environment/database | `env-a2892915-0c8a-4e9d-b974-a1f8adfad1c1` / 1040718: not modified |
 
-The new resources may incur Cloud charges; no teardown was attempted. Retain them for continuation unless the owner authorizes deletion. The new cluster uses 0.25 minimum/maximum compute units, 300-second suspend, and one-day retention.
+[Restricted historical UAT](https://bpls-ipil-historical-review-gate8c-historical-ipil-uat-g-cwkour.laravel.cloud/staff/ipil-history) uses ordinary BPLS sign-in with an exact-reviewer allowlist, not public taxpayer search. Automatic push-to-deploy and deploy hooks remain disabled. Only the isolated branch was pushed, after verifying the repository binding as `3neti/bpls-runtime`. Main and the workflow release branch were not pushed.
 
-The installed CLI's cluster provisioning presets use version-suffixed types, but the live API returns a separate type and version. The initial CLI attempt failed before resource creation. A read-only type inventory established `neon_serverless_postgres` and supported version `17`; an API request without the version was rejected (422), and the corrected explicit version request returned 201. Credentials were consumed only within the authenticated process and never printed.
+Earlier deployments `depl-a2b95d40-a463-4467-ac24-8edfd27316b1` and `depl-a2b95f5b-48de-470c-baf2-3c5e7f24060f` failed before schema creation on TLS hostname mismatch. The explicitly authorized canonical-host correction succeeded in `depl-a2b9652d-12fb-446a-9683-a43b23778793`. Deployment `depl-a2b969ce-e891-4d4e-b0d6-ee014563f38e` attached the isolated read-only media integration. Provider-generated storage configuration established that the physical S3 bucket name is its resource ID, not its display name. The final deployed commit narrowly corrects that authorization constant and its test. Historical writes started only after final deployment and target verification.
 
-Automatic safety review rejected adding an environment to the workflow application's container. That rejected operation was not retried or bypassed. A wholly separate application was created instead; the workflow environment/database were not changed.
+Resources remain provisioned and may incur charges; no teardown was attempted. Separate read/write materializer and read-only runtime media keys remain private.
 
-## Frozen chain — expected, not a new execution authorization
+## Immutable execution chain
 
-| Artifact | Immutable binding |
+| Artifact | Binding |
 | --- | --- |
 | Corpus | `ipil-20260910t153224z-2ab19c17` |
-| Corpus fingerprint | `d799a0c4da562094f3433f7ebe5b6f5175b4640e5738c518d4c2c51dc731fa81` |
-| Mapping profile | `ipil-rescue-mapping-v1.0.0` |
-| Profile fingerprint | `edae710f7e29dcecb148d24e349eb4e0e3d6747704231a298d1d63bb97ab789c` |
-| Seed plan | `ipil-seed-plan-874d26eb21ed0041` |
-| Plan fingerprint | `874d26eb21ed004147bdec32fdbd4cbf097101defdf37a7697776ea42080d9fb` |
-| Accepted Gate 5 manifest fingerprint | `c906494f1c37a4375d78343037e4c5a443986aba9df65217ab4efa4fdbfb64b6` |
+| Corpus SHA-256 | `d799a0c4da562094f3433f7ebe5b6f5175b4640e5738c518d4c2c51dc731fa81` |
+| Profile | `ipil-rescue-mapping-v1.0.0` |
+| Profile SHA-256 | `edae710f7e29dcecb148d24e349eb4e0e3d6747704231a298d1d63bb97ab789c` |
+| Plan | `ipil-seed-plan-874d26eb21ed0041` |
+| Plan SHA-256 | `874d26eb21ed004147bdec32fdbd4cbf097101defdf37a7697776ea42080d9fb` |
+| Accepted Gate 5 manifest SHA-256 | `c906494f1c37a4375d78343037e4c5a443986aba9df65217ab4efa4fdbfb64b6` |
+| New Gate 8C authorization SHA-256 | `b4838b84d35c2e08a335be42232162ea3b7583664df79e4ff843ea9fe5cd6046` |
+| Completed import run | `ipil-g8c-20260912002534-ycsqqnja` |
 
-The existing Gate 6 execution guard remains unchanged and local-only. No Gate 8C authorization has been issued. It must bind these artifacts, the exact separate environment/database, the deployed code, and private media destination before historical writes. The full corpus must stay local: only accepted materialized data and the 16 accepted media copies may be transported under the commissioned scope. Nineteen unresolved objects must stay unattached.
+The private authorization binds the exact application/environment/cluster/database, verified host identity, deployed commit/deployment, private media target, reviewer fingerprint, immutable chain, and 16-object limit. Its body is not committed. Gate 6's local-only guard is unchanged. Pre-import corpus verification and plan fingerprint checks passed. The accepted Gate 5 manifest compares byte-for-byte equal to the original checkout's private manifest after execution.
 
-## Continuation from f50520e — implementation and deployment blocker
+One Gate 8C import ran. The second audit was read-only, not another seed; the accepted two-run idempotency proof remains Gate 6 evidence.
 
-Continuation starting SHA: `f50520ee04894d40c6826882040d0ad8f4edd056`. Activation code is committed and pushed only on `agent/migration/ipil-gate8c` at `640afe9d4a55e5d20ee4c11adccb44f923597a32`. The authenticated Cloud application repository binding and existing Git remote both identify `3neti/bpls-runtime`; this was verified before publishing. Neither `main` nor the workflow release branch was pushed.
+## Quantitative parity
 
-The packet adds a separate Gate 8C authorization contract, guarded reviewer provisioning, explicit private-historical execution mode, private S3-compatible media support, source/destination media size and SHA-256 verification, and truthful remote audit/seed metadata. Gate 6 remains local-only. The historical directory's previously hard-coded paid total now comes from the actual historical completed-payment evidence using exact decimal arithmetic. The standard Flysystem S3 adapter and its locked dependencies support private R2 transport. No historical mappings or accepted artifacts were changed.
+| Evidence | Audited actual = required |
+| --- | ---: |
+| Source identities / evidence excluding authentication payloads | 324,873 / 246,230 |
+| Owners | 3,194 |
+| Businesses | 3,212 |
+| Historical Applications | 3,137 |
+| Renewal / New / Additional | 2,621 / 461 / 55 |
+| Schedules | 7,648 |
+| Payments | 5,874 |
+| Receipt claims | 5,873 |
+| Permit claims | 2,766 |
+| Clearance claims | 14,615 |
+| Completed-payment total | **PHP 93,295,317.20** |
+| Aggregate schedule-paid total | **PHP 93,295,317.20** |
+| Non-cent-exact Application / Schedule totals | 348 / 24 |
+| Duplicate OR groups / events | 196 / 744 |
+| Permits missing Applications | 15 |
+| Broken Permit business / owner edges | 10 / 10 |
+| Broken clearance-type references | 110 |
+| Accepted media / unresolved media | 16 / 19 |
+| Unresolved media imported / checksum mismatches | 0 / 0 |
 
-The copied local corpus passed offline verification again: 97 bound files, 324,873 source identities, 324,833 database rows, 35 media objects, five pricing records, and canonical corpus fingerprint unchanged. This is integrity verification, not a Cloud materialization/audit claim.
+Both audits also pass source statuses, additional missing-edge counts, provenance bindings, and operational-isolation checks. No tolerance or current Price recalculation was used. Audited historical actionability, taxpayer-derived Users, operational Applications, current liabilities, Collections, receipts, work, Payment Orders, certifications/signatures, fabricated lodging manifests, and historical media on operational Applications are all zero. No fuzzy merge, automatic PSGC acceptance, or historical correction occurred.
 
-Deployment attempts:
+The 16 objects comprise one accepted business upload and 15 generated/layout/platform artifacts, retained in separate media collections. The business upload is privately retrievable; its business has no historical Application, and none was fabricated for attachment. Authenticated application streaming avoids public or published signed storage URLs. Independent remote read-back verified exactly 16 objects and 25,399,590 bytes. Anonymous document access returned HTTP 302 to login.
 
-| Deployment | Actual result |
-| --- | --- |
-| `depl-a2b95d40-a463-4467-ac24-8edfd27316b1` | Build passed; deploy command failed with PostgreSQL TLS hostname/certificate mismatch |
-| `depl-a2b95f5b-48de-470c-baf2-3c5e7f24060f` | Build passed; explicit connection-URL correction did not resolve the same TLS mismatch |
+## Restricted access and credential follow-up
 
-The Cloud database alias terminates in `.pg.laravel.cloud`, while the failed Cloud-side connection reports a certificate for `*.c-2.ap-southeast-1.aws.neon.tech`. The local connection to the provider-supplied hostname succeeds with `sslmode=verify-full` and system roots; the Cloud failure shows an IPv6 address. Different network resolution/termination is a hypothesis, not yet a proven root cause. The attempted explicit `DB_URL` still used the provider-supplied alias, not an independently verified Neon hostname. Certificate verification was not disabled or downgraded.
+The initial owner-authorized reviewer has only staff-entry and historical-view permissions, not Admin. Ordinary email/password login succeeded before import. Anonymous history redirects to login; the authenticated reviewer requesting operational Applications received 404. The restriction layer admits authentication plus GET/HEAD historical routes, rejects other identities, and excludes registration, preview personas, account claiming, exports, and operational mutations. Private/no-store, no-index and no-referrer policy is covered by focused tests.
 
-The [deployment skill](../../.ai/skills/deploying-laravel-cloud/SKILL.md) requires pausing after the same error recurs after one correction. Resume by resolving the certificate-correct Cloud-side connection to this exact historical database, retaining full verification, then retrying deployment. Do not issue execution authorization or seed until live restricted access and all target bindings are proved. Reviewer email is no longer a blocker.
+**Credential follow-up remains open:** the temporary bootstrap password unexpectedly appeared in a local file-picker preview during sign-in preparation. It was not committed. A rotation attempt was rejected by the safety check pending explicit approval; this was not bypassed. Approval was requested in the task, with no response received before this report closed. Neither password nor reviewer email is reproduced here. Rotate the temporary credential with explicit approval before broader reviewer handoff; do not treat it as a durable shared walkthrough password.
 
 ## Required return checklist
 
 | # | Item | Actual result |
 | --- | --- | --- |
-| 1 | Starting SHA | Original `b851a56390a69ab3845e116f919544ecdc8684ec`; this continuation `f50520ee04894d40c6826882040d0ad8f4edd056` |
-| 2 | Final/deployed SHA | Activation code `640afe9d4a55e5d20ee4c11adccb44f923597a32`; both deployment attempts used it; no successfully deployed SHA |
-| 3 | Historical environment | New environment identified above; not activated |
-| 4 | Workflow separation | Separate application, environment, and cluster; no workflow write |
-| 5 | Deployment | Two failed attempts listed above; build passed, database setup failed |
-| 6 | Access | Reviewer identity privately configured; account provisioning and live proof pending |
-| 7 | Authorization identity | Not issued; Gate 6 guard not weakened |
-| 8 | Corpus/profile/plan/manifest | Corpus integrity reverified unchanged; full Gate 8C target-bound pre-write chain still pending |
-| 9 | Historical import run | None |
-| 10 | Materialized counts | Not run; expected owners 3,194, businesses 3,212, Applications 3,137, schedules 7,648, payments 5,874, receipt claims 5,873, permits 2,766, clearances 14,615 |
-| 11 | Financial anchor | Not measured in Cloud; required exact PHP 93,295,317.20 independently for completed payments and schedule paid |
-| 12 | Anomalies | Not measured in Cloud; retain 348/24 non-cent totals, 196 duplicate OR groups/744 events, 15 missing-Application permits, 10/10 broken business/owner edges, 110 broken clearance-type references |
-| 13 | Media transfer | None; private bucket and separate materializer/runtime keys configured; actual checksum transfer validation pending |
-| 14 | Unresolved media | No attachment attempted; all 19 remain outside this activation |
-| 15 | ipil:audit | Not run remotely; no parity claim |
-| 16 | Operational isolation | No operational execution invoked; post-materialization audit still required |
-| 17 | Directory | Cloud browser test not run |
-| 18 | Owner | Cloud browser test not run |
-| 19 | Business History | Cloud browser test not run |
-| 20 | Historical Application | Cloud browser test not run |
-| 21 | Search | Cloud real-record test not run |
-| 22 | OR lookup | Cloud real-record test not run |
-| 23 | Permit lookup | Cloud real-record test not run |
-| 24 | Historical document | Cloud private retrieval not tested |
-| 25 | Priority reports | DEFER under Gate 8A; no new report exposed |
-| 26 | Desktop | Not tested on Cloud |
-| 27 | 390×844 | Not tested on Cloud |
-| 28 | Console/network | No application browser acceptance claim |
-| 29 | Tests | See verification below |
-| 30 | Privacy/Git | Code/tests/aggregate documentation only; no taxpayer row, media, credential, dump, or PII manifest committed |
-| 31 | Blocker / remaining execution | Repeated Cloud PostgreSQL TLS hostname mismatch. Resolve secure connection/deployment, provision reviewer and prove live access, issue target-bound authorization, materialize, audit, verify private media, and browser-test. These are NOT complete. |
-| 32 | Nelson recommendation | NO — do not invite walkthrough yet |
+| 1 | Starting SHA | This continuation `640afe9d4a55e5d20ee4c11adccb44f923597a32`; accepted Gate 8A `b851a56390a69ab3845e116f919544ecdc8684ec` |
+| 2 | Final/deployed SHA | `cfb6f3b2d7ac77a22227b63fdb64b646ce132da2`; this later report-only commit is not deployed |
+| 3 | Historical environment | Separate environment above: deployed and populated |
+| 4 | Workflow separation | Separate application, environment, cluster/database and storage; no workflow mutation |
+| 5 | Deployment | `depl-a2b96b62-7c9a-44c7-a25c-f5481f38b0de`, succeeded with full TLS verification |
+| 6 | Access | Exact restricted reviewer; ordinary sign-in proved; credential rotation pending approval |
+| 7 | Authorization | New Gate 8C fingerprint above; Gate 6 guard unchanged |
+| 8 | Corpus/profile/plan/manifest | All bindings pass; accepted manifest byte comparison passes |
+| 9 | Import | `ipil-g8c-20260912002534-ycsqqnja`, completed |
+| 10 | Counts | All required anchors match the table above |
+| 11 | Financial anchor | Both totals exactly PHP 93,295,317.20 |
+| 12 | Anomalies | All accepted anomalies preserved |
+| 13 | Media | 16 private objects, full source/destination and independent remote verification pass |
+| 14 | Unresolved media | All 19 unattached; zero imported |
+| 15 | ipil:audit | Immediate and post-inspection audits pass all 61 checks |
+| 16 | Operational isolation | Audit zeroes and browser route refusal pass; no continuation actions |
+| 17 | Directory | Real records/anchors visible; page-two pagination verified |
+| 18 | Owner | Owner/business/history navigation works; explicit owner-not-User wording |
+| 19 | Business History | Real Application links and truthful year/type/status; missing evidence explicit |
+| 20 | Historical Application | Finance, schedules, payments, OR, Permit, classifications, clearances, and non-operational state verified |
+| 21 | Search | **FAIL:** on-page submissions drop parameters; five real categories tested. Read-service searches return expected matches |
+| 22 | OR lookup | Direct authenticated query returns the claim; on-page submission fails |
+| 23 | Permit lookup | Direct authenticated query returns the claim; on-page submission fails |
+| 24 | Historical document | Private browser image loads (500×410); anonymous request redirects to login |
+| 25 | Priority reports | DEFER per Gate 8A; no new reports exposed. Directory quantitative anchors match audit |
+| 26 | Desktop | Directory/owner/business/Application navigation exercised; 1280×720 owner/directory overflow checks pass. Search form fails |
+| 27 | 390×844 | Directory/owner/Business History/Application/document-link layouts show no document-level horizontal overflow; mobile owner visually inspected. Search form fails |
+| 28 | Console/network | Inspected error log empty; no unexpected history/document server error encountered. Intentional operational 404 and anonymous-document 302 are security outcomes |
+| 29 | Tests | Scoped results below; no new full-suite green claim |
+| 30 | Privacy/Git | Code/tests/aggregate docs only; no real taxpayer rows, media, PII manifests, credentials or dumps committed |
+| 31 | Blockers | Search-form submission defect; temporary credential rotation approval. TLS/import/media are resolved |
+| 32 | Nelson recommendation | **NO** until the bounded defect is corrected/retested and credential handoff secured |
 
-## Verification and handoff
+## Dispositions and next boundary
 
-Final focused restriction/read-surface tests passed **8 tests / 114 assertions**. They cover unauthenticated access, normal sign-in, registration refusal, a different authenticated staff member, the accepted reviewer, operational-route refusal, private response headers, invalid environment/reviewer configuration, and refusal to silently disable restrictions in `historical-uat`. Unchanged rescue contracts passed **26 tests / 217 assertions**. Targeted PHPStan passed with zero errors; Pint and Git whitespace checks passed.
+- **MATCH:** counts, exact totals, statuses, anomalies, provenance and accepted media bytes.
+- **ADAPT:** isolated restricted UAT, certificate-correct provider host with full verification, authenticated private media streaming, non-operational history presentation.
+- **IMPROVE:** separately authorize a bounded search-query propagation correction and regression tests. Recheck all five lookup categories, filter/sort/clear state, and desktop/mobile behavior. No historical data changes are indicated.
+- **DEFER:** full report reconstruction, PSGC/LOB acceptance, collision/anomaly cleanup, unresolved media, Renewal bridge and production migration.
 
-The full suite in the fresh worktree reported 929 tests: 924 passed, one skipped, one assertion failure, and three errors (16,021 assertions). The four failures concerned preview routes/personas: the fresh worktree lacked the preview startup configuration used to register those conditional routes and provision actors. Rerunning both affected files (`ClassicLifecycleCeremonyTest` and `NewApplicationHappyPathLifecycleScenarioTest`) with the explicit synthetic preview startup configuration passed **8 tests / 341 assertions**. The entire suite was not rerun with that configuration, so this report does not claim a green full-suite run. These test settings are not authorization to enable preview mode in historical UAT.
+No reseed is indicated. Retain the audited materialization and use read-only validation in the follow-up. Do not broaden credential rotation into permission changes or public access.
 
-Continuation verification: **41 tests / 349 assertions passed**, covering the new activation guard, reviewer refusal outside the explicit environment, preserved Gate 6 refusal, private media disk selection, historical route restriction, dynamic historical total, and rescue contracts. Targeted PHPStan passed with zero errors after increasing its local analysis memory limit; Pint and Git whitespace checks passed. No new full-suite or real Cloud browser parity claim is made.
+## Verification and preservation
 
-Worktree: `/Users/rli/PhpstormProjects/bpls-gate8c`. Original checkout: `/Users/rli/PhpstormProjects/bpls-runtime`; its four unrelated guidance edits remain untouched. The isolated code branch was pushed and two deployments attempted, as recorded above. No production migration, historical data transfer, source mutation, history correction, reconciliation, or renewal bridge occurred. The Cloud resources remain provisioned and may incur charges.
+The preceding activation packet passed **41 tests / 349 assertions**, covering activation authorization, reviewer guards, preserved Gate 6 restrictions, private disk selection, historical route isolation, dynamic totals and rescue contracts. This continuation's bucket-binding change passed **15 tests / 133 assertions** and Pint. Git whitespace validation passed. No full suite was rerun in this continuation.
 
-**GATE 8C: FAIL — PRIVATE HISTORICAL UAT NOT READY FOR NELSON**
+Earlier baseline full-suite evidence remains in the prior report revision: 924 passed, one skipped, one assertion failure and three errors among 929 tests (16,021 assertions). The four preview-configuration failures passed when the two affected files ran with explicit synthetic preview startup settings (8 tests / 341 assertions). That is not a full-suite green claim or authority to enable preview in historical UAT. Prior targeted PHPStan checks passed.
+
+Private execution evidence remains in Git-ignored `storage/app/private/ipil-rescue/gate8c/`: authorization, access proof, import result, both audits, and media verification. Do not commit runtime artifacts, reviewer identity, real-record examples, private document URLs, or taxpayer screenshots.
+
+Worktree: `/Users/rli/PhpstormProjects/bpls-gate8c`. Original checkout: `/Users/rli/PhpstormProjects/bpls-runtime`. Its four unrelated guidance edits remain untouched and uncommitted by this task: `.ai/skills/deploying-laravel-cloud/SKILL.md`, `.ai/skills/deploying-laravel-cloud/reference/checklists.md`, `AGENTS.md`, and `CLAUDE.md`.
+
+GATE 8C: FAIL — PRIVATE HISTORICAL UAT NOT READY FOR NELSON
