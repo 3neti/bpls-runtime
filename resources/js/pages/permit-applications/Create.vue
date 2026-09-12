@@ -172,6 +172,13 @@ const usesStagedCitizenIntake = computed(
     () => props.cleanroomIntake?.staged_citizen_intake === true,
 );
 const isEditing = computed(() => props.draft !== undefined);
+const savesCitizenDraft = computed(
+    () =>
+        isCitizen.value &&
+        (isEditing.value ||
+            !props.cleanroomIntake ||
+            usesStagedCitizenIntake.value),
+);
 const isCommissionedApplication = computed(
     () =>
         usesStagedCitizenIntake.value ||
@@ -2123,7 +2130,10 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                     :checked="
                                         nested('undertaking.accepted') === true
                                     "
-                                    :required="!isCommissionedApplication"
+                                    :required="
+                                        !savesCitizenDraft &&
+                                        !isCommissionedApplication
+                                    "
                                     class="mt-1"
                                 /><span
                                     ><strong>Oath of Undertaking:</strong> I

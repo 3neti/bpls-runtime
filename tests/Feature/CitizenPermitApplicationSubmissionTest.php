@@ -14,7 +14,10 @@ use App\Models\PermitApplicationLine;
 use App\Models\Role;
 use App\Models\User;
 use App\Notifications\PermitApplicationReceived;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('formal citizen submission records separate submitted and received facts without inventing downstream behavior', function () {
@@ -187,10 +190,77 @@ test('commissioned draft save leaves undertaking optional while sign and submit 
     $component = file_get_contents(resource_path('js/pages/permit-applications/Create.vue'));
 
     expect($component)
-        ->toContain(':required="!isCommissionedApplication"')
+        ->toContain('!savesCitizenDraft &&')
+        ->toContain('!isCommissionedApplication')
         ->toContain('!submissionForm.undertaking_accepted ||')
         ->toContain('!submissionForm.signature_facsimile')
         ->toContain('submissionForm.post(citizenSubmit.url(props.draft.id)');
+});
+
+test('ordinary draft save is independent of the Oath while lodging requires fresh acceptance and signature', function () {
+    Storage::fake('local');
+    $citizen = userWithPermissions([
+        UserPermission::AccessCitizen,
+        UserPermission::CreateOwnPermitApplications,
+        UserPermission::EditOwnPermitApplications,
+        UserPermission::ViewOwnPermitApplications,
+        UserPermission::SubmitOwnPermitApplications,
+    ], UserRole::Citizen);
+    $authorizationBefore = [
+        DB::table('roles')->orderBy('id')->get()->toJson(),
+        DB::table('permissions')->orderBy('id')->get()->toJson(),
+        DB::table('role_has_permissions')->orderBy('role_id')->orderBy('permission_id')->get()->toJson(),
+    ];
+    $payload = [
+        'owner_name' => 'Draft First Citizen',
+        'business_name' => 'Draft First Retail',
+        'business_activity_description' => 'Retail sale of fish.',
+        'business_barangay_psgc_code' => config('ipil_references.barangays.items.0.code'),
+        'type' => 'new',
+        'application_year' => now()->year,
+    ];
+    $this->actingAs($citizen)->post(route('citizen.permit-applications.store'), $payload)
+        ->assertSessionHasNoErrors()->assertRedirect();
+    $application = PermitApplication::query()->whereBelongsTo($citizen, 'submittedBy')->sole();
+    $this->patch(route('citizen.permit-applications.update', $application), [
+        ...$payload,
+        'draft_version' => $application->updated_at->toIso8601String(),
+        'undertaking_accepted' => '0',
+    ])->assertSessionHasNoErrors()->assertRedirect();
+    expect($application->refresh()->status)->toBe(PermitApplicationStatus::Draft)
+        ->and($application->tracking_reference)->toBeNull()
+        ->and($application->declaration()->count())->toBe(0)
+        ->and(data_get($application->metadata, 'undertaking_confirmation'))->toBeNull();
+
+    foreach ([[], ['undertaking_accepted' => '0']] as $unchecked) {
+        $this->post(route('citizen.permit-applications.submit', $application), [
+            ...$unchecked,
+            'signature_facsimile' => UploadedFile::fake()->image('signature.png'),
+        ])->assertSessionHasErrors('undertaking_accepted');
+    }
+    $this->post(route('citizen.permit-applications.submit', $application), ['undertaking_accepted' => '1'])
+        ->assertSessionHasErrors('signature_facsimile');
+    expect($application->refresh()->declaration()->count())->toBe(0);
+    $this->assertDatabaseCount('signature_evidences', 0);
+
+    $this->post(route('citizen.permit-applications.submit', $application), [
+        'undertaking_accepted' => '1',
+        'signature_facsimile' => UploadedFile::fake()->image('signature.png'),
+    ])->assertSessionHasNoErrors()->assertRedirect();
+    $application->refresh();
+    $declaration = $application->declaration()->sole();
+    $beforeRefresh = [$application->tracking_reference, $declaration->snapshot_hash, $application->metadata['status_history']];
+    $this->get(route('citizen.permit-applications.show', $application))->assertSuccessful();
+    expect($application->refresh()->status)->toBe(PermitApplicationStatus::Assessment)
+        ->and($application->declaration()->count())->toBe(1)
+        ->and($declaration->signatureEvidences()->count())->toBe(1)
+        ->and($application->metadata['status_history'])->toHaveCount(1)
+        ->and([$application->tracking_reference, $declaration->fresh()->snapshot_hash, $application->metadata['status_history']])->toBe($beforeRefresh)
+        ->and([
+            DB::table('roles')->orderBy('id')->get()->toJson(),
+            DB::table('permissions')->orderBy('id')->get()->toJson(),
+            DB::table('role_has_permissions')->orderBy('role_id')->orderBy('permission_id')->get()->toJson(),
+        ])->toBe($authorizationBefore);
 });
 
 test('commissioned application form makes document and request invalidation visible', function () {
