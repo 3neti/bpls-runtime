@@ -54,17 +54,25 @@ const matchCount = () =>
     Object.values(props.matches).reduce((sum, rows) => sum + rows.length, 0);
 function apply(): void {
     router.get(
-        index.url({
-            query: Object.fromEntries(
-                Object.entries(form.value).map(([k, v]) => [k, v || undefined]),
-            ),
-        }),
-        {},
+        index.url(),
+        Object.fromEntries(
+            Object.entries(form.value).filter(([, value]) => value !== ''),
+        ),
         { preserveState: true, replace: true },
     );
 }
 function clear(): void {
-    router.get(index.url(), {}, { preserveState: true, replace: true });
+    form.value = {
+        q: '',
+        year: '',
+        type: '',
+        status: '',
+        barangay: '',
+        classification: '',
+        sort: 'name',
+        direction: 'asc',
+    };
+    router.get(index.url(), {}, { preserveState: false, replace: true });
 }
 </script>
 
@@ -96,6 +104,8 @@ function clear(): void {
                 </div>
             </section>
             <form
+                :action="index.url()"
+                method="get"
                 class="grid gap-3 rounded-lg border bg-background p-4 lg:grid-cols-4"
                 @submit.prevent="apply"
             >
@@ -106,6 +116,7 @@ function clear(): void {
                         >Unified search</label
                     ><Input
                         id="history_q"
+                        name="q"
                         v-model="form.q"
                         placeholder="Business, owner, application, permit, or exact OR"
                     />
@@ -113,6 +124,7 @@ function clear(): void {
                 <label
                     class="grid gap-1 text-xs font-medium text-muted-foreground uppercase"
                     >Year<select
+                        name="year"
                         v-model="form.year"
                         class="h-9 rounded-md border bg-transparent px-3 text-sm normal-case"
                     >
@@ -125,6 +137,7 @@ function clear(): void {
                 <label
                     class="grid gap-1 text-xs font-medium text-muted-foreground uppercase"
                     >Transaction type<select
+                        name="type"
                         v-model="form.type"
                         class="h-9 rounded-md border bg-transparent px-3 text-sm normal-case"
                     >
@@ -137,6 +150,7 @@ function clear(): void {
                 <label
                     class="grid gap-1 text-xs font-medium text-muted-foreground uppercase"
                     >Legacy status<select
+                        name="status"
                         v-model="form.status"
                         class="h-9 rounded-md border bg-transparent px-3 text-sm normal-case"
                     >
@@ -153,6 +167,7 @@ function clear(): void {
                 <label
                     class="grid gap-1 text-xs font-medium text-muted-foreground uppercase"
                     >Barangay<select
+                        name="barangay"
                         v-model="form.barangay"
                         class="h-9 rounded-md border bg-transparent px-3 text-sm normal-case"
                     >
@@ -169,10 +184,13 @@ function clear(): void {
                 <label
                     class="grid gap-1 text-xs font-medium text-muted-foreground uppercase"
                     >Historical classification<Input
+                        name="classification"
                         v-model="form.classification"
                         placeholder="Source classification"
                         class="normal-case"
                 /></label>
+                <input type="hidden" name="sort" :value="form.sort" />
+                <input type="hidden" name="direction" :value="form.direction" />
                 <div class="flex items-end gap-2">
                     <Button type="submit"><Search /> Search</Button
                     ><Button type="button" variant="outline" @click="clear"
@@ -181,7 +199,10 @@ function clear(): void {
                 </div>
             </form>
 
-            <section v-if="form.q" class="rounded-lg border bg-background p-4">
+            <section
+                v-if="filters.q"
+                class="rounded-lg border bg-background p-4"
+            >
                 <h2 class="font-semibold">
                     Unified matches
                     <Badge variant="secondary">{{ matchCount() }}</Badge>
