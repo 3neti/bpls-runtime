@@ -14,6 +14,7 @@ export type FinancialLineItemOption = {
 };
 
 export type FinancialLineItem = {
+    amount_locked?: boolean;
     resolution_status?: 'resolved' | 'unresolved';
     resolution_message?: string | null;
     fee_rule_id: number;

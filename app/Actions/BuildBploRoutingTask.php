@@ -4,6 +4,7 @@ namespace App\Actions;
 
 use App\Assessment\AssessmentCalculator;
 use App\Assessment\ConcernedOfficeFeeApplicability;
+use App\Assessment\ProvisionalTreasuryEnterpriseSchedule;
 use App\Assessment\TreasuryFeeResolution;
 use App\Data\Application\BploRoutingTaskData;
 use App\Enums\FeeDeterminationChannel;
@@ -29,6 +30,7 @@ class BuildBploRoutingTask
         private readonly AssessmentCalculator $assessmentCalculator,
         private readonly ConcernedOfficeFeeApplicability $officeFeeApplicability,
         private readonly TreasuryFeeResolution $treasuryFeeResolution,
+        private readonly ProvisionalTreasuryEnterpriseSchedule $enterpriseSchedule,
     ) {}
 
     public function handle(PermitApplication $permitApplication, ?User $viewer): BploRoutingTaskData
@@ -209,6 +211,7 @@ class BuildBploRoutingTask
 
                             return [
                                 'fee_rule_id' => $fee->id,
+                                'enterprise_schedule' => $this->enterpriseSchedule->forApplication($application, $fee),
                                 'code' => $fee->code,
                                 'name' => $this->catalogOptionName($fee),
                                 'amount_cents' => $calculation['amount_cents'],
@@ -223,6 +226,7 @@ class BuildBploRoutingTask
             'treasury_assignments' => $application->treasuryLineOfBusinessAssignments->whereNull('removed_at')->map(fn (TreasuryLineOfBusinessAssignment $assignment): array => [
                 'id' => $assignment->id,
                 'name' => $assignment->lineOfBusiness->name,
+                'enterprise_determination' => data_get($assignment->source_snapshot, 'enterprise_determination'),
                 'items' => $assignment->items->map(fn (TreasuryLineItem $item): array => ['name' => $item->name, 'amount_cents' => $item->determined_amount_cents])->all(),
             ])->values()->all(),
             'authorized_payment_order_office_codes' => $viewer === null

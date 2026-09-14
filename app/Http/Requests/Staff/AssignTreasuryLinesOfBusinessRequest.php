@@ -12,11 +12,14 @@ class AssignTreasuryLinesOfBusinessRequest extends FormRequest
         return $this->user()?->can(UserPermission::CorrectEvaluationLinesOfBusiness->value) ?? false;
     }
 
+    /** @return array<string, list<string>> */
     public function rules(): array
     {
         return [
             'selections' => ['required', 'array', 'list', 'min:1', 'max:20'],
             'selections.*.line_of_business_id' => ['required', 'integer', 'distinct', 'exists:line_of_businesses,id'],
+            'selections.*.enterprise_classification' => ['nullable', 'string', 'in:Micro,Cottage,Small,Medium,Large'],
+            'selections.*.enterprise_schedule_fingerprint' => ['nullable', 'string', 'size:64'],
             'selections.*.items' => ['sometimes', 'array', 'list', 'max:50'],
             'selections.*.items.*.fee_rule_id' => ['required', 'integer', 'distinct', 'exists:fee_rules,id'],
             'selections.*.items.*.amount_cents' => ['required', 'integer', 'min:0'],

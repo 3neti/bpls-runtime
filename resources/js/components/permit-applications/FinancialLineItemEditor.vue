@@ -168,7 +168,10 @@ function money(cents: number): string {
                             : money(item.amount_cents)
                     }}</strong
                     ><button
-                        v-if="item.resolution_status !== 'unresolved'"
+                        v-if="
+                            item.resolution_status !== 'unresolved' &&
+                            !item.amount_locked
+                        "
                         type="button"
                         class="text-xs text-destructive"
                         @click="remove(item.fee_rule_id)"

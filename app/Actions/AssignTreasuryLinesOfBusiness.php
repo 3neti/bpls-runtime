@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Assessment\AssessmentCalculator;
+use App\Assessment\ProvisionalTreasuryEnterpriseSchedule;
 use App\Assessment\TreasuryFeeResolution;
 use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCategory;
@@ -24,6 +25,7 @@ class AssignTreasuryLinesOfBusiness
         private readonly RefreshBusinessPermitEvaluation $refreshEvaluation,
         private readonly AssessmentCalculator $assessmentCalculator,
         private readonly TreasuryFeeResolution $treasuryFeeResolution,
+        private readonly ProvisionalTreasuryEnterpriseSchedule $enterpriseSchedule,
     ) {}
 
     /**
@@ -45,6 +47,16 @@ class AssignTreasuryLinesOfBusiness
                 throw new LogicException('Treasury must assign one or more unique canonical Lines of Business.');
             }
             $selections = $this->normalizeApplicationWideItems($selections);
+            $enterpriseDeterminations = [];
+            $enterpriseRule = FeeRule::query()->where('code', ProvisionalTreasuryEnterpriseSchedule::FeeCode)->first();
+            if ($enterpriseRule !== null) {
+                foreach ($selections as $selection) {
+                    if ($enterpriseRule->line_of_business_id === $selection['line_of_business_id']
+                        || $enterpriseRule->lineOfBusinesses()->where('line_of_businesses.id', $selection['line_of_business_id'])->exists()) {
+                        $enterpriseDeterminations[$selection['line_of_business_id']] = $this->enterpriseSchedule->determine($application, $enterpriseRule, $selection, $actor);
+                    }
+                }
+            }
             $selectedFeeIds = collect($selections)->flatMap(fn (array $selection): array => collect($selection['items'])->pluck('fee_rule_id')->all());
             if ($selectedFeeIds->isEmpty()) {
                 throw new LogicException('Treasury classification requires at least one confirmed payment item.');
@@ -53,7 +65,8 @@ class AssignTreasuryLinesOfBusiness
                 throw new LogicException('Each Treasury payment item may be selected only once.');
             }
             foreach (FeeRule::query()->whereIn('id', $selectedFeeIds)->get() as $rule) {
-                if ($this->treasuryFeeResolution->unresolved($rule, $application)) {
+                if ($this->treasuryFeeResolution->unresolved($rule, $application)
+                    && ! ($rule->code === ProvisionalTreasuryEnterpriseSchedule::FeeCode && collect($enterpriseDeterminations)->filter()->isNotEmpty())) {
                     throw ValidationException::withMessages(['selections' => 'Treasury classification is incomplete: an unresolved fee requires municipal classification and authority.']);
                 }
             }
@@ -71,7 +84,8 @@ class AssignTreasuryLinesOfBusiness
                 if (is_array($types) && $types !== [] && ! in_array($application->type->value, $types, true)) {
                     continue;
                 }
-                if ($this->treasuryFeeResolution->unresolved($rule, $application)) {
+                if ($this->treasuryFeeResolution->unresolved($rule, $application)
+                    && ! ($rule->code === ProvisionalTreasuryEnterpriseSchedule::FeeCode && collect($enterpriseDeterminations)->filter()->isNotEmpty())) {
                     throw ValidationException::withMessages(['selections' => 'Treasury classification is incomplete: an unresolved catalogue default cannot be omitted.']);
                 }
             }
@@ -111,6 +125,7 @@ class AssignTreasuryLinesOfBusiness
             $result = [];
             foreach ($selections as $index => $selection) {
                 $line = $lines->get($selection['line_of_business_id']);
+                $enterpriseDetermination = $enterpriseDeterminations[$line->id] ?? null;
                 $assignment = $application->treasuryLineOfBusinessAssignments()->create([
                     'line_of_business_id' => $line->id,
                     'assigned_by_id' => $actor->id,
@@ -123,6 +138,7 @@ class AssignTreasuryLinesOfBusiness
                         'applicant_declaration_rewritten' => false,
                         'line_of_business_id' => $line->id,
                         'line_of_business_code' => $line->code,
+                        'enterprise_determination' => $enterpriseDetermination,
                     ],
                 ]);
                 $applicationLine = $application->lines()->create([
@@ -160,6 +176,11 @@ class AssignTreasuryLinesOfBusiness
                         ? ['basis_amount_cents' => 0, 'amount_cents' => $rule->amount_cents, 'range_id' => null, 'rule_snapshot' => null]
                         : $this->assessmentCalculator->calculate($rule, null, $application);
                     $defaultAmount = $calculation['amount_cents'];
+                    $itemEnterpriseDetermination = $rule->code === ProvisionalTreasuryEnterpriseSchedule::FeeCode ? $enterpriseDetermination : null;
+                    if ($itemEnterpriseDetermination !== null) {
+                        $defaultAmount = $itemEnterpriseDetermination['resulting_amount_cents'];
+                        $calculation = ['amount_cents' => $defaultAmount, 'basis' => 'explicit_treasury_enterprise_classification', 'schedule' => $itemEnterpriseDetermination['schedule']];
+                    }
                     $variance = $amount - $defaultAmount;
                     $reason = $item['reason'] ?? null;
                     $authority = $item['authority'] ?? null;
@@ -185,6 +206,7 @@ class AssignTreasuryLinesOfBusiness
                             'permit_application_line_id' => $applicationLine->id,
                             'fee_rule_id' => $rule->id,
                             'fee_rule_version' => $this->feeRuleVersion($rule),
+                            'enterprise_determination' => $itemEnterpriseDetermination,
                             'scope' => $rule->scope->value,
                             'exact_once_key' => data_get($rule->metadata, 'exact_once_key', 'fee-rule-'.$rule->id),
                             'default_amount_minor' => $defaultAmount,

@@ -6,6 +6,7 @@ import { computed, reactive, ref } from 'vue';
 import { store as recordBploRouting } from '@/actions/App/Http/Controllers/Staff/BploRoutingDeterminationController';
 import ApplicantDocumentReference from '@/components/permit-applications/ApplicantDocumentReference.vue';
 import type { ApplicantDocumentReferenceItem } from '@/components/permit-applications/ApplicantDocumentReference.vue';
+import EnterpriseClassificationSelector from '@/components/permit-applications/EnterpriseClassificationSelector.vue';
 import FinancialLineItemEditor from '@/components/permit-applications/FinancialLineItemEditor.vue';
 import SignatureFacsimileCapture from '@/components/SignatureFacsimileCapture.vue';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { dateTime, money } from '@/lib/evaluationPresentation';
 import { financialLineItemsResolved } from '@/lib/financialLineItems';
+import type { EnterpriseSchedule } from '@/lib/treasuryEnterprise';
+import { applyEnterpriseClassification } from '@/lib/treasuryEnterprise';
 
 type RoutingLine = {
     id: number | null;
@@ -96,6 +99,7 @@ type BploRoutingTask = {
             code: string;
             name: string;
             default_items: {
+                enterprise_schedule?: EnterpriseSchedule | null;
                 resolution_status?: 'resolved' | 'unresolved';
                 resolution_message?: string | null;
                 fee_rule_id: number;
@@ -112,6 +116,12 @@ type BploRoutingTask = {
         treasury_assignments: {
             id: number;
             name: string;
+            enterprise_determination?: {
+                classification: string;
+                determined_by_id: number;
+                determined_at: string;
+                schedule: EnterpriseSchedule;
+            } | null;
             items: { name: string; amount_cents: number }[];
         }[];
         authorized_payment_order_office_codes: string[];
@@ -157,7 +167,10 @@ const officePaymentOrderTimers = new Map<number, number>();
 const treasurySelections = ref<
     {
         line_of_business_id: number;
+        enterprise_classification?: string;
+        enterprise_schedule_fingerprint?: string;
         items: {
+            amount_locked?: boolean;
             resolution_status?: 'resolved' | 'unresolved';
             resolution_message?: string | null;
             fee_rule_id: number;
@@ -174,6 +187,12 @@ const treasurySelections = ref<
 >([]);
 const selectedTreasuryLob = ref<number | null>(null);
 const treasuryLobSearch = ref('');
+const treasuryPending = ref(false);
+const treasuryErrors = computed(() =>
+    Object.entries(page.props.errors)
+        .filter(([key]) => key.startsWith('selections'))
+        .map(([, message]) => message),
+);
 
 for (const work of props.task.routing?.works ?? []) {
     officeItems[work.id] = [];
@@ -494,7 +513,15 @@ function confirmTreasuryLobs(): void {
 
     useForm({ selections: treasurySelections.value }).post(
         `/staff/permit-applications/${props.task.application.id}/treasury-lines-of-business`,
-        { preserveScroll: true },
+        {
+            preserveScroll: true,
+            onStart: () => {
+                treasuryPending.value = true;
+            },
+            onFinish: () => {
+                treasuryPending.value = false;
+            },
+        },
     );
 }
 
@@ -509,16 +536,45 @@ function treasuryFeeOptions(lineOfBusinessId: number) {
         props.task.financial_editor.line_of_business_options.find(
             (line) => line.id === lineOfBusinessId,
         )?.default_items ?? []
-    ).map((item) => ({
-        id: item.fee_rule_id,
-        code: item.code,
-        name: item.name,
-        default_amount_cents: item.amount_cents,
-        exact_once_key: item.exact_once_key,
-        calculation: item.calculation,
-        resolution_status: item.resolution_status,
-        resolution_message: item.resolution_message,
-    }));
+    )
+        .filter((item) => !item.enterprise_schedule)
+        .map((item) => ({
+            id: item.fee_rule_id,
+            code: item.code,
+            name: item.name,
+            default_amount_cents: item.amount_cents,
+            exact_once_key: item.exact_once_key,
+            calculation: item.calculation,
+            resolution_status: item.resolution_status,
+            resolution_message: item.resolution_message,
+        }));
+}
+
+function enterpriseFee(lineOfBusinessId: number) {
+    return props.task.financial_editor.line_of_business_options
+        .find((line) => line.id === lineOfBusinessId)
+        ?.default_items.find((item) => item.enterprise_schedule);
+}
+
+function determineEnterprise(
+    selection: (typeof treasurySelections.value)[number],
+    classification: string,
+): void {
+    const fee = enterpriseFee(selection.line_of_business_id);
+
+    if (!fee?.enterprise_schedule) {
+        return;
+    }
+
+    selection.enterprise_classification = classification;
+    selection.enterprise_schedule_fingerprint =
+        fee.enterprise_schedule.fingerprint;
+    selection.items = applyEnterpriseClassification(
+        selection.items,
+        fee.fee_rule_id,
+        fee.enterprise_schedule,
+        classification,
+    );
 }
 
 function actorLabel(name: string): string {
@@ -527,6 +583,7 @@ function actorLabel(name: string): string {
 
 const treasurySelectionsReady = computed(
     () =>
+        !treasuryPending.value &&
         treasurySelections.value.length > 0 &&
         treasurySelections.value.every((selection) =>
             financialLineItemsResolved(selection.items),
@@ -563,6 +620,14 @@ const filteredTreasuryLobOptions = computed(() => {
         ]"
         aria-labelledby="bplo-routing-task-title"
     >
+        <p
+            v-for="error in treasuryErrors"
+            :key="error"
+            role="alert"
+            class="p-4 text-sm text-destructive"
+        >
+            {{ error }}
+        </p>
         <header
             :class="[
                 'px-4 py-4 sm:px-5',
@@ -741,6 +806,33 @@ const filteredTreasuryLobOptions = computed(() => {
                     >
                         <strong>{{ assignment.name }}</strong>
                         <p
+                            v-if="assignment.enterprise_determination"
+                            class="text-sm break-words"
+                        >
+                            Enterprise Classification:
+                            {{
+                                assignment.enterprise_determination
+                                    .classification
+                            }}
+                            · Treasury actor #{{
+                                assignment.enterprise_determination
+                                    .determined_by_id
+                            }}
+                            ·
+                            {{
+                                dateTime(
+                                    assignment.enterprise_determination
+                                        .determined_at,
+                                )
+                            }}<br />
+                            Provisional UAT policy — pending Ipil Officer
+                            confirmation ·
+                            {{
+                                assignment.enterprise_determination.schedule
+                                    .version
+                            }}
+                        </p>
+                        <p
                             v-for="item in assignment.items"
                             :key="item.name"
                             class="mt-2 flex justify-between gap-3 text-sm"
@@ -830,6 +922,23 @@ const filteredTreasuryLobOptions = computed(() => {
                                     Remove
                                 </button>
                             </div>
+                            <EnterpriseClassificationSelector
+                                v-if="
+                                    enterpriseFee(selection.line_of_business_id)
+                                        ?.enterprise_schedule
+                                "
+                                :schedule="
+                                    enterpriseFee(
+                                        selection.line_of_business_id,
+                                    )!.enterprise_schedule!
+                                "
+                                :model-value="
+                                    selection.enterprise_classification ?? ''
+                                "
+                                @update:model-value="
+                                    determineEnterprise(selection, $event)
+                                "
+                            />
                             <FinancialLineItemEditor
                                 v-model="selection.items"
                                 :options="
@@ -1156,6 +1265,22 @@ const filteredTreasuryLobOptions = computed(() => {
                     >
                         <strong>{{ assignment.name }}</strong>
                         <p
+                            v-if="assignment.enterprise_determination"
+                            class="text-sm break-words"
+                        >
+                            Enterprise Classification:
+                            {{
+                                assignment.enterprise_determination
+                                    .classification
+                            }}
+                            · Provisional UAT policy — pending Ipil Officer
+                            confirmation ·
+                            {{
+                                assignment.enterprise_determination.schedule
+                                    .version
+                            }}
+                        </p>
+                        <p
                             v-for="item in assignment.items"
                             :key="item.name"
                             class="flex justify-between"
@@ -1222,6 +1347,22 @@ const filteredTreasuryLobOptions = computed(() => {
                                 Remove LOB
                             </button>
                         </div>
+                        <EnterpriseClassificationSelector
+                            v-if="
+                                enterpriseFee(selection.line_of_business_id)
+                                    ?.enterprise_schedule
+                            "
+                            :schedule="
+                                enterpriseFee(selection.line_of_business_id)!
+                                    .enterprise_schedule!
+                            "
+                            :model-value="
+                                selection.enterprise_classification ?? ''
+                            "
+                            @update:model-value="
+                                determineEnterprise(selection, $event)
+                            "
+                        />
                         <FinancialLineItemEditor
                             v-model="selection.items"
                             :options="
