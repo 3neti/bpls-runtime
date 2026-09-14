@@ -10,6 +10,7 @@ use App\Assessment\Price\CanonicalFinancialFingerprint;
 use App\Data\Application\ApplicationDataResolver;
 use App\Models\InstitutionalPositionAssignment;
 use App\Models\PermitApplication;
+use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 require_once __DIR__.'/../Support/OrdinaryCertificationFixture.php';
@@ -43,12 +44,33 @@ test('ordinary Mayor separately authorizes issues and releases once with immutab
     expect(data_get($a->metadata, 'lifecycle_cleanroom.run_id'))->toBeNull()
         ->and(app(ProjectPermitReadiness::class)->handle($a)['blocked_by'])->toBe(['mayoral_authorization_recorded'])
         ->and(app(BuildMunicipalWorkInbox::class)->handle($mayor)['items']->where('task_type', 'permit_issuance'))->toHaveCount(1);
-    $this->actingAs($mayor)->get(route('staff.ordinary-uat-permit.show', $a))->assertOk()
-        ->assertInertia(fn (Assert $page) => $page->component('ordinary-uat-permit/Show')->where('action', 'authorize'));
+    $inbox = $this->actingAs($mayor)->get(route('staff.work.index'))->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->component('work-inbox/Index')
+            ->has('workItems.data', 1)
+            ->where('workItems.data.0.task_label', 'Authorize Business Permit issuance')
+            ->where('workItems.data.0.action_url', route('staff.ordinary-uat-permit.show', $a, false)));
+    $taskUrl = $inbox->viewData('page')['props']['workItems']['data'][0]['action_url'];
+    expect($taskUrl)->not->toBe(route('staff.permit-applications.show', $a, false));
+    $this->get($taskUrl)->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->component('ordinary-uat-permit/Show')
+            ->where('action', 'authorize')
+            ->where('readiness.blocked_by', ['mayoral_authorization_recorded'])
+            ->where('readiness.receipt_total_cents', 417500)
+            ->where('readiness.prerequisites.all_required_post_payment_certifications', true)
+            ->where('readiness.semantic_classification', 'synthetic_only')
+            ->where('readiness.production_authority', false)
+            ->where('applicationUrl', route('staff.permit-applications.evaluation.show', $a, false)));
     $projection = app(ApplicationDataResolver::class)->resolve($a->fresh(), $mayor)->toArray();
     $note = collect($projection['actor_context']['work_notes'])->firstWhere('id', 'permit_authority_review');
     expect($note['actionable'])->toBeTrue()->and($note['state_label'])->toBe('Ready for Mayoral Authorization')
         ->and($note['action_url'])->toBe(route('staff.ordinary-uat-permit.show', $a, false));
+    $this->get(route('staff.permit-applications.evaluation.show', $a))->assertOk()
+        ->assertInertia(fn (Assert $p) => $p->component('business-permit-evaluations/Show')
+            ->where('applicationData.actor_context.work_notes', fn ($notes) => collect($notes)
+                ->contains(fn ($note) => $note['id'] === 'permit_authority_review'
+                    && $note['actionable'] === true
+                    && $note['state_label'] === 'Ready for Mayoral Authorization'
+                    && $note['action_url'] === $taskUrl)));
     $this->post($route, ['ceremony' => 'issue'])->assertSessionHasErrors('ceremony');
     expect($a->provisionalUatPermitCompletion()->count())->toBe(0);
     $this->post($route, ['ceremony' => 'authorize'])->assertRedirect();
@@ -60,7 +82,10 @@ test('ordinary Mayor separately authorizes issues and releases once with immutab
         ->and($evidence['mode'])->toBe('synthetic_only')->and($evidence['actor_id'])->toBe($mayor->id)
         ->and($evidence['configuration']['assignment_id'])->toBe(config('workflow_uat_authority.mayor_assignment_id'));
     $this->post($route, ['ceremony' => 'authorize'])->assertRedirect();
-    $this->get(route('staff.ordinary-uat-permit.show', $a))->assertOk()->assertInertia(fn (Assert $p) => $p->where('action', 'issue'));
+    $this->get(route('staff.work.index'))->assertOk()->assertInertia(fn (Assert $p) => $p
+        ->has('workItems.data', 1)->where('workItems.data.0.task_label', 'Issue UAT Business Permit')
+        ->where('workItems.data.0.action_url', $taskUrl));
+    $this->get($taskUrl)->assertOk()->assertInertia(fn (Assert $p) => $p->where('action', 'issue')->where('readiness.ready', true));
     expect($record->fresh()->getRawOriginal())->toBe($frozen);
     $this->actingAs($releasing)->post($route, ['ceremony' => 'release'])->assertSessionHasErrors('ceremony');
     $this->actingAs($mayor)->post($route, ['ceremony' => 'issue'])->assertRedirect();
@@ -71,6 +96,14 @@ test('ordinary Mayor separately authorizes issues and releases once with immutab
         ->and($record->fresh()->released_at)->toBeNull();
     $verification = app(DescribePermitVerificationBoundary::class)->handle($a->fresh());
     $this->get($verification['url'])->assertNotFound();
+    $this->get(route('staff.work.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->has('workItems.data', 0));
+    $this->get($taskUrl)->assertOk()->assertInertia(fn (Assert $p) => $p->where('action', null));
+    $releaseInbox = $this->actingAs($releasing)->get(route('staff.work.index'))->assertOk()
+        ->assertInertia(fn (Assert $p) => $p->has('workItems.data', 1)
+            ->where('workItems.data.0.task_type', 'permit_release')
+            ->where('workItems.data.0.action_url', $taskUrl));
+    $this->get($releaseInbox->viewData('page')['props']['workItems']['data'][0]['action_url'])
+        ->assertOk()->assertInertia(fn (Assert $p) => $p->component('ordinary-uat-permit/Show')->where('action', 'release'));
     $this->actingAs($releasing)->post($route, ['ceremony' => 'release'])->assertRedirect();
     $released = $record->fresh()->getRawOriginal();
     $this->post($route, ['ceremony' => 'release'])->assertRedirect();
@@ -79,7 +112,24 @@ test('ordinary Mayor separately authorizes issues and releases once with immutab
         ->and($snapshot())->toBe($before)
         ->and($c->receipts()->sum('amount_cents'))->toBe(417500);
     $this->get($verification['url'])->assertOk();
+    $this->get(route('staff.work.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->has('workItems.data', 0));
+    $this->get($taskUrl)->assertOk()->assertInertia(fn (Assert $p) => $p->where('action', null));
     expect(fn () => $record->fresh()->update(['decided_by_id' => $releasing->id]))->toThrow(LogicException::class);
+});
+
+test('ordinary permit task deep links enforce the existing actor and application boundaries', function () {
+    [$a, $mayor] = mayoralFixture();
+    $url = route('staff.ordinary-uat-permit.show', $a);
+    $this->get($url)->assertRedirect(route('login'));
+    $this->actingAs(User::role('engineering')->sole())->get($url)->assertForbidden();
+    $this->actingAs($mayor)->get(route('staff.ordinary-uat-permit.show', PermitApplication::factory()->create()))->assertForbidden();
+    $this->get(route('staff.ordinary-uat-permit.show', 999999))->assertNotFound();
+    config(['app.url' => 'https://historical-uat.laravel.cloud']);
+    $this->get($url)->assertForbidden();
+    config(['app.url' => 'http://localhost']);
+    app()->instance('env', 'production');
+    $this->get($url)->assertForbidden();
+    expect($a->provisionalUatPermitCompletion()->count())->toBe(0);
 });
 
 test('ordinary Mayoral authority fails closed at actor environment and evidence boundaries', function (string $damage) {

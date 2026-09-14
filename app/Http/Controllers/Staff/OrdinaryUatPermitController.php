@@ -39,7 +39,7 @@ class OrdinaryUatPermitController extends Controller
             'action' => $mayor && $completion === null && $authority->prerequisites($permitApplication) ? 'authorize'
                 : ($mayor && $completion?->issued_at === null && $readiness['ready'] ? 'issue'
                     : ($authority->allows($permitApplication, $request->user(), 'releasing') && $completion?->issued_at !== null && $completion->released_at === null ? 'release' : null)),
-            'applicationUrl' => route('staff.permit-applications.show', $permitApplication, false),
+            'applicationUrl' => route('staff.permit-applications.evaluation.show', $permitApplication, false),
             'verificationUrl' => $completion?->released_at !== null ? $verification->handle($permitApplication)['view_url'] : null,
         ]);
     }

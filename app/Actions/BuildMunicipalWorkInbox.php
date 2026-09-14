@@ -329,6 +329,9 @@ final class BuildMunicipalWorkInbox
             && in_array($type, ['post_payment_certification', 'permit_issuance', 'permit_release'], true)) {
             $routeName = 'stakeholder-preview.lifecycle-cleanroom-application.show';
             $routeParameters = [$classicRun];
+        } elseif (in_array($type, ['permit_issuance', 'permit_release'], true)
+            && app(OrdinaryUatPermitAuthority::class)->enabled($application)) {
+            $routeName = 'staff.ordinary-uat-permit.show';
         }
 
         $url = route($routeName, $routeParameters === [] ? $application : $routeParameters, false);
