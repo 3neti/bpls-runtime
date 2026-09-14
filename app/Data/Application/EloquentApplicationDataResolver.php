@@ -9,6 +9,7 @@ use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\ProjectPermitReadiness;
 use App\Actions\ProjectSyntheticPermitCalendar;
+use App\Actions\ResolveActivePaymentAttempt;
 use App\Actions\ResolveOfficialReceiptProfile;
 use App\Actions\ResolvePermitBusinessAddress;
 use App\Assessment\AssessmentCounterCheckReadiness;
@@ -59,6 +60,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         private readonly BuildScheduleOfPayment $buildScheduleOfPayment,
         private readonly BuildPermitVerificationQrDataUrl $buildPermitVerificationQrDataUrl,
         private readonly AssessmentCounterCheckReadiness $counterCheckReadiness,
+        private readonly ResolveActivePaymentAttempt $resolveAttempt,
     ) {}
 
     public function resolve(PermitApplication $permitApplication, ?User $viewer = null): ApplicationData
@@ -798,7 +800,8 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
     {
         $schedule = $application->paymentSchedules->sortByDesc('sequence')->first();
         $onlinePayment = $schedule?->xChangePayment;
-        $attempt = $onlinePayment?->attempts->sortByDesc('id')->first();
+        $attemptResolution = $this->resolveAttempt->handle($onlinePayment);
+        $attempt = $attemptResolution['state'] === 'active' ? $attemptResolution['attempt'] : null;
         $scheduleCollections = $schedule === null ? collect() : $schedule->treasuryCollections;
         $canonicalCollection = $onlinePayment === null ? null : $onlinePayment->treasuryCollection;
         $canonicalCollection ??= $scheduleCollections->sortByDesc('received_at')->first();
@@ -881,6 +884,9 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'due_on' => $schedule->due_on?->toDateString(),
             ],
             'payment_request' => $onlinePayment === null ? null : [
+                'payment_id' => $onlinePayment->id,
+                'attempt_resolution' => $attemptResolution['state'],
+                'server_now' => $attemptResolution['server_now'],
                 'state' => $canonicalCollection instanceof TreasuryCollection ? 'collected' : $onlinePayment->status,
                 'pay_code' => $onlinePayment->pay_code,
                 'external_reference' => $onlinePayment->external_reference,
@@ -896,6 +902,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'collection_reference' => $canonicalCollection?->reference_number,
                 'official_receipt_id' => $canonicalCollection?->receipt?->id,
                 'active_attempt' => $attempt === null ? null : [
+                    'id' => $attempt->id,
                     'reference' => $attempt->reference,
                     'status' => $attempt->status,
                     'provider' => $attempt->provider,

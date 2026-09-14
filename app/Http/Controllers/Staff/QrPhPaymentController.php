@@ -20,6 +20,8 @@ final class QrPhPaymentController extends Controller
         Gate::authorize(UserPermission::ViewPaymentSchedules->value);
         $this->ensureStaffMayControlQrPh($paymentSchedule);
 
+        abort_if($paymentSchedule->xChangePayment()->exists(), 409, 'An existing Citizen payable must be continued, not initiated by Cashier.');
+
         try {
             return response()->json($initiate->handle($paymentSchedule))->header('Cache-Control', 'no-store');
         } catch (XChangePartnerApiException $exception) {

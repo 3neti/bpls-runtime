@@ -8,10 +8,13 @@ use App\Models\XChangePaymentAttempt;
 
 final class BuildCitizenCurrentQrPhAttempt
 {
-    public function __construct(private readonly QrPhPaymentArtifactCache $artifactCache) {}
+    public function __construct(
+        private readonly QrPhPaymentArtifactCache $artifactCache,
+        private readonly ResolveActivePaymentAttempt $resolveAttempt,
+    ) {}
 
     /**
-     * @return array{amount_cents: int, status: string, expires_at: string, qr_data_url: string|null}|null
+     * @return array<string, mixed>|null
      */
     public function handle(PaymentSchedule $paymentSchedule): ?array
     {
@@ -20,15 +23,19 @@ final class BuildCitizenCurrentQrPhAttempt
         }
 
         $payment = $paymentSchedule->xChangePayment()->with('attempts')->first();
-        $attempt = $payment?->attempts->sortByDesc('id')->first();
+        $resolution = $this->resolveAttempt->handle($payment);
+        $attempt = $resolution['attempt'];
 
         if (! $attempt instanceof XChangePaymentAttempt
-            || ! in_array($attempt->status, ['requested', 'awaiting_payment'], true)
-            || $attempt->expires_at?->isFuture() !== true) {
+            || $resolution['state'] !== 'active') {
             return null;
         }
 
         return [
+            'payment_id' => $payment->id,
+            'attempt_id' => $attempt->id,
+            'external_reference' => $payment->external_reference,
+            'server_now' => $resolution['server_now'],
             'amount_cents' => $attempt->amount_cents,
             'status' => $attempt->status,
             'expires_at' => $attempt->expires_at->toIso8601String(),

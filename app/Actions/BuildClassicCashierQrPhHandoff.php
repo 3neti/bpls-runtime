@@ -2,40 +2,33 @@
 
 namespace App\Actions;
 
+use App\Enums\UserPermission;
 use App\Integrations\QrPhPaymentArtifactCache;
-use App\Models\LifecycleCleanroomRun;
 use App\Models\PaymentSchedule;
 use App\Models\User;
 use App\Models\XChangePaymentAttempt;
 
 final class BuildClassicCashierQrPhHandoff
 {
-    public function __construct(private readonly QrPhPaymentArtifactCache $artifactCache) {}
+    public function __construct(
+        private readonly QrPhPaymentArtifactCache $artifactCache,
+        private readonly ResolveActivePaymentAttempt $resolveAttempt,
+    ) {}
 
     /** @return array<string, mixed>|null */
     public function handle(PaymentSchedule $schedule, ?User $viewer): ?array
     {
-        $runId = data_get($schedule->permitApplication->metadata, 'lifecycle_cleanroom.run_id');
-        $run = is_string($runId)
-            ? LifecycleCleanroomRun::query()->where('public_id', $runId)->first()
-            : null;
-
-        if (! $run instanceof LifecycleCleanroomRun
-            || ! $run->isClassicLifecycleV1()
-            || $run->status !== 'active'
-            || ! $viewer instanceof User
-            || data_get($run->actor_manifest, 'actors.cashier.user_id') !== $viewer->id) {
+        if (! $viewer instanceof User || ! $viewer->can(UserPermission::ViewPaymentSchedules->value)) {
             return null;
         }
 
         $payment = $schedule->xChangePayment()->with('attempts')->first();
-        $attempt = $payment?->attempts->sortByDesc('id')->first();
-        if ($payment === null || ! $attempt instanceof XChangePaymentAttempt) {
+        if ($payment === null) {
             return null;
         }
-
-        $isCurrent = in_array($attempt->status, ['requested', 'awaiting_payment'], true)
-            && $attempt->expires_at?->isFuture() === true
+        $resolution = $this->resolveAttempt->handle($payment);
+        $attempt = $resolution['attempt'];
+        $isCurrent = $resolution['state'] === 'active'
             && $schedule->treasuryCollections()->doesntExist();
 
         return [
@@ -46,7 +39,16 @@ final class BuildClassicCashierQrPhHandoff
             'currency' => $payment->currency,
             'status' => $payment->status,
             'is_current' => $isCurrent,
-            'attempt' => [
+            'resolution' => $resolution['state'],
+            'server_now' => $resolution['server_now'],
+            'history' => $payment->attempts->sortBy('id')->values()->map(fn (XChangePaymentAttempt $item): array => [
+                'id' => $item->id,
+                'reference' => $item->reference,
+                'status' => $item->status,
+                'expires_at' => $item->expires_at?->toIso8601String(),
+                'expired' => $item->expires_at?->isFuture() === false,
+            ])->all(),
+            'attempt' => $attempt === null ? null : [
                 'id' => $attempt->id,
                 'reference' => $attempt->reference,
                 'provider' => $attempt->provider,

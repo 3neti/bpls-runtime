@@ -22,7 +22,10 @@ use Illuminate\Support\Str;
 
 final class BuildMunicipalWorkInbox
 {
-    public function __construct(private readonly AssessmentCounterCheckReadiness $counterCheckReadiness) {}
+    public function __construct(
+        private readonly AssessmentCounterCheckReadiness $counterCheckReadiness,
+        private readonly ResolveActivePaymentAttempt $resolveAttempt,
+    ) {}
 
     /**
      * @param  array{q?: string, task?: string, year?: int|null}  $filters
@@ -246,11 +249,7 @@ final class BuildMunicipalWorkInbox
                     return true;
                 }
 
-                $attempt = $schedule->xChangePayment?->attempts->sortByDesc('id')->first();
-
-                return $attempt !== null
-                    && in_array($attempt->status, ['requested', 'awaiting_payment'], true)
-                    && $attempt->expires_at?->isFuture() === true;
+                return $this->resolveAttempt->handle($schedule->xChangePayment)['state'] === 'active';
             })
             ->map(function (PaymentSchedule $schedule): array {
                 $pendingReceipts = $schedule->treasuryCollections->contains(fn ($collection): bool => $collection->status === TreasuryCollectionStatus::PendingReceipt);

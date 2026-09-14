@@ -19,6 +19,7 @@ final class InitiateQrPhPayment
         private readonly AssessmentSnapshotFingerprint $fingerprint,
         private readonly XChangePartnerApiClient $client,
         private readonly QrPhPaymentArtifactCache $artifactCache,
+        private readonly ResolveActivePaymentAttempt $resolveAttempt,
     ) {}
 
     /**
@@ -124,12 +125,12 @@ final class InitiateQrPhPayment
 
     private function attempt(XChangePayment $payment): XChangePaymentAttempt
     {
-        $attempt = $payment->attempts()->latest('id')->first();
-
-        if ($attempt instanceof XChangePaymentAttempt
-            && ($attempt->expires_at === null || $attempt->expires_at->isFuture())
-            && in_array($attempt->status, ['requested', 'awaiting_payment'], true)) {
-            return $attempt;
+        $resolution = $this->resolveAttempt->handle($payment);
+        if ($resolution['state'] === 'needs_review') {
+            throw new XChangePartnerApiException('PAYMENT_TERMS_CONFLICT', 'Payment attempts need review. No additional request was created.');
+        }
+        if ($resolution['attempt'] instanceof XChangePaymentAttempt) {
+            return $resolution['attempt'];
         }
 
         return $payment->attempts()->create([
