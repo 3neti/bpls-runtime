@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\AuthorizeUatQrPhSimulation;
 use App\Actions\BuildCitizenCurrentQrPhAttempt;
 use App\Actions\InitiateQrPhPayment;
 use App\Actions\ResolveActivePaymentAttempt;
@@ -10,12 +11,13 @@ use App\Enums\AssessmentStatus;
 use App\Enums\FeeRuleCategory;
 use App\Enums\PaymentScheduleStatus;
 use App\Enums\PermitApplicationStatus;
-use App\Enums\StakeholderPreviewPersona;
 use App\Enums\UserPermission;
 use App\Exceptions\XChangePartnerApiException;
 use App\Models\Assessment;
 use App\Models\AssessmentDecision;
 use App\Models\AssessmentLine;
+use App\Models\InstitutionalPosition;
+use App\Models\InstitutionalPositionAssignment;
 use App\Models\PaymentSchedule;
 use App\Models\PaymentScheduleLine;
 use App\Models\PermitApplication;
@@ -32,11 +34,19 @@ function handoffFixture(): array
 {
     Http::preventStrayRequests();
     $actor = userWithPermissions([UserPermission::AccessStaff, UserPermission::ViewPaymentSchedules, UserPermission::RecordCollections]);
-    $safety = Mockery::mock(StakeholderPreviewSafety::class)->makePartial();
-    $safety->shouldReceive('isEnabled')->andReturn(true);
-    $safety->shouldReceive('personaFor')->with($actor)->andReturn(StakeholderPreviewPersona::Cashier);
-    app()->instance(StakeholderPreviewSafety::class, $safety);
-    config(['app.url' => 'https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud']);
+    $cashierRole = $actor->roles()->sole();
+    $cashierRole->update(['code' => 'cashier', 'name' => 'cashier']);
+    $position = InstitutionalPosition::factory()->for($cashierRole, 'capabilityRole')->create();
+    InstitutionalPositionAssignment::query()->create([
+        'user_id' => $actor->id, 'institutional_position_id' => $position->id,
+        'status' => 'active', 'assigned_at' => now(), 'reason' => 'Synthetic Cashier authority fixture',
+    ]);
+    config([
+        'app.url' => 'https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud',
+        'stakeholder_preview.mode' => true,
+        'stakeholder_preview.production_migration_enabled' => false,
+        'stakeholder_preview.production_integrations' => 'disabled',
+    ]);
     $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->create([
         'id' => 291, 'status' => PermitApplicationStatus::PendingPayment,
         'metadata' => [],
@@ -200,3 +210,100 @@ test('Cashier cannot reinitiate an existing payable', function () {
     expect($payment->attempts()->count())->toBe(1)->and(XChangePayment::count())->toBe(1);
     Http::assertNothingSent();
 });
+
+test('simulation uses municipal Cashier authority rather than a preview persona', function () {
+    [$actor, $schedule, $payment] = handoffFixture();
+    handoffAttempt($payment);
+    expect(app(StakeholderPreviewSafety::class)->personaFor($actor))->toBeNull()
+        ->and(app(AuthorizeUatQrPhSimulation::class)->available($schedule, $actor))->toBeTrue();
+});
+
+test('non Cashier positions cannot simulate even with collection permission', function (string $role) {
+    [$actor, $schedule, $payment] = handoffFixture();
+    $attempt = handoffAttempt($payment);
+    $actor->roles()->sole()->update(['code' => $role, 'name' => $role]);
+    $this->actingAs($actor)->get(route('staff.payment-schedules.show', $schedule))->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('can.simulate_classic_payment', false)->where('classicPaymentSimulationUrl', null));
+    $this->post(route('staff.payment-schedules.classic-payment-simulation.store', $schedule), ['attempt_id' => $attempt->id])->assertForbidden();
+    expect(TreasuryCollection::count())->toBe(0);
+})->with(['citizen', 'bplo', 'assessor', 'engineering', 'health', 'menro', 'treasury', 'municipal_treasurer', 'admin']);
+
+test('simulation environment is explicit and fail closed', function (string $environment, string $url, bool $enabled, bool $migration, string $integrations, bool $allowed) {
+    [$actor, $schedule, $payment] = handoffFixture();
+    $attempt = handoffAttempt($payment);
+    app()->detectEnvironment(fn () => $environment);
+    config(['app.url' => $url, 'stakeholder_preview.mode' => $enabled,
+        'stakeholder_preview.production_migration_enabled' => $migration,
+        'stakeholder_preview.production_integrations' => $integrations]);
+    $this->actingAs($actor)->get(route('staff.payment-schedules.show', $schedule))->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('can.simulate_classic_payment', $allowed));
+    if (! $allowed) {
+        $this->withSession(['_token' => 'synthetic-csrf'])->post(route('staff.payment-schedules.classic-payment-simulation.store', $schedule), [
+            'attempt_id' => $attempt->id, '_token' => 'synthetic-csrf',
+        ])->assertForbidden();
+    }
+    expect(TreasuryCollection::count())->toBe(0);
+})->with([
+    'production' => ['production', 'https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud', true, false, 'disabled', false],
+    'historical UAT' => ['staging', 'https://historical-uat.example.test', true, false, 'disabled', false],
+    'unapproved target' => ['staging', 'https://ordinary.example.test', true, false, 'disabled', false],
+    'disabled preview' => ['staging', 'https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud', false, false, 'disabled', false],
+    'production migration enabled' => ['staging', 'https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud', true, true, 'disabled', false],
+    'production integration enabled' => ['staging', 'https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud', true, false, 'enabled', false],
+    'local configured' => ['local', 'http://localhost', true, false, 'disabled', true],
+    'local unconfigured' => ['local', 'http://localhost', false, false, 'disabled', false],
+    'workflow UAT' => ['staging', 'https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud', true, false, 'disabled', true],
+]);
+
+test('revoked Cashier position fails both presentation and execution', function () {
+    [$actor, $schedule, $payment] = handoffFixture();
+    $attempt = handoffAttempt($payment);
+    InstitutionalPositionAssignment::where('user_id', $actor->id)->update(['ended_at' => now()]);
+    expect(app(AuthorizeUatQrPhSimulation::class)->available($schedule, $actor))->toBeFalse();
+    $this->actingAs($actor)->post(route('staff.payment-schedules.classic-payment-simulation.store', $schedule), ['attempt_id' => $attempt->id])->assertForbidden();
+});
+
+test('anonymous users cannot simulate', function () {
+    [, $schedule, $payment] = handoffFixture();
+    $attempt = handoffAttempt($payment);
+    expect(app(AuthorizeUatQrPhSimulation::class)->available($schedule, null))->toBeFalse();
+    $this->postJson(route('staff.payment-schedules.classic-payment-simulation.store', $schedule), ['attempt_id' => $attempt->id])->assertUnauthorized();
+});
+
+test('visible simulation fails cleanly when request expires before submission', function () {
+    [$actor, $schedule, $payment] = handoffFixture();
+    $attempt = handoffAttempt($payment);
+    expect(app(AuthorizeUatQrPhSimulation::class)->available($schedule, $actor))->toBeTrue();
+    $this->travel(11)->minutes();
+    $this->actingAs($actor)->post(route('staff.payment-schedules.classic-payment-simulation.store', $schedule), ['attempt_id' => $attempt->id])->assertSessionHasErrors('payment');
+    expect(TreasuryCollection::count())->toBe(0);
+});
+
+test('HTTP simulation is idempotent and refresh hides the settled action with provenance intact', function () {
+    [$actor, $schedule, $payment] = handoffFixture();
+    $attempt = handoffAttempt($payment);
+    foreach ([1, 2] as $retry) {
+        $this->actingAs($actor)->post(route('staff.payment-schedules.classic-payment-simulation.store', $schedule), ['attempt_id' => $attempt->id])->assertRedirect(route('staff.payment-schedules.show', $schedule));
+    }
+    $collection = TreasuryCollection::sole();
+    expect($collection->amount_cents)->toBe(417500)
+        ->and(data_get($collection->source_snapshot, 'integration_evidence.x_change_payment_id'))->toBe(5)
+        ->and(data_get($collection->source_snapshot, 'integration_evidence.attempt_id'))->toBe($attempt->id)
+        ->and(data_get($collection->source_snapshot, 'integration_evidence.attempt_reference'))->toBe($attempt->reference)
+        ->and(data_get($collection->source_snapshot, 'integration_evidence.attempt_provider'))->toBe('synthetic')
+        ->and(data_get($collection->source_snapshot, 'integration_evidence.real_funds_moved'))->toBeFalse()
+        ->and(XChangePayment::count())->toBe(1)->and($payment->attempts()->count())->toBe(1);
+    $this->get(route('staff.payment-schedules.show', $schedule))->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('can.simulate_classic_payment', false)->where('classicPaymentSimulationUrl', null));
+});
+
+test('no active or non payable payment never advertises simulation', function (string $state) {
+    [$actor, $schedule, $payment] = handoffFixture();
+    if ($state !== 'no_attempt') {
+        handoffAttempt($payment, $state === 'expired' ? -1 : 600);
+    }
+    if ($state === 'failed_payment') {
+        $payment->update(['status' => 'failed']);
+    }
+    expect(app(AuthorizeUatQrPhSimulation::class)->available($schedule->fresh(), $actor))->toBeFalse();
+})->with(['no_attempt', 'expired', 'failed_payment']);

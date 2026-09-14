@@ -116,8 +116,7 @@ class AssessmentPaymentScheduleController extends Controller
             'lines.lineOfBusiness',
         ]);
         $classicPaymentHandoff = $this->buildClassicCashierQrPhHandoff->handle($paymentSchedule, auth()->user());
-        $canSimulateClassicPayment = data_get($classicPaymentHandoff, 'is_current') === true
-            && $this->authorizeSimulation->handle($paymentSchedule, auth()->user());
+        $canSimulateClassicPayment = $this->authorizeSimulation->available($paymentSchedule, auth()->user());
 
         if ($canRecordCollections || $canViewCollections || $canIssueReceipts || $canViewReceipts) {
             $paymentSchedule->load([

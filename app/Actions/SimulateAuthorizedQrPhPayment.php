@@ -29,6 +29,9 @@ final class SimulateAuthorizedQrPhPayment
         return Cache::lock("qr-ph:payment-schedule:{$schedule->id}", 20)->block(10, fn (): TreasuryCollection => DB::transaction(function () use ($schedule, $actor, $attemptId): TreasuryCollection {
             $schedule = PaymentSchedule::query()->lockForUpdate()->findOrFail($schedule->id);
             $payment = $schedule->xChangePayment()->lockForUpdate()->first();
+            if (! $this->authorizeSimulation->handle($schedule, $actor->fresh())) {
+                abort(403, 'This payment is not authorized for UAT simulation.');
+            }
             if ($payment === null || blank($payment->pay_code)) {
                 throw new LogicException('The Citizen must create the QR Ph request first.');
             }
@@ -41,6 +44,9 @@ final class SimulateAuthorizedQrPhPayment
                 return $collection;
             }
             $this->ensureEligible->handle($schedule);
+            if (! $this->authorizeSimulation->available($schedule, $actor->fresh())) {
+                throw new LogicException('QR Ph simulation is unavailable. The request may have expired; review the current Citizen request. No Collection was created.');
+            }
             $resolution = $this->resolveAttempt->handle($payment);
             $attempt = $resolution['attempt'];
             if ($resolution['state'] !== 'active' || $attempt?->id !== $attemptId) {
@@ -67,6 +73,8 @@ final class SimulateAuthorizedQrPhPayment
                     'pay_code' => $payment->pay_code,
                     'attempt_id' => $attempt->id,
                     'attempt_reference' => $attempt->reference,
+                    'attempt_provider' => $attempt->provider,
+                    'payment_rail' => 'qr_ph',
                     'consumer_status' => 'paid',
                     'provider_status' => 'active',
                     'collected_total_cents' => $payment->amount_cents,
