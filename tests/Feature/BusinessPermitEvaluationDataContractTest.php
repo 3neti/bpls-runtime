@@ -11,6 +11,7 @@ use App\Enums\BusinessPermitEvaluationApplicability;
 use App\Enums\BusinessPermitEvaluationItemType;
 use App\Enums\BusinessPermitEvaluationSource;
 use App\Enums\PermitApplicationStatus;
+use App\Enums\UserPermission;
 use App\Evaluation\BusinessPermitEvaluationResolver;
 use App\Models\Business;
 use App\Models\BusinessPermitEvaluationItem;
@@ -23,7 +24,7 @@ use App\Models\User;
 /** @return array<string, mixed> */
 function contractFixture(): array
 {
-    $actor = User::factory()->create();
+    $actor = userWithPermissions([UserPermission::CounterCheckBusinessPermitEvaluations]);
     $business = Business::factory()->create();
     $lineOfBusiness = LineOfBusiness::factory()->create(['name' => 'Retail']);
     $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::Assessment)->for($business)->create([

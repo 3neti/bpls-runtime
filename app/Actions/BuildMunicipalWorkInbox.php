@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Assessment\AssessmentCounterCheckReadiness;
 use App\Enums\AssessmentDecisionAction;
 use App\Enums\PaymentScheduleStatus;
 use App\Enums\PermitApplicationStatus;
@@ -21,6 +22,8 @@ use Illuminate\Support\Str;
 
 final class BuildMunicipalWorkInbox
 {
+    public function __construct(private readonly AssessmentCounterCheckReadiness $counterCheckReadiness) {}
+
     /**
      * @param  array{q?: string, task?: string, year?: int|null}  $filters
      * @return array{items: Collection<int, array<string, mixed>>, assignments: Collection<int, array{position: string, role: string}>, task_options: Collection<int, array{value: string, label: string}>}
@@ -186,7 +189,8 @@ final class BuildMunicipalWorkInbox
             ->whereNull('superseded_at')
             ->whereDoesntHave('treasuryCounterCheck')
             ->get()
-            ->map(fn (Assessment $assessment): array => $this->item($assessment->permitApplication, 'treasury_counter_check', 'Counter-check Assessment', 'Treasury', $assessment->assessed_at, 'staff.permit-applications.evaluation.show', $assessment->id))
+            ->filter(fn (Assessment $assessment): bool => in_array($this->counterCheckReadiness->state($assessment), ['awaiting_counter_check', 'incomplete'], true))
+            ->map(fn (Assessment $assessment): array => $this->item($assessment->permitApplication, 'treasury_counter_check', $this->counterCheckReadiness->state($assessment) === 'incomplete' ? 'Incomplete · Evaluation binding unavailable' : 'Counter-check Assessment', 'Treasury', $assessment->assessed_at, 'staff.permit-applications.assessments.show', $assessment->id, ['assessment' => $assessment]))
             ->values()
             ->all();
     }
@@ -200,6 +204,7 @@ final class BuildMunicipalWorkInbox
             ->whereHas('treasuryCounterCheck')
             ->whereDoesntHave('decision')
             ->get()
+            ->filter(fn (Assessment $assessment): bool => $this->counterCheckReadiness->state($assessment) === 'checked')
             ->map(fn (Assessment $assessment): array => $this->item($assessment->permitApplication, 'treasurer_decision', 'Review Assessment', 'Municipal Treasurer', $assessment->updated_at, 'staff.permit-applications.assessments.show', $assessment->id, ['assessment' => $assessment]))
             ->values()
             ->all();

@@ -6,6 +6,7 @@ use App\Actions\BuildComputationAssessmentSlip;
 use App\Actions\BuildLaboratoryAssessmentReconciliation;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Actions\RenderAssessmentPdf;
+use App\Assessment\AssessmentCounterCheckReadiness;
 use App\Assessment\AssessmentSnapshotFingerprint;
 use App\Enums\AssessmentDecisionAction;
 use App\Enums\AssessmentStatus;
@@ -116,6 +117,7 @@ class PermitApplicationAssessmentController extends Controller
         AssessmentSnapshotFingerprint $fingerprint,
         BuildComputationAssessmentSlip $buildSlip,
         BuildLaboratoryAssessmentReconciliation $buildReconciliation,
+        AssessmentCounterCheckReadiness $counterCheckReadiness,
     ): Response {
         Gate::authorize(UserPermission::ViewPermitApplications->value);
 
@@ -132,6 +134,7 @@ class PermitApplicationAssessmentController extends Controller
 
         $latestPaymentSchedule = $assessment->paymentSchedules->first();
         $snapshotHash = $fingerprint->hash($assessment);
+        $counterCheckState = $counterCheckReadiness->state($assessment);
         $paymentScheduleAvailable = $assessment->decision?->action === AssessmentDecisionAction::Approved
             && $assessment->decision->total_amount_cents === $assessment->total_amount_cents
             && hash_equals($assessment->decision->assessment_snapshot_hash, $snapshotHash);
@@ -141,9 +144,7 @@ class PermitApplicationAssessmentController extends Controller
             && $assessment->paymentSchedules->isEmpty()
             && $assessment->permitApplication->status === PermitApplicationStatus::Assessment
             && $assessment->assessed_by_id !== auth()->id()
-            && ($assessment->business_permit_evaluation_version_id === null
-                || ($assessment->treasuryCounterCheck?->assessment_snapshot_hash !== null
-                    && hash_equals($assessment->treasuryCounterCheck->assessment_snapshot_hash, $snapshotHash)));
+            && in_array($counterCheckState, ['checked', 'not_required'], true);
 
         return Inertia::render('permit-applications/Assessments/Show', [
             'computationAssessmentSlip' => $buildSlip->handle($assessment),
@@ -152,7 +153,10 @@ class PermitApplicationAssessmentController extends Controller
                 'id' => $assessment->id,
                 'sequence' => $assessment->sequence,
                 'status' => $assessment->status->value,
-                'display_status' => $this->assessmentDisplayStatus($assessment, $latestPaymentSchedule !== null),
+                'display_status' => $counterCheckState === 'incomplete'
+                    ? 'Incomplete · Evaluation binding unavailable'
+                    : $this->assessmentDisplayStatus($assessment, $latestPaymentSchedule !== null),
+                'counter_check_state' => $counterCheckState,
                 'assessed_at' => $assessment->assessed_at?->toIso8601String(),
                 'assessed_by' => $assessment->assessedBy?->name,
                 'total_amount_cents' => $assessment->total_amount_cents,

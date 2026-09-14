@@ -15,6 +15,14 @@ final class ProjectCurrentAssessmentTotal
         if (data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') !== true) {
             return null;
         }
+        $assessment = $application->assessments()->whereNull('superseded_at')->first();
+        if ($assessment !== null) {
+            return $assessment->total_amount_cents;
+        }
+        $version = $application->businessPermitEvaluation?->currentVersion;
+        if (data_get($version?->metadata, 'financial_snapshot.schema') !== null) {
+            return data_get($version->metadata, 'financial_snapshot.report.total.minor');
+        }
 
         $workIds = $application->bploRoutingDetermination?->works()->pluck('id');
         if ($workIds === null || $workIds->isEmpty()) {

@@ -5,7 +5,9 @@ namespace App\Actions;
 use App\Assessment\AssessmentSnapshotFingerprint;
 use App\Enums\AssessmentStatus;
 use App\Enums\TreasuryCounterCheckResult;
+use App\Enums\UserPermission;
 use App\Evaluation\BusinessPermitEvaluationResolver;
+use App\Evaluation\FrozenFinancialEvaluation;
 use App\Models\Assessment;
 use App\Models\BusinessPermitEvaluationCounterCheck;
 use App\Models\BusinessPermitEvaluationVersion;
@@ -18,6 +20,7 @@ class RecordBusinessPermitEvaluationCounterCheck
     public function __construct(
         private readonly BusinessPermitEvaluationResolver $resolver,
         private readonly AssessmentSnapshotFingerprint $assessmentFingerprint,
+        private readonly FrozenFinancialEvaluation $frozen,
     ) {}
 
     public function handle(
@@ -29,6 +32,9 @@ class RecordBusinessPermitEvaluationCounterCheck
         ?string $expectedFingerprint = null,
     ): BusinessPermitEvaluationCounterCheck {
         return DB::transaction(function () use ($assessment, $treasuryActor, $result, $reason, $expectedVersionSequence, $expectedFingerprint): BusinessPermitEvaluationCounterCheck {
+            if (! $treasuryActor->can(UserPermission::CounterCheckBusinessPermitEvaluations->value)) {
+                throw new LogicException('Only an authorized Treasury counter-check actor may record this act.');
+            }
             $lockedAssessment = Assessment::query()->whereKey($assessment->id)->lockForUpdate()->firstOrFail();
             $lockedAssessment->load(['businessPermitEvaluationVersion.evaluation.currentVersion', 'businessPermitEvaluationVersion.evaluation.permitApplication', 'businessPermitEvaluationVersion.counterCheck', 'decision', 'lines']);
             $version = $lockedAssessment->businessPermitEvaluationVersion;
@@ -49,7 +55,7 @@ class RecordBusinessPermitEvaluationCounterCheck
                 throw new LogicException('Treasury can counter-check only the current prepared Assessment before the Municipal Treasurer decision.');
             }
 
-            if ($lockedEvaluation->currentVersion?->id !== $version->id
+            if ($lockedEvaluation->permit_application_id !== $lockedAssessment->permit_application_id
                 || $lockedAssessment->business_permit_evaluation_fingerprint === null
                 || ! hash_equals($version->fingerprint, $lockedAssessment->business_permit_evaluation_fingerprint)) {
                 throw new LogicException('Treasury cannot counter-check an Assessment that does not bind the current Evaluation version and fingerprint.');
@@ -62,6 +68,9 @@ class RecordBusinessPermitEvaluationCounterCheck
                 throw new LogicException('The Evaluation changed before Treasury counter-check. Review the latest version; no newer office work was erased.');
             }
 
+            if (data_get($version->metadata, 'financial_snapshot.schema') !== null) {
+                $this->frozen->assertAssessment($lockedAssessment);
+            }
             $projection = $this->resolver->resolve($lockedEvaluation, $version);
             if (! $projection['fingerprint_current']) {
                 throw new LogicException('Treasury cannot counter-check a stale Evaluation fingerprint. Refresh its dynamic dependencies first.');

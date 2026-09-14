@@ -9,6 +9,7 @@ use App\Enums\AssessmentStatus;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleScope;
 use App\Enums\PermitApplicationStatus;
+use App\Enums\TreasuryCounterCheckResult;
 use App\Enums\UserPermission;
 use App\Enums\UserRole;
 use App\Models\Assessment;
@@ -209,14 +210,15 @@ test('an assessment detail clearly separates preparation from Treasurer decision
 });
 
 test('an evaluation-bound assessment names Treasury counter-check before Municipal Treasurer approval', function () {
-    [, $assessment] = preparedAssessmentFixture();
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::Assessment)->create();
     $evaluation = BusinessPermitEvaluation::factory()
-        ->for($assessment->permitApplication)
+        ->for($application)
         ->create();
     $version = BusinessPermitEvaluationVersion::factory()
         ->for($evaluation, 'evaluation')
         ->create();
-    $assessment->update([
+    $assessment = Assessment::factory()->for($application)->create([
+        'status' => AssessmentStatus::Computed,
         'business_permit_evaluation_version_id' => $version->id,
         'business_permit_evaluation_fingerprint' => $version->fingerprint,
     ]);
@@ -242,6 +244,7 @@ test('an evaluation-bound assessment names Treasury counter-check before Municip
         ->for($treasury, 'checkedBy')
         ->create([
             'assessment_snapshot_hash' => assessmentSnapshotHash($assessment),
+            'result' => TreasuryCounterCheckResult::NoCorrection,
         ]);
 
     $this->actingAs($treasury)

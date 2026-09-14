@@ -22,10 +22,10 @@ class AssignTreasuryLinesOfBusiness
 {
     public function __construct(
         private readonly BuildConcernedOfficePaymentOrderSummary $paymentOrderSummary,
-        private readonly RefreshBusinessPermitEvaluation $refreshEvaluation,
         private readonly AssessmentCalculator $assessmentCalculator,
         private readonly TreasuryFeeResolution $treasuryFeeResolution,
         private readonly ProvisionalTreasuryEnterpriseSchedule $enterpriseSchedule,
+        private readonly FreezeTreasuryFinancialEvaluation $freezeEvaluation,
     ) {}
 
     /**
@@ -221,9 +221,7 @@ class AssignTreasuryLinesOfBusiness
                 }
                 $result[] = $assignment->load(['lineOfBusiness', 'items.feeRule']);
             }
-            if ($application->businessPermitEvaluation !== null) {
-                $this->refreshEvaluation->handle($application->businessPermitEvaluation, $actor);
-            }
+            $this->freezeEvaluation->handle($application, $actor);
 
             return $result;
         });

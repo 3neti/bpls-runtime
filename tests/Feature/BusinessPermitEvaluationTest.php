@@ -45,7 +45,7 @@ use Database\Seeders\RevenueCodeFeeCatalogSeeder;
 
 function evaluationFixture(): array
 {
-    $actor = User::factory()->create();
+    $actor = evaluationTestCounterChecker();
     $business = Business::factory()->create();
     $retail = LineOfBusiness::factory()->create(['code' => 'RETAIL', 'name' => 'Retail']);
     $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::Assessment)->for($business)->create([
@@ -843,7 +843,7 @@ function businessPermitEvaluatorPreviewActors(): array
         'citizen' => User::factory()->create(),
         'bplo' => userWithRole($bploRole),
         'assessment_officer' => User::factory()->create(),
-        'treasury' => User::factory()->create(),
+        'treasury' => evaluationTestCounterChecker(),
         'municipal_treasurer' => User::factory()->create(),
         'engineering' => User::factory()->create(),
         'mpdo' => User::factory()->create(),
@@ -863,4 +863,15 @@ function configureBusinessPermitEvaluatorPreviewSafety(): void
         'stakeholder_preview.production_migration_enabled' => false,
         'stakeholder_preview.production_integrations' => 'disabled',
     ]);
+}
+
+function evaluationTestCounterChecker(): User
+{
+    $permission = Permission::firstOrCreate(['code' => UserPermission::CounterCheckBusinessPermitEvaluations->value], [
+        'name' => UserPermission::CounterCheckBusinessPermitEvaluations->value, 'guard_name' => 'web',
+    ]);
+    $role = Role::factory()->create();
+    $role->permissions()->sync([$permission->id]);
+
+    return userWithRole($role);
 }

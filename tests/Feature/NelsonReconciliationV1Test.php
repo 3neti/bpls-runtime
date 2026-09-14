@@ -13,6 +13,7 @@ use App\Actions\IssueSyntheticLifecyclePermit;
 use App\Actions\ProjectPermitReadiness;
 use App\Actions\RecordAssessmentDecision;
 use App\Actions\RecordBploRoutingDetermination;
+use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
 use App\Actions\RecordPaymentScheduleCollection;
 use App\Actions\RecordPostPaymentOfficeCertification;
 use App\Actions\ReleaseSyntheticLifecyclePermit;
@@ -32,6 +33,7 @@ use App\Enums\UserRole;
 use App\Models\FeeRule;
 use App\Models\LifecycleCleanroomRun;
 use App\Models\LineOfBusiness;
+use App\Models\Permission;
 use App\Models\SignatureEvidence;
 use App\Models\User;
 use Database\Seeders\NelsonConcernedOfficeFeeCatalogSeeder;
@@ -271,6 +273,12 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         ->and($scheduleOfPayment['grand_total_minor'])->toBe($report['total']['minor'])
         ->and($scheduleOfPayment['assessment_total_minor'])->toBe($assessment->total_amount_cents);
 
+    $checkPermission = Permission::firstOrCreate(['code' => UserPermission::CounterCheckBusinessPermitEvaluations->value], [
+        'name' => UserPermission::CounterCheckBusinessPermitEvaluations->value, 'guard_name' => 'web',
+    ]);
+    $treasurer->primaryRole()->permissions()->syncWithoutDetaching([$checkPermission->id]);
+    $treasurer->unsetRelation('roles');
+    app(RecordBusinessPermitEvaluationCounterCheck::class)->handle($assessment, $treasurer);
     app(RecordAssessmentDecision::class)->handle($assessment, $treasurer, AssessmentDecisionAction::Approved);
     $approvedDocument = app(BuildExecutablePermitApplicationDocument::class)->handle($application->fresh(), $treasurer);
     expect(data_get($approvedDocument, 'page_2_assessment.processing_summary'))

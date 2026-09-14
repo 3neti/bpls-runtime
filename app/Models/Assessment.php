@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\AssessmentStatus;
+use App\Evaluation\FrozenFinancialEvaluation;
 use Database\Factories\AssessmentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -43,6 +44,27 @@ class Assessment extends Model
 {
     /** @use HasFactory<AssessmentFactory> */
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $assessment): void {
+            if ($assessment->business_permit_evaluation_version_id !== null) {
+                $version = $assessment->businessPermitEvaluationVersion;
+                if ($version === null || $version->evaluation->permit_application_id !== $assessment->permit_application_id
+                    || $version->fingerprint !== $assessment->business_permit_evaluation_fingerprint) {
+                    throw new \LogicException('Assessment Evaluation identity must belong to the same Application and exact fingerprint.');
+                }
+            }
+            if (data_get($assessment->permitApplication->metadata, 'nelson_reconciliation_v1.commissioned_path') === true) {
+                app(FrozenFinancialEvaluation::class)->assertAssessment($assessment);
+            }
+        });
+        static::updating(function (self $assessment): void {
+            if ($assessment->isDirty(['business_permit_evaluation_version_id', 'business_permit_evaluation_fingerprint'])) {
+                throw new \LogicException('An Assessment Evaluation binding is immutable; retrospective binding is prohibited.');
+            }
+        });
+    }
 
     protected $attributes = [
         'status' => 'draft',

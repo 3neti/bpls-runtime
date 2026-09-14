@@ -11,6 +11,7 @@ use App\Actions\ProjectPermitReadiness;
 use App\Actions\ProjectSyntheticPermitCalendar;
 use App\Actions\ResolveOfficialReceiptProfile;
 use App\Actions\ResolvePermitBusinessAddress;
+use App\Assessment\AssessmentCounterCheckReadiness;
 use App\Assessment\Price\HistoricalPriceReport;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\ReceiptStatus;
@@ -57,6 +58,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         private readonly LifecycleCleanroomDefinition $lifecycleCleanroomDefinition,
         private readonly BuildScheduleOfPayment $buildScheduleOfPayment,
         private readonly BuildPermitVerificationQrDataUrl $buildPermitVerificationQrDataUrl,
+        private readonly AssessmentCounterCheckReadiness $counterCheckReadiness,
     ) {}
 
     public function resolve(PermitApplication $permitApplication, ?User $viewer = null): ApplicationData
@@ -1220,8 +1222,8 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             instruction: 'Counter-check frozen Assessment',
             section: 'assessment',
             anchor: 'treasury_counter_check',
-            state: $assessment?->treasuryCounterCheck !== null ? 'completed' : ($assessment !== null ? 'ready' : 'waiting'),
-            stateLabel: $assessment?->treasuryCounterCheck !== null ? 'Completed' : ($assessment !== null ? 'Ready' : 'Awaiting Assessment'),
+            state: $assessment !== null && $this->counterCheckReadiness->state($assessment) === 'incomplete' ? 'blocked' : ($assessment?->treasuryCounterCheck !== null ? 'completed' : ($assessment !== null ? 'ready' : 'waiting')),
+            stateLabel: $assessment !== null && $this->counterCheckReadiness->state($assessment) === 'incomplete' ? 'Incomplete · Evaluation binding unavailable' : ($assessment?->treasuryCounterCheck !== null ? 'Completed' : ($assessment !== null ? 'Ready' : 'Awaiting Assessment')),
             tone: 'green',
             affordance: $taskIndex->get('counter_check'),
             completedAt: $assessment?->treasuryCounterCheck?->checked_at?->toIso8601String(),
@@ -1468,10 +1470,11 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         if ($assessment === null && $allResolved && $viewer->hasPermission(UserPermission::AssessPermitApplications)) {
             $tasks[] = $this->task('prepare_assessment', 'Prepare immutable Assessment', 'assessment', route('staff.permit-applications.evaluation.show', $application, false));
         }
-        if ($assessment instanceof Assessment && $assessment->treasuryCounterCheck === null && $viewer->hasPermission(UserPermission::CounterCheckBusinessPermitEvaluations)) {
+        $counterCheckState = $assessment instanceof Assessment ? $this->counterCheckReadiness->state($assessment) : null;
+        if ($assessment instanceof Assessment && $counterCheckState === 'awaiting_counter_check' && $viewer->hasPermission(UserPermission::CounterCheckBusinessPermitEvaluations)) {
             $tasks[] = $this->task('counter_check', 'Counter-check the frozen Assessment', 'assessment', route('staff.permit-applications.assessments.show', $assessment, false));
         }
-        if ($assessment instanceof Assessment && $assessment->treasuryCounterCheck !== null && $assessment->decision === null && $viewer->hasPermission(UserPermission::ApproveAssessments)) {
+        if ($assessment instanceof Assessment && $counterCheckState === 'checked' && $assessment->decision === null && $viewer->hasPermission(UserPermission::ApproveAssessments)) {
             $tasks[] = $this->task('treasurer_decision', 'Approve or return the exact Assessment', 'assessment', route('staff.permit-applications.assessments.show', $assessment, false));
         }
         if ($isApplicant && $schedule !== null && $schedule->total_amount_cents > $schedule->paid_amount_cents) {

@@ -690,6 +690,7 @@ function submitCounterCheck(): void {
     runOnce('counter-check', () => {
         useForm({
             reason: counterCheckReason.value || null,
+            assessment_id: latestAssessment.value?.id,
             expected_version_sequence: props.evaluation!.version.sequence,
             expected_fingerprint: props.evaluation!.version.fingerprint,
         }).post(counterCheck(props.application.id).url, {

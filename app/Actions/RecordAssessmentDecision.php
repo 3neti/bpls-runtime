@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Assessment\AssessmentCounterCheckReadiness;
 use App\Assessment\AssessmentSnapshotFingerprint;
 use App\Enums\AssessmentDecisionAction;
 use App\Enums\AssessmentStatus;
@@ -20,6 +21,7 @@ class RecordAssessmentDecision
     public function __construct(
         private readonly AssessmentSnapshotFingerprint $fingerprint,
         private readonly PermitApplicationStatusMutation $statusMutation,
+        private readonly AssessmentCounterCheckReadiness $counterCheckReadiness,
     ) {}
 
     public function handle(
@@ -114,6 +116,10 @@ class RecordAssessmentDecision
 
         if ($assessment->paymentSchedules()->exists()) {
             throw new DomainException('An assessment decision cannot be recorded after payment scheduling has begun.');
+        }
+
+        if (! in_array($this->counterCheckReadiness->state($assessment), ['checked', 'not_required'], true)) {
+            throw new DomainException('The prepared assessment requires Treasury counter-check of this exact snapshot and its bound Evaluation before Municipal Treasurer decision.');
         }
 
         if ($assessment->business_permit_evaluation_version_id !== null) {
