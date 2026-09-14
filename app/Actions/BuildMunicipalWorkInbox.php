@@ -64,10 +64,10 @@ final class BuildMunicipalWorkInbox
             $workItems = [...$workItems, ...$this->cashierWork()];
         }
         if ($roles->contains('mayor_office')) {
-            $workItems = [...$workItems, ...$this->permitIssuance()];
+            $workItems = [...$workItems, ...$this->permitIssuance($user)];
         }
         if ($roles->contains('releasing')) {
-            $workItems = [...$workItems, ...$this->permitRelease()];
+            $workItems = [...$workItems, ...$this->permitRelease($user)];
         }
 
         $query = Str::lower(trim((string) ($filters['q'] ?? '')));
@@ -282,7 +282,7 @@ final class BuildMunicipalWorkInbox
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function permitIssuance(): array
+    private function permitIssuance(User $user): array
     {
         return PermitApplication::query()
             ->with(['business.owner', 'postPaymentOfficeCertifications', 'provisionalUatPermitCompletion'])
@@ -290,19 +290,25 @@ final class BuildMunicipalWorkInbox
             ->whereDoesntHave('postPaymentOfficeCertifications', fn ($query) => $query->where('status', '!=', 'completed'))
             ->get()
             ->filter(fn (PermitApplication $application): bool => $application->provisionalUatPermitCompletion?->issued_at === null)
-            ->map(fn (PermitApplication $application): array => $this->item($application, 'permit_issuance', 'Authorize and issue Permit', "Mayor's Office", $application->postPaymentOfficeCertifications->max('certified_at'), 'staff.permit-applications.show'))
+            ->filter(fn (PermitApplication $application): bool => data_get($application->metadata, 'lifecycle_cleanroom.run_id') !== null
+                || (app(OrdinaryUatPermitAuthority::class)->allows($application, $user)
+                    && app(OrdinaryUatPermitAuthority::class)->prerequisites($application)))
+            ->map(fn (PermitApplication $application): array => $this->item($application, 'permit_issuance', $application->provisionalUatPermitCompletion?->decided_at !== null ? 'Issue UAT Business Permit' : 'Authorize Business Permit issuance', "Mayor's Office", $application->postPaymentOfficeCertifications->max('certified_at'), 'staff.permit-applications.show'))
             ->values()
             ->all();
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function permitRelease(): array
+    private function permitRelease(User $user): array
     {
         return ProvisionalUatPermitCompletion::query()
             ->with('permitApplication.business.owner')
             ->whereNotNull('issued_at')
             ->whereNull('released_at')
             ->get()
+            ->filter(fn (ProvisionalUatPermitCompletion $completion): bool => data_get($completion->permitApplication->metadata, 'lifecycle_cleanroom.run_id') !== null
+                || (app(OrdinaryUatPermitAuthority::class)->allows($completion->permitApplication, $user, 'releasing')
+                    && app(OrdinaryUatPermitAuthority::class)->authorized($completion->permitApplication)))
             ->map(fn (ProvisionalUatPermitCompletion $completion): array => $this->item($completion->permitApplication, 'permit_release', 'Release Business Permit', 'BPLO Releasing', $completion->issued_at, 'staff.permit-applications.show', $completion->id))
             ->values()
             ->all();

@@ -14,6 +14,7 @@ class IssueSyntheticLifecyclePermit
     public function __construct(
         private readonly ProjectPermitReadiness $projectReadiness,
         private readonly ProjectSyntheticPermitCalendar $permitCalendar,
+        private readonly OrdinaryUatPermitAuthority $ordinaryAuthority,
     ) {}
 
     public function handle(PermitApplication $permitApplication, User $actor): ProvisionalUatPermitCompletion
@@ -24,7 +25,19 @@ class IssueSyntheticLifecyclePermit
             if (! $readiness['ready'] || $readiness['semantic_classification'] !== 'synthetic_only') {
                 throw new DomainException('The synthetic permit cannot be issued until deterministic PermitReadiness passes.');
             }
-            $this->assertActor($application, $actor, 'permit_issuer');
+            $ordinary = $this->ordinaryAuthority->enabled($application);
+            if ($ordinary) {
+                if (! $this->ordinaryAuthority->allows($application, $actor) || ! $this->ordinaryAuthority->authorized($application)) {
+                    throw new DomainException('The exact commissioned Mayor actor and recorded UAT authorization are required.');
+                }
+                if ($application->provisionalUatPermitCompletion?->issued_at === null
+                    && (data_get($application->provisionalUatPermitCompletion?->source_snapshot, 'ordinary_mayoral_authorization.readiness_fingerprint') !== $this->ordinaryAuthority->readinessFingerprint($readiness)
+                        || data_get($application->provisionalUatPermitCompletion?->source_snapshot, 'ordinary_mayoral_authorization.evidence_fingerprint') !== $this->ordinaryAuthority->evidenceFingerprint($application))) {
+                    throw new DomainException('PermitReadiness no longer matches the frozen Mayoral Authorization.');
+                }
+            } else {
+                $this->assertActor($application, $actor, 'permit_issuer');
+            }
 
             $completion = $application->provisionalUatPermitCompletion()->firstOrNew();
             if ($completion->issued_at !== null) {
@@ -46,11 +59,12 @@ class IssueSyntheticLifecyclePermit
                 'valid_until' => $permitCalendar['valid_until'],
                 'semantic_classification' => 'synthetic_only',
                 'source_snapshot' => [
+                    ...($completion->source_snapshot ?? []),
                     'permit_readiness' => $readiness,
                     'synthetic_permit_calendar' => $permitCalendar,
                     'number_allocator' => 'synthetic_specimen_bp_year_sequence_v1',
                     'official_numbering_authority' => false,
-                    'mayor_authority_evidence' => 'bounded_synthetic_cleanroom_representation',
+                    'mayor_authority_evidence' => $ordinary ? 'configured_ordinary_workflow_uat_authorization' : 'bounded_synthetic_cleanroom_representation',
                     'mayoral_authorization' => [
                         'office' => 'Municipal Mayor',
                         'officeholder_name' => $mayorName,

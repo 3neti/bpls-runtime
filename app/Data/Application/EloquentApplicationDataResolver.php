@@ -8,6 +8,7 @@ use App\Actions\BuildPermitVerificationQrDataUrl;
 use App\Actions\BuildScheduleOfPayment;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
+use App\Actions\OrdinaryUatPermitAuthority;
 use App\Actions\ProjectPermitReadiness;
 use App\Actions\ProjectSyntheticPermitCalendar;
 use App\Actions\ResolveActivePaymentAttempt;
@@ -1313,19 +1314,20 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         }
 
         $completion = $application->provisionalUatPermitCompletion;
+        $ordinaryAuthority = app(OrdinaryUatPermitAuthority::class)->enabled($application);
         $notes[] = $this->workNote(
             id: 'permit_authority_review',
             actorKey: 'permit_issuer',
             actorLabel: $this->lifecycleCleanroomDefinition->actors()['permit_issuer']['label'],
-            instruction: 'Record synthetic Mayoral Authorization and issue the Business Permit specimen',
+            instruction: $ordinaryAuthority ? ($completion?->decided_at === null ? 'Authorize Business Permit issuance' : 'Issue UAT Business Permit') : 'Record synthetic Mayoral Authorization and issue the Business Permit specimen',
             section: 'permit',
             anchor: 'permit_authority',
-            state: $permit->issued ? 'completed' : ($permit->ready ? 'ready' : 'waiting'),
-            stateLabel: $permit->issued ? 'Synthetic Mayoral Authorization recorded; specimen issued' : ($permit->ready ? 'Ready for Mayoral Authorization' : 'Awaiting PermitReadiness'),
+            state: $permit->issued ? 'completed' : ($taskIndex->has('issue_synthetic_permit') || $permit->ready ? 'ready' : 'waiting'),
+            stateLabel: $permit->issued ? 'Synthetic Mayoral Authorization recorded; specimen issued' : ($taskIndex->has('issue_synthetic_permit') ? ($completion?->decided_at === null ? 'Ready for Mayoral Authorization' : 'Authorized; ready for issuance') : ($permit->ready ? 'Ready for Mayoral Authorization' : 'Awaiting PermitReadiness')),
             tone: 'violet',
             affordance: $taskIndex->get('issue_synthetic_permit'),
             completedAt: $completion?->issued_at?->toIso8601String(),
-            blockingReason: 'Laboratory specimen only. Mayor Olegario did not log in, sign, or authorize this specimen; production authority remains false.',
+            blockingReason: $ordinaryAuthority ? 'Explicit synthetic / UAT-only authority. No statutory signature, production Permit authority, or claim of personal real-Mayor action.' : 'Laboratory specimen only. Mayor Olegario did not log in, sign, or authorize this specimen; production authority remains false.',
         );
         $notes[] = $this->workNote(
             id: 'permit_release',
@@ -1500,6 +1502,14 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         $runId = data_get($application->metadata, 'lifecycle_cleanroom.run_id');
         $run = is_string($runId) ? LifecycleCleanroomRun::query()->where('public_id', $runId)->first() : null;
         if ($run === null) {
+            $authority = app(OrdinaryUatPermitAuthority::class);
+            $completion = $application->provisionalUatPermitCompletion;
+            if ($authority->allows($application, $viewer) && $completion?->issued_at === null && $authority->prerequisites($application)) {
+                $tasks[] = $this->task('issue_synthetic_permit', $completion?->decided_at === null ? 'Authorize Business Permit issuance' : 'Issue UAT Business Permit', 'permit', route('staff.ordinary-uat-permit.show', $application, false));
+            }
+            if ($authority->allows($application, $viewer, 'releasing') && $authority->authorized($application) && $completion?->issued_at !== null && $completion->released_at === null) {
+                $tasks[] = $this->task('release_synthetic_permit', 'Release UAT Business Permit', 'permit', route('staff.ordinary-uat-permit.show', $application, false));
+            }
             foreach ($application->postPaymentOfficeCertifications->where('status', 'pending') as $certification) {
                 if (app(AuthorizePostPaymentCertification::class)->allows($certification, $viewer)) {
                     $tasks[] = $this->task('post_payment_certification_'.$certification->id, 'Review payment and receipt', 'processing', route('staff.post-payment-certifications.show', $certification, false));

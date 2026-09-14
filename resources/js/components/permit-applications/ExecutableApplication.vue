@@ -456,8 +456,9 @@ function activateWorkNote(note: WorkNote): void {
     if (
         (note.id.startsWith('post_payment_') &&
             note.action_url.includes('/lifecycle-laboratory/')) ||
-        note.id === 'permit_authority_review' ||
-        note.id === 'permit_release'
+        ((note.id === 'permit_authority_review' ||
+            note.id === 'permit_release') &&
+            !note.action_url.endsWith('/uat-permit'))
     ) {
         router.post(note.action_url, {}, { preserveScroll: true });
 

@@ -9,6 +9,8 @@ use App\Models\Receipt;
 
 class ProjectPermitReadiness
 {
+    public function __construct(private readonly OrdinaryUatPermitAuthority $ordinaryAuthority) {}
+
     /** @return array<string, mixed> */
     public function handle(PermitApplication $permitApplication): array
     {
@@ -45,6 +47,8 @@ class ProjectPermitReadiness
         $assessment = $permitApplication->assessments->whereNull('superseded_at')->sortByDesc('sequence')->first();
         $syntheticAuthority = data_get($permitApplication->metadata, 'lifecycle_cleanroom.semantic_classification') === 'synthetic_only'
             && data_get($permitApplication->metadata, 'lifecycle_cleanroom.production_liability') === false;
+        $ordinary = $this->ordinaryAuthority->enabled($permitApplication);
+        $syntheticAuthority = $syntheticAuthority || ($ordinary && $this->ordinaryAuthority->assignment() !== null);
 
         $prerequisites = [
             'application_eligible' => $permitApplication->submitted_at !== null
@@ -61,6 +65,12 @@ class ProjectPermitReadiness
                 && $requiredOffices->every(fn (string $office): bool => $certifiedOffices->contains($office)),
             'synthetic_issuance_authority_available' => $syntheticAuthority,
         ];
+        if ($ordinary) {
+            $prerequisites['canonical_workflow_reconciliation'] = $permitApplication->provisionalUatPermitCompletion?->issued_at !== null
+                ? $this->ordinaryAuthority->authorized($permitApplication)
+                : $this->ordinaryAuthority->prerequisites($permitApplication);
+            $prerequisites['mayoral_authorization_recorded'] = $this->ordinaryAuthority->authorized($permitApplication);
+        }
         $ready = collect($prerequisites)->every(fn (bool $passed): bool => $passed);
 
         return [

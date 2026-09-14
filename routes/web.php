@@ -39,6 +39,7 @@ use App\Http\Controllers\Staff\MunicipalityConfigurationController;
 use App\Http\Controllers\Staff\MunicipalServiceCatalogController;
 use App\Http\Controllers\Staff\MunicipalWorkInboxController;
 use App\Http\Controllers\Staff\OfficePaymentOrderController;
+use App\Http\Controllers\Staff\OrdinaryUatPermitController;
 use App\Http\Controllers\Staff\PaidEstablishmentReportController;
 use App\Http\Controllers\Staff\PaymentScheduleCollectionController;
 use App\Http\Controllers\Staff\PaymentSummaryReportController;
@@ -211,6 +212,8 @@ Route::middleware(['auth', 'verified', EnsureActiveUserAccess::class])->group(fu
 
     Route::prefix('staff')->name('staff.')->middleware('can:staff.access')->group(function () {
         Route::get('post-payment-certifications/{certification}', [PostPaymentCertificationController::class, 'show'])->name('post-payment-certifications.show');
+        Route::get('permit-applications/{permitApplication}/uat-permit', [OrdinaryUatPermitController::class, 'show'])->name('ordinary-uat-permit.show');
+        Route::post('permit-applications/{permitApplication}/uat-permit', [OrdinaryUatPermitController::class, 'store'])->name('ordinary-uat-permit.store');
         Route::post('post-payment-certifications/{certification}', [PostPaymentCertificationController::class, 'store'])->name('post-payment-certifications.store');
         Route::get('services-and-fees', [MunicipalServiceCatalogController::class, 'index'])
             ->name('services-and-fees.index');
