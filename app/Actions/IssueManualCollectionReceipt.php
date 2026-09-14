@@ -12,7 +12,11 @@ use LogicException;
 
 class IssueManualCollectionReceipt
 {
-    public function __construct(private readonly ResolveOfficialReceiptProfile $resolveProfile) {}
+    public function __construct(
+        private readonly ResolveOfficialReceiptProfile $resolveProfile,
+        private readonly PostPaymentCertificationEligibility $certificationEligibility,
+        private readonly CommissionPostPaymentOfficeCertifications $commissionCertifications,
+    ) {}
 
     /**
      * @param  array{receipt_number: string, numbering_authority: string, receipt_group_key?: string, series?: string|null, remarks?: string|null}  $data
@@ -89,6 +93,11 @@ class IssueManualCollectionReceipt
                 ? TreasuryCollectionStatus::PendingReceipt
                 : TreasuryCollectionStatus::Receipted;
             $collection->save();
+
+            if ($collection->status === TreasuryCollectionStatus::Receipted
+                && $this->certificationEligibility->ordinaryUat($collection->permitApplication)) {
+                $this->commissionCertifications->handle($collection->permitApplication);
+            }
 
             return $receipt->load(['issuedBy', 'treasuryCollection', 'allocations']);
         });

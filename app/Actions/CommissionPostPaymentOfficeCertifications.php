@@ -11,6 +11,8 @@ use LogicException;
 
 class CommissionPostPaymentOfficeCertifications
 {
+    public function __construct(private readonly PostPaymentCertificationEligibility $eligibility) {}
+
     /** @return list<PostPaymentOfficeCertification> */
     public function handle(PermitApplication $permitApplication): array
     {
@@ -18,10 +20,13 @@ class CommissionPostPaymentOfficeCertifications
             $application = PermitApplication::query()->whereKey($permitApplication)->lockForUpdate()->firstOrFail();
             $application->load(['bploRoutingDetermination.works', 'paymentSchedules.treasuryCollections.allocations', 'paymentSchedules.treasuryCollections.receipts']);
 
-            if (data_get($application->metadata, 'lifecycle_cleanroom.semantic_classification') !== 'synthetic_only'
-                || data_get($application->metadata, 'lifecycle_cleanroom.production_liability') !== false) {
+            $ordinary = $this->eligibility->ordinaryUat($application);
+            if (! $ordinary && (data_get($application->metadata, 'lifecycle_cleanroom.semantic_classification') !== 'synthetic_only'
+                || data_get($application->metadata, 'lifecycle_cleanroom.production_liability') !== false)) {
                 throw new LogicException('Post-payment certification commissioning is available only for an explicitly synthetic cleanroom Application.');
             }
+
+            $ordinaryBindings = $ordinary ? $this->eligibility->receipts($application) : [];
 
             $routing = $application->bploRoutingDetermination;
             if ($routing === null || $routing->works->isEmpty()) {
@@ -47,7 +52,7 @@ class CommissionPostPaymentOfficeCertifications
 
             $records = [];
             foreach ($routing->works->groupBy('office_code') as $officeCode => $works) {
-                $receipt = $receipts->firstWhere('receipt_group_key', 'office:'.$officeCode)
+                $receipt = $ordinaryBindings[$officeCode] ?? $receipts->firstWhere('receipt_group_key', 'office:'.$officeCode)
                     ?? ($receipts->count() === 1 ? $receipts->sole() : null);
                 if (! $receipt instanceof Receipt) {
                     throw new LogicException("The routed {$officeCode} office has no canonical Official Receipt group to certify.");
@@ -62,12 +67,16 @@ class CommissionPostPaymentOfficeCertifications
                         'routing_work_ids' => $workIds,
                         'status' => 'pending',
                         'evidence' => [
-                            'source' => 'lifecycle_cleanroom_post_payment_commission',
+                            'source' => $ordinary ? 'ordinary_uat_reconciled_receipts' : 'lifecycle_cleanroom_post_payment_commission',
                             'receipt_review_required' => true,
                             'receipt_number' => $receipt->receipt_number,
+                            'receipt_series' => $receipt->series,
+                            'collection_id' => $receipt->treasury_collection_id,
+                            'assessment_id' => $receipt->assessment_id,
                             'receipt_group_key' => $receipt->receipt_group_key,
                             'routing_determination_id' => $routing->id,
                             'routing_work_ids' => $workIds,
+                            'payment_order_ids' => $application->paperlessPaymentOrders()->whereIn('bplo_routing_work_id', $workIds)->where('status', 'issued')->whereNull('superseded_at')->orderBy('id')->pluck('id')->all(),
                             'exact_per_office_production_semantics' => 'unresolved',
                             'real_office_certification' => false,
                         ],
@@ -75,6 +84,11 @@ class CommissionPostPaymentOfficeCertifications
                         'production_authority' => false,
                     ],
                 );
+                $record = $records[array_key_last($records)];
+                if ($record->receipt_id !== $receipt->id || $record->bplo_routing_determination_id !== $routing->id
+                    || $record->routing_work_ids !== $workIds) {
+                    throw new LogicException('An existing certification has a conflicting immutable routing or receipt binding.');
+                }
             }
 
             return $records;

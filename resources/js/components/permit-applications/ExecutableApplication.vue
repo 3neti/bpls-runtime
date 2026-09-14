@@ -454,7 +454,8 @@ function activateWorkNote(note: WorkNote): void {
     }
 
     if (
-        note.id.startsWith('post_payment_') ||
+        (note.id.startsWith('post_payment_') &&
+            note.action_url.includes('/lifecycle-laboratory/')) ||
         note.id === 'permit_authority_review' ||
         note.id === 'permit_release'
     ) {

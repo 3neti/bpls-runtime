@@ -47,7 +47,7 @@ final class BuildMunicipalWorkInbox
         }
         foreach ($roles->intersect(['assessor', 'engineering', 'health', 'menro', 'mpdo']) as $officeCode) {
             $workItems = [...$workItems, ...$this->officePaymentOrders((string) $officeCode)];
-            $workItems = [...$workItems, ...$this->officeCertifications((string) $officeCode)];
+            $workItems = [...$workItems, ...$this->officeCertifications((string) $officeCode, $user)];
         }
         if ($roles->contains('treasury')) {
             $workItems = [...$workItems, ...$this->treasuryClassification()];
@@ -268,14 +268,15 @@ final class BuildMunicipalWorkInbox
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function officeCertifications(string $officeCode): array
+    private function officeCertifications(string $officeCode, User $user): array
     {
         return PostPaymentOfficeCertification::query()
             ->with('permitApplication.business.owner')
             ->where('office_code', $officeCode)
             ->where('status', 'pending')
             ->get()
-            ->map(fn (PostPaymentOfficeCertification $certification): array => $this->item($certification->permitApplication, 'post_payment_certification', 'Certify payment and receipt', $certification->office_label, $certification->created_at, 'staff.permit-applications.evaluation.show', $certification->id))
+            ->filter(fn ($certification): bool => data_get($certification->permitApplication->metadata, 'lifecycle_cleanroom.run_id') !== null || app(AuthorizePostPaymentCertification::class)->allows($certification, $user))
+            ->map(fn (PostPaymentOfficeCertification $certification): array => $this->item($certification->permitApplication, 'post_payment_certification', 'Certify payment and receipt', $certification->office_label, $certification->created_at, 'staff.post-payment-certifications.show', $certification->id, ['certification' => $certification]))
             ->values()
             ->all();
     }

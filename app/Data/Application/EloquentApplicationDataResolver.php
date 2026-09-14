@@ -2,6 +2,7 @@
 
 namespace App\Data\Application;
 
+use App\Actions\AuthorizePostPaymentCertification;
 use App\Actions\BuildMunicipalScheduleOfFees;
 use App\Actions\BuildPermitVerificationQrDataUrl;
 use App\Actions\BuildScheduleOfPayment;
@@ -1498,6 +1499,13 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
 
         $runId = data_get($application->metadata, 'lifecycle_cleanroom.run_id');
         $run = is_string($runId) ? LifecycleCleanroomRun::query()->where('public_id', $runId)->first() : null;
+        if ($run === null) {
+            foreach ($application->postPaymentOfficeCertifications->where('status', 'pending') as $certification) {
+                if (app(AuthorizePostPaymentCertification::class)->allows($certification, $viewer)) {
+                    $tasks[] = $this->task('post_payment_certification_'.$certification->id, 'Review payment and receipt', 'processing', route('staff.post-payment-certifications.show', $certification, false));
+                }
+            }
+        }
         if ($run instanceof LifecycleCleanroomRun && $run->status === 'active') {
             foreach ($application->postPaymentOfficeCertifications->where('status', '!=', 'completed') as $certification) {
                 if (data_get($run->actor_manifest, 'actors.'.$certification->office_code.'.user_id') === $viewer->id) {

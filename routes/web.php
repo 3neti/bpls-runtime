@@ -46,6 +46,7 @@ use App\Http\Controllers\Staff\PermitApplicationAssessmentController;
 use App\Http\Controllers\Staff\PermitApplicationController;
 use App\Http\Controllers\Staff\PermitApplicationDocumentController;
 use App\Http\Controllers\Staff\PldsReportController;
+use App\Http\Controllers\Staff\PostPaymentCertificationController;
 use App\Http\Controllers\Staff\QrPhPaymentController as StaffQrPhPaymentController;
 use App\Http\Controllers\Staff\ReceiptController;
 use App\Http\Controllers\Staff\ReportCatalogController;
@@ -209,6 +210,8 @@ Route::middleware(['auth', 'verified', EnsureActiveUserAccess::class])->group(fu
     });
 
     Route::prefix('staff')->name('staff.')->middleware('can:staff.access')->group(function () {
+        Route::get('post-payment-certifications/{certification}', [PostPaymentCertificationController::class, 'show'])->name('post-payment-certifications.show');
+        Route::post('post-payment-certifications/{certification}', [PostPaymentCertificationController::class, 'store'])->name('post-payment-certifications.store');
         Route::get('services-and-fees', [MunicipalServiceCatalogController::class, 'index'])
             ->name('services-and-fees.index');
         Route::get('permit-applications/assessments', [PermitApplicationAssessmentController::class, 'index'])
