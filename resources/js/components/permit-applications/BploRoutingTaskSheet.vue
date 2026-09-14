@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useForm, usePage } from '@inertiajs/vue3';
+import { useForm, useHttp, usePage } from '@inertiajs/vue3';
 import { Check, ChevronRight, FileClock, Route } from '@lucide/vue';
 import { useNow } from '@vueuse/core';
 import { computed, reactive, ref } from 'vue';
@@ -16,6 +16,7 @@ import { dateTime, money } from '@/lib/evaluationPresentation';
 import { financialLineItemsResolved } from '@/lib/financialLineItems';
 import type { EnterpriseSchedule } from '@/lib/treasuryEnterprise';
 import { applyEnterpriseClassification } from '@/lib/treasuryEnterprise';
+import { index as workInbox } from '@/routes/staff/work';
 
 type RoutingLine = {
     id: number | null;
@@ -143,6 +144,8 @@ const props = withDefaults(
 const page = usePage();
 const pending = ref(false);
 const routingMessage = ref('');
+const routingAcknowledged = ref(false);
+const routingOutcomeUnconfirmed = ref(false);
 let routingTimer: number | undefined;
 const officeItems = reactive<
     Record<
@@ -352,8 +355,14 @@ function applySuggestedRouting(): void {
     });
 }
 
-function submit(): void {
-    if (pending.value || selectedCount.value === 0) {
+async function submit(): Promise<void> {
+    if (
+        pending.value ||
+        routingAcknowledged.value ||
+        routingOutcomeUnconfirmed.value ||
+        props.task.routing !== null ||
+        selectedCount.value === 0
+    ) {
         return;
     }
 
@@ -363,7 +372,7 @@ function submit(): void {
         routingMessage.value =
             'BPLS is still recording the route. Do not submit it again. The page will continue when the canonical record is available.';
     }, 10_000);
-    useForm({
+    const request = useHttp({
         situational_context: routingContext.value,
         selected_work: candidates
             .filter((candidate) => drafts[candidate.key].selected)
@@ -374,38 +383,56 @@ function submit(): void {
                 required_work: drafts[candidate.key].requiredWork,
                 permit_application_line_id: candidate.line.id,
             })),
-    }).post(recordBploRouting(props.task.application.id).url, {
-        preserveScroll: true,
-        onError: (errors) => {
+    });
+
+    try {
+        const response = await request.post(
+            recordBploRouting(props.task.application.id).url,
+        );
+
+        if (request.hasErrors) {
             routingMessage.value =
-                Object.values(errors).find(
+                Object.values(request.errors).find(
                     (message): message is string => typeof message === 'string',
                 ) ??
                 'The route could not be recorded. Review the selected offices.';
-        },
-        onHttpException: (response) => {
-            routingMessage.value =
-                response.status === 401 || response.status === 419
-                    ? 'Your session expired before routing was recorded. Sign in again, review the checklist, and submit it once.'
-                    : 'BPLS could not record the route. No new determination was created. Please try again or report this task.';
 
-            return false;
-        },
-        onNetworkError: () => {
-            routingMessage.value =
-                'The routing request could not reach BPLS. Check the connection before trying again.';
+            return;
+        }
 
-            return false;
-        },
-        onFinish: () => {
-            pending.value = false;
+        if (
+            typeof response !== 'object' ||
+            response === null ||
+            !('status' in response) ||
+            response.status !== 'recorded' ||
+            !('permit_application_id' in response) ||
+            response.permit_application_id !== props.task.application.id ||
+            !('routing_determination_id' in response) ||
+            !Number.isInteger(response.routing_determination_id) ||
+            Number(response.routing_determination_id) < 1
+        ) {
+            throw new Error('Routing acknowledgement unavailable.');
+        }
 
-            if (routingTimer !== undefined) {
-                window.clearTimeout(routingTimer);
-                routingTimer = undefined;
-            }
-        },
-    });
+        routingAcknowledged.value = true;
+        routingMessage.value =
+            'Concerned-office routing recorded. The office Payment Orders are ready.';
+    } catch {
+        routingOutcomeUnconfirmed.value = true;
+        routingMessage.value =
+            'Routing outcome is unconfirmed. It may already be recorded. Do not submit again. Reload the routing record to check before taking another action.';
+    } finally {
+        pending.value = false;
+
+        if (routingTimer !== undefined) {
+            window.clearTimeout(routingTimer);
+            routingTimer = undefined;
+        }
+    }
+}
+
+function reviewRoutingRecord(): void {
+    window.location.reload();
 }
 
 function confirmPaymentOrder(work: RoutingWork): void {
@@ -1473,6 +1500,9 @@ const filteredTreasuryLobOptions = computed(() => {
 
             <fieldset
                 v-if="task.application.commissioned_path"
+                :disabled="
+                    pending || routingAcknowledged || routingOutcomeUnconfirmed
+                "
                 data-testid="concerned-office-checklist"
                 class="divide-y rounded-xl border px-4"
             >
@@ -1498,6 +1528,11 @@ const filteredTreasuryLobOptions = computed(() => {
                 <fieldset
                     v-for="group in officeGroups"
                     :key="group.office.code"
+                    :disabled="
+                        pending ||
+                        routingAcknowledged ||
+                        routingOutcomeUnconfirmed
+                    "
                     class="grid gap-3 rounded-xl border p-4"
                 >
                     <legend class="px-1 font-black">
@@ -1559,6 +1594,21 @@ const filteredTreasuryLobOptions = computed(() => {
             >
                 {{ routingMessage }}
             </p>
+            <a
+                v-if="routingAcknowledged"
+                :href="workInbox.url()"
+                class="font-semibold underline"
+            >
+                Return to My Work
+            </a>
+            <Button
+                v-if="routingOutcomeUnconfirmed"
+                type="button"
+                variant="outline"
+                @click="reviewRoutingRecord"
+            >
+                Reload routing record
+            </Button>
 
             <div
                 class="sticky bottom-0 -mx-4 flex flex-col gap-3 border-t bg-white/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between dark:bg-slate-900/95"
@@ -1568,7 +1618,12 @@ const filteredTreasuryLobOptions = computed(() => {
                 </p>
                 <Button
                     type="submit"
-                    :disabled="pending || selectedCount === 0"
+                    :disabled="
+                        pending ||
+                        routingAcknowledged ||
+                        routingOutcomeUnconfirmed ||
+                        selectedCount === 0
+                    "
                     data-testid="confirm-bplo-routing"
                 >
                     {{
