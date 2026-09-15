@@ -27,14 +27,35 @@ class BuildPublicPermitVerificationProjection
         ]);
         $verification = $this->describeVerificationBoundary->handle($permitApplication);
         $canonicalPermit = $this->applicationDataResolver->resolve($permitApplication)->permit;
-        $readiness = $this->describePermitReleaseReadiness->handle($permitApplication);
         $previewCompletion = $this->describeProvisionalCompletion->handle($permitApplication);
         $completion = $permitApplication->provisionalUatPermitCompletion;
+        $issued = $completion?->issued_at !== null && $completion->permit_number !== null
+            && $completion->semantic_classification === 'synthetic_only';
+        $released = $issued && $completion->released_at !== null;
+        $readiness = $issued ? null : $this->describePermitReleaseReadiness->handle($permitApplication);
+        $availability = $issued ? [
+            'status' => $released ? 'released_synthetic' : 'issued_synthetic',
+            'title' => $released ? 'Released synthetic Permit — available for verification' : 'Issued synthetic Permit — awaiting release',
+            'statement' => $released
+                ? 'This synthetic/UAT Permit was issued and separately released. Its identity is available for verification.'
+                : 'This synthetic/UAT Permit was issued. The separate BPLO release has not yet been recorded.',
+            'fact_label' => 'Authority',
+            'fact_value' => 'Synthetic UAT only',
+            'note' => 'No production municipal issuance or legal release is confirmed. No statutory signature or legal effect is claimed.',
+        ] : [
+            'status' => $readiness['authority_boundary']['status'],
+            'title' => 'Municipal release is not confirmed',
+            'statement' => $readiness['authority_boundary']['artifact_statement'],
+            'fact_label' => 'Ready for authority review',
+            'fact_value' => $readiness['ready_for_authority_review'] ? 'Yes' : 'No',
+            'note' => $readiness['reason'],
+        ];
         $currentStage = $completion === null
             ? ($readiness['ready_for_authority_review'] ? 'ready_for_authority_review' : $permitApplication->status->value)
             : $completion->status;
 
         return [
+            'availability' => $availability,
             'verification' => [
                 ...$verification,
                 'qr_data_url' => $canonicalPermit->verification['qr_data_url'],
@@ -67,7 +88,7 @@ class BuildPublicPermitVerificationProjection
                 'production_authority' => false,
                 'legal_effect' => false,
             ],
-            'release_readiness' => [
+            'release_readiness' => $readiness === null ? null : [
                 'ready_for_authority_review' => $readiness['ready_for_authority_review'],
                 'can_release' => $readiness['can_release'],
                 'blocked_by' => $readiness['blocked_by'],

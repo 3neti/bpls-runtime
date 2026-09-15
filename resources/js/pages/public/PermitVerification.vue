@@ -103,9 +103,17 @@ const cleanroomReturnUrl = computed(
 );
 
 defineProps<{
+    availability: {
+        status: string;
+        title: string;
+        statement: string;
+        fact_label: string;
+        fact_value: string;
+        note: string;
+    };
     verification: VerificationBoundary;
     permit: PermitSummary;
-    releaseReadiness: ReleaseReadiness;
+    releaseReadiness: ReleaseReadiness | null;
     previewCompletion: PreviewCompletion | null;
     releaseStatus: ReleaseStatus;
 }>();
@@ -365,17 +373,13 @@ function goBack(): void {
                 </div>
 
                 <AuthorityBoundaryPanel
-                    title="Municipal release is not confirmed"
-                    :status="releaseReadiness.authority_boundary.status"
-                    :statement="
-                        releaseReadiness.authority_boundary.artifact_statement
-                    "
+                    :title="availability.title"
+                    :status="availability.status"
+                    :statement="availability.statement"
                     :facts="[
                         {
-                            label: 'Ready for authority review',
-                            value: releaseReadiness.ready_for_authority_review
-                                ? 'Yes'
-                                : 'No',
+                            label: availability.fact_label,
+                            value: availability.fact_value,
                         },
                         {
                             label: 'Municipal release confirmed',
@@ -391,7 +395,7 @@ function goBack(): void {
                                 : 'No',
                         },
                     ]"
-                    :note="releaseReadiness.reason"
+                    :note="availability.note"
                 />
             </section>
 
@@ -477,7 +481,7 @@ function goBack(): void {
                     {{ verification.policy_note }}
                 </p>
                 <p class="mt-2 text-sm">
-                    {{ releaseReadiness.reason }}
+                    {{ availability.note }}
                 </p>
             </section>
         </div>

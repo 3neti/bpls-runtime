@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\BuildMunicipalWorkInbox;
+use App\Actions\BuildPublicPermitVerificationProjection;
 use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\OrdinaryUatPermitAuthority;
 use App\Actions\ProjectPermitReadiness;
@@ -40,6 +41,9 @@ test('ordinary Mayor separately authorizes issues and releases once with immutab
     [$a, $mayor, $releasing, $c, $s, $assessment] = mayoralFixture();
     $snapshot = fn () => [$a->fresh()->getRawOriginal(), $c->fresh()->getRawOriginal(), $s->fresh()->getRawOriginal(), $assessment->fresh()->getRawOriginal(), $c->receipts()->orderBy('id')->get()->map->getRawOriginal()->all(), $c->allocations()->orderBy('id')->get()->map->getRawOriginal()->all(), $a->postPaymentOfficeCertifications()->orderBy('id')->get()->map->getRawOriginal()->all()];
     $before = $snapshot();
+    $publicProjection = app(BuildPublicPermitVerificationProjection::class);
+    $incomplete = $publicProjection->handle($a->fresh());
+    expect($incomplete['availability']['status'])->toBe($incomplete['release_readiness']['authority_boundary']['status']);
     $route = route('staff.ordinary-uat-permit.store', $a);
     expect(data_get($a->metadata, 'lifecycle_cleanroom.run_id'))->toBeNull()
         ->and(app(ProjectPermitReadiness::class)->handle($a)['blocked_by'])->toBe(['mayoral_authorization_recorded'])
@@ -90,6 +94,10 @@ test('ordinary Mayor separately authorizes issues and releases once with immutab
     $this->actingAs($releasing)->post($route, ['ceremony' => 'release'])->assertSessionHasErrors('ceremony');
     $this->actingAs($mayor)->post($route, ['ceremony' => 'issue'])->assertRedirect();
     $issued = $record->fresh()->getRawOriginal();
+    $pendingRelease = $publicProjection->handle($a->fresh());
+    expect($pendingRelease['availability']['status'])->toBe('issued_synthetic')
+        ->and($pendingRelease['availability']['title'])->toContain('awaiting release')
+        ->and($pendingRelease['release_readiness'])->toBeNull();
     $this->post($route, ['ceremony' => 'issue'])->assertRedirect();
     expect($record->fresh()->getRawOriginal())->toBe($issued)
         ->and($record->fresh()->source_snapshot['ordinary_mayoral_authorization'])->toBe($evidence)
@@ -112,6 +120,32 @@ test('ordinary Mayor separately authorizes issues and releases once with immutab
         ->and($snapshot())->toBe($before)
         ->and($c->receipts()->sum('amount_cents'))->toBe(417500);
     $this->get($verification['url'])->assertOk();
+    $public = $this->getJson($verification['url'])->assertOk()
+        ->assertJsonPath('availability.status', 'released_synthetic')
+        ->assertJsonPath('release_readiness', null)
+        ->assertJsonPath('permit.production_authority', false)
+        ->assertJsonPath('permit.legal_effect', false)
+        ->assertJsonPath('permit.issuing_authority.signature_applied', false)
+        ->assertJsonPath('verification.legal_release_confirmed', false)
+        ->assertJsonPath('verification.legal_effect_confirmed', false)
+        ->assertJsonMissingPath('permit.official_receipts')
+        ->assertJsonMissingPath('permit.official_receipt_number')
+        ->assertJsonMissingPath('preview_completion.source_snapshot')
+        ->json();
+    expect($public['availability']['note'])->toContain('No statutory signature or legal effect')
+        ->and(json_encode($public))->not->toContain('awaiting_prerequisites', 'release remains unavailable', $evidence['fingerprint']);
+    foreach ($c->receipts as $receipt) {
+        expect(json_encode($public))->not->toContain($receipt->receipt_number);
+    }
+    $this->get($verification['view_url'])->assertOk()->assertInertia(fn (Assert $p) => $p
+        ->component('public/PermitVerification')
+        ->where('availability.status', 'released_synthetic')
+        ->where('availability.fact_value', 'Synthetic UAT only')
+        ->where('releaseReadiness', null)
+        ->where('permit.current_stage', 'released_synthetic'));
+    expect($this->getJson($verification['url'])->assertOk()->json())->toBe($public)
+        ->and($record->fresh()->getRawOriginal())->toBe($released)
+        ->and($snapshot())->toBe($before);
     $this->get(route('staff.work.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->has('workItems.data', 0));
     $this->get($taskUrl)->assertOk()->assertInertia(fn (Assert $p) => $p->where('action', null));
     expect(fn () => $record->fresh()->update(['decided_by_id' => $releasing->id]))->toThrow(LogicException::class);

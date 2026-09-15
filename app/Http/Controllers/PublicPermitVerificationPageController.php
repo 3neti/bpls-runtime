@@ -21,6 +21,7 @@ class PublicPermitVerificationPageController extends Controller
         $projection = $buildProjection->handle($permitApplication);
 
         return Inertia::render('public/PermitVerification', [
+            'availability' => $projection['availability'],
             'verification' => $projection['verification'],
             'permit' => $projection['permit'],
             'releaseReadiness' => $projection['release_readiness'],

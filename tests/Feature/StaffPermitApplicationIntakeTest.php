@@ -1252,6 +1252,7 @@ test('public permit verification page renders the artifact authority boundary', 
             ->where('permit.receipt_coverage_confirmed', false)
             ->missing('permit.official_receipt_number')
             ->where('releaseReadiness.can_release', false)
+            ->where('availability.status', 'awaiting_prerequisites')
             ->where('releaseStatus.preview_sample.completed', false)
             ->where('releaseStatus.municipal_legal_release.confirmed', false)
             ->where('releaseReadiness.authority_boundary.artifact_statement', 'The generated permit document supports municipal review but does not issue or release a permit and has no legal effect.')
@@ -1260,6 +1261,8 @@ test('public permit verification page renders the artifact authority boundary', 
 
 test('public permit verification page provides a safe back navigation control', function () {
     $page = file_get_contents(resource_path('js/pages/public/PermitVerification.vue'));
+    expect($page)->toContain(':title="availability.title"', ':status="availability.status"', ':statement="availability.statement"', ':note="availability.note"')
+        ->not->toContain('releaseReadiness.');
     $permit = file_get_contents(resource_path('js/components/permit-applications/IpilBusinessPermit.vue'));
 
     expect($page)
