@@ -1227,7 +1227,15 @@ function blockerLabel(blocker: string): string {
                                 </p>
                             </div>
                         </div>
-                        <Button as-child variant="outline" size="sm">
+                        <Button
+                            v-if="
+                                permitApplication.permit_artifact &&
+                                permitApplication.permit_artifact.available
+                            "
+                            as-child
+                            variant="outline"
+                            size="sm"
+                        >
                             <a
                                 data-testid="citizen-permit-artifact-verification-link"
                                 :href="

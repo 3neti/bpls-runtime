@@ -20,7 +20,7 @@ final class DescribePermitArtifact
      *     can_issue: bool,
      *     can_release: bool,
      *     can_make_legally_effective: bool,
-     *     permit_pdf_url: string,
+     *     permit_pdf_url: string|null,
      *     verification_reference: string,
      *     verification_status: string,
      *     verification_url: string,
@@ -35,23 +35,26 @@ final class DescribePermitArtifact
     {
         $readiness = $this->releaseReadiness->handle($permitApplication);
         $verification = $this->verificationBoundary->handle($permitApplication);
+        $available = $readiness['prerequisites']['permit_artifact_available'] === true;
 
         return [
             'label' => "Mayor's Permit Preview",
-            'status' => 'generated_artifact_available',
-            'available' => true,
+            'status' => $available ? 'issued_document_available' : 'not_issued',
+            'available' => $available,
             'ready_for_authority_review' => $readiness['ready_for_authority_review'],
             'can_issue' => false,
             'can_release' => false,
             'can_make_legally_effective' => false,
-            'permit_pdf_url' => route('staff.permit-applications.permit.pdf', $permitApplication, false),
+            'permit_pdf_url' => $available ? route('staff.permit-applications.permit.pdf', $permitApplication, false) : null,
             'verification_reference' => $verification['reference'],
             'verification_status' => $verification['status'],
             'verification_url' => $verification['url'],
             'verification_view_url' => $verification['view_url'],
             'authority_boundary_status' => $readiness['authority_boundary']['status'],
             'artifact_statement' => $readiness['authority_boundary']['artifact_statement'],
-            'policy_note' => 'This generated permit document supports municipal review only. It does not issue or release a permit and has no legal effect.',
+            'policy_note' => $available
+                ? 'This issued document is a synthetic UAT artifact and has no production legal effect.'
+                : 'The Business Permit is not yet issued. The verification reference alone does not create a permit document.',
             'blocked_by' => $readiness['blocked_by'],
         ];
     }

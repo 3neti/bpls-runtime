@@ -171,7 +171,7 @@ type PermitApplication = {
         can_issue: boolean;
         can_release: boolean;
         can_make_legally_effective: boolean;
-        permit_pdf_url: string;
+        permit_pdf_url: string | null;
         verification_reference: string;
         verification_status: string;
         authority_boundary_status: string;
@@ -693,7 +693,8 @@ function fileSize(sizeBytes: number): string {
                     >
                         <a
                             :href="
-                                permitApplication.permit_artifact.permit_pdf_url
+                                permitApplication.permit_artifact
+                                    .permit_pdf_url ?? undefined
                             "
                             target="_blank"
                         >

@@ -22,6 +22,7 @@ use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
 use App\Models\PermitClearance;
+use App\Models\ProvisionalUatPermitCompletion;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
 use App\Models\User;
@@ -593,9 +594,9 @@ test('staff users with view permission can review a permit application', functio
             ->where('can.view_permit_documents', true)
             ->where('permitDocumentGaps.0', 'The generated application form shows the intake information currently recorded.')
             ->where('permitApplication.permit_artifact.label', "Mayor's Permit Preview")
-            ->where('permitApplication.permit_artifact.status', 'generated_artifact_available')
-            ->where('permitApplication.permit_artifact.available', true)
-            ->where('permitApplication.permit_artifact.permit_pdf_url', route('staff.permit-applications.permit.pdf', $application, false))
+            ->where('permitApplication.permit_artifact.status', 'not_issued')
+            ->where('permitApplication.permit_artifact.available', false)
+            ->where('permitApplication.permit_artifact.permit_pdf_url', null)
             ->where('permitApplication.permit_artifact.verification_status', 'artifact_only')
             ->where('permitApplication.permit_artifact.can_issue', false)
             ->where('permitApplication.permit_artifact.can_release', false)
@@ -711,7 +712,7 @@ test('release readiness evidence can be ready for authority review without permi
         ->and($readiness['authority_boundary']['software_knows']['payment_completed'])->toBeTrue()
         ->and($readiness['authority_boundary']['human_authority_decides'])->toContain('permit_legally_issued')
         ->and($readiness['authority_boundary']['software_records'])->toContain('authority_decision')
-        ->and($readiness['authority_boundary']['artifact_statement'])->toContain('does not issue or release a permit and has no legal effect');
+        ->and($readiness['authority_boundary']['artifact_statement'])->toContain('Business Permit is not yet issued');
     $artifact = app(DescribePermitArtifact::class)->handle($application);
 
     expect($artifact['ready_for_authority_review'])->toBeTrue()
@@ -719,10 +720,10 @@ test('release readiness evidence can be ready for authority review without permi
         ->and($artifact['can_release'])->toBeFalse()
         ->and($artifact['can_make_legally_effective'])->toBeFalse()
         ->and($artifact['authority_boundary_status'])->toBe('ready_for_authority_review')
-        ->and($artifact['permit_pdf_url'])->toBe(route('staff.permit-applications.permit.pdf', $application, false))
+        ->and($artifact['permit_pdf_url'])->toBeNull()
         ->and($artifact['verification_url'])->toContain('/permits/verify/'.$application->id.'/')
         ->and($artifact['verification_view_url'])->toEndWith('/view')
-        ->and($artifact['policy_note'])->toContain('does not issue or release a permit and has no legal effect');
+        ->and($artifact['policy_note'])->toContain('verification reference alone does not create a permit document');
 
     $this->actingAs($user)
         ->get(route('staff.permit-applications.show', $application))
@@ -1072,6 +1073,11 @@ test('staff users with view permission can open a permit pdf artifact', function
     ]);
 
     $application = permitDocumentFixtureWithCompletedClearances($user);
+    ProvisionalUatPermitCompletion::factory()->create([
+        'permit_application_id' => $application->id,
+        'issued_at' => now(),
+        'permit_number' => 'SYN-00013',
+    ]);
 
     $response = $this->actingAs($user)
         ->get(route('staff.permit-applications.permit.pdf', $application))
@@ -1106,7 +1112,7 @@ test('staff users with view permission can open a permit pdf artifact', function
         ->not->toContain('Software knows')
         ->not->toContain('Human authority decides')
         ->toContain('DOCUMENT REFERENCE')
-        ->toContain('PVA-'.$application->id.'-')
+        ->toContain('BPV-'.$application->id.'-')
         ->toContain('Public check page')
         ->toContain(route('public.permits.verify.view', [
             'permitApplication' => $application,
@@ -1117,7 +1123,7 @@ test('staff users with view permission can open a permit pdf artifact', function
             'permitApplication' => $application,
             'verificationCode' => app(DescribePermitVerificationBoundary::class)->handle($application)['reference'],
         ]))
-        ->toContain('This reference identifies a generated preview document only')
+        ->toContain('This reference resolves to the exact synthetic Permit identity')
         ->toContain('Generated preview document; this does not issue or release a permit.')
         ->not->toContain('POLICY GAPS')
         ->and(permitPdfPageCount($pdf))->toBeGreaterThanOrEqual(1);
@@ -1194,9 +1200,9 @@ test('public permit verification confirms artifact identity but not release', fu
                 'authority_boundary' => [
                     'status' => 'awaiting_prerequisites',
                     'software_knows' => [
-                        'permit_artifact_generated' => true,
+                        'permit_artifact_generated' => false,
                     ],
-                    'artifact_statement' => 'The generated permit document supports municipal review but does not issue or release a permit and has no legal effect.',
+                    'artifact_statement' => 'The Business Permit is not yet issued.',
                 ],
             ],
             'release_status' => [
@@ -1255,7 +1261,7 @@ test('public permit verification page renders the artifact authority boundary', 
             ->where('availability.status', 'awaiting_prerequisites')
             ->where('releaseStatus.preview_sample.completed', false)
             ->where('releaseStatus.municipal_legal_release.confirmed', false)
-            ->where('releaseReadiness.authority_boundary.artifact_statement', 'The generated permit document supports municipal review but does not issue or release a permit and has no legal effect.')
+            ->where('releaseReadiness.authority_boundary.artifact_statement', 'The Business Permit is not yet issued.')
         );
 });
 
