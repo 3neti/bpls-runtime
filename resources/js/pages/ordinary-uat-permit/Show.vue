@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
+import { index as workIndex } from '@/actions/App/Http/Controllers/Staff/MunicipalWorkInboxController';
 import { store } from '@/actions/App/Http/Controllers/Staff/OrdinaryUatPermitController';
 import AppLayout from '@/layouts/AppLayout.vue';
 
@@ -31,6 +32,9 @@ const labels = {
 <template>
     <Head title="Mayoral Authorization and Permit" />
     <AppLayout>
+        <Link :href="workIndex()" class="m-4 inline-block underline"
+            >Back to My Work</Link
+        >
         <main class="mx-auto w-full max-w-2xl min-w-0 space-y-5 p-4">
             <h1 class="text-xl font-semibold">
                 Mayoral Authorization and Permit

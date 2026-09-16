@@ -231,7 +231,7 @@ function paginationLabel(value: string): string {
                     </div>
                     <Button as-child class="w-full md:w-auto">
                         <Link :href="item.action_url"
-                            >Open Application<ArrowRight
+                            >{{ item.task_label }}<ArrowRight
                         /></Link>
                     </Button>
                 </article>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
+import { index as workIndex } from '@/actions/App/Http/Controllers/Staff/MunicipalWorkInboxController';
 import { store } from '@/actions/App/Http/Controllers/Staff/PostPaymentCertificationController';
 import AppLayout from '@/layouts/AppLayout.vue';
 
@@ -29,6 +30,9 @@ defineProps<{
         <main class="mx-auto w-full max-w-2xl space-y-5 p-4">
             <h1 class="text-xl font-semibold">Certify payment and receipt</h1>
             <p>UAT evidence only · No production office authority</p>
+            <Link :href="workIndex()" class="inline-block underline"
+                >Back to My Work</Link
+            >
             <Link :href="applicationUrl" class="block break-all underline">
                 Application {{ certification.application_id }} ·
                 {{ certification.tracking_reference }}
