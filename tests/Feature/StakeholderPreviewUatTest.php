@@ -54,7 +54,7 @@ test('safe preview configuration registers an intentional launcher without crede
         ->and(Route::has('stakeholder-preview.lifecycle-laboratory.enter'))
         ->toBeTrue();
 
-    $response = $this->get('/');
+    $response = $this->get(route('stakeholder-preview.index'));
 
     $response->assertSuccessful()
         ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive')
@@ -125,15 +125,15 @@ test('authorized legacy review requires a preview login and exposes the exact si
 
     $accounts = createStakeholderPreviewAccounts();
 
-    $this->get('/')->assertRedirect(route('login'));
+    $this->get(route('stakeholder-preview.index'))->assertRedirect(route('login'));
     $this->get('/permits/verify/999999/not-a-real-code')->assertRedirect(route('login'));
 
     $ordinaryUser = User::factory()->create(['email_verified_at' => now()]);
-    $this->actingAs($ordinaryUser)->get('/')->assertNotFound();
+    $this->actingAs($ordinaryUser)->get(route('stakeholder-preview.index'))->assertNotFound();
 
     $management = $accounts[StakeholderPreviewPersona::Management->value];
     $this->actingAs($management)
-        ->get('/')
+        ->get(route('stakeholder-preview.index'))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page->component('stakeholder-preview/Launcher'));
 
@@ -417,7 +417,7 @@ test('launcher restores the exact Management operator after exploring a scenario
         ->get(route('stakeholder-preview.lifecycle-laboratory.index'))
         ->assertNotFound();
 
-    $this->get('/')->assertSuccessful();
+    $this->get(route('stakeholder-preview.index'))->assertSuccessful();
 
     $this->post(route('stakeholder-preview.lifecycle-laboratory.enter'))
         ->assertRedirect(route('stakeholder-preview.lifecycle-laboratory.index'));
@@ -433,7 +433,7 @@ test('launcher remains unavailable until the complete exact synthetic account se
     createStakeholderPreviewAccounts();
     User::query()->where('email', StakeholderPreviewPersona::Treasury->approvedEmail())->delete();
 
-    $this->get('/')->assertNotFound();
+    $this->get(route('stakeholder-preview.index'))->assertNotFound();
     $this->get('/stakeholder-preview/walkthrough')->assertNotFound();
     $this->post('/stakeholder-preview/enter/citizen')->assertNotFound();
 });
@@ -494,7 +494,7 @@ test('launcher enters the persisted lifecycle specimen through its manifest-owne
         ->and($previewCitizen->business_owner_id)->toBeNull()
         ->and($scenarioCitizen->id)->not->toBe($previewCitizen->id);
 
-    $this->get('/')
+    $this->get(route('stakeholder-preview.index'))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->has('citizenSpecimens', 1)
@@ -547,7 +547,7 @@ test('launcher exposes both coexisting lifecycle specimens through their own man
     }
 
     $specimens = LifecycleScenarioSpecimen::query()->orderBy('scenario_id')->get();
-    $this->get('/')
+    $this->get(route('stakeholder-preview.index'))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->has('citizenSpecimens', 2)
@@ -608,7 +608,7 @@ test('specimen Citizen entry fails closed when explicit lifecycle ownership gate
     $manifest['production_liability'] = true;
     $specimen->update(['owned_resource_manifest' => $manifest]);
 
-    $this->get('/')
+    $this->get(route('stakeholder-preview.index'))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page->has('citizenSpecimens', 0));
 
@@ -778,7 +778,7 @@ test('preview context exposes only authorized real guidance and a persistent ban
     'releasing' => [StakeholderPreviewPersona::Releasing, 1],
 ]);
 
-test('logout ends the preview session and returns to the launcher', function () {
+test('logout ends the preview session and returns to the ordinary home', function () {
     $accounts = createStakeholderPreviewAccounts();
 
     $this->actingAs($accounts['citizen'])
@@ -786,7 +786,7 @@ test('logout ends the preview session and returns to the launcher', function () 
         ->assertRedirect('/');
 
     $this->assertGuest();
-    $this->get('/')->assertInertia(fn (Assert $page) => $page->component('stakeholder-preview/Launcher'));
+    $this->get('/')->assertInertia(fn (Assert $page) => $page->component('Welcome'));
 });
 
 test('the production environment refuses preview even when every preview flag is enabled', function () {

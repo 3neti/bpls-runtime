@@ -17,8 +17,9 @@ defineProps<{
 
 defineOptions({
     layout: {
-        title: 'Create an account',
-        description: 'Enter your details below to create your account',
+        title: 'Create a citizen account',
+        description:
+            'For business permit applicants. Municipal staff use an assigned account.',
     },
 });
 </script>

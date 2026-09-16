@@ -73,6 +73,10 @@ use Illuminate\Support\Facades\Route;
 
 $stakeholderPreviewSafety = app(StakeholderPreviewSafety::class);
 
+Route::inertia('/', 'Welcome', [
+    'isNonProduction' => ! app()->environment('production'),
+])->name('home');
+
 if ($stakeholderPreviewSafety->isEnabled()) {
     $stakeholderPreviewMiddleware = [EnsureStakeholderPreviewIsSafe::class, 'throttle:stakeholder-preview'];
 
@@ -87,7 +91,7 @@ if ($stakeholderPreviewSafety->isEnabled()) {
     }
 
     Route::middleware($stakeholderPreviewMiddleware)->group(function () {
-        Route::get('/', [StakeholderPreviewController::class, 'index'])->name('home');
+        Route::get('stakeholder-preview', [StakeholderPreviewController::class, 'index'])->name('stakeholder-preview.index');
         Route::get('stakeholder-preview/walkthrough', [StakeholderPreviewController::class, 'walkthrough'])
             ->name('stakeholder-preview.walkthrough');
         Route::post('stakeholder-preview/enter/{persona}', [StakeholderPreviewController::class, 'enter'])
@@ -153,8 +157,6 @@ if ($stakeholderPreviewSafety->isEnabled()) {
                 ->name('stakeholder-preview.permit-decision.store');
         });
     });
-} else {
-    Route::inertia('/', 'Welcome')->name('home');
 }
 
 $restrictedReviewMiddleware = $stakeholderPreviewSafety->requiresPrivateAuthentication()
