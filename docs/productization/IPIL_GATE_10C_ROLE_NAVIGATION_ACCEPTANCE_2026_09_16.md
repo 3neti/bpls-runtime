@@ -20,17 +20,19 @@ Citizen navigation remains distinct: My Businesses and My Permit Applications ar
 
 Focused task pages for post-payment certification and ordinary UAT permit now expose **Back to My Work** while retaining their Application link and canonical actions. The home/preview separation from Gate 10B is unchanged: `/` remains Welcome and the protected preview launcher remains `/stakeholder-preview`. No new engineering, Laboratory, storyboard or specimen navigation was added.
 
-## Verification
+## Isolated local integration verification
 
-- Focused Pest: `Gate10CNavigationTest` and `DashboardTest` pass (10 tests, 132 assertions before final static test addition; the added assertions are covered by the same suite). Gate 10B `PublicHomeTest`, `ExampleTest`, and preview suite remain passing in prior verification; no Gate 9 workflow suite was mutated.
+- Focused Pest: `Gate10CNavigationTest` (11 tests, 136 assertions) and `DashboardTest` pass. Gate 10B `PublicHomeTest` and `ExampleTest` remain passing in prior verification; no Gate 9 workflow suite was mutated.
 - PHP formatting (Pint), changed-file ESLint, Prettier, TypeScript generation/check and Vite production build pass. No domain PHP, migrations, database definitions, permissions or actions changed.
-- Desktop and exactly `390×844` browser acceptance of the changed live Laravel shell was not run in this bounded local worktree: `bpls-runtime.test` still serves the separate main checkout, and no local server was started or switched. The existing synthetic Gate 10B browser fixture remains valid for the public home but does not represent the authenticated staff shell. This is an explicit infrastructure/integration boundary, not a claim of browser PASS.
-- Keyboard and responsive code paths retain existing Sidebar/NavMain focus behavior and use the same responsive layout classes; the focused browser proof belongs in the local integration step before presenting this wave to a reviewer.
+- An isolated Laravel server for this candidate was run only on `http://127.0.0.1:8877` against a disposable SQLite database at `/private/tmp/bpls_gate10c_acceptance.XXXXXX.sqlite`. The database was migrated from an empty install and populated only with the 14 canonical synthetic preview personas; no scenario command was run because its existing stakeholder-cycle fixture requires configured X-Change settings. No Cloud/UAT/protected records were used.
+- Authenticated browser acceptance was performed against the actual Laravel/Inertia shell (not a synthetic HTML fixture). At desktop, BPLO and Management views visibly showed **My Work → Inbox** first, neutral Overview next, permission-backed Applications/Treasury/Reports destinations, canonical Report Templates, and the protected `/stakeholder-preview` launcher. Inbox displayed the canonical “No active municipal position” state, zero action-required work, search/task/year filters, and preserved action URL/task-label rendering. Role switching was exercised for BPLO, Treasury, Engineering, Mayor’s Office and Releasing Officer; each remained on the role-sensitive staff shell without exposing unauthorized actions. The protected Laboratory route remained separate and read-only in this check.
+- At exactly `390×844`, the preview launcher and authenticated Dashboard rendered with `scrollWidth === clientWidth === 390` (no horizontal overflow); the same Inbox-first and role-sensitive controls remained visible. Browser console error logs were empty for the exercised local pages. No POST/action controls were invoked.
+- The isolated server was intentionally not mapped to `bpls-runtime.test`; that hostname continues to serve the protected main checkout. Keyboard/focus behavior remains the existing Sidebar/NavMain implementation and was not altered.
 
 ## Preservation and stop boundary
 
 No Cloud operation, deployment, seed, migration, lifecycle action, financial mutation, historical corpus access, report integration, or production policy occurred. Applications 285–291, Assessment 214, Reports 004/016/028, fingerprints and browser-certification records remain untouched. Gate 10B home/authentication behavior and preview safeguards remain intact. Pre-existing unrelated guidance edits in the main checkout were not touched.
 
-**Recommended next disposition:** integrate this branch into the designated local `bpls-runtime.test` checkout, run authenticated synthetic role browser checks at desktop and 390×844, then return for Gate 10C acceptance. Do not begin Gate 10D or deploy from this packet.
+**Readiness boundary:** navigation and Inbox-first integration are proven in the isolated local shell. Representative assigned task records were not fabricated because the existing stakeholder-cycle fixture is X-Change-configured and unavailable in this offline-only acceptance environment. A future fixture-backed run may add task-card coverage without changing this navigation implementation. Do not begin Gate 10D or deploy from this packet.
 
-**GATE 10C: BLOCKED — CHIEF ARCHITECT DISPOSITION REQUIRED**
+**GATE 10C: PASS — ROLE NAVIGATION READY**
