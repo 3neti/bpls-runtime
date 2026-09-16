@@ -53,6 +53,7 @@ import {
     readinessBlockers,
     sourceLabel,
 } from '@/lib/evaluationPresentation';
+import { createRequestId } from '@/lib/requestId';
 import type { ResponsibilityDraft } from '@/lib/evaluationPresentation';
 import type {
     BreadcrumbItem,
@@ -142,6 +143,7 @@ const props = defineProps<{
 }>();
 
 const pendingAction = ref<string | null>(null);
+const actionError = ref<string | null>(null);
 const { stop: stopRoutingPoll } = usePoll(
     15_000,
     { only: ['routingTask', 'bploRouting', 'routingSuggestion'] },
@@ -547,7 +549,11 @@ function runOnce(key: string, action: () => void): void {
     }
 
     pendingAction.value = key;
-    action();
+    actionError.value = null;
+    try { action(); } catch (error) {
+        pendingAction.value = null;
+        actionError.value = error instanceof Error ? error.message : 'Unable to prepare this action. Please retry.';
+    }
 }
 
 function submitLineCorrection(): void {
@@ -566,7 +572,7 @@ function submitLineCorrection(): void {
             reason: lineCorrectionReason.value,
             expected_version_sequence: props.evaluation!.version.sequence,
             expected_fingerprint: props.evaluation!.version.fingerprint,
-            idempotency_key: crypto.randomUUID(),
+            idempotency_key: createRequestId(),
         });
         const action = isCitizenLens.value
             ? correctCitizenLinesOfBusiness(props.application.id)
@@ -619,7 +625,7 @@ function submitResponsibility(
         const form = useForm({
             expected_version_sequence: props.evaluation!.version.sequence,
             expected_fingerprint: props.evaluation!.version.fingerprint,
-            idempotency_key: crypto.randomUUID(),
+            idempotency_key: createRequestId(),
             applicability: draft.applicability,
             determination_type: draft.determinationType,
             amount_cents: amountCents,
@@ -667,7 +673,7 @@ function confirmAllDefaults(): void {
             item_ids: myConfirmableDefaults.value.map((item) => item.id),
             expected_version_sequence: props.evaluation!.version.sequence,
             expected_fingerprint: props.evaluation!.version.fingerprint,
-            idempotency_key: crypto.randomUUID(),
+            idempotency_key: createRequestId(),
         }).post(confirmOfficeDefaults(props.application.id).url, {
             preserveScroll: true,
             onFinish: () => {
@@ -734,7 +740,7 @@ function submitPrepareAssessment(): void {
         useForm({
             evaluation_version_id: props.evaluation!.version.id,
             evaluation_fingerprint: props.evaluation!.version.fingerprint,
-            idempotency_key: crypto.randomUUID(),
+            idempotency_key: createRequestId(),
         }).post(prepareAssessment(props.application.id).url, {
             preserveScroll: true,
             onFinish: () => {
@@ -750,6 +756,13 @@ function submitPrepareAssessment(): void {
         <Head title="Business Permit Evaluator" />
 
         <main class="flex min-w-0 flex-1 flex-col gap-5 p-4 sm:p-6 lg:p-8">
+            <div
+                v-if="actionError"
+                role="alert"
+                class="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive"
+            >
+                {{ actionError }}
+            </div>
             <div
                 v-if="evaluationError"
                 role="alert"
