@@ -2,6 +2,12 @@
 
 return [
     // Commission 2026-09-14: workflow UAT hypothesis only, not production policy.
+    // Explicit admission is required in addition to the stakeholder-preview
+    // safety flags below. This keeps the provisional schedule unavailable in
+    // unrelated local environments and avoids hostname-based authority.
+    'provisional_uat_enabled' => (bool) env('TREASURY_ENTERPRISE_PROVISIONAL_UAT_ENABLED', false),
+    'provisional_uat_context' => env('TREASURY_ENTERPRISE_PROVISIONAL_UAT_CONTEXT'),
+    'provisional_uat_allowed_contexts' => ['workflow_uat', 'gate10_local'],
     'workflow_url' => 'https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud',
     'schedule' => [
         'id' => 'ipil-new-enterprise-provisional-uat',

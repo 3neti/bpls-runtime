@@ -13,7 +13,7 @@ use Database\Seeders\MunicipalFeeCatalogSeeder;
 
 function enterpriseUatFixture(): array
 {
-    config(['app.url' => config('treasury_enterprise.workflow_url'), 'stakeholder_preview.mode' => true,
+    config(['app.url' => config('treasury_enterprise.workflow_url'), 'treasury_enterprise.provisional_uat_enabled' => true, 'treasury_enterprise.provisional_uat_context' => 'workflow_uat', 'stakeholder_preview.mode' => true,
         'stakeholder_preview.production_migration_enabled' => false, 'stakeholder_preview.production_integrations' => 'disabled']);
     test()->seed(MunicipalFeeCatalogSeeder::class);
     $application = PermitApplication::factory()->create(['application_year' => 2026, 'type' => 'new',

@@ -69,16 +69,19 @@ test('enterprise confirmation rejects incomplete tampered stale or unavailable a
         config(['treasury_enterprise.schedule' => null]);
     }
     if ($case === 'other_environment') {
-        config(['app.url' => 'https://production.example.test']);
+        config(['app.url' => 'https://production.example.test', 'treasury_enterprise.provisional_uat_context' => 'production']);
     }
     if ($case === 'disabled') {
         config(['stakeholder_preview.mode' => false]);
+    }
+    if ($case === 'unknown_context') {
+        config(['treasury_enterprise.provisional_uat_context' => 'unadmitted']);
     }
     $before = $application->fresh()->toJson();
     expect(fn () => app(AssignTreasuryLinesOfBusiness::class)->handle($application, [$selection], $actor))->toThrow(ValidationException::class);
     expect($application->treasuryLineOfBusinessAssignments()->count())->toBe(0)->and($application->lines()->count())->toBe(0)
         ->and($application->fresh()->toJson())->toBe($before);
-})->with(['missing', 'invalid', 'stale', 'amount', 'omitted', 'schedule', 'other_environment', 'disabled']);
+})->with(['missing', 'invalid', 'stale', 'amount', 'omitted', 'schedule', 'other_environment', 'disabled', 'unknown_context']);
 
 test('enterprise authority does not grant a non Treasury actor permission', function (): void {
     [$application, $actor, $selection] = enterpriseUatFixture();

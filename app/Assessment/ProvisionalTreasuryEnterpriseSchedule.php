@@ -22,7 +22,8 @@ class ProvisionalTreasuryEnterpriseSchedule
             || config('stakeholder_preview.mode') !== true
             || config('stakeholder_preview.production_migration_enabled') !== false
             || config('stakeholder_preview.production_integrations') !== 'disabled'
-            || rtrim((string) config('app.url'), '/') !== config('treasury_enterprise.workflow_url')) {
+            || config('treasury_enterprise.provisional_uat_enabled') !== true
+            || ! in_array(config('treasury_enterprise.provisional_uat_context'), config('treasury_enterprise.provisional_uat_allowed_contexts', []), true)) {
             return null;
         }
 
