@@ -135,6 +135,9 @@ type PermitApplication = {
                 can_pay_online: boolean;
                 can_reconcile_online: boolean;
                 artifact_statement: string;
+                pay_code: string | null;
+                payment_reference: string | null;
+                attempt_reference: string | null;
             };
         } | null;
         collection: {
@@ -910,13 +913,18 @@ function blockerLabel(blocker: string): string {
                         class="border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
                     >
                         <p class="font-medium">
-                            Online payment is not available in this preview
+                            Online payment:
+                            {{ permitApplication.processing.payment_schedule.online_payment_boundary.can_pay_online ? 'Available' : 'Not available' }}
                         </p>
                         <p class="mt-1">
-                            This sample uses the recorded in-person payment
-                            path. Future online-payment policy has not been
-                            decided here.
+                            {{ permitApplication.processing.payment_schedule.online_payment_boundary.artifact_statement }}
                         </p>
+                        <dl v-if="permitApplication.processing.payment_schedule.online_payment_boundary.pay_code" class="mt-3 grid gap-1 text-xs">
+                            <div><dt class="inline font-medium">Pay Code:</dt> <dd class="inline break-all">{{ permitApplication.processing.payment_schedule.online_payment_boundary.pay_code }}</dd></div>
+                            <div v-if="permitApplication.processing.payment_schedule.online_payment_boundary.payment_reference"><dt class="inline font-medium">Payment reference:</dt> <dd class="inline break-all">{{ permitApplication.processing.payment_schedule.online_payment_boundary.payment_reference }}</dd></div>
+                            <div v-if="permitApplication.processing.payment_schedule.online_payment_boundary.attempt_reference"><dt class="inline font-medium">Attempt reference:</dt> <dd class="inline break-all">{{ permitApplication.processing.payment_schedule.online_payment_boundary.attempt_reference }}</dd></div>
+                        </dl>
+                        <p v-if="permitApplication.processing.payment_schedule.online_payment_boundary.can_pay_online" class="mt-3 font-medium">UAT / Test Payment — no production payment or legal effect.</p>
                     </div>
                 </div>
 

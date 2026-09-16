@@ -44,6 +44,11 @@ class DescribeOnlinePaymentBoundary
             'payment_schedule_id' => $paymentSchedule->id,
             'payment_schedule_status' => $paymentSchedule->status->value,
             'payment_status' => $payment?->status,
+            ...($payment === null ? [] : [
+                'pay_code' => $payment->pay_code,
+                'payment_reference' => $payment->external_reference,
+                'attempt_reference' => $attempt?->reference,
+            ]),
             'attempt_status' => $attempt?->status,
             'attempt_expires_at' => $attempt?->expires_at?->toIso8601String(),
             'blocked_transitions' => [
