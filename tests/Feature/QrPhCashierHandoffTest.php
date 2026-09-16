@@ -43,6 +43,8 @@ function handoffFixture(): array
     ]);
     config([
         'app.url' => 'https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud',
+        'payment_simulation.commissioned' => true,
+        'payment_simulation.context' => 'workflow_uat',
         'stakeholder_preview.mode' => true,
         'stakeholder_preview.production_migration_enabled' => false,
         'stakeholder_preview.production_integrations' => 'disabled',
@@ -232,7 +234,8 @@ test('simulation environment is explicit and fail closed', function (string $env
     [$actor, $schedule, $payment] = handoffFixture();
     $attempt = handoffAttempt($payment);
     app()->detectEnvironment(fn () => $environment);
-    config(['app.url' => $url, 'stakeholder_preview.mode' => $enabled,
+    config(['app.url' => $url, 'payment_simulation.commissioned' => $allowed,
+        'payment_simulation.context' => $environment === 'local' ? 'gate10_local' : ($environment === 'staging' && $allowed ? 'workflow_uat' : 'unadmitted'), 'stakeholder_preview.mode' => $enabled,
         'stakeholder_preview.production_migration_enabled' => $migration,
         'stakeholder_preview.production_integrations' => $integrations]);
     $this->actingAs($actor)->get(route('staff.payment-schedules.show', $schedule))->assertOk()

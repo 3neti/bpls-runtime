@@ -40,16 +40,20 @@ final class AuthorizeUatQrPhSimulation
 
     public function environmentAllowsSimulation(): bool
     {
-        $url = rtrim((string) config('app.url'), '/');
-        $targetAllowed = $url === 'https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud'
-            || (app()->environment(['local', 'testing'])
-                && in_array(parse_url($url, PHP_URL_HOST), ['localhost', '127.0.0.1', 'bpls-runtime.test'], true));
+        $context = config('payment_simulation.context');
+        $environmentAllowed = ($context === 'gate10_local' && app()->environment(['local', 'testing']))
+            || ($context === 'workflow_uat' && app()->environment(['staging', 'testing']));
+        $host = parse_url((string) config('app.url'), PHP_URL_HOST);
+        $hostAllowed = ($context === 'gate10_local' && in_array($host, ['bpls-gate10.test', 'localhost', '127.0.0.1'], true))
+            || ($context === 'workflow_uat' && $host === 'bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud');
 
-        return app()->environment(['staging', 'local', 'testing'])
+        return config('payment_simulation.commissioned') === true
+            && in_array($context, config('payment_simulation.allowed_contexts', []), true)
+            && $environmentAllowed
+            && $hostAllowed
             && config('stakeholder_preview.mode') === true
             && config('stakeholder_preview.production_migration_enabled') === false
-            && config('stakeholder_preview.production_integrations') === 'disabled'
-            && $targetAllowed;
+            && config('stakeholder_preview.production_integrations') === 'disabled';
     }
 
     public function handle(PaymentSchedule $schedule, ?User $viewer): bool
@@ -68,18 +72,13 @@ final class AuthorizeUatQrPhSimulation
                 && data_get($run->actor_manifest, 'actors.cashier.user_id') === $viewer->id;
         }
 
-        // The ordinary walkthrough commission is bound to this preserved UAT specimen.
+        // Outside a cleanroom, explicit commission plus a canonical Cashier
+        // assignment is sufficient; never bind simulation to specimen IDs.
         return InstitutionalPositionAssignment::query()
             ->where('user_id', $viewer->id)
             ->where('status', 'active')
             ->whereNull('ended_at')
             ->whereHas('position.capabilityRole', fn ($query) => $query->where('code', 'cashier'))
-            ->exists()
-            && $schedule->permit_application_id === 291
-            && $schedule->id === 63
-            && $schedule->assessment_id === 215
-            && $schedule->xChangePayment?->id === 5
-            && $schedule->total_amount_cents === 417500
-            && data_get($schedule->permitApplication->metadata, 'nelson_reconciliation_v1.commissioned_path') === true;
+            ->exists();
     }
 }
