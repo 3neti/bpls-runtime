@@ -11,7 +11,7 @@ final class RenderReceiptPdf
         $receipt->loadMissing([
             'issuedBy',
             'treasuryCollection.receivedBy',
-            'treasuryCollection.allocations.paymentScheduleLine.lineOfBusiness',
+            'allocations.paymentScheduleLine.lineOfBusiness',
             'paymentSchedule',
             'permitApplication.business.owner',
             'assessment',
@@ -62,7 +62,7 @@ final class RenderReceiptPdf
         $document->line($page, 330, 486, 330, 286);
         $document->line($page, 420, 486, 420, 286);
         $rowY = 438;
-        foreach ($receipt->treasuryCollection->allocations->take(8) as $allocation) {
+        foreach ($receipt->allocations->take(8) as $allocation) {
             $document->wrappedText($page, $allocation->paymentScheduleLine->name, 94, $rowY, 226, 8, 9);
             $document->text($page, (string) data_get($allocation->source_snapshot, 'account_code', data_get($allocation->source_snapshot, 'code', $allocation->paymentScheduleLine->code)), 375, $rowY, 5, false, 'center');
             $document->text($page, number_format($allocation->amount_cents / 100, 2), 501, $rowY, 8, false, 'right');

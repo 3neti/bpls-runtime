@@ -42,6 +42,7 @@ test('staff users with view receipt permission can view receipt detail evidence'
             ->where('receipt.permit_application.application_number', 'LOCAL-PERMIT')
             ->where('receipt.business.name', 'Codex Quantity Store')
             ->where('receipt.business.owner.name', 'Codex Owner')
+            ->has('receipt.allocations', 1)
             ->where('receipt.allocations.0.code', 'MAYOR-PERMIT')
             ->where('receipt.allocations.0.amount_cents', 12_500)
             ->where('receipt.void_boundary.status', 'blocked')
@@ -166,6 +167,7 @@ test('staff users with view receipt permission can open a receipt pdf artifact',
         ->toContain('Codex Quantity Store')
         ->toContain('Codex Browser Payer')
         ->toContain('MAYOR-PERMIT')
+        ->not->toContain('UNRELATED-LINE')
         ->toContain('Automatic receipt numbering authority remains unresolved.')
         ->toContain('Void, reprint, and reconciliation policy remain unresolved.')
         ->and(pdfPageCount($pdf))->toBe(1);
@@ -274,7 +276,7 @@ function receiptDocumentFixture(): Receipt
             'status' => PaymentScheduleStatus::PartiallyPaid,
             'payment_mode' => 'single',
             'total_amount_cents' => 42_000,
-            'paid_amount_cents' => 12_500,
+            'paid_amount_cents' => 42_000,
         ]);
     $paymentLine = PaymentScheduleLine::factory()->for($paymentSchedule)->create([
         'code' => 'MAYOR-PERMIT',
@@ -282,7 +284,7 @@ function receiptDocumentFixture(): Receipt
         'category' => FeeRuleCategory::Fee,
         'status' => PaymentScheduleLineStatus::PartiallyPaid,
         'amount_cents' => 42_000,
-        'paid_amount_cents' => 12_500,
+        'paid_amount_cents' => 42_000,
     ]);
     $collection = TreasuryCollection::factory()
         ->for($paymentSchedule)
@@ -291,19 +293,28 @@ function receiptDocumentFixture(): Receipt
         ->for($receivedBy, 'receivedBy')
         ->create([
             'status' => TreasuryCollectionStatus::Receipted,
-            'amount_cents' => 12_500,
+            'amount_cents' => 42_000,
             'payer_name' => 'Codex Browser Payer',
             'reference_number' => 'CASH-REF',
         ]);
 
-    CollectionAllocation::factory()
+    $selectedAllocation = CollectionAllocation::factory()
         ->for($collection)
         ->for($paymentLine)
         ->create([
             'amount_cents' => 12_500,
         ]);
 
-    return Receipt::factory()
+    $siblingLine = PaymentScheduleLine::factory()->for($paymentSchedule)->create([
+        'code' => 'UNRELATED-LINE', 'name' => 'Unrelated sibling line',
+        'category' => FeeRuleCategory::Fee, 'amount_cents' => 29_500,
+        'paid_amount_cents' => 29_500,
+    ]);
+    CollectionAllocation::factory()->for($collection)->for($siblingLine)->create([
+        'amount_cents' => 29_500,
+    ]);
+
+    $receipt = Receipt::factory()
         ->for($collection)
         ->for($paymentSchedule)
         ->for($permitApplication)
@@ -322,6 +333,10 @@ function receiptDocumentFixture(): Receipt
                 ],
             ],
         ]);
+
+    $selectedAllocation->update(['receipt_id' => $receipt->id]);
+
+    return $receipt;
 }
 
 function pdfPageCount(string $pdf): int

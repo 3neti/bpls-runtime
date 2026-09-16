@@ -90,7 +90,7 @@ class ReceiptController extends Controller
         $receipt->load([
             'issuedBy',
             'treasuryCollection.receivedBy',
-            'treasuryCollection.allocations.paymentScheduleLine.lineOfBusiness',
+            'allocations.paymentScheduleLine.lineOfBusiness',
             'paymentSchedule',
             'permitApplication.business.owner',
             'assessment',
@@ -236,7 +236,7 @@ class ReceiptController extends Controller
                     'address' => $businessOwner->address,
                 ],
             ],
-            'allocations' => $collection->allocations
+            'allocations' => $receipt->allocations
                 ->values()
                 ->map(fn (CollectionAllocation $allocation): array => [
                     'id' => $allocation->id,
