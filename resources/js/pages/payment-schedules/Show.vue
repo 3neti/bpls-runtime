@@ -129,6 +129,7 @@ type ClassicPaymentHandoff = {
     currency: string;
     status: string;
     is_current: boolean;
+    is_settled: boolean;
     resolution: string;
     server_now: string;
     history: {
@@ -1061,10 +1062,11 @@ onBeforeUnmount(stopQrChecks);
                             data-testid="qr-handoff-state"
                         >
                             {{
-                                classicPaymentHandoff.resolution ===
-                                'needs_review'
-                                    ? 'Payment attempts need review. No request can be confirmed.'
-                                    : 'No active QR request. The Citizen must request a replacement.'
+                                classicPaymentHandoff.is_settled
+                                    ? 'Payment completed. This QR request is retained as history; no replacement is required.'
+                                    : classicPaymentHandoff.resolution === 'needs_review'
+                                      ? 'Payment attempts need review. No request can be confirmed.'
+                                      : 'No active QR request. The Citizen may request a replacement.'
                             }}
                         </p>
                         <details

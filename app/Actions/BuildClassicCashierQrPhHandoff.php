@@ -28,8 +28,9 @@ final class BuildClassicCashierQrPhHandoff
         }
         $resolution = $this->resolveAttempt->handle($payment);
         $attempt = $resolution['attempt'];
-        $isCurrent = $resolution['state'] === 'active'
-            && $schedule->treasuryCollections()->doesntExist();
+        $collection = $schedule->treasuryCollections()->latest('received_at')->first();
+        $isSettled = $collection !== null || $schedule->paid_amount_cents >= $schedule->total_amount_cents;
+        $isCurrent = ! $isSettled && $resolution['state'] === 'active';
 
         return [
             'payment_id' => $payment->id,
@@ -39,6 +40,13 @@ final class BuildClassicCashierQrPhHandoff
             'currency' => $payment->currency,
             'status' => $payment->status,
             'is_current' => $isCurrent,
+            'is_settled' => $isSettled,
+            'collection' => $collection === null ? null : [
+                'id' => $collection->id,
+                'amount_cents' => $collection->amount_cents,
+                'reference' => $collection->reference_number,
+                'received_at' => $collection->received_at?->toIso8601String(),
+            ],
             'resolution' => $resolution['state'],
             'server_now' => $resolution['server_now'],
             'history' => $payment->attempts->sortBy('id')->values()->map(fn (XChangePaymentAttempt $item): array => [
