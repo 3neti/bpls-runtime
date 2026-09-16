@@ -104,3 +104,17 @@ test('hiding engineering presentation preserves the restricted legacy safety cla
             ->where('stakeholder_preview.authorized_legacy_review', true)
             ->where('stakeholder_preview.access', 'private'));
 });
+
+test('ordinary municipal management cannot discover or invoke laboratory provisioning', function () {
+    $management = User::query()->where('email', StakeholderPreviewPersona::Management->approvedEmail())->sole();
+
+    $this->actingAs($management)
+        ->get(route('staff.users.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('capabilities.provision_laboratory_actors', false));
+
+    $this->actingAs($management)
+        ->post(route('staff.users.provision-laboratory'))
+        ->assertForbidden();
+});
