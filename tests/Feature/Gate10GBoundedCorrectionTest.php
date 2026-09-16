@@ -46,3 +46,13 @@ test('preview controls require the protected engineering context', function () {
         ->toContain('$showEngineeringControls = $cleanroomActor !== null')
         ->toContain("str_contains(\$item['href'], 'lifecycle-laboratory')");
 });
+
+test('concerned-office payment order presentation does not wait for evaluation', function () {
+    $page = file_get_contents(resource_path('js/pages/business-permit-evaluations/Show.vue'));
+
+    expect($page)
+        ->toContain('Concerned-office Payment Orders are recorded here')
+        ->toContain('first; Evaluation and Assessment follow their')
+        ->not->toContain('The Evaluation has not started, so no concerned office')
+        ->not->toContain('Waiting for an authorized Assessment Officer to start');
+});

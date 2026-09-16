@@ -1029,21 +1029,15 @@ function submitPrepareAssessment(): void {
                     <p class="text-sm leading-6 text-muted-foreground">
                         <template v-if="bploRouting">
                             BPLO recorded the required office routing on
-                            {{ dateTime(bploRouting.determined_at) }}. The
-                            Evaluation has not started, so no concerned office
-                            has recorded a fee decision.
+                            {{ dateTime(bploRouting.determined_at) }}.
+                            Concerned-office Payment Orders are recorded here
+                            first; Evaluation and Assessment follow their
+                            completion.
                         </template>
                         <template v-else>
                             BPLO must record the required office routing before
                             the fee Evaluation can begin.
                         </template>
-                    </p>
-                    <p
-                        v-if="!can.initialize && bploRouting"
-                        class="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground"
-                    >
-                        Waiting for an authorized Assessment Officer to start
-                        the Evaluation.
                     </p>
                 </div>
             </section>
