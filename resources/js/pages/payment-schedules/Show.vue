@@ -426,8 +426,8 @@ watch(
     () => props.classicPaymentHandoff,
     (handoff) => {
         if (handoff === null) {
-return;
-}
+            return;
+        }
 
         stopQrChecks();
         serverClockOffset = Date.parse(handoff.server_now) - Date.now();
@@ -435,8 +435,8 @@ return;
         qrMessage.value = null;
 
         if (qrAttempt.value !== null) {
-startQrChecks(false);
-}
+            startQrChecks(false);
+        }
     },
 );
 
@@ -1098,6 +1098,19 @@ onBeforeUnmount(stopQrChecks);
                             v-slot="{ processing }"
                             class="mt-3"
                         >
+                            <div
+                                data-testid="classic-payment-simulation-disclosure"
+                                role="note"
+                                class="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+                            >
+                                <p class="font-semibold">UAT / Test Payment</p>
+                                <p>
+                                    This simulates successful QR Ph payment for
+                                    testing only. No production funds are moved,
+                                    and this action has no production or legal
+                                    effect.
+                                </p>
+                            </div>
                             <input
                                 type="hidden"
                                 name="attempt_id"

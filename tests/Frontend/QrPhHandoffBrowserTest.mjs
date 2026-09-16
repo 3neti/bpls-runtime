@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
-import vue from '@vitejs/plugin-vue';
 import tailwindcss from '@tailwindcss/vite';
+import vue from '@vitejs/plugin-vue';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
@@ -101,11 +101,14 @@ const server = await createServer({
         {
             name: 'synthetic-handoff',
             resolveId(id) {
-                if (id === 'synthetic-layout') return '\0synthetic-layout';
+                if (id === 'synthetic-layout') {
+                    return '\0synthetic-layout';
+                }
             },
             load(id) {
-                if (id === '\0synthetic-layout')
+                if (id === '\0synthetic-layout') {
                     return "import {h} from 'vue'; export default {setup(_, {slots}) {return () => h('div', slots.default?.());}}";
+                }
             },
             configureServer(server) {
                 server.middlewares.use((req, res, next) => {
@@ -123,28 +126,43 @@ const server = await createServer({
                             res.setHeader('Location', '/');
                             res.end();
                         });
+
                         return;
                     }
+
                     if (req.url === '/test-state') {
                         res.setHeader('Content-Type', 'application/json');
                         res.end(
                             JSON.stringify({ submitted, synthetic_only: true }),
                         );
+
                         return;
                     }
-                    if (req.url !== '/') return next();
+
+                    const requestUrl = new URL(
+                        req.url ?? '/',
+                        'http://localhost',
+                    );
+
+                    if (requestUrl.pathname !== '/') {
+                        return next();
+                    }
+
                     const page = {
                         component: 'Handoff',
                         props: props(),
-                        url: '/',
+                        url: requestUrl.pathname + requestUrl.search,
                         version: null,
                     };
+
                     if (req.headers['x-inertia']) {
                         res.setHeader('X-Inertia', 'true');
                         res.setHeader('Content-Type', 'application/json');
                         res.end(JSON.stringify(page));
+
                         return;
                     }
+
                     const html = `<meta name="viewport" content="width=device-width,initial-scale=1"><div id="app"></div><script type="module">
                     import '/resources/css/app.css';
                     import {createApp,h} from 'vue'; import {createInertiaApp} from '@inertiajs/vue3';
@@ -172,13 +190,16 @@ const server = await createServer({
 });
 await server.listen();
 const url = `http://127.0.0.1:${server.httpServer.address().port}/`;
+
 if (process.argv.includes('--serve')) {
     console.log(`Synthetic handoff fixture: ${url}`);
     await new Promise(() => {});
 } else {
     let browser;
+
     try {
         browser = await chromium.launch({ headless: true });
+
         for (const viewport of [
             { width: 1280, height: 900 },
             { width: 390, height: 844 },
@@ -188,6 +209,38 @@ if (process.argv.includes('--serve')) {
             page.on('pageerror', (error) => errors.push(error.message));
             await page.goto(url);
             await page.getByTestId('classic-payment-simulate').waitFor();
+            const disclosure = page.getByTestId(
+                'classic-payment-simulation-disclosure',
+            );
+            await disclosure.waitFor();
+            await assert.doesNotReject(() =>
+                disclosure.getByText('UAT / Test Payment').waitFor(),
+            );
+            await assert.doesNotReject(() =>
+                disclosure
+                    .getByText(
+                        'This simulates successful QR Ph payment for testing only. No production funds are moved, and this action has no production or legal effect.',
+                    )
+                    .waitFor(),
+            );
+            assert.equal(
+                await page.evaluate(() => {
+                    const disclosure = document.querySelector(
+                        '[data-testid="classic-payment-simulation-disclosure"]',
+                    );
+                    const action = document.querySelector(
+                        '[data-testid="classic-payment-simulate"]',
+                    );
+
+                    return Boolean(
+                        disclosure &&
+                        action &&
+                        disclosure.compareDocumentPosition(action) &
+                            Node.DOCUMENT_POSITION_FOLLOWING,
+                    );
+                }),
+                true,
+            );
             assert.equal(
                 await page.getByTestId('staff-qr-ph-generate').count(),
                 0,
@@ -203,8 +256,9 @@ if (process.argv.includes('--serve')) {
             await Promise.all([
                 page.waitForResponse(
                     (response) =>
-                        response.url() === url &&
-                        response.request().headers()['x-inertia'],
+                        new URL(response.url()).pathname ===
+                            '/synthetic-confirm' &&
+                        response.request().method() === 'POST',
                 ),
                 page.getByTestId('classic-payment-simulate').click(),
             ]);
@@ -221,6 +275,7 @@ if (process.argv.includes('--serve')) {
             );
             await page.close();
         }
+
         console.log(
             'PASS: actual Cashier form submits exact attempt on desktop and 390×844',
         );
