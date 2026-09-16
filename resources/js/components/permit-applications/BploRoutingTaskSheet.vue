@@ -984,7 +984,7 @@ const filteredTreasuryLobOptions = computed(() => {
                         :disabled="!treasurySelectionsReady"
                         @click="confirmTreasuryLobs"
                     >
-                        Confirm Treasury Classification
+                        Confirm Treasury
                     </Button>
                 </template>
 
@@ -1403,7 +1403,7 @@ const filteredTreasuryLobOptions = computed(() => {
                         type="button"
                         :disabled="!treasurySelectionsReady"
                         @click="confirmTreasuryLobs"
-                        >Confirm Treasury Classification</Button
+                        >Confirm Treasury</Button
                     >
                 </template>
             </section>

@@ -1013,8 +1013,7 @@ function permitBlockerLabel(blocker: string): string {
                         v-else
                         class="rounded-lg border border-dashed border-slate-300 p-5 text-sm dark:border-slate-700"
                     >
-                        Assessment and frozen PriceReport are pending canonical
-                        preparation.
+                        Assessment is not ready.
                     </p>
                 </div>
 
@@ -1024,7 +1023,7 @@ function permitBlockerLabel(blocker: string): string {
                         class="rounded-xl border border-slate-300 p-4 dark:border-slate-700"
                         data-testid="application-schedule-of-payment"
                     >
-                        <h3 class="font-black">Schedule of Payment</h3>
+                        <h3 class="font-black">Payment Schedule</h3>
                         <div
                             v-for="group in application.schedule_of_payment
                                 .groups"
@@ -1061,9 +1060,8 @@ function permitBlockerLabel(blocker: string): string {
                         v-if="application.official_receipts.length === 0"
                         class="rounded-lg border border-dashed border-slate-300 p-5 text-sm dark:border-slate-700"
                     >
-                        <ReceiptText class="mb-2 size-5" />No Official Receipt
-                        projection exists until a canonical Receipt is issued
-                        from Collection truth.
+                        <ReceiptText class="mb-2 size-5" />Official Receipts
+                        will appear after Collection is recorded.
                     </div>
                 </div>
 

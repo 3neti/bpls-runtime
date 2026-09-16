@@ -49,9 +49,7 @@ defineProps<{
                 <div>
                     <p class="font-medium">Charges assembled so far</p>
                     <p class="mt-1 text-sm leading-6 text-muted-foreground">
-                        These amounts come from the canonical Evaluation. This
-                        panel reports them without recalculating or changing any
-                        determination.
+                        Recorded charges and current status.
                     </p>
                 </div>
 
