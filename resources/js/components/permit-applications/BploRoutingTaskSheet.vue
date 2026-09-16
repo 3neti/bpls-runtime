@@ -986,6 +986,14 @@ const filteredTreasuryLobOptions = computed(() => {
                     >
                         Confirm Treasury
                     </Button>
+                    <p
+                        v-if="!treasurySelectionsReady"
+                        class="text-xs text-amber-800 dark:text-amber-200"
+                        data-testid="treasury-confirm-reason"
+                    >
+                        Select a Line of Business and enterprise classification
+                        before confirming Treasury.
+                    </p>
                 </template>
 
                 <div

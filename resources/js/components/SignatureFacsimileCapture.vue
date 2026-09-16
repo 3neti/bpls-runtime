@@ -194,13 +194,20 @@ function removeSignature(): void {
 
         <dialog
             ref="dialog"
+            aria-labelledby="signature-capture-title"
+            aria-describedby="signature-capture-instructions"
             class="m-auto w-[min(92vw,32rem)] rounded-xl border bg-background p-0 text-foreground shadow-2xl backdrop:bg-black/50"
             @close="isDrawing = false"
         >
             <div class="flex items-center justify-between border-b p-4">
                 <div>
-                    <h2 class="font-bold">Sign here</h2>
-                    <p class="text-xs text-muted-foreground">
+                    <h2 id="signature-capture-title" class="font-bold">
+                        Sign here
+                    </h2>
+                    <p
+                        id="signature-capture-instructions"
+                        class="text-xs text-muted-foreground"
+                    >
                         Draw your signature using your finger, stylus, or mouse.
                     </p>
                 </div>
@@ -221,8 +228,10 @@ function removeSignature(): void {
                         ref="canvas"
                         class="block h-48 w-full cursor-crosshair touch-none"
                         role="img"
+                        tabindex="0"
                         aria-label="Signature drawing area"
                         :aria-required="props.required"
+                        aria-describedby="signature-keyboard-hint"
                         data-testid="signature-facsimile-canvas"
                         @pointerdown="startDrawing"
                         @pointermove="draw"
@@ -236,6 +245,13 @@ function removeSignature(): void {
                         Draw inside this box
                     </span>
                 </div>
+                <p
+                    id="signature-keyboard-hint"
+                    class="text-xs text-muted-foreground"
+                >
+                    Use the buttons below with the keyboard. Clear and Use
+                    signature stay unavailable until a signature is drawn.
+                </p>
                 <div
                     class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between"
                 >
