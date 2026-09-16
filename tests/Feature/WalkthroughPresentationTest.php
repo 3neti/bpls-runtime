@@ -62,18 +62,25 @@ test('all ordinary walkthrough identities keep normal access without engineering
     expect($run->fresh()->getRawOriginal())->toBe($before);
 });
 
-test('exact approved preview operators retain engineering presentation and laboratory access', function () {
+test('only the authorized management reviewer retains engineering presentation', function () {
+    $management = User::query()->where('email', StakeholderPreviewPersona::Management->approvedEmail())->sole();
+    LifecycleCleanroomRun::factory()->for($management, 'startedBy')->create([
+        'actor_manifest' => [
+            'semantic_classification' => 'synthetic_only',
+            'production_liability' => false,
+        ],
+    ]);
+
     foreach (StakeholderPreviewPersona::cases() as $persona) {
         $user = User::query()->where('email', $persona->approvedEmail())->sole();
         $this->actingAs($user)->get(route('dashboard'))
             ->assertSuccessful()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('stakeholder_preview.show_engineering_controls', true)
+                ->where('stakeholder_preview.show_engineering_controls', $persona === StakeholderPreviewPersona::Management)
                 ->where('stakeholder_preview.current_persona', $persona->value)
-                ->has('stakeholder_preview.personas', count(StakeholderPreviewPersona::cases())));
+                ->has('stakeholder_preview.personas', $persona === StakeholderPreviewPersona::Management ? count(StakeholderPreviewPersona::cases()) : 0));
     }
 
-    $management = User::query()->where('email', StakeholderPreviewPersona::Management->approvedEmail())->sole();
     $this->actingAs($management)->get(route('stakeholder-preview.lifecycle-laboratory.index'))->assertSuccessful();
 });
 

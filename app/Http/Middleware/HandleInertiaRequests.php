@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\StakeholderPreviewPersona;
 use App\Models\LifecycleCleanroomRun;
 use App\Models\User;
 use App\StakeholderPreview\StakeholderPreviewSafety;
@@ -43,8 +44,15 @@ class HandleInertiaRequests extends Middleware
 
         $previewSafety = app(StakeholderPreviewSafety::class);
         $previewPersona = $previewSafety->personaFor($user);
-        $showEngineeringControls = $previewPersona !== null;
-        $cleanroomActor = $showEngineeringControls ? $this->cleanroomActor($user, $previewSafety) : null;
+        $cleanroomActor = $this->cleanroomActor($user, $previewSafety);
+        $showEngineeringControls = $cleanroomActor !== null;
+        $previewGuidance = $previewSafety->guidanceFor($user);
+        if (! $showEngineeringControls) {
+            $previewGuidance = array_values(array_filter(
+                $previewGuidance,
+                fn (array $item): bool => ! str_contains($item['href'], 'lifecycle-laboratory'),
+            ));
+        }
 
         return [
             ...parent::share($request),
@@ -89,7 +97,7 @@ class HandleInertiaRequests extends Middleware
                 'current_label' => $previewPersona?->label(),
                 'cleanroom_actor' => $cleanroomActor,
                 'personas' => $showEngineeringControls ? $previewSafety->personas() : [],
-                'what_to_try' => $previewSafety->guidanceFor($user),
+                'what_to_try' => $previewGuidance,
                 'recovery_message' => 'Preview data can be restored by the preview administrator.',
             ] : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
@@ -103,7 +111,28 @@ class HandleInertiaRequests extends Middleware
             return null;
         }
 
-        foreach (LifecycleCleanroomRun::query()->where('status', 'active')->latest('id')->limit(10)->get() as $run) {
+        // Only the explicitly authorized engineering reviewer receives the
+        // laboratory context. Municipal preview personas remain ordinary staff
+        // even while a cleanroom run is active.
+        if ($safety->personaFor($user) !== StakeholderPreviewPersona::Management) {
+            return null;
+        }
+
+        foreach (LifecycleCleanroomRun::query()
+            ->where('status', 'active')
+            ->where('started_by_id', $user->id)
+            ->latest('id')->limit(10)->get() as $run) {
+            if (data_get($run->actor_manifest, 'semantic_classification') === 'synthetic_only'
+                && data_get($run->actor_manifest, 'production_liability') === false) {
+                return [
+                    'run_id' => $run->id,
+                    'public_id' => $run->public_id,
+                    'key' => 'engineering_reviewer',
+                    'label' => 'Engineering reviewer',
+                    'laboratory_url' => route('stakeholder-preview.lifecycle-laboratory.cleanrooms.status', $run, false),
+                ];
+            }
+
             foreach (data_get($run->actor_manifest, 'actors', []) as $key => $actor) {
                 if (($actor['user_id'] ?? null) === $user->id && $user->roles->contains('id', $actor['role_id'] ?? null)) {
                     return [
