@@ -123,6 +123,27 @@ type BploRoutingTask = {
             fingerprint: string;
         } | null;
         can_record_menro_determination: boolean;
+        menro_determination_proposal: {
+            scope: string;
+            scope_label: string;
+            fee_rule_id: number;
+            source_identity: number;
+            code: string;
+            basis: string;
+            application_area_square_meters: number;
+            calculation_basis_centi_square_meters: number;
+            operative_range_min_centi_square_meters: number;
+            operative_range_max_centi_square_meters: number;
+            amount_minor: number;
+            schedule_version: string;
+            source_evidence: string;
+            classification: string;
+            production_authority: boolean;
+            reason: string;
+            actor_statement: string;
+            timestamp_statement: string;
+            warning: string;
+        } | null;
         line_of_business_options: {
             id: number;
             code: string;
@@ -531,21 +552,26 @@ function recordProvisionalMenroDetermination(): void {
         return;
     }
 
+    const proposal = props.task.financial_editor.menro_determination_proposal;
+    if (!proposal) {
+        return;
+    }
+
     useForm({
-        scope: 'application',
-        fee_rule_id: 176,
-        code: 'IPIL-LEGACY-98CDCAD9D28055FB',
-        basis: 'business_area_square_meters',
-        application_area_square_meters: 12,
-        calculation_basis_centi_square_meters: 1200,
-        operative_range_min_centi_square_meters: 1100,
-        operative_range_max_centi_square_meters: 1600,
-        amount_minor: 250000,
-        schedule_version: 'ipil-municipal-fees-v1',
-        source_evidence: 'LIVE-APP-001',
-        classification: 'PROVISIONAL_UAT_ONLY',
-        production_authority: false,
-        reason: 'Provisional Gate 10 synthetic-UAT determination pending Ipil municipal confirmation',
+        scope: proposal.scope,
+        fee_rule_id: proposal.fee_rule_id,
+        code: proposal.code,
+        basis: proposal.basis,
+        application_area_square_meters: proposal.application_area_square_meters,
+        calculation_basis_centi_square_meters: proposal.calculation_basis_centi_square_meters,
+        operative_range_min_centi_square_meters: proposal.operative_range_min_centi_square_meters,
+        operative_range_max_centi_square_meters: proposal.operative_range_max_centi_square_meters,
+        amount_minor: proposal.amount_minor,
+        schedule_version: proposal.schedule_version,
+        source_evidence: proposal.source_evidence,
+        classification: proposal.classification,
+        production_authority: proposal.production_authority,
+        reason: proposal.reason,
     }).post(
         `/staff/permit-applications/${props.task.application.id}/menro-fee-determination`,
         {
@@ -1291,7 +1317,7 @@ const filteredTreasuryLobOptions = computed(() => {
                                     Provisional MENRO determination
                                 </h3>
                                 <p class="mt-1 text-sm leading-6">
-                                    Synthetic-UAT evidence only. This does not establish municipal policy and does not create a Payment Order.
+                                    {{ task.financial_editor.menro_determination_proposal?.warning ?? 'Synthetic-UAT evidence only; this is not municipal policy.' }}
                                 </p>
                             </div>
                             <dl v-if="task.financial_editor.menro_determination" class="grid gap-2 text-sm sm:grid-cols-2">
@@ -1304,8 +1330,24 @@ const filteredTreasuryLobOptions = computed(() => {
                                 <div><dt class="font-semibold">Recorded by / time</dt><dd>{{ task.financial_editor.menro_determination.actor ?? 'Not recorded' }} · {{ dateTime(task.financial_editor.menro_determination.determined_at) }}</dd></div>
                                 <div><dt class="font-semibold">Fingerprint</dt><dd class="break-all font-mono text-xs">{{ task.financial_editor.menro_determination.fingerprint }}</dd></div>
                             </dl>
-                            <template v-else-if="task.financial_editor.can_record_menro_determination">
-                                <p class="text-sm">Authorized facts: 12 m² → 1,200 centi-m² → range 1,100–1,600 → ₱2,500.00.</p>
+                            <template v-else-if="task.financial_editor.can_record_menro_determination && task.financial_editor.menro_determination_proposal">
+                                <dl class="grid gap-2 text-sm sm:grid-cols-2">
+                                    <div><dt class="font-semibold">Scope</dt><dd>{{ task.financial_editor.menro_determination_proposal.scope_label }}</dd></div>
+                                    <div><dt class="font-semibold">Source identity</dt><dd>{{ task.financial_editor.menro_determination_proposal.source_identity }}</dd></div>
+                                    <div class="min-w-0"><dt class="font-semibold">Canonical code</dt><dd class="break-words font-mono text-xs">{{ task.financial_editor.menro_determination_proposal.code }}</dd></div>
+                                    <div><dt class="font-semibold">Basis</dt><dd class="break-words">{{ task.financial_editor.menro_determination_proposal.basis }}</dd></div>
+                                    <div><dt class="font-semibold">Application area</dt><dd>{{ task.financial_editor.menro_determination_proposal.application_area_square_meters }} m²</dd></div>
+                                    <div><dt class="font-semibold">Calculation basis</dt><dd>{{ task.financial_editor.menro_determination_proposal.calculation_basis_centi_square_meters.toLocaleString() }} centi-square-meters</dd></div>
+                                    <div><dt class="font-semibold">Operative range</dt><dd>{{ task.financial_editor.menro_determination_proposal.operative_range_min_centi_square_meters.toLocaleString() }}–{{ task.financial_editor.menro_determination_proposal.operative_range_max_centi_square_meters.toLocaleString() }}</dd></div>
+                                    <div><dt class="font-semibold">Amount</dt><dd>{{ money(task.financial_editor.menro_determination_proposal.amount_minor) }}</dd></div>
+                                    <div><dt class="font-semibold">Schedule / version</dt><dd class="break-words">{{ task.financial_editor.menro_determination_proposal.schedule_version }}</dd></div>
+                                    <div><dt class="font-semibold">Source evidence</dt><dd>{{ task.financial_editor.menro_determination_proposal.source_evidence }}</dd></div>
+                                    <div><dt class="font-semibold">Classification</dt><dd class="break-words">{{ task.financial_editor.menro_determination_proposal.classification }}</dd></div>
+                                    <div><dt class="font-semibold">Production authority</dt><dd>{{ task.financial_editor.menro_determination_proposal.production_authority ? 'Yes' : 'No' }}</dd></div>
+                                    <div class="sm:col-span-2"><dt class="font-semibold">Reason</dt><dd class="break-words">{{ task.financial_editor.menro_determination_proposal.reason }}</dd></div>
+                                    <div class="sm:col-span-2"><dt class="font-semibold">Actor</dt><dd class="break-words">{{ task.financial_editor.menro_determination_proposal.actor_statement }}</dd></div>
+                                    <div class="sm:col-span-2"><dt class="font-semibold">Timestamp</dt><dd class="break-words">{{ task.financial_editor.menro_determination_proposal.timestamp_statement }}</dd></div>
+                                </dl>
                                 <Button
                                     type="button"
                                     variant="outline"

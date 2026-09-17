@@ -32,6 +32,7 @@ class BuildBploRoutingTask
         private readonly ConcernedOfficeFeeApplicability $officeFeeApplicability,
         private readonly TreasuryFeeResolution $treasuryFeeResolution,
         private readonly ProvisionalTreasuryEnterpriseSchedule $enterpriseSchedule,
+        private readonly ProvisionalMenroFeeDeterminationProposal $menroProposal,
     ) {}
 
     public function handle(PermitApplication $permitApplication, ?User $viewer): BploRoutingTaskData
@@ -153,6 +154,7 @@ class BuildBploRoutingTask
     {
         $menroWork = $application->bploRoutingDetermination?->works->firstWhere('office_code', 'menro');
         $menroDetermination = $application->menroFeeDetermination;
+        $menroDeterminationProposal = $this->menroProposal->forApplication($application);
         $canRecordMenroDetermination = $viewer instanceof User
             && $menroWork !== null
             && $this->authorizeRoutedOfficeActor->allows(
@@ -196,6 +198,7 @@ class BuildBploRoutingTask
                 'determined_at' => $menroDetermination->determined_at->toIso8601String(),
                 'fingerprint' => $menroDetermination->fingerprint,
             ] : null,
+            'menro_determination_proposal' => $menroDetermination === null ? $menroDeterminationProposal : null,
             'can_record_menro_determination' => $canRecordMenroDetermination && $menroDetermination === null,
             'concerned_office_payment_orders' => $this->paymentOrderSummary->handle($application),
             'office_fee_options' => $offices->mapWithKeys(function (array $office) use ($application, $catalogFees): array {

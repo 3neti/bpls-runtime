@@ -2,6 +2,7 @@
 
 use App\Actions\RecordProvisionalMenroFeeDetermination;
 use App\Actions\BuildBploRoutingTask;
+use App\Actions\ProvisionalMenroFeeDeterminationProposal;
 use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
@@ -29,7 +30,7 @@ function provisionalMenroFacts(): array
         'source_evidence' => 'LIVE-APP-001',
         'classification' => 'PROVISIONAL_UAT_ONLY',
         'production_authority' => false,
-        'reason' => RecordProvisionalMenroFeeDetermination::Reason,
+        'reason' => ProvisionalMenroFeeDeterminationProposal::Reason,
     ];
 }
 
@@ -87,7 +88,23 @@ it('builds the ordinary MENRO task before and after evidence without financial m
 
     $before = $builder->handle($application, $actor)->toArray();
     expect(data_get($before, 'financial_editor.menro_determination'))->toBeNull()
-        ->and(data_get($before, 'financial_editor.can_record_menro_determination'))->toBeTrue();
+        ->and(data_get($before, 'financial_editor.can_record_menro_determination'))->toBeTrue()
+        ->and(data_get($before, 'financial_editor.menro_determination_proposal'))->toMatchArray([
+            'scope_label' => 'Application',
+            'source_identity' => 176,
+            'code' => 'IPIL-LEGACY-98CDCAD9D28055FB',
+            'basis' => 'business_area_square_meters',
+            'application_area_square_meters' => 12,
+            'calculation_basis_centi_square_meters' => 1200,
+            'operative_range_min_centi_square_meters' => 1100,
+            'operative_range_max_centi_square_meters' => 1600,
+            'amount_minor' => 250000,
+            'schedule_version' => 'ipil-municipal-fees-v1',
+            'source_evidence' => 'LIVE-APP-001',
+            'classification' => 'PROVISIONAL_UAT_ONLY',
+            'production_authority' => false,
+            'reason' => ProvisionalMenroFeeDeterminationProposal::Reason,
+        ]);
 
     app(RecordProvisionalMenroFeeDetermination::class)->handle($application, $actor, provisionalMenroFacts());
     $after = $builder->handle($application->refresh(), $actor)->toArray();

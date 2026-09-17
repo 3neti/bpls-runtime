@@ -14,13 +14,10 @@ use LogicException;
 final class RecordProvisionalMenroFeeDetermination
 {
     public const OfficeCode = 'menro';
-    public const FeeRuleId = 176;
-    public const FeeCode = 'IPIL-LEGACY-98CDCAD9D28055FB';
-    public const Reason = 'Provisional Gate 10 synthetic-UAT determination pending Ipil municipal confirmation';
-
     public function __construct(
         private readonly AuthorizeRoutedOfficeActor $authorizeRoutedOfficeActor,
         private readonly CanonicalFinancialFingerprint $fingerprint,
+        private readonly ProvisionalMenroFeeDeterminationProposal $proposal,
     ) {}
 
     /** @param array<string, mixed> $facts */
@@ -43,22 +40,9 @@ final class RecordProvisionalMenroFeeDetermination
             );
 
             $canonical = [
+                ...$this->proposal->facts($application),
                 'permit_application_id' => $application->id,
                 'office_code' => self::OfficeCode,
-                'scope' => 'application',
-                'fee_rule_id' => self::FeeRuleId,
-                'code' => self::FeeCode,
-                'basis' => 'business_area_square_meters',
-                'application_area_square_meters' => 12,
-                'calculation_basis_centi_square_meters' => 1200,
-                'operative_range_min_centi_square_meters' => 1100,
-                'operative_range_max_centi_square_meters' => 1600,
-                'amount_minor' => 250000,
-                'schedule_version' => 'ipil-municipal-fees-v1',
-                'source_evidence' => 'LIVE-APP-001',
-                'classification' => 'PROVISIONAL_UAT_ONLY',
-                'production_authority' => false,
-                'reason' => self::Reason,
                 'actor_id' => $actor->id,
             ];
             $hash = $this->fingerprint->hash($canonical);
@@ -88,23 +72,8 @@ final class RecordProvisionalMenroFeeDetermination
     /** @param array<string, mixed> $facts */
     private function assertExactFacts(PermitApplication $application, array $facts): void
     {
-        $expected = [
-            'scope' => 'application',
-            'fee_rule_id' => self::FeeRuleId,
-            'code' => self::FeeCode,
-            'basis' => 'business_area_square_meters',
-            'application_area_square_meters' => 12,
-            'calculation_basis_centi_square_meters' => 1200,
-            'operative_range_min_centi_square_meters' => 1100,
-            'operative_range_max_centi_square_meters' => 1600,
-            'amount_minor' => 250000,
-            'schedule_version' => 'ipil-municipal-fees-v1',
-            'source_evidence' => 'LIVE-APP-001',
-            'classification' => 'PROVISIONAL_UAT_ONLY',
-            'production_authority' => false,
-            'reason' => self::Reason,
-        ];
-        if ($application->id !== 3 || $application->application_year !== 2026 || $application->type->value !== 'new') {
+        $expected = $this->proposal->facts($application);
+        if ($expected === [] || $application->id !== 3 || $application->application_year !== 2026 || $application->type->value !== 'new') {
             throw new LogicException('This provisional MENRO determination is authorized only for Application 3.');
         }
         foreach ($expected as $key => $value) {
