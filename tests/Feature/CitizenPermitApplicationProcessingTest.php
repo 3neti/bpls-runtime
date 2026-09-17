@@ -12,9 +12,12 @@ use App\Enums\TreasuryCollectionStatus;
 use App\Enums\UserPermission;
 use App\Enums\UserRole;
 use App\Models\Assessment;
+use App\Models\BploRoutingDetermination;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use App\Models\PermitClearance;
+use App\Models\PostPaymentOfficeCertification;
+use App\Models\ProvisionalUatPermitCompletion;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -256,4 +259,97 @@ test('citizens cannot view another applicants processing or financial state', fu
     $this->actingAs($citizen)
         ->get(route('citizen.permit-applications.show', $application))
         ->assertNotFound();
+});
+
+test('released synthetic permits replace stale payment and clearance projections for citizens', function () {
+    $citizen = userWithPermissions([
+        UserPermission::AccessCitizen,
+        UserPermission::ViewOwnPermitApplications,
+        UserPermission::ViewOwnPermitApplicationFinancials,
+    ], UserRole::Citizen);
+    $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->for($citizen, 'submittedBy')->create([
+        'status' => PermitApplicationStatus::PendingPayment,
+        'metadata' => [
+            'lifecycle_cleanroom' => [
+                'semantic_classification' => 'synthetic_only',
+            ],
+        ],
+    ]);
+    linkPortalUserToApplicationOwner($citizen, $application);
+    $routing = BploRoutingDetermination::factory()->for($application)->create();
+    $assessment = Assessment::factory()->for($application)->create([
+        'status' => AssessmentStatus::Computed,
+        'total_amount_cents' => 417_500,
+        'superseded_at' => null,
+    ]);
+    $paymentSchedule = PaymentSchedule::factory()->for($application)->for($assessment)->create([
+        'status' => PaymentScheduleStatus::Paid,
+        'total_amount_cents' => 417_500,
+        'paid_amount_cents' => 417_500,
+    ]);
+    $collection = TreasuryCollection::factory()->for($application)->for($assessment)->for($paymentSchedule)->create([
+        'status' => TreasuryCollectionStatus::Receipted,
+        'amount_cents' => 417_500,
+    ]);
+    $receipt = Receipt::factory()
+        ->for($collection, 'treasuryCollection')
+        ->for($application)
+        ->for($assessment)
+        ->for($paymentSchedule)
+        ->create([
+            'status' => ReceiptStatus::Issued,
+            'amount_cents' => 417_500,
+        ]);
+
+    foreach (['assessor', 'engineering', 'health', 'menro'] as $office) {
+        PostPaymentOfficeCertification::query()->create([
+            'permit_application_id' => $application->id,
+            'bplo_routing_determination_id' => $routing->id,
+            'receipt_id' => $receipt->id,
+            'certified_by_id' => null,
+            'office_code' => $office,
+            'office_label' => str($office)->headline()->toString(),
+            'routing_work_ids' => [],
+            'status' => 'completed',
+            'result' => 'certified',
+            'remarks' => null,
+            'evidence' => [],
+            'certified_at' => now(),
+            'semantic_classification' => 'synthetic_only',
+            'production_authority' => false,
+        ]);
+    }
+
+    ProvisionalUatPermitCompletion::factory()->for($application)->create([
+        'issued_at' => now()->subMinute(),
+        'released_at' => now(),
+        'permit_number' => 'BP-2026-0004',
+        'semantic_classification' => 'synthetic_only',
+    ]);
+
+    $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('permitApplications.data.0.id', $application->id)
+            ->where('permitApplications.data.0.status', PermitApplicationStatus::Released->value)
+        );
+
+    $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.show', $application))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('permitApplication.status', PermitApplicationStatus::Released->value)
+            ->where('permitApplication.processing.application_status', PermitApplicationStatus::Released->value)
+            ->where('permitApplication.processing.current_stage', PermitApplicationStatus::Released->value)
+            ->where('permitApplication.processing.clearance_summary.completed', 4)
+            ->where('permitApplication.processing.clearance_summary.total', 4)
+            ->where('permitApplication.processing.clearance_summary.all_completed', true)
+            ->where('permitApplication.processing.statement', 'The synthetic Business Permit was issued and separately released. Its public verification reference is available below.')
+        );
+
+    $page = file_get_contents(resource_path('js/pages/citizen/permit-applications/Show.vue'));
+
+    expect($page)->toContain("permitApplication.processing.current_stage === 'released'")
+        ->and($page)->toContain("!['issued', 'released'].includes(");
 });

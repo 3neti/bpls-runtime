@@ -504,17 +504,22 @@ function blockerLabel(blocker: string): string {
                 data-testid="citizen-lifecycle-summary"
                 eyebrow="Your permit application"
                 :title="
-                    permitApplication.processing.payment_schedule &&
-                    permitApplication.processing.payment_schedule
-                        .balance_amount_cents > 0
-                        ? `${applicationTypeLabel(permitApplication.type)} ready for payment`
+                    permitApplication.processing.current_stage === 'released'
+                        ? `${applicationTypeLabel(permitApplication.type)} permit released`
                         : permitApplication.processing.current_stage ===
-                            'submitted_awaiting_municipal_intake'
-                          ? 'Submitted — awaiting municipal intake'
-                          : permitApplication.processing
-                                  .has_entered_municipal_processing
-                            ? `${applicationTypeLabel(permitApplication.type)} under municipal review`
-                            : `${applicationTypeLabel(permitApplication.type)} draft`
+                            'issued'
+                          ? `${applicationTypeLabel(permitApplication.type)} permit issued`
+                          : permitApplication.processing.payment_schedule &&
+                              permitApplication.processing.payment_schedule
+                                  .balance_amount_cents > 0
+                            ? `${applicationTypeLabel(permitApplication.type)} ready for payment`
+                            : permitApplication.processing.current_stage ===
+                                'submitted_awaiting_municipal_intake'
+                              ? 'Submitted — awaiting municipal intake'
+                              : permitApplication.processing
+                                      .has_entered_municipal_processing
+                                ? `${applicationTypeLabel(permitApplication.type)} under municipal review`
+                                : `${applicationTypeLabel(permitApplication.type)} draft`
                 "
                 :description="
                     permitApplication.processing
@@ -914,17 +919,87 @@ function blockerLabel(blocker: string): string {
                     >
                         <p class="font-medium">
                             Online payment:
-                            {{ permitApplication.processing.payment_schedule.online_payment_boundary.can_pay_online ? 'Available' : 'Not available' }}
+                            {{
+                                permitApplication.processing.payment_schedule
+                                    .online_payment_boundary.can_pay_online
+                                    ? 'Available'
+                                    : 'Not available'
+                            }}
                         </p>
                         <p class="mt-1">
-                            {{ permitApplication.processing.payment_schedule.online_payment_boundary.artifact_statement }}
+                            {{
+                                permitApplication.processing.payment_schedule
+                                    .online_payment_boundary.artifact_statement
+                            }}
                         </p>
-                        <dl v-if="permitApplication.processing.payment_schedule.online_payment_boundary.pay_code" class="mt-3 grid gap-1 text-xs">
-                            <div><dt class="inline font-medium">Pay Code:</dt> <dd class="inline break-all">{{ permitApplication.processing.payment_schedule.online_payment_boundary.pay_code }}</dd></div>
-                            <div v-if="permitApplication.processing.payment_schedule.online_payment_boundary.payment_reference"><dt class="inline font-medium">Payment reference:</dt> <dd class="inline break-all">{{ permitApplication.processing.payment_schedule.online_payment_boundary.payment_reference }}</dd></div>
-                            <div v-if="permitApplication.processing.payment_schedule.online_payment_boundary.attempt_reference"><dt class="inline font-medium">Attempt reference:</dt> <dd class="inline break-all">{{ permitApplication.processing.payment_schedule.online_payment_boundary.attempt_reference }}</dd></div>
+                        <dl
+                            v-if="
+                                permitApplication.processing.payment_schedule
+                                    .online_payment_boundary.pay_code
+                            "
+                            class="mt-3 grid gap-1 text-xs"
+                        >
+                            <div>
+                                <dt class="inline font-medium">Pay Code:</dt>
+                                <dd class="inline break-all">
+                                    {{
+                                        permitApplication.processing
+                                            .payment_schedule
+                                            .online_payment_boundary.pay_code
+                                    }}
+                                </dd>
+                            </div>
+                            <div
+                                v-if="
+                                    permitApplication.processing
+                                        .payment_schedule
+                                        .online_payment_boundary
+                                        .payment_reference
+                                "
+                            >
+                                <dt class="inline font-medium">
+                                    Payment reference:
+                                </dt>
+                                <dd class="inline break-all">
+                                    {{
+                                        permitApplication.processing
+                                            .payment_schedule
+                                            .online_payment_boundary
+                                            .payment_reference
+                                    }}
+                                </dd>
+                            </div>
+                            <div
+                                v-if="
+                                    permitApplication.processing
+                                        .payment_schedule
+                                        .online_payment_boundary
+                                        .attempt_reference
+                                "
+                            >
+                                <dt class="inline font-medium">
+                                    Attempt reference:
+                                </dt>
+                                <dd class="inline break-all">
+                                    {{
+                                        permitApplication.processing
+                                            .payment_schedule
+                                            .online_payment_boundary
+                                            .attempt_reference
+                                    }}
+                                </dd>
+                            </div>
                         </dl>
-                        <p v-if="permitApplication.processing.payment_schedule.online_payment_boundary.can_pay_online" class="mt-3 font-medium">UAT / Test Payment — no production payment or legal effect.</p>
+                        <p
+                            v-if="
+                                permitApplication.processing.payment_schedule
+                                    .online_payment_boundary.can_pay_online
+                            "
+                            class="mt-3 font-medium"
+                        >
+                            UAT / Test Payment — no production payment or legal
+                            effect.
+                        </p>
                     </div>
                 </div>
 
@@ -1143,7 +1218,12 @@ function blockerLabel(blocker: string): string {
                 </div>
 
                 <AuthorityBoundaryPanel
-                    v-if="permitApplication.processing.authority_review"
+                    v-if="
+                        permitApplication.processing.authority_review &&
+                        !['issued', 'released'].includes(
+                            permitApplication.processing.current_stage,
+                        )
+                    "
                     data-testid="citizen-authority-review-boundary"
                     :data-authority-review-status="
                         permitApplication.processing.authority_review.status

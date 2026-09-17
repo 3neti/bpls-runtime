@@ -52,7 +52,7 @@ class PermitApplicationController extends Controller
 
         $permitApplications = PermitApplication::query()
             ->visibleToPortalOwner($request->user())
-            ->with(['business', 'lines.lineOfBusiness'])
+            ->with(['business', 'lines.lineOfBusiness', 'provisionalUatPermitCompletion'])
             ->latest('id')
             ->paginate(15)
             ->through(fn (PermitApplication $permitApplication): array => $this->summaryPayload($permitApplication));
@@ -266,6 +266,37 @@ class PermitApplicationController extends Controller
             ? $this->describePermitArtifact->handle($application)
             : null;
         $syntheticPermitCompletion = $application->provisionalUatPermitCompletion;
+        if ($application->postPaymentOfficeCertifications->isNotEmpty()) {
+            $completedCertifications = $application->postPaymentOfficeCertifications
+                ->filter(fn ($certification): bool => $certification->status === 'completed' && $certification->result === 'certified');
+            $clearanceSummary = [
+                'completed' => $completedCertifications->count(),
+                'total' => $application->postPaymentOfficeCertifications->count(),
+                'all_completed' => $completedCertifications->count() === $application->postPaymentOfficeCertifications->count(),
+                'items' => $application->postPaymentOfficeCertifications->map(fn ($certification): array => [
+                    'id' => $certification->id,
+                    'code' => $certification->office_code,
+                    'label' => $certification->office_label,
+                    'status' => $certification->status,
+                    'completed_at' => $certification->certified_at?->toIso8601String(),
+                ])->values(),
+            ];
+        } else {
+            $completedClearances = $application->clearances->where('status', PermitClearanceStatus::Completed);
+            $clearanceSummary = [
+                'completed' => $completedClearances->count(),
+                'total' => $application->clearances->count(),
+                'all_completed' => $application->clearances->isNotEmpty()
+                    && $completedClearances->count() === $application->clearances->count(),
+                'items' => $application->clearances->map(fn ($clearance): array => [
+                    'id' => $clearance->id,
+                    'code' => $clearance->code,
+                    'label' => $clearance->label,
+                    'status' => $clearance->status->value,
+                    'completed_at' => $clearance->completed_at?->toIso8601String(),
+                ])->values(),
+            ];
+        }
         $currentProcessingStage = match (true) {
             $syntheticPermitCompletion?->released_at !== null => PermitApplicationStatus::Released->value,
             $syntheticPermitCompletion?->issued_at !== null => 'issued',
@@ -360,9 +391,11 @@ class PermitApplicationController extends Controller
                     'has_entered_municipal_processing' => ! $isDraft
                         || $application->application_number !== null
                         || $assessmentStarted,
-                    'application_status' => $application->status->value,
+                    'application_status' => $currentProcessingStage,
                     'current_stage' => $currentProcessingStage,
                     'statement' => match (true) {
+                        $syntheticPermitCompletion?->released_at !== null => 'The synthetic Business Permit was issued and separately released. Its public verification reference is available below.',
+                        $syntheticPermitCompletion?->issued_at !== null => 'The synthetic Business Permit was issued and is awaiting the separate BPLO release action.',
                         $latestPaymentSchedule?->status->value === 'pending' => 'Municipal evaluation is complete, the Assessment is approved, and payment is pending.',
                         $currentProcessingStage === 'submitted_awaiting_municipal_intake' => 'Your submission was received. Municipal intake, official numbering, and assessment preparation are still pending.',
                         default => 'This view reports the municipality’s current processing record and payment state.',
@@ -410,19 +443,7 @@ class PermitApplicationController extends Controller
                             'issued_at' => $latestReceipt->issued_at?->toIso8601String(),
                         ],
                     ],
-                    'clearance_summary' => [
-                        'completed' => $application->clearances->where('status', PermitClearanceStatus::Completed)->count(),
-                        'total' => $application->clearances->count(),
-                        'all_completed' => $application->clearances->isNotEmpty()
-                            && $application->clearances->every(fn ($clearance): bool => $clearance->status === PermitClearanceStatus::Completed),
-                        'items' => $application->clearances->map(fn ($clearance): array => [
-                            'id' => $clearance->id,
-                            'code' => $clearance->code,
-                            'label' => $clearance->label,
-                            'status' => $clearance->status->value,
-                            'completed_at' => $clearance->completed_at?->toIso8601String(),
-                        ])->values(),
-                    ],
+                    'clearance_summary' => $clearanceSummary,
                     'authority_review' => $authorityReview === null ? null : [
                         'ready_for_authority_review' => $authorityReview['ready_for_authority_review'],
                         'can_release' => $authorityReview['can_release'],
@@ -481,6 +502,8 @@ class PermitApplicationController extends Controller
                 'paymentSchedules.treasuryCollections.receipt',
                 'clearances' => fn ($query) => $query->oldest('id'),
                 'businessPermitEvaluation',
+                'postPaymentOfficeCertifications' => fn ($query) => $query->oldest('id'),
+                'provisionalUatPermitCompletion',
             ])
             ->withExists('assessments')
             ->firstOrFail();
@@ -685,7 +708,11 @@ class PermitApplicationController extends Controller
                     : 'Application record #'.$permitApplication->id),
             'application_number' => $permitApplication->application_number,
             'type' => $permitApplication->type->value,
-            'status' => $permitApplication->status->value,
+            'status' => match (true) {
+                $permitApplication->provisionalUatPermitCompletion?->released_at !== null => PermitApplicationStatus::Released->value,
+                $permitApplication->provisionalUatPermitCompletion?->issued_at !== null => 'issued',
+                default => $permitApplication->status->value,
+            },
             'business_name' => $permitApplication->business->name,
             'activity_count' => $permitApplication->lines->count(),
             'saved_at' => $permitApplication->created_at?->toIso8601String(),
