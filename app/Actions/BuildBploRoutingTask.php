@@ -180,8 +180,10 @@ class BuildBploRoutingTask
         return [
             'catalog_status' => $this->concernedOffices->provenance()['production_catalog_status'],
             'menro_determination' => $menroDetermination instanceof MenroFeeDetermination ? [
+                'id' => $menroDetermination->id,
                 'scope' => $menroDetermination->scope,
                 'fee_rule_id' => $menroDetermination->fee_rule_id,
+                'source_identity' => $menroDetermination->fee_rule_id,
                 'code' => $menroDetermination->code,
                 'basis' => $menroDetermination->basis,
                 'application_area_square_meters' => $menroDetermination->application_area_square_meters,
@@ -197,6 +199,7 @@ class BuildBploRoutingTask
                 'actor' => $menroDetermination->actor?->name,
                 'determined_at' => $menroDetermination->determined_at->toIso8601String(),
                 'fingerprint' => $menroDetermination->fingerprint,
+                'warning' => 'Synthetic-UAT evidence only; this is not municipal policy.',
             ] : null,
             'menro_determination_proposal' => $menroDetermination === null ? $menroDeterminationProposal : null,
             'can_record_menro_determination' => $canRecordMenroDetermination && $menroDetermination === null,

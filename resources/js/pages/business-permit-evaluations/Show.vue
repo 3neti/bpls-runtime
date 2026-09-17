@@ -199,6 +199,9 @@ const concernedOfficePaymentOrders = computed(
         props.routingTask.financial_editor
             .concerned_office_payment_orders as ConcernedOfficePaymentOrderSummaryData,
 );
+const savedMenroDetermination = computed(
+    () => props.routingTask.financial_editor?.menro_determination ?? null,
+);
 const treasuryAssignmentsComplete = computed(
     () =>
         props.routingTask.financial_editor.treasury_assignments.length > 0 &&
@@ -1036,7 +1039,12 @@ function submitPrepareAssessment(): void {
                     >
                         Evaluation activity
                     </h2>
-                    <p class="font-medium">
+                    <p v-if="savedMenroDetermination" class="font-medium">
+                        Provisional MENRO determination evidence recorded
+                        (record #{{ savedMenroDetermination.id }}); it remains
+                        separate from finalized Payment Order financial lines.
+                    </p>
+                    <p v-else class="font-medium">
                         No fee determinations recorded yet
                     </p>
                     <p class="text-sm leading-6 text-muted-foreground">

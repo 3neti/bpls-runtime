@@ -104,8 +104,10 @@ type BploRoutingTask = {
             }[]
         >;
         menro_determination: {
+            id: number;
             scope: string;
             fee_rule_id: number;
+            source_identity: number;
             code: string;
             basis: string;
             application_area_square_meters: number;
@@ -121,6 +123,7 @@ type BploRoutingTask = {
             actor: string | null;
             determined_at: string;
             fingerprint: string;
+            warning: string;
         } | null;
         can_record_menro_determination: boolean;
         menro_determination_proposal: {
@@ -1321,14 +1324,23 @@ const filteredTreasuryLobOptions = computed(() => {
                                 </p>
                             </div>
                             <dl v-if="task.financial_editor.menro_determination" class="grid gap-2 text-sm sm:grid-cols-2">
-                                <div><dt class="font-semibold">Scope / source</dt><dd>Application · {{ task.financial_editor.menro_determination.code }} (identity {{ task.financial_editor.menro_determination.fee_rule_id }})</dd></div>
-                                <div><dt class="font-semibold">Area basis</dt><dd>{{ task.financial_editor.menro_determination.application_area_square_meters }} m² · {{ task.financial_editor.menro_determination.calculation_basis_centi_square_meters }} centi-m²</dd></div>
-                                <div><dt class="font-semibold">Operative range</dt><dd>{{ task.financial_editor.menro_determination.operative_range_min_centi_square_meters }}–{{ task.financial_editor.menro_determination.operative_range_max_centi_square_meters }}</dd></div>
-                                <div><dt class="font-semibold">Provisional amount</dt><dd>{{ money(task.financial_editor.menro_determination.amount_minor) }}</dd></div>
-                                <div><dt class="font-semibold">Schedule / evidence</dt><dd>{{ task.financial_editor.menro_determination.schedule_version }} · {{ task.financial_editor.menro_determination.source_evidence }}</dd></div>
-                                <div><dt class="font-semibold">Classification</dt><dd>{{ task.financial_editor.menro_determination.classification }} · Production authority: No</dd></div>
-                                <div><dt class="font-semibold">Recorded by / time</dt><dd>{{ task.financial_editor.menro_determination.actor ?? 'Not recorded' }} · {{ dateTime(task.financial_editor.menro_determination.determined_at) }}</dd></div>
-                                <div><dt class="font-semibold">Fingerprint</dt><dd class="break-all font-mono text-xs">{{ task.financial_editor.menro_determination.fingerprint }}</dd></div>
+                                    <div><dt class="font-semibold">Determination record ID</dt><dd>#{{ task.financial_editor.menro_determination.id }}</dd></div>
+                                    <div><dt class="font-semibold">Scope</dt><dd>{{ task.financial_editor.menro_determination.scope === 'application' ? 'Application' : task.financial_editor.menro_determination.scope }}</dd></div>
+                                    <div><dt class="font-semibold">Source identity</dt><dd>{{ task.financial_editor.menro_determination.source_identity }}</dd></div>
+                                    <div class="min-w-0"><dt class="font-semibold">Canonical code</dt><dd class="break-words font-mono text-xs">{{ task.financial_editor.menro_determination.code }}</dd></div>
+                                    <div><dt class="font-semibold">Basis</dt><dd class="break-words">{{ task.financial_editor.menro_determination.basis }}</dd></div>
+                                    <div><dt class="font-semibold">Area basis</dt><dd>{{ task.financial_editor.menro_determination.application_area_square_meters }} m² / {{ task.financial_editor.menro_determination.calculation_basis_centi_square_meters.toLocaleString() }} centi-square-meters</dd></div>
+                                    <div><dt class="font-semibold">Operative range</dt><dd>{{ task.financial_editor.menro_determination.operative_range_min_centi_square_meters.toLocaleString() }}–{{ task.financial_editor.menro_determination.operative_range_max_centi_square_meters.toLocaleString() }}</dd></div>
+                                    <div><dt class="font-semibold">Provisional amount</dt><dd>{{ money(task.financial_editor.menro_determination.amount_minor) }}</dd></div>
+                                    <div><dt class="font-semibold">Schedule / version</dt><dd class="break-words">{{ task.financial_editor.menro_determination.schedule_version }}</dd></div>
+                                    <div><dt class="font-semibold">Source evidence</dt><dd>{{ task.financial_editor.menro_determination.source_evidence }}</dd></div>
+                                    <div><dt class="font-semibold">Classification</dt><dd class="break-words">{{ task.financial_editor.menro_determination.classification }}</dd></div>
+                                    <div><dt class="font-semibold">Production authority</dt><dd>{{ task.financial_editor.menro_determination.production_authority ? 'Yes' : 'No' }}</dd></div>
+                                    <div class="sm:col-span-2"><dt class="font-semibold">Reason</dt><dd class="break-words">{{ task.financial_editor.menro_determination.reason }}</dd></div>
+                                    <div><dt class="font-semibold">Recorded actor</dt><dd class="break-words">{{ task.financial_editor.menro_determination.actor ?? 'Not recorded' }}</dd></div>
+                                    <div><dt class="font-semibold">Recorded timestamp</dt><dd>{{ dateTime(task.financial_editor.menro_determination.determined_at) }}</dd></div>
+                                    <div class="sm:col-span-2"><dt class="font-semibold">Fingerprint</dt><dd class="break-all font-mono text-xs">{{ task.financial_editor.menro_determination.fingerprint }}</dd></div>
+                                    <div class="sm:col-span-2 text-sm font-semibold">{{ task.financial_editor.menro_determination.warning }}</div>
                             </dl>
                             <template v-else-if="task.financial_editor.can_record_menro_determination && task.financial_editor.menro_determination_proposal">
                                 <dl class="grid gap-2 text-sm sm:grid-cols-2">

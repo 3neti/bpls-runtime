@@ -111,6 +111,12 @@ it('builds the ordinary MENRO task before and after evidence without financial m
 
     expect(data_get($after, 'financial_editor.menro_determination.code'))
         ->toBe('IPIL-LEGACY-98CDCAD9D28055FB')
+        ->and(data_get($after, 'financial_editor.menro_determination.id'))->toBeInt()
+        ->and(data_get($after, 'financial_editor.menro_determination.source_identity'))->toBe(176)
+        ->and(data_get($after, 'financial_editor.menro_determination.basis'))->toBe('business_area_square_meters')
+        ->and(data_get($after, 'financial_editor.menro_determination.reason'))->toBe(ProvisionalMenroFeeDeterminationProposal::Reason)
+        ->and(data_get($after, 'financial_editor.menro_determination.production_authority'))->toBeFalse()
+        ->and(data_get($after, 'financial_editor.menro_determination.warning'))->toContain('not municipal policy')
         ->and(data_get($after, 'financial_editor.can_record_menro_determination'))->toBeFalse()
         ->and($application->paperlessPaymentOrders()->count())->toBe(0);
 });
