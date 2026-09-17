@@ -21,6 +21,13 @@ Nothing in this environment:
 
 The accepted Gate 10G specimen is Application 2. Its evidence is protected. Do not create a replacement Application, edit its amounts, reissue its receipts, or “repair” it manually.
 
+### Choose a starting mode
+
+Write the selected mode at the top of the observation log before opening the first staff page:
+
+- **Mode A - read-only baseline review:** inspect the accepted Application 2 evidence only. Its application list may still display the workflow status `Pending Payment` even though the accepted schedule, Collection, receipts, Permit, release, and public verification are complete. Treat that label as a known presentation finding unless the underlying evidence is also wrong; do not stop solely because the label is stale.
+- **Mode B - fresh walkthrough from scratch:** use a separately prepared, unsubmitted synthetic Citizen application. Do not use Application 2, Application 291, or another completed specimen as the current transaction. If no fresh specimen identity has been explicitly prepared and authorized, stop with `CURRENT SPECIMEN NOT PREPARED`.
+
 ## 2. Before opening the site
 
 1. Obtain the private credential handoff from the owner. It is stored locally at `storage/app/private/gate10h-turnover-handoff.md` and must not be copied into Git, screenshots, tickets, or broad email.
