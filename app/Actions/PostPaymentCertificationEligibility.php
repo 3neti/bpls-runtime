@@ -25,7 +25,7 @@ final class PostPaymentCertificationEligibility
             && config('stakeholder_preview.production_integrations') === 'disabled'
             && ($url === 'https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud'
                 || (app()->environment(['local', 'testing'])
-                    && in_array(parse_url($url, PHP_URL_HOST), ['localhost', '127.0.0.1', 'bpls-runtime.test'], true)));
+                    && in_array(parse_url($url, PHP_URL_HOST), ['localhost', '127.0.0.1', 'bpls-runtime.test', 'bpls-gate10.test'], true)));
     }
 
     /** @return array<string, Receipt> Exact routing-office to receipt binding. */

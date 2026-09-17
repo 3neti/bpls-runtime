@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\AuthorizeRoutedOfficeActor;
+use App\Actions\PostPaymentCertificationEligibility;
 use App\Enums\UserPermission;
 use App\Models\InstitutionalPosition;
 use App\Models\InstitutionalPositionAssignment;
@@ -55,4 +56,17 @@ test('concerned-office payment order presentation does not wait for evaluation',
         ->toContain('first; Evaluation and Assessment follow their')
         ->not->toContain('The Evaluation has not started, so no concerned office')
         ->not->toContain('Waiting for an authorized Assessment Officer to start');
+});
+
+test('ordinary post-payment certification eligibility admits the Gate 10 local hostname', function () {
+    config()->set('app.url', 'http://bpls-gate10.test');
+    config()->set('stakeholder_preview.mode', true);
+    config()->set('stakeholder_preview.production_migration_enabled', false);
+    config()->set('stakeholder_preview.production_integrations', 'disabled');
+
+    $application = PermitApplication::factory()->create([
+        'metadata' => ['nelson_reconciliation_v1' => ['commissioned_path' => true]],
+    ]);
+
+    expect(app(PostPaymentCertificationEligibility::class)->ordinaryUat($application))->toBeTrue();
 });
