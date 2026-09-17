@@ -16,7 +16,6 @@ final class AuthorizePostPaymentCertification
     {
         if ($actor === null || ! $actor->can(UserPermission::AccessStaff->value)
             || ! $this->eligibility->ordinaryUat($certification->permitApplication)
-            || ! $actor->hasRole($certification->office_code)
             || ! InstitutionalPositionAssignment::query()->where('user_id', $actor->id)
                 ->where('status', 'active')->whereNull('ended_at')
                 ->whereHas('position.capabilityRole', fn ($q) => $q->where('code', $certification->office_code))->exists()) {

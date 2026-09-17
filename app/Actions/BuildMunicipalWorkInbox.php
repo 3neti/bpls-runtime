@@ -25,6 +25,7 @@ final class BuildMunicipalWorkInbox
     public function __construct(
         private readonly AssessmentCounterCheckReadiness $counterCheckReadiness,
         private readonly ResolveActivePaymentAttempt $resolveAttempt,
+        private readonly DiscoverPostPaymentCertificationTasks $discoverCertificationTasks,
     ) {}
 
     /**
@@ -47,6 +48,7 @@ final class BuildMunicipalWorkInbox
         }
         foreach ($roles->intersect(['assessor', 'engineering', 'health', 'menro', 'mpdo']) as $officeCode) {
             $workItems = [...$workItems, ...$this->officePaymentOrders((string) $officeCode)];
+            $this->discoverCertificationTasks->forOffice((string) $officeCode);
             $workItems = [...$workItems, ...$this->officeCertifications((string) $officeCode, $user)];
         }
         if ($roles->contains('treasury')) {
