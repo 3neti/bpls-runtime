@@ -71,6 +71,7 @@ it('keeps duplicate assessor identities and exposes provenance in the office men
 
     expect($options)->toHaveCount(2)
         ->and($options->pluck('name')->unique())->toHaveCount(2)
+        ->and($options->pluck('name')->every(fn (string $name): bool => str_contains($name, 'Fixed')))->toBeTrue()
         ->and($options->pluck('provenance.catalog_version')->sort()->values()->all())->toBe([
             'ipil-municipal-fees-v1',
             'nelson-concerned-office-preview-v1',

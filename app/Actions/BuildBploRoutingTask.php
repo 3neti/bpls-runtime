@@ -193,7 +193,20 @@ class BuildBploRoutingTask
                     $classification = data_get($fee->metadata, 'semantic_classification')
                         ?? data_get($fee->metadata, 'price_list_source_classification')
                         ?? data_get($fee->metadata, 'classification');
-                    $provenanceLabel = collect([$catalogVersion, $classification])
+                    $basisLabel = collect([
+                        $fee->scope->value,
+                        $fee->basis,
+                        $fee->calculation_type->value,
+                    ])
+                        ->filter(fn ($value): bool => is_string($value) && trim($value) !== '' && strtolower(trim($value)) !== 'none')
+                        ->map(fn (string $value): string => str($value)->replace(['_', '-'], ' ')->headline()->toString())
+                        ->unique()
+                        ->implode(' · ');
+                    $effectivePeriod = collect([
+                        $fee->effective_from?->toDateString(),
+                        $fee->effective_until?->toDateString(),
+                    ])->filter()->implode(' → ');
+                    $provenanceLabel = collect([$catalogVersion, $classification, $basisLabel, $fee->code, $effectivePeriod])
                         ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
                         ->map(fn (string $value): string => str($value)->replace(['_', '-'], ' ')->headline()->toString())
                         ->implode(' · ');
