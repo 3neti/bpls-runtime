@@ -10,7 +10,9 @@ use App\Actions\RecordPostPaymentOfficeCertification;
 use App\Assessment\Price\CanonicalFinancialFingerprint;
 use App\Data\Application\ApplicationDataResolver;
 use App\Models\InstitutionalPositionAssignment;
+use App\Models\Permission;
 use App\Models\PermitApplication;
+use App\Models\Role;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -164,6 +166,24 @@ test('ordinary permit task deep links enforce the existing actor and application
     app()->instance('env', 'production');
     $this->get($url)->assertForbidden();
     expect($a->provisionalUatPermitCompletion()->count())->toBe(0);
+});
+
+test('assigned preview Mayor can open the authorized application evidence link read-only', function () {
+    [$a, $mayor] = mayoralFixture();
+    app(RecordOrdinaryUatMayoralAuthorization::class)->handle($a, $mayor);
+
+    $mayor->roles()->detach();
+    $previewRole = Role::factory()->create(['code' => 'preview_mayor_office']);
+    $previewRole->syncPermissions([Permission::query()->where('code', 'staff.access')->firstOrFail()]);
+    $mayor->roles()->attach($previewRole);
+    $mayor->refresh();
+
+    $this->actingAs($mayor)
+        ->get(route('staff.permit-applications.evaluation.show', $a))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('business-permit-evaluations/Show')
+            ->where('can.initialize', false));
 });
 
 test('ordinary Mayoral authority fails closed at actor environment and evidence boundaries', function (string $damage) {

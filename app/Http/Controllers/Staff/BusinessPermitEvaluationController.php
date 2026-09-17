@@ -12,6 +12,7 @@ use App\Actions\ConfirmBusinessPermitEvaluationOfficeDefaults;
 use App\Actions\CorrectEvaluationLinesOfBusiness;
 use App\Actions\DescribeBusinessPermitEvaluation;
 use App\Actions\InitializeBusinessPermitEvaluation;
+use App\Actions\OrdinaryUatPermitAuthority;
 use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
 use App\Actions\RefreshBusinessPermitEvaluation;
 use App\Data\Application\ApplicationDataResolver;
@@ -44,8 +45,14 @@ class BusinessPermitEvaluationController extends Controller
         BuildBploRoutingTask $buildRoutingTask,
         ApplicationDataResolver $applicationDataResolver,
         BuildExecutablePermitApplicationDocument $buildExecutableDocument,
+        OrdinaryUatPermitAuthority $ordinaryUatPermitAuthority,
     ): Response {
-        Gate::authorize(UserPermission::ViewBusinessPermitEvaluations->value);
+        $canReviewAuthorizedUat = $ordinaryUatPermitAuthority->authorized($permitApplication)
+            && $ordinaryUatPermitAuthority->allows($permitApplication, auth()->user());
+        abort_unless(
+            auth()->user()?->can(UserPermission::ViewBusinessPermitEvaluations->value) || $canReviewAuthorizedUat,
+            403,
+        );
         $armRoutingSentinel->handle($permitApplication);
         $applyDueRoutingSuggestions->handle();
         $permitApplication->loadMissing('business.owner');
