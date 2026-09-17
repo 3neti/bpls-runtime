@@ -88,6 +88,14 @@ type BploRoutingTask = {
                 code: string;
                 name: string;
                 default_amount_cents: number;
+                provenance?: {
+                    catalog_version?: string | null;
+                    classification?: string | null;
+                    source_name?: string | null;
+                    effective_from?: string | null;
+                    effective_until?: string | null;
+                    is_active?: boolean;
+                };
                 exact_once_key?: string | null;
                 calculation?: {
                     explanation?: string | null;

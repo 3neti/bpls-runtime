@@ -185,13 +185,36 @@ class BuildBploRoutingTask
 
                 return [$office['code'] => $fees->map(function (FeeRule $fee) use ($application, $fees): array {
                     $calculation = $this->catalogCalculation($fee, $application);
+                    $sameLabelCount = $fees->where('name', $fee->name)->count();
+                    $sameCodeCount = $fees->where('code', $fee->code)->count();
+                    $needsProvenanceLabel = $sameLabelCount > 1 || $sameCodeCount > 1;
+                    $catalogVersion = $fee->catalogVersion?->code
+                        ?? data_get($fee->metadata, 'catalog_version');
+                    $classification = data_get($fee->metadata, 'semantic_classification')
+                        ?? data_get($fee->metadata, 'price_list_source_classification')
+                        ?? data_get($fee->metadata, 'classification');
+                    $provenanceLabel = collect([$catalogVersion, $classification])
+                        ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
+                        ->map(fn (string $value): string => str($value)->replace(['_', '-'], ' ')->headline()->toString())
+                        ->implode(' · ');
+                    $displayName = $needsProvenanceLabel && $provenanceLabel !== ''
+                        ? $this->catalogOptionName($fee).' — '.$provenanceLabel
+                        : ($sameLabelCount > 1
+                            ? $fee->name.' — '.($fee->businessDivision->name ?? data_get($fee->metadata, 'legacy_division_name', 'Application')).' · '.$fee->code
+                            : $this->catalogOptionName($fee));
 
                     return [
                         'id' => $fee->id,
                         'code' => $fee->code,
-                        'name' => $fees->where('name', $fee->name)->count() > 1
-                            ? $fee->name.' — '.($fee->businessDivision->name ?? data_get($fee->metadata, 'legacy_division_name', 'Application')).' · '.$fee->code
-                            : $this->catalogOptionName($fee),
+                        'name' => $displayName,
+                        'provenance' => [
+                            'catalog_version' => $catalogVersion,
+                            'classification' => $classification,
+                            'source_name' => data_get($fee->metadata, 'source_name'),
+                            'effective_from' => $fee->effective_from?->toDateString(),
+                            'effective_until' => $fee->effective_until?->toDateString(),
+                            'is_active' => $fee->is_active,
+                        ],
                         'default_amount_cents' => $calculation['amount_cents'],
                         'calculation' => $calculation,
                         'scope' => $fee->scope->value,
