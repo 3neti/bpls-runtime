@@ -4,6 +4,7 @@ return [
     'name' => env('MUNICIPALITY_NAME', 'Municipality of Ipil'),
     'province' => env('MUNICIPALITY_PROVINCE', 'Zamboanga Sibugay'),
     'system_name' => env('BPLS_SYSTEM_NAME', 'Business Permit and Licensing System'),
+    'timezone' => env('MUNICIPALITY_TIMEZONE', 'Asia/Manila'),
 
     'official_receipt' => [
         'profile_key' => env('MUNICIPALITY_RECEIPT_PROFILE', 'ipil-af51-nelson-v1'),

@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Models\InstitutionalPositionAssignment;
 use App\Models\LifecycleCleanroomRun;
 use App\Models\PermitApplication;
 use App\Models\User;
@@ -41,6 +42,17 @@ class AuthorizeRoutedOfficeActor
             return $explicitlyAuthorizedActorId === $actor->id;
         }
 
-        return $actor->hasRole($officeCode);
+        if ($actor->hasRole($officeCode)) {
+            return true;
+        }
+
+        // Preview personas retain their preview roles; municipal responsibility
+        // is established by the active institutional position assignment.
+        return InstitutionalPositionAssignment::query()
+            ->where('user_id', $actor->id)
+            ->where('status', 'active')
+            ->whereNull('ended_at')
+            ->whereHas('position.capabilityRole', fn ($query) => $query->where('code', $officeCode))
+            ->exists();
     }
 }

@@ -19,6 +19,7 @@ class DescribePermitReleaseReadiness
         $readiness = $isSyntheticLifecycle ? $this->projectPermitReadiness->handle($permitApplication) : null;
         $permitApplication->loadMissing(['paymentSchedules.treasuryCollections.receipt', 'clearances', 'provisionalUatPermitCompletion']);
         $syntheticCompletion = $permitApplication->provisionalUatPermitCompletion;
+        $permitDocumentIssued = $syntheticCompletion?->issued_at !== null;
 
         $latestSchedule = $permitApplication->paymentSchedules
             ->sortByDesc('id')
@@ -38,11 +39,13 @@ class DescribePermitReleaseReadiness
                 ? $readiness['prerequisites']['all_required_post_payment_certifications']
                 : ($permitApplication->clearances->isNotEmpty()
                     && $permitApplication->clearances->every(fn ($clearance): bool => $clearance->status === PermitClearanceStatus::Completed)),
-            'permit_artifact_available' => true,
+            'permit_artifact_available' => $permitDocumentIssued,
         ];
         $readyForAuthorityReview = $isSyntheticLifecycle
             ? $readiness['ready']
-            : collect($prerequisites)->every(fn (bool $passed): bool => $passed);
+            : collect($prerequisites)
+                ->except('permit_artifact_available')
+                ->every(fn (bool $passed): bool => $passed);
 
         return [
             'ready_for_authority_review' => $readyForAuthorityReview,
@@ -86,11 +89,15 @@ class DescribePermitReleaseReadiness
                 ],
                 'artifact_statement' => $isSyntheticLifecycle && $syntheticCompletion?->released_at !== null
                     ? 'The synthetic cleanroom records distinct specimen issuance and BPLO release acts. Neither act establishes production authority, municipal legal release, or legal effect.'
-                    : 'The generated permit document supports municipal review but does not issue or release a permit and has no legal effect.',
+                    : ($permitDocumentIssued
+                        ? 'The issued permit document is available for authorized review. It has no production legal effect.'
+                        : 'The Business Permit is not yet issued.'),
             ],
             'reason' => $isSyntheticLifecycle && $syntheticCompletion?->released_at !== null
                 ? 'The synthetic Permit specimen was issued and separately released in the cleanroom. Production authority, official signatories, legal attestation, and revocation semantics remain uncommissioned.'
-                : 'Payment, receipt, clearance, and the generated permit document are ready for review. Municipal release remains unavailable until the responsible authority, official signatories, public verification, and existing release records are confirmed.',
+                : ($permitDocumentIssued
+                    ? 'Payment, receipt, clearance, and the issued permit document are ready for review. Municipal release remains unavailable until the responsible authority and release records are confirmed.'
+                    : 'Permit prerequisites are not complete.'),
         ];
     }
 }

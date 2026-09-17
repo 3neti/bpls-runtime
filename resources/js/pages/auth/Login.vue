@@ -114,8 +114,11 @@ defineProps<{
         </div>
 
         <div class="text-center text-sm text-muted-foreground">
-            Don't have an account?
-            <TextLink :href="register()" :tabindex="5">Sign up</TextLink>
+            Applying for a business permit?
+            <TextLink :href="register()" :tabindex="5"
+                >Create a citizen account</TextLink
+            >
+            <p class="mt-2">Municipal staff: use your assigned account.</p>
         </div>
     </Form>
 </template>

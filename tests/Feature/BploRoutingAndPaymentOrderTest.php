@@ -66,14 +66,61 @@ test('cleanroom routing commits once and returns BPLO to the lightweight work in
         ->and($application->bploRoutingDetermination()->sole()->works()->count())->toBe(1);
 });
 
-test('routing submission visibly guards slow and failed post-commit navigation', function (): void {
-    $component = file_get_contents(resource_path('js/components/permit-applications/BploRoutingTaskSheet.vue'));
+test('routing JSON acknowledgement is independent of page navigation and repeated submission preserves the record', function (): void {
+    $bplo = userWithRole(Role::query()->where('code', 'bplo')->sole());
+    $application = PermitApplication::factory()->create([
+        'submitted_at' => now(),
+        'metadata' => ['nelson_reconciliation_v1' => ['commissioned_path' => true]],
+    ]);
+    $url = route('staff.permit-applications.bplo-routing.store', $application);
+    $payload = ['selected_work' => collect(['assessor', 'engineering', 'health', 'menro'])
+        ->map(fn (string $office): array => ['office_code' => $office, 'office_label' => $office])
+        ->all()];
 
-    expect($component)
+    $this->actingAs($bplo)->postJson($url, $payload)
+        ->assertOk()
+        ->assertHeaderMissing('Location')
+        ->assertJsonPath('status', 'recorded')
+        ->assertJsonPath('permit_application_id', $application->id);
+
+    $routing = $application->bploRoutingDetermination()->sole();
+    $before = [$routing->getRawOriginal(), $routing->works()->orderBy('id')->get()->map->getRawOriginal()->all()];
+
+    $this->postJson($url, $payload)->assertOk()->assertJsonPath('routing_determination_id', $routing->id);
+
+    expect($application->bploRoutingDetermination()->count())->toBe(1)
+        ->and($routing->works()->count())->toBe(4)
+        ->and([$routing->refresh()->getRawOriginal(), $routing->works()->orderBy('id')->get()->map->getRawOriginal()->all()])->toBe($before)
+        ->and($application->paperlessPaymentOrders()->count())->toBe(0)
+        ->and($application->assessments()->count())->toBe(0);
+});
+
+test('routing JSON validation and domain rejection remain explicit and do not create a route', function (): void {
+    $bplo = userWithRole(Role::query()->where('code', 'bplo')->sole());
+    $application = PermitApplication::factory()->create([
+        'submitted_at' => now(),
+        'metadata' => ['nelson_reconciliation_v1' => ['commissioned_path' => true]],
+    ]);
+    $url = route('staff.permit-applications.bplo-routing.store', $application);
+
+    $this->actingAs($bplo)->postJson($url, ['selected_work' => []])
+        ->assertUnprocessable()->assertJsonValidationErrors('selected_work');
+    $this->postJson($url, ['selected_work' => [['office_code' => 'unknown', 'office_label' => 'Unknown']]])
+        ->assertUnprocessable()->assertJsonValidationErrors('routing');
+
+    expect($application->bploRoutingDetermination()->count())->toBe(0);
+});
+
+test('routing submission guards uncertain outcomes without claiming a failed save', function (): void {
+    $component = file_get_contents(resource_path('js/components/permit-applications/BploRoutingTaskSheet.vue'));
+    $submission = substr($component, strpos($component, 'async function submit('), strpos($component, 'function confirmPaymentOrder(') - strpos($component, 'async function submit('));
+
+    expect($submission)
         ->toContain('BPLS is still recording the route. Do not submit it again.')
-        ->toContain('onHttpException: (response) =>')
-        ->toContain('onNetworkError: () =>')
-        ->toContain('v-if="routingMessage"');
+        ->toContain('Routing outcome is unconfirmed. It may already be recorded. Do not submit again.')
+        ->not->toContain('No new determination was created.')
+        ->not->toContain('Check the connection before trying again.');
+    expect($component)->toContain('v-if="routingMessage"');
 });
 
 test('BPLO owns an explicit post-lodging situational route without changing the applicant declaration', function (): void {

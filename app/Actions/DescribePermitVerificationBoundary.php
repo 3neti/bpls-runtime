@@ -46,6 +46,12 @@ final class DescribePermitVerificationBoundary
 
     public function matches(PermitApplication $permitApplication, string $verificationCode): bool
     {
+        if (data_get($permitApplication->metadata, 'nelson_reconciliation_v1.commissioned_path') === true
+            && data_get($permitApplication->metadata, 'lifecycle_cleanroom.run_id') === null
+            && $permitApplication->provisionalUatPermitCompletion?->released_at === null) {
+            return false;
+        }
+
         return hash_equals($this->reference($permitApplication), $verificationCode);
     }
 

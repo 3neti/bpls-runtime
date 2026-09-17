@@ -44,7 +44,7 @@ class DescribeProvisionalUatPermitCompletion
             'issued_by' => $completion->issuedBy?->name,
             'issued_at' => $completion->issued_at?->toIso8601String(),
             'valid_until' => $completion->valid_until?->toDateString(),
-            'signature_applied' => $completion->synthetic_signature_reference !== null,
+            'signature_applied' => data_get($completion->source_snapshot, 'ordinary_mayoral_authorization') === null && $completion->synthetic_signature_reference !== null,
             'synthetic_signature_reference' => $completion->synthetic_signature_reference,
             'decided_by' => $completion->decidedBy?->name,
             'decided_at' => $completion->decided_at?->toIso8601String(),

@@ -78,6 +78,9 @@ type OnlinePaymentBoundary = {
     attempt_expires_at: string | null;
     blocked_transitions: string[];
     artifact_statement: string;
+    pay_code?: string | null;
+    payment_reference?: string | null;
+    attempt_reference?: string | null;
 };
 
 type QrPhAttempt = {
@@ -606,6 +609,64 @@ onBeforeUnmount(stopPaymentChecks);
                 </div>
 
                 <div v-if="qrAttempt" class="grid justify-items-center gap-3">
+                    <div
+                        class="w-full rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+                    >
+                        <p class="font-semibold">UAT / Test Payment</p>
+                        <p>
+                            This QR Ph request is for testing only. It has no
+                            production payment or legal effect.
+                        </p>
+                    </div>
+                    <dl
+                        class="grid w-full gap-1 rounded-md border bg-background p-3 text-sm"
+                    >
+                        <div
+                            v-if="
+                                paymentSchedule.online_payment_boundary.pay_code
+                            "
+                        >
+                            <dt class="inline font-medium">Pay Code:</dt>
+                            <dd class="inline break-all">
+                                {{
+                                    paymentSchedule.online_payment_boundary
+                                        .pay_code
+                                }}
+                            </dd>
+                        </div>
+                        <div
+                            v-if="
+                                paymentSchedule.online_payment_boundary
+                                    .payment_reference
+                            "
+                        >
+                            <dt class="inline font-medium">
+                                Payment reference:
+                            </dt>
+                            <dd class="inline break-all">
+                                {{
+                                    paymentSchedule.online_payment_boundary
+                                        .payment_reference
+                                }}
+                            </dd>
+                        </div>
+                        <div
+                            v-if="
+                                paymentSchedule.online_payment_boundary
+                                    .attempt_reference
+                            "
+                        >
+                            <dt class="inline font-medium">
+                                Attempt reference:
+                            </dt>
+                            <dd class="inline break-all">
+                                {{
+                                    paymentSchedule.online_payment_boundary
+                                        .attempt_reference
+                                }}
+                            </dd>
+                        </div>
+                    </dl>
                     <img
                         v-if="qrAttempt.qr_data_url"
                         data-testid="qr-ph-image"

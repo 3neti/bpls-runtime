@@ -217,6 +217,9 @@ test('one Application executes routing-derived certification readiness issuance 
 
     $this->get($data['permit']['verification']['url'])
         ->assertSuccessful()
+        ->assertJsonPath('availability.status', 'released_synthetic')
+        ->assertJsonPath('release_readiness', null)
+        ->assertJsonPath('availability.fact_value', 'Synthetic UAT only')
         ->assertJsonPath('permit.permit_number', $issued->permit_number)
         ->assertJsonMissingPath('permit.official_receipt_number')
         ->assertJsonPath('permit.receipt_coverage_confirmed', true)

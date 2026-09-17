@@ -14,12 +14,13 @@ import { index as citizenNotificationIndex } from '@/actions/App/Http/Controller
 import { index as citizenPermitApplicationIndex } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
 import { index as paymentScheduleIndex } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { index as billingGroupIndex } from '@/actions/App/Http/Controllers/Staff/BillingGroupController';
-import { index as dailyCollectionReportIndex } from '@/actions/App/Http/Controllers/Staff/DailyCollectionReportController';
 import { index as feeRuleIndex } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
 import { index as municipalityConfigurationIndex } from '@/actions/App/Http/Controllers/Staff/MunicipalityConfigurationController';
+import { index as municipalWorkInboxIndex } from '@/actions/App/Http/Controllers/Staff/MunicipalWorkInboxController';
 import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import { index as permitApplicationIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
+import { index as reportCatalogIndex } from '@/actions/App/Http/Controllers/Staff/ReportCatalogController';
 import { index as rolePermissionIndex } from '@/actions/App/Http/Controllers/Staff/RolePermissionController';
 import { index as userDirectoryIndex } from '@/actions/App/Http/Controllers/Staff/UserDirectoryController';
 import PageHeader from '@/components/PageHeader.vue';
@@ -45,13 +46,21 @@ type DashboardAction = NavItem & {
 };
 
 const staffActions = computed<DashboardAction[]>(() => {
-    const actions: DashboardAction[] = [];
+    const actions: DashboardAction[] = [
+        {
+            title: 'Inbox / My Work',
+            description:
+                'See assigned municipal tasks that need your attention.',
+            href: municipalWorkInboxIndex(),
+            icon: ClipboardList,
+        },
+    ];
 
     if (page.props.auth.can_view_permit_applications) {
         actions.push(
             {
                 title: 'Applications',
-                description: 'Review the municipal application work queue.',
+                description: 'Find or inspect an application record.',
                 href: permitApplicationIndex(),
                 icon: ClipboardList,
             },
@@ -65,22 +74,25 @@ const staffActions = computed<DashboardAction[]>(() => {
         );
     }
 
-    const treasuryHref = page.props.auth.can_view_payment_schedules
-        ? paymentScheduleIndex()
-        : page.props.auth.can_view_receipts
-          ? receiptIndex()
-          : page.props.auth.can_view_billing_groups
-            ? billingGroupIndex()
-            : page.props.auth.can_view_reports
-              ? dailyCollectionReportIndex()
-              : null;
-
-    if (treasuryHref !== null) {
+    if (page.props.auth.can_view_payment_schedules) {
         actions.push({
-            title: 'Treasury Work',
-            description:
-                'Open the first Treasury or collection area available to your account.',
-            href: treasuryHref,
+            title: 'Payment Schedules',
+            description: 'Find or inspect recorded payment schedules.',
+            href: paymentScheduleIndex(),
+            icon: Landmark,
+        });
+    } else if (page.props.auth.can_view_receipts) {
+        actions.push({
+            title: 'Official Receipts',
+            description: 'Find or inspect recorded receipts.',
+            href: receiptIndex(),
+            icon: Landmark,
+        });
+    } else if (page.props.auth.can_view_billing_groups) {
+        actions.push({
+            title: 'Billing Groups',
+            description: 'Find or inspect billing records.',
+            href: billingGroupIndex(),
             icon: Landmark,
         });
     }
@@ -88,8 +100,8 @@ const staffActions = computed<DashboardAction[]>(() => {
     if (page.props.auth.can_view_reports) {
         actions.push({
             title: 'Reports',
-            description: 'Open an available operational report.',
-            href: dailyCollectionReportIndex(),
+            description: 'Open the report catalogue.',
+            href: reportCatalogIndex(),
             icon: ClipboardList,
         });
     }

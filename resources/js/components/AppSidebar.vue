@@ -57,21 +57,17 @@ const overviewItem: NavItem = {
 const staffSections = computed<NavSection[]>(() => {
     const sections: NavSection[] = [
         {
-            title: 'Overview',
-            items: [overviewItem],
+            title: 'My Work',
+            items: [
+                {
+                    title: 'Inbox',
+                    href: municipalWorkInboxIndex(),
+                    icon: Inbox,
+                },
+            ],
         },
+        { title: 'Overview', items: [overviewItem] },
     ];
-
-    sections.push({
-        title: 'My Work',
-        items: [
-            {
-                title: 'Inbox',
-                href: municipalWorkInboxIndex(),
-                icon: Inbox,
-            },
-        ],
-    });
 
     if (page.props.auth.can_view_permit_applications) {
         sections.push({

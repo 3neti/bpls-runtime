@@ -112,6 +112,7 @@ type Assessment = {
         }[];
         total: { currency: 'PHP'; minor: number };
     } | null;
+    counter_check_state: string;
     business_permit_evaluation: {
         evaluation_id: number;
         version_id: number;
@@ -290,12 +291,15 @@ const page = usePage();
 
 const awaitingTreasuryCounterCheck = computed(
     () =>
-        props.assessment.business_permit_evaluation !== null &&
-        props.assessment.treasury_counter_check === null &&
+        props.assessment.counter_check_state === 'awaiting_counter_check' &&
         props.assessment.decision === null,
 );
 
 const nextActor = computed(() => {
+    if (props.assessment.counter_check_state === 'incomplete') {
+        return 'Blocked · Evaluation binding unavailable';
+    }
+
     if (props.assessment.latest_payment_schedule) {
         return 'Treasury collection';
     }

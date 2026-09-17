@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import type { FormDataConvertible } from '@inertiajs/core';
-import { Form, Head, Link, setLayoutProps, useForm } from '@inertiajs/vue3';
+import {
+    Form,
+    Head,
+    Link,
+    setLayoutProps,
+    useForm,
+    usePage,
+} from '@inertiajs/vue3';
 import {
     ArrowLeft,
     Eraser,
@@ -142,6 +149,8 @@ type FilledControl = {
     previousValue: string;
 };
 
+const page = usePage();
+
 const props = defineProps<{
     intakeAudience: 'staff' | 'citizen';
     currentApplicationYear: number;
@@ -163,6 +172,13 @@ const usesStagedCitizenIntake = computed(
     () => props.cleanroomIntake?.staged_citizen_intake === true,
 );
 const isEditing = computed(() => props.draft !== undefined);
+const savesCitizenDraft = computed(
+    () =>
+        isCitizen.value &&
+        (isEditing.value ||
+            !props.cleanroomIntake ||
+            usesStagedCitizenIntake.value),
+);
 const isCommissionedApplication = computed(
     () =>
         usesStagedCitizenIntake.value ||
@@ -742,6 +758,15 @@ function nested(path: string): unknown {
 function cleanroom(key: string): unknown {
     return props.cleanroomIntake?.[key];
 }
+const occupancy = ref(
+    typeof nested('rental.place_is_rented') === 'boolean'
+        ? nested('rental.place_is_rented')
+            ? 'rented'
+            : 'owned'
+        : (props.draft?.occupancy ?? cleanroom('occupancy')) === 'rented'
+          ? 'rented'
+          : 'owned',
+);
 function text(value: unknown): string | number | null {
     return typeof value === 'string' || typeof value === 'number'
         ? value
@@ -862,7 +887,11 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                 />
 
                 <section
-                    v-if="cleanroomIntake"
+                    v-if="
+                        cleanroomIntake &&
+                        page.props.stakeholder_preview
+                            ?.show_engineering_controls
+                    "
                     data-testid="lifecycle-cleanroom-intake"
                     class="border-l-4 border-emerald-600 bg-emerald-50 p-3 text-sm text-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-100"
                 >
@@ -870,7 +899,12 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     · Draft, add documents, then Sign & Submit.
                 </section>
                 <section
-                    v-if="labIntakeFixtures?.length && !isEditing"
+                    v-if="
+                        labIntakeFixtures?.length &&
+                        !isEditing &&
+                        page.props.stakeholder_preview
+                            ?.show_engineering_controls
+                    "
                     data-testid="permit-application-lab-helper"
                     class="grid gap-3 border border-blue-200 bg-blue-50 p-4 text-blue-950 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100"
                     aria-label="Permit application laboratory helper"
@@ -1699,16 +1733,28 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                 "
                                 :error="errors.female_employee_count"
                             />
-                            <input
-                                type="hidden"
-                                name="occupancy"
-                                :value="
-                                    nested('rental.place_is_rented') === true ||
-                                    cleanroom('occupancy') === 'rented'
-                                        ? 'rented'
-                                        : 'owned'
-                                "
-                            />
+                            <div class="grid gap-1.5">
+                                <label
+                                    for="occupancy"
+                                    class="text-xs font-bold uppercase"
+                                    >Occupancy</label
+                                >
+                                <select
+                                    id="occupancy"
+                                    v-model="occupancy"
+                                    name="occupancy"
+                                    class="h-10 w-full rounded-md border border-stone-300 bg-white px-3 text-sm text-stone-950 dark:border-stone-700 dark:bg-stone-950 dark:text-stone-50"
+                                    :aria-invalid="Boolean(errors.occupancy)"
+                                    aria-describedby="occupancy-error"
+                                >
+                                    <option value="owned">Owned</option>
+                                    <option value="rented">Rented</option>
+                                </select>
+                                <InputError
+                                    id="occupancy-error"
+                                    :message="errors.occupancy"
+                                />
+                            </div>
                         </section>
 
                         <section
@@ -2084,7 +2130,10 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                     :checked="
                                         nested('undertaking.accepted') === true
                                     "
-                                    :required="!isCommissionedApplication"
+                                    :required="
+                                        !savesCitizenDraft &&
+                                        !isCommissionedApplication
+                                    "
                                     class="mt-1"
                                 /><span
                                     ><strong>Oath of Undertaking:</strong> I

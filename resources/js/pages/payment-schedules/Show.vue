@@ -8,7 +8,7 @@ import {
     ReceiptText,
     RefreshCw,
 } from '@lucide/vue';
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { store as receiptStore } from '@/actions/App/Http/Controllers/Staff/CollectionReceiptController';
 import { store as collectionStore } from '@/actions/App/Http/Controllers/Staff/PaymentScheduleCollectionController';
@@ -129,11 +129,22 @@ type ClassicPaymentHandoff = {
     currency: string;
     status: string;
     is_current: boolean;
-    attempt: QrPhAttempt & {
+    is_settled: boolean;
+    resolution: string;
+    server_now: string;
+    history: {
         id: number;
         reference: string | null;
-        provider: string | null;
-    };
+        expired: boolean;
+        status: string;
+    }[];
+    attempt:
+        | (QrPhAttempt & {
+              id: number;
+              reference: string | null;
+              provider: string | null;
+          })
+        | null;
 };
 
 type QrPhStatus = {
@@ -260,7 +271,10 @@ const qrAttempt = ref<QrPhAttempt | null>(
         : null,
 );
 const qrMessage = ref<string | null>(null);
-const currentTime = ref(Date.now());
+let serverClockOffset = props.classicPaymentHandoff
+    ? Date.parse(props.classicPaymentHandoff.server_now) - Date.now()
+    : 0;
+const currentTime = ref(Date.now() + serverClockOffset);
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -366,14 +380,14 @@ async function checkQrPayment(): Promise<void> {
 
 function startQrChecks(pollForPayment = true): void {
     stopQrChecks();
-    currentTime.value = Date.now();
+    currentTime.value = Date.now() + serverClockOffset;
     countdownTimer = setInterval(() => {
-        currentTime.value = Date.now();
+        currentTime.value = Date.now() + serverClockOffset;
 
         if (secondsRemaining.value === 0) {
             stopQrChecks();
             qrMessage.value =
-                'This QR expired without payment. Generate a fresh QR to continue.';
+                'This QR request expired. The Citizen must request a replacement; refresh to review the current request.';
         }
     }, 1000);
 
@@ -408,6 +422,24 @@ async function generateQrPh(): Promise<void> {
 if (qrAttempt.value !== null) {
     startQrChecks(props.classicPaymentHandoff === null);
 }
+
+watch(
+    () => props.classicPaymentHandoff,
+    (handoff) => {
+        if (handoff === null) {
+            return;
+        }
+
+        stopQrChecks();
+        serverClockOffset = Date.parse(handoff.server_now) - Date.now();
+        qrAttempt.value = handoff.is_current ? handoff.attempt : null;
+        qrMessage.value = null;
+
+        if (qrAttempt.value !== null) {
+            startQrChecks(false);
+        }
+    },
+);
 
 onBeforeUnmount(stopQrChecks);
 </script>
@@ -994,7 +1026,7 @@ onBeforeUnmount(stopQrChecks);
                                 <dd class="font-medium">
                                     {{
                                         classicPaymentHandoff.attempt
-                                            .provider ?? 'QR Ph'
+                                            ?.provider ?? 'QR Ph'
                                     }}
                                 </dd>
                             </div>
@@ -1015,11 +1047,48 @@ onBeforeUnmount(stopQrChecks);
                                 <dd class="font-medium break-all">
                                     {{
                                         classicPaymentHandoff.attempt
-                                            .reference ?? '—'
+                                            ?.reference ?? '—'
                                     }}
                                 </dd>
                             </div>
                         </dl>
+
+                        <p
+                            v-if="
+                                classicPaymentHandoff &&
+                                !classicPaymentHandoff.is_current
+                            "
+                            class="mt-3 text-sm"
+                            data-testid="qr-handoff-state"
+                        >
+                            {{
+                                classicPaymentHandoff.is_settled
+                                    ? 'Payment completed. This QR request is retained as history; no replacement is required.'
+                                    : classicPaymentHandoff.resolution ===
+                                        'needs_review'
+                                      ? 'Payment attempts need review. No request can be confirmed.'
+                                      : 'No active QR request. The Citizen may request a replacement.'
+                            }}
+                        </p>
+                        <details
+                            v-if="classicPaymentHandoff?.history.length"
+                            class="mt-3 text-sm"
+                        >
+                            <summary>QR request history · read only</summary>
+                            <p
+                                v-for="attempt in classicPaymentHandoff.history"
+                                :key="attempt.id"
+                                class="mt-2 break-all"
+                            >
+                                {{
+                                    attempt.reference ?? `Request ${attempt.id}`
+                                }}
+                                —
+                                {{
+                                    attempt.expired ? 'Expired' : attempt.status
+                                }}
+                            </p>
+                        </details>
 
                         <Form
                             v-if="
@@ -1032,11 +1101,29 @@ onBeforeUnmount(stopQrChecks);
                             v-slot="{ processing }"
                             class="mt-3"
                         >
+                            <div
+                                data-testid="classic-payment-simulation-disclosure"
+                                role="note"
+                                class="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+                            >
+                                <p class="font-semibold">UAT / Test Payment</p>
+                                <p>
+                                    This simulates successful QR Ph payment for
+                                    testing only. No production funds are moved,
+                                    and this action has no production or legal
+                                    effect.
+                                </p>
+                            </div>
+                            <input
+                                type="hidden"
+                                name="attempt_id"
+                                :value="classicPaymentHandoff?.attempt?.id"
+                            />
                             <Button
                                 type="submit"
                                 variant="secondary"
                                 class="w-full"
-                                :disabled="processing"
+                                :disabled="processing || secondsRemaining === 0"
                                 data-testid="classic-payment-simulate"
                             >
                                 <Banknote />
@@ -1071,7 +1158,11 @@ onBeforeUnmount(stopQrChecks);
                     </section>
 
                     <details
-                        v-if="can.record_collections && balanceDueCents > 0"
+                        v-if="
+                            can.record_collections &&
+                            balanceDueCents > 0 &&
+                            !classicPaymentHandoff
+                        "
                         class="rounded-xl border bg-background p-4"
                     >
                         <summary class="cursor-pointer text-sm font-medium">

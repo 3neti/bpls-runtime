@@ -12,6 +12,7 @@ use App\Actions\ConfirmBusinessPermitEvaluationOfficeDefaults;
 use App\Actions\CorrectEvaluationLinesOfBusiness;
 use App\Actions\DescribeBusinessPermitEvaluation;
 use App\Actions\InitializeBusinessPermitEvaluation;
+use App\Actions\OrdinaryUatPermitAuthority;
 use App\Actions\RecordBusinessPermitEvaluationCounterCheck;
 use App\Actions\RefreshBusinessPermitEvaluation;
 use App\Data\Application\ApplicationDataResolver;
@@ -44,8 +45,14 @@ class BusinessPermitEvaluationController extends Controller
         BuildBploRoutingTask $buildRoutingTask,
         ApplicationDataResolver $applicationDataResolver,
         BuildExecutablePermitApplicationDocument $buildExecutableDocument,
+        OrdinaryUatPermitAuthority $ordinaryUatPermitAuthority,
     ): Response {
-        Gate::authorize(UserPermission::ViewBusinessPermitEvaluations->value);
+        $canReviewAuthorizedUat = $ordinaryUatPermitAuthority->authorized($permitApplication)
+            && $ordinaryUatPermitAuthority->allows($permitApplication, auth()->user());
+        abort_unless(
+            auth()->user()?->can(UserPermission::ViewBusinessPermitEvaluations->value) || $canReviewAuthorizedUat,
+            403,
+        );
         $armRoutingSentinel->handle($permitApplication);
         $applyDueRoutingSuggestions->handle();
         $permitApplication->loadMissing('business.owner');
@@ -289,13 +296,14 @@ class BusinessPermitEvaluationController extends Controller
     ): RedirectResponse {
         Gate::authorize(UserPermission::CounterCheckBusinessPermitEvaluations->value);
         $data = $request->validate([
+            'assessment_id' => ['nullable', 'integer', 'min:1'],
             'reason' => ['nullable', 'string', 'max:2000'],
             'expected_version_sequence' => ['required', 'integer', 'min:1'],
             'expected_fingerprint' => ['required', 'string', 'size:64'],
         ]);
 
         return $this->attempt(fn () => $counterCheck->handle(
-            $this->assessmentForCounterCheck($permitApplication),
+            $this->assessmentForCounterCheck($permitApplication, $data['assessment_id'] ?? null),
             auth()->user(),
             TreasuryCounterCheckResult::NoCorrection,
             $data['reason'] ?? null,
@@ -309,9 +317,13 @@ class BusinessPermitEvaluationController extends Controller
         return $permitApplication->businessPermitEvaluation()->firstOrFail();
     }
 
-    private function assessmentForCounterCheck(PermitApplication $permitApplication): Assessment
+    private function assessmentForCounterCheck(PermitApplication $permitApplication, ?int $assessmentId = null): Assessment
     {
-        $assessment = $permitApplication->assessments()->whereNull('superseded_at')->first();
+        if ($assessmentId === null && data_get($permitApplication->metadata, 'nelson_reconciliation_v1.commissioned_path') === true) {
+            throw new LogicException('Counter-check requires the exact Assessment identity shown to Treasury.');
+        }
+        $assessment = $permitApplication->assessments()->whereNull('superseded_at')
+            ->when($assessmentId !== null, fn ($query) => $query->whereKey($assessmentId))->first();
 
         if (! $assessment instanceof Assessment) {
             throw new LogicException('Treasury counter-check requires the Assessment Officer to prepare the immutable Assessment first.');

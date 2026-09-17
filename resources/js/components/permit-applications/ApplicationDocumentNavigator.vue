@@ -103,7 +103,7 @@ function money(amountCents: number | null): string {
                         {{ processingSummary }}
                     </template>
                     <template v-else>
-                        Living · {{ officeCount }} offices ·
+                        In progress · {{ officeCount }} offices ·
                         {{ resolvedDeterminationCount }}/{{
                             requiredDeterminationCount
                         }}

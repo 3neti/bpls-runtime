@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Assessment\AssessmentCounterCheckReadiness;
 use App\Enums\AssessmentDecisionAction;
 use App\Enums\PaymentScheduleStatus;
 use App\Enums\PermitApplicationStatus;
@@ -21,6 +22,12 @@ use Illuminate\Support\Str;
 
 final class BuildMunicipalWorkInbox
 {
+    public function __construct(
+        private readonly AssessmentCounterCheckReadiness $counterCheckReadiness,
+        private readonly ResolveActivePaymentAttempt $resolveAttempt,
+        private readonly DiscoverPostPaymentCertificationTasks $discoverCertificationTasks,
+    ) {}
+
     /**
      * @param  array{q?: string, task?: string, year?: int|null}  $filters
      * @return array{items: Collection<int, array<string, mixed>>, assignments: Collection<int, array{position: string, role: string}>, task_options: Collection<int, array{value: string, label: string}>}
@@ -41,7 +48,8 @@ final class BuildMunicipalWorkInbox
         }
         foreach ($roles->intersect(['assessor', 'engineering', 'health', 'menro', 'mpdo']) as $officeCode) {
             $workItems = [...$workItems, ...$this->officePaymentOrders((string) $officeCode)];
-            $workItems = [...$workItems, ...$this->officeCertifications((string) $officeCode)];
+            $this->discoverCertificationTasks->forOffice((string) $officeCode);
+            $workItems = [...$workItems, ...$this->officeCertifications((string) $officeCode, $user)];
         }
         if ($roles->contains('treasury')) {
             $workItems = [...$workItems, ...$this->treasuryClassification()];
@@ -58,10 +66,10 @@ final class BuildMunicipalWorkInbox
             $workItems = [...$workItems, ...$this->cashierWork()];
         }
         if ($roles->contains('mayor_office')) {
-            $workItems = [...$workItems, ...$this->permitIssuance()];
+            $workItems = [...$workItems, ...$this->permitIssuance($user)];
         }
         if ($roles->contains('releasing')) {
-            $workItems = [...$workItems, ...$this->permitRelease()];
+            $workItems = [...$workItems, ...$this->permitRelease($user)];
         }
 
         $query = Str::lower(trim((string) ($filters['q'] ?? '')));
@@ -186,7 +194,8 @@ final class BuildMunicipalWorkInbox
             ->whereNull('superseded_at')
             ->whereDoesntHave('treasuryCounterCheck')
             ->get()
-            ->map(fn (Assessment $assessment): array => $this->item($assessment->permitApplication, 'treasury_counter_check', 'Counter-check Assessment', 'Treasury', $assessment->assessed_at, 'staff.permit-applications.evaluation.show', $assessment->id))
+            ->filter(fn (Assessment $assessment): bool => in_array($this->counterCheckReadiness->state($assessment), ['awaiting_counter_check', 'incomplete'], true))
+            ->map(fn (Assessment $assessment): array => $this->item($assessment->permitApplication, 'treasury_counter_check', $this->counterCheckReadiness->state($assessment) === 'incomplete' ? 'Incomplete · Evaluation binding unavailable' : 'Counter-check Assessment', 'Treasury', $assessment->assessed_at, 'staff.permit-applications.assessments.show', $assessment->id, ['assessment' => $assessment]))
             ->values()
             ->all();
     }
@@ -200,6 +209,7 @@ final class BuildMunicipalWorkInbox
             ->whereHas('treasuryCounterCheck')
             ->whereDoesntHave('decision')
             ->get()
+            ->filter(fn (Assessment $assessment): bool => $this->counterCheckReadiness->state($assessment) === 'checked')
             ->map(fn (Assessment $assessment): array => $this->item($assessment->permitApplication, 'treasurer_decision', 'Review Assessment', 'Municipal Treasurer', $assessment->updated_at, 'staff.permit-applications.assessments.show', $assessment->id, ['assessment' => $assessment]))
             ->values()
             ->all();
@@ -241,11 +251,7 @@ final class BuildMunicipalWorkInbox
                     return true;
                 }
 
-                $attempt = $schedule->xChangePayment?->attempts->sortByDesc('id')->first();
-
-                return $attempt !== null
-                    && in_array($attempt->status, ['requested', 'awaiting_payment'], true)
-                    && $attempt->expires_at?->isFuture() === true;
+                return $this->resolveAttempt->handle($schedule->xChangePayment)['state'] === 'active';
             })
             ->map(function (PaymentSchedule $schedule): array {
                 $pendingReceipts = $schedule->treasuryCollections->contains(fn ($collection): bool => $collection->status === TreasuryCollectionStatus::PendingReceipt);
@@ -264,20 +270,21 @@ final class BuildMunicipalWorkInbox
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function officeCertifications(string $officeCode): array
+    private function officeCertifications(string $officeCode, User $user): array
     {
         return PostPaymentOfficeCertification::query()
             ->with('permitApplication.business.owner')
             ->where('office_code', $officeCode)
             ->where('status', 'pending')
             ->get()
-            ->map(fn (PostPaymentOfficeCertification $certification): array => $this->item($certification->permitApplication, 'post_payment_certification', 'Certify payment and receipt', $certification->office_label, $certification->created_at, 'staff.permit-applications.evaluation.show', $certification->id))
+            ->filter(fn ($certification): bool => data_get($certification->permitApplication->metadata, 'lifecycle_cleanroom.run_id') !== null || app(AuthorizePostPaymentCertification::class)->allows($certification, $user))
+            ->map(fn (PostPaymentOfficeCertification $certification): array => $this->item($certification->permitApplication, 'post_payment_certification', 'Certify payment and receipt', $certification->office_label, $certification->created_at, 'staff.post-payment-certifications.show', $certification->id, ['certification' => $certification]))
             ->values()
             ->all();
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function permitIssuance(): array
+    private function permitIssuance(User $user): array
     {
         return PermitApplication::query()
             ->with(['business.owner', 'postPaymentOfficeCertifications', 'provisionalUatPermitCompletion'])
@@ -285,19 +292,25 @@ final class BuildMunicipalWorkInbox
             ->whereDoesntHave('postPaymentOfficeCertifications', fn ($query) => $query->where('status', '!=', 'completed'))
             ->get()
             ->filter(fn (PermitApplication $application): bool => $application->provisionalUatPermitCompletion?->issued_at === null)
-            ->map(fn (PermitApplication $application): array => $this->item($application, 'permit_issuance', 'Authorize and issue Permit', "Mayor's Office", $application->postPaymentOfficeCertifications->max('certified_at'), 'staff.permit-applications.show'))
+            ->filter(fn (PermitApplication $application): bool => data_get($application->metadata, 'lifecycle_cleanroom.run_id') !== null
+                || (app(OrdinaryUatPermitAuthority::class)->allows($application, $user)
+                    && app(OrdinaryUatPermitAuthority::class)->prerequisites($application)))
+            ->map(fn (PermitApplication $application): array => $this->item($application, 'permit_issuance', $application->provisionalUatPermitCompletion?->decided_at !== null ? 'Issue UAT Business Permit' : 'Authorize Business Permit issuance', "Mayor's Office", $application->postPaymentOfficeCertifications->max('certified_at'), 'staff.permit-applications.show'))
             ->values()
             ->all();
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function permitRelease(): array
+    private function permitRelease(User $user): array
     {
         return ProvisionalUatPermitCompletion::query()
             ->with('permitApplication.business.owner')
             ->whereNotNull('issued_at')
             ->whereNull('released_at')
             ->get()
+            ->filter(fn (ProvisionalUatPermitCompletion $completion): bool => data_get($completion->permitApplication->metadata, 'lifecycle_cleanroom.run_id') !== null
+                || (app(OrdinaryUatPermitAuthority::class)->allows($completion->permitApplication, $user, 'releasing')
+                    && app(OrdinaryUatPermitAuthority::class)->authorized($completion->permitApplication)))
             ->map(fn (ProvisionalUatPermitCompletion $completion): array => $this->item($completion->permitApplication, 'permit_release', 'Release Business Permit', 'BPLO Releasing', $completion->issued_at, 'staff.permit-applications.show', $completion->id))
             ->values()
             ->all();
@@ -318,6 +331,9 @@ final class BuildMunicipalWorkInbox
             && in_array($type, ['post_payment_certification', 'permit_issuance', 'permit_release'], true)) {
             $routeName = 'stakeholder-preview.lifecycle-cleanroom-application.show';
             $routeParameters = [$classicRun];
+        } elseif (in_array($type, ['permit_issuance', 'permit_release'], true)
+            && app(OrdinaryUatPermitAuthority::class)->enabled($application)) {
+            $routeName = 'staff.ordinary-uat-permit.show';
         }
 
         $url = route($routeName, $routeParameters === [] ? $application : $routeParameters, false);

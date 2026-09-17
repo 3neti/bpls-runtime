@@ -6,6 +6,7 @@ use App\Actions\RecordBploRoutingDetermination;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Staff\RecordBploRoutingDeterminationRequest;
 use App\Models\PermitApplication;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use LogicException;
@@ -16,16 +17,28 @@ class BploRoutingDeterminationController extends Controller
         RecordBploRoutingDeterminationRequest $request,
         PermitApplication $permitApplication,
         RecordBploRoutingDetermination $recordRouting,
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         try {
-            $recordRouting->handle(
+            $routing = $recordRouting->handle(
                 $permitApplication,
                 $request->user(),
                 $request->validated('situational_context') ?? 'Concerned offices selected by BPLO checklist.',
                 $request->validated('selected_work'),
             );
         } catch (LogicException $exception) {
+            if ($request->expectsJson() && ! $request->hasHeader('X-Inertia')) {
+                return response()->json(['errors' => ['routing' => [$exception->getMessage()]]], 422);
+            }
+
             return back()->withErrors(['routing' => $exception->getMessage()]);
+        }
+
+        if ($request->expectsJson() && ! $request->hasHeader('X-Inertia')) {
+            return response()->json([
+                'status' => 'recorded',
+                'permit_application_id' => $permitApplication->id,
+                'routing_determination_id' => $routing->id,
+            ]);
         }
 
         Inertia::flash('toast', [

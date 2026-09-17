@@ -32,6 +32,9 @@ class BusinessPermitEvaluationVersioner
         return DB::transaction(function () use ($evaluation, $actor, $reason, $recordChanges, $expectedVersionSequence, $expectedFingerprint): BusinessPermitEvaluationVersion {
             $lockedEvaluation = BusinessPermitEvaluation::query()->whereKey($evaluation->id)->lockForUpdate()->firstOrFail();
             $currentVersion = $lockedEvaluation->versions()->latest('sequence')->first();
+            if (data_get($currentVersion?->metadata, 'financial_snapshot.schema') !== null) {
+                throw new LogicException('Frozen financial Evaluation cannot be regenerated from current state.');
+            }
             if ($expectedVersionSequence !== null
                 && ($currentVersion?->sequence !== $expectedVersionSequence
                     || $expectedFingerprint === null

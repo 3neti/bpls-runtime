@@ -54,6 +54,7 @@ import {
     sourceLabel,
 } from '@/lib/evaluationPresentation';
 import type { ResponsibilityDraft } from '@/lib/evaluationPresentation';
+import { createRequestId } from '@/lib/requestId';
 import type {
     BreadcrumbItem,
     BusinessPermitEvaluationData,
@@ -142,6 +143,7 @@ const props = defineProps<{
 }>();
 
 const pendingAction = ref<string | null>(null);
+const actionError = ref<string | null>(null);
 const { stop: stopRoutingPoll } = usePoll(
     15_000,
     { only: ['routingTask', 'bploRouting', 'routingSuggestion'] },
@@ -196,6 +198,9 @@ const concernedOfficePaymentOrders = computed(
     () =>
         props.routingTask.financial_editor
             .concerned_office_payment_orders as ConcernedOfficePaymentOrderSummaryData,
+);
+const savedMenroDetermination = computed(
+    () => props.routingTask.financial_editor?.menro_determination ?? null,
 );
 const treasuryAssignmentsComplete = computed(
     () =>
@@ -547,7 +552,17 @@ function runOnce(key: string, action: () => void): void {
     }
 
     pendingAction.value = key;
-    action();
+    actionError.value = null;
+
+    try {
+        action();
+    } catch (error) {
+        pendingAction.value = null;
+        actionError.value =
+            error instanceof Error
+                ? error.message
+                : 'Unable to prepare this action. Please retry.';
+    }
 }
 
 function submitLineCorrection(): void {
@@ -566,7 +581,7 @@ function submitLineCorrection(): void {
             reason: lineCorrectionReason.value,
             expected_version_sequence: props.evaluation!.version.sequence,
             expected_fingerprint: props.evaluation!.version.fingerprint,
-            idempotency_key: crypto.randomUUID(),
+            idempotency_key: createRequestId(),
         });
         const action = isCitizenLens.value
             ? correctCitizenLinesOfBusiness(props.application.id)
@@ -619,7 +634,7 @@ function submitResponsibility(
         const form = useForm({
             expected_version_sequence: props.evaluation!.version.sequence,
             expected_fingerprint: props.evaluation!.version.fingerprint,
-            idempotency_key: crypto.randomUUID(),
+            idempotency_key: createRequestId(),
             applicability: draft.applicability,
             determination_type: draft.determinationType,
             amount_cents: amountCents,
@@ -667,7 +682,7 @@ function confirmAllDefaults(): void {
             item_ids: myConfirmableDefaults.value.map((item) => item.id),
             expected_version_sequence: props.evaluation!.version.sequence,
             expected_fingerprint: props.evaluation!.version.fingerprint,
-            idempotency_key: crypto.randomUUID(),
+            idempotency_key: createRequestId(),
         }).post(confirmOfficeDefaults(props.application.id).url, {
             preserveScroll: true,
             onFinish: () => {
@@ -690,6 +705,7 @@ function submitCounterCheck(): void {
     runOnce('counter-check', () => {
         useForm({
             reason: counterCheckReason.value || null,
+            assessment_id: latestAssessment.value?.id,
             expected_version_sequence: props.evaluation!.version.sequence,
             expected_fingerprint: props.evaluation!.version.fingerprint,
         }).post(counterCheck(props.application.id).url, {
@@ -733,7 +749,7 @@ function submitPrepareAssessment(): void {
         useForm({
             evaluation_version_id: props.evaluation!.version.id,
             evaluation_fingerprint: props.evaluation!.version.fingerprint,
-            idempotency_key: crypto.randomUUID(),
+            idempotency_key: createRequestId(),
         }).post(prepareAssessment(props.application.id).url, {
             preserveScroll: true,
             onFinish: () => {
@@ -749,6 +765,13 @@ function submitPrepareAssessment(): void {
         <Head title="Business Permit Evaluator" />
 
         <main class="flex min-w-0 flex-1 flex-col gap-5 p-4 sm:p-6 lg:p-8">
+            <div
+                v-if="actionError"
+                role="alert"
+                class="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive"
+            >
+                {{ actionError }}
+            </div>
             <div
                 v-if="evaluationError"
                 role="alert"
@@ -1022,27 +1045,26 @@ function submitPrepareAssessment(): void {
                     >
                         Evaluation activity
                     </h2>
-                    <p class="font-medium">
+                    <p v-if="savedMenroDetermination" class="font-medium">
+                        Provisional MENRO determination evidence recorded
+                        (record #{{ savedMenroDetermination.id }}); it remains
+                        separate from finalized Payment Order financial lines.
+                    </p>
+                    <p v-else class="font-medium">
                         No fee determinations recorded yet
                     </p>
                     <p class="text-sm leading-6 text-muted-foreground">
                         <template v-if="bploRouting">
                             BPLO recorded the required office routing on
-                            {{ dateTime(bploRouting.determined_at) }}. The
-                            Evaluation has not started, so no concerned office
-                            has recorded a fee decision.
+                            {{ dateTime(bploRouting.determined_at) }}.
+                            Concerned-office Payment Orders are recorded here
+                            first; Evaluation and Assessment follow their
+                            completion.
                         </template>
                         <template v-else>
                             BPLO must record the required office routing before
                             the fee Evaluation can begin.
                         </template>
-                    </p>
-                    <p
-                        v-if="!can.initialize && bploRouting"
-                        class="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground"
-                    >
-                        Waiting for an authorized Assessment Officer to start
-                        the Evaluation.
                     </p>
                 </div>
             </section>

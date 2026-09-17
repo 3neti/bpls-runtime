@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Assessment\AssessmentCalculator;
+use App\Assessment\ConcernedOfficeFeeApplicability;
 use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCategory;
 use App\Enums\UserPermission;
@@ -22,6 +23,7 @@ class ConfirmOfficePaymentOrder
         private readonly ConcernedOfficeReference $concernedOffices,
         private readonly AuthorizeRoutedOfficeActor $authorizeRoutedOfficeActor,
         private readonly AssessmentCalculator $assessmentCalculator,
+        private readonly ConcernedOfficeFeeApplicability $officeFeeApplicability,
     ) {}
 
     /**
@@ -99,6 +101,9 @@ class ConfirmOfficePaymentOrder
                 $rule = $rules->get($item['fee_rule_id']);
                 if (! $rule instanceof FeeRule) {
                     throw new LogicException('The Payment Order item must reference a catalogued fee.');
+                }
+                if (! $this->officeFeeApplicability->matches($rule, $application, $work->office_code)) {
+                    throw new LogicException('The selected fee is not applicable to this application and concerned office.');
                 }
                 if (! $rule->is_active
                     || $rule->effective_from->year > $application->application_year

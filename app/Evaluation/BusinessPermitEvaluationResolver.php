@@ -27,6 +27,7 @@ class BusinessPermitEvaluationResolver
     public function __construct(
         private readonly ApplicableFeeRuleQuery $applicableFeeRuleQuery,
         private readonly AssessmentCalculator $calculator,
+        private readonly FrozenFinancialEvaluation $frozen,
     ) {}
 
     /**
@@ -60,6 +61,49 @@ class BusinessPermitEvaluationResolver
 
         if (! $version instanceof BusinessPermitEvaluationVersion) {
             throw new \LogicException("Evaluation [{$evaluation->id}] has no version.");
+        }
+
+        if ($version->business_permit_evaluation_id !== $evaluation->id) {
+            throw new \LogicException('Evaluation version belongs to another Evaluation.');
+        }
+        if (data_get($version->metadata, 'financial_snapshot.schema') === FrozenFinancialEvaluation::Schema) {
+            $snapshot = $this->frozen->read($version);
+            $lineIds = array_values(array_unique(array_column($snapshot['treasury_assignments'], 'line_of_business_id')));
+            $components = data_get($snapshot, 'report.components');
+            if (! is_array($components)) {
+                throw new \LogicException('Frozen Evaluation has no financial components.');
+            }
+            $charges = collect($components)->map(fn (array $component): array => [
+                'identity' => $component['key'], 'source_type' => $component['source']['type'] ?? 'frozen_financial_input',
+                'evaluation_item_id' => null, 'fee_rule_id' => data_get($component, 'explanation.fee_rule_id'),
+                'scope' => $component['scope'], 'permit_application_line_id' => $component['permit_application_line_id'],
+                'line_of_business_id' => $component['line_of_business_id'], 'code' => $component['key'],
+                'label' => $component['label'], 'responsible_party' => 'treasury',
+                'proposal_amount_cents' => $component['scheduled_minor'], 'resolved_amount_cents' => $component['resolved_minor'],
+                'applicability' => 'applicable', 'resolution' => 'resolved', 'source_classification' => 'frozen_financial_evidence',
+                'action' => 'authorized_determination', 'reason' => null, 'included_in_subtotal' => true, 'included_in_grand_total' => true,
+            ]);
+            $applicationCharges = $charges->whereNull('line_of_business_id')->values();
+            $total = $snapshot['report']['total']['minor'];
+
+            return [
+                'evaluation_id' => $evaluation->id, 'version_id' => $version->id, 'version_sequence' => $version->sequence,
+                'persisted_fingerprint' => $version->fingerprint, 'current_fingerprint' => $version->fingerprint, 'fingerprint_current' => true,
+                'application' => ['declared_lines' => [], 'permit_application_id' => $evaluation->permit_application_id],
+                'resolved_line_of_business_ids' => $lineIds, 'items' => [], 'projected_charges' => [], 'pricing_issues' => [],
+                'total_amount_cents' => $total,
+                'financial_working_paper' => [
+                    'line_sections' => collect($lineIds)->map(fn (int $id): array => [
+                        'line_of_business_id' => $id, 'permit_application_line_id' => null,
+                        'line_of_business_name' => LineOfBusiness::query()->find($id)?->name,
+                        'charges' => $charges->where('line_of_business_id', $id)->values()->all(),
+                        'subtotal_amount_cents' => (int) $charges->where('line_of_business_id', $id)->sum('resolved_amount_cents'),
+                    ])->all(),
+                    'application_charges' => $applicationCharges->all(),
+                    'application_subtotal_amount_cents' => (int) $applicationCharges->sum('resolved_amount_cents'),
+                    'required_unresolved_charge_count' => 0, 'grand_total_available' => true, 'grand_total_amount_cents' => $total,
+                ],
+            ];
         }
 
         $items = $evaluation->items

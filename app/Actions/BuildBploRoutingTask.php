@@ -3,12 +3,16 @@
 namespace App\Actions;
 
 use App\Assessment\AssessmentCalculator;
+use App\Assessment\ConcernedOfficeFeeApplicability;
+use App\Assessment\ProvisionalTreasuryEnterpriseSchedule;
+use App\Assessment\TreasuryFeeResolution;
 use App\Data\Application\BploRoutingTaskData;
 use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCategory;
 use App\Enums\UserPermission;
 use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
+use App\Models\MenroFeeDetermination;
 use App\Models\PermitApplication;
 use App\Models\SignatureEvidence;
 use App\Models\TreasuryLineItem;
@@ -25,6 +29,10 @@ class BuildBploRoutingTask
         private readonly BuildConcernedOfficePaymentOrderSummary $paymentOrderSummary,
         private readonly AuthorizeRoutedOfficeActor $authorizeRoutedOfficeActor,
         private readonly AssessmentCalculator $assessmentCalculator,
+        private readonly ConcernedOfficeFeeApplicability $officeFeeApplicability,
+        private readonly TreasuryFeeResolution $treasuryFeeResolution,
+        private readonly ProvisionalTreasuryEnterpriseSchedule $enterpriseSchedule,
+        private readonly ProvisionalMenroFeeDeterminationProposal $menroProposal,
     ) {}
 
     public function handle(PermitApplication $permitApplication, ?User $viewer): BploRoutingTaskData
@@ -40,6 +48,7 @@ class BuildBploRoutingTask
             'bploRoutingDetermination.works.paymentOrders.signatureEvidences.media',
             'treasuryLineOfBusinessAssignments.lineOfBusiness',
             'treasuryLineOfBusinessAssignments.items',
+            'menroFeeDetermination.actor',
         ]);
         $determination = $application->bploRoutingDetermination;
         $suggestion = $application->bploRoutingSuggestion;
@@ -143,10 +152,21 @@ class BuildBploRoutingTask
     /** @return array<string, mixed> */
     private function financialEditor(PermitApplication $application, ?User $viewer): array
     {
+        $menroWork = $application->bploRoutingDetermination?->works->firstWhere('office_code', 'menro');
+        $menroDetermination = $application->menroFeeDetermination;
+        $menroDeterminationProposal = $this->menroProposal->forApplication($application);
+        $canRecordMenroDetermination = $viewer instanceof User
+            && $menroWork !== null
+            && $this->authorizeRoutedOfficeActor->allows(
+                $application,
+                'menro',
+                $viewer,
+                data_get($menroWork->context_snapshot, 'authorized_actor_id'),
+            );
         $periodStart = $application->application_year.'-01-01';
         $periodEnd = $application->application_year.'-12-31';
         $catalogFees = FeeRule::query()
-            ->with(['lineOfBusinesses:id', 'officeAssignments', 'revenueAccount', 'ranges'])
+            ->with(['lineOfBusinesses:id', 'officeAssignments', 'revenueAccount', 'ranges', 'catalogVersion', 'businessDivision'])
             ->where('is_active', true)
             ->where('category', '!=', FeeRuleCategory::Tax->value)
             ->whereDate('effective_from', '<=', $periodEnd)
@@ -159,12 +179,36 @@ class BuildBploRoutingTask
 
         return [
             'catalog_status' => $this->concernedOffices->provenance()['production_catalog_status'],
+            'menro_determination' => $menroDetermination instanceof MenroFeeDetermination ? [
+                'id' => $menroDetermination->id,
+                'scope' => $menroDetermination->scope,
+                'fee_rule_id' => $menroDetermination->fee_rule_id,
+                'source_identity' => $menroDetermination->fee_rule_id,
+                'code' => $menroDetermination->code,
+                'basis' => $menroDetermination->basis,
+                'application_area_square_meters' => $menroDetermination->application_area_square_meters,
+                'calculation_basis_centi_square_meters' => $menroDetermination->calculation_basis_centi_square_meters,
+                'operative_range_min_centi_square_meters' => $menroDetermination->operative_range_min_centi_square_meters,
+                'operative_range_max_centi_square_meters' => $menroDetermination->operative_range_max_centi_square_meters,
+                'amount_minor' => $menroDetermination->amount_minor,
+                'schedule_version' => $menroDetermination->schedule_version,
+                'source_evidence' => $menroDetermination->source_evidence,
+                'classification' => $menroDetermination->classification,
+                'production_authority' => $menroDetermination->production_authority,
+                'reason' => $menroDetermination->reason,
+                'actor' => $menroDetermination->actor?->name,
+                'determined_at' => $menroDetermination->determined_at->toIso8601String(),
+                'fingerprint' => $menroDetermination->fingerprint,
+                'warning' => 'Synthetic-UAT evidence only; this is not municipal policy.',
+            ] : null,
+            'menro_determination_proposal' => $menroDetermination === null ? $menroDeterminationProposal : null,
+            'can_record_menro_determination' => $canRecordMenroDetermination && $menroDetermination === null,
             'concerned_office_payment_orders' => $this->paymentOrderSummary->handle($application),
             'office_fee_options' => $offices->mapWithKeys(function (array $office) use ($application, $catalogFees): array {
                 $configuredCodes = collect($office['fee_rule_codes'] ?? []);
                 $commissionedPath = data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') === true;
-                $fees = $catalogFees->filter(function (FeeRule $fee) use ($commissionedPath, $configuredCodes, $office): bool {
-                    if ($fee->determination_channel !== FeeDeterminationChannel::ConcernedOfficePaymentOrder) {
+                $fees = $catalogFees->filter(function (FeeRule $fee) use ($application, $commissionedPath, $configuredCodes, $office): bool {
+                    if (! $this->officeFeeApplicability->matches($fee, $application, $office['code'])) {
                         return false;
                     }
                     if (! $commissionedPath && data_get($fee->metadata, 'semantic_classification') === 'synthetic_only') {
@@ -177,13 +221,51 @@ class BuildBploRoutingTask
                         : $explicitOfficeMatch || data_get($fee->metadata, 'responsible_office_code') === $office['code'];
                 });
 
-                return [$office['code'] => $fees->map(function (FeeRule $fee) use ($application): array {
+                return [$office['code'] => $fees->map(function (FeeRule $fee) use ($application, $fees): array {
                     $calculation = $this->catalogCalculation($fee, $application);
+                    $sameLabelCount = $fees->where('name', $fee->name)->count();
+                    $sameCodeCount = $fees->where('code', $fee->code)->count();
+                    $needsProvenanceLabel = $sameLabelCount > 1 || $sameCodeCount > 1;
+                    $catalogVersion = $fee->catalogVersion?->code
+                        ?? data_get($fee->metadata, 'catalog_version');
+                    $classification = data_get($fee->metadata, 'semantic_classification')
+                        ?? data_get($fee->metadata, 'price_list_source_classification')
+                        ?? data_get($fee->metadata, 'classification');
+                    $basisLabel = collect([
+                        $fee->scope->value,
+                        $fee->basis,
+                        $fee->calculation_type->value,
+                    ])
+                        ->filter(fn ($value): bool => is_string($value) && trim($value) !== '' && strtolower(trim($value)) !== 'none')
+                        ->map(fn (string $value): string => str($value)->replace(['_', '-'], ' ')->headline()->toString())
+                        ->unique()
+                        ->implode(' · ');
+                    $effectivePeriod = collect([
+                        $fee->effective_from?->toDateString(),
+                        $fee->effective_until?->toDateString(),
+                    ])->filter()->implode(' → ');
+                    $provenanceLabel = collect([$catalogVersion, $classification, $basisLabel, $fee->code, $effectivePeriod])
+                        ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
+                        ->map(fn (string $value): string => str($value)->replace(['_', '-'], ' ')->headline()->toString())
+                        ->implode(' · ');
+                    $displayName = $needsProvenanceLabel && $provenanceLabel !== ''
+                        ? $this->catalogOptionName($fee).' — '.$provenanceLabel
+                        : ($sameLabelCount > 1
+                            ? $fee->name.' — '.($fee->businessDivision->name ?? data_get($fee->metadata, 'legacy_division_name', 'Application')).' · '.$fee->code
+                            : $this->catalogOptionName($fee));
 
                     return [
                         'id' => $fee->id,
                         'code' => $fee->code,
-                        'name' => $this->catalogOptionName($fee),
+                        'name' => $displayName,
+                        'provenance' => [
+                            'catalog_version' => $catalogVersion,
+                            'classification' => $classification,
+                            'source_name' => data_get($fee->metadata, 'source_name'),
+                            'effective_from' => $fee->effective_from?->toDateString(),
+                            'effective_until' => $fee->effective_until?->toDateString(),
+                            'is_active' => $fee->is_active,
+                        ],
                         'default_amount_cents' => $calculation['amount_cents'],
                         'calculation' => $calculation,
                         'scope' => $fee->scope->value,
@@ -203,9 +285,12 @@ class BuildBploRoutingTask
 
                             return [
                                 'fee_rule_id' => $fee->id,
+                                'enterprise_schedule' => $this->enterpriseSchedule->forApplication($application, $fee),
                                 'code' => $fee->code,
                                 'name' => $this->catalogOptionName($fee),
                                 'amount_cents' => $calculation['amount_cents'],
+                                'resolution_status' => $this->treasuryFeeResolution->unresolved($fee, $application) ? 'unresolved' : 'resolved',
+                                'resolution_message' => $this->treasuryFeeResolution->unresolved($fee, $application) ? $this->treasuryFeeResolution->message($fee) : null,
                                 'calculation' => $calculation,
                                 'scope' => $fee->scope->value,
                                 'exact_once_key' => data_get($fee->metadata, 'exact_once_key'),
@@ -215,6 +300,7 @@ class BuildBploRoutingTask
             'treasury_assignments' => $application->treasuryLineOfBusinessAssignments->whereNull('removed_at')->map(fn (TreasuryLineOfBusinessAssignment $assignment): array => [
                 'id' => $assignment->id,
                 'name' => $assignment->lineOfBusiness->name,
+                'enterprise_determination' => data_get($assignment->source_snapshot, 'enterprise_determination'),
                 'items' => $assignment->items->map(fn (TreasuryLineItem $item): array => ['name' => $item->name, 'amount_cents' => $item->determined_amount_cents])->all(),
             ])->values()->all(),
             'authorized_payment_order_office_codes' => $viewer === null

@@ -225,6 +225,7 @@ class PermitApplicationController extends Controller
     public function permitPdf(PermitApplication $permitApplication, RenderPermitPdf $renderPermitPdf): HttpResponse
     {
         Gate::authorize(UserPermission::ViewPermitApplications->value);
+        abort_unless($permitApplication->provisionalUatPermitCompletion?->issued_at !== null, 404);
 
         return response($renderPermitPdf->handle($permitApplication))
             ->withHeaders([

@@ -3,6 +3,7 @@ import { Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
 
 type PaymentRequest = {
+    attempt_resolution?: string;
     state: string;
     pay_code: string | null;
     external_reference: string;
@@ -368,9 +369,12 @@ function paymentSource(): string {
                         class="grid aspect-square w-full max-w-48 place-items-center border-2 border-dashed border-stone-400 p-4 text-center text-xs font-bold uppercase"
                     >
                         {{
-                            payable
-                                ? 'QR Ph not generated or expired'
-                                : 'Payment schedule pending'
+                            paymentRequest?.attempt_resolution ===
+                            'needs_review'
+                                ? 'Payment attempts need review'
+                                : payable
+                                  ? 'QR Ph not generated or expired'
+                                  : 'Payment schedule pending'
                         }}
                     </div>
                     <div

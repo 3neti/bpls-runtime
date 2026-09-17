@@ -333,7 +333,9 @@ test('classic ceremony completes the canonical lifecycle through each municipal 
             ->where('classicPaymentHandoff.attempt.provider', 'netbank')
             ->where('classicPaymentHandoff.amount_cents', $schedule->total_amount_cents));
     $this->actingAs($actor('cashier'))
-        ->post(route('staff.payment-schedules.classic-payment-simulation.store', $schedule))
+        ->post(route('staff.payment-schedules.classic-payment-simulation.store', $schedule), [
+            'attempt_id' => $schedule->xChangePayment->attempts()->latest('id')->firstOrFail()->id,
+        ])
         ->assertRedirect(route('staff.payment-schedules.show', $schedule));
     $collection = $schedule->treasuryCollections()->sole();
     $receiptGroups = $collection->allocations()->pluck('receipt_group_key')->unique()->sort()->values();

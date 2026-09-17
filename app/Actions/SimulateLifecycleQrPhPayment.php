@@ -15,7 +15,10 @@ use LogicException;
 
 class SimulateLifecycleQrPhPayment
 {
-    public function __construct(private readonly RecordPaymentScheduleCollection $recordCollection) {}
+    public function __construct(
+        private readonly RecordPaymentScheduleCollection $recordCollection,
+        private readonly ResolveActivePaymentAttempt $resolveAttempt,
+    ) {}
 
     public function handle(LifecycleCleanroomRun $run): TreasuryCollection
     {
@@ -43,12 +46,12 @@ class SimulateLifecycleQrPhPayment
         }
 
         $payment = $schedule->xChangePayment;
-        $attempt = $payment->attempts()->latest('id')->first();
+        $resolution = $this->resolveAttempt->handle($payment);
+        $attempt = $resolution['attempt'];
         if (! $attempt instanceof XChangePaymentAttempt) {
             throw new LogicException('The Pay Code has no QR Ph attempt to simulate.');
         }
-        if (! in_array($attempt->status, ['requested', 'awaiting_payment'], true)
-            || $attempt->expires_at?->isPast() !== false) {
+        if ($resolution['state'] !== 'active') {
             throw new LogicException('The current QR Ph attempt has expired. The Citizen must generate a fresh QR Ph request.');
         }
         $cashierId = data_get($run->actor_manifest, 'actors.cashier.user_id');

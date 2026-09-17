@@ -48,6 +48,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property-read PermitApplicationDeclaration|null $declaration
  * @property-read ProvisionalUatPermitCompletion|null $provisionalUatPermitCompletion
  * @property-read Collection<int, PostPaymentOfficeCertification> $postPaymentOfficeCertifications
+ * @property-read MenroFeeDetermination|null $menroFeeDetermination
  */
 #[Fillable(['business_id', 'submitted_by_id', 'application_number', 'tracking_reference', 'type', 'status', 'application_year', 'business_activity_description', 'submitted_at', 'assessed_at', 'legacy_source_id', 'metadata'])]
 class PermitApplication extends Model implements HasMedia
@@ -142,6 +143,12 @@ class PermitApplication extends Model implements HasMedia
     public function postPaymentOfficeCertifications(): HasMany
     {
         return $this->hasMany(PostPaymentOfficeCertification::class);
+    }
+
+    /** @return HasOne<MenroFeeDetermination, $this> */
+    public function menroFeeDetermination(): HasOne
+    {
+        return $this->hasOne(MenroFeeDetermination::class);
     }
 
     /** @return HasMany<PermitApplicationDocument, $this> */

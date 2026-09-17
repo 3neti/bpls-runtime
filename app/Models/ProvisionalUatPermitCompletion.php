@@ -35,6 +35,23 @@ class ProvisionalUatPermitCompletion extends Model
     /** @use HasFactory<ProvisionalUatPermitCompletionFactory> */
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::updating(function (self $record): void {
+            $original = json_decode((string) $record->getRawOriginal('source_snapshot'), true);
+            $authorization = data_get($original, 'ordinary_mayoral_authorization');
+            if ($authorization !== null && ($authorization !== data_get($record->source_snapshot, 'ordinary_mayoral_authorization')
+                || $record->isDirty(['permit_application_id', 'decided_by_id', 'decided_at']))) {
+                throw new \LogicException('Recorded ordinary UAT Mayoral Authorization is immutable.');
+            }
+        });
+        static::deleting(function (self $record): void {
+            if (data_get($record->source_snapshot, 'ordinary_mayoral_authorization') !== null) {
+                throw new \LogicException('Recorded ordinary UAT Mayoral Authorization cannot be deleted.');
+            }
+        });
+    }
+
     protected $fillable = [
         'permit_application_id',
         'decided_by_id',

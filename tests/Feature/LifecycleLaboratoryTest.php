@@ -253,7 +253,7 @@ test('retained history remains independently viewable and starting another Class
         ->and(PermitApplication::query()->whereKey($application)->exists())->toBeTrue();
 });
 
-test('cleanroom return navigation is shared only with an active exact actor', function () {
+test('cleanroom return navigation is shared only with the authorized engineering reviewer', function () {
     $management = previewAccount(StakeholderPreviewPersona::Management);
     $actor = previewAccount(StakeholderPreviewPersona::Bplo);
     $role = $actor->primaryRole() ?? throw new RuntimeException('Expected BPLO preview role.');
@@ -268,6 +268,12 @@ test('cleanroom return navigation is shared only with an active exact actor', fu
     ]);
 
     $this->actingAs($actor)
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('stakeholder_preview.cleanroom_actor', null)
+            ->where('stakeholder_preview.show_engineering_controls', false));
+
+    $this->actingAs($management)
         ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('stakeholder_preview.cleanroom_actor.public_id', $run->public_id)

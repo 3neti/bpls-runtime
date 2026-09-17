@@ -2,15 +2,19 @@
 
 namespace App\Data\Application;
 
+use App\Actions\AuthorizePostPaymentCertification;
 use App\Actions\BuildMunicipalScheduleOfFees;
 use App\Actions\BuildPermitVerificationQrDataUrl;
 use App\Actions\BuildScheduleOfPayment;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\DescribePermitVerificationBoundary;
+use App\Actions\OrdinaryUatPermitAuthority;
 use App\Actions\ProjectPermitReadiness;
 use App\Actions\ProjectSyntheticPermitCalendar;
+use App\Actions\ResolveActivePaymentAttempt;
 use App\Actions\ResolveOfficialReceiptProfile;
 use App\Actions\ResolvePermitBusinessAddress;
+use App\Assessment\AssessmentCounterCheckReadiness;
 use App\Assessment\Price\HistoricalPriceReport;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\ReceiptStatus;
@@ -29,6 +33,7 @@ use App\Models\TreasuryCollection;
 use App\Models\TreasuryLineItem;
 use App\Models\TreasuryLineOfBusinessAssignment;
 use App\Models\User;
+use App\Support\ReceiptCivilTime;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
@@ -57,6 +62,8 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         private readonly LifecycleCleanroomDefinition $lifecycleCleanroomDefinition,
         private readonly BuildScheduleOfPayment $buildScheduleOfPayment,
         private readonly BuildPermitVerificationQrDataUrl $buildPermitVerificationQrDataUrl,
+        private readonly AssessmentCounterCheckReadiness $counterCheckReadiness,
+        private readonly ResolveActivePaymentAttempt $resolveAttempt,
     ) {}
 
     public function resolve(PermitApplication $permitApplication, ?User $viewer = null): ApplicationData
@@ -104,7 +111,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             ->map(fn (Receipt $receipt): OfficialReceiptData => $this->officialReceipt($receipt, $viewer))
             ->values()
             ->all());
-        $permit = $this->permit($application, $receipts);
+        $permit = $this->permit($application, $receipts, $viewer);
         $scheduleOfFees = $this->scheduleOfFees($application, $assessment);
         $attachments = $this->attachments($application, $assessment, $receipts, $permit);
         $tasks = $this->tasks($application, $viewer, $evaluationProjection);
@@ -796,7 +803,8 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
     {
         $schedule = $application->paymentSchedules->sortByDesc('sequence')->first();
         $onlinePayment = $schedule?->xChangePayment;
-        $attempt = $onlinePayment?->attempts->sortByDesc('id')->first();
+        $attemptResolution = $this->resolveAttempt->handle($onlinePayment);
+        $attempt = $attemptResolution['state'] === 'active' ? $attemptResolution['attempt'] : null;
         $scheduleCollections = $schedule === null ? collect() : $schedule->treasuryCollections;
         $canonicalCollection = $onlinePayment === null ? null : $onlinePayment->treasuryCollection;
         $canonicalCollection ??= $scheduleCollections->sortByDesc('received_at')->first();
@@ -879,6 +887,9 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'due_on' => $schedule->due_on?->toDateString(),
             ],
             'payment_request' => $onlinePayment === null ? null : [
+                'payment_id' => $onlinePayment->id,
+                'attempt_resolution' => $attemptResolution['state'],
+                'server_now' => $attemptResolution['server_now'],
                 'state' => $canonicalCollection instanceof TreasuryCollection ? 'collected' : $onlinePayment->status,
                 'pay_code' => $onlinePayment->pay_code,
                 'external_reference' => $onlinePayment->external_reference,
@@ -894,6 +905,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'collection_reference' => $canonicalCollection?->reference_number,
                 'official_receipt_id' => $canonicalCollection?->receipt?->id,
                 'active_attempt' => $attempt === null ? null : [
+                    'id' => $attempt->id,
                     'reference' => $attempt->reference,
                     'status' => $attempt->status,
                     'provider' => $attempt->provider,
@@ -994,7 +1006,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             series: $receipt->series ?? data_get($receipt->source_snapshot, 'af51.series'),
             numbering_authority: $receipt->numbering_authority,
             synthetic_number: str_contains(strtolower($receipt->numbering_authority), 'synthetic'),
-            issued_on: $receipt->issued_at->toDateString(),
+            issued_on: ReceiptCivilTime::date($receipt->issued_at),
             agency: data_get($receipt->source_snapshot, 'af51.agency'),
             fund: data_get($receipt->source_snapshot, 'af51.fund'),
             payor: $collection->payer_name,
@@ -1013,7 +1025,8 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'type' => $collection->method->value,
                 'drawee_bank' => data_get($collection->source_snapshot, 'payment_instrument.drawee_bank'),
                 'number' => $collection->reference_number,
-                'date' => data_get($collection->source_snapshot, 'payment_instrument.date'),
+                'date' => data_get($collection->source_snapshot, 'payment_instrument.date')
+                    ?? ReceiptCivilTime::date($collection->received_at),
             ],
             collecting_officer: data_get($receipt->source_snapshot, 'issuer.printed_name') ?? $receipt->issuedBy?->getAttribute('name'),
             presentation_profile: $profile,
@@ -1032,7 +1045,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
     }
 
     /** @param list<OfficialReceiptData> $receipts */
-    private function permit(PermitApplication $application, array $receipts): BusinessPermitData
+    private function permit(PermitApplication $application, array $receipts, ?User $viewer): BusinessPermitData
     {
         $verification = $this->verificationBoundary->handle($application);
         $syntheticLifecycle = data_get($application->metadata, 'lifecycle_cleanroom.semantic_classification') === 'synthetic_only';
@@ -1098,7 +1111,9 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'view_url' => $verification['view_url'],
                 'qr_data_url' => $this->buildPermitVerificationQrDataUrl->handle($verification['view_url']),
             ],
-            printable_artifact_url: ! $syntheticLifecycle || $issued
+            printable_artifact_url: (! $syntheticLifecycle || $issued)
+                && ($viewer?->can(UserPermission::AccessStaff->value) ?? false)
+                && $viewer->can(UserPermission::ViewPermitApplications->value)
                 ? route('staff.permit-applications.permit.pdf', $application, false)
                 : null,
             statement: $released
@@ -1218,8 +1233,8 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             instruction: 'Counter-check frozen Assessment',
             section: 'assessment',
             anchor: 'treasury_counter_check',
-            state: $assessment?->treasuryCounterCheck !== null ? 'completed' : ($assessment !== null ? 'ready' : 'waiting'),
-            stateLabel: $assessment?->treasuryCounterCheck !== null ? 'Completed' : ($assessment !== null ? 'Ready' : 'Awaiting Assessment'),
+            state: $assessment !== null && $this->counterCheckReadiness->state($assessment) === 'incomplete' ? 'blocked' : ($assessment?->treasuryCounterCheck !== null ? 'completed' : ($assessment !== null ? 'ready' : 'waiting')),
+            stateLabel: $assessment !== null && $this->counterCheckReadiness->state($assessment) === 'incomplete' ? 'Incomplete · Evaluation binding unavailable' : ($assessment?->treasuryCounterCheck !== null ? 'Completed' : ($assessment !== null ? 'Ready' : 'Awaiting Assessment')),
             tone: 'green',
             affordance: $taskIndex->get('counter_check'),
             completedAt: $assessment?->treasuryCounterCheck?->checked_at?->toIso8601String(),
@@ -1301,19 +1316,20 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         }
 
         $completion = $application->provisionalUatPermitCompletion;
+        $ordinaryAuthority = app(OrdinaryUatPermitAuthority::class)->enabled($application);
         $notes[] = $this->workNote(
             id: 'permit_authority_review',
             actorKey: 'permit_issuer',
             actorLabel: $this->lifecycleCleanroomDefinition->actors()['permit_issuer']['label'],
-            instruction: 'Record synthetic Mayoral Authorization and issue the Business Permit specimen',
+            instruction: $ordinaryAuthority ? ($completion?->decided_at === null ? 'Authorize Business Permit issuance' : 'Issue UAT Business Permit') : 'Record synthetic Mayoral Authorization and issue the Business Permit specimen',
             section: 'permit',
             anchor: 'permit_authority',
-            state: $permit->issued ? 'completed' : ($permit->ready ? 'ready' : 'waiting'),
-            stateLabel: $permit->issued ? 'Synthetic Mayoral Authorization recorded; specimen issued' : ($permit->ready ? 'Ready for Mayoral Authorization' : 'Awaiting PermitReadiness'),
+            state: $permit->issued ? 'completed' : ($taskIndex->has('issue_synthetic_permit') || $permit->ready ? 'ready' : 'waiting'),
+            stateLabel: $permit->issued ? 'Synthetic Mayoral Authorization recorded; specimen issued' : ($taskIndex->has('issue_synthetic_permit') ? ($completion?->decided_at === null ? 'Ready for Mayoral Authorization' : 'Authorized; ready for issuance') : ($permit->ready ? 'Ready for Mayoral Authorization' : 'Awaiting PermitReadiness')),
             tone: 'violet',
             affordance: $taskIndex->get('issue_synthetic_permit'),
             completedAt: $completion?->issued_at?->toIso8601String(),
-            blockingReason: 'Laboratory specimen only. Mayor Olegario did not log in, sign, or authorize this specimen; production authority remains false.',
+            blockingReason: $ordinaryAuthority ? 'Explicit synthetic / UAT-only authority. No statutory signature, production Permit authority, or claim of personal real-Mayor action.' : 'Laboratory specimen only. Mayor Olegario did not log in, sign, or authorize this specimen; production authority remains false.',
         );
         $notes[] = $this->workNote(
             id: 'permit_release',
@@ -1466,10 +1482,11 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
         if ($assessment === null && $allResolved && $viewer->hasPermission(UserPermission::AssessPermitApplications)) {
             $tasks[] = $this->task('prepare_assessment', 'Prepare immutable Assessment', 'assessment', route('staff.permit-applications.evaluation.show', $application, false));
         }
-        if ($assessment instanceof Assessment && $assessment->treasuryCounterCheck === null && $viewer->hasPermission(UserPermission::CounterCheckBusinessPermitEvaluations)) {
+        $counterCheckState = $assessment instanceof Assessment ? $this->counterCheckReadiness->state($assessment) : null;
+        if ($assessment instanceof Assessment && $counterCheckState === 'awaiting_counter_check' && $viewer->hasPermission(UserPermission::CounterCheckBusinessPermitEvaluations)) {
             $tasks[] = $this->task('counter_check', 'Counter-check the frozen Assessment', 'assessment', route('staff.permit-applications.assessments.show', $assessment, false));
         }
-        if ($assessment instanceof Assessment && $assessment->treasuryCounterCheck !== null && $assessment->decision === null && $viewer->hasPermission(UserPermission::ApproveAssessments)) {
+        if ($assessment instanceof Assessment && $counterCheckState === 'checked' && $assessment->decision === null && $viewer->hasPermission(UserPermission::ApproveAssessments)) {
             $tasks[] = $this->task('treasurer_decision', 'Approve or return the exact Assessment', 'assessment', route('staff.permit-applications.assessments.show', $assessment, false));
         }
         if ($isApplicant && $schedule !== null && $schedule->total_amount_cents > $schedule->paid_amount_cents) {
@@ -1486,6 +1503,21 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
 
         $runId = data_get($application->metadata, 'lifecycle_cleanroom.run_id');
         $run = is_string($runId) ? LifecycleCleanroomRun::query()->where('public_id', $runId)->first() : null;
+        if ($run === null) {
+            $authority = app(OrdinaryUatPermitAuthority::class);
+            $completion = $application->provisionalUatPermitCompletion;
+            if ($authority->allows($application, $viewer) && $completion?->issued_at === null && $authority->prerequisites($application)) {
+                $tasks[] = $this->task('issue_synthetic_permit', $completion?->decided_at === null ? 'Authorize Business Permit issuance' : 'Issue UAT Business Permit', 'permit', route('staff.ordinary-uat-permit.show', $application, false));
+            }
+            if ($authority->allows($application, $viewer, 'releasing') && $authority->authorized($application) && $completion?->issued_at !== null && $completion->released_at === null) {
+                $tasks[] = $this->task('release_synthetic_permit', 'Release UAT Business Permit', 'permit', route('staff.ordinary-uat-permit.show', $application, false));
+            }
+            foreach ($application->postPaymentOfficeCertifications->where('status', 'pending') as $certification) {
+                if (app(AuthorizePostPaymentCertification::class)->allows($certification, $viewer)) {
+                    $tasks[] = $this->task('post_payment_certification_'.$certification->id, 'Review payment and receipt', 'processing', route('staff.post-payment-certifications.show', $certification, false));
+                }
+            }
+        }
         if ($run instanceof LifecycleCleanroomRun && $run->status === 'active') {
             foreach ($application->postPaymentOfficeCertifications->where('status', '!=', 'completed') as $certification) {
                 if (data_get($run->actor_manifest, 'actors.'.$certification->office_code.'.user_id') === $viewer->id) {

@@ -1,4 +1,6 @@
 export type FinancialLineItemOption = {
+    resolution_status?: 'resolved' | 'unresolved';
+    resolution_message?: string | null;
     id: number;
     code: string;
     name: string;
@@ -12,6 +14,9 @@ export type FinancialLineItemOption = {
 };
 
 export type FinancialLineItem = {
+    amount_locked?: boolean;
+    resolution_status?: 'resolved' | 'unresolved';
+    resolution_message?: string | null;
     fee_rule_id: number;
     code: string;
     name: string;
@@ -72,6 +77,8 @@ export function upsertFinancialLineItem(
             amount_cents: amountCents,
             exact_once_key: option.exact_once_key,
             calculation: option.calculation,
+            resolution_status: option.resolution_status,
+            resolution_message: option.resolution_message,
         },
     ];
 }
@@ -84,5 +91,16 @@ export function removeFinancialLineItem(
 }
 
 export function financialLineItemSubtotal(items: FinancialLineItem[]): number {
-    return items.reduce((sum, item) => sum + item.amount_cents, 0);
+    return items.reduce(
+        (sum, item) =>
+            sum +
+            (item.resolution_status === 'unresolved' ? 0 : item.amount_cents),
+        0,
+    );
+}
+
+export function financialLineItemsResolved(
+    items: FinancialLineItem[],
+): boolean {
+    return items.every((item) => item.resolution_status !== 'unresolved');
 }

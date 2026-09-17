@@ -29,6 +29,17 @@ class BusinessPermitEvaluationVersion extends Model
     /** @use HasFactory<BusinessPermitEvaluationVersionFactory> */
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::updating(function (self $version): void {
+            $original = $version->getRawOriginal('metadata');
+            $metadata = is_string($original) ? json_decode($original, true) : $original;
+            if (data_get($metadata, 'financial_snapshot.schema') !== null && $version->isDirty()) {
+                throw new \LogicException('A frozen financial Evaluation version is immutable.');
+            }
+        });
+    }
+
     /** @return BelongsTo<BusinessPermitEvaluation, $this> */
     public function evaluation(): BelongsTo
     {

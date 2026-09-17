@@ -3,12 +3,14 @@
 namespace App\Actions;
 
 use App\Models\PaymentSchedule;
-use App\Models\XChangePayment;
 use LogicException;
 
 class DescribeOnlinePaymentBoundary
 {
-    public function __construct(private readonly EnsureQrPhPaymentEligible $ensureEligible) {}
+    public function __construct(
+        private readonly EnsureQrPhPaymentEligible $ensureEligible,
+        private readonly ResolveActivePaymentAttempt $resolveAttempt,
+    ) {}
 
     /**
      * @return array<string, mixed>
@@ -30,15 +32,23 @@ class DescribeOnlinePaymentBoundary
             }
         }
 
-        $attempt = $payment instanceof XChangePayment ? $payment->attempts->sortByDesc('id')->first() : null;
+        $resolution = $this->resolveAttempt->handle($payment);
+        $attempt = $resolution['attempt'];
+        $eligible = $eligible && $resolution['state'] !== 'needs_review';
 
         return [
+            'attempt_resolution' => $resolution['state'],
             'status' => $payment?->treasury_collection_id !== null ? 'paid' : ($eligible ? 'available' : 'blocked'),
             'can_pay_online' => $eligible,
             'can_reconcile_online' => $configured,
             'payment_schedule_id' => $paymentSchedule->id,
             'payment_schedule_status' => $paymentSchedule->status->value,
             'payment_status' => $payment?->status,
+            ...($payment === null ? [] : [
+                'pay_code' => $payment->pay_code,
+                'payment_reference' => $payment->external_reference,
+                'attempt_reference' => $attempt?->reference,
+            ]),
             'attempt_status' => $attempt?->status,
             'attempt_expires_at' => $attempt?->expires_at?->toIso8601String(),
             'blocked_transitions' => [

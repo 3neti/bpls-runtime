@@ -1,17 +1,22 @@
 <script setup lang="ts">
-import { useForm, usePage } from '@inertiajs/vue3';
+import { useForm, useHttp, usePage } from '@inertiajs/vue3';
 import { Check, ChevronRight, FileClock, Route } from '@lucide/vue';
 import { useNow } from '@vueuse/core';
 import { computed, reactive, ref } from 'vue';
 import { store as recordBploRouting } from '@/actions/App/Http/Controllers/Staff/BploRoutingDeterminationController';
 import ApplicantDocumentReference from '@/components/permit-applications/ApplicantDocumentReference.vue';
 import type { ApplicantDocumentReferenceItem } from '@/components/permit-applications/ApplicantDocumentReference.vue';
+import EnterpriseClassificationSelector from '@/components/permit-applications/EnterpriseClassificationSelector.vue';
 import FinancialLineItemEditor from '@/components/permit-applications/FinancialLineItemEditor.vue';
 import SignatureFacsimileCapture from '@/components/SignatureFacsimileCapture.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { dateTime, money } from '@/lib/evaluationPresentation';
+import { financialLineItemsResolved } from '@/lib/financialLineItems';
+import type { EnterpriseSchedule } from '@/lib/treasuryEnterprise';
+import { applyEnterpriseClassification } from '@/lib/treasuryEnterprise';
+import { index as workInbox } from '@/routes/staff/work';
 
 type RoutingLine = {
     id: number | null;
@@ -83,6 +88,14 @@ type BploRoutingTask = {
                 code: string;
                 name: string;
                 default_amount_cents: number;
+                provenance?: {
+                    catalog_version?: string | null;
+                    classification?: string | null;
+                    source_name?: string | null;
+                    effective_from?: string | null;
+                    effective_until?: string | null;
+                    is_active?: boolean;
+                };
                 exact_once_key?: string | null;
                 calculation?: {
                     explanation?: string | null;
@@ -90,11 +103,58 @@ type BploRoutingTask = {
                 };
             }[]
         >;
+        menro_determination: {
+            id: number;
+            scope: string;
+            fee_rule_id: number;
+            source_identity: number;
+            code: string;
+            basis: string;
+            application_area_square_meters: number;
+            calculation_basis_centi_square_meters: number;
+            operative_range_min_centi_square_meters: number;
+            operative_range_max_centi_square_meters: number;
+            amount_minor: number;
+            schedule_version: string;
+            source_evidence: string;
+            classification: string;
+            production_authority: boolean;
+            reason: string;
+            actor: string | null;
+            determined_at: string;
+            fingerprint: string;
+            warning: string;
+        } | null;
+        can_record_menro_determination: boolean;
+        menro_determination_proposal: {
+            scope: string;
+            scope_label: string;
+            fee_rule_id: number;
+            source_identity: number;
+            code: string;
+            basis: string;
+            application_area_square_meters: number;
+            calculation_basis_centi_square_meters: number;
+            operative_range_min_centi_square_meters: number;
+            operative_range_max_centi_square_meters: number;
+            amount_minor: number;
+            schedule_version: string;
+            source_evidence: string;
+            classification: string;
+            production_authority: boolean;
+            reason: string;
+            actor_statement: string;
+            timestamp_statement: string;
+            warning: string;
+        } | null;
         line_of_business_options: {
             id: number;
             code: string;
             name: string;
             default_items: {
+                enterprise_schedule?: EnterpriseSchedule | null;
+                resolution_status?: 'resolved' | 'unresolved';
+                resolution_message?: string | null;
                 fee_rule_id: number;
                 code: string;
                 name: string;
@@ -109,6 +169,12 @@ type BploRoutingTask = {
         treasury_assignments: {
             id: number;
             name: string;
+            enterprise_determination?: {
+                classification: string;
+                determined_by_id: number;
+                determined_at: string;
+                schedule: EnterpriseSchedule;
+            } | null;
             items: { name: string; amount_cents: number }[];
         }[];
         authorized_payment_order_office_codes: string[];
@@ -130,6 +196,8 @@ const props = withDefaults(
 const page = usePage();
 const pending = ref(false);
 const routingMessage = ref('');
+const routingAcknowledged = ref(false);
+const routingOutcomeUnconfirmed = ref(false);
 let routingTimer: number | undefined;
 const officeItems = reactive<
     Record<
@@ -154,7 +222,12 @@ const officePaymentOrderTimers = new Map<number, number>();
 const treasurySelections = ref<
     {
         line_of_business_id: number;
+        enterprise_classification?: string;
+        enterprise_schedule_fingerprint?: string;
         items: {
+            amount_locked?: boolean;
+            resolution_status?: 'resolved' | 'unresolved';
+            resolution_message?: string | null;
             fee_rule_id: number;
             code: string;
             name: string;
@@ -169,6 +242,13 @@ const treasurySelections = ref<
 >([]);
 const selectedTreasuryLob = ref<number | null>(null);
 const treasuryLobSearch = ref('');
+const treasuryPending = ref(false);
+const menroDeterminationPending = ref(false);
+const treasuryErrors = computed(() =>
+    Object.entries(page.props.errors)
+        .filter(([key]) => key.startsWith('selections'))
+        .map(([, message]) => message),
+);
 
 for (const work of props.task.routing?.works ?? []) {
     officeItems[work.id] = [];
@@ -328,8 +408,14 @@ function applySuggestedRouting(): void {
     });
 }
 
-function submit(): void {
-    if (pending.value || selectedCount.value === 0) {
+async function submit(): Promise<void> {
+    if (
+        pending.value ||
+        routingAcknowledged.value ||
+        routingOutcomeUnconfirmed.value ||
+        props.task.routing !== null ||
+        selectedCount.value === 0
+    ) {
         return;
     }
 
@@ -339,7 +425,7 @@ function submit(): void {
         routingMessage.value =
             'BPLS is still recording the route. Do not submit it again. The page will continue when the canonical record is available.';
     }, 10_000);
-    useForm({
+    const request = useHttp({
         situational_context: routingContext.value,
         selected_work: candidates
             .filter((candidate) => drafts[candidate.key].selected)
@@ -350,38 +436,56 @@ function submit(): void {
                 required_work: drafts[candidate.key].requiredWork,
                 permit_application_line_id: candidate.line.id,
             })),
-    }).post(recordBploRouting(props.task.application.id).url, {
-        preserveScroll: true,
-        onError: (errors) => {
+    });
+
+    try {
+        const response = await request.post(
+            recordBploRouting(props.task.application.id).url,
+        );
+
+        if (request.hasErrors) {
             routingMessage.value =
-                Object.values(errors).find(
+                Object.values(request.errors).find(
                     (message): message is string => typeof message === 'string',
                 ) ??
                 'The route could not be recorded. Review the selected offices.';
-        },
-        onHttpException: (response) => {
-            routingMessage.value =
-                response.status === 401 || response.status === 419
-                    ? 'Your session expired before routing was recorded. Sign in again, review the checklist, and submit it once.'
-                    : 'BPLS could not record the route. No new determination was created. Please try again or report this task.';
 
-            return false;
-        },
-        onNetworkError: () => {
-            routingMessage.value =
-                'The routing request could not reach BPLS. Check the connection before trying again.';
+            return;
+        }
 
-            return false;
-        },
-        onFinish: () => {
-            pending.value = false;
+        if (
+            typeof response !== 'object' ||
+            response === null ||
+            !('status' in response) ||
+            response.status !== 'recorded' ||
+            !('permit_application_id' in response) ||
+            response.permit_application_id !== props.task.application.id ||
+            !('routing_determination_id' in response) ||
+            !Number.isInteger(response.routing_determination_id) ||
+            Number(response.routing_determination_id) < 1
+        ) {
+            throw new Error('Routing acknowledgement unavailable.');
+        }
 
-            if (routingTimer !== undefined) {
-                window.clearTimeout(routingTimer);
-                routingTimer = undefined;
-            }
-        },
-    });
+        routingAcknowledged.value = true;
+        routingMessage.value =
+            'Concerned-office routing recorded. The office Payment Orders are ready.';
+    } catch {
+        routingOutcomeUnconfirmed.value = true;
+        routingMessage.value =
+            'Routing outcome is unconfirmed. It may already be recorded. Do not submit again. Reload the routing record to check before taking another action.';
+    } finally {
+        pending.value = false;
+
+        if (routingTimer !== undefined) {
+            window.clearTimeout(routingTimer);
+            routingTimer = undefined;
+        }
+    }
+}
+
+function reviewRoutingRecord(): void {
+    window.location.reload();
 }
 
 function confirmPaymentOrder(work: RoutingWork): void {
@@ -446,6 +550,49 @@ function confirmPaymentOrder(work: RoutingWork): void {
     );
 }
 
+function recordProvisionalMenroDetermination(): void {
+    if (menroDeterminationPending.value) {
+        return;
+    }
+
+    const proposal = props.task.financial_editor.menro_determination_proposal;
+
+    if (!proposal) {
+        return;
+    }
+
+    useForm({
+        scope: proposal.scope,
+        fee_rule_id: proposal.fee_rule_id,
+        code: proposal.code,
+        basis: proposal.basis,
+        application_area_square_meters: proposal.application_area_square_meters,
+        calculation_basis_centi_square_meters:
+            proposal.calculation_basis_centi_square_meters,
+        operative_range_min_centi_square_meters:
+            proposal.operative_range_min_centi_square_meters,
+        operative_range_max_centi_square_meters:
+            proposal.operative_range_max_centi_square_meters,
+        amount_minor: proposal.amount_minor,
+        schedule_version: proposal.schedule_version,
+        source_evidence: proposal.source_evidence,
+        classification: proposal.classification,
+        production_authority: proposal.production_authority,
+        reason: proposal.reason,
+    }).post(
+        `/staff/permit-applications/${props.task.application.id}/menro-fee-determination`,
+        {
+            preserveScroll: true,
+            onStart: () => {
+                menroDeterminationPending.value = true;
+            },
+            onFinish: () => {
+                menroDeterminationPending.value = false;
+            },
+        },
+    );
+}
+
 function addTreasuryLob(): void {
     const option = props.task.financial_editor.line_of_business_options.find(
         (candidate) => candidate.id === selectedTreasuryLob.value,
@@ -483,13 +630,21 @@ function addTreasuryLob(): void {
 }
 
 function confirmTreasuryLobs(): void {
-    if (treasurySelections.value.length === 0) {
+    if (!treasurySelectionsReady.value) {
         return;
     }
 
     useForm({ selections: treasurySelections.value }).post(
         `/staff/permit-applications/${props.task.application.id}/treasury-lines-of-business`,
-        { preserveScroll: true },
+        {
+            preserveScroll: true,
+            onStart: () => {
+                treasuryPending.value = true;
+            },
+            onFinish: () => {
+                treasuryPending.value = false;
+            },
+        },
     );
 }
 
@@ -504,14 +659,45 @@ function treasuryFeeOptions(lineOfBusinessId: number) {
         props.task.financial_editor.line_of_business_options.find(
             (line) => line.id === lineOfBusinessId,
         )?.default_items ?? []
-    ).map((item) => ({
-        id: item.fee_rule_id,
-        code: item.code,
-        name: item.name,
-        default_amount_cents: item.amount_cents,
-        exact_once_key: item.exact_once_key,
-        calculation: item.calculation,
-    }));
+    )
+        .filter((item) => !item.enterprise_schedule)
+        .map((item) => ({
+            id: item.fee_rule_id,
+            code: item.code,
+            name: item.name,
+            default_amount_cents: item.amount_cents,
+            exact_once_key: item.exact_once_key,
+            calculation: item.calculation,
+            resolution_status: item.resolution_status,
+            resolution_message: item.resolution_message,
+        }));
+}
+
+function enterpriseFee(lineOfBusinessId: number) {
+    return props.task.financial_editor.line_of_business_options
+        .find((line) => line.id === lineOfBusinessId)
+        ?.default_items.find((item) => item.enterprise_schedule);
+}
+
+function determineEnterprise(
+    selection: (typeof treasurySelections.value)[number],
+    classification: string,
+): void {
+    const fee = enterpriseFee(selection.line_of_business_id);
+
+    if (!fee?.enterprise_schedule) {
+        return;
+    }
+
+    selection.enterprise_classification = classification;
+    selection.enterprise_schedule_fingerprint =
+        fee.enterprise_schedule.fingerprint;
+    selection.items = applyEnterpriseClassification(
+        selection.items,
+        fee.fee_rule_id,
+        fee.enterprise_schedule,
+        classification,
+    );
 }
 
 function actorLabel(name: string): string {
@@ -520,7 +706,11 @@ function actorLabel(name: string): string {
 
 const treasurySelectionsReady = computed(
     () =>
+        !treasuryPending.value &&
         treasurySelections.value.length > 0 &&
+        treasurySelections.value.every((selection) =>
+            financialLineItemsResolved(selection.items),
+        ) &&
         treasurySelections.value.some(
             (selection) => selection.items.length > 0,
         ),
@@ -553,6 +743,14 @@ const filteredTreasuryLobOptions = computed(() => {
         ]"
         aria-labelledby="bplo-routing-task-title"
     >
+        <p
+            v-for="error in treasuryErrors"
+            :key="error"
+            role="alert"
+            class="p-4 text-sm text-destructive"
+        >
+            {{ error }}
+        </p>
         <header
             :class="[
                 'px-4 py-4 sm:px-5',
@@ -675,7 +873,7 @@ const filteredTreasuryLobOptions = computed(() => {
 
             <section
                 v-if="isTreasuryActor && task.application.commissioned_path"
-                class="grid gap-5 rounded-xl border-2 border-primary/40 bg-primary/5 p-4 sm:p-5"
+                class="grid w-full min-w-0 grid-cols-1 gap-5 rounded-xl border-2 border-primary/40 bg-primary/5 p-4 sm:p-5"
                 aria-labelledby="treasury-classification-heading"
                 data-testid="treasury-classification-workspace"
             >
@@ -698,7 +896,9 @@ const filteredTreasuryLobOptions = computed(() => {
                     </p>
                 </div>
 
-                <div class="rounded-lg border bg-background p-4">
+                <div
+                    class="min-w-0 rounded-lg border bg-background p-4 break-words"
+                >
                     <p
                         class="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
                     >
@@ -712,7 +912,9 @@ const filteredTreasuryLobOptions = computed(() => {
                     </p>
                 </div>
 
-                <ApplicantDocumentReference :documents="documents" />
+                <div class="max-w-full min-w-0">
+                    <ApplicantDocumentReference :documents="documents" />
+                </div>
 
                 <div
                     v-if="task.financial_editor.treasury_assignments.length"
@@ -727,6 +929,33 @@ const filteredTreasuryLobOptions = computed(() => {
                     >
                         <strong>{{ assignment.name }}</strong>
                         <p
+                            v-if="assignment.enterprise_determination"
+                            class="text-sm break-words"
+                        >
+                            Enterprise Classification:
+                            {{
+                                assignment.enterprise_determination
+                                    .classification
+                            }}
+                            · Treasury actor #{{
+                                assignment.enterprise_determination
+                                    .determined_by_id
+                            }}
+                            ·
+                            {{
+                                dateTime(
+                                    assignment.enterprise_determination
+                                        .determined_at,
+                                )
+                            }}<br />
+                            Provisional UAT policy — pending Ipil Officer
+                            confirmation ·
+                            {{
+                                assignment.enterprise_determination.schedule
+                                    .version
+                            }}
+                        </p>
+                        <p
                             v-for="item in assignment.items"
                             :key="item.name"
                             class="mt-2 flex justify-between gap-3 text-sm"
@@ -740,7 +969,7 @@ const filteredTreasuryLobOptions = computed(() => {
                 </div>
 
                 <template v-else-if="allPaymentOrdersFinalized">
-                    <div class="grid gap-2">
+                    <div class="grid min-w-0 grid-cols-1 gap-2">
                         <label
                             for="treasury-line-of-business"
                             class="font-bold"
@@ -753,11 +982,11 @@ const filteredTreasuryLobOptions = computed(() => {
                             placeholder="Search the Ipil Line of Business catalogue"
                             autocomplete="off"
                         />
-                        <div class="flex flex-col gap-2 sm:flex-row">
+                        <div class="flex min-w-0 flex-col gap-2 sm:flex-row">
                             <select
                                 id="treasury-line-of-business"
                                 v-model="selectedTreasuryLob"
-                                class="h-11 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
+                                class="h-11 w-full min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
                             >
                                 <option :value="null">
                                     Choose an official classification
@@ -773,7 +1002,7 @@ const filteredTreasuryLobOptions = computed(() => {
                             <Button
                                 type="button"
                                 variant="outline"
-                                class="h-11"
+                                class="h-auto min-h-11 min-w-0 whitespace-normal"
                                 :disabled="selectedTreasuryLob === null"
                                 @click="addTreasuryLob"
                             >
@@ -784,7 +1013,7 @@ const filteredTreasuryLobOptions = computed(() => {
 
                     <div
                         v-if="treasurySelections.length"
-                        class="grid gap-3 border-t border-primary/20 pt-5"
+                        class="grid min-w-0 grid-cols-1 gap-3 border-t border-primary/20 pt-5"
                     >
                         <h4 class="text-lg font-black">
                             Payment items for selected LOB
@@ -792,10 +1021,12 @@ const filteredTreasuryLobOptions = computed(() => {
                         <article
                             v-for="selection in treasurySelections"
                             :key="selection.line_of_business_id"
-                            class="grid gap-3 rounded-lg border bg-background p-4"
+                            class="grid min-w-0 grid-cols-1 gap-3 rounded-lg border bg-background p-4"
                         >
-                            <div class="flex items-start justify-between gap-3">
-                                <strong>{{
+                            <div
+                                class="flex min-w-0 items-start justify-between gap-3"
+                            >
+                                <strong class="min-w-0 break-words">{{
                                     task.financial_editor.line_of_business_options.find(
                                         (line) =>
                                             line.id ===
@@ -814,6 +1045,23 @@ const filteredTreasuryLobOptions = computed(() => {
                                     Remove
                                 </button>
                             </div>
+                            <EnterpriseClassificationSelector
+                                v-if="
+                                    enterpriseFee(selection.line_of_business_id)
+                                        ?.enterprise_schedule
+                                "
+                                :schedule="
+                                    enterpriseFee(
+                                        selection.line_of_business_id,
+                                    )!.enterprise_schedule!
+                                "
+                                :model-value="
+                                    selection.enterprise_classification ?? ''
+                                "
+                                @update:model-value="
+                                    determineEnterprise(selection, $event)
+                                "
+                            />
                             <FinancialLineItemEditor
                                 v-model="selection.items"
                                 :options="
@@ -828,11 +1076,20 @@ const filteredTreasuryLobOptions = computed(() => {
                     <Button
                         type="button"
                         size="lg"
+                        class="h-auto min-h-11 w-full min-w-0 whitespace-normal"
                         :disabled="!treasurySelectionsReady"
                         @click="confirmTreasuryLobs"
                     >
-                        Confirm Treasury Classification
+                        Confirm Treasury
                     </Button>
+                    <p
+                        v-if="!treasurySelectionsReady"
+                        class="text-xs text-amber-800 dark:text-amber-200"
+                        data-testid="treasury-confirm-reason"
+                    >
+                        Select a Line of Business and enterprise classification
+                        before confirming Treasury.
+                    </p>
                 </template>
 
                 <div
@@ -1057,6 +1314,429 @@ const filteredTreasuryLobOptions = computed(() => {
                         >
                             Ipil source-backed fee menu
                         </p>
+                        <section
+                            v-if="work.office_code === 'menro'"
+                            class="grid gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+                            aria-labelledby="menro-determination-heading"
+                        >
+                            <div>
+                                <h3
+                                    id="menro-determination-heading"
+                                    class="font-black"
+                                >
+                                    Provisional MENRO determination
+                                </h3>
+                                <p class="mt-1 text-sm leading-6">
+                                    {{
+                                        task.financial_editor
+                                            .menro_determination_proposal
+                                            ?.warning ??
+                                        'Synthetic-UAT evidence only; this is not municipal policy.'
+                                    }}
+                                </p>
+                            </div>
+                            <dl
+                                v-if="task.financial_editor.menro_determination"
+                                class="grid gap-2 text-sm sm:grid-cols-2"
+                            >
+                                <div>
+                                    <dt class="font-semibold">
+                                        Determination record ID
+                                    </dt>
+                                    <dd>
+                                        #{{
+                                            task.financial_editor
+                                                .menro_determination.id
+                                        }}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="font-semibold">Scope</dt>
+                                    <dd>
+                                        {{
+                                            task.financial_editor
+                                                .menro_determination.scope ===
+                                            'application'
+                                                ? 'Application'
+                                                : task.financial_editor
+                                                      .menro_determination.scope
+                                        }}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="font-semibold">
+                                        Source identity
+                                    </dt>
+                                    <dd>
+                                        {{
+                                            task.financial_editor
+                                                .menro_determination
+                                                .source_identity
+                                        }}
+                                    </dd>
+                                </div>
+                                <div class="min-w-0">
+                                    <dt class="font-semibold">
+                                        Canonical code
+                                    </dt>
+                                    <dd class="font-mono text-xs break-words">
+                                        {{
+                                            task.financial_editor
+                                                .menro_determination.code
+                                        }}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="font-semibold">Basis</dt>
+                                    <dd class="break-words">
+                                        {{
+                                            task.financial_editor
+                                                .menro_determination.basis
+                                        }}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="font-semibold">Area basis</dt>
+                                    <dd>
+                                        {{
+                                            task.financial_editor
+                                                .menro_determination
+                                                .application_area_square_meters
+                                        }}
+                                        m² /
+                                        {{
+                                            task.financial_editor.menro_determination.calculation_basis_centi_square_meters.toLocaleString()
+                                        }}
+                                        centi-square-meters
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="font-semibold">
+                                        Operative range
+                                    </dt>
+                                    <dd>
+                                        {{
+                                            task.financial_editor.menro_determination.operative_range_min_centi_square_meters.toLocaleString()
+                                        }}–{{
+                                            task.financial_editor.menro_determination.operative_range_max_centi_square_meters.toLocaleString()
+                                        }}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="font-semibold">
+                                        Provisional amount
+                                    </dt>
+                                    <dd>
+                                        {{
+                                            money(
+                                                task.financial_editor
+                                                    .menro_determination
+                                                    .amount_minor,
+                                            )
+                                        }}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="font-semibold">
+                                        Schedule / version
+                                    </dt>
+                                    <dd class="break-words">
+                                        {{
+                                            task.financial_editor
+                                                .menro_determination
+                                                .schedule_version
+                                        }}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="font-semibold">
+                                        Source evidence
+                                    </dt>
+                                    <dd>
+                                        {{
+                                            task.financial_editor
+                                                .menro_determination
+                                                .source_evidence
+                                        }}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="font-semibold">
+                                        Classification
+                                    </dt>
+                                    <dd class="break-words">
+                                        {{
+                                            task.financial_editor
+                                                .menro_determination
+                                                .classification
+                                        }}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="font-semibold">
+                                        Production authority
+                                    </dt>
+                                    <dd>
+                                        {{
+                                            task.financial_editor
+                                                .menro_determination
+                                                .production_authority
+                                                ? 'Yes'
+                                                : 'No'
+                                        }}
+                                    </dd>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <dt class="font-semibold">Reason</dt>
+                                    <dd class="break-words">
+                                        {{
+                                            task.financial_editor
+                                                .menro_determination.reason
+                                        }}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="font-semibold">
+                                        Recorded actor
+                                    </dt>
+                                    <dd class="break-words">
+                                        {{
+                                            task.financial_editor
+                                                .menro_determination.actor ??
+                                            'Not recorded'
+                                        }}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="font-semibold">
+                                        Recorded timestamp
+                                    </dt>
+                                    <dd>
+                                        {{
+                                            dateTime(
+                                                task.financial_editor
+                                                    .menro_determination
+                                                    .determined_at,
+                                            )
+                                        }}
+                                    </dd>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <dt class="font-semibold">Fingerprint</dt>
+                                    <dd class="font-mono text-xs break-all">
+                                        {{
+                                            task.financial_editor
+                                                .menro_determination.fingerprint
+                                        }}
+                                    </dd>
+                                </div>
+                                <div
+                                    class="text-sm font-semibold sm:col-span-2"
+                                >
+                                    {{
+                                        task.financial_editor
+                                            .menro_determination.warning
+                                    }}
+                                </div>
+                            </dl>
+                            <template
+                                v-else-if="
+                                    task.financial_editor
+                                        .can_record_menro_determination &&
+                                    task.financial_editor
+                                        .menro_determination_proposal
+                                "
+                            >
+                                <dl class="grid gap-2 text-sm sm:grid-cols-2">
+                                    <div>
+                                        <dt class="font-semibold">Scope</dt>
+                                        <dd>
+                                            {{
+                                                task.financial_editor
+                                                    .menro_determination_proposal
+                                                    .scope_label
+                                            }}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt class="font-semibold">
+                                            Source identity
+                                        </dt>
+                                        <dd>
+                                            {{
+                                                task.financial_editor
+                                                    .menro_determination_proposal
+                                                    .source_identity
+                                            }}
+                                        </dd>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <dt class="font-semibold">
+                                            Canonical code
+                                        </dt>
+                                        <dd
+                                            class="font-mono text-xs break-words"
+                                        >
+                                            {{
+                                                task.financial_editor
+                                                    .menro_determination_proposal
+                                                    .code
+                                            }}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt class="font-semibold">Basis</dt>
+                                        <dd class="break-words">
+                                            {{
+                                                task.financial_editor
+                                                    .menro_determination_proposal
+                                                    .basis
+                                            }}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt class="font-semibold">
+                                            Application area
+                                        </dt>
+                                        <dd>
+                                            {{
+                                                task.financial_editor
+                                                    .menro_determination_proposal
+                                                    .application_area_square_meters
+                                            }}
+                                            m²
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt class="font-semibold">
+                                            Calculation basis
+                                        </dt>
+                                        <dd>
+                                            {{
+                                                task.financial_editor.menro_determination_proposal.calculation_basis_centi_square_meters.toLocaleString()
+                                            }}
+                                            centi-square-meters
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt class="font-semibold">
+                                            Operative range
+                                        </dt>
+                                        <dd>
+                                            {{
+                                                task.financial_editor.menro_determination_proposal.operative_range_min_centi_square_meters.toLocaleString()
+                                            }}–{{
+                                                task.financial_editor.menro_determination_proposal.operative_range_max_centi_square_meters.toLocaleString()
+                                            }}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt class="font-semibold">Amount</dt>
+                                        <dd>
+                                            {{
+                                                money(
+                                                    task.financial_editor
+                                                        .menro_determination_proposal
+                                                        .amount_minor,
+                                                )
+                                            }}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt class="font-semibold">
+                                            Schedule / version
+                                        </dt>
+                                        <dd class="break-words">
+                                            {{
+                                                task.financial_editor
+                                                    .menro_determination_proposal
+                                                    .schedule_version
+                                            }}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt class="font-semibold">
+                                            Source evidence
+                                        </dt>
+                                        <dd>
+                                            {{
+                                                task.financial_editor
+                                                    .menro_determination_proposal
+                                                    .source_evidence
+                                            }}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt class="font-semibold">
+                                            Classification
+                                        </dt>
+                                        <dd class="break-words">
+                                            {{
+                                                task.financial_editor
+                                                    .menro_determination_proposal
+                                                    .classification
+                                            }}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt class="font-semibold">
+                                            Production authority
+                                        </dt>
+                                        <dd>
+                                            {{
+                                                task.financial_editor
+                                                    .menro_determination_proposal
+                                                    .production_authority
+                                                    ? 'Yes'
+                                                    : 'No'
+                                            }}
+                                        </dd>
+                                    </div>
+                                    <div class="sm:col-span-2">
+                                        <dt class="font-semibold">Reason</dt>
+                                        <dd class="break-words">
+                                            {{
+                                                task.financial_editor
+                                                    .menro_determination_proposal
+                                                    .reason
+                                            }}
+                                        </dd>
+                                    </div>
+                                    <div class="sm:col-span-2">
+                                        <dt class="font-semibold">Actor</dt>
+                                        <dd class="break-words">
+                                            {{
+                                                task.financial_editor
+                                                    .menro_determination_proposal
+                                                    .actor_statement
+                                            }}
+                                        </dd>
+                                    </div>
+                                    <div class="sm:col-span-2">
+                                        <dt class="font-semibold">Timestamp</dt>
+                                        <dd class="break-words">
+                                            {{
+                                                task.financial_editor
+                                                    .menro_determination_proposal
+                                                    .timestamp_statement
+                                            }}
+                                        </dd>
+                                    </div>
+                                </dl>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    :disabled="menroDeterminationPending"
+                                    @click="recordProvisionalMenroDetermination"
+                                >
+                                    {{
+                                        menroDeterminationPending
+                                            ? 'Recording determination…'
+                                            : 'Record Provisional Determination'
+                                    }}
+                                </Button>
+                            </template>
+                        </section>
                         <FinancialLineItemEditor
                             v-model="officeItems[work.id]"
                             :options="
@@ -1139,6 +1819,22 @@ const filteredTreasuryLobOptions = computed(() => {
                     >
                         <strong>{{ assignment.name }}</strong>
                         <p
+                            v-if="assignment.enterprise_determination"
+                            class="text-sm break-words"
+                        >
+                            Enterprise Classification:
+                            {{
+                                assignment.enterprise_determination
+                                    .classification
+                            }}
+                            · Provisional UAT policy — pending Ipil Officer
+                            confirmation ·
+                            {{
+                                assignment.enterprise_determination.schedule
+                                    .version
+                            }}
+                        </p>
+                        <p
                             v-for="item in assignment.items"
                             :key="item.name"
                             class="flex justify-between"
@@ -1205,6 +1901,22 @@ const filteredTreasuryLobOptions = computed(() => {
                                 Remove LOB
                             </button>
                         </div>
+                        <EnterpriseClassificationSelector
+                            v-if="
+                                enterpriseFee(selection.line_of_business_id)
+                                    ?.enterprise_schedule
+                            "
+                            :schedule="
+                                enterpriseFee(selection.line_of_business_id)!
+                                    .enterprise_schedule!
+                            "
+                            :model-value="
+                                selection.enterprise_classification ?? ''
+                            "
+                            @update:model-value="
+                                determineEnterprise(selection, $event)
+                            "
+                        />
                         <FinancialLineItemEditor
                             v-model="selection.items"
                             :options="
@@ -1218,7 +1930,7 @@ const filteredTreasuryLobOptions = computed(() => {
                         type="button"
                         :disabled="!treasurySelectionsReady"
                         @click="confirmTreasuryLobs"
-                        >Confirm Treasury Classification</Button
+                        >Confirm Treasury</Button
                     >
                 </template>
             </section>
@@ -1315,6 +2027,9 @@ const filteredTreasuryLobOptions = computed(() => {
 
             <fieldset
                 v-if="task.application.commissioned_path"
+                :disabled="
+                    pending || routingAcknowledged || routingOutcomeUnconfirmed
+                "
                 data-testid="concerned-office-checklist"
                 class="divide-y rounded-xl border px-4"
             >
@@ -1340,6 +2055,11 @@ const filteredTreasuryLobOptions = computed(() => {
                 <fieldset
                     v-for="group in officeGroups"
                     :key="group.office.code"
+                    :disabled="
+                        pending ||
+                        routingAcknowledged ||
+                        routingOutcomeUnconfirmed
+                    "
                     class="grid gap-3 rounded-xl border p-4"
                 >
                     <legend class="px-1 font-black">
@@ -1401,6 +2121,21 @@ const filteredTreasuryLobOptions = computed(() => {
             >
                 {{ routingMessage }}
             </p>
+            <a
+                v-if="routingAcknowledged"
+                :href="workInbox.url()"
+                class="font-semibold underline"
+            >
+                Return to My Work
+            </a>
+            <Button
+                v-if="routingOutcomeUnconfirmed"
+                type="button"
+                variant="outline"
+                @click="reviewRoutingRecord"
+            >
+                Reload routing record
+            </Button>
 
             <div
                 class="sticky bottom-0 -mx-4 flex flex-col gap-3 border-t bg-white/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between dark:bg-slate-900/95"
@@ -1410,7 +2145,12 @@ const filteredTreasuryLobOptions = computed(() => {
                 </p>
                 <Button
                     type="submit"
-                    :disabled="pending || selectedCount === 0"
+                    :disabled="
+                        pending ||
+                        routingAcknowledged ||
+                        routingOutcomeUnconfirmed ||
+                        selectedCount === 0
+                    "
                     data-testid="confirm-bplo-routing"
                 >
                     {{

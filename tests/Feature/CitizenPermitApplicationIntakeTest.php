@@ -1,5 +1,6 @@
 <?php
 
+use App\Data\Application\ApplicationDataResolver;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
 use App\Enums\UserPermission;
@@ -10,6 +11,9 @@ use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('citizen permit routes require authentication and citizen permissions', function () {
@@ -503,6 +507,56 @@ test('citizen application lists and details are scoped to the authenticated port
         ->assertNotFound();
 });
 
+test('Citizen occupancy saves reloads and freezes the application declaration without changing shared authorization', function (string $occupancy) {
+    Storage::fake('local');
+    $citizen = userWithPermissions([
+        UserPermission::AccessCitizen,
+        UserPermission::CreateOwnPermitApplications,
+        UserPermission::EditOwnPermitApplications,
+        UserPermission::ViewOwnPermitApplications,
+        UserPermission::SubmitOwnPermitApplications,
+    ], UserRole::Citizen);
+    $permissionsBefore = DB::table('role_has_permissions')->orderBy('role_id')->orderBy('permission_id')->get()->toJson();
+    $rolesBefore = DB::table('roles')->orderBy('id')->get()->toJson();
+    $payload = citizenPermitDraftPayload([
+        'business_activity_description' => 'Retail sale of fish.',
+        'business_barangay_psgc_code' => config('ipil_references.barangays.items.0.code'),
+        'occupancy' => $occupancy,
+        'undertaking_accepted' => '0',
+    ]);
+    $this->actingAs($citizen)->post(route('citizen.permit-applications.store'), $payload)
+        ->assertSessionHasNoErrors()->assertRedirect();
+    $application = PermitApplication::query()->whereBelongsTo($citizen, 'submittedBy')->sole();
+    expect($application->business->occupancy)->toBe($occupancy)
+        ->and($application->status)->toBe(PermitApplicationStatus::Draft);
+    $this->get(route('citizen.permit-applications.edit', $application))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('draft.occupancy', $occupancy)
+            ->where('draft.declaration.rental.place_is_rented', $occupancy === 'rented'));
+
+    $changedOccupancy = $occupancy === 'rented' ? 'owned' : 'rented';
+    $this->patch(route('citizen.permit-applications.update', $application), [
+        ...$payload,
+        'occupancy' => $changedOccupancy,
+        'draft_version' => $application->updated_at->toIso8601String(),
+    ])->assertSessionHasNoErrors()->assertRedirect();
+    $this->get(route('citizen.permit-applications.edit', $application))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('draft.occupancy', $occupancy)
+            ->where('draft.declaration.rental.place_is_rented', $changedOccupancy === 'rented'));
+    expect($application->business->fresh()->occupancy)->toBe($occupancy);
+
+    $this->post(route('citizen.permit-applications.submit', $application), [
+        'undertaking_accepted' => '1',
+        'signature_facsimile' => UploadedFile::fake()->image('signature.png'),
+    ])->assertSessionHasNoErrors()->assertRedirect();
+    $projection = app(ApplicationDataResolver::class)->resolve($application->fresh(), $citizen)->toArray();
+    expect(data_get($projection, 'declaration.state'))->toBe('frozen')
+        ->and(data_get($projection, 'declaration.snapshot.rental.place_is_rented'))->toBe($changedOccupancy === 'rented')
+        ->and(DB::table('role_has_permissions')->orderBy('role_id')->orderBy('permission_id')->get()->toJson())->toBe($permissionsBefore)
+        ->and(DB::table('roles')->orderBy('id')->get()->toJson())->toBe($rolesBefore);
+})->with(['owned', 'rented']);
+
 test('citizen intake refuses official numbers and policy-sensitive application types', function (array $overrides, string $error): void {
     $citizen = userWithPermissions([
         UserPermission::AccessCitizen,
@@ -526,6 +580,10 @@ test('citizen intake refuses official numbers and policy-sensitive application t
         ->and(Business::query()->count())->toBe(0)
         ->and(BusinessOwner::query()->count())->toBe(0);
 })->with([
+    'unsupported occupancy' => [
+        ['occupancy' => 'unknown'],
+        'occupancy',
+    ],
     'official application number' => [
         ['application_number' => 'APP-CITIZEN-NOT-ALLOWED'],
         'application_number',

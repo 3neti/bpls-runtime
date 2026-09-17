@@ -18,6 +18,7 @@ use App\Models\PermitApplication;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
 use App\Models\User;
+use Carbon\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('staff users with view receipt permission can view receipt detail evidence', function () {
@@ -42,6 +43,7 @@ test('staff users with view receipt permission can view receipt detail evidence'
             ->where('receipt.permit_application.application_number', 'LOCAL-PERMIT')
             ->where('receipt.business.name', 'Codex Quantity Store')
             ->where('receipt.business.owner.name', 'Codex Owner')
+            ->has('receipt.allocations', 1)
             ->where('receipt.allocations.0.code', 'MAYOR-PERMIT')
             ->where('receipt.allocations.0.amount_cents', 12_500)
             ->where('receipt.void_boundary.status', 'blocked')
@@ -166,6 +168,7 @@ test('staff users with view receipt permission can open a receipt pdf artifact',
         ->toContain('Codex Quantity Store')
         ->toContain('Codex Browser Payer')
         ->toContain('MAYOR-PERMIT')
+        ->not->toContain('UNRELATED-LINE')
         ->toContain('Automatic receipt numbering authority remains unresolved.')
         ->toContain('Void, reprint, and reconciliation policy remain unresolved.')
         ->and(pdfPageCount($pdf))->toBe(1);
@@ -177,6 +180,24 @@ test('receipt pdf output is deterministic for the same persisted receipt facts',
     $renderer = app(RenderReceiptPdf::class);
 
     expect($renderer->handle($receipt))->toBe($renderer->handle($receipt->fresh()));
+});
+
+test('receipt screen and pdf use the explicit Manila civil date at a UTC boundary', function () {
+    expect(config('municipality.timezone'))->toBe('Asia/Manila');
+
+    $receipt = receiptDocumentFixture();
+    $receipt->forceFill(['issued_at' => Carbon::parse('2026-09-16 16:30:00', 'UTC')])->save();
+    $receipt->treasuryCollection->forceFill(['received_at' => Carbon::parse('2026-09-16 16:30:00', 'UTC')])->save();
+
+    $user = userWithPermissions([UserPermission::AccessStaff, UserPermission::ViewReceipts]);
+    $this->actingAs($user)
+        ->get(route('staff.receipts.show', $receipt))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('receipt.issued_at', '2026-09-17T00:30:00+08:00')
+            ->where('receipt.collection.received_at', '2026-09-17T00:30:00+08:00'));
+
+    $pdf = $this->actingAs($user)->get(route('staff.receipts.pdf', $receipt))->getContent();
+    expect($pdf)->toContain('September 17, 2026')->toContain('2026-09-17');
 });
 
 test('staff users without view receipt permission cannot view receipt details', function () {
@@ -274,7 +295,7 @@ function receiptDocumentFixture(): Receipt
             'status' => PaymentScheduleStatus::PartiallyPaid,
             'payment_mode' => 'single',
             'total_amount_cents' => 42_000,
-            'paid_amount_cents' => 12_500,
+            'paid_amount_cents' => 42_000,
         ]);
     $paymentLine = PaymentScheduleLine::factory()->for($paymentSchedule)->create([
         'code' => 'MAYOR-PERMIT',
@@ -282,7 +303,7 @@ function receiptDocumentFixture(): Receipt
         'category' => FeeRuleCategory::Fee,
         'status' => PaymentScheduleLineStatus::PartiallyPaid,
         'amount_cents' => 42_000,
-        'paid_amount_cents' => 12_500,
+        'paid_amount_cents' => 42_000,
     ]);
     $collection = TreasuryCollection::factory()
         ->for($paymentSchedule)
@@ -291,19 +312,28 @@ function receiptDocumentFixture(): Receipt
         ->for($receivedBy, 'receivedBy')
         ->create([
             'status' => TreasuryCollectionStatus::Receipted,
-            'amount_cents' => 12_500,
+            'amount_cents' => 42_000,
             'payer_name' => 'Codex Browser Payer',
             'reference_number' => 'CASH-REF',
         ]);
 
-    CollectionAllocation::factory()
+    $selectedAllocation = CollectionAllocation::factory()
         ->for($collection)
         ->for($paymentLine)
         ->create([
             'amount_cents' => 12_500,
         ]);
 
-    return Receipt::factory()
+    $siblingLine = PaymentScheduleLine::factory()->for($paymentSchedule)->create([
+        'code' => 'UNRELATED-LINE', 'name' => 'Unrelated sibling line',
+        'category' => FeeRuleCategory::Fee, 'amount_cents' => 29_500,
+        'paid_amount_cents' => 29_500,
+    ]);
+    CollectionAllocation::factory()->for($collection)->for($siblingLine)->create([
+        'amount_cents' => 29_500,
+    ]);
+
+    $receipt = Receipt::factory()
         ->for($collection)
         ->for($paymentSchedule)
         ->for($permitApplication)
@@ -322,6 +352,10 @@ function receiptDocumentFixture(): Receipt
                 ],
             ],
         ]);
+
+    $selectedAllocation->update(['receipt_id' => $receipt->id]);
+
+    return $receipt;
 }
 
 function pdfPageCount(string $pdf): int

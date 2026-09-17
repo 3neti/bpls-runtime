@@ -4,6 +4,7 @@ use App\Actions\ExecutePersistedLifecycleScenario;
 use App\Actions\IssueManualCollectionReceipt;
 use App\Actions\RecordPaymentScheduleCollection;
 use App\Data\Application\ApplicationDataResolver;
+use App\Enums\UserPermission;
 use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\Models\LifecycleScenarioSpecimen;
 use App\Models\LineOfBusiness;
@@ -20,6 +21,36 @@ beforeEach(function () {
 
 afterEach(function () {
     config()->set('stakeholder_preview.mode', false);
+});
+
+test('Attachment F exposes its PDF only to viewers authorized by the staff PDF endpoint', function () {
+    app(ExecutePersistedLifecycleScenario::class)->handle(NewApplicationHappyPathDefinition::Id);
+    $application = PermitApplication::query()->sole();
+    $resolver = app(ApplicationDataResolver::class);
+    $baseline = $resolver->resolve($application)->toArray()['permit'];
+
+    foreach ([
+        [],
+        [UserPermission::AccessStaff],
+        [UserPermission::ViewPermitApplications],
+        [UserPermission::AccessStaff, UserPermission::ViewPermitApplications],
+    ] as $permissions) {
+        $viewer = User::factory()->create();
+        $viewer->givePermissionTo(array_map(fn (UserPermission $permission): string => $permission->value, $permissions));
+        $permit = $resolver->resolve($application, $viewer)->toArray()['permit'];
+        $allowed = count($permissions) === 2;
+
+        expect($permit['printable_artifact_url'])->toBe($allowed
+            ? route('staff.permit-applications.permit.pdf', $application, false)
+            : null)
+            ->and(Arr::except($permit, ['printable_artifact_url']))
+            ->toBe(Arr::except($baseline, ['printable_artifact_url']));
+
+        $response = $this->actingAs($viewer)->get(route('staff.permit-applications.permit.pdf', $application));
+        $allowed ? $response->assertOk()->assertHeader('Content-Type', 'application/pdf') : $response->assertForbidden();
+    }
+
+    expect($baseline['printable_artifact_url'])->toBeNull();
 });
 
 test('ApplicationData V1 contains typed canonical facts without Eloquent models and varies only actor context', function () {

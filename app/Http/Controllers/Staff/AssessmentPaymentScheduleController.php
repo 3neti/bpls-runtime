@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Staff;
 
+use App\Actions\AuthorizeUatQrPhSimulation;
 use App\Actions\BuildClassicCashierQrPhHandoff;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\DescribeOnlinePaymentBoundary;
@@ -27,6 +28,7 @@ class AssessmentPaymentScheduleController extends Controller
         private readonly BuildClassicCashierQrPhHandoff $buildClassicCashierQrPhHandoff,
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly DescribePaymentPolicyBoundary $describePaymentPolicyBoundary,
+        private readonly AuthorizeUatQrPhSimulation $authorizeSimulation,
     ) {}
 
     public function index(Request $request): Response
@@ -114,7 +116,7 @@ class AssessmentPaymentScheduleController extends Controller
             'lines.lineOfBusiness',
         ]);
         $classicPaymentHandoff = $this->buildClassicCashierQrPhHandoff->handle($paymentSchedule, auth()->user());
-        $canSimulateClassicPayment = data_get($classicPaymentHandoff, 'is_current') === true;
+        $canSimulateClassicPayment = $this->authorizeSimulation->available($paymentSchedule, auth()->user());
 
         if ($canRecordCollections || $canViewCollections || $canIssueReceipts || $canViewReceipts) {
             $paymentSchedule->load([
@@ -141,7 +143,7 @@ class AssessmentPaymentScheduleController extends Controller
                 'view_collections' => $canViewCollections,
                 'issue_receipts' => $canIssueReceipts,
                 'view_receipts' => $canViewReceipts,
-                'initiate_qr_ph' => ! $isActiveClassicRun,
+                'initiate_qr_ph' => ! $isActiveClassicRun && $classicPaymentHandoff === null,
                 'simulate_classic_payment' => $canSimulateClassicPayment,
             ],
             'classicPaymentHandoff' => $classicPaymentHandoff,

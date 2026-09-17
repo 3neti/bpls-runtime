@@ -1,173 +1,98 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowRight, Building2, CheckCircle2 } from '@lucide/vue';
-import { dashboard, login, register } from '@/routes';
+import { login } from '@/routes';
+import { create, index } from '@/routes/citizen/permit-applications';
 import { index as servicesAndFeesIndex } from '@/routes/services-and-fees';
+
+defineProps<{ isNonProduction: boolean }>();
 </script>
 
 <template>
-    <Head title="Business Permit and Licensing System" />
-
-    <main class="min-h-svh bg-background text-foreground">
+    <div class="min-h-svh bg-background text-foreground">
+        <Head title="Business Permit and Licensing System" />
         <header class="border-b">
-            <div
-                class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4 sm:px-8"
-            >
-                <div class="min-w-0">
-                    <p class="font-semibold">Municipality of Ipil</p>
-                    <p
-                        class="truncate text-xs text-muted-foreground sm:text-sm"
-                    >
-                        Business Permit and Licensing System
-                    </p>
-                </div>
-                <nav
-                    aria-label="Account"
-                    class="flex shrink-0 items-center gap-2"
-                >
-                    <Link
-                        :href="servicesAndFeesIndex()"
-                        class="hidden rounded-md px-3 py-2 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex"
-                    >
-                        Schedule of Fees
-                    </Link>
-                    <Link
-                        v-if="$page.props.auth.user"
-                        :href="dashboard()"
-                        class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                        Open overview
-                    </Link>
-                    <template v-else>
-                        <Link
-                            :href="login()"
-                            class="rounded-md px-3 py-2 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                            Log in
-                        </Link>
-                        <Link
-                            :href="register()"
-                            class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                            Register
-                        </Link>
-                    </template>
-                </nav>
+            <div class="mx-auto max-w-5xl px-5 py-6 sm:px-8">
+                <p class="text-lg font-semibold">Municipality of Ipil</p>
             </div>
         </header>
-
-        <section
-            class="mx-auto grid max-w-6xl gap-10 px-5 py-14 sm:px-8 sm:py-20 lg:grid-cols-[1.2fr_0.8fr] lg:items-center"
+        <main
+            class="mx-auto grid max-w-5xl gap-8 px-5 py-8 sm:gap-10 sm:px-8 sm:py-12"
         >
-            <div class="space-y-6">
-                <p class="text-sm font-medium text-muted-foreground">
-                    Municipal online service
+            <div class="grid gap-3">
+                <h1
+                    class="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl"
+                >
+                    Business Permit and Licensing System
+                </h1>
+                <p class="max-w-2xl leading-7 text-muted-foreground">
+                    Start a business permit application or continue your
+                    existing application.
                 </p>
-                <div class="space-y-4">
-                    <h1
-                        class="max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl"
-                    >
-                        Business permits, clearly tracked from application to
-                        municipal review.
-                    </h1>
-                    <p
-                        class="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg"
-                    >
-                        Start a permit application, provide supporting
-                        information, and follow the progress recorded by the
-                        Municipality of Ipil.
-                    </p>
-                </div>
-                <div class="flex flex-wrap gap-3">
-                    <Link
-                        :href="servicesAndFeesIndex()"
-                        class="inline-flex items-center gap-2 rounded-md border px-5 py-3 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                        View Municipal Schedule of Fees
-                    </Link>
-                    <Link
-                        v-if="$page.props.auth.user"
-                        :href="dashboard()"
-                        class="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-3 text-sm font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                        Continue to BPLS
-                        <ArrowRight class="size-4" aria-hidden="true" />
-                    </Link>
-                    <template v-else>
-                        <Link
-                            :href="register()"
-                            class="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-3 text-sm font-medium text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                            Create an account
-                            <ArrowRight class="size-4" aria-hidden="true" />
-                        </Link>
-                        <Link
-                            :href="login()"
-                            class="rounded-md border px-5 py-3 text-sm font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                            Log in
-                        </Link>
-                    </template>
-                </div>
             </div>
-
-            <aside
-                class="rounded-2xl border bg-card p-6 shadow-sm sm:p-8"
-                aria-labelledby="service-scope-heading"
+            <nav aria-label="BPLS services" class="grid gap-4 sm:grid-cols-2">
+                <Link
+                    :href="create()"
+                    class="grid gap-2 rounded-xl border border-primary bg-primary p-5 text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background sm:p-6"
+                >
+                    <span class="text-lg font-semibold"
+                        >Apply for a Business Permit</span
+                    >
+                    <span class="text-sm leading-6"
+                        >Log in or create a citizen account to start.</span
+                    >
+                </Link>
+                <Link
+                    :href="index()"
+                    class="grid gap-2 rounded-xl border bg-card p-5 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background sm:p-6"
+                >
+                    <span class="text-lg font-semibold"
+                        >Track or Continue Application</span
+                    >
+                    <span class="text-sm leading-6 text-muted-foreground"
+                        >Log in to view your applications and resume a
+                        draft.</span
+                    >
+                </Link>
+                <Link
+                    :href="login()"
+                    class="grid gap-2 rounded-xl border bg-card p-5 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background sm:p-6"
+                >
+                    <span class="text-lg font-semibold">Staff Login</span>
+                    <span class="text-sm leading-6 text-muted-foreground"
+                        >Municipal personnel: use your assigned account.</span
+                    >
+                </Link>
+                <section
+                    aria-labelledby="verify-heading"
+                    class="grid content-start gap-2 rounded-xl border bg-card p-5 sm:p-6"
+                >
+                    <h2 id="verify-heading" class="text-lg font-semibold">
+                        Verify Business Permit
+                    </h2>
+                    <p class="text-sm leading-6 text-muted-foreground">
+                        Use the QR code or verification link shown on the
+                        Permit. Verification is available through that exact
+                        link, not a name search.
+                    </p>
+                </section>
+            </nav>
+            <Link
+                :href="servicesAndFeesIndex()"
+                class="w-fit rounded-md py-2 font-medium underline underline-offset-4 outline-none hover:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background"
+                >Municipal Schedule of Fees</Link
             >
-                <Building2
-                    class="size-8 text-muted-foreground"
-                    aria-hidden="true"
-                />
-                <h2
-                    id="service-scope-heading"
-                    class="mt-5 text-xl font-semibold"
-                >
-                    What you can do here
-                </h2>
-                <ul class="mt-5 space-y-4 text-sm leading-6">
-                    <li class="flex gap-3">
-                        <CheckCircle2
-                            class="mt-0.5 size-5 shrink-0 text-muted-foreground"
-                            aria-hidden="true"
-                        />
-                        <span
-                            >Create and submit a business permit
-                            application.</span
-                        >
-                    </li>
-                    <li class="flex gap-3">
-                        <CheckCircle2
-                            class="mt-0.5 size-5 shrink-0 text-muted-foreground"
-                            aria-hidden="true"
-                        />
-                        <span
-                            >Review municipal processing, assessment, payment,
-                            clearance, and artifact progress recorded for your
-                            application.</span
-                        >
-                    </li>
-                    <li class="flex gap-3">
-                        <CheckCircle2
-                            class="mt-0.5 size-5 shrink-0 text-muted-foreground"
-                            aria-hidden="true"
-                        />
-                        <span
-                            >Receive account notices about municipal receipt and
-                            processing.</span
-                        >
-                    </li>
-                </ul>
-                <p
-                    class="mt-6 border-t pt-5 text-sm leading-6 text-muted-foreground"
-                >
-                    The current service ends at
-                    <strong class="text-foreground"
-                        >Ready for Authority Review</strong
-                    >. Permit issuance, release, validity, and legal effect are
-                    not available.
+            <aside
+                v-if="isNonProduction"
+                aria-label="Testing environment"
+                class="grid gap-2 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+            >
+                <p class="font-semibold">UAT · Not for production use</p>
+                <p>
+                    Test authority is synthetic, payments are simulated, and
+                    municipal policy remains provisional. Test permits have no
+                    production legal effect.
                 </p>
             </aside>
-        </section>
-    </main>
+        </main>
+    </div>
 </template>

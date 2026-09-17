@@ -36,10 +36,12 @@ use App\Http\Controllers\Staff\FeeMatrixController;
 use App\Http\Controllers\Staff\FeeRuleController;
 use App\Http\Controllers\Staff\IpilHistoricalRecordController;
 use App\Http\Controllers\Staff\LegacyFeeCatalogController;
+use App\Http\Controllers\Staff\MenroFeeDeterminationController;
 use App\Http\Controllers\Staff\MunicipalityConfigurationController;
 use App\Http\Controllers\Staff\MunicipalServiceCatalogController;
 use App\Http\Controllers\Staff\MunicipalWorkInboxController;
 use App\Http\Controllers\Staff\OfficePaymentOrderController;
+use App\Http\Controllers\Staff\OrdinaryUatPermitController;
 use App\Http\Controllers\Staff\PaidEstablishmentReportController;
 use App\Http\Controllers\Staff\PaymentScheduleCollectionController;
 use App\Http\Controllers\Staff\PaymentSummaryReportController;
@@ -47,6 +49,7 @@ use App\Http\Controllers\Staff\PermitApplicationAssessmentController;
 use App\Http\Controllers\Staff\PermitApplicationController;
 use App\Http\Controllers\Staff\PermitApplicationDocumentController;
 use App\Http\Controllers\Staff\PldsReportController;
+use App\Http\Controllers\Staff\PostPaymentCertificationController;
 use App\Http\Controllers\Staff\QrPhPaymentController as StaffQrPhPaymentController;
 use App\Http\Controllers\Staff\ReceiptController;
 use App\Http\Controllers\Staff\ReportCatalogController;
@@ -72,6 +75,10 @@ use Illuminate\Support\Facades\Route;
 
 $stakeholderPreviewSafety = app(StakeholderPreviewSafety::class);
 
+Route::inertia('/', 'Welcome', [
+    'isNonProduction' => ! app()->environment('production'),
+])->name('home');
+
 if ($stakeholderPreviewSafety->isEnabled()) {
     $stakeholderPreviewMiddleware = [EnsureStakeholderPreviewIsSafe::class, 'throttle:stakeholder-preview'];
 
@@ -86,7 +93,7 @@ if ($stakeholderPreviewSafety->isEnabled()) {
     }
 
     Route::middleware($stakeholderPreviewMiddleware)->group(function () {
-        Route::get('/', [StakeholderPreviewController::class, 'index'])->name('home');
+        Route::get('stakeholder-preview', [StakeholderPreviewController::class, 'index'])->name('stakeholder-preview.index');
         Route::get('stakeholder-preview/walkthrough', [StakeholderPreviewController::class, 'walkthrough'])
             ->name('stakeholder-preview.walkthrough');
         Route::post('stakeholder-preview/enter/{persona}', [StakeholderPreviewController::class, 'enter'])
@@ -152,8 +159,6 @@ if ($stakeholderPreviewSafety->isEnabled()) {
                 ->name('stakeholder-preview.permit-decision.store');
         });
     });
-} else {
-    Route::inertia('/', 'Welcome')->name('home');
 }
 
 $restrictedReviewMiddleware = $stakeholderPreviewSafety->requiresPrivateAuthentication()
@@ -215,6 +220,10 @@ Route::middleware(['auth', 'verified', EnsureActiveUserAccess::class])->group(fu
         Route::get('ipil-history/businesses/{business}', [IpilHistoricalRecordController::class, 'business'])->whereNumber('business')->name('ipil-history.businesses.show');
         Route::get('ipil-history/applications/{application}', [IpilHistoricalRecordController::class, 'application'])->whereNumber('application')->name('ipil-history.applications.show');
         Route::get('ipil-history/businesses/{business}/documents/{document}', [IpilHistoricalRecordController::class, 'document'])->whereNumber(['business', 'document'])->name('ipil-history.documents.view');
+        Route::get('post-payment-certifications/{certification}', [PostPaymentCertificationController::class, 'show'])->name('post-payment-certifications.show');
+        Route::get('permit-applications/{permitApplication}/uat-permit', [OrdinaryUatPermitController::class, 'show'])->name('ordinary-uat-permit.show');
+        Route::post('permit-applications/{permitApplication}/uat-permit', [OrdinaryUatPermitController::class, 'store'])->name('ordinary-uat-permit.store');
+        Route::post('post-payment-certifications/{certification}', [PostPaymentCertificationController::class, 'store'])->name('post-payment-certifications.store');
         Route::get('services-and-fees', [MunicipalServiceCatalogController::class, 'index'])
             ->name('services-and-fees.index');
         Route::get('permit-applications/assessments', [PermitApplicationAssessmentController::class, 'index'])
@@ -229,6 +238,8 @@ Route::middleware(['auth', 'verified', EnsureActiveUserAccess::class])->group(fu
             ->name('permit-applications.bplo-routing.store');
         Route::post('permit-applications/{permitApplication}/office-payment-orders/{work}', [OfficePaymentOrderController::class, 'store'])
             ->name('permit-applications.office-payment-orders.store');
+        Route::post('permit-applications/{permitApplication}/menro-fee-determination', [MenroFeeDeterminationController::class, 'store'])
+            ->name('permit-applications.menro-fee-determination.store');
         Route::post('permit-applications/{permitApplication}/treasury-lines-of-business', [TreasuryLineOfBusinessController::class, 'store'])
             ->name('permit-applications.treasury-lines-of-business.store');
         Route::post('permit-applications/{permitApplication}/evaluation', [BusinessPermitEvaluationController::class, 'initialize'])

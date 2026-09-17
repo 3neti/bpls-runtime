@@ -306,7 +306,7 @@ test('authoritative full collection enters the existing collection receipt and r
     expect(data_get($collectedApplicationData, 'payment.payment_request.state'))->toBe('collected')
         ->and(data_get($collectedApplicationData, 'payment.payment_request.collection_id'))->toBe($collection->id)
         ->and(data_get($collectedApplicationData, 'payment.payment_request.collection_reference'))->toBe($collection->reference_number)
-        ->and(data_get($collectedApplicationData, 'payment.payment_request.active_attempt.qr_data_url'))->not->toBeNull()
+        ->and(data_get($collectedApplicationData, 'payment.payment_request.active_attempt'))->toBeNull()
         ->and($collectedApplicationData['official_receipts'])->toBe([])
         ->and($collectedApplicationData['permit']['official_receipt_bound'])->toBeFalse();
 

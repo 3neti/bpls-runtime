@@ -5,10 +5,12 @@ namespace App\Actions;
 use App\Assessment\AssessmentPriceInputResolver;
 use App\Assessment\Price\CanonicalFinancialFingerprint;
 use App\Assessment\Price\Price;
+use App\Data\Assessment\AssessmentPriceInput;
 use App\Enums\AssessmentDecisionAction;
 use App\Enums\AssessmentStatus;
 use App\Enums\PermitApplicationStatus;
 use App\Evaluation\BusinessPermitEvaluationReadiness;
+use App\Evaluation\FrozenFinancialEvaluation;
 use App\Exceptions\UnsupportedAssessmentPolicy;
 use App\Models\Assessment;
 use App\Models\BusinessPermitEvaluation;
@@ -24,15 +26,24 @@ class CreateAssessmentForPermitApplication
         private PermitApplicationStatusMutation $statusMutation,
         private AssessmentPriceInputResolver $priceInputResolver,
         private CanonicalFinancialFingerprint $financialFingerprint,
+        private FrozenFinancialEvaluation $frozenEvaluation,
     ) {}
 
     public function handle(PermitApplication $permitApplication, ?User $assessedBy = null): Assessment
     {
         return DB::transaction(function () use ($permitApplication, $assessedBy): Assessment {
+            $permitApplication = PermitApplication::query()->lockForUpdate()->findOrFail($permitApplication->id);
             $permitApplication->loadMissing(['business', 'lines.lineOfBusiness']);
 
             $evaluation = $permitApplication->businessPermitEvaluation()->with('currentVersion.counterCheck')->first();
             $evaluationProjection = null;
+            $frozen = null;
+            if (data_get($permitApplication->metadata, 'nelson_reconciliation_v1.commissioned_path') === true) {
+                if ($evaluation?->currentVersion === null) {
+                    throw new UnsupportedAssessmentPolicy('Assessment requires the frozen financial Evaluation version created by Treasury confirmation.');
+                }
+                $frozen = $this->frozenEvaluation->read($evaluation->currentVersion);
+            }
 
             if ($evaluation instanceof BusinessPermitEvaluation) {
                 $evaluationMode = $this->evaluationMode($permitApplication);
@@ -68,12 +79,17 @@ class CreateAssessmentForPermitApplication
                 ->whereNull('superseded_at')
                 ->update(['superseded_at' => now()]);
 
-            $priceInput = $this->priceInputResolver->resolve($permitApplication, $evaluationProjection);
+            $priceInput = $frozen === null
+                ? $this->priceInputResolver->resolve($permitApplication, $evaluationProjection)
+                : AssessmentPriceInput::from($frozen['input']);
             $inputSnapshot = $priceInput->toArray();
             $inputFingerprint = $this->financialFingerprint->hash($inputSnapshot);
             $resolvedPrice = Price::fromInput($priceInput)->resolve();
             $reportSnapshot = Price::fromInput($priceInput)->report()->toArray();
             $reportFingerprint = $this->financialFingerprint->hash($reportSnapshot);
+            if ($frozen !== null && $reportFingerprint !== $this->financialFingerprint->hash($frozen['report'])) {
+                throw new LogicException('Assessment Price result differs from the frozen Evaluation result.');
+            }
 
             $assessment = $permitApplication->assessments()->create([
                 'business_permit_evaluation_version_id' => $evaluationProjection['version_id'] ?? null,

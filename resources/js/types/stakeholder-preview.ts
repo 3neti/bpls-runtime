@@ -25,6 +25,7 @@ export type StakeholderPreviewGuidance = {
 
 export type StakeholderPreviewContext = {
     enabled: true;
+    show_engineering_controls: boolean;
     authorized_legacy_review: boolean;
     access: 'open' | 'private';
     current_persona: StakeholderPreviewPersona['key'] | null;
