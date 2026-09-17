@@ -14,6 +14,7 @@ use LogicException;
 final class RecordProvisionalMenroFeeDetermination
 {
     public const OfficeCode = 'menro';
+
     public function __construct(
         private readonly AuthorizeRoutedOfficeActor $authorizeRoutedOfficeActor,
         private readonly CanonicalFinancialFingerprint $fingerprint,
@@ -73,8 +74,8 @@ final class RecordProvisionalMenroFeeDetermination
     private function assertExactFacts(PermitApplication $application, array $facts): void
     {
         $expected = $this->proposal->facts($application);
-        if ($expected === [] || $application->id !== 3 || $application->application_year !== 2026 || $application->type->value !== 'new') {
-            throw new LogicException('This provisional MENRO determination is authorized only for Application 3.');
+        if ($expected === []) {
+            throw new LogicException('This application is not eligible for a provisional MENRO determination.');
         }
         foreach ($expected as $key => $value) {
             if (($facts[$key] ?? null) !== $value) {

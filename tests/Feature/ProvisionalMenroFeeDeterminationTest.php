@@ -1,17 +1,15 @@
 <?php
 
-use App\Actions\RecordProvisionalMenroFeeDetermination;
 use App\Actions\BuildBploRoutingTask;
 use App\Actions\ProvisionalMenroFeeDeterminationProposal;
-use App\Enums\FeeDeterminationChannel;
-use App\Enums\FeeRuleCalculationType;
-use App\Enums\FeeRuleCategory;
-use App\Enums\FeeRuleScope;
+use App\Actions\RecordProvisionalMenroFeeDetermination;
 use App\Models\BploRoutingDetermination;
 use App\Models\BploRoutingWork;
 use App\Models\FeeRule;
 use App\Models\PermitApplication;
+use App\Models\PermitApplicationDeclaration;
 use App\Models\Role;
+use Database\Seeders\MunicipalFeeCatalogSeeder;
 use Illuminate\Support\Facades\Artisan;
 
 function provisionalMenroFacts(): array
@@ -37,11 +35,23 @@ function provisionalMenroFacts(): array
 function provisionalMenroFixture(): array
 {
     Artisan::call('bpls:install');
-    PermitApplication::factory()->create();
-    PermitApplication::factory()->create();
+    Artisan::call('db:seed', ['--class' => MunicipalFeeCatalogSeeder::class]);
+    PermitApplication::factory()->count(4)->create();
     $application = PermitApplication::factory()->create([
         'application_year' => 2026,
         'metadata' => ['nelson_reconciliation_v1' => ['commissioned_path' => true]],
+    ]);
+    $application->business->update(['business_area_square_meters' => 12]);
+    PermitApplicationDeclaration::factory()->for($application)->create([
+        'snapshot' => [
+            'schema_version' => 1,
+            'establishment' => [
+                'total_employees' => 1,
+                'male_employees' => 1,
+                'female_employees' => 0,
+                'business_area_square_meters' => '12.00',
+            ],
+        ],
     ]);
     $actor = userWithRole(Role::query()->where('code', 'menro')->sole());
     $determination = BploRoutingDetermination::factory()->for($application)->create();
@@ -50,23 +60,13 @@ function provisionalMenroFixture(): array
         'office_label' => 'MENRO',
         'context_snapshot' => ['authorized_actor_id' => $actor->id],
     ]);
-    FeeRule::unguarded(fn () => FeeRule::query()->firstOrCreate([
-        'id' => 176,
-    ], [
-        'code' => 'IPIL-LEGACY-98CDCAD9D28055FB',
-        'name' => 'Solid Waste Management',
-        'category' => FeeRuleCategory::Fee,
-        'scope' => FeeRuleScope::Application,
-        'determination_channel' => FeeDeterminationChannel::ConcernedOfficePaymentOrder,
-        'calculation_type' => FeeRuleCalculationType::Range,
-        'effective_from' => '2025-01-01',
-    ]));
 
     return [$application, $actor];
 }
 
 it('records the exact provisional MENRO evidence idempotently without a Payment Order', function (): void {
     [$application, $actor] = provisionalMenroFixture();
+    expect($application->id)->not->toBe(3);
     $action = app(RecordProvisionalMenroFeeDetermination::class);
 
     $first = $action->handle($application, $actor, provisionalMenroFacts());
@@ -128,4 +128,46 @@ it('fails closed for a changed authorized fact', function (): void {
 
     expect(fn () => app(RecordProvisionalMenroFeeDetermination::class)->handle($application, $actor, $facts))
         ->toThrow(LogicException::class, 'amount_minor');
+});
+
+it('derives eligibility from canonical application and rule facts and fails closed on ambiguity', function (): void {
+    [$application] = provisionalMenroFixture();
+    $proposal = app(ProvisionalMenroFeeDeterminationProposal::class);
+
+    expect($proposal->forApplication($application))->not->toBeNull();
+
+    $application->business->update(['business_area_square_meters' => null]);
+    expect($proposal->forApplication($application->refresh()))->toBeNull();
+
+    $application->business->update(['business_area_square_meters' => '10.50']);
+    expect($proposal->forApplication($application->refresh()))->toBeNull();
+
+    $application->business->update(['business_area_square_meters' => '12.00']);
+    $overlap = FeeRule::query()->findOrFail(ProvisionalMenroFeeDeterminationProposal::FeeRuleId)
+        ->ranges()->create([
+            'min_basis_cents' => 1200,
+            'max_basis_cents' => 1200,
+            'amount_cents' => 999999,
+        ]);
+    expect($proposal->forApplication($application->refresh()))->toBeNull();
+    $overlap->delete();
+
+    $application->update(['metadata' => ['nelson_reconciliation_v1' => ['commissioned_path' => false]]]);
+    expect($proposal->forApplication($application->refresh()))->toBeNull();
+
+    $application->update([
+        'application_year' => 2025,
+        'metadata' => ['nelson_reconciliation_v1' => ['commissioned_path' => true]],
+    ]);
+    expect($proposal->forApplication($application->refresh()))->toBeNull();
+
+    $application->update(['application_year' => 2026, 'type' => 'renewal']);
+    expect($proposal->forApplication($application->refresh()))->toBeNull();
+
+    $application->update(['type' => 'new']);
+    BploRoutingWork::query()->whereHas(
+        'determination',
+        fn ($query) => $query->where('permit_application_id', $application->id),
+    )->delete();
+    expect($proposal->forApplication($application->refresh()))->toBeNull();
 });
