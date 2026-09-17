@@ -24,9 +24,7 @@ use App\Models\PermitApplication;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
 use App\Models\User;
-use DomainException;
 use Inertia\Testing\AssertableInertia as Assert;
-use LogicException;
 
 test('an authorized Treasurer records immutable approval of the exact prepared assessment snapshot', function () {
     [$assessmentOfficer, $assessment] = preparedAssessmentFixture();

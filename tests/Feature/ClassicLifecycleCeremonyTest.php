@@ -46,6 +46,10 @@ beforeEach(function () {
         'stakeholder_preview.pii_mode' => 'synthetic_only',
         'stakeholder_preview.production_migration_enabled' => false,
         'stakeholder_preview.production_integrations' => 'disabled',
+        'payment_simulation.commissioned' => true,
+        'payment_simulation.context' => 'gate10_local',
+        'payment_simulation.allowed_contexts' => ['gate10_local'],
+        'app.url' => 'http://bpls-gate10.test',
     ]);
     Artisan::call('bpls:install');
     $this->seed(MunicipalFeeCatalogSeeder::class);

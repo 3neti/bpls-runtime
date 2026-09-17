@@ -206,7 +206,7 @@ test('scenario registry discovers the citizen permit authority review visibility
         ->and($scenario->expectations['receipt_status'])->toBe('issued')
         ->and($scenario->expectations['ready_for_authority_review'])->toBeTrue()
         ->and($scenario->expectations['can_release'])->toBeFalse()
-        ->and($scenario->expectations['permit_artifact_status'])->toBe('generated_artifact_available')
+        ->and($scenario->expectations['permit_artifact_status'])->toBe('not_issued')
         ->and($scenario->expectations['public_verification_status'])->toBe('artifact_only')
         ->and($scenario->expectations['citizen_payment_detail'])->toBe('read_only')
         ->and($scenario->expectations['can_reconcile_online'])->toBeFalse()
@@ -668,6 +668,11 @@ test('citizen permit draft scenario audit compares browser evidence with canonic
     ]);
 
     $audited = $runner->audit($manifest, $artifactStore);
+
+    expect(collect($artifactStore->readJson('terminal/audit.json')['checks'])
+        ->where('passed', false)
+        ->values()
+        ->all())->toBe([]);
 
     expect($audited['result'])
         ->terminal->toBe('passed')
@@ -1160,7 +1165,7 @@ test('citizen permit authority review scenario composes domain actions idempoten
         ->and($firstManifest['resources']['clearances_completed'])->toBe(3)
         ->and($firstManifest['resources']['ready_for_authority_review'])->toBeTrue()
         ->and($firstManifest['resources']['can_release'])->toBeFalse()
-        ->and($firstManifest['resources']['permit_artifact_status'])->toBe('generated_artifact_available')
+        ->and($firstManifest['resources']['permit_artifact_status'])->toBe('not_issued')
         ->and($firstManifest['resources']['permit_verification_reference'])->toStartWith('PVA-'.$firstManifest['resources']['record_id'].'-')
         ->and($firstManifest['resources']['permit_verification_status'])->toBe('artifact_only')
         ->and($firstManifest['resources']['permit_verification_view_url'])->toEndWith('/view')
@@ -1281,7 +1286,7 @@ test('manual collection receipt scenario executes treasury actions idempotently'
         ->and($firstManifest['resources']['application_form_pdf_url'])->toBe('/staff/permit-applications/'.$firstManifest['resources']['permit_application_id'].'/application-form.pdf')
         ->and($firstManifest['resources']['assessment_pdf_url'])->toBe('/staff/assessments/'.$firstManifest['resources']['assessment_id'].'/pdf')
         ->and($firstManifest['resources']['assessment_total_amount_cents'])->toBe(PermitApplication::query()->findOrFail($firstManifest['resources']['permit_application_id'])->assessments()->firstOrFail()->total_amount_cents)
-        ->and($firstManifest['resources']['permit_artifact_status'])->toBe('generated_artifact_available')
+        ->and($firstManifest['resources']['permit_artifact_status'])->toBe('not_issued')
         ->and($firstManifest['resources']['permit_verification_reference'])->toStartWith('PVA-'.$firstManifest['resources']['permit_application_id'].'-')
         ->and($firstManifest['resources']['permit_verification_url'])->toContain($firstManifest['resources']['permit_verification_reference'])
         ->and($firstManifest['resources']['permit_verification_view_url'])->toBe($firstManifest['resources']['permit_verification_url'].'/view')
@@ -1325,7 +1330,7 @@ test('new permit lifecycle scenario executes real domain actions to authority bo
         ->and($firstManifest['resources']['record_id'])->toBe($secondManifest['resources']['record_id'])
         ->and($firstManifest['resources']['permit_application_id'])->toBe($secondManifest['resources']['permit_application_id'])
         ->and($firstManifest['resources']['collection_id'])->toBe($secondManifest['resources']['collection_id'])
-        ->and($firstManifest['resources']['permit_artifact_status'])->toBe('generated_artifact_available')
+        ->and($firstManifest['resources']['permit_artifact_status'])->toBe('not_issued')
         ->and($firstManifest['resources']['permit_verification_reference'])->toStartWith('PVA-'.$firstManifest['resources']['permit_application_id'].'-')
         ->and($firstManifest['resources']['permit_verification_view_url'])->toBe($firstManifest['resources']['permit_verification_url'].'/view')
         ->and($firstManifest['resources']['receipt_void_boundary_reference'])->toStartWith('RVB-'.$firstManifest['resources']['record_id'].'-')
@@ -1960,7 +1965,7 @@ test('command prepares the citizen permit authority review visibility scenario',
         ->and($manifest['resources']['receipt_status'])->toBe(ReceiptStatus::Issued->value)
         ->and($manifest['resources']['ready_for_authority_review'])->toBeTrue()
         ->and($manifest['resources']['can_release'])->toBeFalse()
-        ->and($manifest['resources']['permit_artifact_status'])->toBe('generated_artifact_available')
+        ->and($manifest['resources']['permit_artifact_status'])->toBe('not_issued')
         ->and($manifest['resources']['permit_verification_status'])->toBe('artifact_only')
         ->and($manifest['resources']['payment_detail_url'])->toBe('/citizen/payment-schedules/'.$manifest['resources']['payment_schedule_id'])
         ->and($manifest['resources']['payment_line_count'])->toBe(1)
@@ -2210,7 +2215,7 @@ test('manual collection receipt scenario audit compares browser evidence with ca
             'verification_reference' => $verification['reference'],
             'panel_visible' => true,
             'not_legally_effective_visible' => true,
-            'open_affordance_visible' => true,
+            'open_affordance_visible' => false,
         ],
         'documents' => [
             'application_form' => [
@@ -2243,7 +2248,7 @@ test('manual collection receipt scenario audit compares browser evidence with ca
         ->audit->toBe('passed')
         ->passed->toBeTrue()
         ->and($audited['resources']['permit_verification_reference'])->toBe($verification['reference'])
-        ->and($audited['resources']['permit_artifact_status'])->toBe('generated_artifact_available')
+        ->and($audited['resources']['permit_artifact_status'])->toBe('not_issued')
         ->and($audited['resources']['receipt_void_boundary_reference'])->toBe($voidBoundary['reference'])
         ->and(collect($artifactStore->readJson('terminal/audit.json')['checks'])->firstWhere('key', 'audit-all-abstract-completeness-boundary')['passed'])->toBeTrue()
         ->and(collect($artifactStore->readJson('terminal/audit.json')['checks'])->firstWhere('key', 'audit-browser-all-abstract-completeness-boundary')['passed'])->toBeTrue()

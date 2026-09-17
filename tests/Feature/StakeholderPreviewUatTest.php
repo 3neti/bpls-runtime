@@ -32,6 +32,7 @@ beforeEach(function () {
     $this->withoutVite();
     configureStakeholderPreviewSafety();
     config(['stakeholder_preview.legacy_lab_snapshot_tables' => null]);
+    createStakeholderPreviewAccounts();
     Route::middleware('web')->group(base_path('routes/web.php'));
     Route::getRoutes()->refreshNameLookups();
     Route::getRoutes()->refreshActionLookups();
@@ -744,8 +745,9 @@ test('entry fails closed when the exact synthetic identity is altered', function
     'permission removed' => [['permission' => 'users.view']],
 ]);
 
-test('preview context exposes only authorized real guidance and a persistent banner signal', function (StakeholderPreviewPersona $persona, int $expectedCount) {
+test('preview context exposes only authorized real guidance and a persistent banner signal', function (StakeholderPreviewPersona $persona, int $sharedCount, ?int $rawCount = null) {
     $accounts = createStakeholderPreviewAccounts();
+    $rawCount ??= $sharedCount;
 
     $response = $this->actingAs($accounts[$persona->value])->get(route('dashboard'));
 
@@ -753,13 +755,20 @@ test('preview context exposes only authorized real guidance and a persistent ban
         ->component('Dashboard')
         ->where('stakeholder_preview.enabled', true)
         ->where('stakeholder_preview.current_persona', $persona->value)
-        ->has('stakeholder_preview.what_to_try', $expectedCount));
+        ->where('stakeholder_preview.show_engineering_controls', false)
+        ->has('stakeholder_preview.what_to_try', $sharedCount));
 
     $guidance = app(StakeholderPreviewSafety::class)->guidanceFor($accounts[$persona->value]);
 
-    expect($guidance)->toHaveCount($expectedCount);
+    expect($guidance)->toHaveCount($rawCount);
     foreach ($guidance as $item) {
         expect($item['href'])->toStartWith('/')->not->toContain('http');
+    }
+
+    if ($persona === StakeholderPreviewPersona::Management) {
+        $response->assertInertia(fn (Assert $page) => $page
+            ->where('stakeholder_preview.what_to_try', fn ($items): bool => collect($items)
+                ->doesntContain(fn (array $item): bool => str_contains($item['href'], 'lifecycle-laboratory'))));
     }
 })->with([
     'citizen' => [StakeholderPreviewPersona::Citizen, 4],
@@ -768,7 +777,7 @@ test('preview context exposes only authorized real guidance and a persistent ban
     'treasury' => [StakeholderPreviewPersona::Treasury, 5],
     'municipal treasurer' => [StakeholderPreviewPersona::MunicipalTreasurer, 2],
     'cashier' => [StakeholderPreviewPersona::Cashier, 2],
-    'management' => [StakeholderPreviewPersona::Management, 6],
+    'management' => [StakeholderPreviewPersona::Management, 5, 6],
     'engineering' => [StakeholderPreviewPersona::Engineering, 1],
     'mpdo' => [StakeholderPreviewPersona::Mpdo, 1],
     'assessor' => [StakeholderPreviewPersona::Assessor, 1],
@@ -834,10 +843,11 @@ function createStakeholderPreviewAccounts(): array
 {
     return collect(StakeholderPreviewPersona::cases())
         ->mapWithKeys(function (StakeholderPreviewPersona $persona): array {
-            $role = Role::factory()->create([
-                'code' => $persona->roleCode(),
-                'name' => 'Preview '.$persona->label(),
-            ]);
+            $role = Role::query()->where('code', $persona->roleCode())->first()
+                ?? Role::factory()->create([
+                    'code' => $persona->roleCode(),
+                    'name' => 'Preview '.$persona->label(),
+                ]);
             $role->permissions()->sync(collect($persona->permissions())
                 ->map(fn ($permission) => Permission::query()->firstOrCreate(
                     ['code' => $permission->value],
@@ -845,14 +855,17 @@ function createStakeholderPreviewAccounts(): array
                 )->id)
                 ->all());
 
-            $user = User::factory()->create([
-                'name' => $persona->accountName(),
-                'email' => $persona->approvedEmail(),
-                'email_verified_at' => now(),
-                'two_factor_secret' => null,
-                'two_factor_recovery_codes' => null,
-                'two_factor_confirmed_at' => null,
-            ]);
+            $user = User::query()->where('email', $persona->approvedEmail())->first();
+            if (! $user instanceof User) {
+                $user = User::factory()->create([
+                    'name' => $persona->accountName(),
+                    'email' => $persona->approvedEmail(),
+                    'email_verified_at' => now(),
+                    'two_factor_secret' => null,
+                    'two_factor_recovery_codes' => null,
+                    'two_factor_confirmed_at' => null,
+                ]);
+            }
             $user->assignRole($role);
 
             return [$persona->value => $user];

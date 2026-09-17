@@ -39,7 +39,6 @@ use App\Models\User;
 use Database\Seeders\NelsonConcernedOfficeFeeCatalogSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
-use LogicException;
 
 test('Nelson cleanroom ceremony preserves applicant truth and reconciles one collection to every canonical OR', function () {
     Storage::fake('local');

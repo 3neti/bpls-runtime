@@ -210,7 +210,7 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
                 'can_release' => $releaseReadiness['can_release'],
             ]),
             $this->step('citizen-artifact-identity-projected', 'Describe the generated artifact identity and public verification boundary without exposing the staff PDF', [
-                'artifact_status' => 'generated_artifact_available',
+                'artifact_status' => 'not_issued',
                 'verification_status' => 'artifact_only',
                 'can_issue' => false,
                 'can_release' => false,
@@ -432,10 +432,10 @@ final class CitizenPermitAuthorityReviewVisibilityScenario
                 'can_release' => false,
                 'authority_review_status' => 'ready_for_authority_review',
             ], $canonical),
-            $this->step('audit-artifact-identity', 'Canonical artifact identity remains generated and artifact-only without issuance or legal effect', [
+            $this->step('audit-artifact-identity', 'Canonical Permit identity remains unissued and artifact-only without legal effect', [
                 'can_release' => false,
-                'permit_artifact_status' => 'generated_artifact_available',
-                'permit_artifact_available' => true,
+                'permit_artifact_status' => 'not_issued',
+                'permit_artifact_available' => false,
                 'permit_verification_reference' => $manifest['resources']['permit_verification_reference'],
                 'permit_verification_status' => 'artifact_only',
                 'permit_verification_view_url' => $manifest['resources']['permit_verification_view_url'],

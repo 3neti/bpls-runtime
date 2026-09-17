@@ -5,7 +5,6 @@ use App\Actions\PermitApplicationStatusMutation;
 use App\Enums\PermitApplicationStatus;
 use App\Models\PermitApplication;
 use App\Models\User;
-use DomainException;
 use Illuminate\Support\Facades\File;
 
 test('ordinary Eloquent paths cannot mutate a PermitApplication status', function (Closure $mutation): void {

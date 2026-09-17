@@ -166,7 +166,7 @@ class BuildBploRoutingTask
         $periodStart = $application->application_year.'-01-01';
         $periodEnd = $application->application_year.'-12-31';
         $catalogFees = FeeRule::query()
-            ->with(['lineOfBusinesses:id', 'officeAssignments', 'revenueAccount', 'ranges', 'catalogVersion', 'businessDivision'])
+            ->with(['lineOfBusiness:id,name', 'lineOfBusinesses:id,name', 'officeAssignments', 'revenueAccount', 'ranges', 'catalogVersion', 'businessDivision'])
             ->where('is_active', true)
             ->where('category', '!=', FeeRuleCategory::Tax->value)
             ->whereDate('effective_from', '<=', $periodEnd)
@@ -248,11 +248,12 @@ class BuildBploRoutingTask
                         ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
                         ->map(fn (string $value): string => str($value)->replace(['_', '-'], ' ')->headline()->toString())
                         ->implode(' · ');
+                    $optionName = $this->catalogOptionName($fee, includeLineOfBusiness: true);
                     $displayName = $needsProvenanceLabel && $provenanceLabel !== ''
-                        ? $this->catalogOptionName($fee).' — '.$provenanceLabel
+                        ? $optionName.' — '.$provenanceLabel
                         : ($sameLabelCount > 1
                             ? $fee->name.' — '.($fee->businessDivision->name ?? data_get($fee->metadata, 'legacy_division_name', 'Application')).' · '.$fee->code
-                            : $this->catalogOptionName($fee));
+                            : $optionName);
 
                     return [
                         'id' => $fee->id,
@@ -331,13 +332,26 @@ class BuildBploRoutingTask
             || in_array($application->type->value, $applicationTypes, true);
     }
 
-    private function catalogOptionName(FeeRule $fee): string
+    private function catalogOptionName(FeeRule $fee, bool $includeLineOfBusiness = false): string
     {
         $division = data_get($fee->metadata, 'legacy_division_name');
-
-        return is_string($division) && trim($division) !== ''
+        $name = is_string($division) && trim($division) !== ''
             ? $fee->name.' — '.str($division)->lower()->headline()->toString()
             : $fee->name;
+
+        if (! $includeLineOfBusiness) {
+            return $name;
+        }
+
+        $lineOfBusinesses = collect([$fee->lineOfBusiness?->name])
+            ->merge($fee->lineOfBusinesses->pluck('name'))
+            ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
+            ->unique()
+            ->values();
+
+        return $lineOfBusinesses->isEmpty()
+            ? $name
+            : $name.' · '.$lineOfBusinesses->implode(', ');
     }
 
     /** @return array{amount_cents: int, basis_value: int|null, basis_unit: string|null, explanation: string|null, rule_signature: string} */

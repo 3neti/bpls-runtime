@@ -107,8 +107,11 @@ test('office applicability preserves distinct eligible identities and rejects un
     expect($resolver->matches($lobRule, $application, 'health'))->toBeTrue();
     $fees = collect(app(BuildBploRoutingTask::class)->handle($application, null)->toArray()['financial_editor']['office_fee_options']['health']);
     expect($fees->pluck('id'))->toContain($applicationRule->id, $lobRule->id)
-        ->and($fees->firstWhere('id', $lobRule->id)['name'])->toContain('Gasoline Station', $lobRule->code)
-        ->and($fees->firstWhere('id', $applicationRule->id)['name'])->toContain($applicationRule->code);
+        ->and($fees->firstWhere('id', $lobRule->id)['name'])->toContain('Health Certificate')
+        ->and($fees->firstWhere('id', $lobRule->id)['name'])->toContain('Gasoline Station')
+        ->and($fees->firstWhere('id', $lobRule->id)['code'])->toBe($lobRule->code)
+        ->and($lobRule->lineOfBusiness->name)->toContain('Gasoline Station')
+        ->and($fees->firstWhere('id', $applicationRule->id)['code'])->toBe($applicationRule->code);
 
     foreach ([['application_types' => ['renewal']], ['application_types' => 'new']] as $metadata) {
         $candidate = clone $applicationRule;

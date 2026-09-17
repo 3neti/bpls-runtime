@@ -1406,6 +1406,7 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         ->and(data_get($collection->source_snapshot, 'integration_evidence.source'))->toBe('lifecycle_laboratory_simulator')
         ->and(data_get($collection->source_snapshot, 'integration_evidence.synthetic_only'))->toBeTrue()
         ->and(data_get($collection->source_snapshot, 'integration_evidence.real_funds_moved'))->toBeFalse()
+        ->and(data_get($collection->source_snapshot, 'integration_evidence.attempt_provider'))->toBe('netbank')
         ->and(data_get($collection->source_snapshot, 'integration_evidence.consumer_status'))->toBe('paid')
         ->and(data_get($collection->source_snapshot, 'integration_evidence.provider_status'))->toBe('active')
         ->and($payment->consumer_status)->toBe('paid')
@@ -1417,7 +1418,8 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         ->and(data_get($simulatedApplicationData, 'payment.payment_request.state'))->toBe('collected')
         ->and(data_get($simulatedApplicationData, 'payment.payment_request.consumer_status'))->toBe('paid')
         ->and(data_get($simulatedApplicationData, 'payment.payment_request.provider_status'))->toBe('active')
-        ->and(data_get($simulatedApplicationData, 'payment.payment_request.active_attempt.provider'))->toBe('netbank')
+        ->and(data_get($simulatedApplicationData, 'payment.payment_request.active_attempt'))->toBeNull()
+        ->and($payment->attempts()->where('provider', 'netbank')->exists())->toBeTrue()
         ->and(data_get($simulatedApplicationData, 'payment.payment_request.collection_reference'))->toBe('SYNTHETIC-QRPH-'.$schedule->id)
         ->and(data_get(app(ResolveLifecycleCleanroomState::class)->handle($run->fresh()), 'progress.next_step.key'))->toBe('official_receipt_issued');
 

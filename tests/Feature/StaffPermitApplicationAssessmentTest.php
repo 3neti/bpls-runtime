@@ -18,7 +18,6 @@ use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
 use App\Models\ProvisionalUatPermitCompletion;
 use Inertia\Testing\AssertableInertia as Assert;
-use LogicException;
 
 test('guests are redirected away from staff permit assessments', function () {
     $this->get(route('staff.permit-applications.assessments.index'))

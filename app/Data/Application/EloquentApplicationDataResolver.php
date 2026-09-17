@@ -916,7 +916,8 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             ],
             'reconciliation' => $schedule === null ? null : [
                 'integration' => $onlinePayment === null ? null : 'x_change',
-                'provider' => $attempt?->provider,
+                'provider' => $attempt?->provider
+                    ?? data_get($canonicalCollection?->source_snapshot, 'integration_evidence.attempt_provider'),
                 'payment_rail' => $canonicalCollection?->method->value,
                 'channel' => $canonicalCollection?->channel->value,
                 'approved_amount_cents' => $schedule->total_amount_cents,
@@ -1111,7 +1112,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'view_url' => $verification['view_url'],
                 'qr_data_url' => $this->buildPermitVerificationQrDataUrl->handle($verification['view_url']),
             ],
-            printable_artifact_url: (! $syntheticLifecycle || $issued)
+            printable_artifact_url: $issued
                 && ($viewer?->can(UserPermission::AccessStaff->value) ?? false)
                 && $viewer->can(UserPermission::ViewPermitApplications->value)
                 ? route('staff.permit-applications.permit.pdf', $application, false)

@@ -9,6 +9,7 @@ use App\LifecycleScenarios\NewApplicationHappyPathDefinition;
 use App\Models\LifecycleScenarioSpecimen;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
+use App\Models\ProvisionalUatPermitCompletion;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
@@ -28,6 +29,7 @@ test('Attachment F exposes its PDF only to viewers authorized by the staff PDF e
     $application = PermitApplication::query()->sole();
     $resolver = app(ApplicationDataResolver::class);
     $baseline = $resolver->resolve($application)->toArray()['permit'];
+    $authorizedViewer = null;
 
     foreach ([
         [],
@@ -40,17 +42,28 @@ test('Attachment F exposes its PDF only to viewers authorized by the staff PDF e
         $permit = $resolver->resolve($application, $viewer)->toArray()['permit'];
         $allowed = count($permissions) === 2;
 
-        expect($permit['printable_artifact_url'])->toBe($allowed
-            ? route('staff.permit-applications.permit.pdf', $application, false)
-            : null)
+        expect($permit['printable_artifact_url'])->toBeNull()
             ->and(Arr::except($permit, ['printable_artifact_url']))
             ->toBe(Arr::except($baseline, ['printable_artifact_url']));
 
         $response = $this->actingAs($viewer)->get(route('staff.permit-applications.permit.pdf', $application));
-        $allowed ? $response->assertOk()->assertHeader('Content-Type', 'application/pdf') : $response->assertForbidden();
+        $allowed ? $response->assertNotFound() : $response->assertForbidden();
+        $authorizedViewer = $allowed ? $viewer : $authorizedViewer;
     }
 
     expect($baseline['printable_artifact_url'])->toBeNull();
+
+    ProvisionalUatPermitCompletion::factory()->for($application)->create([
+        'issued_at' => now(),
+    ]);
+
+    $issuedPermit = $resolver->resolve($application->fresh(), $authorizedViewer)->toArray()['permit'];
+    expect($issuedPermit['printable_artifact_url'])
+        ->toBe(route('staff.permit-applications.permit.pdf', $application, false));
+    $this->actingAs($authorizedViewer)
+        ->get(route('staff.permit-applications.permit.pdf', $application))
+        ->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf');
 });
 
 test('ApplicationData V1 contains typed canonical facts without Eloquent models and varies only actor context', function () {

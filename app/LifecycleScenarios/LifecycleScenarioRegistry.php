@@ -232,7 +232,7 @@ final class LifecycleScenarioRegistry
                     'clearances_completed' => true,
                     'ready_for_authority_review' => true,
                     'can_release' => false,
-                    'permit_artifact_status' => 'generated_artifact_available',
+                    'permit_artifact_status' => 'not_issued',
                     'public_verification_status' => 'artifact_only',
                     'citizen_payment_detail' => 'read_only',
                     'can_reconcile_online' => false,
