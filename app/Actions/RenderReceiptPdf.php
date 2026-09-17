@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Models\Receipt;
+use App\Support\ReceiptCivilTime;
 
 final class RenderReceiptPdf
 {
@@ -45,7 +46,7 @@ final class RenderReceiptPdf
         $document->text($page, $receipt->receipt_number, 410, 589, $receiptNumberSize, true, 'center', true);
         $document->line($page, $left, 574, $right, 574);
         $document->text($page, 'DATE', 94, 558, 8, true);
-        $document->text($page, $receipt->issued_at->format('F j, Y'), 155, 558, 9);
+        $document->text($page, ReceiptCivilTime::date($receipt->issued_at, 'F j, Y'), 155, 558, 9);
         $document->line($page, $left, 545, $right, 545);
         $document->text($page, 'AGENCY', 94, 529, 8, true);
         $document->text($page, (string) data_get($receipt->source_snapshot, 'af51.agency', data_get($profile, 'defaults.agency')), 150, 529, 9);
@@ -84,7 +85,7 @@ final class RenderReceiptPdf
         $document->text($page, 'NUMBER / REFERENCE', 230, 178, 7, true);
         $document->wrappedText($page, $receipt->treasuryCollection->reference_number ?? 'Not recorded', 230, 162, 145, 8, 10, false, true);
         $document->text($page, 'DATE', 395, 178, 7, true);
-        $document->text($page, $receipt->treasuryCollection->received_at->format('Y-m-d'), 395, 162, 8);
+        $document->text($page, ReceiptCivilTime::date($receipt->treasuryCollection->received_at), 395, 162, 8);
         $document->text($page, (string) data_get($receipt->source_snapshot, 'issuer.printed_name', data_get($profile, 'collecting_officer.name')), 496, 146, 9, true, 'right');
         $document->text($page, (string) data_get($receipt->source_snapshot, 'issuer.printed_title', data_get($profile, 'collecting_officer.title')), 496, 133, 8, false, 'right');
         $document->text($page, (string) data_get($receipt->source_snapshot, 'issuer.printed_designation', data_get($profile, 'collecting_officer.designation')), 496, 120, 8, false, 'right');

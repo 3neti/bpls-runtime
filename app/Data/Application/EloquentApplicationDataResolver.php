@@ -33,6 +33,7 @@ use App\Models\TreasuryCollection;
 use App\Models\TreasuryLineItem;
 use App\Models\TreasuryLineOfBusinessAssignment;
 use App\Models\User;
+use App\Support\ReceiptCivilTime;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
@@ -1005,7 +1006,7 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
             series: $receipt->series ?? data_get($receipt->source_snapshot, 'af51.series'),
             numbering_authority: $receipt->numbering_authority,
             synthetic_number: str_contains(strtolower($receipt->numbering_authority), 'synthetic'),
-            issued_on: $receipt->issued_at->toDateString(),
+            issued_on: ReceiptCivilTime::date($receipt->issued_at),
             agency: data_get($receipt->source_snapshot, 'af51.agency'),
             fund: data_get($receipt->source_snapshot, 'af51.fund'),
             payor: $collection->payer_name,
@@ -1024,7 +1025,8 @@ final class EloquentApplicationDataResolver implements ApplicationDataResolver
                 'type' => $collection->method->value,
                 'drawee_bank' => data_get($collection->source_snapshot, 'payment_instrument.drawee_bank'),
                 'number' => $collection->reference_number,
-                'date' => data_get($collection->source_snapshot, 'payment_instrument.date'),
+                'date' => data_get($collection->source_snapshot, 'payment_instrument.date')
+                    ?? ReceiptCivilTime::date($collection->received_at),
             ],
             collecting_officer: data_get($receipt->source_snapshot, 'issuer.printed_name') ?? $receipt->issuedBy?->getAttribute('name'),
             presentation_profile: $profile,

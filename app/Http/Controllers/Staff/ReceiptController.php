@@ -12,6 +12,7 @@ use App\Exceptions\UnresolvedReceiptPolicy;
 use App\Http\Controllers\Controller;
 use App\Models\CollectionAllocation;
 use App\Models\Receipt;
+use App\Support\ReceiptCivilTime;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -145,7 +146,7 @@ class ReceiptController extends Controller
             'numbering_authority' => $receipt->numbering_authority,
             'receipt_number' => $receipt->receipt_number,
             'amount_cents' => $receipt->amount_cents,
-            'issued_at' => $receipt->issued_at->toIso8601String(),
+            'issued_at' => ReceiptCivilTime::iso($receipt->issued_at),
             'issued_by' => $receipt->issuedBy?->name,
             'collection' => [
                 'id' => $receipt->treasuryCollection->id,
@@ -187,7 +188,7 @@ class ReceiptController extends Controller
             'numbering_authority' => $receipt->numbering_authority,
             'receipt_number' => $receipt->receipt_number,
             'amount_cents' => $receipt->amount_cents,
-            'issued_at' => $receipt->issued_at->toIso8601String(),
+            'issued_at' => ReceiptCivilTime::iso($receipt->issued_at),
             'issued_by' => $receipt->issuedBy?->name,
             'remarks' => $receipt->remarks,
             'source_snapshot' => $receipt->source_snapshot,
@@ -200,7 +201,7 @@ class ReceiptController extends Controller
                 'amount_cents' => $collection->amount_cents,
                 'payer_name' => $collection->payer_name,
                 'reference_number' => $collection->reference_number,
-                'received_at' => $collection->received_at->toIso8601String(),
+                'received_at' => ReceiptCivilTime::iso($collection->received_at),
                 'received_by' => $collection->receivedBy?->name,
             ],
             'payment_schedule' => [

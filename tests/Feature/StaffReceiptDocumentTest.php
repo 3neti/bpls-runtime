@@ -18,6 +18,7 @@ use App\Models\PermitApplication;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
 use App\Models\User;
+use Carbon\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('staff users with view receipt permission can view receipt detail evidence', function () {
@@ -179,6 +180,24 @@ test('receipt pdf output is deterministic for the same persisted receipt facts',
     $renderer = app(RenderReceiptPdf::class);
 
     expect($renderer->handle($receipt))->toBe($renderer->handle($receipt->fresh()));
+});
+
+test('receipt screen and pdf use the explicit Manila civil date at a UTC boundary', function () {
+    expect(config('municipality.timezone'))->toBe('Asia/Manila');
+
+    $receipt = receiptDocumentFixture();
+    $receipt->forceFill(['issued_at' => Carbon::parse('2026-09-16 16:30:00', 'UTC')])->save();
+    $receipt->treasuryCollection->forceFill(['received_at' => Carbon::parse('2026-09-16 16:30:00', 'UTC')])->save();
+
+    $user = userWithPermissions([UserPermission::AccessStaff, UserPermission::ViewReceipts]);
+    $this->actingAs($user)
+        ->get(route('staff.receipts.show', $receipt))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('receipt.issued_at', '2026-09-17T00:30:00+08:00')
+            ->where('receipt.collection.received_at', '2026-09-17T00:30:00+08:00'));
+
+    $pdf = $this->actingAs($user)->get(route('staff.receipts.pdf', $receipt))->getContent();
+    expect($pdf)->toContain('September 17, 2026')->toContain('2026-09-17');
 });
 
 test('staff users without view receipt permission cannot view receipt details', function () {

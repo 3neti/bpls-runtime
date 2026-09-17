@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import { MUNICIPAL_TIMEZONE } from '@/lib/municipalTime';
 
 const props = withDefaults(
     defineProps<{
@@ -96,7 +97,9 @@ function date(value: string | null | undefined, long = false): string {
 
     return new Date(value).toLocaleDateString(
         'en-PH',
-        long ? { dateStyle: 'long' } : undefined,
+        long
+            ? { dateStyle: 'long', timeZone: MUNICIPAL_TIMEZONE }
+            : { timeZone: MUNICIPAL_TIMEZONE },
     );
 }
 </script>
