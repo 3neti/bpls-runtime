@@ -44,7 +44,13 @@ final class AuthorizeUatQrPhSimulation
         $environmentAllowed = ($context === 'gate10_local' && app()->environment(['local', 'testing']))
             || ($context === 'workflow_uat' && app()->environment(['staging', 'testing']));
         $host = parse_url((string) config('app.url'), PHP_URL_HOST);
-        $hostAllowed = ($context === 'gate10_local' && in_array($host, ['bpls-gate10.test', 'localhost', '127.0.0.1'], true))
+        $hostAllowed = ($context === 'gate10_local' && in_array($host, [
+            'bpls-gate10.test',
+            'bpls-runtime-integration.test',
+            'bpls-runtime.test',
+            'localhost',
+            '127.0.0.1',
+        ], true))
             || ($context === 'workflow_uat' && $host === 'bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud');
 
         return config('payment_simulation.commissioned') === true

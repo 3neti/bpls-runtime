@@ -254,6 +254,9 @@ test('simulation environment is explicit and fail closed', function (string $env
     'production migration enabled' => ['staging', 'https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud', true, true, 'disabled', false],
     'production integration enabled' => ['staging', 'https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud', true, false, 'enabled', false],
     'local configured' => ['local', 'http://localhost', true, false, 'disabled', true],
+    'local isolated runtime' => ['local', 'http://bpls-runtime-integration.test', true, false, 'disabled', true],
+    'local target runtime' => ['local', 'http://bpls-runtime.test', true, false, 'disabled', true],
+    'arbitrary local test host' => ['local', 'http://ordinary.example.test', true, false, 'disabled', false],
     'local unconfigured' => ['local', 'http://localhost', false, false, 'disabled', false],
     'workflow UAT' => ['staging', 'https://bpls-stakeholder-preview-uat-uat-5wn03n.laravel.cloud', true, false, 'disabled', true],
 ]);
