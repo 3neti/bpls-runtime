@@ -38,6 +38,7 @@ use App\Http\Controllers\Staff\LegacyFeeCatalogController;
 use App\Http\Controllers\Staff\MunicipalityConfigurationController;
 use App\Http\Controllers\Staff\MunicipalServiceCatalogController;
 use App\Http\Controllers\Staff\MunicipalWorkInboxController;
+use App\Http\Controllers\Staff\MenroFeeDeterminationController;
 use App\Http\Controllers\Staff\OfficePaymentOrderController;
 use App\Http\Controllers\Staff\OrdinaryUatPermitController;
 use App\Http\Controllers\Staff\PaidEstablishmentReportController;
@@ -231,6 +232,8 @@ Route::middleware(['auth', 'verified', EnsureActiveUserAccess::class])->group(fu
             ->name('permit-applications.bplo-routing.store');
         Route::post('permit-applications/{permitApplication}/office-payment-orders/{work}', [OfficePaymentOrderController::class, 'store'])
             ->name('permit-applications.office-payment-orders.store');
+        Route::post('permit-applications/{permitApplication}/menro-fee-determination', [MenroFeeDeterminationController::class, 'store'])
+            ->name('permit-applications.menro-fee-determination.store');
         Route::post('permit-applications/{permitApplication}/treasury-lines-of-business', [TreasuryLineOfBusinessController::class, 'store'])
             ->name('permit-applications.treasury-lines-of-business.store');
         Route::post('permit-applications/{permitApplication}/evaluation', [BusinessPermitEvaluationController::class, 'initialize'])

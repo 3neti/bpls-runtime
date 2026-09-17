@@ -103,6 +103,26 @@ type BploRoutingTask = {
                 };
             }[]
         >;
+        menro_determination: {
+            scope: string;
+            fee_rule_id: number;
+            code: string;
+            basis: string;
+            application_area_square_meters: number;
+            calculation_basis_centi_square_meters: number;
+            operative_range_min_centi_square_meters: number;
+            operative_range_max_centi_square_meters: number;
+            amount_minor: number;
+            schedule_version: string;
+            source_evidence: string;
+            classification: string;
+            production_authority: boolean;
+            reason: string;
+            actor: string | null;
+            determined_at: string;
+            fingerprint: string;
+        } | null;
+        can_record_menro_determination: boolean;
         line_of_business_options: {
             id: number;
             code: string;
@@ -199,6 +219,7 @@ const treasurySelections = ref<
 const selectedTreasuryLob = ref<number | null>(null);
 const treasuryLobSearch = ref('');
 const treasuryPending = ref(false);
+const menroDeterminationPending = ref(false);
 const treasuryErrors = computed(() =>
     Object.entries(page.props.errors)
         .filter(([key]) => key.startsWith('selections'))
@@ -500,6 +521,40 @@ function confirmPaymentOrder(work: RoutingWork): void {
                     window.clearTimeout(timer);
                     officePaymentOrderTimers.delete(work.id);
                 }
+            },
+        },
+    );
+}
+
+function recordProvisionalMenroDetermination(): void {
+    if (menroDeterminationPending.value) {
+        return;
+    }
+
+    useForm({
+        scope: 'application',
+        fee_rule_id: 176,
+        code: 'IPIL-LEGACY-98CDCAD9D28055FB',
+        basis: 'business_area_square_meters',
+        application_area_square_meters: 12,
+        calculation_basis_centi_square_meters: 1200,
+        operative_range_min_centi_square_meters: 1100,
+        operative_range_max_centi_square_meters: 1600,
+        amount_minor: 250000,
+        schedule_version: 'ipil-municipal-fees-v1',
+        source_evidence: 'LIVE-APP-001',
+        classification: 'PROVISIONAL_UAT_ONLY',
+        production_authority: false,
+        reason: 'Provisional Gate 10 synthetic-UAT determination pending Ipil municipal confirmation',
+    }).post(
+        `/staff/permit-applications/${props.task.application.id}/menro-fee-determination`,
+        {
+            preserveScroll: true,
+            onStart: () => {
+                menroDeterminationPending.value = true;
+            },
+            onFinish: () => {
+                menroDeterminationPending.value = false;
             },
         },
     );
@@ -1226,6 +1281,41 @@ const filteredTreasuryLobOptions = computed(() => {
                         >
                             Ipil source-backed fee menu
                         </p>
+                        <section
+                            v-if="work.office_code === 'menro'"
+                            class="grid gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+                            aria-labelledby="menro-determination-heading"
+                        >
+                            <div>
+                                <h3 id="menro-determination-heading" class="font-black">
+                                    Provisional MENRO determination
+                                </h3>
+                                <p class="mt-1 text-sm leading-6">
+                                    Synthetic-UAT evidence only. This does not establish municipal policy and does not create a Payment Order.
+                                </p>
+                            </div>
+                            <dl v-if="task.financial_editor.menro_determination" class="grid gap-2 text-sm sm:grid-cols-2">
+                                <div><dt class="font-semibold">Scope / source</dt><dd>Application · {{ task.financial_editor.menro_determination.code }} (identity {{ task.financial_editor.menro_determination.fee_rule_id }})</dd></div>
+                                <div><dt class="font-semibold">Area basis</dt><dd>{{ task.financial_editor.menro_determination.application_area_square_meters }} m² · {{ task.financial_editor.menro_determination.calculation_basis_centi_square_meters }} centi-m²</dd></div>
+                                <div><dt class="font-semibold">Operative range</dt><dd>{{ task.financial_editor.menro_determination.operative_range_min_centi_square_meters }}–{{ task.financial_editor.menro_determination.operative_range_max_centi_square_meters }}</dd></div>
+                                <div><dt class="font-semibold">Provisional amount</dt><dd>{{ money(task.financial_editor.menro_determination.amount_minor) }}</dd></div>
+                                <div><dt class="font-semibold">Schedule / evidence</dt><dd>{{ task.financial_editor.menro_determination.schedule_version }} · {{ task.financial_editor.menro_determination.source_evidence }}</dd></div>
+                                <div><dt class="font-semibold">Classification</dt><dd>{{ task.financial_editor.menro_determination.classification }} · Production authority: No</dd></div>
+                                <div><dt class="font-semibold">Recorded by / time</dt><dd>{{ task.financial_editor.menro_determination.actor ?? 'Not recorded' }} · {{ dateTime(task.financial_editor.menro_determination.determined_at) }}</dd></div>
+                                <div><dt class="font-semibold">Fingerprint</dt><dd class="break-all font-mono text-xs">{{ task.financial_editor.menro_determination.fingerprint }}</dd></div>
+                            </dl>
+                            <template v-else-if="task.financial_editor.can_record_menro_determination">
+                                <p class="text-sm">Authorized facts: 12 m² → 1,200 centi-m² → range 1,100–1,600 → ₱2,500.00.</p>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    :disabled="menroDeterminationPending"
+                                    @click="recordProvisionalMenroDetermination"
+                                >
+                                    {{ menroDeterminationPending ? 'Recording determination…' : 'Record Provisional Determination' }}
+                                </Button>
+                            </template>
+                        </section>
                         <FinancialLineItemEditor
                             v-model="officeItems[work.id]"
                             :options="

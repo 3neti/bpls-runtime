@@ -12,6 +12,7 @@ use App\Enums\FeeRuleCategory;
 use App\Enums\UserPermission;
 use App\Models\FeeRule;
 use App\Models\LineOfBusiness;
+use App\Models\MenroFeeDetermination;
 use App\Models\PermitApplication;
 use App\Models\SignatureEvidence;
 use App\Models\TreasuryLineItem;
@@ -46,6 +47,7 @@ class BuildBploRoutingTask
             'bploRoutingDetermination.works.paymentOrders.signatureEvidences.media',
             'treasuryLineOfBusinessAssignments.lineOfBusiness',
             'treasuryLineOfBusinessAssignments.items',
+            'menroFeeDetermination.actor',
         ]);
         $determination = $application->bploRoutingDetermination;
         $suggestion = $application->bploRoutingSuggestion;
@@ -149,6 +151,16 @@ class BuildBploRoutingTask
     /** @return array<string, mixed> */
     private function financialEditor(PermitApplication $application, ?User $viewer): array
     {
+        $menroWork = $application->bploRoutingDetermination?->works->firstWhere('office_code', 'menro');
+        $menroDetermination = $application->menroFeeDetermination;
+        $canRecordMenroDetermination = $viewer instanceof User
+            && $menroWork !== null
+            && $this->authorizeRoutedOfficeActor->allows(
+                $application,
+                'menro',
+                $viewer,
+                data_get($menroWork->context_snapshot, 'authorized_actor_id'),
+            );
         $periodStart = $application->application_year.'-01-01';
         $periodEnd = $application->application_year.'-12-31';
         $catalogFees = FeeRule::query()
@@ -165,6 +177,26 @@ class BuildBploRoutingTask
 
         return [
             'catalog_status' => $this->concernedOffices->provenance()['production_catalog_status'],
+            'menro_determination' => $menroDetermination instanceof MenroFeeDetermination ? [
+                'scope' => $menroDetermination->scope,
+                'fee_rule_id' => $menroDetermination->fee_rule_id,
+                'code' => $menroDetermination->code,
+                'basis' => $menroDetermination->basis,
+                'application_area_square_meters' => $menroDetermination->application_area_square_meters,
+                'calculation_basis_centi_square_meters' => $menroDetermination->calculation_basis_centi_square_meters,
+                'operative_range_min_centi_square_meters' => $menroDetermination->operative_range_min_centi_square_meters,
+                'operative_range_max_centi_square_meters' => $menroDetermination->operative_range_max_centi_square_meters,
+                'amount_minor' => $menroDetermination->amount_minor,
+                'schedule_version' => $menroDetermination->schedule_version,
+                'source_evidence' => $menroDetermination->source_evidence,
+                'classification' => $menroDetermination->classification,
+                'production_authority' => $menroDetermination->production_authority,
+                'reason' => $menroDetermination->reason,
+                'actor' => $menroDetermination->actor?->name,
+                'determined_at' => $menroDetermination->determined_at->toIso8601String(),
+                'fingerprint' => $menroDetermination->fingerprint,
+            ] : null,
+            'can_record_menro_determination' => $canRecordMenroDetermination && $menroDetermination === null,
             'concerned_office_payment_orders' => $this->paymentOrderSummary->handle($application),
             'office_fee_options' => $offices->mapWithKeys(function (array $office) use ($application, $catalogFees): array {
                 $configuredCodes = collect($office['fee_rule_codes'] ?? []);
