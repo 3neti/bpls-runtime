@@ -33,8 +33,7 @@ final class OrdinaryUatPermitAuthority
         $assignment = $this->assignment($ceremony);
 
         return $this->enabled($application) && $actor !== null && $assignment !== null
-            && $assignment->user_id === $actor->id && $actor->can('staff.access')
-            && $actor->hasRole($ceremony === 'mayor' ? 'mayor_office' : 'releasing');
+            && $assignment->user_id === $actor->id && $actor->can('staff.access');
     }
 
     public function prerequisites(PermitApplication $application): bool

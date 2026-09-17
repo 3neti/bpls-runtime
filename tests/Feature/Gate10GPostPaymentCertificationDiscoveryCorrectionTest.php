@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\BuildMunicipalWorkInbox;
+use App\Actions\OrdinaryUatPermitAuthority;
 use App\Actions\RecordPostPaymentOfficeCertification;
 use App\Models\InstitutionalPosition;
 use App\Models\InstitutionalPositionAssignment;
@@ -147,4 +148,32 @@ test('four completed office certifications reconnect Mayoral Authorization readi
     expect($application->postPaymentOfficeCertifications()->where('status', 'completed')->count())->toBe(4)
         ->and(app(BuildMunicipalWorkInbox::class)->handle($mayor)['items']->where('task_type', 'permit_issuance')->sole()['task_label'])
         ->toBe('Authorize Business Permit issuance');
+});
+
+test('ordinary permit authority admits the assigned preview Mayor and Releasing actors', function () {
+    [$application] = ordinaryCertificationFixture();
+    foreach (['assessor', 'engineering', 'health', 'menro'] as $office) {
+        $certification = $application->postPaymentOfficeCertifications()->where('office_code', $office)->sole();
+        app(RecordPostPaymentOfficeCertification::class)->handle($certification, gate10PreviewCertificationOfficer($office), 'certified');
+    }
+
+    $mayor = gate10PreviewCertificationOfficer('mayor_office');
+    $releasing = gate10PreviewCertificationOfficer('releasing');
+    $mayorAssignment = InstitutionalPositionAssignment::where('user_id', $mayor->id)->sole();
+    $releasingAssignment = InstitutionalPositionAssignment::where('user_id', $releasing->id)->sole();
+    $mayorAssignment->position->update(['code' => 'mayors_office_reviewer']);
+    $releasingAssignment->position->update(['code' => 'releasing_officer']);
+    config([
+        'workflow_uat_authority.mode' => 'synthetic_only',
+        'workflow_uat_authority.mayor_assignment_id' => $mayorAssignment->id,
+        'workflow_uat_authority.releasing_assignment_id' => $releasingAssignment->id,
+    ]);
+
+    $authority = app(OrdinaryUatPermitAuthority::class);
+
+    expect($mayor->hasRole('mayor_office'))->toBeFalse()
+        ->and($releasing->hasRole('releasing'))->toBeFalse()
+        ->and($authority->allows($application->fresh(), $mayor))->toBeTrue()
+        ->and($authority->allows($application->fresh(), $releasing, 'releasing'))->toBeTrue()
+        ->and(app(BuildMunicipalWorkInbox::class)->handle($mayor)['items']->where('task_type', 'permit_issuance'))->toHaveCount(1);
 });
