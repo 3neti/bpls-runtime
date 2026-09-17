@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\RecordProvisionalMenroFeeDetermination;
+use App\Actions\BuildBploRoutingTask;
 use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
@@ -78,6 +79,23 @@ it('records the exact provisional MENRO evidence idempotently without a Payment 
         ->and($first->fresh()->fingerprint)->toBe($first->fingerprint)
         ->and($application->paperlessPaymentOrders()->count())->toBe(0)
         ->and($application->menroFeeDetermination()->count())->toBe(1);
+});
+
+it('builds the ordinary MENRO task before and after evidence without financial mutation', function (): void {
+    [$application, $actor] = provisionalMenroFixture();
+    $builder = app(BuildBploRoutingTask::class);
+
+    $before = $builder->handle($application, $actor)->toArray();
+    expect(data_get($before, 'financial_editor.menro_determination'))->toBeNull()
+        ->and(data_get($before, 'financial_editor.can_record_menro_determination'))->toBeTrue();
+
+    app(RecordProvisionalMenroFeeDetermination::class)->handle($application, $actor, provisionalMenroFacts());
+    $after = $builder->handle($application->refresh(), $actor)->toArray();
+
+    expect(data_get($after, 'financial_editor.menro_determination.code'))
+        ->toBe('IPIL-LEGACY-98CDCAD9D28055FB')
+        ->and(data_get($after, 'financial_editor.can_record_menro_determination'))->toBeFalse()
+        ->and($application->paperlessPaymentOrders()->count())->toBe(0);
 });
 
 it('fails closed for a changed authorized fact', function (): void {
