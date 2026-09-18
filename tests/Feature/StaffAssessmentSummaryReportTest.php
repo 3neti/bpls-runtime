@@ -2,6 +2,7 @@
 
 use App\Enums\AssessmentStatus;
 use App\Enums\FeeRuleCategory;
+use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
 use App\Enums\UserPermission;
 use App\Models\Assessment;
@@ -9,6 +10,7 @@ use App\Models\AssessmentLine;
 use App\Models\Business;
 use App\Models\BusinessOwner;
 use App\Models\PermitApplication;
+use App\Models\ProvisionalUatPermitCompletion;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('staff users with report permission can view current assessment snapshot totals', function () {
@@ -105,6 +107,34 @@ test('assessment summary filters exact current snapshots and excludes drafts voi
             ->where('summary.total_amount_cents', 30_000)
             ->where('rows.0.application_number', 'APP-INCLUDED-RENEWAL')
             ->missing('rows.1')
+        );
+});
+
+test('assessment summary projects released permit truth over stale workflow status', function (): void {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewReports,
+    ]);
+    $assessment = assessmentSummaryRecord([
+        'application_number' => 'APP-RELEASED-ASSESSMENT',
+        'business_name' => 'Released Assessment Store',
+        'owner_name' => 'Released Owner',
+        'type' => PermitApplicationType::New,
+        'tax_amount_cents' => 0,
+        'fee_amount_cents' => 417_500,
+    ]);
+    ProvisionalUatPermitCompletion::factory()->for($assessment->permitApplication)->create([
+        'status' => 'released_synthetic',
+        'permit_number' => 'BP-2026-0201',
+        'issued_at' => now()->subMinute(),
+        'released_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('staff.reports.assessment-summary.index', ['year' => 2026, 'q' => 'RELEASED-ASSESSMENT']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('rows.0.application_status', PermitApplicationStatus::Released->value)
         );
 });
 

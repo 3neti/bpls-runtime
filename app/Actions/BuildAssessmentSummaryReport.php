@@ -5,10 +5,15 @@ namespace App\Actions;
 use App\Enums\AssessmentStatus;
 use App\Enums\FeeRuleCategory;
 use App\Models\Assessment;
+use App\Support\PermitApplicationLifecyclePresentation;
 use Illuminate\Support\Collection;
 
 final class BuildAssessmentSummaryReport
 {
+    public function __construct(
+        private readonly PermitApplicationLifecyclePresentation $lifecyclePresentation,
+    ) {}
+
     /**
      * @param  array{year?: int|string|null, type?: string|null, q?: string|null}  $filters
      * @return array{
@@ -28,6 +33,7 @@ final class BuildAssessmentSummaryReport
                 'assessedBy',
                 'lines.lineOfBusiness',
                 'permitApplication.business.owner',
+                'permitApplication.provisionalUatPermitCompletion',
             ])
             ->where('status', AssessmentStatus::Computed)
             ->whereNull('superseded_at')
@@ -93,7 +99,7 @@ final class BuildAssessmentSummaryReport
             'application_id' => $permitApplication->id,
             'application_number' => $permitApplication->application_number,
             'application_type' => $permitApplication->type->value,
-            'application_status' => $permitApplication->status->value,
+            'application_status' => $this->lifecyclePresentation->status($permitApplication),
             'application_year' => $permitApplication->application_year,
             'business_id' => $business->id,
             'business_name' => $business->name,

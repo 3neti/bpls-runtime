@@ -6,11 +6,16 @@ use App\Enums\PaymentScheduleStatus;
 use App\Enums\ReceiptStatus;
 use App\Enums\TreasuryCollectionStatus;
 use App\Models\PaymentSchedule;
+use App\Support\PermitApplicationLifecyclePresentation;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 final class BuildPaymentSummaryReport
 {
+    public function __construct(
+        private readonly PermitApplicationLifecyclePresentation $lifecyclePresentation,
+    ) {}
+
     /**
      * @param  array{year?: int|string|null, type?: string|null, status?: string|null, q?: string|null}  $filters
      * @return array{
@@ -29,7 +34,8 @@ final class BuildPaymentSummaryReport
         $schedules = PaymentSchedule::query()
             ->with([
                 'permitApplication.business.owner',
-                'treasuryCollections.receipt',
+                'permitApplication.provisionalUatPermitCompletion',
+                'treasuryCollections.receipts',
             ])
             ->when($status !== null, fn ($query) => $query->where('status', $status))
             ->whereHas('permitApplication', function ($query) use ($year, $type, $search): void {
@@ -94,8 +100,7 @@ final class BuildPaymentSummaryReport
         $activeCollections = $schedule->treasuryCollections
             ->where('status', '!=', TreasuryCollectionStatus::Voided);
         $issuedReceipts = $activeCollections
-            ->pluck('receipt')
-            ->filter()
+            ->flatMap(fn ($collection) => $collection->receipts)
             ->where('status', ReceiptStatus::Issued);
         $latestReceipt = $issuedReceipts->sortBy('issued_at')->last();
         $isFinanciallyActive = $schedule->status !== PaymentScheduleStatus::Voided;
@@ -111,7 +116,7 @@ final class BuildPaymentSummaryReport
             'application_id' => $permitApplication->id,
             'application_number' => $permitApplication->application_number,
             'application_type' => $permitApplication->type->value,
-            'application_status' => $permitApplication->status->value,
+            'application_status' => $this->lifecyclePresentation->status($permitApplication),
             'application_year' => $permitApplication->application_year,
             'business_id' => $business->id,
             'business_name' => $business->name,

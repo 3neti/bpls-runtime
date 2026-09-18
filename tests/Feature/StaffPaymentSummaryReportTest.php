@@ -11,6 +11,7 @@ use App\Models\Business;
 use App\Models\BusinessOwner;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
+use App\Models\ProvisionalUatPermitCompletion;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -101,6 +102,57 @@ test('payment summary filters by schedule status application type and search', f
             ->where('summary.paid_count', 1)
             ->where('rows.0.application_number', 'APP-INCLUDED-PAYMENT')
             ->missing('rows.1')
+        );
+});
+
+test('payment summary reconciles a multi receipt packet and projects released permit truth', function (): void {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewReports,
+    ]);
+    $schedule = paymentSummaryRecord([
+        'business_name' => 'Released Multi Receipt Store',
+        'owner_name' => 'Released Owner',
+        'application_number' => 'APP-MULTI-RECEIPT-RELEASED',
+        'type' => PermitApplicationType::New,
+        'status' => PaymentScheduleStatus::Paid,
+        'total_amount_cents' => 417_500,
+        'paid_amount_cents' => 417_500,
+        'collections' => [
+            ['amount_cents' => 417_500, 'status' => TreasuryCollectionStatus::Receipted, 'receipt_number' => '6600101'],
+        ],
+    ]);
+    $collection = $schedule->treasuryCollections()->sole();
+    foreach ([150_000, 167_500, 100_000] as $index => $amount) {
+        Receipt::factory()
+            ->for($collection, 'treasuryCollection')
+            ->for($schedule, 'paymentSchedule')
+            ->for($schedule->permitApplication)
+            ->for($schedule->assessment)
+            ->create([
+                'status' => ReceiptStatus::Issued,
+                'receipt_number' => '660010'.($index + 2),
+                'amount_cents' => $amount,
+                'receipt_group_key' => 'test-group-'.($index + 2),
+                'receipt_group_label' => 'Test Group '.($index + 2),
+            ]);
+    }
+    $collection->receipt()->firstOrFail()->update(['amount_cents' => 0]);
+    ProvisionalUatPermitCompletion::factory()->for($schedule->permitApplication)->create([
+        'status' => 'released_synthetic',
+        'permit_number' => 'BP-2026-0101',
+        'issued_at' => now()->subMinute(),
+        'released_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('staff.reports.payment-summary.index', ['year' => 2026, 'q' => 'MULTI-RECEIPT']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('rows.0.application_status', 'released')
+            ->where('rows.0.receipted_count', 4)
+            ->where('rows.0.receipted_amount_cents', 417_500)
+            ->where('rows.0.latest_receipt_number', '6600104')
         );
 });
 

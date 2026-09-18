@@ -5,11 +5,16 @@ namespace App\Actions;
 use App\Enums\PaymentScheduleStatus;
 use App\Enums\ReceiptStatus;
 use App\Models\PaymentSchedule;
+use App\Support\PermitApplicationLifecyclePresentation;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 final class BuildPaidEstablishmentsReport
 {
+    public function __construct(
+        private readonly PermitApplicationLifecyclePresentation $lifecyclePresentation,
+    ) {}
+
     /**
      * @param  array{year?: int|string|null, type?: string|null, q?: string|null}  $filters
      * @return array{
@@ -28,6 +33,7 @@ final class BuildPaidEstablishmentsReport
             ->with([
                 'permitApplication.business.owner',
                 'permitApplication.lines.lineOfBusiness',
+                'permitApplication.provisionalUatPermitCompletion',
                 'treasuryCollections.receipt',
             ])
             ->where('status', PaymentScheduleStatus::Paid)
@@ -98,7 +104,7 @@ final class BuildPaidEstablishmentsReport
             'application_id' => $permitApplication->id,
             'application_number' => $permitApplication->application_number,
             'application_type' => $permitApplication->type->value,
-            'application_status' => $permitApplication->status->value,
+            'application_status' => $this->lifecyclePresentation->status($permitApplication),
             'application_year' => $permitApplication->application_year,
             'business_id' => $business->id,
             'business_name' => $business->name,

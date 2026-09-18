@@ -13,6 +13,7 @@ use App\Models\LineOfBusiness;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationLine;
+use App\Models\ProvisionalUatPermitCompletion;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -121,6 +122,38 @@ test('paid establishments report filters by type and search and excludes unpaid 
             ->where('filters.q', 'taway')
             ->where('rows.0.business_name', 'Included Renewal')
             ->missing('rows.1')
+        );
+});
+
+test('paid establishments report projects issued and released synthetic permit truth over stale workflow status', function (): void {
+    $user = userWithPermissions([
+        UserPermission::AccessStaff,
+        UserPermission::ViewReports,
+    ]);
+
+    $schedule = paidEstablishmentForReport([
+        'business_name' => 'Released Fish Stall',
+        'owner_name' => 'Released Owner',
+        'application_number' => 'APP-RELEASED-PAID',
+        'type' => PermitApplicationType::New,
+        'year' => 2025,
+        'paid_amount_cents' => 417_500,
+        'receipt_number' => '6600099',
+        'line_of_business' => 'Fresh Fish Retailer',
+    ]);
+    ProvisionalUatPermitCompletion::factory()->for($schedule->permitApplication)->create([
+        'status' => 'released_synthetic',
+        'permit_number' => 'BP-2025-0099',
+        'issued_at' => now()->subMinute(),
+        'released_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('staff.reports.paid-establishments.index', ['year' => 2025]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('rows.0.application_number', 'APP-RELEASED-PAID')
+            ->where('rows.0.application_status', PermitApplicationStatus::Released->value)
         );
 });
 
