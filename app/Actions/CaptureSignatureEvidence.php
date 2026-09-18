@@ -86,7 +86,7 @@ class CaptureSignatureEvidence
                     ->addMedia($facsimile)
                     ->usingName('Signature facsimile')
                     ->withCustomProperties(['checksum_sha256' => $checksum, 'immutable_evidence_digest' => $digest])
-                    ->toMediaCollection(SignatureEvidence::FacsimileCollection, 'local');
+                    ->toMediaCollection(SignatureEvidence::FacsimileCollection);
 
                 if ($media->size < 1) {
                     throw new RuntimeException('The captured signature facsimile is empty.');

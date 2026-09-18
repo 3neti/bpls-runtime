@@ -17,6 +17,8 @@ return [
 
     'application_documents_disk' => env('BPLS_DOCUMENT_DISK', 'local'),
 
+    'signature_evidence_disk' => env('BPLS_SIGNATURE_DISK', env('BPLS_DOCUMENT_DISK', 'local')),
+
     /*
     |--------------------------------------------------------------------------
     | Filesystem Disks

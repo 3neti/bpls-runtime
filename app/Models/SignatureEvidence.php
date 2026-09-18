@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Config;
 use LogicException;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
@@ -56,7 +57,7 @@ class SignatureEvidence extends Model implements HasMedia
 
     public function registerMediaCollections(): void
     {
-        $this->addMediaCollection(self::FacsimileCollection)->singleFile()->useDisk('local');
+        $this->addMediaCollection(self::FacsimileCollection)->singleFile()->useDisk(Config::string('filesystems.signature_evidence_disk'));
     }
 
     protected function casts(): array

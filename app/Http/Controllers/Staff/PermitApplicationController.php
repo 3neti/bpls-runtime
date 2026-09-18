@@ -30,6 +30,7 @@ use App\Http\Requests\Staff\StorePermitApplicationRequest;
 use App\Models\LineOfBusiness;
 use App\Models\PermitApplication;
 use App\Models\PermitClearance;
+use App\Support\PermitApplicationLifecyclePresentation;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,6 +53,7 @@ class PermitApplicationController extends Controller
         private readonly BuildPermitApplicationTimeline $buildPermitApplicationTimeline,
         private readonly DescribeProvisionalUatPermitCompletion $describeProvisionalUatPermitCompletion,
         private readonly ResolvePermitOwnerAddress $resolvePermitOwnerAddress,
+        private readonly PermitApplicationLifecyclePresentation $lifecyclePresentation,
     ) {}
 
     public function index(Request $request): Response
@@ -60,13 +62,13 @@ class PermitApplicationController extends Controller
 
         $filters = $request->validate([
             'q' => ['nullable', 'string', 'max:120'],
-            'status' => ['nullable', Rule::enum(PermitApplicationStatus::class)],
+            'status' => ['nullable', Rule::in([...array_column(PermitApplicationStatus::cases(), 'value'), 'issued'])],
         ]);
         $search = str($filters['q'] ?? '')->trim()->toString();
         $status = $filters['status'] ?? null;
 
         $permitApplications = PermitApplication::query()
-            ->with(['business.owner', 'declaration', 'businessPermitEvaluation', 'lines.lineOfBusiness', 'assessments' => fn ($query) => $query->latest(), 'paymentSchedules' => fn ($query) => $query->latest()])
+            ->with(['business.owner', 'declaration', 'businessPermitEvaluation', 'provisionalUatPermitCompletion', 'lines.lineOfBusiness', 'assessments' => fn ($query) => $query->latest(), 'paymentSchedules' => fn ($query) => $query->latest()])
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($query) use ($search): void {
                     $query
@@ -81,7 +83,19 @@ class PermitApplicationController extends Controller
                         ->orWhereHas('business.owner', fn ($query) => $query->where('name', 'like', '%'.$search.'%'));
                 });
             })
-            ->when($status !== null, fn ($query) => $query->where('status', $status))
+            ->when($status !== null, function ($query) use ($status): void {
+                if ($status === 'released') {
+                    $query->where(function ($query): void {
+                        $query->whereHas('provisionalUatPermitCompletion', fn ($completion) => $completion->whereNotNull('released_at'))
+                            ->orWhere(fn ($query) => $query->where('status', 'released')->whereDoesntHave('provisionalUatPermitCompletion', fn ($completion) => $completion->whereNotNull('issued_at')));
+                    });
+                } elseif ($status === 'issued') {
+                    $query->whereHas('provisionalUatPermitCompletion', fn ($completion) => $completion->whereNotNull('issued_at')->whereNull('released_at'));
+                } else {
+                    $query->where('status', $status)
+                        ->whereDoesntHave('provisionalUatPermitCompletion', fn ($completion) => $completion->whereNotNull('issued_at')->orWhereNotNull('released_at'));
+                }
+            })
             ->latest()
             ->paginate(15)
             ->withQueryString()
@@ -98,6 +112,7 @@ class PermitApplicationController extends Controller
                     'label' => str($status->value)->replace('_', ' ')->title()->toString(),
                     'value' => $status->value,
                 ])
+                ->push(['label' => 'Issued', 'value' => 'issued'])
                 ->values(),
             'can' => [
                 'create_permit_applications' => auth()->user()?->can(UserPermission::CreatePermitApplications->value) ?? false,
@@ -249,7 +264,7 @@ class PermitApplicationController extends Controller
             'id' => $permitApplication->id,
             'application_number' => $permitApplication->application_number,
             'type' => $permitApplication->type->value,
-            'status' => $permitApplication->status->value,
+            'status' => $this->lifecyclePresentation->status($permitApplication),
             'application_year' => $permitApplication->application_year,
             'business_permit_evaluation_url' => route('staff.permit-applications.evaluation.show', $permitApplication, absolute: false),
             'has_business_permit_evaluation' => $permitApplication->businessPermitEvaluation !== null,

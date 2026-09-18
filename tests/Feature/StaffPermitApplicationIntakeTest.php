@@ -69,6 +69,26 @@ test('staff users with view permission can list permit applications', function (
         );
 });
 
+test('staff queue projects and filters issued and released synthetic permits without changing application facts', function () {
+    $user = userWithPermissions([UserPermission::AccessStaff, UserPermission::ViewPermitApplications]);
+    $released = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->create();
+    $issued = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->create();
+    $pending = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->create();
+    ProvisionalUatPermitCompletion::factory()->create(['permit_application_id' => $released->id, 'issued_at' => now(), 'released_at' => now()]);
+    ProvisionalUatPermitCompletion::factory()->create(['permit_application_id' => $issued->id, 'issued_at' => now(), 'released_at' => null]);
+
+    foreach (['released' => $released, 'issued' => $issued, 'pending_payment' => $pending] as $status => $application) {
+        $this->actingAs($user)->get(route('staff.permit-applications.index', ['status' => $status]))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->has('permitApplications.data', 1)
+            ->where('permitApplications.data.0.id', $application->id)
+            ->where('permitApplications.data.0.status', $status));
+    }
+
+    expect($released->fresh()->status)->toBe(PermitApplicationStatus::PendingPayment)
+        ->and($issued->fresh()->status)->toBe(PermitApplicationStatus::PendingPayment);
+});
+
 test('staff can search and filter the permit application queue using recorded fields', function () {
     $user = userWithPermissions([
         UserPermission::AccessStaff,
