@@ -719,15 +719,11 @@ const filteredTreasuryLobOptions = computed(() => {
     const query = treasuryLobSearch.value.trim().toLocaleLowerCase();
     const options = props.task.financial_editor.line_of_business_options;
 
-    return (
-        query === ''
-            ? options
-            : options.filter((line) =>
-                  `${line.name} ${line.code}`
-                      .toLocaleLowerCase()
-                      .includes(query),
-              )
-    ).slice(0, 100);
+    return query === ''
+        ? options
+        : options.filter((line) =>
+              `${line.name} ${line.code}`.toLocaleLowerCase().includes(query),
+          );
 });
 </script>
 
@@ -979,6 +975,7 @@ const filteredTreasuryLobOptions = computed(() => {
                         <Input
                             v-model="treasuryLobSearch"
                             type="search"
+                            aria-label="Search Line of Business catalogue"
                             placeholder="Search the Ipil Line of Business catalogue"
                             autocomplete="off"
                         />
@@ -1849,6 +1846,7 @@ const filteredTreasuryLobOptions = computed(() => {
                         <Input
                             v-model="treasuryLobSearch"
                             type="search"
+                            aria-label="Search Line of Business catalogue"
                             placeholder="Search Line of Business"
                             autocomplete="off"
                         />

@@ -150,13 +150,17 @@ test('the municipal fee editor resolves accepted employee and area defaults exac
     $task = app(BuildBploRoutingTask::class)->handle($application, null)->toArray();
     $healthOptions = collect(data_get($task, 'financial_editor.office_fee_options.health'));
     $menroOptions = collect(data_get($task, 'financial_editor.office_fee_options.menro'));
-    $sariSari = collect(data_get($task, 'financial_editor.line_of_business_options'))
+    $lineOfBusinessOptions = collect(data_get($task, 'financial_editor.line_of_business_options'));
+    $sariSari = $lineOfBusinessOptions
         ->firstWhere('code', 'LOB-F4F644287B2E8261');
     $treasuryItems = collect($sariSari['default_items']);
-    $freshFishItems = collect(data_get($task, 'financial_editor.line_of_business_options'))
-        ->firstWhere('code', 'LOB-3A9A93CA46967768')['default_items'];
+    $freshFishOptionIndex = $lineOfBusinessOptions
+        ->search(fn (array $lineOfBusiness): bool => $lineOfBusiness['code'] === 'LOB-3A9A93CA46967768');
+    $freshFishItems = $lineOfBusinessOptions[$freshFishOptionIndex]['default_items'];
 
-    expect($healthOptions->firstWhere('code', 'IPIL-LEGACY-99C7F1CE5E8189C8')['default_amount_cents'])->toBe(70_000)
+    expect($lineOfBusinessOptions)->toHaveCount(822)
+        ->and($freshFishOptionIndex)->toBeInt()->toBeGreaterThanOrEqual(100)
+        ->and($healthOptions->firstWhere('code', 'IPIL-LEGACY-99C7F1CE5E8189C8')['default_amount_cents'])->toBe(70_000)
         ->and($healthOptions->firstWhere('code', 'IPIL-LEGACY-04845A0127A00E12')['default_amount_cents'])->toBe(40_000)
         ->and($menroOptions->firstWhere('code', 'IPIL-LEGACY-98CDCAD9D28055FB')['default_amount_cents'])->toBe(350_000)
         ->and($treasuryItems->firstWhere('code', 'IPIL-LEGACY-A9B730041C0AE6F6')['amount_cents'])->toBe(17_500)
