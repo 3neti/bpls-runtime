@@ -30,6 +30,8 @@ test('ordinary Treasury projects unresolved canonical identity rather than a res
 });
 
 test('zero nonzero and omitted unresolved Treasury defaults fail before creating canonical records', function (string $mode): void {
+    config(['treasury_enterprise.provisional_uat_enabled' => false]);
+
     $this->seed(MunicipalFeeCatalogSeeder::class);
     $application = PermitApplication::factory()->create([
         'application_year' => 2026, 'type' => 'new',
