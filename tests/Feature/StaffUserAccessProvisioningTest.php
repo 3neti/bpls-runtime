@@ -134,6 +134,12 @@ test('laboratory actor provisioning creates twelve stable role-specific accounts
     config()->set('bpls_installation.seed_laboratory_actors', true);
     config()->set('bpls_installation.laboratory_actor_password', 'password');
     $administrator = provisioningAdministrator();
+    User::factory()->create([
+        'email' => 'intake@bpls-runtime.test',
+        'password' => Hash::make('old-laboratory-password'),
+    ]);
+    $unrelated = User::factory()->create(['password' => Hash::make('unrelated-password')]);
+    $unrelatedPassword = $unrelated->password;
 
     $this->actingAs($administrator)
         ->post(route('staff.users.provision-laboratory'), [
@@ -156,10 +162,13 @@ test('laboratory actor provisioning creates twelve stable role-specific accounts
     }
 
     $firstIds = User::query()->whereIn('email', $emails)->pluck('id', 'email')->all();
+    $firstPassword = User::query()->where('email', 'intake@bpls-runtime.test')->value('password');
     app(ProvisionLifecycleLaboratoryActors::class)->handle();
 
     expect(User::query()->whereIn('email', $emails)->pluck('id', 'email')->all())->toBe($firstIds)
-        ->and(User::query()->whereIn('email', $emails)->count())->toBe(12);
+        ->and(User::query()->whereIn('email', $emails)->count())->toBe(12)
+        ->and(User::query()->where('email', 'intake@bpls-runtime.test')->value('password'))->toBe($firstPassword)
+        ->and($unrelated->fresh()->password)->toBe($unrelatedPassword);
 });
 
 test('laboratory actor provisioning obeys the environment switch', function () {
@@ -167,4 +176,19 @@ test('laboratory actor provisioning obeys the environment switch', function () {
 
     expect(fn () => app(ProvisionLifecycleLaboratoryActors::class)->handle())
         ->toThrow(RuntimeException::class, 'Lifecycle laboratory actor provisioning is disabled');
+});
+
+test('laboratory actor provisioning cannot reset credentials in production', function () {
+    config()->set('bpls_installation.seed_laboratory_actors', true);
+    config()->set('bpls_installation.laboratory_actor_password', 'password');
+    app()->detectEnvironment(fn (): string => 'production');
+    $actor = User::factory()->create([
+        'email' => 'intake@bpls-runtime.test',
+        'password' => Hash::make('old-laboratory-password'),
+    ]);
+    $password = $actor->password;
+
+    expect(fn () => app(ProvisionLifecycleLaboratoryActors::class)->handle())
+        ->toThrow(RuntimeException::class, 'Lifecycle laboratory actor provisioning is disabled')
+        ->and($actor->fresh()->password)->toBe($password);
 });

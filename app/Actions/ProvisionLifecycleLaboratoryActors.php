@@ -46,7 +46,7 @@ class ProvisionLifecycleLaboratoryActors
                     'access_status' => 'active',
                     'access_expires_at' => null,
                 ]);
-                if (! $user->exists) {
+                if (! $user->exists || ! Hash::check($password, $user->password)) {
                     $user->password = Hash::make($password);
                 }
                 $user->save();

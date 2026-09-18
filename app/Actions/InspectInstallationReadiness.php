@@ -10,6 +10,7 @@ use App\Models\LineOfBusiness;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 use RuntimeException;
 
 class InspectInstallationReadiness
@@ -25,6 +26,15 @@ class InspectInstallationReadiness
         $expectedRoles = array_keys($this->institution->roleDefinitions());
         $expectedActors = collect($this->laboratoryActors->definitions())->pluck('email');
         $laboratoryExpected = config('bpls_installation.seed_laboratory_actors') === true && ! app()->isProduction();
+        $laboratoryActorPassword = config('bpls_installation.laboratory_actor_password');
+        $laboratoryActorUsers = User::query()->whereIn('email', $expectedActors)->get()->keyBy('email');
+        $laboratoryCredentialsReady = is_string($laboratoryActorPassword)
+            && mb_strlen($laboratoryActorPassword) >= 8
+            && $expectedActors->every(function (string $email) use ($laboratoryActorPassword, $laboratoryActorUsers): bool {
+                $user = $laboratoryActorUsers->get($email);
+
+                return $user instanceof User && Hash::check($laboratoryActorPassword, $user->password);
+            });
         $checks = [
             'canonical_permissions' => Permission::query()->whereIn('code', array_column(UserPermission::cases(), 'value'))->count() === count(UserPermission::cases()),
             'institutional_roles' => Role::query()->whereIn('code', $expectedRoles)->count() === count($expectedRoles),
@@ -36,6 +46,7 @@ class InspectInstallationReadiness
             'municipality_identity' => filled(config('municipality.name')),
             'receipt_configuration' => config('municipality.official_receipt.form.accountable_form_number') === 51,
             'laboratory_actors' => ! $laboratoryExpected || User::query()->whereIn('email', $expectedActors)->count() === $expectedActors->count(),
+            'laboratory_actor_credentials' => ! $laboratoryExpected || $laboratoryCredentialsReady,
         ];
         $failed = array_keys(array_filter($checks, fn (bool $passed): bool => ! $passed));
 
