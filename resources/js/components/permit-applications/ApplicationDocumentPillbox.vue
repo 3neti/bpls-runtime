@@ -398,13 +398,15 @@ function fileSize(bytes: number): string {
 
         <Dialog v-model:open="viewerOpen">
             <DialogContent
-                class="grid h-[min(90vh,56rem)] max-w-5xl grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0"
+                class="grid h-[min(90vh,56rem)] min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-5xl"
                 style="
                     height: min(calc(100dvh - 1rem), 56rem);
                     max-height: calc(100% - 1rem);
                 "
             >
-                <DialogHeader class="border-b p-4 pr-12 sm:p-5 sm:pr-14">
+                <DialogHeader
+                    class="min-w-0 overflow-hidden border-b p-4 pr-12 sm:p-5 sm:pr-14"
+                >
                     <DialogTitle>{{ selectedDocument?.label }}</DialogTitle>
                     <DialogDescription>
                         {{ selectedDocument?.original_name }}
@@ -418,7 +420,9 @@ function fileSize(bytes: number): string {
                         Download
                     </a>
                 </DialogHeader>
-                <div class="min-h-0 bg-muted/40 p-2 sm:p-4">
+                <div
+                    class="min-h-0 min-w-0 overflow-hidden bg-muted/40 p-2 sm:p-4"
+                >
                     <img
                         v-if="selectedDocument && isImage(selectedDocument)"
                         :src="selectedDocument.view_url"

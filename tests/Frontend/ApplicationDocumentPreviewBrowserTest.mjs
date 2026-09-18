@@ -195,9 +195,31 @@ test('authorized document references open visible PDF and image previews without
         const previewBox = await page
             .getByLabel('DTI Registration PDF preview')
             .boundingBox();
-        assert.ok(dialogBox && previewBox);
+        const mobileCanvasBox = await pdfCanvas.boundingBox();
+        const mobileDownloadBox = await page
+            .getByRole('dialog')
+            .getByRole('link', { name: 'Download DTI Registration' })
+            .boundingBox();
+        assert.ok(
+            dialogBox && previewBox && mobileCanvasBox && mobileDownloadBox,
+        );
+        assert.ok(dialogBox.x >= 0 && dialogBox.x + dialogBox.width <= 390);
+        assert.ok(
+            mobileCanvasBox.x >= 0 &&
+                mobileCanvasBox.x + mobileCanvasBox.width <= 390,
+        );
+        assert.ok(
+            mobileDownloadBox.x >= 0 &&
+                mobileDownloadBox.x + mobileDownloadBox.width <= 390,
+        );
         assert.ok(
             previewBox.y + previewBox.height <= dialogBox.y + dialogBox.height,
+        );
+        assert.equal(
+            await page.evaluate(
+                () => document.documentElement.scrollWidth <= window.innerWidth,
+            ),
+            true,
         );
         assert.ok((await page.getByRole('dialog').screenshot()).length > 1_000);
 

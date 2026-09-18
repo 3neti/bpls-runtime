@@ -306,7 +306,7 @@ onBeforeUnmount(() => {
 <template>
     <section
         ref="container"
-        class="relative flex size-full min-h-0 flex-col overflow-hidden rounded-md border bg-slate-200"
+        class="relative flex size-full min-h-0 max-w-full min-w-0 flex-col overflow-hidden rounded-md border bg-slate-200"
         :aria-label="`${title} PDF preview`"
     >
         <div
@@ -336,10 +336,10 @@ onBeforeUnmount(() => {
             </button>
         </div>
 
-        <div class="min-h-0 flex-1 overflow-auto p-2">
+        <div class="min-h-0 max-w-full min-w-0 flex-1 overflow-auto p-2">
             <canvas
                 ref="canvas"
-                class="mx-auto bg-white shadow"
+                class="mx-auto max-w-full bg-white shadow"
                 :aria-label="`${title}, page ${pageNumber}`"
             />
             <p data-testid="pdf-text-layer" class="sr-only">

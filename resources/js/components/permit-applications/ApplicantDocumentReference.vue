@@ -170,13 +170,15 @@ function fileSize(sizeBytes: number): string {
 
         <Dialog v-model:open="viewerOpen">
             <DialogContent
-                class="grid h-[min(90vh,56rem)] max-w-5xl grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0"
+                class="grid h-[min(90vh,56rem)] min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-5xl"
                 style="
                     height: min(calc(100dvh - 1rem), 56rem);
                     max-height: calc(100% - 1rem);
                 "
             >
-                <DialogHeader class="border-b p-4 pr-12 sm:p-5 sm:pr-14">
+                <DialogHeader
+                    class="min-w-0 overflow-hidden border-b p-4 pr-12 sm:p-5 sm:pr-14"
+                >
                     <div class="flex min-w-0 items-start gap-3">
                         <span
                             class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
@@ -206,6 +208,7 @@ function fileSize(sizeBytes: number): string {
                         <a
                             v-if="selectedDocument"
                             :href="selectedDocument.download_url"
+                            :aria-label="`Download ${selectedDocument.label}`"
                             class="ml-auto inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold"
                         >
                             <Download class="size-4" aria-hidden="true" />
@@ -214,7 +217,9 @@ function fileSize(sizeBytes: number): string {
                     </div>
                 </DialogHeader>
 
-                <div class="min-h-0 bg-muted/40 p-2 sm:p-4">
+                <div
+                    class="min-h-0 min-w-0 overflow-hidden bg-muted/40 p-2 sm:p-4"
+                >
                     <img
                         v-if="selectedDocument && isImage(selectedDocument)"
                         :src="selectedDocument.view_url"
