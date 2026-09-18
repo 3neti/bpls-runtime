@@ -13,6 +13,7 @@ use App\Actions\DescribePermitArtifact;
 use App\Actions\DescribePermitReleaseReadiness;
 use App\Actions\LodgeLifecycleCleanroomApplication;
 use App\Actions\ResolveLifecycleCleanroomIntake;
+use App\Actions\ResolvePermitOwnerAddress;
 use App\Actions\SubmitCitizenPermitApplication;
 use App\Actions\UpdateCitizenPermitApplicationDraft;
 use App\Enums\PermitApplicationStatus;
@@ -44,6 +45,7 @@ class PermitApplicationController extends Controller
         private readonly DescribePaymentPolicyBoundary $describePaymentPolicyBoundary,
         private readonly DescribePermitArtifact $describePermitArtifact,
         private readonly DescribePermitReleaseReadiness $describePermitReleaseReadiness,
+        private readonly ResolvePermitOwnerAddress $resolvePermitOwnerAddress,
     ) {}
 
     public function index(Request $request): Response
@@ -310,7 +312,6 @@ class PermitApplicationController extends Controller
         };
         $declaration = data_get($application->metadata, 'applicant_declaration_draft');
         $declaration = is_array($declaration) ? $declaration : [];
-        $declaredOwnerAddress = $this->declaredAddress($declaration, 'owner_address');
         $declaredBusinessAddress = $this->declaredAddress($declaration, 'business_address');
 
         return Inertia::render('citizen/permit-applications/Show', [
@@ -321,7 +322,7 @@ class PermitApplicationController extends Controller
                     'name' => $this->declaredOwnerName($declaration) ?? $application->business->owner->name,
                     'email' => data_get($declaration, 'owner_address.email') ?? $application->business->owner->email,
                     'phone' => data_get($declaration, 'owner_address.telephone') ?? $application->business->owner->phone,
-                    'address' => $declaredOwnerAddress ?? $application->business->owner->address,
+                    'address' => $this->resolvePermitOwnerAddress->handle($application),
                 ],
                 'business' => [
                     'name' => data_get($declaration, 'business.name') ?? $application->business->name,
@@ -490,6 +491,7 @@ class PermitApplicationController extends Controller
             ->visibleToPortalOwner($request->user())
             ->with([
                 'business.owner',
+                'declaration',
                 'submittedBy',
                 'lines.lineOfBusiness',
                 'documents' => fn ($query) => $query->whereNull('removed_at')->with('media')->latest('uploaded_at')->latest('id'),

@@ -17,6 +17,7 @@ use App\Actions\DescribeRetirementPolicyBoundary;
 use App\Actions\DescribeTransferPolicyBoundary;
 use App\Actions\RenderApplicationFormPdf;
 use App\Actions\RenderPermitPdf;
+use App\Actions\ResolvePermitOwnerAddress;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
 use App\Enums\PermitClearanceStatus;
@@ -50,6 +51,7 @@ class PermitApplicationController extends Controller
         private readonly DescribeRetirementPolicyBoundary $describeRetirementPolicyBoundary,
         private readonly BuildPermitApplicationTimeline $buildPermitApplicationTimeline,
         private readonly DescribeProvisionalUatPermitCompletion $describeProvisionalUatPermitCompletion,
+        private readonly ResolvePermitOwnerAddress $resolvePermitOwnerAddress,
     ) {}
 
     public function index(Request $request): Response
@@ -64,7 +66,7 @@ class PermitApplicationController extends Controller
         $status = $filters['status'] ?? null;
 
         $permitApplications = PermitApplication::query()
-            ->with(['business.owner', 'businessPermitEvaluation', 'lines.lineOfBusiness', 'assessments' => fn ($query) => $query->latest(), 'paymentSchedules' => fn ($query) => $query->latest()])
+            ->with(['business.owner', 'declaration', 'businessPermitEvaluation', 'lines.lineOfBusiness', 'assessments' => fn ($query) => $query->latest(), 'paymentSchedules' => fn ($query) => $query->latest()])
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($query) use ($search): void {
                     $query
@@ -177,6 +179,7 @@ class PermitApplicationController extends Controller
 
         $permitApplication->load([
             'business.owner',
+            'declaration',
             'submittedBy',
             'documents' => fn ($query) => $query->with('uploadedBy')->latest('uploaded_at'),
             'lines.lineOfBusiness',
@@ -276,7 +279,7 @@ class PermitApplicationController extends Controller
                     'name' => $permitApplication->business->owner->name,
                     'email' => $permitApplication->business->owner->email,
                     'phone' => $permitApplication->business->owner->phone,
-                    'address' => $permitApplication->business->owner->address,
+                    'address' => $this->resolvePermitOwnerAddress->handle($permitApplication),
                 ],
             ],
             'lines' => $permitApplication->lines
