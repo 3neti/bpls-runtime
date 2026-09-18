@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { router, useForm } from '@inertiajs/vue3';
-import { FileText, Plus, Upload, X } from '@lucide/vue';
+import { Download, Eye, FileText, Plus, Upload, X } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import {
     destroy,
@@ -8,7 +8,15 @@ import {
     store,
 } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationDocumentController';
 import InputError from '@/components/InputError.vue';
+import AuthenticatedPdfPreview from '@/components/permit-applications/AuthenticatedPdfPreview.vue';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 
 type DocumentType = {
     code: string;
@@ -22,6 +30,9 @@ type ApplicationDocument = {
     original_name: string;
     size_bytes: number;
     version: number | null;
+    mime_type?: string;
+    view_url?: string;
+    download_url?: string;
 };
 type PendingDocument = {
     key: number;
@@ -61,6 +72,8 @@ const fileInput = ref<HTMLInputElement | null>(null);
 const localError = ref('');
 const selectedType = ref(props.documentTypes[0]?.code ?? '');
 const selectedFile = ref<File | null>(null);
+const viewerOpen = ref(false);
+const selectedDocument = ref<ApplicationDocument | null>(null);
 const uploadForm = useForm({
     document_type: '',
     file: null as File | null,
@@ -147,6 +160,23 @@ function removeDocument(documentId: number): void {
     );
 }
 
+function openDocument(document: ApplicationDocument): void {
+    if (!document.view_url) {
+        return;
+    }
+
+    selectedDocument.value = document;
+    viewerOpen.value = true;
+}
+
+function isImage(document: ApplicationDocument): boolean {
+    return document.mime_type?.startsWith('image/') ?? false;
+}
+
+function isPdf(document: ApplicationDocument): boolean {
+    return document.mime_type === 'application/pdf';
+}
+
 function fileSize(bytes: number): string {
     return bytes < 1024 * 1024
         ? `${Math.max(1, Math.round(bytes / 1024))} KB`
@@ -205,19 +235,45 @@ function fileSize(bytes: number): string {
                 :title="`${document.original_name} · ${fileSize(document.size_bytes)} · version ${document.version ?? 1}`"
             >
                 <FileText class="size-3.5 shrink-0" />
+                <button
+                    v-if="document.view_url"
+                    type="button"
+                    class="truncate underline-offset-2 hover:underline"
+                    :aria-label="`View ${document.label}`"
+                    @click="openDocument(document)"
+                >
+                    {{ document.label }}
+                </button>
                 <a
-                    v-if="applicationId"
+                    v-else-if="applicationId"
                     class="truncate underline-offset-2 hover:underline"
                     :href="
+                        document.download_url ??
                         download.url({
                             permitApplication: applicationId,
                             document: document.id,
                         })
                     "
+                    >{{ document.label }}</a
                 >
-                    {{ document.label }}
-                </a>
                 <span v-else class="truncate">{{ document.label }}</span>
+                <button
+                    v-if="document.view_url"
+                    type="button"
+                    class="rounded-full p-0.5 hover:bg-blue-200 dark:hover:bg-blue-800"
+                    :aria-label="`View ${document.label}`"
+                    @click="openDocument(document)"
+                >
+                    <Eye class="size-3.5" />
+                </button>
+                <a
+                    v-if="document.download_url"
+                    :href="document.download_url"
+                    class="rounded-full p-0.5 hover:bg-blue-200 dark:hover:bg-blue-800"
+                    :aria-label="`Download ${document.label}`"
+                >
+                    <Download class="size-3.5" />
+                </a>
                 <button
                     v-if="editable"
                     type="button"
@@ -339,5 +395,53 @@ function fileSize(bytes: number): string {
                 </div>
             </div>
         </dialog>
+
+        <Dialog v-model:open="viewerOpen">
+            <DialogContent
+                class="grid h-[min(90vh,56rem)] max-w-5xl grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0"
+                style="
+                    height: min(calc(100dvh - 1rem), 56rem);
+                    max-height: calc(100% - 1rem);
+                "
+            >
+                <DialogHeader class="border-b p-4 pr-12 sm:p-5 sm:pr-14">
+                    <DialogTitle>{{ selectedDocument?.label }}</DialogTitle>
+                    <DialogDescription>
+                        {{ selectedDocument?.original_name }}
+                    </DialogDescription>
+                    <a
+                        v-if="selectedDocument?.download_url"
+                        :href="selectedDocument.download_url"
+                        class="mt-2 inline-flex w-fit items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold"
+                    >
+                        <Download class="size-4" aria-hidden="true" />
+                        Download
+                    </a>
+                </DialogHeader>
+                <div class="min-h-0 bg-muted/40 p-2 sm:p-4">
+                    <img
+                        v-if="selectedDocument && isImage(selectedDocument)"
+                        :src="selectedDocument.view_url"
+                        :alt="selectedDocument.label"
+                        class="size-full object-contain"
+                    />
+                    <AuthenticatedPdfPreview
+                        v-else-if="selectedDocument && isPdf(selectedDocument)"
+                        :src="selectedDocument.view_url!"
+                        :title="selectedDocument.label"
+                    />
+                    <div
+                        v-else-if="selectedDocument"
+                        class="flex size-full flex-col items-center justify-center gap-4 text-center"
+                    >
+                        <FileText class="size-12 text-muted-foreground" />
+                        <p class="max-w-md text-sm text-muted-foreground">
+                            This file type cannot be previewed here. Download it
+                            to review the document.
+                        </p>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
     </section>
 </template>

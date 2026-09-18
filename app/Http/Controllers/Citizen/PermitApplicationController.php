@@ -361,6 +361,8 @@ class PermitApplicationController extends Controller
                         'uploaded_by' => $document->uploaded_by_id === $request->user()->id
                             ? 'You'
                             : 'Municipal staff',
+                        'view_url' => route('citizen.permit-applications.documents.view', [$application, $document], false),
+                        'download_url' => route('citizen.permit-applications.documents.download', [$application, $document], false),
                     ])->values()
                     : [],
                 'documentary_readiness' => [

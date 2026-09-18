@@ -55,11 +55,16 @@ class PermitApplicationDocumentController extends Controller
     public function view(PermitApplication $permitApplication, PermitApplicationDocument $document): StreamedResponse
     {
         [$disk, $path] = $this->authorizedDocumentPath($permitApplication, $document);
+        abort_unless(in_array($document->mime_type, ['application/pdf', 'image/jpeg', 'image/png'], true), 415);
 
         return Storage::disk($disk)->response(
             $path,
             $document->original_name,
-            ['Content-Type' => $document->mime_type],
+            [
+                'Content-Type' => $document->mime_type,
+                'X-Content-Type-Options' => 'nosniff',
+                'Cache-Control' => 'private, no-store, max-age=0',
+            ],
             'inline',
         );
     }

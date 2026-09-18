@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Download, Eye, FileText, Image as ImageIcon } from '@lucide/vue';
 import { computed, ref } from 'vue';
+import AuthenticatedPdfPreview from '@/components/permit-applications/AuthenticatedPdfPreview.vue';
 import {
     Dialog,
     DialogContent,
@@ -17,10 +18,14 @@ export type ApplicantDocumentReferenceItem = {
     size_bytes: number;
     view_url: string;
     download_url: string;
+    remarks?: string | null;
+    uploaded_at?: string;
+    uploaded_by?: string | null;
 };
 
 const props = defineProps<{
     documents: ApplicantDocumentReferenceItem[];
+    description?: string;
 }>();
 
 const viewerOpen = ref(false);
@@ -66,8 +71,10 @@ function fileSize(sizeBytes: number): string {
                 Applicant documents
             </h3>
             <p class="mt-1 text-sm text-muted-foreground">
-                Open the submitted evidence while determining the official Lines
-                of Business.
+                {{
+                    description ??
+                    'Open the submitted evidence while determining the official Lines of Business.'
+                }}
             </p>
         </div>
 
@@ -124,14 +131,50 @@ function fileSize(sizeBytes: number): string {
                             {{ document.original_name }} ·
                             {{ fileSize(document.size_bytes) }}
                         </span>
+                        <span
+                            v-if="document.remarks"
+                            class="mt-2 block text-xs text-muted-foreground"
+                        >
+                            {{ document.remarks }}
+                        </span>
+                        <span
+                            v-if="document.uploaded_at"
+                            class="mt-1 block text-xs text-muted-foreground"
+                        >
+                            {{ document.uploaded_at
+                            }}<template v-if="document.uploaded_by">
+                                · {{ document.uploaded_by }}</template
+                            >
+                        </span>
                     </span>
                 </button>
+                <div class="flex gap-2 border-t p-2">
+                    <button
+                        type="button"
+                        class="inline-flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold"
+                        @click="openDocument(document)"
+                    >
+                        <Eye class="size-4" aria-hidden="true" />
+                        View
+                    </button>
+                    <a
+                        :href="document.download_url"
+                        class="inline-flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold"
+                    >
+                        <Download class="size-4" aria-hidden="true" />
+                        Download
+                    </a>
+                </div>
             </article>
         </div>
 
         <Dialog v-model:open="viewerOpen">
             <DialogContent
                 class="grid h-[min(90vh,56rem)] max-w-5xl grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0"
+                style="
+                    height: min(calc(100dvh - 1rem), 56rem);
+                    max-height: calc(100% - 1rem);
+                "
             >
                 <DialogHeader class="border-b p-4 pr-12 sm:p-5 sm:pr-14">
                     <div class="flex min-w-0 items-start gap-3">
@@ -178,11 +221,10 @@ function fileSize(sizeBytes: number): string {
                         :alt="selectedDocument.label"
                         class="size-full object-contain"
                     />
-                    <iframe
+                    <AuthenticatedPdfPreview
                         v-else-if="selectedDocument && isPdf(selectedDocument)"
                         :src="selectedDocument.view_url"
                         :title="selectedDocument.label"
-                        class="size-full rounded-md border bg-white"
                     />
                     <div
                         v-else-if="selectedDocument"

@@ -355,6 +355,8 @@ class PermitApplicationController extends Controller
                     'remarks' => $document->remarks,
                     'uploaded_at' => $document->uploaded_at->toIso8601String(),
                     'uploaded_by' => $document->uploadedBy?->name,
+                    'document_id' => $document->id,
+                    'view_url' => route('staff.permit-applications.documents.view', [$permitApplication, $document], false),
                     'download_url' => route('staff.permit-applications.documents.download', [$permitApplication, $document], false),
                     'policy_note' => $document->source_snapshot['policy_note'] ?? null,
                 ])] : []),

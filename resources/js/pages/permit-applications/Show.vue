@@ -3,7 +3,6 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 import {
     Calculator,
     CircleX,
-    Download,
     FileText,
     History,
     LinkIcon,
@@ -29,6 +28,7 @@ import {
 } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
 import { store as storeSupportingDocument } from '@/actions/App/Http/Controllers/Staff/PermitApplicationDocumentController';
 import InputError from '@/components/InputError.vue';
+import ApplicantDocumentReference from '@/components/permit-applications/ApplicantDocumentReference.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -251,6 +251,7 @@ type PermitApplication = {
     }[];
     documents: {
         id: number;
+        document_id: number;
         label: string;
         original_name: string;
         mime_type: string;
@@ -258,6 +259,7 @@ type PermitApplication = {
         remarks: string | null;
         uploaded_at: string;
         uploaded_by: string | null;
+        view_url: string;
         download_url: string;
         policy_note: string | null;
     }[];
@@ -357,14 +359,6 @@ function uploadDocument(): void {
         preserveScroll: true,
         onSuccess: () => documentForm.reset(),
     });
-}
-
-function fileSize(sizeBytes: number): string {
-    if (sizeBytes < 1024) {
-        return `${sizeBytes} B`;
-    }
-
-    return `${(sizeBytes / 1024).toFixed(1)} KB`;
 }
 </script>
 
@@ -1147,43 +1141,11 @@ function fileSize(sizeBytes: number): string {
                 >
                     No supporting documents recorded.
                 </div>
-                <ul v-else class="divide-y divide-border">
-                    <li
-                        v-for="document in permitApplication.documents"
-                        :key="document.id"
-                        data-testid="permit-supporting-document"
-                        :data-document-id="document.id"
-                        class="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"
-                    >
-                        <div class="min-w-0 flex-1">
-                            <p class="text-sm font-medium break-words">
-                                {{ document.label }}
-                            </p>
-                            <p class="text-xs break-all text-muted-foreground">
-                                {{ document.original_name }} ·
-                                {{ fileSize(document.size_bytes) }}
-                            </p>
-                            <p
-                                v-if="document.remarks"
-                                class="mt-1 text-sm break-words text-muted-foreground"
-                            >
-                                {{ document.remarks }}
-                            </p>
-                            <p class="mt-1 text-xs text-muted-foreground">
-                                {{ dateTime(document.uploaded_at) }}
-                                <template v-if="document.uploaded_by">
-                                    · {{ document.uploaded_by }}
-                                </template>
-                            </p>
-                        </div>
-                        <Button as-child variant="outline" size="sm">
-                            <a :href="document.download_url">
-                                <Download />
-                                Download
-                            </a>
-                        </Button>
-                    </li>
-                </ul>
+                <ApplicantDocumentReference
+                    v-else
+                    :documents="permitApplication.documents"
+                    description="Review the submitted evidence without leaving the Application."
+                />
             </section>
 
             <section

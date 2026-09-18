@@ -6,6 +6,7 @@ use App\Enums\UserPermission;
 use App\Enums\UserRole;
 use App\Models\Permission;
 use App\Models\PermitApplication;
+use App\Models\PermitApplicationDeclaration;
 use App\Models\PermitApplicationDocument;
 use App\Models\Role;
 use Illuminate\Http\UploadedFile;
@@ -31,7 +32,7 @@ test('citizens can add and download private supporting evidence for an owned dra
     $this->actingAs($citizen)
         ->post(route('citizen.permit-applications.documents.store', $application), [
             'document_type' => 'dti_registration',
-            'file' => UploadedFile::fake()->create('registration.pdf', 120, 'application/pdf'),
+            'file' => UploadedFile::fake()->createWithContent('registration.pdf', '%PDF-1.4 citizen evidence'),
         ])
         ->assertRedirect(route('citizen.permit-applications.show', $application))
         ->assertSessionHas(
@@ -61,6 +62,8 @@ test('citizens can add and download private supporting evidence for an owned dra
             ->where('permitApplication.documents.0.label', 'DTI Registration')
             ->where('permitApplication.documents.0.version', 1)
             ->where('permitApplication.documents.0.uploaded_by', 'You')
+            ->where('permitApplication.documents.0.view_url', route('citizen.permit-applications.documents.view', [$application, $document], false))
+            ->where('permitApplication.documents.0.download_url', route('citizen.permit-applications.documents.download', [$application, $document], false))
             ->where('permitApplication.documentary_readiness.received_document_count', 1)
             ->where('permitApplication.documentary_readiness.requirement_catalog_status', 'unresolved')
             ->where('permitApplication.documentary_readiness.submission_readiness', 'not_determined')
@@ -72,6 +75,35 @@ test('citizens can add and download private supporting evidence for an owned dra
         ->get(route('citizen.permit-applications.documents.download', [$application, $document]))
         ->assertOk()
         ->assertDownload('registration.pdf');
+
+    $declaration = PermitApplicationDeclaration::factory()->for($application)->create([
+        'snapshot' => ['applicant_documents_manifest' => ['frozen' => true, 'documents' => [['id' => $document->id]]]],
+    ]);
+    $frozenManifest = $declaration->fresh()->snapshot['applicant_documents_manifest'];
+    $viewResponse = $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.documents.view', [$application, $document]))
+        ->assertOk()
+        ->assertHeader('content-type', 'application/pdf');
+
+    expect($viewResponse->headers->get('content-disposition'))->toContain('inline')
+        ->and($viewResponse->headers->get('x-content-type-options'))->toBe('nosniff')
+        ->and($viewResponse->headers->get('cache-control'))->toContain('private')
+        ->and($viewResponse->headers->get('cache-control'))->toContain('no-store')
+        ->and($declaration->fresh()->snapshot['applicant_documents_manifest'])->toBe($frozenManifest);
+
+    $unsupported = PermitApplicationDocument::factory()->for($application)->create([
+        'path' => "permit-applications/{$application->id}/documents/legacy.html",
+        'original_name' => 'legacy.html',
+        'mime_type' => 'text/html',
+    ]);
+    Storage::disk('local')->put($unsupported->path, '<script>window.activeContent = true</script>');
+
+    $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.documents.view', [$application, $unsupported]))
+        ->assertStatus(415);
+    $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.documents.download', [$application, $unsupported]))
+        ->assertDownload('legacy.html');
 });
 
 test('citizen supporting evidence accepts configured types only and derives its label', function () {
@@ -170,6 +202,10 @@ test('citizen document access is permission and ownership scoped', function () {
         ->get(route('citizen.permit-applications.documents.download', [$otherApplication, $document]))
         ->assertNotFound();
 
+    $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.documents.view', [$otherApplication, $document]))
+        ->assertNotFound();
+
     $citizenOnlyRole = Role::factory()->create();
     $citizenOnlyRole->permissions()->attach(
         Permission::query()->where('code', UserPermission::AccessCitizen->value)->sole(),
@@ -194,6 +230,10 @@ test('citizen document access is permission and ownership scoped', function () {
 
     $this->actingAs($citizenWithoutDocumentPermissions)
         ->get(route('citizen.permit-applications.documents.download', [$ownedApplication, $ownedDocument]))
+        ->assertForbidden();
+
+    $this->actingAs($citizenWithoutDocumentPermissions)
+        ->get(route('citizen.permit-applications.documents.view', [$ownedApplication, $ownedDocument]))
         ->assertForbidden();
 
     expect(PermitApplicationDocument::query()->count())->toBe(2);

@@ -77,6 +77,8 @@ type PermitApplication = {
         remarks: string | null;
         uploaded_at: string;
         uploaded_by: string;
+        view_url: string;
+        download_url: string;
     }[];
     documentary_readiness: {
         received_document_count: number;

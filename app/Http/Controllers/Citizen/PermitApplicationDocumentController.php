@@ -8,6 +8,7 @@ use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Citizen\StorePermitApplicationDocumentRequest;
 use App\Models\PermitApplication;
+use App\Models\PermitApplicationDocument;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,23 +53,29 @@ class PermitApplicationDocumentController extends Controller
 
     public function download(Request $request, int $permitApplication, int $document): StreamedResponse
     {
-        Gate::authorize(UserPermission::ViewOwnPermitApplicationDocuments->value);
+        [$supportingDocument, $disk, $path] = $this->authorizedDocumentPath($request, $permitApplication, $document);
 
-        $application = $this->ownedApplication($request, $permitApplication);
-        $supportingDocument = $application->documents()->findOrFail($document);
-
-        if ($supportingDocument->media !== null) {
-            return Storage::disk($supportingDocument->media->disk)->download(
-                $supportingDocument->media->getPathRelativeToRoot(),
-                $supportingDocument->original_name,
-                ['Content-Type' => $supportingDocument->mime_type],
-            );
-        }
-
-        return Storage::disk($supportingDocument->storage_disk)->download(
-            $supportingDocument->path,
+        return Storage::disk($disk)->download(
+            $path,
             $supportingDocument->original_name,
             ['Content-Type' => $supportingDocument->mime_type],
+        );
+    }
+
+    public function view(Request $request, int $permitApplication, int $document): StreamedResponse
+    {
+        [$supportingDocument, $disk, $path] = $this->authorizedDocumentPath($request, $permitApplication, $document);
+        abort_unless(in_array($supportingDocument->mime_type, ['application/pdf', 'image/jpeg', 'image/png'], true), 415);
+
+        return Storage::disk($disk)->response(
+            $path,
+            $supportingDocument->original_name,
+            [
+                'Content-Type' => $supportingDocument->mime_type,
+                'X-Content-Type-Options' => 'nosniff',
+                'Cache-Control' => 'private, no-store, max-age=0',
+            ],
+            'inline',
         );
     }
 
@@ -99,5 +106,19 @@ class PermitApplicationDocumentController extends Controller
             ->whereKey($permitApplication)
             ->visibleToPortalOwner($request->user())
             ->firstOrFail();
+    }
+
+    /** @return array{0: PermitApplicationDocument, 1: string, 2: string} */
+    private function authorizedDocumentPath(Request $request, int $permitApplication, int $document): array
+    {
+        Gate::authorize(UserPermission::ViewOwnPermitApplicationDocuments->value);
+
+        $application = $this->ownedApplication($request, $permitApplication);
+        $supportingDocument = $application->documents()->findOrFail($document);
+        $supportingDocument->loadMissing('media');
+
+        return $supportingDocument->media === null
+            ? [$supportingDocument, $supportingDocument->storage_disk, $supportingDocument->path]
+            : [$supportingDocument, $supportingDocument->media->disk, $supportingDocument->media->getPathRelativeToRoot()];
     }
 }

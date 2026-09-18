@@ -196,6 +196,8 @@ Route::middleware(['auth', 'verified', EnsureActiveUserAccess::class])->group(fu
             ->name('permit-applications.submit');
         Route::post('permit-applications/{permitApplication}/documents', [CitizenPermitApplicationDocumentController::class, 'store'])
             ->name('permit-applications.documents.store');
+        Route::get('permit-applications/{permitApplication}/documents/{document}/view', [CitizenPermitApplicationDocumentController::class, 'view'])
+            ->name('permit-applications.documents.view');
         Route::get('permit-applications/{permitApplication}/documents/{document}/download', [CitizenPermitApplicationDocumentController::class, 'download'])
             ->name('permit-applications.documents.download');
         Route::delete('permit-applications/{permitApplication}/documents/{document}', [CitizenPermitApplicationDocumentController::class, 'destroy'])

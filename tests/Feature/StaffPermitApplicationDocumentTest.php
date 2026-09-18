@@ -1,8 +1,10 @@
 <?php
 
 use App\Enums\UserPermission;
+use App\Models\Permission;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationDocument;
+use App\Models\Role;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -46,6 +48,7 @@ test('authorized staff can record private supporting evidence for a permit appli
             ->component('permit-applications/Show')
             ->where('permitApplication.documents.0.id', $document->id)
             ->where('permitApplication.documents.0.label', 'Business registration evidence')
+            ->where('permitApplication.documents.0.view_url', route('staff.permit-applications.documents.view', [$application, $document], false))
             ->where('permitApplication.documents.0.download_url', route('staff.permit-applications.documents.download', [$application, $document], false))
             ->where('permitApplication.timeline.1.key', "document-recorded:{$document->id}")
             ->where('can.upload_documents', true)
@@ -150,6 +153,9 @@ test('authorized staff can download only documents belonging to the requested ap
         ->assertHeader('content-type', 'application/pdf');
 
     expect($viewResponse->headers->get('content-disposition'))->toContain('inline');
+    expect($viewResponse->headers->get('x-content-type-options'))->toBe('nosniff')
+        ->and($viewResponse->headers->get('cache-control'))->toContain('private')
+        ->and($viewResponse->headers->get('cache-control'))->toContain('no-store');
 
     $this->actingAs($user)
         ->get(route('staff.permit-applications.documents.download', [$otherApplication, $document]))
@@ -158,4 +164,28 @@ test('authorized staff can download only documents belonging to the requested ap
     $this->actingAs($user)
         ->get(route('staff.permit-applications.documents.view', [$otherApplication, $document]))
         ->assertNotFound();
+
+    $unauthorizedRole = Role::factory()->create();
+    $unauthorizedRole->permissions()->attach(
+        Permission::query()->where('code', UserPermission::AccessStaff->value)->sole(),
+    );
+    $unauthorized = userWithRole($unauthorizedRole);
+
+    $this->actingAs($unauthorized)
+        ->get(route('staff.permit-applications.documents.view', [$application, $document]))
+        ->assertForbidden();
+
+    $unsupported = PermitApplicationDocument::factory()->for($application)->create([
+        'path' => "permit-applications/{$application->id}/documents/legacy.html",
+        'original_name' => 'legacy.html',
+        'mime_type' => 'text/html',
+    ]);
+    Storage::disk('local')->put($unsupported->path, '<script>window.activeContent = true</script>');
+
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.documents.view', [$application, $unsupported]))
+        ->assertStatus(415);
+    $this->actingAs($user)
+        ->get(route('staff.permit-applications.documents.download', [$application, $unsupported]))
+        ->assertDownload('legacy.html');
 });
