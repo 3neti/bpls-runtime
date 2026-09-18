@@ -223,8 +223,8 @@ class PermitApplicationController extends Controller
             ],
             'permitDocumentGaps' => [
                 'The generated application form shows the intake information currently recorded.',
-                'The generated permit document does not release or issue a permit.',
-                'Clearance completion, public verification, signatories, and the final municipal layout are not yet confirmed.',
+                'Opening or downloading a permit document does not perform issuance or release.',
+                'When marked synthetic, issuance, release, certification and identity verification are test evidence, not production municipal authority or legal effect.',
             ],
         ]);
     }
@@ -345,6 +345,7 @@ class PermitApplicationController extends Controller
             'release_policy_boundary' => $permitApplication->metadata['release_policy_boundary'] ?? null,
             'permit_artifact' => $this->describePermitArtifact->handle($permitApplication),
             'release_readiness' => $this->describeReleaseReadiness->handle($permitApplication),
+            'uses_routing_certifications' => data_get($permitApplication->metadata, 'lifecycle_cleanroom.semantic_classification') === 'synthetic_only',
             'verification_boundary' => $this->describeVerificationBoundary->handle($permitApplication),
             ...($includeTimeline ? ['provisional_uat_completion' => $this->describeProvisionalUatPermitCompletion->handle($permitApplication)] : []),
             ...($includeTimeline ? ['office_charge_contributions' => $permitApplication->officeChargeContributions

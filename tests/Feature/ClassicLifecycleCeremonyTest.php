@@ -354,10 +354,17 @@ test('classic ceremony completes the canonical lifecycle through each municipal 
     expect($collection->fresh()->status)->toBe(TreasuryCollectionStatus::Receipted);
     app(AdvanceClassicLifecycleSystemSteps::class)->handle($run->fresh());
 
+    $completedCertifications = 0;
     foreach ($application->fresh()->postPaymentOfficeCertifications as $certification) {
         $inboxItem = $assertInbox($certification->office_code, 'post_payment_certification');
         expect($inboxItem['action_url'])->toContain('/stakeholder-preview/lifecycle-laboratory/cleanrooms/');
         app(RecordPostPaymentOfficeCertification::class)->handle($certification, $actor($certification->office_code));
+        $completedCertifications++;
+        $this->actingAs($actor('treasury'))->get(route('staff.permit-applications.show', $application))
+            ->assertSuccessful()->assertInertia(fn (Assert $page) => $page
+            ->where('permitApplication.uses_routing_certifications', true)
+            ->where('permitApplication.release_readiness.clearances_completed', $completedCertifications)
+            ->where('permitApplication.release_readiness.clearances_total', 4));
     }
     $issuanceItem = $assertInbox('permit_issuer', 'permit_issuance');
     expect($issuanceItem['action_url'])->toContain('/stakeholder-preview/lifecycle-laboratory/cleanrooms/');
@@ -366,6 +373,25 @@ test('classic ceremony completes the canonical lifecycle through each municipal 
     $releaseItem = $assertInbox('releasing_officer', 'permit_release');
     expect($releaseItem['action_url'])->toContain('/stakeholder-preview/lifecycle-laboratory/cleanrooms/');
     app(ReleaseSyntheticLifecyclePermit::class)->handle($application->fresh(), $actor('releasing_officer'));
+
+    $completedFacts = fn () => [
+        $application->fresh()->getRawOriginal(),
+        $permit->fresh()->getRawOriginal(),
+        $assessment->fresh()->getRawOriginal(),
+        $schedule->fresh()->getRawOriginal(),
+        $collection->fresh()->getRawOriginal(),
+        $collection->receipts()->orderBy('id')->get()->map->getRawOriginal()->all(),
+        $application->postPaymentOfficeCertifications()->orderBy('id')->get()->map->getRawOriginal()->all(),
+    ];
+    $beforeDetailRead = $completedFacts();
+    $this->actingAs($actor('treasury'))->get(route('staff.permit-applications.show', $application))
+        ->assertSuccessful()->assertInertia(fn (Assert $page) => $page
+        ->where('permitApplication.verification_boundary.released', true)
+        ->where('permitApplication.release_readiness.clearances_completed', 4)
+        ->where('permitApplication.release_readiness.clearances_total', 4)
+        ->where('permitApplication.release_readiness.authority_boundary.artifact_statement', 'The synthetic cleanroom records distinct specimen issuance and BPLO release acts. Neither act establishes production authority, municipal legal release, or legal effect.')
+        ->where('permitApplication.release_readiness.can_release', false));
+    expect($completedFacts())->toBe($beforeDetailRead);
 
     $state = app(ResolveLifecycleCleanroomState::class)->handle($run->fresh());
     $data = app(ApplicationDataResolver::class)->resolve($application->fresh(), $citizen)->toArray();

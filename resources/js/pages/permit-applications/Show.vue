@@ -12,6 +12,7 @@ import {
     Upload,
     WalletCards,
 } from '@lucide/vue';
+import { computed } from 'vue';
 import { show as showPaymentSchedule } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import {
     show as showAssessment,
@@ -36,6 +37,7 @@ import { Label } from '@/components/ui/label';
 import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
 import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { permitDetailPresentation } from '@/lib/permitDetailPresentation';
 import type { BreadcrumbItem } from '@/types';
 
 type PermitApplication = {
@@ -46,6 +48,7 @@ type PermitApplication = {
     application_year: number;
     business_permit_evaluation_url: string;
     has_business_permit_evaluation: boolean;
+    uses_routing_certifications: boolean;
     submitted_at: string | null;
     business: {
         name: string;
@@ -286,6 +289,10 @@ const documentForm = useForm({
     remarks: '',
 });
 
+const detailPresentation = computed(() =>
+    permitDetailPresentation(props.permitApplication),
+);
+
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Permit Applications',
@@ -451,14 +458,7 @@ function uploadDocument(): void {
                     },
                     {
                         label: 'Remaining legitimate action',
-                        value: permitApplication.latest_payment_schedule
-                            ? 'Receive payment'
-                            : permitApplication.has_business_permit_evaluation
-                              ? 'Continue municipal review'
-                              : 'Start Evaluation',
-                        detail: permitApplication.latest_payment_schedule
-                            ? 'No financial mutation; collect against the Payable'
-                            : null,
+                        value: detailPresentation.nextAction,
                     },
                 ]"
             >
@@ -1705,7 +1705,7 @@ function uploadDocument(): void {
                     </div>
                     <div>
                         <dt class="text-xs text-muted-foreground">
-                            Municipal release
+                            Production municipal release
                         </dt>
                         <dd>
                             {{
@@ -1739,6 +1739,32 @@ function uploadDocument(): void {
             </section>
 
             <section
+                v-if="permitApplication.uses_routing_certifications"
+                data-testid="routing-certification-summary"
+                class="rounded-lg border p-4"
+            >
+                <h2 class="text-sm font-semibold">
+                    Post-payment office certifications
+                </h2>
+                <p class="mt-2 text-sm">
+                    {{
+                        permitApplication.release_readiness.clearances_completed
+                    }}
+                    of
+                    {{ permitApplication.release_readiness.clearances_total }}
+                    required offices certified
+                </p>
+                <Link
+                    v-if="can.view_business_permit_evaluation"
+                    :href="permitApplication.business_permit_evaluation_url"
+                    class="mt-2 inline-block text-sm underline"
+                >
+                    View Application and certification evidence
+                </Link>
+            </section>
+
+            <section
+                v-else
                 class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border"
             >
                 <div
@@ -1829,12 +1855,16 @@ function uploadDocument(): void {
             </section>
 
             <AuthorityBoundaryPanel
-                title="Ready for municipal review — not released"
+                :title="detailPresentation.authorityTitle"
                 :status="
+                    detailPresentation.authorityStatus ??
                     permitApplication.release_readiness.authority_boundary
                         .status
                 "
-                :statement="'Payment, receipt, and checklist completion can prepare an application for review. Municipal release and legal effect are not confirmed by this preview.'"
+                :statement="
+                    permitApplication.release_readiness.authority_boundary
+                        .artifact_statement
+                "
                 :facts="[
                     {
                         label: 'Ready for authority review',
@@ -1858,7 +1888,7 @@ function uploadDocument(): void {
                             : 'No',
                     },
                     {
-                        label: 'Municipal release confirmed',
+                        label: 'Production municipal release authority',
                         value: permitApplication.release_readiness.can_release
                             ? 'Yes'
                             : 'No',

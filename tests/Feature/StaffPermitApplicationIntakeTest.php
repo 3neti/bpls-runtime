@@ -89,6 +89,34 @@ test('staff queue projects and filters issued and released synthetic permits wit
         ->and($issued->fresh()->status)->toBe(PermitApplicationStatus::PendingPayment);
 });
 
+test('staff detail selects routing certification evidence without rewriting generic clearances or completed permit facts', function () {
+    $user = userWithPermissions([UserPermission::AccessStaff, UserPermission::ViewPermitApplications]);
+    foreach ([false, true] as $synthetic) {
+        $application = PermitApplication::factory()->withStatus(PermitApplicationStatus::PendingPayment)->create([
+            'metadata' => $synthetic ? ['lifecycle_cleanroom' => ['semantic_classification' => 'synthetic_only']] : [],
+        ]);
+        $completion = ProvisionalUatPermitCompletion::factory()->create(['permit_application_id' => $application->id, 'issued_at' => now(), 'released_at' => now()]);
+        app(EnsurePermitApplicationClearances::class)->handle($application);
+        $before = $application->fresh()->getRawOriginal();
+        $completionBefore = $completion->fresh()->getRawOriginal();
+        $clearancesBefore = $application->clearances()->get()->toArray();
+
+        $this->actingAs($user)->get(route('staff.permit-applications.show', $application))
+            ->assertSuccessful()->assertInertia(fn (Assert $page) => $page
+            ->where('permitApplication.uses_routing_certifications', $synthetic)
+            ->where('permitApplication.verification_boundary.released', true)
+            ->where('permitApplication.verification_boundary.status', 'released_synthetic_identity')
+            ->where('permitApplication.release_readiness.can_release', false)
+            ->where('permitApplication.clearance_summary.completed', 0)
+            ->where('permitApplication.clearance_summary.total', 3)
+            ->where('permitDocumentGaps.2', 'When marked synthetic, issuance, release, certification and identity verification are test evidence, not production municipal authority or legal effect.'));
+
+        expect($application->fresh()->getRawOriginal())->toBe($before)
+            ->and($completion->fresh()->getRawOriginal())->toBe($completionBefore)
+            ->and($application->clearances()->get()->toArray())->toBe($clearancesBefore);
+    }
+});
+
 test('staff can search and filter the permit application queue using recorded fields', function () {
     $user = userWithPermissions([
         UserPermission::AccessStaff,
