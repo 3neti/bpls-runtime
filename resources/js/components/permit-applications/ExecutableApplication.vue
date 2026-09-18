@@ -337,10 +337,10 @@ const page2Summary = computed(() => {
                 ? 'Assessment total'
                 : 'Current total'),
         emergingTotalAmountCents:
-            projection?.emerging_total_amount_cents ??
-            props.application.financial?.evaluation?.working_paper
-                ?.grand_total_amount_cents ??
-            null,
+            projection != null
+                ? projection.emerging_total_amount_cents
+                : (props.application.financial?.evaluation?.working_paper
+                      ?.grand_total_amount_cents ?? null),
         unresolvedChargeCount: Number(
             projection?.required_unresolved_charge_count ??
                 props.application.financial?.evaluation?.working_paper

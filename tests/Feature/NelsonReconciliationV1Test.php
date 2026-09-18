@@ -172,7 +172,10 @@ test('Nelson cleanroom ceremony preserves applicant truth and reconciles one col
         ]], User::query()->findOrFail(data_get($run->actor_manifest, 'actors.'.$work->office_code.'.user_id')), UploadedFile::fake()->image("{$work->office_code}-signature.png"));
         if ($officeIndex === 0) {
             $partialDocument = app(BuildExecutablePermitApplicationDocument::class)->handle($application->fresh(), $treasurer);
-            expect(data_get($partialDocument, 'page_2_assessment.processing_summary'))->toBe('Payment Orders · 1 of 2');
+            expect(data_get($partialDocument, 'page_2_assessment.processing_summary'))->toBe('Payment Orders · 1 of 2')
+                ->and(data_get($partialDocument, 'page_2_assessment.total_source'))->toBe('pending_canonical_inputs')
+                ->and(data_get($partialDocument, 'page_2_assessment.emerging_total_amount_cents'))->toBeNull()
+                ->and($application->paperlessPaymentOrders()->sum('total_amount_cents'))->toBeGreaterThan(0);
         }
     }
     $editedOfficeLine = $application->paperlessPaymentOrders()->with('lines')->oldest('id')->firstOrFail()->lines->sole();

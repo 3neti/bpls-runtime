@@ -6,7 +6,7 @@ export type AssessmentActionPresentation = {
     ownerLabel: string;
     statusLabel: string;
     totalLabel: string;
-    totalAmountCents: number;
+    totalAmountCents: number | null;
     description: string;
     canPrepare: boolean;
 };
@@ -14,7 +14,7 @@ export type AssessmentActionPresentation = {
 export function assessmentActionPresentation(
     latestAssessment: EvaluationLatestAssessment | null | undefined,
     assessmentReady: boolean,
-    emergingTotalAmountCents: number,
+    emergingTotalAmountCents: number | null,
     treasuryCounterCheckComplete = false,
 ): AssessmentActionPresentation {
     const currentAssessment =

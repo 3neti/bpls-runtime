@@ -47,6 +47,17 @@ test('genuinely pending state permits preparation only when canonical readiness 
     );
 });
 
+test('an incomplete canonical amount remains unknown rather than becoming a zero assessment total', () => {
+    const pending = assessmentActionPresentation(null, false, null);
+    assert.equal(pending.totalAmountCents, null);
+    assert.equal(pending.canPrepare, false);
+    assert.equal(
+        assessmentActionPresentation(currentAssessment, false, null)
+            .totalAmountCents,
+        417_500,
+    );
+});
+
 test('superseded or stale-version Assessment never suppresses current preparation', () => {
     assert.equal(
         assessmentActionPresentation(

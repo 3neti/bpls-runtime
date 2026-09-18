@@ -453,7 +453,7 @@ const showAssessmentActionRail = computed(
 const assessmentActionTotal = computed(
     () =>
         props.applicationDocument?.page_2_assessment
-            ?.emerging_total_amount_cents ?? 0,
+            ?.emerging_total_amount_cents ?? null,
 );
 const assessmentAction = computed(() =>
     assessmentActionPresentation(
@@ -904,9 +904,12 @@ function submitPrepareAssessment(): void {
                                         class="mt-1 text-lg font-semibold tabular-nums"
                                     >
                                         {{
-                                            money(
-                                                assessmentAction.totalAmountCents,
-                                            )
+                                            assessmentAction.totalAmountCents ===
+                                            null
+                                                ? 'Not yet available'
+                                                : money(
+                                                      assessmentAction.totalAmountCents,
+                                                  )
                                         }}
                                     </dd>
                                 </div>
