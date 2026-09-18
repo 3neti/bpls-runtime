@@ -1075,6 +1075,11 @@ onBeforeUnmount(stopQrChecks);
                             class="mt-3 text-sm"
                         >
                             <summary>QR request history · read only</summary>
+                            <p class="mt-2 text-muted-foreground">
+                                Historical request status, not the current
+                                Collection status. Payment completion is shown
+                                above.
+                            </p>
                             <p
                                 v-for="attempt in classicPaymentHandoff.history"
                                 :key="attempt.id"
@@ -1083,10 +1088,11 @@ onBeforeUnmount(stopQrChecks);
                                 {{
                                     attempt.reference ?? `Request ${attempt.id}`
                                 }}
-                                —
-                                {{
-                                    attempt.expired ? 'Expired' : attempt.status
-                                }}
+                                — Recorded QR request status:
+                                {{ attempt.status.replaceAll('_', ' ') }}
+                                <span v-if="attempt.expired">
+                                    · QR validity: Expired
+                                </span>
                             </p>
                         </details>
 
