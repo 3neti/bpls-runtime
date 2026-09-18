@@ -460,10 +460,12 @@ onBeforeUnmount(stopQrChecks);
         <Head :title="`Payment Schedule #${paymentSchedule.sequence}`" />
 
         <main
-            class="mx-auto flex h-full w-full max-w-[1500px] flex-1 flex-col gap-4 overflow-x-hidden p-4"
+            class="mx-auto flex h-full w-full max-w-[1500px] min-w-0 flex-1 flex-col gap-4 p-4"
         >
             <header class="flex flex-wrap items-end justify-between gap-3">
-                <div class="grid gap-1">
+                <div
+                    class="grid max-w-full min-w-0 grid-cols-1 gap-1 break-words"
+                >
                     <Button
                         as-child
                         variant="ghost"
@@ -580,13 +582,15 @@ onBeforeUnmount(stopQrChecks);
                 </dl>
             </section>
 
-            <div class="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+            <div
+                class="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]"
+            >
                 <div
-                    class="order-2 grid min-w-0 content-start gap-4 xl:order-1"
+                    class="order-2 grid min-w-0 grid-cols-1 content-start gap-4 xl:order-1"
                 >
                     <section
                         data-testid="payment-schedule-items"
-                        class="overflow-hidden rounded-xl border bg-background"
+                        class="min-w-0 overflow-hidden rounded-xl border bg-background"
                     >
                         <div
                             class="flex flex-wrap items-end justify-between gap-4 border-b p-4"
@@ -635,7 +639,9 @@ onBeforeUnmount(stopQrChecks);
                             </dl>
                         </div>
 
-                        <div class="hidden sm:block">
+                        <div
+                            class="hidden max-w-full min-w-0 overflow-x-auto sm:block"
+                        >
                             <table class="w-full text-sm">
                                 <thead
                                     class="border-b bg-muted/30 text-left text-xs text-muted-foreground"
@@ -705,7 +711,7 @@ onBeforeUnmount(stopQrChecks);
 
                     <section
                         v-if="paymentSchedule.collections.length > 0"
-                        class="rounded-xl border bg-background p-4"
+                        class="min-w-0 rounded-xl border bg-background p-4"
                     >
                         <div class="mb-4 flex items-center gap-2">
                             <ReceiptText class="size-4 text-muted-foreground" />
@@ -713,11 +719,11 @@ onBeforeUnmount(stopQrChecks);
                                 Collections and Official Receipts
                             </h2>
                         </div>
-                        <div class="grid gap-3">
+                        <div class="grid min-w-0 grid-cols-1 gap-3">
                             <article
                                 v-for="collection in paymentSchedule.collections"
                                 :key="collection.id"
-                                class="rounded-lg border p-3"
+                                class="min-w-0 rounded-lg border p-3"
                             >
                                 <div
                                     class="flex flex-wrap items-start justify-between gap-3"
@@ -740,25 +746,30 @@ onBeforeUnmount(stopQrChecks);
 
                                 <div
                                     v-if="collection.receipts.length > 0"
-                                    class="mt-3 grid gap-2"
+                                    class="mt-3 grid min-w-0 grid-cols-1 gap-2"
                                 >
                                     <div
                                         v-for="receipt in collection.receipts"
                                         :key="receipt.id"
-                                        class="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/30 px-3 py-2 text-sm"
+                                        class="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-md bg-muted/30 px-3 py-2 text-sm"
                                     >
-                                        <span>
+                                        <span
+                                            class="max-w-full min-w-0 break-words"
+                                        >
                                             {{ receipt.receipt_group_label }} ·
                                             {{ money(receipt.amount_cents) }}
                                         </span>
                                         <Link
                                             v-if="can.view_receipts"
                                             :href="receiptShow(receipt.id)"
-                                            class="font-mono text-xs text-primary hover:underline"
+                                            class="max-w-full min-w-0 font-mono text-xs break-all text-primary hover:underline"
                                         >
                                             OR {{ receipt.receipt_number }}
                                         </Link>
-                                        <span v-else class="font-mono text-xs">
+                                        <span
+                                            v-else
+                                            class="max-w-full min-w-0 font-mono text-xs break-all"
+                                        >
                                             OR {{ receipt.receipt_number }}
                                         </span>
                                     </div>
@@ -771,7 +782,7 @@ onBeforeUnmount(stopQrChecks);
                                     :key="group.key"
                                     v-bind="receiptStore.form(collection.id)"
                                     v-slot="{ errors, processing }"
-                                    class="mt-3 grid gap-2 rounded-md border p-3"
+                                    class="mt-3 grid min-w-0 grid-cols-1 gap-2 rounded-md border p-3"
                                 >
                                     <input
                                         type="hidden"
@@ -818,7 +829,7 @@ onBeforeUnmount(stopQrChecks);
 
                     <details
                         data-testid="payment-details"
-                        class="rounded-xl border bg-background p-4"
+                        class="max-w-full min-w-0 rounded-xl border bg-background p-4"
                     >
                         <summary class="cursor-pointer text-sm font-medium">
                             Payment details
@@ -899,7 +910,9 @@ onBeforeUnmount(stopQrChecks);
                                 </dd>
                             </div>
                         </dl>
-                        <div class="mt-4 overflow-x-auto">
+                        <div
+                            class="mt-4 w-full max-w-full min-w-0 overflow-x-auto"
+                        >
                             <table class="w-full min-w-[560px] text-xs">
                                 <thead
                                     class="border-b text-left text-muted-foreground"
@@ -947,7 +960,7 @@ onBeforeUnmount(stopQrChecks);
 
                     <details
                         data-testid="payment-policy"
-                        class="rounded-xl border bg-background p-4"
+                        class="max-w-full min-w-0 rounded-xl border bg-background p-4"
                     >
                         <summary class="cursor-pointer text-sm font-medium">
                             Payment policy
@@ -1003,7 +1016,7 @@ onBeforeUnmount(stopQrChecks);
 
                 <aside
                     data-testid="payment-action-rail"
-                    class="order-1 grid content-start gap-4 xl:sticky xl:top-4 xl:order-2"
+                    class="order-1 grid min-w-0 grid-cols-1 content-start gap-4 xl:sticky xl:top-4 xl:order-2"
                 >
                     <section
                         data-testid="staff-qr-ph-payment"
