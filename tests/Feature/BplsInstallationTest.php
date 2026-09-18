@@ -1,9 +1,15 @@
 <?php
 
 use App\Actions\BuildMunicipalPriceList;
+use App\Actions\InspectBplsInstallation;
 use App\Actions\InstallBplsBaseline;
+use App\Enums\FeeRuleCalculationType;
+use App\Enums\FeeRuleCategory;
+use App\Enums\FeeRuleScope;
 use App\Enums\StakeholderPreviewPersona;
 use App\Enums\UserPermission;
+use App\Models\Assessment;
+use App\Models\AssessmentLine;
 use App\Models\BusinessOwner;
 use App\Models\FeeRule;
 use App\Models\InstitutionalPosition;
@@ -199,6 +205,53 @@ test('bpls install never removes existing local transaction data', function () {
         ->and(FeeRule::query()->where('code', 'MRC-3A-04-BUSINESS-INSPECTION')->sole()->id)->toBe($inspectionRuleId);
 });
 
+test('bpls install retires only the exact evaluator UAT pricing fixture while preserving financial evidence', function () {
+    Storage::fake('local');
+    $assessment = Assessment::factory()->create(['total_amount_cents' => 10_000]);
+    $stableRule = evaluatorUatFeeRule('EVAL-UAT-BASE', true);
+    $legacyRule = evaluatorUatFeeRule('EVAL-UAT-BASE-LEGACY', false);
+    $line = AssessmentLine::factory()->for($assessment)->create([
+        'fee_rule_id' => $stableRule->id,
+        'code' => $stableRule->code,
+        'name' => $stableRule->name,
+        'amount_cents' => 10_000,
+        'rule_snapshot' => ['code' => $stableRule->code, 'amount_cents' => 10_000, 'semantic_classification' => 'provisional_uat'],
+    ]);
+    $snapshot = $line->rule_snapshot;
+
+    expect(app(InspectBplsInstallation::class)->handle()['integrity']['pass'])->toBeFalse();
+
+    $first = app(InstallBplsBaseline::class)->handle();
+    $second = app(InstallBplsBaseline::class)->handle();
+
+    expect($first['integrity'])->toBe(['pass' => true, 'issues' => []])
+        ->and($first['evidence']['retired_evaluator_uat_fee_rules'])->toBe(1)
+        ->and($second['evidence']['retired_evaluator_uat_fee_rules'])->toBe(0)
+        ->and($stableRule->fresh()->is_active)->toBeFalse()
+        ->and($legacyRule->fresh()->is_active)->toBeFalse()
+        ->and($line->fresh()->fee_rule_id)->toBe($stableRule->id)
+        ->and($line->rule_snapshot)->toBe($snapshot)
+        ->and($assessment->fresh()->total_amount_cents)->toBe(10_000);
+});
+
+test('inactive pricing evidence is retained while unrelated active synthetic pricing still fails installation coherence', function () {
+    Storage::fake('local');
+    app(InstallBplsBaseline::class)->handle();
+
+    $unrelated = FeeRule::factory()->create([
+        'code' => 'UNRELATED-ACTIVE-UAT-RULE',
+        'is_active' => true,
+        'metadata' => ['semantic_classification' => 'provisional_uat', 'production_liability' => false],
+    ]);
+
+    expect(app(InspectBplsInstallation::class)->handle()['integrity']['pass'])->toBeFalse();
+
+    $unrelated->update(['is_active' => false]);
+
+    expect(app(InspectBplsInstallation::class)->handle()['integrity'])->toBe(['pass' => true, 'issues' => []])
+        ->and($unrelated->fresh())->not->toBeNull();
+});
+
 test('public Price List publishes governed pricing and excludes every Scenario 01 amount', function () {
     Artisan::call('bpls:install');
     $priceList = app(BuildMunicipalPriceList::class)->handle();
@@ -230,6 +283,27 @@ test('institutional roles preserve separation of duties and authority seats rema
         ->and(InstitutionalPosition::query()->where('assignment_status', 'unassigned')->count())->toBe(13)
         ->and(InstitutionalPosition::query()->where('code', 'municipal_treasurer')->value('authority_classification'))->toBe('statutory_assessment_approval');
 });
+
+function evaluatorUatFeeRule(string $code, bool $active): FeeRule
+{
+    return FeeRule::factory()->create([
+        'code' => $code,
+        'name' => 'Evaluator UAT base proposal',
+        'category' => FeeRuleCategory::Fee,
+        'scope' => FeeRuleScope::Application,
+        'calculation_type' => FeeRuleCalculationType::Fixed,
+        'basis' => 'none',
+        'amount_cents' => 10_000,
+        'effective_from' => '2099-01-01',
+        'effective_until' => '2099-12-31',
+        'is_active' => $active,
+        'metadata' => [
+            'semantic_classification' => 'provisional_uat',
+            'fixture_family' => 'evaluator_uat_base',
+            'production_liability' => false,
+        ],
+    ]);
+}
 
 /** @return array<string, list<array<string, mixed>>> */
 function databaseSnapshot(): array

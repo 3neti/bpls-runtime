@@ -11,6 +11,7 @@ class InstallBplsBaseline
     public function __construct(
         private readonly RevenueCodeFeeCatalogSeeder $revenueCodeFeeCatalog,
         private readonly NelsonConcernedOfficeFeeCatalogSeeder $nelsonConcernedOfficeFeeCatalog,
+        private readonly RetireEvaluatorUatPricingFixture $retireEvaluatorUatPricingFixture,
         private readonly EnsureBplsInstitution $ensureInstitution,
         private readonly ProvisionStakeholderPreviewPersonas $provisionPreviewPersonas,
         private readonly InspectBplsInstallation $inspectInstallation,
@@ -21,11 +22,13 @@ class InstallBplsBaseline
     {
         $this->revenueCodeFeeCatalog->run();
         $this->nelsonConcernedOfficeFeeCatalog->run();
+        $retiredEvaluatorUatFeeRules = $this->retireEvaluatorUatPricingFixture->handle();
         $this->ensureInstitution->handle();
         $this->provisionPreviewPersonas->handle();
 
         $manifest = $this->inspectInstallation->handle();
         $manifest['evidence']['installed_at'] = now()->toIso8601String();
+        $manifest['evidence']['retired_evaluator_uat_fee_rules'] = $retiredEvaluatorUatFeeRules;
 
         Storage::disk('local')->put(
             'private/bpls-installation/manifest.json',

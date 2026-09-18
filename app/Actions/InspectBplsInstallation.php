@@ -71,7 +71,7 @@ class InspectBplsInstallation
                 && data_get($rule->metadata, 'semantic_classification') === 'synthetic_only');
         $syntheticRules = $feeRules
             ->whereNotIn('id', $paymentOrderPreviewRules->merge($treasuryPreviewRules)->modelKeys())
-            ->filter(fn (FeeRule $rule): bool => in_array(
+            ->filter(fn (FeeRule $rule): bool => $rule->is_active && in_array(
                 FeeRulePublicationSource::forRule($rule),
                 [
                     FeeRulePublicationSource::Synthetic,
