@@ -3,6 +3,7 @@
 use App\Actions\BuildBploRoutingTask;
 use App\Actions\InspectBplsInstallation;
 use App\Assessment\ApplicableFeeRuleQuery;
+use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
@@ -12,8 +13,46 @@ use App\Models\BusinessPermitEvaluation;
 use App\Models\BusinessPermitEvaluationVersion;
 use App\Models\FeeRule;
 use App\Models\PermitApplication;
+use App\Models\PermitApplicationDeclaration;
 use App\References\NelsonConcernedOfficeFeeCatalog;
 use Database\Seeders\NelsonConcernedOfficeFeeCatalogSeeder;
+
+test('office fee explanation exposes the calculator matched area bracket without financial writes', function (string $area, int $minimum, ?int $maximum, string $label) {
+    $application = PermitApplication::factory()->create(['application_year' => 2025]);
+    PermitApplicationDeclaration::factory()->for($application)->create([
+        'snapshot' => ['establishment' => ['business_area_square_meters' => $area]],
+    ]);
+    $fee = FeeRule::factory()->create([
+        'name' => 'Solid Waste Management Fee',
+        'determination_channel' => FeeDeterminationChannel::ConcernedOfficePaymentOrder,
+        'calculation_type' => FeeRuleCalculationType::Range,
+        'basis' => 'business_area_square_meters',
+        'effective_from' => '2025-01-01',
+        'effective_until' => '2025-12-31',
+        'metadata' => ['basis_unit' => 'centi_square_meter', 'responsible_office_code' => 'menro'],
+    ]);
+    $fee->ranges()->create([
+        'min_basis_cents' => $minimum,
+        'max_basis_cents' => $maximum,
+        'amount_cents' => 250000,
+    ]);
+    $before = $application->fresh()->getRawOriginal();
+    $editor = app(BuildBploRoutingTask::class)->handle($application, null)->toArray()['financial_editor'];
+    $option = collect($editor['office_fee_options']['menro'])->sole('id', $fee->id);
+
+    expect($option['calculation']['explanation'])->toBe($area.' m² · '.$label.' = ₱2,500.00')
+        ->and($option['default_amount_cents'])->toBe(250000)
+        ->and($option['calculation']['basis_value'])->toBe((int) round((float) $area * 100))
+        ->and($application->fresh()->getRawOriginal())->toBe($before)
+        ->and($application->paperlessPaymentOrders()->count())->toBe(0)
+        ->and($application->menroFeeDetermination()->count())->toBe(0);
+})->with([
+    'matched bracket' => ['12.00', 1100, 1600, '11.00–16.00 m²'],
+    'inclusive lower bound' => ['11.00', 1100, 1600, '11.00–16.00 m²'],
+    'inclusive upper bound' => ['16.00', 1100, 1600, '11.00–16.00 m²'],
+    'zero lower bound' => ['0.00', 0, 1000, '0.00–10.00 m²'],
+    'open upper bound' => ['20.00', 1700, null, '17.00 m² and above'],
+]);
 
 test('versioned Nelson preview catalog materializes idempotent year-bound FeeRules', function () {
     $this->seed(NelsonConcernedOfficeFeeCatalogSeeder::class);

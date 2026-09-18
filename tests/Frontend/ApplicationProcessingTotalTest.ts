@@ -70,6 +70,7 @@ test('actual Assessment rail binding and amount markup preserve unknown, zero an
         compile(amountMarkup, { mode: 'function', prefixIdentifiers: true })
             .code,
     )(Vue);
+
     for (const [amount, expected] of [
         [null, 'Not yet available'],
         [0, '0'],
@@ -116,6 +117,7 @@ test('actual navigator renders unknown distinctly from a genuine zero and a comp
             {},
         ).outputText,
     )();
+
     for (const [total, expected] of [
         [null, 'Not yet available'],
         [0, '₱0.00'],
@@ -137,6 +139,9 @@ test('actual navigator renders unknown distinctly from a genuine zero and a comp
             }),
         );
         assert.ok(html.includes(expected));
-        if (total === null) assert.ok(!html.includes('₱0.00'));
+
+        if (total === null) {
+            assert.ok(!html.includes('₱0.00'));
+        }
     }
 });

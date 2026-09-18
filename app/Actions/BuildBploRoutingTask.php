@@ -400,9 +400,16 @@ class BuildBploRoutingTask
         $calculation = $this->assessmentCalculator->calculate($fee, null, $application);
         $basisUnit = data_get($fee->metadata, 'basis_unit');
         $basis = $calculation['basis_amount_cents'];
+        $matchedRange = data_get($calculation, 'rule_snapshot.range');
+        $areaBracket = is_array($matchedRange)
+            ? number_format($matchedRange['min_basis_cents'] / 100, 2)
+                .($matchedRange['max_basis_cents'] === null
+                    ? ' m² and above'
+                    : '–'.number_format($matchedRange['max_basis_cents'] / 100, 2).' m²')
+            : 'applicable area bracket';
         $explanation = match ($basisUnit) {
             'employee' => $basis.' employees × ₱'.number_format(((int) data_get($fee->metadata, 'unit_amount_minor')) / 100, 2).' = ₱'.number_format($calculation['amount_cents'] / 100, 2),
-            'centi_square_meter' => number_format($basis / 100, 2).' m² · applicable area bracket = ₱'.number_format($calculation['amount_cents'] / 100, 2),
+            'centi_square_meter' => number_format($basis / 100, 2).' m² · '.$areaBracket.' = ₱'.number_format($calculation['amount_cents'] / 100, 2),
             default => null,
         };
 
