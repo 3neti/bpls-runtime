@@ -46,6 +46,30 @@ test('the visible Q1 to Q4 schedule fails closed instead of inventing allocation
         ->and(data_get($slip, 'schedule_of_payments.canonical_single_schedule.total_amount_cents'))->toBe(122_000);
 });
 
+test('the Assessment slip prefers the frozen application business address over mutable registry data', function (): void {
+    $assessment = Assessment::query()->sole();
+    $assessment->permitApplication->business->update([
+        'address' => 'Different Registry Address',
+    ]);
+
+    $slip = app(BuildComputationAssessmentSlip::class)->handle($assessment->fresh());
+
+    expect($slip['business_address'])
+        ->toBe('Synthetic Ipil product laboratory address, Synthetic Barangay')
+        ->not->toBe('Different Registry Address');
+});
+
+test('the Assessment slip retains registry address fallback for applications without frozen address evidence', function (): void {
+    $assessment = Assessment::factory()->create();
+    $assessment->permitApplication->business->update([
+        'address' => 'Historical Registry Address',
+    ]);
+
+    $slip = app(BuildComputationAssessmentSlip::class)->handle($assessment->fresh());
+
+    expect($slip['business_address'])->toBe('Historical Registry Address');
+});
+
 test('the executable slip component contains no browser-side calculator', function (): void {
     $component = file_get_contents(resource_path('js/components/assessments/ComputationAssessmentSlip.vue'));
 

@@ -10,7 +10,10 @@ use Illuminate\Support\Number;
 
 class BuildComputationAssessmentSlip
 {
-    public function __construct(private readonly AssessmentSnapshotFingerprint $fingerprint) {}
+    public function __construct(
+        private readonly AssessmentSnapshotFingerprint $fingerprint,
+        private readonly ResolvePermitBusinessAddress $resolvePermitBusinessAddress,
+    ) {}
 
     /** @return array<string, mixed> */
     public function handle(Assessment $assessment): array
@@ -70,7 +73,7 @@ class BuildComputationAssessmentSlip
             'transaction_type' => $application->type->value,
             'owner_proprietor' => $application->business->owner->name,
             'business_name' => $application->business->name,
-            'business_address' => $application->business->address,
+            'business_address' => $this->resolvePermitBusinessAddress->handle($application),
             'payment_mode' => $paymentMode,
             'line_of_businesses' => $application->lines->map(fn ($line): array => [
                 'id' => $line->line_of_business_id,

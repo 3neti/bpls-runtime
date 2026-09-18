@@ -42,6 +42,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { assessmentActionPresentation } from '@/lib/assessmentActionPresentation';
 import {
     amountFromValue,
     applicationTypeLabel,
@@ -453,6 +454,14 @@ const assessmentActionTotal = computed(
     () =>
         props.applicationDocument?.page_2_assessment
             ?.emerging_total_amount_cents ?? 0,
+);
+const assessmentAction = computed(() =>
+    assessmentActionPresentation(
+        latestAssessment.value,
+        nelsonAssessmentReady.value,
+        assessmentActionTotal.value,
+        props.evaluation?.version.treasury_counter_check != null,
+    ),
 );
 const treasuryPaymentItemSubtotal = computed(() =>
     (
@@ -873,13 +882,13 @@ function submitPrepareAssessment(): void {
                             <p
                                 class="text-xs font-semibold tracking-wide text-primary uppercase"
                             >
-                                Assessment Officer
+                                {{ assessmentAction.ownerLabel }}
                             </p>
                             <h2
                                 id="assessment-action-heading"
                                 class="mt-1 text-xl font-semibold"
                             >
-                                Prepare Assessment
+                                {{ assessmentAction.heading }}
                             </h2>
                         </header>
 
@@ -889,12 +898,16 @@ function submitPrepareAssessment(): void {
                                     <dt
                                         class="text-xs text-muted-foreground uppercase"
                                     >
-                                        Current total
+                                        {{ assessmentAction.totalLabel }}
                                     </dt>
                                     <dd
                                         class="mt-1 text-lg font-semibold tabular-nums"
                                     >
-                                        {{ money(assessmentActionTotal) }}
+                                        {{
+                                            money(
+                                                assessmentAction.totalAmountCents,
+                                            )
+                                        }}
                                     </dd>
                                 </div>
                                 <div class="rounded-lg bg-muted/50 p-3">
@@ -903,22 +916,20 @@ function submitPrepareAssessment(): void {
                                     >
                                         Assessment
                                     </dt>
-                                    <dd class="mt-1 font-semibold">Pending</dd>
+                                    <dd class="mt-1 font-semibold">
+                                        {{ assessmentAction.statusLabel }}
+                                    </dd>
                                 </div>
                             </dl>
 
                             <p class="text-sm text-muted-foreground">
-                                Freeze the current total as the Assessment.
-                                Treasurer approval follows.
+                                {{ assessmentAction.description }}
                             </p>
 
                             <Button
+                                v-if="assessmentAction.canPrepare"
                                 class="w-full"
-                                :disabled="
-                                    !nelsonAssessmentReady ||
-                                    currentAssessmentExists ||
-                                    pendingAction !== null
-                                "
+                                :disabled="pendingAction !== null"
                                 @click="submitPrepareAssessment"
                             >
                                 <PhilippinePeso aria-hidden="true" />
@@ -927,6 +938,29 @@ function submitPrepareAssessment(): void {
                                         ? 'Preparing…'
                                         : 'Prepare Assessment'
                                 }}
+                            </Button>
+                            <Button
+                                v-else-if="
+                                    assessmentAction.currentAssessmentId !==
+                                    null
+                                "
+                                as-child
+                                class="w-full"
+                            >
+                                <Link
+                                    :href="
+                                        showAssessment(
+                                            assessmentAction.currentAssessmentId,
+                                        )
+                                    "
+                                >
+                                    <ClipboardCheck aria-hidden="true" />
+                                    View Assessment
+                                </Link>
+                            </Button>
+                            <Button v-else class="w-full" disabled>
+                                <PhilippinePeso aria-hidden="true" />
+                                Prepare Assessment
                             </Button>
 
                             <details
