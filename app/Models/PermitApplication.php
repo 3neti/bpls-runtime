@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Config;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
@@ -171,7 +172,8 @@ class PermitApplication extends Model implements HasMedia
 
     public function registerMediaCollections(): void
     {
-        $this->addMediaCollection(self::ApplicationDocumentsCollection)->useDisk('local');
+        $this->addMediaCollection(self::ApplicationDocumentsCollection)
+            ->useDisk(Config::string('filesystems.application_documents_disk'));
     }
 
     /** @return HasMany<OfficeChargeContribution, $this> */

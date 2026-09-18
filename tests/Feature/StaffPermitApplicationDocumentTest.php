@@ -9,8 +9,9 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
-test('authorized staff can record private supporting evidence for a permit application', function () {
-    Storage::fake('local');
+test('authorized staff can record private supporting evidence for a permit application', function (string $disk) {
+    config(['filesystems.application_documents_disk' => $disk]);
+    Storage::fake($disk);
 
     $user = userWithPermissions([
         UserPermission::AccessStaff,
@@ -36,10 +37,11 @@ test('authorized staff can record private supporting evidence for a permit appli
         ->and($document->uploaded_by_id)->toBe($user->id)
         ->and($document->label)->toBe('Business registration evidence')
         ->and($document->original_name)->toBe('registration.pdf')
-        ->and($document->storage_disk)->toBe('local')
+        ->and($document->storage_disk)->toBe($disk)
+        ->and($document->media->disk)->toBe($disk)
         ->and($document->source_snapshot['requirement_catalog_status'])->toBe('unresolved')
         ->and($document->source_snapshot['policy_note'])->toContain('does not establish statutory sufficiency');
-    Storage::disk('local')->assertExists($document->path);
+    Storage::disk($disk)->assertExists($document->path);
 
     $this->actingAs($user)
         ->get(route('staff.permit-applications.show', $application))
@@ -53,7 +55,7 @@ test('authorized staff can record private supporting evidence for a permit appli
             ->where('permitApplication.timeline.1.key', "document-recorded:{$document->id}")
             ->where('can.upload_documents', true)
         );
-});
+})->with(['local', 's3']);
 
 test('supporting evidence upload validates file type and required label', function () {
     Storage::fake('local');
@@ -129,6 +131,8 @@ test('supporting evidence cannot be added after the permit application reaches a
 
 test('authorized staff can download only documents belonging to the requested application', function () {
     Storage::fake('local');
+    Storage::fake('s3');
+    config(['filesystems.application_documents_disk' => 's3']);
 
     $user = userWithPermissions([
         UserPermission::AccessStaff,

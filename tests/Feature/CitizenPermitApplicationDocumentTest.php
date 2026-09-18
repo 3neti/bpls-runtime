@@ -13,8 +13,10 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
-test('citizens can add and download private supporting evidence for an owned draft', function () {
+test('citizens can add and download private supporting evidence for an owned draft', function (string $disk) {
+    config(['filesystems.application_documents_disk' => $disk]);
     Storage::fake('local');
+    Storage::fake($disk);
 
     $citizen = userWithPermissions([
         UserPermission::AccessCitizen,
@@ -47,11 +49,13 @@ test('citizens can add and download private supporting evidence for an owned dra
         ->and($document->label)->toBe('DTI Registration')
         ->and($document->document_type)->toBe('dti_registration')
         ->and($document->version)->toBe(1)
+        ->and($document->storage_disk)->toBe($disk)
+        ->and($document->media->disk)->toBe($disk)
         ->and($document->original_name)->toBe('registration.pdf')
         ->and($document->source_snapshot['submitted_via'])->toBe('citizen_portal')
         ->and($document->source_snapshot['document_type_catalog_revision'])->toBe('ipil_application_document_types_v1')
         ->and($document->source_snapshot['requirement_catalog_status'])->toBe('unresolved');
-    Storage::disk('local')->assertExists($document->path);
+    Storage::disk($disk)->assertExists($document->path);
 
     $this->actingAs($citizen)
         ->get(route('citizen.permit-applications.show', $application))
@@ -104,7 +108,7 @@ test('citizens can add and download private supporting evidence for an owned dra
     $this->actingAs($citizen)
         ->get(route('citizen.permit-applications.documents.download', [$application, $unsupported]))
         ->assertDownload('legacy.html');
-});
+})->with(['local', 's3']);
 
 test('citizen supporting evidence accepts configured types only and derives its label', function () {
     Storage::fake('local');

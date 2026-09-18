@@ -36,7 +36,7 @@ class StorePermitApplicationDocument
                 'uploaded_by_id' => $uploadedBy->id,
                 'semantic_classification' => 'applicant_supplied_evidence',
             ])
-            ->toMediaCollection(PermitApplication::ApplicationDocumentsCollection, 'local');
+            ->toMediaCollection(PermitApplication::ApplicationDocumentsCollection);
 
         try {
             return $permitApplication->documents()->create([
@@ -46,7 +46,7 @@ class StorePermitApplicationDocument
                 'document_type' => $data['document_type'] ?? 'other',
                 'version' => $this->nextVersion($permitApplication, (string) ($data['document_type'] ?? 'other')),
                 'original_name' => $media->file_name,
-                'storage_disk' => 'local',
+                'storage_disk' => $media->disk,
                 'path' => $media->getPathRelativeToRoot(),
                 'mime_type' => $media->mime_type,
                 'size_bytes' => $media->size,
