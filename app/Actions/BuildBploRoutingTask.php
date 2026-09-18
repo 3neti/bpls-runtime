@@ -19,6 +19,7 @@ use App\Models\TreasuryLineItem;
 use App\Models\TreasuryLineOfBusinessAssignment;
 use App\Models\User;
 use App\References\ConcernedOfficeReference;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
@@ -175,6 +176,7 @@ class BuildBploRoutingTask
                 ->orWhereDate('effective_until', '>=', $periodStart))
             ->orderBy('name')->get()
             ->filter(fn (FeeRule $fee): bool => $this->appliesToApplicationType($fee, $application));
+        $treasuryFeesByLineOfBusinessId = $this->treasuryFeesByLineOfBusinessId($catalogFees);
         $offices = collect($this->concernedOffices->items());
 
         return [
@@ -280,23 +282,22 @@ class BuildBploRoutingTask
                     'id' => $line->id,
                     'code' => $line->code,
                     'name' => $line->name,
-                    'default_items' => $catalogFees->filter(fn (FeeRule $fee): bool => $fee->determination_channel === FeeDeterminationChannel::TreasuryLineOfBusiness
-                        && ($fee->line_of_business_id === $line->id || $fee->lineOfBusinesses->contains('id', $line->id)))->map(function (FeeRule $fee) use ($application): array {
-                            $calculation = $this->catalogCalculation($fee, $application);
+                    'default_items' => collect($treasuryFeesByLineOfBusinessId[$line->id] ?? [])->map(function (FeeRule $fee) use ($application): array {
+                        $calculation = $this->catalogCalculation($fee, $application);
 
-                            return [
-                                'fee_rule_id' => $fee->id,
-                                'enterprise_schedule' => $this->enterpriseSchedule->forApplication($application, $fee),
-                                'code' => $fee->code,
-                                'name' => $this->catalogOptionName($fee),
-                                'amount_cents' => $calculation['amount_cents'],
-                                'resolution_status' => $this->treasuryFeeResolution->unresolved($fee, $application) ? 'unresolved' : 'resolved',
-                                'resolution_message' => $this->treasuryFeeResolution->unresolved($fee, $application) ? $this->treasuryFeeResolution->message($fee) : null,
-                                'calculation' => $calculation,
-                                'scope' => $fee->scope->value,
-                                'exact_once_key' => data_get($fee->metadata, 'exact_once_key'),
-                            ];
-                        })->values()->all(),
+                        return [
+                            'fee_rule_id' => $fee->id,
+                            'enterprise_schedule' => $this->enterpriseSchedule->forApplication($application, $fee),
+                            'code' => $fee->code,
+                            'name' => $this->catalogOptionName($fee),
+                            'amount_cents' => $calculation['amount_cents'],
+                            'resolution_status' => $this->treasuryFeeResolution->unresolved($fee, $application) ? 'unresolved' : 'resolved',
+                            'resolution_message' => $this->treasuryFeeResolution->unresolved($fee, $application) ? $this->treasuryFeeResolution->message($fee) : null,
+                            'calculation' => $calculation,
+                            'scope' => $fee->scope->value,
+                            'exact_once_key' => data_get($fee->metadata, 'exact_once_key'),
+                        ];
+                    })->values()->all(),
                 ])->values()->all(),
             'treasury_assignments' => $application->treasuryLineOfBusinessAssignments->whereNull('removed_at')->map(fn (TreasuryLineOfBusinessAssignment $assignment): array => [
                 'id' => $assignment->id,
@@ -321,6 +322,35 @@ class BuildBploRoutingTask
                     ->pluck('office_code')->unique()->values()->all() ?? [],
             'can_assign_treasury_lobs' => $viewer?->can(UserPermission::CorrectEvaluationLinesOfBusiness->value) ?? false,
         ];
+    }
+
+    /**
+     * Index Treasury fees once so the catalog projection does not rescan every
+     * fee and pivot relation for every available Line of Business.
+     *
+     * @param  Collection<int, FeeRule>  $catalogFees
+     * @return array<int, array<int, FeeRule>>
+     */
+    private function treasuryFeesByLineOfBusinessId(Collection $catalogFees): array
+    {
+        $indexed = [];
+
+        foreach ($catalogFees as $fee) {
+            if ($fee->determination_channel !== FeeDeterminationChannel::TreasuryLineOfBusiness) {
+                continue;
+            }
+
+            $lineOfBusinessIds = $fee->lineOfBusinesses->pluck('id');
+            if ($fee->line_of_business_id !== null) {
+                $lineOfBusinessIds->prepend($fee->line_of_business_id);
+            }
+
+            foreach ($lineOfBusinessIds->map(fn (mixed $id): int => (int) $id)->unique(strict: true) as $lineOfBusinessId) {
+                $indexed[$lineOfBusinessId][] = $fee;
+            }
+        }
+
+        return $indexed;
     }
 
     private function appliesToApplicationType(FeeRule $fee, PermitApplication $application): bool

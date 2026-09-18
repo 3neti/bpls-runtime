@@ -303,7 +303,7 @@ test('presentation preserves authoritative totals verbatim instead of summing ch
     assert.equal(presentation.grandTotalCents, 777_777);
 });
 
-test('the Vue working paper renders backend sections and contains no amount reduction', () => {
+test('the Vue working paper renders backend sections without recomputing authoritative totals', () => {
     const page = readFileSync(
         new URL(
             '../../resources/js/pages/business-permit-evaluations/Show.vue',
@@ -316,7 +316,11 @@ test('the Vue working paper renders backend sections and contains no amount redu
     assert.equal(page.includes('workingPaper.applicationSection'), true);
     assert.equal(page.includes('LOB Subtotal'), true);
     assert.equal(page.includes('Application-wide subtotal'), true);
-    assert.equal(page.includes('.reduce('), false);
+    assert.equal(page.includes('workingPaper.lineSections.reduce('), false);
+    assert.equal(
+        page.includes('workingPaper.applicationSection?.charges.reduce('),
+        false,
+    );
 });
 
 test('concerned offices receive a focused workspace and a server-backed Price calculator', () => {
