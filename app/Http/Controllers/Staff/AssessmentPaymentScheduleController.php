@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Staff;
 
 use App\Actions\AuthorizeUatQrPhSimulation;
 use App\Actions\BuildClassicCashierQrPhHandoff;
+use App\Actions\BuildPaymentScheduleReceiptReconciliation;
 use App\Actions\CreatePaymentScheduleForAssessment;
 use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Actions\DescribePaymentPolicyBoundary;
@@ -29,6 +30,7 @@ class AssessmentPaymentScheduleController extends Controller
         private readonly DescribeOnlinePaymentBoundary $describeOnlinePaymentBoundary,
         private readonly DescribePaymentPolicyBoundary $describePaymentPolicyBoundary,
         private readonly AuthorizeUatQrPhSimulation $authorizeSimulation,
+        private readonly BuildPaymentScheduleReceiptReconciliation $receiptReconciliation,
     ) {}
 
     public function index(Request $request): Response
@@ -132,6 +134,9 @@ class AssessmentPaymentScheduleController extends Controller
 
         return Inertia::render('payment-schedules/Show', [
             'paymentSchedule' => $this->paymentSchedulePayload($paymentSchedule),
+            'receiptReconciliation' => $canIssueReceipts || $canViewReceipts
+                ? $this->receiptReconciliation->handle($paymentSchedule)
+                : null,
             'collectionMethods' => collect(TreasuryCollectionMethod::cases())
                 ->map(fn (TreasuryCollectionMethod $method): array => [
                     'label' => str($method->value)->replace('_', ' ')->title()->toString(),
@@ -139,6 +144,7 @@ class AssessmentPaymentScheduleController extends Controller
                 ])
                 ->values(),
             'can' => [
+                'view_permit_application' => auth()->user()?->can(UserPermission::ViewPermitApplications->value) ?? false,
                 'record_collections' => $canRecordCollections,
                 'view_collections' => $canViewCollections,
                 'issue_receipts' => $canIssueReceipts,

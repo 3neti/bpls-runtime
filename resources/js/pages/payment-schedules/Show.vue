@@ -9,7 +9,10 @@ import {
     RefreshCw,
 } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
-import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
+import {
+    index as paymentScheduleIndex,
+    show as paymentScheduleShow,
+} from '@/actions/App/Http/Controllers/Staff/AssessmentPaymentScheduleController';
 import { store as receiptStore } from '@/actions/App/Http/Controllers/Staff/CollectionReceiptController';
 import { store as collectionStore } from '@/actions/App/Http/Controllers/Staff/PaymentScheduleCollectionController';
 import { show as assessmentShow } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
@@ -201,7 +204,15 @@ type Option = {
 const props = defineProps<{
     paymentSchedule: PaymentSchedule;
     collectionMethods: Option[];
+    receiptReconciliation: {
+        required_receipt_group_count: number;
+        issued_receipt_group_count: number;
+        total_receipted_cents: number;
+        unreceipted_amount_cents: number;
+        status: string;
+    } | null;
     can: {
+        view_permit_application: boolean;
         record_collections: boolean;
         view_collections: boolean;
         issue_receipts: boolean;
@@ -461,11 +472,19 @@ onBeforeUnmount(stopQrChecks);
                     >
                         <Link
                             :href="
-                                assessmentShow(paymentSchedule.assessment.id)
+                                can.view_permit_application
+                                    ? assessmentShow(
+                                          paymentSchedule.assessment.id,
+                                      )
+                                    : paymentScheduleIndex()
                             "
                         >
                             <ArrowLeft />
-                            Back to Assessment
+                            {{
+                                can.view_permit_application
+                                    ? 'Back to Assessment'
+                                    : 'Back to Payment Schedules'
+                            }}
                         </Link>
                     </Button>
                     <div class="flex flex-wrap items-center gap-2">
@@ -480,6 +499,7 @@ onBeforeUnmount(stopQrChecks);
                     </p>
                 </div>
                 <Link
+                    v-if="can.view_permit_application"
                     :href="
                         permitApplicationShow(
                             paymentSchedule.permit_application.id,
@@ -492,7 +512,73 @@ onBeforeUnmount(stopQrChecks);
                         `Application #${paymentSchedule.permit_application.id}`
                     }}
                 </Link>
+                <span
+                    v-else
+                    data-testid="payment-schedule-application-identity"
+                    class="text-sm font-medium"
+                >
+                    {{
+                        paymentSchedule.permit_application.application_number ??
+                        `Application #${paymentSchedule.permit_application.id}`
+                    }}
+                </span>
             </header>
+
+            <section
+                v-if="receiptReconciliation"
+                data-testid="payment-schedule-receipt-reconciliation"
+                class="rounded-xl border bg-background p-4"
+            >
+                <h2 class="font-semibold">Official Receipt coverage</h2>
+                <dl class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                        <dt class="text-sm text-muted-foreground">
+                            Receipt groups issued
+                        </dt>
+                        <dd class="font-medium">
+                            {{
+                                receiptReconciliation.issued_receipt_group_count
+                            }}
+                            /
+                            {{
+                                receiptReconciliation.required_receipt_group_count
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-muted-foreground">
+                            Total receipted
+                        </dt>
+                        <dd class="font-medium">
+                            {{
+                                money(
+                                    receiptReconciliation.total_receipted_cents,
+                                )
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-muted-foreground">
+                            Unreceipted amount
+                        </dt>
+                        <dd class="font-medium">
+                            {{
+                                money(
+                                    receiptReconciliation.unreceipted_amount_cents,
+                                )
+                            }}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-muted-foreground">
+                            Reconciliation
+                        </dt>
+                        <dd class="font-medium capitalize">
+                            {{ label(receiptReconciliation.status) }}
+                        </dd>
+                    </div>
+                </dl>
+            </section>
 
             <div class="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
                 <div
@@ -778,6 +864,7 @@ onBeforeUnmount(stopQrChecks);
                                 </dt>
                                 <dd>
                                     <Link
+                                        v-if="can.view_permit_application"
                                         :href="
                                             assessmentShow(
                                                 paymentSchedule.assessment.id,
@@ -789,6 +876,11 @@ onBeforeUnmount(stopQrChecks);
                                             paymentSchedule.assessment.sequence
                                         }}
                                     </Link>
+                                    <span v-else
+                                        >Assessment #{{
+                                            paymentSchedule.assessment.sequence
+                                        }}</span
+                                    >
                                 </dd>
                             </div>
                             <div>
