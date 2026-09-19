@@ -23,6 +23,7 @@ test('citizens can add and download private supporting evidence for an owned dra
         UserPermission::UploadOwnPermitApplicationDocuments,
         UserPermission::ViewOwnPermitApplications,
         UserPermission::ViewOwnPermitApplicationDocuments,
+        UserPermission::EditOwnPermitApplications,
     ], UserRole::Citizen);
     $application = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
         'application_number' => null,
@@ -56,6 +57,27 @@ test('citizens can add and download private supporting evidence for an owned dra
         ->and($document->source_snapshot['document_type_catalog_revision'])->toBe('ipil_application_document_types_v1')
         ->and($document->source_snapshot['requirement_catalog_status'])->toBe('unresolved');
     Storage::disk($disk)->assertExists($document->path);
+
+    $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.edit', $application))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('permit-applications/Create')
+            ->where('draft.documents.0.id', $document->id)
+            ->where('draft.documents.0.mime_type', 'application/pdf')
+            ->where('draft.documents.0.view_url', route('citizen.permit-applications.documents.view', [$application, $document], false))
+            ->where('draft.documents.0.download_url', route('citizen.permit-applications.documents.download', [$application, $document], false))
+            ->where('draft.documents.0.version', 1)
+        );
+
+    $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.documents.view', [$application, $document]))
+        ->assertOk()
+        ->assertStreamedContent('%PDF-1.4 citizen evidence');
+
+    expect($application->fresh()->status)->toBe(PermitApplicationStatus::Draft)
+        ->and($document->fresh()->version)->toBe(1)
+        ->and(PermitApplicationDeclaration::query()->where('permit_application_id', $application->id)->count())->toBe(0);
 
     $this->actingAs($citizen)
         ->get(route('citizen.permit-applications.show', $application))
@@ -109,6 +131,31 @@ test('citizens can add and download private supporting evidence for an owned dra
         ->get(route('citizen.permit-applications.documents.download', [$application, $unsupported]))
         ->assertDownload('legacy.html');
 })->with(['local', 's3']);
+
+test('draft preview links require the existing document viewing permission', function () {
+    $citizen = userWithPermissions([
+        UserPermission::AccessCitizen,
+        UserPermission::EditOwnPermitApplications,
+    ], UserRole::Citizen);
+    $application = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
+        'application_number' => null,
+        'status' => PermitApplicationStatus::Draft,
+    ]);
+    linkPortalUserToApplicationOwner($citizen, $application);
+    $document = PermitApplicationDocument::factory()->for($application)->create();
+
+    $this->actingAs($citizen)
+        ->get(route('citizen.permit-applications.edit', $application))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('draft.documents.0.id', $document->id)
+            ->missing('draft.documents.0.view_url')
+            ->missing('draft.documents.0.download_url')
+        );
+
+    $this->get(route('citizen.permit-applications.documents.view', [$application, $document]))
+        ->assertForbidden();
+});
 
 test('citizen supporting evidence accepts configured types only and derives its label', function () {
     Storage::fake('local');

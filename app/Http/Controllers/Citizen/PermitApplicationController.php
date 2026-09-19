@@ -178,7 +178,7 @@ class PermitApplicationController extends Controller
                 'email' => $request->user()->email,
             ],
             'registry' => $this->registryPayload($request),
-            'draft' => $this->draftIntakePayload($application),
+            'draft' => $this->draftIntakePayload($application, $request->user()->can(UserPermission::ViewOwnPermitApplicationDocuments->value)),
             'canSubmit' => $request->user()->can(UserPermission::SubmitOwnPermitApplications->value)
                 && $this->isSubmittableDraft($application, $request->user()->business_owner_id),
             'applicationDocumentTypes' => $documentTypeCatalog->options(),
@@ -567,7 +567,7 @@ class PermitApplicationController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function draftIntakePayload(PermitApplication $permitApplication): array
+    private function draftIntakePayload(PermitApplication $permitApplication, bool $canViewDocuments): array
     {
         $business = $permitApplication->business;
         $owner = $business->owner;
@@ -611,6 +611,11 @@ class PermitApplicationController extends Controller
                 'original_name' => $document->original_name,
                 'size_bytes' => $document->size_bytes,
                 'version' => $document->version,
+                'mime_type' => $document->mime_type,
+                ...($canViewDocuments ? [
+                    'view_url' => route('citizen.permit-applications.documents.view', [$permitApplication, $document], false),
+                    'download_url' => route('citizen.permit-applications.documents.download', [$permitApplication, $document], false),
+                ] : []),
             ])->values(),
             'lines' => $permitApplication->lines->map(fn ($line): array => [
                 'id' => $line->id,
