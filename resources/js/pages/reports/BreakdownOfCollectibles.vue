@@ -7,6 +7,7 @@ import {
     index,
 } from '@/actions/App/Http/Controllers/Staff/CollectiblesReportController';
 import ReportFamilyBanner from '@/components/reports/ReportFamilyBanner.vue';
+import ReportWorkspace from '@/components/reports/ReportWorkspace.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -112,7 +113,7 @@ function label(value: string): string {
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head title="Breakdown of Collectibles" />
 
-        <main class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
+        <ReportWorkspace>
             <section class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold text-foreground">
@@ -123,18 +124,13 @@ function label(value: string): string {
                         quarter.
                     </p>
                 </div>
-                <Button as-child variant="outline">
-                    <a :href="download.url({ query: query() })">
-                        <Download />
-                        Export CSV
-                    </a>
-                </Button>
             </section>
 
             <ReportFamilyBanner family="operational" availability="working" />
 
             <form
-                class="grid gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 xl:grid-cols-[10rem_14rem_minmax(18rem,1fr)_auto] xl:items-end dark:border-sidebar-border"
+                aria-label="Report filters"
+                class="flex flex-wrap items-end gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 [&>div]:w-full [&>div]:min-w-0 sm:[&>div]:w-auto"
                 @submit.prevent="applyFilters"
             >
                 <div class="grid gap-2">
@@ -197,10 +193,16 @@ function label(value: string): string {
                         ><X />Clear</Button
                     >
                 </div>
+                <Button as-child variant="outline">
+                    <a :href="download.url({ query: query() })">
+                        <Download />
+                        Export CSV
+                    </a>
+                </Button>
             </form>
 
             <section
-                class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+                class="report-totals grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
                 aria-label="Collectibles summary"
             >
                 <div
@@ -387,60 +389,85 @@ function label(value: string): string {
             <section
                 class="hidden overflow-hidden rounded-lg border border-sidebar-border/70 bg-background md:block dark:border-sidebar-border"
             >
-                <div class="overflow-x-auto">
+                <div
+                    class="w-full max-w-full min-w-0 overflow-x-auto focus-visible:outline-2 focus-visible:outline-ring"
+                    role="region"
+                    aria-label="Report table"
+                    tabindex="0"
+                >
                     <table class="w-full min-w-[1760px] table-fixed text-sm">
                         <thead
                             class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
                         >
                             <tr>
-                                <th class="w-[12%] px-3 py-3 font-medium">
+                                <th
+                                    scope="col"
+                                    class="w-[12%] px-3 py-3 font-medium"
+                                >
                                     Owner / Applicant
                                 </th>
-                                <th class="w-[12%] px-3 py-3 font-medium">
+                                <th
+                                    scope="col"
+                                    class="w-[12%] px-3 py-3 font-medium"
+                                >
                                     Business
                                 </th>
-                                <th class="w-[15%] px-3 py-3 font-medium">
+                                <th
+                                    scope="col"
+                                    class="w-[15%] px-3 py-3 font-medium"
+                                >
                                     Address
                                 </th>
-                                <th class="w-[11%] px-3 py-3 font-medium">
+                                <th
+                                    scope="col"
+                                    class="w-[11%] px-3 py-3 font-medium"
+                                >
                                     Application
                                 </th>
                                 <th
+                                    scope="col"
                                     class="w-[9%] px-3 py-3 text-right font-medium"
                                 >
                                     Capital
                                 </th>
                                 <th
+                                    scope="col"
                                     class="w-[9%] px-3 py-3 text-right font-medium"
                                 >
                                     Gross sales
                                 </th>
                                 <th
+                                    scope="col"
                                     class="w-[6%] px-3 py-3 text-right font-medium"
                                 >
                                     Q1
                                 </th>
                                 <th
+                                    scope="col"
                                     class="w-[6%] px-3 py-3 text-right font-medium"
                                 >
                                     Q2
                                 </th>
                                 <th
+                                    scope="col"
                                     class="w-[6%] px-3 py-3 text-right font-medium"
                                 >
                                     Q3
                                 </th>
                                 <th
+                                    scope="col"
                                     class="w-[6%] px-3 py-3 text-right font-medium"
                                 >
                                     Q4
                                 </th>
                                 <th
+                                    scope="col"
                                     class="w-[8%] px-3 py-3 text-right font-medium"
                                 >
                                     Unscheduled
                                 </th>
                                 <th
+                                    scope="col"
                                     class="w-[8%] px-3 py-3 text-right font-medium"
                                 >
                                     Total
@@ -545,6 +572,6 @@ function label(value: string): string {
                     </table>
                 </div>
             </section>
-        </main>
+        </ReportWorkspace>
     </AppLayout>
 </template>

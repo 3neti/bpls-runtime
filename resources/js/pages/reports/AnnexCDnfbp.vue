@@ -8,6 +8,7 @@ import {
 } from '@lucide/vue';
 import { index } from '@/actions/App/Http/Controllers/Staff/AnnexCDnfbpReportController';
 import ReportFamilyBanner from '@/components/reports/ReportFamilyBanner.vue';
+import ReportWorkspace from '@/components/reports/ReportWorkspace.vue';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
@@ -88,7 +89,7 @@ function sourceClass(status: string): string {
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head title="ANNEX C - DNFBP" />
 
-        <main class="flex h-full min-w-0 flex-1 flex-col gap-4 p-4">
+        <ReportWorkspace>
             <section class="flex flex-wrap items-start justify-between gap-3">
                 <div class="min-w-0">
                     <h1 class="text-xl font-semibold text-foreground">
@@ -318,6 +319,6 @@ function sourceClass(status: string): string {
                     </section>
                 </aside>
             </section>
-        </main>
+        </ReportWorkspace>
     </AppLayout>
 </template>

@@ -2,6 +2,8 @@
 import { Head } from '@inertiajs/vue3';
 import { FileClock, FileLock2 } from '@lucide/vue';
 import { index } from '@/actions/App/Http/Controllers/Staff/TaxpayerAccountCardReportController';
+import ReportFamilyBanner from '@/components/reports/ReportFamilyBanner.vue';
+import ReportWorkspace from '@/components/reports/ReportWorkspace.vue';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
@@ -26,7 +28,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head title="Taxpayer Account Card" />
 
-        <main class="flex h-full min-w-0 flex-1 flex-col gap-4 p-4">
+        <ReportWorkspace>
             <section class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <div class="text-xs font-medium text-muted-foreground">
@@ -46,6 +48,11 @@ const breadcrumbs: BreadcrumbItem[] = [
                     Awaiting confirmation
                 </Badge>
             </section>
+
+            <ReportFamilyBanner
+                family="authority_pending"
+                availability="policy_bound"
+            />
 
             <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <article
@@ -89,6 +96,6 @@ const breadcrumbs: BreadcrumbItem[] = [
                     </li>
                 </ul>
             </details>
-        </main>
+        </ReportWorkspace>
     </AppLayout>
 </template>

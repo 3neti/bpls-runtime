@@ -7,6 +7,7 @@ import {
     index,
 } from '@/actions/App/Http/Controllers/Staff/PaymentSummaryReportController';
 import ReportFamilyBanner from '@/components/reports/ReportFamilyBanner.vue';
+import ReportWorkspace from '@/components/reports/ReportWorkspace.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -124,7 +125,7 @@ function label(value: string | null): string {
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head title="Payment Summary" />
 
-        <main class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
+        <ReportWorkspace>
             <section class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold text-foreground">
@@ -135,18 +136,13 @@ function label(value: string | null): string {
                         evidence.
                     </p>
                 </div>
-                <Button as-child variant="outline">
-                    <a :href="download.url({ query: query() })">
-                        <Download />
-                        Export CSV
-                    </a>
-                </Button>
             </section>
 
             <ReportFamilyBanner family="management" availability="working" />
 
             <form
-                class="grid gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 xl:grid-cols-[10rem_13rem_13rem_minmax(16rem,1fr)_auto] xl:items-end dark:border-sidebar-border"
+                aria-label="Report filters"
+                class="flex flex-wrap items-end gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 [&>div]:w-full [&>div]:min-w-0 sm:[&>div]:w-auto"
                 @submit.prevent="applyFilters"
             >
                 <div class="grid gap-2">
@@ -231,10 +227,16 @@ function label(value: string | null): string {
                         ><X />Clear</Button
                     >
                 </div>
+                <Button as-child variant="outline">
+                    <a :href="download.url({ query: query() })">
+                        <Download />
+                        Export CSV
+                    </a>
+                </Button>
             </form>
 
             <section
-                class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"
+                class="report-totals grid gap-3 sm:grid-cols-2 xl:grid-cols-5"
                 aria-label="Payment summary totals"
             >
                 <div
@@ -396,7 +398,7 @@ function label(value: string | null): string {
                         </div>
                         <div>
                             <dt class="text-xs text-muted-foreground uppercase">
-                                Receipt
+                                Latest OR
                             </dt>
                             <dd class="mt-1 font-medium break-words">
                                 {{ row.latest_receipt_number ?? 'Pending' }}
@@ -409,37 +411,57 @@ function label(value: string | null): string {
             <section
                 class="hidden overflow-hidden rounded-lg border border-sidebar-border/70 bg-background md:block dark:border-sidebar-border"
             >
-                <div class="overflow-x-auto">
+                <div
+                    class="w-full max-w-full min-w-0 overflow-x-auto focus-visible:outline-2 focus-visible:outline-ring"
+                    role="region"
+                    aria-label="Report table"
+                    tabindex="0"
+                >
                     <table class="w-full min-w-[1120px] table-fixed text-sm">
                         <thead
                             class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
                         >
                             <tr>
-                                <th class="w-[22%] px-3 py-3 font-medium">
+                                <th
+                                    scope="col"
+                                    class="w-[22%] px-3 py-3 font-medium"
+                                >
                                     Business
                                 </th>
-                                <th class="w-[18%] px-3 py-3 font-medium">
+                                <th
+                                    scope="col"
+                                    class="w-[18%] px-3 py-3 font-medium"
+                                >
                                     Application
                                 </th>
-                                <th class="w-[13%] px-3 py-3 font-medium">
+                                <th
+                                    scope="col"
+                                    class="w-[13%] px-3 py-3 font-medium"
+                                >
                                     Status
                                 </th>
                                 <th
+                                    scope="col"
                                     class="w-[13%] px-3 py-3 text-right font-medium"
                                 >
                                     Total
                                 </th>
                                 <th
+                                    scope="col"
                                     class="w-[13%] px-3 py-3 text-right font-medium"
                                 >
                                     Paid
                                 </th>
                                 <th
+                                    scope="col"
                                     class="w-[13%] px-3 py-3 text-right font-medium"
                                 >
                                     Outstanding
                                 </th>
-                                <th class="w-[18%] px-3 py-3 font-medium">
+                                <th
+                                    scope="col"
+                                    class="w-[18%] px-3 py-3 font-medium"
+                                >
                                     Receipt evidence
                                 </th>
                             </tr>
@@ -543,6 +565,6 @@ function label(value: string | null): string {
                     </table>
                 </div>
             </section>
-        </main>
+        </ReportWorkspace>
     </AppLayout>
 </template>

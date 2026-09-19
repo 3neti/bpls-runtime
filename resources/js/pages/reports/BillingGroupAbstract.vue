@@ -10,6 +10,7 @@ import {
 import { index } from '@/actions/App/Http/Controllers/Staff/BillingGroupAbstractReportController';
 import { show as billingGroupShow } from '@/actions/App/Http/Controllers/Staff/BillingGroupController';
 import ReportFamilyBanner from '@/components/reports/ReportFamilyBanner.vue';
+import ReportWorkspace from '@/components/reports/ReportWorkspace.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -102,7 +103,7 @@ function statusClass(status: string): string {
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head :title="report.title" />
 
-        <main class="flex h-full min-w-0 flex-1 flex-col gap-4 p-4">
+        <ReportWorkspace>
             <section class="flex flex-wrap items-start justify-between gap-3">
                 <div class="min-w-0">
                     <h1 class="text-xl font-semibold text-foreground">
@@ -377,6 +378,6 @@ function statusClass(status: string): string {
                     </p>
                 </aside>
             </section>
-        </main>
+        </ReportWorkspace>
     </AppLayout>
 </template>

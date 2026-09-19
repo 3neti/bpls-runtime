@@ -7,6 +7,7 @@ import {
     index,
 } from '@/actions/App/Http/Controllers/Staff/BusinessTaxByMajorTypeReportController';
 import ReportFamilyBanner from '@/components/reports/ReportFamilyBanner.vue';
+import ReportWorkspace from '@/components/reports/ReportWorkspace.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -94,7 +95,7 @@ function label(value: string): string {
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head title="Business Tax by Major Type" />
 
-        <main class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
+        <ReportWorkspace>
             <section class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold text-foreground">
@@ -105,18 +106,13 @@ function label(value: string): string {
                         classification.
                     </p>
                 </div>
-                <Button as-child variant="outline">
-                    <a :href="download.url({ query: query() })">
-                        <Download />
-                        Export CSV
-                    </a>
-                </Button>
             </section>
 
             <ReportFamilyBanner family="management" availability="working" />
 
             <form
-                class="grid gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 md:grid-cols-2 xl:grid-cols-4 dark:border-sidebar-border"
+                aria-label="Report filters"
+                class="flex flex-wrap items-end gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 [&>div]:w-full [&>div]:min-w-0 sm:[&>div]:w-auto"
                 @submit.prevent="applyFilters"
             >
                 <div class="grid gap-2">
@@ -180,10 +176,16 @@ function label(value: string): string {
                         ><X />Clear</Button
                     >
                 </div>
+                <Button as-child variant="outline">
+                    <a :href="download.url({ query: query() })">
+                        <Download />
+                        Export CSV
+                    </a>
+                </Button>
             </form>
 
             <section
-                class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+                class="report-totals grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
                 aria-label="Business tax summary"
             >
                 <div
@@ -289,71 +291,86 @@ function label(value: string): string {
             <section
                 class="hidden overflow-hidden rounded-lg border border-sidebar-border/70 bg-background md:block dark:border-sidebar-border"
             >
-                <table class="w-full table-fixed text-sm">
-                    <thead
-                        class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
-                    >
-                        <tr>
-                            <th class="w-[55%] px-4 py-3 font-medium">
-                                Major Type
-                            </th>
-                            <th
-                                class="w-[15%] px-4 py-3 text-right font-medium"
-                            >
-                                Allocations
-                            </th>
-                            <th
-                                class="w-[15%] px-4 py-3 text-right font-medium"
-                            >
-                                Receipts
-                            </th>
-                            <th
-                                class="w-[15%] px-4 py-3 text-right font-medium"
-                            >
-                                Amount
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-sidebar-border/70">
-                        <tr
-                            v-for="row in rows"
-                            :key="row.major_type"
-                            data-testid="business-tax-major-row"
-                            :data-major-type="row.major_type"
+                <div
+                    class="w-full max-w-full min-w-0 overflow-x-auto focus-visible:outline-2 focus-visible:outline-ring"
+                    role="region"
+                    aria-label="Report table"
+                    tabindex="0"
+                >
+                    <table class="w-full table-fixed text-sm">
+                        <thead
+                            class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
                         >
-                            <td class="px-4 py-3 font-medium break-words">
-                                {{ row.major_type }}
-                            </td>
-                            <td class="px-4 py-3 text-right">
-                                {{ row.allocation_count }}
-                            </td>
-                            <td class="px-4 py-3 text-right">
-                                {{ row.receipt_count }}
-                            </td>
-                            <td
-                                class="px-4 py-3 text-right font-semibold whitespace-nowrap"
-                                data-testid="business-tax-major-amount"
+                            <tr>
+                                <th
+                                    scope="col"
+                                    class="w-[55%] px-4 py-3 font-medium"
+                                >
+                                    Major Type
+                                </th>
+                                <th
+                                    scope="col"
+                                    class="w-[15%] px-4 py-3 text-right font-medium"
+                                >
+                                    Amount
+                                </th>
+                                <th
+                                    scope="col"
+                                    class="w-[15%] px-4 py-3 text-right font-medium"
+                                >
+                                    Allocations
+                                </th>
+                                <th
+                                    scope="col"
+                                    class="w-[15%] px-4 py-3 text-right font-medium"
+                                >
+                                    Receipts
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-sidebar-border/70">
+                            <tr
+                                v-for="row in rows"
+                                :key="row.major_type"
+                                data-testid="business-tax-major-row"
+                                :data-major-type="row.major_type"
                             >
-                                {{ money(row.amount_cents) }}
-                            </td>
-                        </tr>
-                    </tbody>
-                    <tfoot class="border-t bg-muted/30 font-semibold">
-                        <tr>
-                            <td class="px-4 py-3">Total Amount</td>
-                            <td class="px-4 py-3 text-right">
-                                {{ summary.allocation_count }}
-                            </td>
-                            <td class="px-4 py-3 text-right">
-                                {{ summary.receipt_count }}
-                            </td>
-                            <td class="px-4 py-3 text-right whitespace-nowrap">
-                                {{ money(summary.total_amount_cents) }}
-                            </td>
-                        </tr>
-                    </tfoot>
-                </table>
+                                <td class="px-4 py-3 font-medium break-words">
+                                    {{ row.major_type }}
+                                </td>
+                                <td
+                                    class="px-4 py-3 text-right font-semibold whitespace-nowrap"
+                                    data-testid="business-tax-major-amount"
+                                >
+                                    {{ money(row.amount_cents) }}
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    {{ row.allocation_count }}
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    {{ row.receipt_count }}
+                                </td>
+                            </tr>
+                        </tbody>
+                        <tfoot class="border-t bg-muted/30 font-semibold">
+                            <tr>
+                                <td class="px-4 py-3">Total Amount</td>
+                                <td
+                                    class="px-4 py-3 text-right whitespace-nowrap"
+                                >
+                                    {{ money(summary.total_amount_cents) }}
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    {{ summary.allocation_count }}
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    {{ summary.receipt_count }}
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
             </section>
-        </main>
+        </ReportWorkspace>
     </AppLayout>
 </template>

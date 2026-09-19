@@ -7,6 +7,7 @@ import {
     index,
 } from '@/actions/App/Http/Controllers/Staff/TopEstablishmentTaxDueReportController';
 import ReportFamilyBanner from '@/components/reports/ReportFamilyBanner.vue';
+import ReportWorkspace from '@/components/reports/ReportWorkspace.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -122,7 +123,7 @@ function label(value: string | null): string {
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head title="Top Tax Due" />
 
-        <main class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
+        <ReportWorkspace>
             <section class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold text-foreground">
@@ -133,18 +134,13 @@ function label(value: string | null): string {
                         tax lines.
                     </p>
                 </div>
-                <Button as-child variant="outline">
-                    <a :href="exportUrl()">
-                        <Download />
-                        Export CSV
-                    </a>
-                </Button>
             </section>
 
             <ReportFamilyBanner family="management" availability="working" />
 
             <form
-                class="flex flex-col gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 xl:flex-row xl:items-end dark:border-sidebar-border"
+                aria-label="Report filters"
+                class="flex flex-wrap items-end gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 [&>div]:w-full [&>div]:min-w-0 sm:[&>div]:w-auto"
                 @submit.prevent="applyFilters"
             >
                 <div class="grid gap-2 sm:w-36">
@@ -231,10 +227,16 @@ function label(value: string | null): string {
                         Clear
                     </Button>
                 </div>
+                <Button as-child variant="outline">
+                    <a :href="exportUrl()">
+                        <Download />
+                        Export CSV
+                    </a>
+                </Button>
             </form>
 
             <section
-                class="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+                class="report-totals grid gap-3 md:grid-cols-2 xl:grid-cols-4"
                 aria-label="Top tax due summary"
             >
                 <div
@@ -307,36 +309,61 @@ function label(value: string | null): string {
             <section
                 class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
             >
-                <div class="overflow-x-auto">
+                <div
+                    class="w-full max-w-full min-w-0 overflow-x-auto focus-visible:outline-2 focus-visible:outline-ring"
+                    role="region"
+                    aria-label="Report table"
+                    tabindex="0"
+                >
                     <table class="w-full min-w-[1040px] table-fixed text-sm">
                         <thead
                             class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
                         >
                             <tr>
-                                <th class="w-[6%] px-3 py-3 font-medium">
+                                <th
+                                    scope="col"
+                                    class="w-[6%] px-3 py-3 font-medium"
+                                >
                                     Rank
                                 </th>
-                                <th class="w-[22%] px-3 py-3 font-medium">
-                                    Establishment
-                                </th>
-                                <th class="w-[13%] px-3 py-3 font-medium">
+                                <th
+                                    scope="col"
+                                    class="w-[13%] px-3 py-3 font-medium"
+                                >
                                     Owner
                                 </th>
-                                <th class="w-[16%] px-3 py-3 font-medium">
+                                <th
+                                    scope="col"
+                                    class="w-[22%] px-3 py-3 font-medium"
+                                >
+                                    Establishment
+                                </th>
+                                <th
+                                    scope="col"
+                                    class="w-[16%] px-3 py-3 font-medium"
+                                >
                                     Application
                                 </th>
-                                <th class="w-[14%] px-3 py-3 font-medium">
+                                <th
+                                    scope="col"
+                                    class="w-[14%] px-3 py-3 font-medium"
+                                >
                                     Tax Lines
                                 </th>
                                 <th
+                                    scope="col"
                                     class="w-[12%] px-3 py-3 text-right font-medium"
                                 >
                                     Tax Due
                                 </th>
-                                <th class="w-[10%] px-3 py-3 font-medium">
+                                <th
+                                    scope="col"
+                                    class="w-[10%] px-3 py-3 font-medium"
+                                >
                                     Payment
                                 </th>
                                 <th
+                                    scope="col"
                                     class="w-[7%] px-3 py-3 text-right font-medium"
                                 >
                                     Balance
@@ -360,6 +387,9 @@ function label(value: string | null): string {
                                 <td class="px-3 py-3 align-top font-medium">
                                     {{ rowIndex + 1 }}
                                 </td>
+                                <td class="px-3 py-3 align-top break-words">
+                                    {{ row.owner_name }}
+                                </td>
                                 <td class="px-3 py-3 align-top">
                                     <div class="font-medium break-words">
                                         {{ row.business_name }}
@@ -370,9 +400,6 @@ function label(value: string | null): string {
                                         {{ row.trade_name ?? '-' }} ·
                                         {{ row.barangay ?? '-' }}
                                     </div>
-                                </td>
-                                <td class="px-3 py-3 align-top break-words">
-                                    {{ row.owner_name }}
                                 </td>
                                 <td class="px-3 py-3 align-top">
                                     <div class="font-medium break-words">
@@ -424,6 +451,6 @@ function label(value: string | null): string {
                     </table>
                 </div>
             </section>
-        </main>
+        </ReportWorkspace>
     </AppLayout>
 </template>

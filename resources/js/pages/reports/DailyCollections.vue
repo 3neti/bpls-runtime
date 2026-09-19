@@ -7,6 +7,7 @@ import {
     index,
 } from '@/actions/App/Http/Controllers/Staff/DailyCollectionReportController';
 import ReportFamilyBanner from '@/components/reports/ReportFamilyBanner.vue';
+import ReportWorkspace from '@/components/reports/ReportWorkspace.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -121,7 +122,7 @@ function label(value: string | null): string {
     <AppLayout :breadcrumbs="breadcrumbs">
         <Head title="Daily Collections" />
 
-        <main class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
+        <ReportWorkspace>
             <section class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h1 class="text-xl font-semibold text-foreground">
@@ -132,18 +133,13 @@ function label(value: string | null): string {
                         permit collections.
                     </p>
                 </div>
-                <Button as-child variant="outline">
-                    <a :href="exportUrl()">
-                        <Download />
-                        Export CSV
-                    </a>
-                </Button>
             </section>
 
             <ReportFamilyBanner family="operational" availability="working" />
 
             <form
-                class="flex flex-col gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 md:flex-row md:items-end dark:border-sidebar-border"
+                aria-label="Report filters"
+                class="flex flex-wrap items-end gap-3 rounded-lg border border-sidebar-border/70 bg-background p-4 [&>div]:w-full [&>div]:min-w-0 sm:[&>div]:w-auto"
                 @submit.prevent="applyFilters"
             >
                 <div class="grid gap-2 md:w-56">
@@ -188,10 +184,16 @@ function label(value: string | null): string {
                         Clear
                     </Button>
                 </div>
+                <Button as-child variant="outline">
+                    <a :href="exportUrl()">
+                        <Download />
+                        Export CSV
+                    </a>
+                </Button>
             </form>
 
             <section
-                class="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+                class="report-totals grid gap-3 md:grid-cols-2 xl:grid-cols-4"
                 aria-label="Daily collection summary"
             >
                 <div
@@ -264,21 +266,39 @@ function label(value: string | null): string {
             <section
                 class="overflow-hidden rounded-lg border border-sidebar-border/70 bg-background dark:border-sidebar-border"
             >
-                <div class="overflow-x-auto">
+                <div
+                    class="w-full max-w-full min-w-0 overflow-x-auto focus-visible:outline-2 focus-visible:outline-ring"
+                    role="region"
+                    aria-label="Report table"
+                    tabindex="0"
+                >
                     <table class="w-full min-w-[1120px] text-sm">
                         <thead
                             class="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase"
                         >
                             <tr>
-                                <th class="px-4 py-3 font-medium">Receipt</th>
-                                <th class="px-4 py-3 font-medium">Received</th>
-                                <th class="px-4 py-3 font-medium">Payer</th>
-                                <th class="px-4 py-3 font-medium">Business</th>
-                                <th class="px-4 py-3 font-medium">
+                                <th scope="col" class="px-4 py-3 font-medium">
+                                    Representative OR
+                                </th>
+                                <th scope="col" class="px-4 py-3 font-medium">
+                                    Payer
+                                </th>
+                                <th scope="col" class="px-4 py-3 font-medium">
+                                    Business
+                                </th>
+                                <th scope="col" class="px-4 py-3 font-medium">
+                                    Received
+                                </th>
+                                <th scope="col" class="px-4 py-3 font-medium">
                                     Application
                                 </th>
-                                <th class="px-4 py-3 font-medium">Status</th>
-                                <th class="px-4 py-3 text-right font-medium">
+                                <th scope="col" class="px-4 py-3 font-medium">
+                                    Status
+                                </th>
+                                <th
+                                    scope="col"
+                                    class="px-4 py-3 text-right font-medium"
+                                >
                                     Amount
                                 </th>
                             </tr>
@@ -306,9 +326,6 @@ function label(value: string | null): string {
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 align-top">
-                                    {{ dateTime(row.received_at) }}
-                                </td>
-                                <td class="px-4 py-3 align-top">
                                     <div>{{ row.payer_name ?? '-' }}</div>
                                     <div class="text-xs text-muted-foreground">
                                         {{ row.reference_number ?? '-' }}
@@ -321,6 +338,9 @@ function label(value: string | null): string {
                                     <div class="text-xs text-muted-foreground">
                                         {{ row.owner_name }}
                                     </div>
+                                </td>
+                                <td class="px-4 py-3 align-top">
+                                    {{ dateTime(row.received_at) }}
                                 </td>
                                 <td class="px-4 py-3 align-top">
                                     {{
@@ -351,6 +371,6 @@ function label(value: string | null): string {
                     </table>
                 </div>
             </section>
-        </main>
+        </ReportWorkspace>
     </AppLayout>
 </template>
