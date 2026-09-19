@@ -263,6 +263,58 @@ test('ordinary draft save is independent of the Oath while lodging requires fres
         ])->toBe($authorizationBefore);
 });
 
+test('lodging freezes the final application address without changing shared registry facts', function () {
+    Storage::fake('local');
+    $citizen = userWithPermissions([
+        UserPermission::AccessCitizen,
+        UserPermission::CreateOwnPermitApplications,
+        UserPermission::EditOwnPermitApplications,
+        UserPermission::ViewOwnPermitApplications,
+        UserPermission::SubmitOwnPermitApplications,
+    ], UserRole::Citizen);
+    $barangays = config('ipil_references.barangays.items');
+    $payload = [
+        'owner_name' => 'Frozen Address Citizen',
+        'business_name' => 'Frozen Address Retail',
+        'business_activity_description' => 'Retail sale of fish.',
+        'business_barangay_psgc_code' => $barangays[0]['code'],
+        'business_house_building_number' => '12-B',
+        'owner_house_building_number' => '34-C',
+        'lessor_house_building_number' => '56-D',
+        'type' => 'new',
+        'application_year' => now()->year,
+        'undertaking_accepted' => '0',
+    ];
+    $this->actingAs($citizen)->post(route('citizen.permit-applications.store'), $payload)
+        ->assertSessionHasNoErrors()->assertRedirect();
+    $application = PermitApplication::query()->whereBelongsTo($citizen, 'submittedBy')->sole();
+    $businessBefore = $application->business->getAttributes();
+    $ownerBefore = $application->business->owner->getAttributes();
+    $this->patch(route('citizen.permit-applications.update', $application), [
+        ...$payload,
+        'business_barangay_psgc_code' => $barangays[1]['code'],
+        'draft_version' => $application->updated_at->toIso8601String(),
+    ])->assertSessionHasNoErrors()->assertRedirect();
+    expect($application->refresh()->declaration()->count())->toBe(0);
+    $this->assertDatabaseCount('signature_evidences', 0);
+
+    $this->post(route('citizen.permit-applications.submit', $application), [
+        'undertaking_accepted' => '1',
+        'signature_facsimile' => UploadedFile::fake()->image('signature.png'),
+    ])->assertSessionHasNoErrors()->assertRedirect();
+    $declaration = $application->refresh()->declaration()->sole();
+    expect(data_get($declaration->snapshot, 'business_address.house_or_building_number'))->toBe('12-B')
+        ->and(data_get($declaration->snapshot, 'owner_address.house_or_building_number'))->toBe('34-C')
+        ->and(data_get($declaration->snapshot, 'rental.lessor.address.house_or_building_number'))->toBe('56-D')
+        ->and(data_get($declaration->snapshot, 'business_address.barangay_psgc_code'))->toBe($barangays[1]['code'])
+        ->and($application->business->refresh()->getAttributes())->toBe($businessBefore)
+        ->and($application->business->owner->refresh()->getAttributes())->toBe($ownerBefore)
+        ->and($declaration->signatureEvidences()->count())->toBe(1)
+        ->and($application->metadata['status_history'])->toHaveCount(1);
+    $this->assertDatabaseCount('permit_application_declarations', 1);
+    $this->assertDatabaseCount('signature_evidences', 1);
+});
+
 test('commissioned application form makes document and request invalidation visible', function () {
     $component = file_get_contents(resource_path('js/pages/permit-applications/Create.vue'));
     $documentControl = file_get_contents(resource_path('js/components/permit-applications/ApplicationDocumentPillbox.vue'));
