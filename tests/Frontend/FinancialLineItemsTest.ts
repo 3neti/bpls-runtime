@@ -21,6 +21,15 @@ const option: FinancialLineItemOption = {
 test('same-name fee options use distinct basis or stable identity, never matching amount alone', () => {
     assert.equal(financialFeeOptionLabel(option, [option]), option.name);
     const other = { ...option, id: 43, code: 'OTHER-RULE' };
+    const sameCode = { ...option, id: 44 };
+    assert.notEqual(
+        financialFeeOptionLabel(option, [option, sameCode]),
+        financialFeeOptionLabel(sameCode, [option, sameCode]),
+    );
+    assert.equal(
+        financialFeeOptionLabel(sameCode, [option, sameCode]),
+        `${option.name} — ${option.code} · Fee #44`,
+    );
     assert.equal(
         financialFeeOptionLabel(option, [option, other]),
         `${option.name} — ${option.code}`,

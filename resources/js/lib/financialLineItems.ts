@@ -47,7 +47,13 @@ export function financialFeeOptionLabel(
             (candidate) => candidate.calculation?.explanation === basis,
         ).length === 1;
 
-    return `${option.name} — ${distinctBasis ? basis : option.code}`;
+    const identity =
+        sameName.filter((candidate) => candidate.code === option.code).length >
+        1
+            ? `${option.code} · Fee #${option.id}`
+            : option.code;
+
+    return `${option.name} — ${distinctBasis ? basis : identity}`;
 }
 
 export type PesoAmountParseResult =

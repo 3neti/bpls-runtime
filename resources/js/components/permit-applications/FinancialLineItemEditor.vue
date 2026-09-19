@@ -153,7 +153,9 @@ function money(cents: number): string {
         >
             <summary class="cursor-pointer">Fee reference</summary>
             <p class="break-words">
-                {{ selectedOption.name }} · {{ selectedOption.code }}
+                {{ selectedOption.name }} · {{ selectedOption.code }} · Fee #{{
+                    selectedOption.id
+                }}
             </p>
             <p v-if="selectedOption.resolution_message" class="break-words">
                 {{ selectedOption.resolution_message }}
