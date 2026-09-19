@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { FinancialLineItemOption } from '../../resources/js/lib/financialLineItems.ts';
 import {
+    financialFeeOptionLabel,
     financialLineItemSubtotal,
     financialLineItemsResolved,
     formatMinorAsPesoInput,
@@ -16,6 +17,28 @@ const option: FinancialLineItemOption = {
     name: 'Assessor Service Fee',
     default_amount_cents: 10_050,
 };
+
+test('same-name fee options use distinct basis or stable identity, never matching amount alone', () => {
+    assert.equal(financialFeeOptionLabel(option, [option]), option.name);
+    const other = { ...option, id: 43, code: 'OTHER-RULE' };
+    assert.equal(
+        financialFeeOptionLabel(option, [option, other]),
+        `${option.name} — ${option.code}`,
+    );
+    const area = {
+        ...option,
+        calculation: { explanation: 'Application business area: 11–16 m²' },
+    };
+    assert.equal(
+        financialFeeOptionLabel(area, [area, other]),
+        `${option.name} — Application business area: 11–16 m²`,
+    );
+    const sameBasis = { ...other, calculation: area.calculation };
+    assert.equal(
+        financialFeeOptionLabel(area, [area, sameBasis]),
+        `${option.name} — ${option.code}`,
+    );
+});
 
 test('unresolved financial truth keeps the subtotal partial and readiness false without confusing resolved zero', () => {
     const unresolved = upsertFinancialLineItem(

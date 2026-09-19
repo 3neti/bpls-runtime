@@ -15,7 +15,10 @@ import { Input } from '@/components/ui/input';
 import { dateTime, money } from '@/lib/evaluationPresentation';
 import { financialLineItemsResolved } from '@/lib/financialLineItems';
 import type { EnterpriseSchedule } from '@/lib/treasuryEnterprise';
-import { applyEnterpriseClassification } from '@/lib/treasuryEnterprise';
+import {
+    applyEnterpriseClassification,
+    treasuryConfirmationReason,
+} from '@/lib/treasuryEnterprise';
 import { index as workInbox } from '@/routes/staff/work';
 
 type RoutingLine = {
@@ -715,6 +718,21 @@ const treasurySelectionsReady = computed(
             (selection) => selection.items.length > 0,
         ),
 );
+const treasuryConfirmReason = computed(() =>
+    treasuryConfirmationReason(
+        treasurySelections.value.map((selection) => ({
+            items: selection.items,
+            requiresEnterpriseClassification: Boolean(
+                enterpriseFee(selection.line_of_business_id)
+                    ?.enterprise_schedule,
+            ),
+            enterpriseClassification: selection.enterprise_classification,
+            enterpriseFeeId: enterpriseFee(selection.line_of_business_id)
+                ?.fee_rule_id,
+        })),
+        treasuryPending.value,
+    ),
+);
 const filteredTreasuryLobOptions = computed(() => {
     const query = treasuryLobSearch.value.trim().toLocaleLowerCase();
     const options = props.task.financial_editor.line_of_business_options;
@@ -1083,9 +1101,9 @@ const filteredTreasuryLobOptions = computed(() => {
                         v-if="!treasurySelectionsReady"
                         class="text-xs text-amber-800 dark:text-amber-200"
                         data-testid="treasury-confirm-reason"
+                        role="status"
                     >
-                        Select a Line of Business and enterprise classification
-                        before confirming Treasury.
+                        {{ treasuryConfirmReason }}
                     </p>
                 </template>
 
@@ -1930,6 +1948,14 @@ const filteredTreasuryLobOptions = computed(() => {
                         @click="confirmTreasuryLobs"
                         >Confirm Treasury</Button
                     >
+                    <p
+                        v-if="!treasurySelectionsReady"
+                        class="text-xs text-amber-800 dark:text-amber-200"
+                        data-testid="treasury-confirm-reason"
+                        role="status"
+                    >
+                        {{ treasuryConfirmReason }}
+                    </p>
                 </template>
             </section>
 

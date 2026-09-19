@@ -7,6 +7,7 @@ import type {
     FinancialLineItemOption as Option,
 } from '@/lib/financialLineItems';
 import {
+    financialFeeOptionLabel,
     financialLineItemSubtotal,
     financialLineItemsResolved,
     formatMinorAsPesoInput,
@@ -99,7 +100,7 @@ function money(cents: number): string {
                     :key="option.id"
                     :value="option.id"
                 >
-                    {{ option.name
+                    {{ financialFeeOptionLabel(option, options)
                     }}{{
                         option.resolution_status === 'unresolved'
                             ? ' — ' + option.resolution_message
@@ -146,6 +147,18 @@ function money(cents: number): string {
         >
             {{ selectedOption.calculation.explanation }}
         </p>
+        <details
+            v-if="selectedOption"
+            class="min-w-0 text-xs text-muted-foreground"
+        >
+            <summary class="cursor-pointer">Fee reference</summary>
+            <p class="break-words">
+                {{ selectedOption.name }} · {{ selectedOption.code }}
+            </p>
+            <p v-if="selectedOption.resolution_message" class="break-words">
+                {{ selectedOption.resolution_message }}
+            </p>
+        </details>
         <div
             v-if="modelValue.length"
             class="grid min-w-0 grid-cols-1 gap-1 text-sm"

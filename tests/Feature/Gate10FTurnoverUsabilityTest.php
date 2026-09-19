@@ -18,5 +18,5 @@ test('disabled Treasury confirmation states its actionable prerequisite', functi
     expect($source)
         ->toContain(':disabled="!treasurySelectionsReady"')
         ->toContain('data-testid="treasury-confirm-reason"')
-        ->toContain('Select a Line of Business and enterprise classification');
+        ->toContain('{{ treasuryConfirmReason }}');
 });

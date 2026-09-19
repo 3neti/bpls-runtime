@@ -28,6 +28,28 @@ export type FinancialLineItem = {
     };
 };
 
+export function financialFeeOptionLabel(
+    option: FinancialLineItemOption,
+    options: FinancialLineItemOption[],
+): string {
+    const sameName = options.filter(
+        (candidate) => candidate.name === option.name,
+    );
+
+    if (sameName.length < 2) {
+        return option.name;
+    }
+
+    const basis = option.calculation?.explanation;
+    const distinctBasis =
+        basis &&
+        sameName.filter(
+            (candidate) => candidate.calculation?.explanation === basis,
+        ).length === 1;
+
+    return `${option.name} — ${distinctBasis ? basis : option.code}`;
+}
+
 export type PesoAmountParseResult =
     { ok: true; amountCents: number } | { ok: false; error: string };
 

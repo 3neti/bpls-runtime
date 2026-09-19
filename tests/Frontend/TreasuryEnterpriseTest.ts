@@ -1,11 +1,86 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { compile } from '@vue/compiler-dom';
+import { parse } from '@vue/compiler-sfc';
+import { renderToString } from '@vue/server-renderer';
+import * as Vue from 'vue';
+import { transpile } from 'typescript';
 import {
     financialLineItemSubtotal,
     financialLineItemsResolved,
 } from '../../resources/js/lib/financialLineItems.ts';
-import { applyEnterpriseClassification } from '../../resources/js/lib/treasuryEnterprise.ts';
+import {
+    applyEnterpriseClassification,
+    treasuryConfirmationReason,
+} from '../../resources/js/lib/treasuryEnterprise.ts';
+
+test('confirmation guidance distinguishes LOB, admitted classification and unresolved policy', () => {
+    assert.equal(
+        treasuryConfirmationReason([], false),
+        'Select an official Line of Business.',
+    );
+    assert.equal(
+        treasuryConfirmationReason([], true),
+        'Treasury confirmation is being submitted.',
+    );
+    assert.match(
+        treasuryConfirmationReason(
+            [
+                {
+                    items: [],
+                    requiresEnterpriseClassification: true,
+                    enterpriseClassification: '',
+                },
+            ],
+            false,
+        ),
+        /Choose Enterprise Classification/,
+    );
+    assert.match(
+        treasuryConfirmationReason(
+            [
+                {
+                    items: [
+                        {
+                            fee_rule_id: 1,
+                            code: 'mayor',
+                            name: 'Mayor’s Permit Fee',
+                            amount_cents: 0,
+                            resolution_status: 'unresolved',
+                        },
+                    ],
+                    requiresEnterpriseClassification: false,
+                },
+            ],
+            false,
+        ),
+        /Pricing determination required: Mayor’s Permit Fee/,
+    );
+    assert.equal(
+        treasuryConfirmationReason([{ items: [] }], false),
+        'Add the required payment items.',
+    );
+    assert.equal(
+        treasuryConfirmationReason(
+            [
+                {
+                    items: [
+                        {
+                            fee_rule_id: 1,
+                            code: 'known',
+                            name: 'Known fee',
+                            amount_cents: 0,
+                            resolution_status: 'resolved',
+                        },
+                    ],
+                },
+            ],
+            false,
+        ),
+        '',
+    );
+});
 
 const schedule = {
     id: 'uat',
@@ -35,6 +110,118 @@ const initial = [
         amount_cents: 10000,
     },
 ];
+test('mixed LOB guidance retains a separate policy stop and distinct same-name rule identities', () => {
+    const reason = treasuryConfirmationReason(
+        [
+            {
+                items: initial,
+                requiresEnterpriseClassification: true,
+                enterpriseClassification: '',
+                enterpriseFeeId: 1,
+            },
+            {
+                items: [
+                    {
+                        ...initial[0],
+                        code: 'policy-a',
+                        resolution_message: 'No admitted rule',
+                    },
+                    {
+                        ...initial[0],
+                        code: 'policy-b',
+                        resolution_message: 'Authority missing',
+                    },
+                ],
+            },
+            { items: [initial[1]] },
+        ],
+        false,
+    );
+    assert.match(reason, /Choose Enterprise Classification/);
+    assert.match(reason, /policy-a.*No admitted rule/);
+    assert.match(reason, /policy-b.*Authority missing/);
+    assert.match(reason, /No authorized pricing determination/);
+    assert.match(reason, /do not enter, remove or override/);
+    const selected = treasuryConfirmationReason(
+        [
+            {
+                items: applyEnterpriseClassification(
+                    initial,
+                    1,
+                    schedule,
+                    'Small',
+                ),
+                requiresEnterpriseClassification: true,
+                enterpriseClassification: 'Small',
+                enterpriseFeeId: 1,
+            },
+            { items: [{ ...initial[0], code: 'unrelated' }] },
+        ],
+        false,
+    );
+    assert.doesNotMatch(selected, /Choose Enterprise Classification/);
+    assert.match(selected, /unrelated/);
+    assert.match(selected, /Stop for municipal policy\/configuration review/);
+});
+
+test('selector displays supplied band amounts without claiming municipal policy', async () => {
+    const selector = readFileSync(
+        new URL(
+            '../../resources/js/components/permit-applications/EnterpriseClassificationSelector.vue',
+            import.meta.url,
+        ),
+        'utf8',
+    );
+    assert.match(
+        selector,
+        /v-for="\(amount, classification\) in schedule.bands"/,
+    );
+    assert.match(
+        selector,
+        /\{\{ classification \}\} — \{\{ money\(amount\) \}\}/,
+    );
+    assert.match(selector, /PROVISIONAL UAT SCHEDULE — NOT MUNICIPAL POLICY/);
+    assert.match(selector, /schedule.id/);
+    assert.match(selector, /schedule.version/);
+    assert.match(selector, /stop for municipal\s+confirmation/);
+    assert.doesNotMatch(selector, /PROVISIONAL MUNICIPAL POLICY/);
+    const { descriptor } = parse(selector);
+    const render = new Function(
+        'Vue',
+        transpile(
+            compile(descriptor.template!.content, {
+                mode: 'function',
+                prefixIdentifiers: true,
+                expressionPlugins: ['typescript'],
+            }).code,
+        ),
+    )(Vue);
+    const html = await renderToString(
+        Vue.createSSRApp({
+            render,
+            data: () => ({
+                schedule,
+                modelValue: '',
+                emit: () => {},
+                money: (amount: number) =>
+                    new Intl.NumberFormat('en-PH', {
+                        style: 'currency',
+                        currency: 'PHP',
+                    }).format(amount / 100),
+            }),
+        }),
+    );
+    for (const [classification, amount] of Object.entries(schedule.bands)) {
+        assert.ok(
+            html.includes(
+                `${classification} — ₱${(amount / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            ),
+        );
+    }
+    assert.match(html, /NOT MUNICIPAL POLICY/);
+    assert.match(html, /<option value(?:="")?>Choose classification<\/option>/);
+});
+
 test('unselected means TBD and partial 125; each explicit band controls immutable preview amount', () => {
     assert.equal(financialLineItemsResolved(initial), false);
     assert.equal(financialLineItemSubtotal(initial), 12500);
@@ -97,4 +284,16 @@ test('actual Treasury form binds officer selection and schedule fingerprint, wit
     );
     assert.match(component, /filter\(\(item\) => !item\.enterprise_schedule\)/);
     assert.match(component, /:disabled="!treasurySelectionsReady"/);
+    assert.equal(
+        (component.match(/\{\{ treasuryConfirmReason \}\}/g) ?? []).length,
+        2,
+    );
+    assert.equal(
+        (
+            component.match(
+                /data-testid="treasury-confirm-reason"\s+role="status"/g,
+            ) ?? []
+        ).length,
+        2,
+    );
 });
