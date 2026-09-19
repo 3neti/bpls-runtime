@@ -232,7 +232,7 @@ function money(cents: number | null | undefined): string {
         <section
             v-if="page === 'all' || page === 'page_1'"
             data-testid="ipil-executable-document-page-1"
-            class="overflow-hidden border-2 border-stone-900 bg-white shadow-sm dark:border-stone-400 dark:bg-stone-900"
+            class="min-w-0 border-2 border-stone-900 bg-white wrap-anywhere shadow-sm dark:border-stone-400 dark:bg-stone-900"
         >
             <header
                 class="grid gap-3 border-b-2 border-stone-900 p-4 sm:grid-cols-[1fr_auto] dark:border-stone-400"
@@ -242,11 +242,15 @@ function money(cents: number | null | undefined): string {
                         Application Form for Business Permit
                     </h2>
                     <p class="font-bold">
-                        TAX YEAR: {{ document.identity.tax_year }}
+                        TAX YEAR:
+                        {{
+                            value('application.tax_year') ??
+                            document.identity.tax_year
+                        }}
                     </p>
                 </div>
                 <div
-                    class="grid min-w-56 gap-2 border-2 border-stone-900 p-2 text-xs dark:border-stone-400"
+                    class="grid min-w-0 gap-2 border-2 border-stone-900 p-2 text-xs dark:border-stone-400"
                 >
                     <div>
                         <span class="block">Official application number</span>
@@ -266,7 +270,7 @@ function money(cents: number | null | undefined): string {
                     </div>
                 </div>
             </header>
-            <div class="grid gap-4 p-4 text-sm sm:p-5">
+            <div class="grid min-w-0 gap-4 p-4 text-sm sm:p-5">
                 <div
                     class="flex flex-wrap items-center justify-between gap-3 border-b border-stone-300 pb-3"
                 >
@@ -284,7 +288,7 @@ function money(cents: number | null | undefined): string {
                     >
                     <span
                         v-if="document.declaration.snapshot_hash"
-                        class="font-mono text-[10px] text-stone-500"
+                        class="w-full min-w-0 font-mono text-[10px] break-all text-stone-500"
                         >SHA-256 {{ document.declaration.snapshot_hash }}</span
                     >
                 </div>
@@ -351,6 +355,10 @@ function money(cents: number | null | undefined): string {
                         {{ shown(value('organization.tin')) }}
                     </p>
                     <p class="md:col-span-2">
+                        <strong>Organization Name:</strong>
+                        {{ shown(value('organization.organization_name')) }}
+                    </p>
+                    <p class="md:col-span-2">
                         <strong>Tax incentive from Government Entity:</strong>
                         {{ shown(value('organization.tax_incentive_enjoyed')) }}
                         ·
@@ -398,6 +406,14 @@ function money(cents: number | null | undefined): string {
                         <strong>Trade Name/Franchise:</strong>
                         {{ shown(value('business.trade_name')) }}
                     </p>
+                    <p data-testid="frozen-business-description">
+                        <strong>Nature / Description of Business:</strong>
+                        {{
+                            value('business.activity_description') ??
+                            value('applicant_business_activity_description') ??
+                            '—'
+                        }}
+                    </p>
                     <h3 class="pt-2 text-xs font-black uppercase">
                         Name of President/Treasurer of Corporation
                     </h3>
@@ -424,6 +440,10 @@ function money(cents: number | null | undefined): string {
                                 title: 'Business Address',
                             },
                             { key: 'owner_address', title: `Owner's Address` },
+                            {
+                                key: 'rental.lessor.address',
+                                title: `Declared Lessor's Address`,
+                            },
                         ]"
                         :key="address.key"
                         class="border border-stone-300"
@@ -444,6 +464,10 @@ function money(cents: number | null | undefined): string {
                                     { k: 'unit_number', l: 'Unit No.' },
                                     { k: 'street', l: 'Street' },
                                     { k: 'barangay', l: 'Barangay' },
+                                    {
+                                        k: 'barangay_psgc_code',
+                                        l: 'Barangay PSGC',
+                                    },
                                     { k: 'subdivision', l: 'Subdivision' },
                                     {
                                         k: 'city_municipality',
@@ -454,7 +478,7 @@ function money(cents: number | null | undefined): string {
                                     { k: 'email', l: 'Email Address' },
                                 ]"
                                 :key="field.k"
-                                class="grid grid-cols-[145px_1fr] gap-2 p-2"
+                                class="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 p-2"
                             >
                                 <dt class="text-xs text-stone-500">
                                     {{ field.l }}
@@ -494,6 +518,14 @@ function money(cents: number | null | undefined): string {
                         {{ shown(value('establishment.total_employees')) }}
                     </p>
                     <p>
+                        <strong>Male Employees:</strong>
+                        {{ shown(value('establishment.male_employees')) }}
+                    </p>
+                    <p>
+                        <strong>Female Employees:</strong>
+                        {{ shown(value('establishment.female_employees')) }}
+                    </p>
+                    <p>
                         <strong>Employees Residing in LGU:</strong>
                         {{
                             shown(
@@ -508,6 +540,10 @@ function money(cents: number | null | undefined): string {
                     <h3 class="text-xs font-black uppercase">
                         If Place of Business is Rented
                     </h3>
+                    <p>
+                        <strong>Place of Business Rented:</strong>
+                        {{ shown(value('rental.place_is_rented')) }}
+                    </p>
                     <p>
                         <strong>Monthly Rental:</strong>
                         {{ shown(value('rental.monthly_rental_pesos')) }}
@@ -537,7 +573,13 @@ function money(cents: number | null | undefined): string {
                     {{ shown(value('emergency_contact.mobile')) }} ·
                     {{ shown(value('emergency_contact.email')) }}
                 </p>
-                <section class="grid gap-2">
+                <section
+                    v-if="
+                        !document.commissioned_path &&
+                        value('lines_of_business')?.length
+                    "
+                    class="grid gap-2"
+                >
                     <h3 class="text-xs font-black uppercase">
                         Lines of Business
                     </h3>
@@ -594,6 +636,51 @@ function money(cents: number | null | undefined): string {
                         </p>
                     </div>
                 </section>
+                <details
+                    v-if="value('applicant_documents_manifest')"
+                    class="min-w-0 border-t border-stone-300 pt-3"
+                >
+                    <summary class="cursor-pointer font-bold">
+                        Documents lodged with this declaration
+                    </summary>
+                    <ul class="mt-2 grid gap-2">
+                        <li
+                            v-for="item in value(
+                                'applicant_documents_manifest.documents',
+                            ) ?? []"
+                            :key="item.document_id"
+                            class="min-w-0"
+                        >
+                            <p>
+                                <span v-if="item.label"
+                                    >{{ item.label }} ·
+                                </span>
+                                {{ shown(item.document_type) }} ·
+                                {{ item.original_name }}
+                            </p>
+                            <p class="text-xs">
+                                Document {{ item.document_id }} · Version
+                                {{ item.version }}
+                            </p>
+                            <p class="font-mono text-[10px] break-all">
+                                SHA-256 {{ item.checksum_sha256 }}
+                            </p>
+                        </li>
+                    </ul>
+                    <p
+                        v-if="
+                            !value('applicant_documents_manifest.documents')
+                                ?.length
+                        "
+                        class="mt-2"
+                    >
+                        No documents lodged.
+                    </p>
+                    <p class="mt-2 font-mono text-[10px] break-all">
+                        Manifest SHA-256
+                        {{ value('applicant_documents_manifest.digest') }}
+                    </p>
+                </details>
                 <section
                     class="border-t-2 border-stone-900 pt-3 dark:border-stone-400"
                 >
