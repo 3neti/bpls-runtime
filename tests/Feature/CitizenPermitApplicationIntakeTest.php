@@ -428,6 +428,78 @@ test('citizen draft editing preserves shared registry records while updating dec
         ->and($application->lines()->sole()->declared_gross_sales_cents)->toBe(999_999);
 });
 
+test('citizen draft address declarations survive repeated saves without changing registry or requiring oath', function () {
+    $citizen = userWithPermissions([
+        UserPermission::AccessCitizen,
+        UserPermission::CreateOwnPermitApplications,
+        UserPermission::EditOwnPermitApplications,
+        UserPermission::ViewOwnPermitApplications,
+    ], UserRole::Citizen);
+    $barangays = config('ipil_references.barangays.items');
+    $payload = [
+        'owner_name' => 'Address Roundtrip Citizen',
+        'business_name' => 'Address Roundtrip Retail',
+        'business_activity_description' => 'Retail sale of fish.',
+        'business_barangay_psgc_code' => $barangays[0]['code'],
+        'business_house_building_number' => '12-B',
+        'owner_house_building_number' => '34-C',
+        'lessor_house_building_number' => '56-D',
+        'occupancy' => 'rented',
+        'monthly_rental_pesos' => '15000',
+        'type' => 'new',
+        'application_year' => now()->year,
+        'undertaking_accepted' => '0',
+    ];
+    $this->actingAs($citizen)->post(route('citizen.permit-applications.store'), $payload)
+        ->assertSessionHasNoErrors()->assertRedirect();
+    $application = PermitApplication::query()->whereBelongsTo($citizen, 'submittedBy')->sole();
+    $businessBefore = $application->business->getAttributes();
+    $ownerBefore = $application->business->owner->getAttributes();
+
+    foreach ([$barangays[0]['code'], $barangays[1]['code'], $barangays[1]['code']] as $code) {
+        $this->patch(route('citizen.permit-applications.update', $application), [
+            ...$payload,
+            'business_barangay_psgc_code' => $code,
+            'draft_version' => $application->updated_at->toIso8601String(),
+        ])->assertSessionHasNoErrors()->assertRedirect();
+        $application->refresh();
+        $this->get(route('citizen.permit-applications.edit', $application))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('draft.barangay_psgc_code', $code)
+            ->where('draft.declaration.business_address.barangay_psgc_code', $code)
+            ->where('draft.declaration.business_address.house_or_building_number', '12-B')
+            ->where('draft.declaration.owner_address.house_or_building_number', '34-C')
+            ->where('draft.declaration.rental.lessor.address.house_or_building_number', '56-D')
+            ->where('draft.declaration.undertaking.accepted', false));
+    }
+    expect($application->business->refresh()->getAttributes())->toBe($businessBefore)
+        ->and($application->business->owner->refresh()->getAttributes())->toBe($ownerBefore)
+        ->and($application->status)->toBe(PermitApplicationStatus::Draft)
+        ->and($application->submitted_at)->toBeNull()
+        ->and($application->declaration()->count())->toBe(0);
+    $this->assertDatabaseCount('permit_applications', 1);
+    $this->assertDatabaseCount('signature_evidences', 0);
+});
+
+test('older citizen drafts fall back to the registry barangay code', function () {
+    $citizen = userWithPermissions([
+        UserPermission::AccessCitizen,
+        UserPermission::EditOwnPermitApplications,
+        UserPermission::ViewOwnPermitApplications,
+    ], UserRole::Citizen);
+    $application = PermitApplication::factory()->for($citizen, 'submittedBy')->create([
+        'application_number' => null,
+        'status' => PermitApplicationStatus::Draft,
+        'type' => PermitApplicationType::New,
+        'metadata' => ['applicant_declaration_draft' => ['business_address' => ['barangay' => 'Older draft']]],
+    ]);
+    linkPortalUserToApplicationOwner($citizen, $application);
+    $code = config('ipil_references.barangays.items.0.code');
+    $application->business->update(['barangay_psgc_code' => $code]);
+    $this->actingAs($citizen)->get(route('citizen.permit-applications.edit', $application))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->where('draft.barangay_psgc_code', $code));
+});
+
 test('citizen draft update refuses stale or municipally processed records without mutation', function (array $applicationOverrides, bool $stale): void {
     $citizen = userWithPermissions([
         UserPermission::AccessCitizen,

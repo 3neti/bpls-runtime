@@ -773,7 +773,12 @@ function text(value: unknown): string | number | null {
         : null;
 }
 function initial(path: string, fallback?: unknown): string | number | null {
-    return text(nested(path) ?? fallback);
+    const declarationPath = path.replace(
+        /\.house_building_number$/,
+        '.house_or_building_number',
+    );
+
+    return text(nested(declarationPath) ?? fallback);
 }
 function splitOwnerName(): { first: string; middle: string; last: string } {
     const value =

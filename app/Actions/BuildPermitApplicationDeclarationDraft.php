@@ -101,6 +101,7 @@ class BuildPermitApplicationDeclarationDraft
             'unit_number' => $this->text($data, $prefix.'_unit_number'),
             'street' => $this->text($data, $prefix.'_street') ?? ($prefix === 'business' ? $this->text($data, 'business_address') : ($prefix === 'owner' ? $this->text($data, 'owner_address') : null)),
             'barangay' => $this->text($data, $prefix.'_barangay') ?? ($prefix === 'business' ? $this->text($data, 'barangay') : null),
+            'barangay_psgc_code' => $this->text($data, $prefix.'_barangay_psgc_code'),
             'subdivision' => $this->text($data, $prefix.'_subdivision'),
             'city_municipality' => $this->text($data, $prefix.'_city_municipality'),
             'province' => $this->text($data, $prefix.'_province'),

@@ -585,7 +585,8 @@ class PermitApplicationController extends Controller
             'registration_number' => $business->registration_number,
             'business_address' => $business->address,
             'barangay' => $business->barangay,
-            'barangay_psgc_code' => $business->barangay_psgc_code,
+            'barangay_psgc_code' => data_get($permitApplication->metadata, 'applicant_declaration_draft.business_address.barangay_psgc_code')
+                ?? $business->barangay_psgc_code,
             'business_activity_description' => $permitApplication->business_activity_description,
             'ownership_type' => $business->ownership_type,
             'organization_name' => $business->organization_name,
