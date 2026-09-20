@@ -37,6 +37,12 @@ function chooseClassification(event: Event): void {
     confirmed.value = false;
     emit('update:modelValue', (event.target as HTMLSelectElement).value);
 }
+function clearDetermination(): void {
+    amount.value = '';
+    basis.value = '';
+    confirmed.value = false;
+    emit('manual', null);
+}
 </script>
 
 <template>
@@ -70,14 +76,24 @@ function chooseClassification(event: Event): void {
                     @input="invalidate"
                 />
             </label>
-            <button
-                type="button"
-                class="min-h-11 rounded border bg-background px-3 font-semibold disabled:opacity-50"
-                :disabled="!manual || confirmed"
-                @click="confirmAmount"
-            >
-                {{ confirmed ? 'Amount staged' : 'Confirm amount' }}
-            </button>
+            <div class="flex flex-wrap gap-2">
+                <button
+                    type="button"
+                    class="min-h-11 rounded border bg-background px-3 font-semibold disabled:opacity-50"
+                    :disabled="!manual || confirmed"
+                    @click="confirmAmount"
+                >
+                    {{ confirmed ? 'Amount staged' : 'Confirm amount' }}
+                </button>
+                <button
+                    type="button"
+                    class="min-h-11 rounded border bg-background px-3 font-semibold disabled:opacity-50"
+                    :disabled="!amount && !basis && !confirmed && !modelValue"
+                    @click="clearDetermination"
+                >
+                    Clear
+                </button>
+            </div>
             <p>
                 Local/UAT test only. Saves officer, amount and basis with
                 Confirm Treasury. Not municipal policy.

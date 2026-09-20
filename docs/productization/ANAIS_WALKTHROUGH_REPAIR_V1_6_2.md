@@ -69,6 +69,12 @@ Implementation and bounded local acceptance are complete. Commit this repair bra
 
 ### Existing recovery locations
 
+### Clear staged Mayor determination — follow-up
+
+- Added owner-requested Clear beside Confirm amount. Resets amount/basis/staged flag and invokes the existing null-determination handler; required fee remains TBD and Treasury confirmation is disabled. No saved determination or database record is deleted.
+- Seven focused frontend tests, TypeScript, ESLint, Prettier and local build passed. New test executes the actual Clear handler and verifies blank fields, retained required item and unresolved subtotal state. No new browser or full-lifecycle claim for this button-only change; existing unsaved user tabs were not reloaded. Cloud unchanged.
+
+
 ### Manual Mayor’s Permit test determination — 20 September authorization
 
 - Owner authorized implementing controlled local/UAT manual determination after reproducing the ordinary 2026 Treasury blocker. No universal ₱1,000 rate or production policy authorized. Application 39 was inspected and browser-staged only; Confirm Treasury was not clicked.

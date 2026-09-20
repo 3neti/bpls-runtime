@@ -112,6 +112,45 @@ const initial = [
         amount_cents: 10000,
     },
 ];
+test('Clear resets staged amount and basis, retains the required item and blocks Treasury confirmation', () => {
+    const source = readFileSync(
+        'resources/js/components/permit-applications/EnterpriseClassificationSelector.vue',
+        'utf8',
+    );
+    const handler = source.slice(
+        source.indexOf('function clearDetermination('),
+        source.indexOf('</script>'),
+    );
+    const amount = { value: '1000' };
+    const basis = { value: 'Authorized test' };
+    const confirmed = { value: true };
+    let items = applyManualTreasuryDetermination(initial, 1, {
+        amount_cents: 100000,
+        basis: basis.value,
+    });
+    const clear = new Function(
+        'amount',
+        'basis',
+        'confirmed',
+        'emit',
+        transpile(`${handler}; return clearDetermination;`),
+    )(amount, basis, confirmed, (event: string, value: null) => {
+        assert.equal(event, 'manual');
+        assert.equal(value, null);
+        items = applyManualTreasuryDetermination(items, 1, value);
+    });
+    clear();
+    assert.equal(amount.value, '');
+    assert.equal(basis.value, '');
+    assert.equal(confirmed.value, false);
+    assert.equal(items.length, initial.length);
+    assert.equal(items[0].fee_rule_id, 1);
+    assert.equal(items[0].resolution_status, 'unresolved');
+    assert.equal(financialLineItemsResolved(items), false);
+    assert.equal(financialLineItemSubtotal(items), 12500);
+    assert.match(source, /@click="clearDetermination"/);
+    assert.doesNotMatch(handler, /fetch\(|\.post\(|\.submit\(/);
+});
 test('manual test amount requires exact positive centavos and a basis; editing returns the item to TBD', () => {
     for (const value of [
         '',
