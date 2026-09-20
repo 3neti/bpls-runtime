@@ -15,7 +15,56 @@ import {
     applyManualTreasuryDetermination,
     manualTreasuryDetermination,
     treasuryConfirmationReason,
+    treasuryEntryDefault,
 } from '../../resources/js/lib/treasuryEnterprise.ts';
+
+test('Treasury default populates only an admitted valid suggestion without confirming it', () => {
+    const schedule = {
+        id: 'test',
+        version: 'v1',
+        fingerprint: 'test',
+        bands: {},
+        manual_determination_available: true,
+        entry_default: {
+            version: 'v1',
+            application_year: 2026,
+            application_type: 'new',
+            amount_minor: 100000,
+            reference: 'Test',
+        },
+    };
+    assert.equal(treasuryEntryDefault(schedule), '1000.00');
+    assert.equal(
+        manualTreasuryDetermination(treasuryEntryDefault(schedule), ''),
+        null,
+    );
+    assert.equal(
+        treasuryEntryDefault({
+            ...schedule,
+            manual_determination_available: false,
+        }),
+        '',
+    );
+    assert.equal(
+        treasuryEntryDefault({ ...schedule, entry_default: undefined }),
+        '',
+    );
+
+    for (const amount_minor of [0, -1, 1.1, NaN, Infinity, 1000000001]) {
+        assert.equal(
+            treasuryEntryDefault({
+                ...schedule,
+                entry_default: { ...schedule.entry_default, amount_minor },
+            }),
+            '',
+        );
+    }
+
+    assert.deepEqual(manualTreasuryDetermination('1200', 'Reviewed override'), {
+        amount_cents: 120000,
+        basis: 'Reviewed override',
+    });
+});
 
 test('confirmation guidance distinguishes LOB, admitted classification and unresolved policy', () => {
     assert.equal(
@@ -333,7 +382,7 @@ test('selector displays supplied band amounts without claiming municipal policy'
     assert.match(selector, /PROVISIONAL UAT SCHEDULE — NOT MUNICIPAL POLICY/);
     assert.match(selector, /schedule.id/);
     assert.match(selector, /schedule.version/);
-    assert.match(selector, /stop for municipal\s+confirmation/);
+    assert.match(selector, /stop\s+for\s+municipal\s+confirmation/);
     assert.doesNotMatch(selector, /PROVISIONAL MUNICIPAL POLICY/);
     const { descriptor } = parse(selector);
     const render = new Function(

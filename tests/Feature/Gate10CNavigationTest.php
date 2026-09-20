@@ -36,7 +36,7 @@ test('focused task pages provide a return to My Work affordance', function () {
     $permit = file_get_contents(resource_path('js/pages/ordinary-uat-permit/Show.vue'));
 
     expect($certification)->toContain('Back to My Work')->toContain('workIndex()')
-        ->and($permit)->toContain('Back to My Work')->toContain('workIndex()');
+        ->and($permit)->toContain('Back to Inbox')->toContain('workIndex()');
 });
 
 test('citizen navigation remains distinct from municipal work navigation', function () {

@@ -4,6 +4,7 @@ use App\Actions\AssignTreasuryLinesOfBusiness;
 use App\Actions\BuildBploRoutingTask;
 use App\Actions\BuildScheduleOfPayment;
 use App\Actions\CreateAssessmentForPermitApplication;
+use App\Assessment\ProvisionalTreasuryEnterpriseSchedule;
 use App\Enums\UserPermission;
 use App\Enums\UserRole;
 use App\Models\FeeRule;
@@ -11,6 +12,45 @@ use App\Models\User;
 use Illuminate\Validation\ValidationException;
 
 require_once __DIR__.'/../Support/TreasuryEnterpriseFixture.php';
+
+test('catalogue entry default is scoped editable evidence and never a calculated classification', function (): void {
+    [$application, $actor, $selection, $mayor] = enterpriseUatFixture();
+    $rule = FeeRule::findOrFail($mayor['fee_rule_id']);
+    expect(data_get($rule->metadata, 'treasury_entry_default.amount_minor'))->toBeNull();
+    $default = data_get($rule->metadata, 'treasury_entry_default');
+    $default['amount_minor'] = 100000;
+    $rule->update(['metadata' => [...$rule->metadata, 'treasury_entry_default' => $default]]);
+    $schedule = app(ProvisionalTreasuryEnterpriseSchedule::class)->forApplication($application, $rule);
+    expect($schedule['entry_default']['amount_minor'])->toBe(100000)
+        ->and($schedule['fingerprint'])->not->toBe($mayor['enterprise_schedule']['fingerprint']);
+    unset($selection['enterprise_classification']);
+    $selection['manual_amount_cents'] = 120000;
+    $selection['manual_basis'] = 'Reviewed test amount, edited from the suggested default.';
+    $selection['enterprise_schedule_fingerprint'] = $schedule['fingerprint'];
+    foreach ($selection['items'] as &$item) {
+        if ($item['fee_rule_id'] === $rule->id) {
+            $item['amount_cents'] = 120000;
+        }
+    }
+    unset($item);
+    app(AssignTreasuryLinesOfBusiness::class)->handle($application, [$selection], $actor);
+    $evidence = $application->treasuryLineOfBusinessAssignments()->sole()->source_snapshot['enterprise_determination'];
+    expect($evidence['resulting_amount_cents'])->toBe(120000)
+        ->and($evidence['schedule']['reviewed_entry_default'])->toBe($default)
+        ->and($evidence['classification'])->toBeNull();
+});
+
+test('invalid or mismatched entry defaults stay blank without changing the classification schedule', function (mixed $amount, int $year, string $type): void {
+    [$application, $actor, $selection, $mayor] = enterpriseUatFixture();
+    $rule = FeeRule::findOrFail($mayor['fee_rule_id']);
+    $rule->metadata = [...$rule->metadata, 'treasury_entry_default' => [
+        'version' => 'test.v1', 'application_year' => $year, 'application_type' => $type,
+        'amount_minor' => $amount, 'reference' => 'Test default',
+    ]];
+    $schedule = app(ProvisionalTreasuryEnterpriseSchedule::class)->forApplication($application, $rule);
+    expect($schedule)->not->toHaveKey('entry_default')
+        ->and($schedule['bands']['Small'])->toBe(100000);
+})->with([[null, 2026, 'new'], [0, 2026, 'new'], [-1, 2026, 'new'], ['100000', 2026, 'new'], [100000.5, 2026, 'new'], [1000000001, 2026, 'new'], [100000, 2025, 'new'], [100000, 2026, 'renewal']]);
 
 test('manual local UAT Mayor fee persists exact officer basis and amount through the canonical evaluation', function (): void {
     [$application, $actor, $selection, $mayor] = enterpriseUatFixture();

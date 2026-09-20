@@ -11,13 +11,14 @@ import {
     FileCheck2,
     LockKeyhole,
 } from '@lucide/vue';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import {
     confirmRoutineOfficeDefaults,
     runNext as runCleanroomNextRoute,
     simulateOfficeReviews,
 } from '@/actions/App/Http/Controllers/LifecycleCleanroomController';
 import { index as laboratoryIndex } from '@/actions/App/Http/Controllers/LifecycleLaboratoryController';
+import ActionConfirmationDialog from '@/components/ActionConfirmationDialog.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 
 type Handoff = {
@@ -125,27 +126,49 @@ function completeRoutineConfirmations(): void {
     );
 }
 
-function simulateRemainingOfficeReviews(): void {
+const confirmation = ref<InstanceType<typeof ActionConfirmationDialog> | null>(
+    null,
+);
+const simulationPending = ref(false);
+async function simulateRemainingOfficeReviews(): Promise<void> {
+    if (simulationPending.value) {
+        return;
+    }
+
     if (
-        !window.confirm(
+        !(await confirmation.value?.ask(
+            'Simulate remaining reviews?',
             'Simulate the remaining inspection-bearing office reviews? Every resulting audit record will state that no real inspection occurred.',
-        )
+            'Simulate reviews',
+        ))
     ) {
         return;
     }
 
+    simulationPending.value = true;
     router.post(
         simulateOfficeReviews([
             props.handoff.run.id,
             props.handoff.application.year,
         ]).url,
         {},
-        { preserveScroll: true },
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                simulationPending.value = false;
+            },
+        },
     );
 }
 </script>
 
 <template>
+    <ActionConfirmationDialog
+        ref="confirmation"
+        :context="
+            handoff.application.business_name + ' · ' + handoff.application.year
+        "
+    />
     <Head title="Office reviews assigned" />
 
     <AppLayout>

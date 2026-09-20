@@ -22,6 +22,42 @@ use App\Models\Receipt;
 use App\Models\TreasuryCollection;
 use Inertia\Testing\AssertableInertia as Assert;
 
+test('released permit is displayed and downloadable only by its portal owner without mutating release evidence', function () {
+    $citizen = userWithPermissions([UserPermission::AccessCitizen, UserPermission::ViewOwnPermitApplications], UserRole::Citizen);
+    $application = PermitApplication::factory()->create();
+    linkPortalUserToApplicationOwner($citizen, $application);
+    $completion = ProvisionalUatPermitCompletion::factory()->for($application)->create([
+        'status' => 'released_synthetic', 'semantic_classification' => 'synthetic_only',
+        'issued_at' => now()->subMinute(), 'released_at' => now(), 'permit_number' => 'BP-2026-TEST',
+    ]);
+    $before = $completion->fresh()->getRawOriginal();
+    $this->actingAs($citizen)->get(route('citizen.permit-applications.show', $application))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->where('permitApplication.released_permit.number', 'BP-2026-TEST')
+        ->where('permitApplication.released_permit.pdf_url', '/citizen/permit-applications/'.$application->id.'/permit.pdf'));
+    $url = route('citizen.permit-applications.permit.pdf', $application);
+    $response = $this->get($url)->assertOk()->assertHeader('Content-Type', 'application/pdf');
+    expect($response->getContent())->toStartWith('%PDF-');
+    $this->get($url.'?download=1')->assertOk()->assertHeader('Content-Disposition', 'attachment; filename="business-permit-'.$application->id.'.pdf"');
+    expect($completion->fresh()->getRawOriginal())->toBe($before);
+    $stranger = userWithRole($citizen->roles()->firstOrFail());
+    $this->actingAs($stranger)->get($url)->assertNotFound();
+});
+
+test('citizens cannot retrieve or see an unreleased permit PDF', function (bool $issued) {
+    $citizen = userWithPermissions([UserPermission::AccessCitizen, UserPermission::ViewOwnPermitApplications], UserRole::Citizen);
+    $application = PermitApplication::factory()->create();
+    linkPortalUserToApplicationOwner($citizen, $application);
+    ProvisionalUatPermitCompletion::factory()->for($application)->create([
+        'status' => $issued ? 'issued_synthetic' : 'approved_for_preview_release',
+        'semantic_classification' => 'synthetic_only', 'issued_at' => $issued ? now() : null,
+        'released_at' => null,
+    ]);
+    $this->actingAs($citizen)->get(route('citizen.permit-applications.show', $application))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->where('permitApplication.released_permit', null));
+    $this->get(route('citizen.permit-applications.permit.pdf', $application))->assertNotFound();
+})->with([true, false]);
+
 test('citizens can view authoritative assessment and payment state for an owned application', function () {
     $citizen = userWithPermissions([
         UserPermission::AccessCitizen,

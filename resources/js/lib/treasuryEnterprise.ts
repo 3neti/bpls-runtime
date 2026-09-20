@@ -6,7 +6,26 @@ export type EnterpriseSchedule = {
     fingerprint: string;
     bands: Record<string, number>;
     manual_determination_available?: boolean;
+    entry_default?: {
+        version: string;
+        application_year: number;
+        application_type: string;
+        amount_minor: number;
+        reference: string;
+    };
 };
+
+export function treasuryEntryDefault(schedule: EnterpriseSchedule): string {
+    const amount = schedule.entry_default?.amount_minor;
+
+    return schedule.manual_determination_available &&
+        typeof amount === 'number' &&
+        Number.isSafeInteger(amount) &&
+        amount > 0 &&
+        amount <= 1000000000
+        ? (amount / 100).toFixed(2)
+        : '';
+}
 
 export type ManualTreasuryDetermination = {
     amount_cents: number;

@@ -192,6 +192,8 @@ Route::middleware(['auth', 'verified', EnsureActiveUserAccess::class])->group(fu
             ->name('notifications.update');
         Route::resource('permit-applications', CitizenPermitApplicationController::class)
             ->only(['index', 'create', 'store', 'show', 'edit', 'update']);
+        Route::get('permit-applications/{permitApplication}/permit.pdf', [CitizenPermitApplicationController::class, 'permitPdf'])
+            ->name('permit-applications.permit.pdf');
         Route::post('permit-applications/{permitApplication}/submit', [CitizenPermitApplicationController::class, 'submit'])
             ->name('permit-applications.submit');
         Route::post('permit-applications/{permitApplication}/documents', [CitizenPermitApplicationDocumentController::class, 'store'])

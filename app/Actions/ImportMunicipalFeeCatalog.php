@@ -143,6 +143,7 @@ final class ImportMunicipalFeeCatalog
                         'source_name' => $item['name'],
                         'application_types' => $item['application_types'] ?? [],
                         'formula' => $item['formula'] ?? null,
+                        'treasury_entry_default' => $item['treasury_entry_default'] ?? null,
                         'basis_unit' => $item['basis_unit'] ?? null,
                         'unit_amount_minor' => $item['unit_amount_minor'] ?? null,
                         'exact_once_key' => $item['exact_once_key'] ?? null,
@@ -223,6 +224,12 @@ final class ImportMunicipalFeeCatalog
             'fees.*.exact_once_key' => ['sometimes', 'string'],
             'fees.*.amount_minor' => ['required', 'integer', 'min:0'],
             'fees.*.status' => ['required', Rule::in(['active', 'incomplete', 'inactive'])],
+            'fees.*.treasury_entry_default' => ['sometimes', 'array:version,application_year,application_type,amount_minor,reference'],
+            'fees.*.treasury_entry_default.version' => ['required_with:fees.*.treasury_entry_default', 'string'],
+            'fees.*.treasury_entry_default.application_year' => ['required_with:fees.*.treasury_entry_default', 'integer', 'between:2000,2100'],
+            'fees.*.treasury_entry_default.application_type' => ['required_with:fees.*.treasury_entry_default', Rule::in(['new', 'renewal'])],
+            'fees.*.treasury_entry_default.amount_minor' => ['nullable', 'integer', 'min:1', 'max:1000000000'],
+            'fees.*.treasury_entry_default.reference' => ['required_with:fees.*.treasury_entry_default', 'string', 'max:500'],
         ]);
         if ($validator->fails()) {
             throw new ValidationException($validator);

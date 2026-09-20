@@ -12,7 +12,9 @@ use App\Actions\DescribeOnlinePaymentBoundary;
 use App\Actions\DescribePaymentPolicyBoundary;
 use App\Actions\DescribePermitArtifact;
 use App\Actions\DescribePermitReleaseReadiness;
+use App\Actions\DescribePermitVerificationBoundary;
 use App\Actions\LodgeLifecycleCleanroomApplication;
+use App\Actions\RenderPermitPdf;
 use App\Actions\ResolveLifecycleCleanroomIntake;
 use App\Actions\ResolvePermitOwnerAddress;
 use App\Actions\SubmitCitizenPermitApplication;
@@ -319,6 +321,12 @@ class PermitApplicationController extends Controller
             'permitApplication' => [
                 ...$this->summaryPayload($application),
                 'application_year' => $application->application_year,
+                'released_permit' => $this->hasReleasedPermit($application) ? [
+                    'number' => $syntheticPermitCompletion->permit_number,
+                    'pdf_url' => route('citizen.permit-applications.permit.pdf', $application, false),
+                    'download_url' => route('citizen.permit-applications.permit.pdf', ['permitApplication' => $application, 'download' => 1], false),
+                    'verification_url' => app(DescribePermitVerificationBoundary::class)->handle($application)['view_url'],
+                ] : null,
                 'owner' => [
                     'name' => $this->declaredOwnerName($declaration) ?? $application->business->owner->name,
                     'email' => data_get($declaration, 'owner_address.email') ?? $application->business->owner->email,
@@ -485,6 +493,31 @@ class PermitApplicationController extends Controller
             'applicationDocumentTypes' => $documentTypeCatalog->options(),
             'executableDocument' => $this->buildExecutableDocument->handle($application),
         ]);
+    }
+
+    public function permitPdf(Request $request, int $permitApplication, RenderPermitPdf $renderer): \Illuminate\Http\Response
+    {
+        Gate::authorize(UserPermission::ViewOwnPermitApplications->value);
+        $application = $this->ownedApplication($request, $permitApplication);
+        abort_unless($this->hasReleasedPermit($application), 404);
+
+        return response($renderer->handle($application))
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', ($request->boolean('download') ? 'attachment' : 'inline').'; filename="business-permit-'.$application->id.'.pdf"')
+            ->header('Cache-Control', 'private, no-store')
+            ->header('X-Content-Type-Options', 'nosniff');
+    }
+
+    private function hasReleasedPermit(PermitApplication $application): bool
+    {
+        $completion = $application->provisionalUatPermitCompletion;
+
+        return ! $application->isHistoricalEvidenceOnly()
+            && $completion?->issued_at !== null
+            && $completion->released_at !== null
+            && filled($completion->permit_number)
+            && $completion->status === 'released_synthetic'
+            && $completion->semantic_classification === 'synthetic_only';
     }
 
     private function ownedApplication(Request $request, int $permitApplication): PermitApplication

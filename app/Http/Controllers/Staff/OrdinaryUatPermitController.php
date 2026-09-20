@@ -8,6 +8,7 @@ use App\Actions\OrdinaryUatPermitAuthority;
 use App\Actions\ProjectPermitReadiness;
 use App\Actions\RecordOrdinaryUatMayoralAuthorization;
 use App\Actions\ReleaseSyntheticLifecyclePermit;
+use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Staff\StoreOrdinaryUatPermitRequest;
 use App\Models\PermitApplication;
@@ -28,7 +29,8 @@ class OrdinaryUatPermitController extends Controller
         $mayor = $authority->allows($permitApplication, $request->user());
 
         return Inertia::render('ordinary-uat-permit/Show', [
-            'application' => ['id' => $permitApplication->id, 'tracking_reference' => $permitApplication->tracking_reference],
+            'application' => ['id' => $permitApplication->id, 'tracking_reference' => $permitApplication->tracking_reference,
+                'business_name' => $permitApplication->business->name, 'year' => $permitApplication->application_year, 'type' => $permitApplication->type->value],
             'readiness' => $readiness,
             'completion' => $completion === null ? null : [
                 'authorized_at' => $completion->decided_at?->toIso8601String(),
@@ -40,6 +42,8 @@ class OrdinaryUatPermitController extends Controller
                 : ($mayor && $completion?->issued_at === null && $readiness['ready'] ? 'issue'
                     : ($authority->allows($permitApplication, $request->user(), 'releasing') && $completion?->issued_at !== null && $completion->released_at === null ? 'release' : null)),
             'applicationUrl' => route('staff.permit-applications.evaluation.show', $permitApplication, false),
+            'permitUrl' => $completion?->issued_at !== null && $request->user()->can(UserPermission::ViewPermitApplications->value)
+                ? route('staff.permit-applications.permit.pdf', $permitApplication, false) : null,
             'verificationUrl' => $completion?->released_at !== null ? $verification->handle($permitApplication)['view_url'] : null,
         ]);
     }

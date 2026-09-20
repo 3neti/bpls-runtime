@@ -961,9 +961,7 @@ const filteredTreasuryLobOptions = computed(() => {
                         Assign official Lines of Business
                     </h3>
                     <p class="mt-2 text-sm leading-6 text-muted-foreground">
-                        Classify the applicant’s frozen business description,
-                        then review the payment items for each selected Line of
-                        Business.
+                        Select the LOB. Review fees. Confirm Treasury.
                     </p>
                 </div>
 
@@ -1156,6 +1154,11 @@ const filteredTreasuryLobOptions = computed(() => {
                                 </button>
                             </div>
                             <EnterpriseClassificationSelector
+                                :cleared="
+                                    !!determinationRevisions[
+                                        selection.line_of_business_id
+                                    ]
+                                "
                                 :key="`${selection.line_of_business_id}:${determinationRevisions[selection.line_of_business_id] ?? 0}`"
                                 @manual="
                                     determineManualAmount(selection, $event)
@@ -2032,6 +2035,11 @@ const filteredTreasuryLobOptions = computed(() => {
                             </button>
                         </div>
                         <EnterpriseClassificationSelector
+                            :cleared="
+                                !!determinationRevisions[
+                                    selection.line_of_business_id
+                                ]
+                            "
                             :key="`${selection.line_of_business_id}:${determinationRevisions[selection.line_of_business_id] ?? 0}`"
                             @manual="determineManualAmount(selection, $event)"
                             v-if="

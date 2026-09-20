@@ -31,6 +31,7 @@ import {
     show as showAssessment,
     store as prepareAssessment,
 } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
+import ActionConfirmationDialog from '@/components/ActionConfirmationDialog.vue';
 import EvaluationComponentRow from '@/components/evaluations/EvaluationComponentRow.vue';
 import EvaluationItemCard from '@/components/evaluations/EvaluationItemCard.vue';
 import EvaluationTotalPanel from '@/components/evaluations/EvaluationTotalPanel.vue';
@@ -574,12 +575,43 @@ function runOnce(key: string, action: () => void): void {
     }
 }
 
-function submitLineCorrection(): void {
+const actionConfirmation = ref<InstanceType<
+    typeof ActionConfirmationDialog
+> | null>(null);
+async function requestConfirmation(
+    description: string,
+    title = 'Confirm determination',
+    label = 'Confirm determination',
+): Promise<boolean> {
+    if (pendingAction.value) {
+        return false;
+    }
+
+    const fingerprint = props.evaluation?.version.fingerprint;
+    const accepted = await actionConfirmation.value?.ask(
+        title,
+        description,
+        label,
+    );
+
+    if (accepted && fingerprint !== props.evaluation?.version.fingerprint) {
+        actionError.value =
+            'The Application changed. Review the current amounts before confirming again.';
+
+        return false;
+    }
+
+    return accepted === true;
+}
+
+async function submitLineCorrection(): Promise<void> {
     if (
         !props.evaluation ||
-        !window.confirm(
+        !(await requestConfirmation(
             'Record this correction and re-evaluate affected responsibilities?',
-        )
+            'Record correction?',
+            'Record correction',
+        ))
     ) {
         return;
     }
@@ -604,10 +636,10 @@ function submitLineCorrection(): void {
     });
 }
 
-function submitResponsibility(
+async function submitResponsibility(
     item: EvaluationItem,
     draft: ResponsibilityDraft,
-): void {
+): Promise<void> {
     if (!props.evaluation) {
         return;
     }
@@ -626,9 +658,9 @@ function submitResponsibility(
     }
 
     if (
-        !window.confirm(
+        !(await requestConfirmation(
             `Record the ${officeLabel(item.responsible_party)} determination for ${item.label}?`,
-        )
+        ))
     ) {
         return;
     }
@@ -673,15 +705,17 @@ function submitResponsibility(
     });
 }
 
-function confirmAllDefaults(): void {
+async function confirmAllDefaults(): Promise<void> {
     if (!props.evaluation || myConfirmableDefaults.value.length === 0) {
         return;
     }
 
     if (
-        !window.confirm(
+        !(await requestConfirmation(
             `Confirm ${myConfirmableDefaults.value.length} default ${myConfirmableDefaults.value.length === 1 ? 'amount' : 'amounts'} for ${myOffice.value}?`,
-        )
+            'Confirm office amounts?',
+            'Confirm amounts',
+        ))
     ) {
         return;
     }
@@ -701,12 +735,14 @@ function confirmAllDefaults(): void {
     });
 }
 
-function submitCounterCheck(): void {
+async function submitCounterCheck(): Promise<void> {
     if (
         !props.evaluation ||
-        !window.confirm(
+        !(await requestConfirmation(
             'Confirm Treasury counter-check for this exact evaluation version?',
-        )
+            'Confirm counter-check?',
+            'Confirm counter-check',
+        ))
     ) {
         return;
     }
@@ -744,12 +780,14 @@ function submitRefresh(): void {
     });
 }
 
-function submitPrepareAssessment(): void {
+async function submitPrepareAssessment(): Promise<void> {
     if (
         !props.evaluation ||
-        !window.confirm(
-            'Prepare an immutable Assessment from this exact resolved evaluation?',
-        )
+        !(await requestConfirmation(
+            `This locks the current fees and amounts (${assessmentAction.value.totalAmountCents === null ? 'unresolved' : money(assessmentAction.value.totalAmountCents)}). Treasurer approval follows separately.`,
+            'Prepare Assessment?',
+            'Prepare Assessment',
+        ))
     ) {
         return;
     }
@@ -771,6 +809,10 @@ function submitPrepareAssessment(): void {
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbs">
+        <ActionConfirmationDialog
+            ref="actionConfirmation"
+            :context="`${application.business_name} · ${application.year} · ${application.type}`"
+        />
         <Head title="Business Permit Evaluator" />
 
         <main class="flex min-w-0 flex-1 flex-col gap-5 p-4 sm:p-6 lg:p-8">

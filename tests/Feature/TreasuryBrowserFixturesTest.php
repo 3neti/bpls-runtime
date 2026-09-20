@@ -5,6 +5,7 @@ use App\LifecycleScenarios\TreasuryBrowserFixtures;
 use App\Models\FeeRule;
 use App\Models\PermitApplication;
 use App\Models\User;
+use App\StakeholderPreview\StakeholderPreviewSafety;
 use Database\Seeders\MunicipalFeeCatalogSeeder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,8 @@ beforeEach(function (): void {
     config([
         'app.url' => 'http://bpls-runtime.test',
         'stakeholder_preview.mode' => true,
+        'stakeholder_preview.profile' => StakeholderPreviewSafety::Profile,
+        'stakeholder_preview.data_classification' => 'synthetic_only',
         'stakeholder_preview.pii_mode' => 'synthetic_only',
         'stakeholder_preview.production_migration_enabled' => false,
         'stakeholder_preview.production_integrations' => 'disabled',

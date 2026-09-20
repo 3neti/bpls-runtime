@@ -35,6 +35,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Route;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
@@ -51,6 +52,8 @@ beforeEach(function () {
         'payment_simulation.allowed_contexts' => ['gate10_local'],
         'app.url' => 'http://bpls-gate10.test',
     ]);
+    Route::middleware('web')->group(base_path('routes/web.php'));
+    Route::getRoutes()->refreshNameLookups();
     Artisan::call('bpls:install');
     $this->seed(MunicipalFeeCatalogSeeder::class);
     config()->set('cache.default', 'array');

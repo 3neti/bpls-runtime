@@ -10872,6 +10872,12 @@ fees:
     status: active
   -
     code: IPIL-LEGACY-5F028B76EEBEF485
+    treasury_entry_default:
+      version: '2026-09-20.v1'
+      application_year: 2026
+      application_type: new
+      amount_minor: null
+      reference: 'Editable Treasury starting amount; not a calculated rate'
     source_key: 'sha256:5f028b76eebef485a0c3ec3ab1b71806882501943beb79692687f51ff9722b1e'
     name: "Mayor's Permit Fee"
     fee_category_code: fee

@@ -1,18 +1,29 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { money } from '@/lib/evaluationPresentation';
-import { manualTreasuryDetermination } from '@/lib/treasuryEnterprise';
+import {
+    manualTreasuryDetermination,
+    treasuryEntryDefault,
+} from '@/lib/treasuryEnterprise';
 import type {
     EnterpriseSchedule,
     ManualTreasuryDetermination,
 } from '@/lib/treasuryEnterprise';
 
-defineProps<{ schedule: EnterpriseSchedule; modelValue: string }>();
+const props = defineProps<{
+    schedule: EnterpriseSchedule;
+    modelValue: string;
+    cleared?: boolean;
+}>();
 const emit = defineEmits<{
     'update:modelValue': [value: string];
     manual: [value: ManualTreasuryDetermination | null];
 }>();
-const amount = ref('');
+const amount = ref(
+    props.cleared || props.modelValue
+        ? ''
+        : treasuryEntryDefault(props.schedule),
+);
 const basis = ref('');
 const manual = computed(() =>
     manualTreasuryDetermination(amount.value, basis.value),
@@ -54,6 +65,10 @@ function clearDetermination(): void {
             class="grid min-w-0 gap-2 border-b border-amber-300 pb-3"
         >
             <strong>Determine Mayor’s Permit Fee</strong>
+            <p v-if="schedule.entry_default" class="text-xs">
+                Default amount · review before confirming. Enter a basis to use
+                or override it.
+            </p>
             <label class="grid gap-1"
                 >Amount (₱)
                 <input
@@ -94,10 +109,7 @@ function clearDetermination(): void {
                     Clear
                 </button>
             </div>
-            <p>
-                Local/UAT test only. Saves officer, amount and basis with
-                Confirm Treasury. Not municipal policy.
-            </p>
+            <p>Local/UAT only · Amount and basis save with Confirm Treasury.</p>
         </section>
         <label class="grid min-w-0 gap-2 font-semibold">
             Enterprise Classification
@@ -118,12 +130,9 @@ function clearDetermination(): void {
             </select>
         </label>
         <p>
-            Alternative: choose a classification, separate from the official
-            Line of Business, only when its synthetic-UAT basis for this
-            Application has been recorded; its scheduled Mayor’s Permit Fee
-            cannot be edited here. If the classification is not established,
-            stop for municipal confirmation, or use the manual test
-            determination above if available.
+            Alternative: select the established classification. Its scheduled
+            amount is fixed. Otherwise use manual determination or stop for
+            municipal confirmation.
         </p>
         <p class="font-bold">PROVISIONAL UAT SCHEDULE — NOT MUNICIPAL POLICY</p>
         <p class="text-xs break-words">

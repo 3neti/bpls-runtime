@@ -44,10 +44,22 @@ class ProvisionalTreasuryEnterpriseSchedule
             }
         }
 
+        $default = data_get($rule->metadata, 'treasury_entry_default');
+        $manualAvailable = app(StakeholderPreviewSafety::class)->isEnabled()
+            && app()->environment(['local', 'testing', 'staging', 'uat']);
+        if ($manualAvailable && is_array($default)
+            && ($default['application_year'] ?? null) === $application->application_year
+            && ($default['application_type'] ?? null) === $application->type->value
+            && is_int($default['amount_minor'] ?? null)
+            && $default['amount_minor'] > 0 && $default['amount_minor'] <= 1000000000
+            && is_string($default['version'] ?? null) && trim($default['version']) !== ''
+            && is_string($default['reference'] ?? null) && trim($default['reference']) !== '') {
+            $schedule['entry_default'] = $default;
+        }
+
         return [...$schedule,
             'fingerprint' => hash('sha256', json_encode($schedule, JSON_THROW_ON_ERROR)),
-            'manual_determination_available' => app(StakeholderPreviewSafety::class)->isEnabled()
-                && app()->environment(['local', 'testing', 'staging', 'uat']),
+            'manual_determination_available' => $manualAvailable,
         ];
     }
 
@@ -87,6 +99,7 @@ class ProvisionalTreasuryEnterpriseSchedule
                     'policy_status' => 'test_only_not_municipal_policy',
                     'currency' => 'PHP',
                     'reviewed_catalogue_fingerprint' => $schedule['fingerprint'],
+                    'reviewed_entry_default' => $schedule['entry_default'] ?? null,
                 ],
                 'resulting_amount_cents' => $amount,
                 'fee_rule_id' => $rule->id,

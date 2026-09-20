@@ -37,6 +37,7 @@ test('all report templates retain a constrained shared workspace', () => {
         assert.ok(s.includes('<ReportFamilyBanner'), name);
         assert.equal(parse(s).errors.length, 0, name);
     }
+
     const shell = readFileSync(
         'resources/js/components/reports/ReportWorkspace.vue',
         'utf8',
@@ -63,6 +64,7 @@ test('working report filters and unchanged exports share one toolbar', () => {
             name,
         );
     }
+
     for (const name of blocked) {
         assert.ok(source(name).includes('availability="policy_bound"'), name);
         assert.ok(!source(name).includes('Export CSV'), name);
@@ -128,6 +130,7 @@ test('wide table regions are keyboard reachable and headers are scoped', () => {
         assert.ok(s.includes('tabindex="0"'), name);
         const ast = baseParse(parse(s).descriptor.template!.content);
         assert.ok(ast.children.length > 0);
+
         for (const th of s.matchAll(/<th\b[^>]*>/g)) {
             assert.ok(th[0].includes('scope="col"'), name);
         }
@@ -144,6 +147,7 @@ async function renderRows(
         'Vue',
         compile(table, { mode: 'function', prefixIdentifiers: true }).code,
     )(Vue);
+
     return renderToString(
         Vue.createSSRApp({
             render,

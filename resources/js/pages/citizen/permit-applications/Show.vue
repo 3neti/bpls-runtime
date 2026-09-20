@@ -13,7 +13,7 @@ import {
     Send,
     ShieldCheck,
 } from '@lucide/vue';
-import { computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { show as paymentScheduleShow } from '@/actions/App/Http/Controllers/Citizen/PaymentScheduleController';
 import {
     edit,
@@ -23,6 +23,7 @@ import {
 } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
 import InputError from '@/components/InputError.vue';
 import ApplicationDocumentPillbox from '@/components/permit-applications/ApplicationDocumentPillbox.vue';
+import AuthenticatedPdfPreview from '@/components/permit-applications/AuthenticatedPdfPreview.vue';
 import IpilExecutableDocument from '@/components/permit-applications/IpilExecutableDocument.vue';
 import SignatureFacsimileCapture from '@/components/SignatureFacsimileCapture.vue';
 import { Badge } from '@/components/ui/badge';
@@ -32,6 +33,12 @@ import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue
 import type { BreadcrumbItem } from '@/types';
 
 type PermitApplication = {
+    released_permit: null | {
+        number: string;
+        pdf_url: string;
+        download_url: string;
+        verification_url: string;
+    };
     id: number;
     display_reference: string;
     application_number: string | null;
@@ -333,6 +340,7 @@ function blockerLabel(blocker: string): string {
 
     return labels[blocker] ?? blocker.replaceAll('_', ' ');
 }
+const showReleasedPermit = ref(true);
 </script>
 
 <template>
@@ -340,6 +348,56 @@ function blockerLabel(blocker: string): string {
         <Head :title="permitApplication.display_reference" />
 
         <main class="flex h-full flex-1 flex-col gap-4 p-4">
+            <section
+                v-if="permitApplication.released_permit"
+                class="grid min-w-0 gap-3 rounded-xl border p-4"
+                data-testid="citizen-released-permit"
+            >
+                <div>
+                    <h2 class="text-xl font-semibold">
+                        Business Permit
+                        {{ permitApplication.released_permit.number }}
+                    </h2>
+                    <p>{{ permitApplication.business.name }} · Released</p>
+                    <p class="text-xs text-muted-foreground">
+                        Test environment · Not valid for official use
+                    </p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <Button
+                        variant="outline"
+                        :aria-expanded="showReleasedPermit"
+                        @click="showReleasedPermit = !showReleasedPermit"
+                        >{{
+                            showReleasedPermit ? 'Hide Permit' : 'View Permit'
+                        }}</Button
+                    >
+                    <Button as-child variant="outline"
+                        ><a
+                            :href="
+                                permitApplication.released_permit.download_url
+                            "
+                            >Download PDF</a
+                        ></Button
+                    >
+                    <Button as-child variant="outline"
+                        ><a
+                            :href="
+                                permitApplication.released_permit
+                                    .verification_url
+                            "
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            >Verify Permit</a
+                        ></Button
+                    >
+                </div>
+                <AuthenticatedPdfPreview
+                    v-if="showReleasedPermit"
+                    :src="permitApplication.released_permit.pdf_url"
+                    :title="`Business Permit ${permitApplication.released_permit.number}`"
+                />
+            </section>
             <section>
                 <div>
                     <div class="flex flex-wrap items-center gap-2">

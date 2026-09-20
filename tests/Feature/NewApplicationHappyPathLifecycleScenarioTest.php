@@ -14,9 +14,21 @@ use App\Models\LineOfBusiness;
 use App\Models\PaymentSchedule;
 use App\Models\PermitApplication;
 use App\Models\User;
+use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
+
+beforeEach(function (): void {
+    config([
+        'stakeholder_preview.mode' => true,
+        'stakeholder_preview.profile' => StakeholderPreviewSafety::Profile,
+        'stakeholder_preview.data_classification' => 'synthetic_only',
+        'stakeholder_preview.pii_mode' => 'synthetic_only',
+        'stakeholder_preview.production_migration_enabled' => false,
+        'stakeholder_preview.production_integrations' => 'disabled',
+    ]);
+});
 
 test('Scenario 01 certifies the effective-2025 empty-to-first-business Citizen lifecycle and rolls back by default', function () {
     Storage::fake('local');
@@ -123,6 +135,8 @@ test('Scenario 01 persist is idempotent, explicitly owned, and visible through i
             ->where('profile.linked', false)
             ->where('profile.owner', null)
             ->has('profile.businesses', 0));
+
+    config(['stakeholder_preview.mode' => false]);
 
     $this->actingAs($scenarioCitizen)
         ->get(route('citizen.permit-applications.create'))

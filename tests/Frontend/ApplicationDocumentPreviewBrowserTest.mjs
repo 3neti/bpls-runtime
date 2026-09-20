@@ -164,6 +164,7 @@ test('authorized document references open visible PDF and image previews without
         const errors = [];
         page.on('pageerror', (error) => errors.push(error.message));
         await page.goto(`http://127.0.0.1:${port}/`);
+        await page.getByRole('link', { name: 'Download' }).first().waitFor();
 
         assert.equal(
             await page.getByRole('link', { name: 'Download' }).count(),
