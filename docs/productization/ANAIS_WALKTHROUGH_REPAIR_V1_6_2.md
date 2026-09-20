@@ -69,6 +69,13 @@ Implementation and bounded local acceptance are complete. Commit this repair bra
 
 ### Existing recovery locations
 
+### Specimen selector restoration — subsequent owner correction
+
+- Supersedes the single generic example and Classic-link presentation above. Ordinary fresh Citizen New applications in safe preview now receive the existing laboratory specimen pool and show Source specimen, Fill blanks, Clear helper values and collapsed details. The Classic navigation link is removed from this panel.
+- Selected specimen declaration fields only are filled; existing entries remain. Changing selection clears unchanged prior helper assignments while preserving edits. No legacy LOBs, fiscal lines, Assessment binding, application year, uploads or undertaking are imported. Exact Classic exclusion and production/disabled-preview refusal remain.
+- Verification: 69 focused PHP tests / 2,065 assertions, five helper tests, TypeScript, ESLint, Prettier, Pint and build PASS. Chrome ordinary local form exposed the six original specimens; filling the first and switching to the second verified blank-only population and clearing. No save, submission, transaction, reset or Cloud deployment performed.
+
+
 - Worktree: `/Users/rli/Documents/Codex/2026-09-07/referenced-chatgpt-conversation-this-is-an-2/work/bpls-anais-walkthrough-repair`.
 - Private Markdown: parent task `outputs/Ipil Business Permit System - Complete Walkthrough and Acceptance Guide - Version 1.6.2.md`.
 - Private PDF: parent task `output/pdf/Ipil Business Permit System - Complete Walkthrough and Acceptance Guide - Version 1.6.2 - Monograph.pdf`.

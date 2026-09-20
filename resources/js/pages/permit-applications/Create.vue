@@ -25,7 +25,6 @@ import {
     submit as citizenSubmit,
     update as citizenUpdate,
 } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
-import { index as laboratoryIndex } from '@/actions/App/Http/Controllers/LifecycleLaboratoryController';
 import {
     index as staffIndex,
     store as staffStore,
@@ -191,28 +190,11 @@ function fillExampleDetails(event: MouseEvent): void {
 
     const form = (event.currentTarget as HTMLElement).closest('form');
 
-    if (!form) {
+    if (!form || !labIntakeFixture.value) {
         return;
     }
 
-    const example = {
-        business_name: 'IPIL SAMPLE FISH STORE',
-        business_activity_description: 'Retail sale of fresh fish and seafood.',
-        business_street: '117 Sample Market Road',
-        business_city_municipality: 'Ipil',
-        business_province: 'Zamboanga Sibugay',
-        owner_first_name: 'Sample',
-        owner_last_name: 'Applicant',
-        owner_street: '117 Sample Market Road',
-        owner_barangay: 'Don Andres',
-        owner_city_municipality: 'Ipil',
-        owner_province: 'Zamboanga Sibugay',
-        business_area_square_meters: 20,
-        male_employee_count: 1,
-        female_employee_count: 0,
-        total_employee_count: 1,
-        employees_residing_in_lgu: 1,
-    };
+    const example = labIntakeFixture.value.fields;
 
     for (const [name, value] of Object.entries(example)) {
         fillEmptyControl(form, name, value, walkthroughFilledControls);
@@ -220,7 +202,7 @@ function fillExampleDetails(event: MouseEvent): void {
 
     walkthroughFilledCount.value = walkthroughFilledControls.length;
     walkthroughFillNotice.value =
-        'Sample details filled into blanks only. Review all fields before Save Draft.';
+        'Specimen details filled into blanks only. Review before Save Draft.';
 }
 const walkthroughFilledCount = ref(0);
 let walkthroughFilledControls: FilledControl[] = [];
@@ -849,6 +831,10 @@ function selectLabFixture(event: Event): void {
         return;
     }
 
+    if (canFillExampleDetails.value && walkthroughFilledCount.value > 0) {
+        clearWalkthroughExample();
+    }
+
     if (helperFilled.value) {
         clearHelperValues();
     }
@@ -1042,13 +1028,31 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                         </p>
                     </template>
                     <template v-else-if="canFillExampleDetails">
+                        <label for="ordinary-specimen" class="font-semibold"
+                            >Source specimen</label
+                        >
+                        <select
+                            id="ordinary-specimen"
+                            class="h-10 w-full min-w-0 rounded border bg-background px-3 text-foreground"
+                            :value="selectedLabFixtureId"
+                            @change="selectLabFixture"
+                        >
+                            <option
+                                v-for="fixture in labIntakeFixtures"
+                                :key="fixture.fixture_id"
+                                :value="fixture.fixture_id"
+                            >
+                                {{ fixture.label }}
+                            </option>
+                        </select>
                         <div class="flex flex-wrap gap-2">
                             <Button
                                 type="button"
                                 variant="outline"
+                                :disabled="!labIntakeFixture"
                                 @click="fillExampleDetails"
                             >
-                                Fill example details
+                                Fill blanks
                             </Button>
                             <Button
                                 v-if="walkthroughFilledCount"
@@ -1058,22 +1062,24 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             >
                                 Clear helper values
                             </Button>
-                            <Button as-child variant="outline">
-                                <Link
-                                    :href="laboratoryIndex()"
-                                    target="_blank"
-                                    rel="noopener"
-                                >
-                                    Start 2025 Classic walkthrough
-                                </Link>
-                            </Button>
                         </div>
                         <p>
-                            Sample details only. Year and pricing stay
-                            unchanged. For the ₱3,975 guide scenario, open
-                            Classic in a new tab and follow its Citizen
-                            invitation.
+                            Fills blanks only. Year, fees, uploads and
+                            undertaking stay unchanged.
                         </p>
+                        <details v-if="labIntakeFixture" class="text-xs">
+                            <summary class="cursor-pointer font-semibold">
+                                Specimen details
+                            </summary>
+                            <p>
+                                {{ labIntakeFixture.source_reference }} ·
+                                {{ labIntakeFixture.source_business_category }}
+                            </p>
+                            <p>
+                                Business details only. Treasury assigns Lines of
+                                Business and fees separately.
+                            </p>
+                        </details>
                         <p v-if="walkthroughFillNotice" role="status">
                             {{ walkthroughFillNotice }}
                         </p>
@@ -1106,6 +1112,7 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                 <section
                     v-if="
                         labIntakeFixtures?.length &&
+                        !canFillExampleDetails &&
                         !isEditing &&
                         page.props.stakeholder_preview
                             ?.show_engineering_controls

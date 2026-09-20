@@ -75,7 +75,7 @@ test('safe preview configuration registers an intentional launcher without crede
         ->and(Receipt::query()->count())->toBe(0);
 });
 
-test('approved preview citizen receives the deterministic Ipil application helper while ordinary citizens do not', function () {
+test('preview citizens receive the specimen selector while disabled preview exposes no specimens', function () {
     Artisan::call('bpls:install');
     $this->seed(MunicipalFeeCatalogSeeder::class);
     $previewCitizen = User::query()
@@ -104,6 +104,17 @@ test('approved preview citizen receives the deterministic Ipil application helpe
             ->missing('labIntakeFixtures.0.fields.application_number'));
 
     $ordinaryCitizen = userWithRole(Role::query()->where('code', 'citizen')->sole());
+
+    $this->actingAs($ordinaryCitizen)
+        ->get(route('citizen.permit-applications.create'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('labIntakeFixtures', 1)
+            ->where('labIntakeFixtures.0.fixture_id', 'ipil-poblacion-retail-v1')
+            ->where('cleanroomIntake', null)
+            ->where('walkthroughExample', null));
+
+    config(['stakeholder_preview.mode' => false]);
 
     $this->actingAs($ordinaryCitizen)
         ->get(route('citizen.permit-applications.create'))

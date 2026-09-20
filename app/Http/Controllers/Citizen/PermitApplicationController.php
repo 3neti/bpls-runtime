@@ -20,7 +20,6 @@ use App\Actions\UpdateCitizenPermitApplicationDraft;
 use App\Enums\PermitApplicationStatus;
 use App\Enums\PermitApplicationType;
 use App\Enums\PermitClearanceStatus;
-use App\Enums\StakeholderPreviewPersona;
 use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Citizen\StorePermitApplicationRequest;
@@ -100,8 +99,7 @@ class PermitApplicationController extends Controller
             'registry' => $this->registryPayload($request),
             'cleanroomIntake' => $cleanroomIntake,
             'walkthroughExample' => $buildWalkthroughHelper->handle($cleanroom, $cleanroomIntake, $request->user()->id),
-            'labIntakeFixtures' => ! ($cleanroom?->isClassicLifecycleV1() ?? false) && ($cleanroom !== null
-                || $previewSafety->personaFor($request->user()) === StakeholderPreviewPersona::Citizen)
+            'labIntakeFixtures' => $previewSafety->isEnabled() && ! ($cleanroom?->isClassicLifecycleV1() ?? false)
                     ? $buildLabFixture->pool()
                     : [],
             'applicationDocumentTypes' => $documentTypeCatalog->options(),

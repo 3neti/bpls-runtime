@@ -77,6 +77,7 @@ test('ordinary example preserves entered fields and cannot populate fiscal or lo
         'allowed',
         transpile(`
         const canFillExampleDetails = { value: allowed };
+        const labIntakeFixture = { value: { fields: { business_name: 'Selected specimen', business_street: '117 Sample Market Road' }, lines: [{ line_of_business_id: 999 }] } };
         const walkthroughFilledControls = []; const filledControls = [];
         const walkthroughFilledCount = { value: 0 }; const walkthroughFillNotice = { value: '' };
         ${controls} ${handler}
@@ -107,8 +108,13 @@ test('ordinary example preserves entered fields and cannot populate fiscal or lo
     }
 
     assert.doesNotMatch(handler, /\.post\(|\.submit\(|fetch\(|replaceControl/);
-    assert.match(source, /:href="laboratoryIndex\(\)"/);
-    assert.match(source, /target="_blank"/);
+    assert.match(source, /id="ordinary-specimen"/);
+    assert.match(handler, /labIntakeFixture.value.fields/);
+    assert.doesNotMatch(
+        handler,
+        /fixture\.lines|activities\.value|loadedLabFixtureId/,
+    );
+    assert.doesNotMatch(source, /Start 2025 Classic walkthrough/);
 });
 
 test('walkthrough filling retains nonblank entries and zero, ignores hidden fields, and fills blanks', () => {
