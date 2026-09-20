@@ -112,6 +112,55 @@ const initial = [
         amount_cents: 10000,
     },
 ];
+test('row Remove requests a required-fee reset rather than deleting the Mayor item', () => {
+    const editor = readFileSync(
+        'resources/js/components/permit-applications/FinancialLineItemEditor.vue',
+        'utf8',
+    );
+    const handler = editor.slice(
+        editor.indexOf('function remove('),
+        editor.indexOf('function money('),
+    );
+    const events: unknown[][] = [];
+    const remove = new Function(
+        'props',
+        'emit',
+        'removeFinancialLineItem',
+        transpile(`${handler}; return remove;`),
+    )(
+        { resettableFeeId: 1, modelValue: initial },
+        (...args: unknown[]) => events.push(args),
+        () => {
+            throw new Error('Required fee must not be deleted');
+        },
+    );
+    remove(1);
+    assert.deepEqual(events, [['resetDetermination', 1]]);
+    const parent = readFileSync(
+        'resources/js/components/permit-applications/BploRoutingTaskSheet.vue',
+        'utf8',
+    );
+    const reset = parent.slice(
+        parent.indexOf('function removeTreasuryDetermination('),
+        parent.indexOf('function determineManualAmount('),
+    );
+    assert.match(reset, /fee.fee_rule_id !== feeId/);
+    assert.match(reset, /determineEnterprise\(selection, ''\)/);
+    assert.match(reset, /determinationRevisions/);
+    assert.equal((parent.match(/@reset-determination=/g) ?? []).length, 2);
+    const cleared = applyEnterpriseClassification(
+        applyManualTreasuryDetermination(initial, 1, {
+            amount_cents: 100000,
+            basis: 'Test',
+        }),
+        1,
+        schedule,
+        '',
+    );
+    assert.equal(cleared.length, initial.length);
+    assert.equal(cleared[0].resolution_status, 'unresolved');
+    assert.equal(financialLineItemsResolved(cleared), false);
+});
 test('Clear resets staged amount and basis, retains the required item and blocks Treasury confirmation', () => {
     const source = readFileSync(
         'resources/js/components/permit-applications/EnterpriseClassificationSelector.vue',

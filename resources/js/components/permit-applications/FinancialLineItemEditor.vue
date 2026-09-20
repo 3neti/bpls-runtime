@@ -16,8 +16,15 @@ import {
     upsertFinancialLineItem,
 } from '@/lib/financialLineItems';
 
-const props = defineProps<{ options: Option[]; modelValue: Item[] }>();
-const emit = defineEmits<{ 'update:modelValue': [items: Item[]] }>();
+const props = defineProps<{
+    options: Option[];
+    modelValue: Item[];
+    resettableFeeId?: number;
+}>();
+const emit = defineEmits<{
+    'update:modelValue': [items: Item[]];
+    resetDetermination: [id: number];
+}>();
 const selectedId = ref<number | null>(null);
 const amount = ref('');
 const amountError = ref<string | null>(null);
@@ -73,6 +80,12 @@ function add(): void {
 }
 
 function remove(id: number): void {
+    if (id === props.resettableFeeId) {
+        emit('resetDetermination', id);
+
+        return;
+    }
+
     emit('update:modelValue', removeFinancialLineItem(props.modelValue, id));
 }
 
@@ -185,10 +198,16 @@ function money(cents: number): string {
                     ><button
                         v-if="
                             item.resolution_status !== 'unresolved' &&
-                            !item.amount_locked
+                            (!item.amount_locked ||
+                                item.fee_rule_id === resettableFeeId)
                         "
                         type="button"
                         class="text-xs text-destructive"
+                        :title="
+                            item.fee_rule_id === resettableFeeId
+                                ? 'Remove amount for editing; this fee remains required'
+                                : undefined
+                        "
                         @click="remove(item.fee_rule_id)"
                     >
                         Remove

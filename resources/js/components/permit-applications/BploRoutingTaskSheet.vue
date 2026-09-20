@@ -251,6 +251,7 @@ const treasurySelections = ref<
         }[];
     }[]
 >([]);
+const determinationRevisions = reactive<Record<number, number>>({});
 const selectedTreasuryLob = ref<number | null>(null);
 const treasuryLobSearch = ref('');
 const treasuryPending = ref(false);
@@ -717,6 +718,21 @@ function actorLabel(name: string): string {
     return name.replace(/^Cleanroom\s+\S+\s+/, '');
 }
 
+function removeTreasuryDetermination(
+    selection: (typeof treasurySelections.value)[number],
+    feeId: number,
+): void {
+    const fee = enterpriseFee(selection.line_of_business_id);
+
+    if (!fee || fee.fee_rule_id !== feeId) {
+        return;
+    }
+
+    determineEnterprise(selection, '');
+    determinationRevisions[selection.line_of_business_id] =
+        (determinationRevisions[selection.line_of_business_id] ?? 0) + 1;
+}
+
 function determineManualAmount(
     selection: (typeof treasurySelections.value)[number],
     determination: ManualTreasuryDetermination | null,
@@ -1140,6 +1156,7 @@ const filteredTreasuryLobOptions = computed(() => {
                                 </button>
                             </div>
                             <EnterpriseClassificationSelector
+                                :key="`${selection.line_of_business_id}:${determinationRevisions[selection.line_of_business_id] ?? 0}`"
                                 @manual="
                                     determineManualAmount(selection, $event)
                                 "
@@ -1161,6 +1178,16 @@ const filteredTreasuryLobOptions = computed(() => {
                             />
                             <FinancialLineItemEditor
                                 v-model="selection.items"
+                                :resettable-fee-id="
+                                    enterpriseFee(selection.line_of_business_id)
+                                        ?.fee_rule_id
+                                "
+                                @reset-determination="
+                                    removeTreasuryDetermination(
+                                        selection,
+                                        $event,
+                                    )
+                                "
                                 :options="
                                     treasuryFeeOptions(
                                         selection.line_of_business_id,
@@ -2005,6 +2032,7 @@ const filteredTreasuryLobOptions = computed(() => {
                             </button>
                         </div>
                         <EnterpriseClassificationSelector
+                            :key="`${selection.line_of_business_id}:${determinationRevisions[selection.line_of_business_id] ?? 0}`"
                             @manual="determineManualAmount(selection, $event)"
                             v-if="
                                 enterpriseFee(selection.line_of_business_id)
@@ -2023,6 +2051,13 @@ const filteredTreasuryLobOptions = computed(() => {
                         />
                         <FinancialLineItemEditor
                             v-model="selection.items"
+                            :resettable-fee-id="
+                                enterpriseFee(selection.line_of_business_id)
+                                    ?.fee_rule_id
+                            "
+                            @reset-determination="
+                                removeTreasuryDetermination(selection, $event)
+                            "
                             :options="
                                 treasuryFeeOptions(
                                     selection.line_of_business_id,

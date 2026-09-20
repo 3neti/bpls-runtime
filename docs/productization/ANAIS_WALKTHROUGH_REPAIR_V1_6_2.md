@@ -69,6 +69,13 @@ Implementation and bounded local acceptance are complete. Commit this repair bra
 
 ### Existing recovery locations
 
+### Row-level Remove for editing — owner clarification
+
+- Added Remove beside the resolved Mayor fee amount in both Treasury layouts. For this required fee it emits a reset, clears staged manual/classification evidence and remounts the entry controls blank. The row remains TBD and confirmation is blocked until a replacement determination; no waiver, deletion or saved-record modification.
+- Ordinary item removal is unchanged. Only the explicitly identified enterprise fee receives reset behavior; other locked fees remain protected.
+- Fourteen focused frontend tests, TypeScript, ESLint, Prettier and build passed. New test executes row removal and verifies a reset event rather than item deletion, plus retained unresolved item/readiness. No new live browser or lifecycle claim. Local only; user tabs and persisted Application39 unchanged.
+
+
 ### Clear staged Mayor determination — follow-up
 
 - Added owner-requested Clear beside Confirm amount. Resets amount/basis/staged flag and invokes the existing null-determination handler; required fee remains TBD and Treasury confirmation is disabled. No saved determination or database record is deleted.
