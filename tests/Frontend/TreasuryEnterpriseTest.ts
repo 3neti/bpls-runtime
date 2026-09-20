@@ -112,7 +112,7 @@ const initial = [
         amount_cents: 10000,
     },
 ];
-test('row Remove requests a required-fee reset rather than deleting the Mayor item', () => {
+test('row Clear requests a required-fee reset rather than deleting the Mayor item', () => {
     const editor = readFileSync(
         'resources/js/components/permit-applications/FinancialLineItemEditor.vue',
         'utf8',
@@ -136,6 +136,9 @@ test('row Remove requests a required-fee reset rather than deleting the Mayor it
     );
     remove(1);
     assert.deepEqual(events, [['resetDetermination', 1]]);
+    assert.match(editor, /\?\s*'Clear'\s*:\s*'Remove'/);
+    assert.match(editor, /\? 'Amount required'/);
+    assert.match(editor, /item.fee_rule_id !== resettableFeeId/);
     const parent = readFileSync(
         'resources/js/components/permit-applications/BploRoutingTaskSheet.vue',
         'utf8',

@@ -69,6 +69,12 @@ Implementation and bounded local acceptance are complete. Commit this repair bra
 
 ### Existing recovery locations
 
+### Final row wording — Clear / Amount required
+
+- Owner corrected the editing label back to Clear. Required Mayor fee now displays Clear when resolved and Amount required when unresolved; duplicate technical TBD explanation is suppressed for that row. Other fee Remove buttons and unresolved labels are unchanged. Reset behavior and all server gates unchanged.
+- Fourteen focused frontend tests passed, including Clear event/reset and wording assertions. No application mutation or Cloud deployment. No additional live browser/lifecycle claim for this wording-only adjustment.
+
+
 ### Row-level Remove for editing — owner clarification
 
 - Added Remove beside the resolved Mayor fee amount in both Treasury layouts. For this required fee it emits a reset, clears staged manual/classification evidence and remounts the entry controls blank. The row remains TBD and confirmation is blocked until a replacement determination; no waiver, deletion or saved-record modification.

@@ -185,14 +185,21 @@ function money(cents: number): string {
             >
                 <span class="min-w-0 flex-1 basis-40 break-words"
                     >{{ item.name
-                    }}<span v-if="item.resolution_status === 'unresolved'">
+                    }}<span
+                        v-if="
+                            item.resolution_status === 'unresolved' &&
+                            item.fee_rule_id !== resettableFeeId
+                        "
+                    >
                         — {{ item.resolution_message }}</span
                     ></span
                 >
                 <span class="flex min-w-0 flex-wrap items-center gap-3"
                     ><strong>{{
                         item.resolution_status === 'unresolved'
-                            ? 'TBD'
+                            ? item.fee_rule_id === resettableFeeId
+                                ? 'Amount required'
+                                : 'TBD'
                             : money(item.amount_cents)
                     }}</strong
                     ><button
@@ -205,12 +212,16 @@ function money(cents: number): string {
                         class="text-xs text-destructive"
                         :title="
                             item.fee_rule_id === resettableFeeId
-                                ? 'Remove amount for editing; this fee remains required'
+                                ? 'Clear amount for editing; this fee remains required'
                                 : undefined
                         "
                         @click="remove(item.fee_rule_id)"
                     >
-                        Remove
+                        {{
+                            item.fee_rule_id === resettableFeeId
+                                ? 'Clear'
+                                : 'Remove'
+                        }}
                     </button></span
                 >
             </div>
