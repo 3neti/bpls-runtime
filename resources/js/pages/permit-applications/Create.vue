@@ -25,6 +25,7 @@ import {
     submit as citizenSubmit,
     update as citizenUpdate,
 } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
+import { index as laboratoryIndex } from '@/actions/App/Http/Controllers/LifecycleLaboratoryController';
 import {
     index as staffIndex,
     store as staffStore,
@@ -174,6 +175,53 @@ const usesStagedCitizenIntake = computed(
 );
 const isEditing = computed(() => props.draft !== undefined);
 const walkthroughFillNotice = ref('');
+const canFillExampleDetails = computed(
+    () =>
+        isCitizen.value &&
+        !isEditing.value &&
+        !props.cleanroomIntake &&
+        !props.walkthroughExample &&
+        selectedType.value === 'new' &&
+        page.props.stakeholder_preview?.enabled === true,
+);
+function fillExampleDetails(event: MouseEvent): void {
+    if (!canFillExampleDetails.value) {
+        return;
+    }
+
+    const form = (event.currentTarget as HTMLElement).closest('form');
+
+    if (!form) {
+        return;
+    }
+
+    const example = {
+        business_name: 'IPIL SAMPLE FISH STORE',
+        business_activity_description: 'Retail sale of fresh fish and seafood.',
+        business_street: '117 Sample Market Road',
+        business_city_municipality: 'Ipil',
+        business_province: 'Zamboanga Sibugay',
+        owner_first_name: 'Sample',
+        owner_last_name: 'Applicant',
+        owner_street: '117 Sample Market Road',
+        owner_barangay: 'Don Andres',
+        owner_city_municipality: 'Ipil',
+        owner_province: 'Zamboanga Sibugay',
+        business_area_square_meters: 20,
+        male_employee_count: 1,
+        female_employee_count: 0,
+        total_employee_count: 1,
+        employees_residing_in_lgu: 1,
+    };
+
+    for (const [name, value] of Object.entries(example)) {
+        fillEmptyControl(form, name, value, walkthroughFilledControls);
+    }
+
+    walkthroughFilledCount.value = walkthroughFilledControls.length;
+    walkthroughFillNotice.value =
+        'Sample details filled into blanks only. Review all fields before Save Draft.';
+}
 const walkthroughFilledCount = ref(0);
 let walkthroughFilledControls: FilledControl[] = [];
 const displayedApplicationYear = computed(
@@ -988,6 +1036,43 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             Upload your document, accept the Oath and sign after
                             saving the draft. Fees follow the separately bound
                             historical replay; this helper does not change them.
+                        </p>
+                        <p v-if="walkthroughFillNotice" role="status">
+                            {{ walkthroughFillNotice }}
+                        </p>
+                    </template>
+                    <template v-else-if="canFillExampleDetails">
+                        <div class="flex flex-wrap gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                @click="fillExampleDetails"
+                            >
+                                Fill example details
+                            </Button>
+                            <Button
+                                v-if="walkthroughFilledCount"
+                                type="button"
+                                variant="outline"
+                                @click="clearWalkthroughExample"
+                            >
+                                Clear helper values
+                            </Button>
+                            <Button as-child variant="outline">
+                                <Link
+                                    :href="laboratoryIndex()"
+                                    target="_blank"
+                                    rel="noopener"
+                                >
+                                    Start 2025 Classic walkthrough
+                                </Link>
+                            </Button>
+                        </div>
+                        <p>
+                            Sample details only. Year and pricing stay
+                            unchanged. For the ₱3,975 guide scenario, open
+                            Classic in a new tab and follow its Citizen
+                            invitation.
                         </p>
                         <p v-if="walkthroughFillNotice" role="status">
                             {{ walkthroughFillNotice }}

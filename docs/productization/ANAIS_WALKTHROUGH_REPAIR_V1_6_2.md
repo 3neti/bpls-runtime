@@ -61,6 +61,14 @@ Implementation and bounded local acceptance are complete. Commit this repair bra
 
 ### Recovery pointers (internal, not officer instructions)
 
+### Ordinary Citizen example helper — 20 September follow-up
+
+- Owner requested direct pre-fill access on the ordinary Citizen create page. Added preview-only, fresh New application `Fill example details` and a separate `Start 2025 Classic walkthrough` link opening the laboratory in a new tab.
+- Uses the existing blank-only fill and edit-preserving clear implementation. No year, transaction type, run binding, fees, upload, undertaking or signature is assigned. Existing exact Classic helper and server-side pricing restrictions are unchanged; no PHP/domain changes or database mutation.
+- Six focused frontend/helper/draft-hydration tests, TypeScript, changed-file ESLint, Prettier and build passed. Chrome verified both controls on the ordinary 2026 form, fill into blank fields, retained owner values, unchanged year, and clear preserving an edited Street. No Save Draft or lodging clicked; no new application created. No full lifecycle rerun or Cloud deployment claimed.
+
+### Existing recovery locations
+
 - Worktree: `/Users/rli/Documents/Codex/2026-09-07/referenced-chatgpt-conversation-this-is-an-2/work/bpls-anais-walkthrough-repair`.
 - Private Markdown: parent task `outputs/Ipil Business Permit System - Complete Walkthrough and Acceptance Guide - Version 1.6.2.md`.
 - Private PDF: parent task `output/pdf/Ipil Business Permit System - Complete Walkthrough and Acceptance Guide - Version 1.6.2 - Monograph.pdf`.

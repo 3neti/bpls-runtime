@@ -29,6 +29,88 @@ class Input {
 class Select extends Input {}
 class Textarea extends Input {}
 
+test('ordinary example is limited to fresh preview Citizen new applications', () => {
+    const guard = source.slice(
+        source.indexOf('const canFillExampleDetails ='),
+        source.indexOf('function fillExampleDetails('),
+    );
+    const enabled = new Function(
+        'isCitizen',
+        'isEditing',
+        'props',
+        'selectedType',
+        'page',
+        `const computed = (getter) => getter; ${guard}; return canFillExampleDetails();`,
+    );
+    const evaluate = (
+        citizen = true,
+        editing = false,
+        props = {},
+        type = 'new',
+        preview = true,
+    ) =>
+        enabled(
+            { value: citizen },
+            { value: editing },
+            props,
+            { value: type },
+            { props: { stakeholder_preview: { enabled: preview } } },
+        );
+    assert.equal(evaluate(), true);
+    assert.equal(evaluate(false), false);
+    assert.equal(evaluate(true, true), false);
+    assert.equal(evaluate(true, false, { cleanroomIntake: {} }), false);
+    assert.equal(evaluate(true, false, { walkthroughExample: {} }), false);
+    assert.equal(evaluate(true, false, {}, 'renewal'), false);
+    assert.equal(evaluate(true, false, {}, 'new', false), false);
+});
+
+test('ordinary example preserves entered fields and cannot populate fiscal or lodging controls', () => {
+    const handler = source.slice(
+        source.indexOf('function fillExampleDetails('),
+        source.indexOf('const walkthroughFilledCount'),
+    );
+    const run = new Function(
+        'HTMLInputElement',
+        'HTMLSelectElement',
+        'HTMLTextAreaElement',
+        'allowed',
+        transpile(`
+        const canFillExampleDetails = { value: allowed };
+        const walkthroughFilledControls = []; const filledControls = [];
+        const walkthroughFilledCount = { value: 0 }; const walkthroughFillNotice = { value: '' };
+        ${controls} ${handler}
+        return fillExampleDetails;
+    `),
+    );
+    const business = new Input('business_name', 'My real entry');
+    const street = new Input('business_street', '');
+    const protectedNames = [
+        'application_year',
+        'type',
+        'lifecycle_cleanroom_run_id',
+        'undertaking_accepted',
+        'signature',
+        'mayors_permit_fee',
+    ];
+    const protectedControls = protectedNames.map((name) => new Input(name, ''));
+    const form = { elements: [business, street, ...protectedControls] };
+    const event = { currentTarget: { closest: () => form } };
+    run(Input, Select, Textarea, false)(event);
+    assert.equal(street.value, '');
+    run(Input, Select, Textarea, true)(event);
+    assert.equal(business.value, 'My real entry');
+    assert.equal(street.value, '117 Sample Market Road');
+
+    for (const control of protectedControls) {
+        assert.equal(control.value, '');
+    }
+
+    assert.doesNotMatch(handler, /\.post\(|\.submit\(|fetch\(|replaceControl/);
+    assert.match(source, /:href="laboratoryIndex\(\)"/);
+    assert.match(source, /target="_blank"/);
+});
+
 test('walkthrough filling retains nonblank entries and zero, ignores hidden fields, and fills blanks', () => {
     const fill = new Function(
         'HTMLInputElement',
