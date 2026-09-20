@@ -34,7 +34,7 @@ export function treasuryConfirmationReason(
         )
     ) {
         reasons.push(
-            'Choose Enterprise Classification only for each selected LOB that shows a provisional UAT schedule and has an established test basis. This is separate from the official Line of Business and the applicant’s activity description.',
+            'Choose Enterprise Classification only from the displayed provisional UAT schedule, using an established test basis—not a target amount. It is separate from the Line of Business. Without that basis, ask the authorized municipal official to confirm the classification. The required fee cannot be removed or manually priced.',
         );
     }
 
@@ -52,7 +52,7 @@ export function treasuryConfirmationReason(
 
     if (unresolved.length > 0) {
         reasons.push(
-            `Pricing determination required: ${unresolved.map((item) => `${item.name} (${item.code})${item.resolution_message ? ' — ' + item.resolution_message : ''}`).join('; ')}. No authorized pricing determination is available for these unresolved items in this screen. Stop for municipal policy/configuration review; do not enter, remove or override an amount.`,
+            `Pricing determination required: ${unresolved.map((item) => `${item.name} (${item.code})${item.resolution_message ? ' — ' + item.resolution_message : ''}`).join('; ')}. No authorized pricing determination is available here. Ask the authorized municipal official to confirm the applicable fee basis, then have the administrator verify its configuration. Required fees cannot be deleted to bypass pricing. Stop for municipal policy/configuration review; do not enter, remove or override an amount.`,
         );
     }
 

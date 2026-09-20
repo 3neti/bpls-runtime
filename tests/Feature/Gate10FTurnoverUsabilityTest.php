@@ -20,3 +20,15 @@ test('disabled Treasury confirmation states its actionable prerequisite', functi
         ->toContain('data-testid="treasury-confirm-reason"')
         ->toContain('{{ treasuryConfirmReason }}');
 });
+
+test('Treasury walkthrough reference is conditional and names exact replay instead of general pricing authority', function () {
+    $source = file_get_contents(resource_path('js/components/permit-applications/BploRoutingTaskSheet.vue'));
+
+    expect($source)
+        ->toContain('v-if="task.financial_editor.classic_walkthrough_reference"')
+        ->toContain('data-testid="classic-treasury-reference"')
+        ->toContain('IPIL-LEGACY-5F028B76EEBEF485')
+        ->toContain('Enterprise Classification is not required.')
+        ->toContain('data-testid="treasury-walkthrough-scenario-note"')
+        ->toContain('change its year to bypass a missing determination');
+});

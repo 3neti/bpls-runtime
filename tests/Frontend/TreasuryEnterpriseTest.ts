@@ -4,8 +4,8 @@ import { test } from 'node:test';
 import { compile } from '@vue/compiler-dom';
 import { parse } from '@vue/compiler-sfc';
 import { renderToString } from '@vue/server-renderer';
-import * as Vue from 'vue';
 import { transpile } from 'typescript';
+import * as Vue from 'vue';
 import {
     financialLineItemSubtotal,
     financialLineItemsResolved,
@@ -141,6 +141,9 @@ test('mixed LOB guidance retains a separate policy stop and distinct same-name r
     assert.match(reason, /policy-a.*No admitted rule/);
     assert.match(reason, /policy-b.*Authority missing/);
     assert.match(reason, /No authorized pricing determination/);
+    assert.match(reason, /authorized municipal official/);
+    assert.match(reason, /Required fees cannot be deleted to bypass pricing/);
+    assert.match(reason, /not a target amount/);
     assert.match(reason, /do not enter, remove or override/);
     const selected = treasuryConfirmationReason(
         [
@@ -211,6 +214,7 @@ test('selector displays supplied band amounts without claiming municipal policy'
             }),
         }),
     );
+
     for (const [classification, amount] of Object.entries(schedule.bands)) {
         assert.ok(
             html.includes(
@@ -218,6 +222,7 @@ test('selector displays supplied band amounts without claiming municipal policy'
             ),
         );
     }
+
     assert.match(html, /NOT MUNICIPAL POLICY/);
     assert.match(html, /<option value(?:="")?>Choose classification<\/option>/);
 });

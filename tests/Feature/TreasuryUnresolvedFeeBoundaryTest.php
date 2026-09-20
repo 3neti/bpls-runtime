@@ -5,6 +5,7 @@ use App\Actions\BuildBploRoutingTask;
 use App\Assessment\TreasuryFeeResolution;
 use App\Enums\UserPermission;
 use App\Models\FeeRule;
+use App\Models\LifecycleCleanroomRun;
 use App\Models\PermitApplication;
 use App\Models\PermitApplicationDeclaration;
 use App\Models\SignatureEvidence;
@@ -65,3 +66,72 @@ test('a resolved zero is distinct from legacy unresolved and ordinary 2025 gets 
     expect(app(TreasuryFeeResolution::class)->unresolved($resolved, $application))->toBeFalse()
         ->and(app(TreasuryFeeResolution::class)->unresolved($unresolved, $application))->toBeTrue();
 });
+
+test('Classic Treasury reference requires the existing exact historical replay binding', function (string $brokenBinding): void {
+    $fee = FeeRule::factory()->create([
+        'code' => 'IPIL-LEGACY-5F028B76EEBEF485',
+        'basis' => 'legacy_unresolved',
+        'effective_from' => '2025-01-01',
+    ]);
+    $run = LifecycleCleanroomRun::factory()->create([
+        'actor_manifest' => [
+            'ceremony' => LifecycleCleanroomRun::CeremonyClassicLifecycleV1,
+            'semantic_classification' => 'synthetic_only',
+            'production_liability' => false,
+            'source_specimen' => ['id' => LifecycleCleanroomRun::SourceSpecimenCal2026001New2025],
+        ],
+    ]);
+    $metadata = [
+        'lifecycle_cleanroom' => [
+            'ceremony' => LifecycleCleanroomRun::CeremonyClassicLifecycleV1,
+            'run_id' => $run->public_id,
+            'scenario_id' => 'classic-reference-test',
+            'semantic_classification' => 'synthetic_only',
+            'production_liability' => false,
+            'source_specimen' => ['id' => LifecycleCleanroomRun::SourceSpecimenCal2026001New2025],
+        ],
+        'business_permit_evaluation' => [
+            'cleanroom_run_id' => $run->public_id,
+            'scenario_id' => 'classic-reference-test',
+            'semantic_classification' => 'provisional_uat',
+            'production_liability' => false,
+        ],
+    ];
+    if (str_starts_with($brokenBinding, 'metadata:')) {
+        data_set($metadata, substr($brokenBinding, 9), 'invalid');
+    }
+    $application = PermitApplication::factory()->create([
+        'application_year' => $brokenBinding === 'year' ? 2026 : 2025,
+        'type' => 'new',
+        'metadata' => $metadata,
+    ]);
+    $run->update(['new_application_id' => $brokenBinding === 'application' ? null : $application->id]);
+    if (str_starts_with($brokenBinding, 'manifest:')) {
+        $manifest = $run->actor_manifest;
+        data_set($manifest, substr($brokenBinding, 9), 'invalid');
+        $run->update(['actor_manifest' => $manifest]);
+    }
+    if ($brokenBinding === 'fee') {
+        $fee->update(['code' => 'OTHER-FEE']);
+    }
+
+    $before = $application->fresh()->toJson();
+    $editor = app(BuildBploRoutingTask::class)->handle($application, null)->financial_editor;
+
+    expect($editor['classic_walkthrough_reference'])->toBe($brokenBinding === 'none')
+        ->and($application->fresh()->toJson())->toBe($before)
+        ->and($application->treasuryLineOfBusinessAssignments()->count())->toBe(0);
+})->with([
+    'none', 'year', 'application', 'fee',
+    'metadata:lifecycle_cleanroom.ceremony',
+    'metadata:lifecycle_cleanroom.run_id',
+    'metadata:lifecycle_cleanroom.scenario_id',
+    'metadata:lifecycle_cleanroom.source_specimen.id',
+    'metadata:lifecycle_cleanroom.semantic_classification',
+    'metadata:lifecycle_cleanroom.production_liability',
+    'metadata:business_permit_evaluation.semantic_classification',
+    'metadata:business_permit_evaluation.production_liability',
+    'manifest:source_specimen.id',
+    'manifest:semantic_classification',
+    'manifest:production_liability',
+]);

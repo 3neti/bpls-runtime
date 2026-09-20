@@ -150,6 +150,7 @@ type BploRoutingTask = {
             timestamp_statement: string;
             warning: string;
         } | null;
+        classic_walkthrough_reference?: boolean;
         line_of_business_options: {
             id: number;
             code: string;
@@ -909,6 +910,39 @@ const filteredTreasuryLobOptions = computed(() => {
                         Business.
                     </p>
                 </div>
+
+                <aside
+                    v-if="task.financial_editor.classic_walkthrough_reference"
+                    class="grid min-w-0 gap-2 rounded-lg border bg-background p-3 text-sm break-words"
+                    data-testid="classic-treasury-reference"
+                    aria-label="2025 Classic walkthrough reference"
+                >
+                    <strong>2025 New · Classic walkthrough reference</strong>
+                    <p>Line of Business: REC- Fresh Fish Retailer</p>
+                    <p>
+                        Laminated ID ₱25 · Occupation Fee ₱100 · Mayor’s Permit
+                        Fee ₱1,000
+                    </p>
+                    <p>
+                        Expected Treasury subtotal ₱1,125 · Office Payment
+                        Orders ₱2,850 · Assessment ₱3,975
+                    </p>
+                    <p class="text-xs text-muted-foreground">
+                        Mayor’s Permit: IPIL-LEGACY-5F028B76EEBEF485.
+                        Source-observed amount for this bound historical replay
+                        only. Enterprise Classification is not required.
+                    </p>
+                </aside>
+                <p
+                    v-else
+                    class="text-xs text-muted-foreground"
+                    data-testid="treasury-walkthrough-scenario-note"
+                >
+                    Following the walkthrough? It requires a bound 2025 New
+                    Classic application. This application uses its own year and
+                    pricing requirements; do not copy the walkthrough’s ₱1,000
+                    fee or change its year to bypass a missing determination.
+                </p>
 
                 <div
                     class="min-w-0 rounded-lg border bg-background p-4 break-words"

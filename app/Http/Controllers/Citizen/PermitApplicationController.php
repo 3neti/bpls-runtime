@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Citizen;
 
 use App\Actions\BuildCitizenPermitApplicationLabFixture;
+use App\Actions\BuildClassicWalkthroughHelper;
 use App\Actions\BuildExecutablePermitApplicationDocument;
 use App\Actions\BuildLifecycleCleanroomIntake;
 use App\Actions\BuildPermitApplicationTimeline;
@@ -71,6 +72,7 @@ class PermitApplicationController extends Controller
         BuildCitizenPermitApplicationLabFixture $buildLabFixture,
         StakeholderPreviewSafety $previewSafety,
         ApplicationDocumentTypeCatalog $documentTypeCatalog,
+        BuildClassicWalkthroughHelper $buildWalkthroughHelper,
     ): Response {
         Gate::authorize(UserPermission::CreateOwnPermitApplications->value);
         $cleanroom = $resolveCleanroomIntake->handle($request);
@@ -97,7 +99,8 @@ class PermitApplicationController extends Controller
             ],
             'registry' => $this->registryPayload($request),
             'cleanroomIntake' => $cleanroomIntake,
-            'labIntakeFixtures' => ($cleanroom !== null
+            'walkthroughExample' => $buildWalkthroughHelper->handle($cleanroom, $cleanroomIntake, $request->user()->id),
+            'labIntakeFixtures' => ! ($cleanroom?->isClassicLifecycleV1() ?? false) && ($cleanroom !== null
                 || $previewSafety->personaFor($request->user()) === StakeholderPreviewPersona::Citizen)
                     ? $buildLabFixture->pool()
                     : [],

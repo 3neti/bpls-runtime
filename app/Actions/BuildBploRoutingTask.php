@@ -11,6 +11,7 @@ use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCategory;
 use App\Enums\UserPermission;
 use App\Models\FeeRule;
+use App\Models\LifecycleCleanroomRun;
 use App\Models\LineOfBusiness;
 use App\Models\MenroFeeDetermination;
 use App\Models\PermitApplication;
@@ -178,8 +179,14 @@ class BuildBploRoutingTask
             ->filter(fn (FeeRule $fee): bool => $this->appliesToApplicationType($fee, $application));
         $treasuryFeesByLineOfBusinessId = $this->treasuryFeesByLineOfBusinessId($catalogFees);
         $offices = collect($this->concernedOffices->items());
+        $replayFee = $catalogFees->firstWhere('code', 'IPIL-LEGACY-5F028B76EEBEF485');
 
         return [
+            'classic_walkthrough_reference' => $replayFee instanceof FeeRule
+                && $replayFee->basis === 'legacy_unresolved'
+                && $application->type->value === 'new'
+                && data_get($application->metadata, 'lifecycle_cleanroom.ceremony') === LifecycleCleanroomRun::CeremonyClassicLifecycleV1
+                && ! $this->treasuryFeeResolution->unresolved($replayFee, $application),
             'catalog_status' => $this->concernedOffices->provenance()['production_catalog_status'],
             'menro_determination' => $menroDetermination instanceof MenroFeeDetermination ? [
                 'id' => $menroDetermination->id,

@@ -161,6 +161,7 @@ const props = defineProps<{
     registry?: Registry;
     draft?: Draft;
     cleanroomIntake?: CleanroomIntake | null;
+    walkthroughExample?: Record<string, string | number> | null;
     labIntakeFixtures?: LabIntakeFixture[];
     applicationDocumentTypes?: ApplicationDocumentType[];
     canSubmit?: boolean;
@@ -172,6 +173,65 @@ const usesStagedCitizenIntake = computed(
     () => props.cleanroomIntake?.staged_citizen_intake === true,
 );
 const isEditing = computed(() => props.draft !== undefined);
+const walkthroughFillNotice = ref('');
+const walkthroughFilledCount = ref(0);
+let walkthroughFilledControls: FilledControl[] = [];
+const displayedApplicationYear = computed(
+    () =>
+        props.draft?.application_year ??
+        props.cleanroomIntake?.application_year ??
+        props.currentApplicationYear,
+);
+function fillWalkthroughExample(event: MouseEvent): void {
+    if (!props.walkthroughExample || isEditing.value || !isCitizen.value) {
+        return;
+    }
+
+    const form = (event.currentTarget as HTMLElement).closest('form');
+
+    if (!form) {
+        return;
+    }
+
+    const before = walkthroughFilledControls.length;
+
+    for (const [name, value] of Object.entries(props.walkthroughExample)) {
+        fillEmptyControl(form, name, value, walkthroughFilledControls);
+    }
+
+    walkthroughFillNotice.value =
+        walkthroughFilledControls.length > before
+            ? 'Blank fields filled. Your entries are unchanged. Review, then Save Draft.'
+            : 'No blank matching fields. Your entries are unchanged.';
+    walkthroughFilledCount.value = walkthroughFilledControls.length;
+}
+function clearWalkthroughExample(): void {
+    for (const snapshot of [...walkthroughFilledControls].reverse()) {
+        const control = snapshot.control;
+
+        if (control instanceof HTMLInputElement && control.type === 'radio') {
+            if (control.checked !== snapshot.assignedChecked) {
+                continue;
+            }
+
+            control.checked = snapshot.previousChecked;
+        } else {
+            if (control.value !== snapshot.assignedValue) {
+                continue;
+            }
+
+            control.value = snapshot.previousValue;
+        }
+
+        control.dispatchEvent(new Event('input', { bubbles: true }));
+        control.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    walkthroughFilledControls = [];
+    walkthroughFilledCount.value = 0;
+    walkthroughFillNotice.value =
+        'Unchanged helper values cleared. Your edits are retained.';
+}
 const savesCitizenDraft = computed(
     () =>
         isCitizen.value &&
@@ -391,6 +451,7 @@ function fillEmptyControl(
     form: HTMLFormElement,
     name: string,
     value: boolean | number | string | null | undefined,
+    snapshots: FilledControl[] = filledControls,
 ): void {
     if (value === null || value === undefined) {
         return;
@@ -420,7 +481,7 @@ function fillEmptyControl(
             return;
         }
 
-        filledControls.push({
+        snapshots.push({
             control: selected,
             assignedChecked: true,
             assignedValue: selected.value,
@@ -452,7 +513,7 @@ function fillEmptyControl(
     control.dispatchEvent(new Event('input', { bubbles: true }));
     control.dispatchEvent(new Event('change', { bubbles: true }));
     snapshot.assignedValue = control.value;
-    filledControls.push(snapshot);
+    snapshots.push(snapshot);
 }
 function replaceControl(
     form: HTMLFormElement,
@@ -891,6 +952,60 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                     :value="draft.business_id"
                 />
 
+                <section
+                    v-if="isCitizen && page.props.stakeholder_preview?.enabled"
+                    class="grid gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100"
+                    data-testid="walkthrough-scenario-preflight"
+                >
+                    <strong
+                        >{{ displayedApplicationYear }} ·
+                        {{ draft?.type ?? selectedType }}
+                        <template v-if="walkthroughExample">
+                            · Classic walkthrough</template
+                        >
+                    </strong>
+                    <template v-if="walkthroughExample && !isEditing">
+                        <p>
+                            2025 New · Classic walkthrough. Fill blanks only;
+                            review all values before saving.
+                        </p>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            class="w-fit max-w-full"
+                            @click="fillWalkthroughExample"
+                            >Fill walkthrough example</Button
+                        >
+                        <Button
+                            v-if="walkthroughFilledCount"
+                            type="button"
+                            variant="outline"
+                            class="w-fit max-w-full"
+                            @click="clearWalkthroughExample"
+                            >Clear helper values</Button
+                        >
+                        <p>
+                            Upload your document, accept the Oath and sign after
+                            saving the draft. Fees follow the separately bound
+                            historical replay; this helper does not change them.
+                        </p>
+                        <p v-if="walkthroughFillNotice" role="status">
+                            {{ walkthroughFillNotice }}
+                        </p>
+                    </template>
+                    <p v-else-if="!isEditing">
+                        Following the guide? Start through the Classic
+                        Laboratory invitation for the 2025 New walkthrough, not
+                        ordinary New Application. Pricing depends on the actual
+                        scenario.
+                    </p>
+                    <p v-else>
+                        Before Sign &amp; Submit: the guide requires 2025 New,
+                        started through a Classic invitation. If this differs,
+                        keep this draft and ask BPLO for the correct starting
+                        path; do not change its year to match the guide.
+                    </p>
+                </section>
                 <section
                     v-if="
                         cleanroomIntake &&

@@ -144,6 +144,11 @@ test('classic ceremony records normal Citizen and BPLO login inbox Application a
             ->component('permit-applications/Create')
             ->where('cleanroomIntake.ceremony', LifecycleCleanroomRun::CeremonyClassicLifecycleV1)
             ->where('cleanroomIntake.staged_citizen_intake', true)
+            ->where('walkthroughExample.total_employee_count', 1)
+            ->where('labIntakeFixtures', [])
+            ->missing('walkthroughExample.undertaking_accepted')
+            ->missing('walkthroughExample.application_year')
+            ->missing('walkthroughExample.lines')
             ->where('cleanroomIntake.run_id', $run->public_id));
     $this->post(route('citizen.permit-applications.store'), [
         ...$intake,
