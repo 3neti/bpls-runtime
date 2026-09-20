@@ -12,6 +12,8 @@ import {
 } from '../../resources/js/lib/financialLineItems.ts';
 import {
     applyEnterpriseClassification,
+    applyManualTreasuryDetermination,
+    manualTreasuryDetermination,
     treasuryConfirmationReason,
 } from '../../resources/js/lib/treasuryEnterprise.ts';
 
@@ -110,6 +112,60 @@ const initial = [
         amount_cents: 10000,
     },
 ];
+test('manual test amount requires exact positive centavos and a basis; editing returns the item to TBD', () => {
+    for (const value of [
+        '',
+        '0',
+        '-1',
+        '1.001',
+        '1e3',
+        'Infinity',
+        '10000000.01',
+    ]) {
+        assert.equal(
+            manualTreasuryDetermination(value, 'Test authority'),
+            null,
+        );
+    }
+
+    assert.equal(manualTreasuryDetermination('1000', ' '), null);
+    const determination = manualTreasuryDetermination(
+        '1000.00',
+        ' Owner-authorized test ',
+    );
+    assert.deepEqual(determination, {
+        amount_cents: 100000,
+        basis: 'Owner-authorized test',
+    });
+    const selected = applyManualTreasuryDetermination(
+        initial,
+        1,
+        determination,
+    );
+    assert.equal(financialLineItemSubtotal(selected), 112500);
+    assert.equal(financialLineItemsResolved(selected), true);
+    assert.equal(selected[0].amount_locked, true);
+    assert.equal(selected[1], initial[1]);
+    assert.equal(
+        treasuryConfirmationReason(
+            [
+                {
+                    items: selected,
+                    requiresEnterpriseClassification: true,
+                    manualDetermination: true,
+                },
+            ],
+            false,
+        ),
+        '',
+    );
+    assert.equal(
+        financialLineItemsResolved(
+            applyManualTreasuryDetermination(selected, 1, null),
+        ),
+        false,
+    );
+});
 test('mixed LOB guidance retains a separate policy stop and distinct same-name rule identities', () => {
     const reason = treasuryConfirmationReason(
         [
@@ -206,6 +262,7 @@ test('selector displays supplied band amounts without claiming municipal policy'
                 schedule,
                 modelValue: '',
                 emit: () => {},
+                chooseClassification: () => {},
                 money: (amount: number) =>
                     new Intl.NumberFormat('en-PH', {
                         style: 'currency',

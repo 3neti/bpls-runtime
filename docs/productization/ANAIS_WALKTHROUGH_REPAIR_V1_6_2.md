@@ -69,6 +69,16 @@ Implementation and bounded local acceptance are complete. Commit this repair bra
 
 ### Existing recovery locations
 
+### Manual Mayor’s Permit test determination — 20 September authorization
+
+- Owner authorized implementing controlled local/UAT manual determination after reproducing the ordinary 2026 Treasury blocker. No universal ₱1,000 rate or production policy authorized. Application 39 was inspected and browser-staged only; Confirm Treasury was not clicked.
+- Existing provisional 2026 New fee boundary now additionally offers manual amount plus required basis for safe local/testing/staging/UAT contexts. Canonical Treasury permission, exact fee/LOB identity, current fingerprint, required item and amount equality enforced server-side. Positive integer centavos only; classification and manual paths are mutually exclusive. Disabled preview, production, renewal, wrong year, stale fingerprint, missing basis, omitted item, mismatched amount and unauthorized actors fail closed.
+- Uses existing Treasury assignment/item audit snapshots and frozen Evaluation/Price/Assessment chain. Manual evidence records application/year/LOB/fee, actor/time, amount, basis and false production-policy authority. No schema/catalogue migration, fee removal or rewrite of applicant/office evidence.
+- Verification: 52 focused PHP tests / 534 assertions passed, followed by enhanced manual-path Assessment parity test / 17 assertions passed (including Schedule of Payment = PriceReport = Assessment). Six frontend tests passed; TypeScript, changed-file ESLint/Prettier, Pint, targeted PHPStan and build passed. No full-suite or complete lifecycle rerun claimed for this bounded follow-up.
+- Browser: ordinary local Application39 displayed controls; staging ₱1,000 with a basis produced ₱1,125 Treasury subtotal and enabled Confirm Treasury. Clearing the basis returned TBD and disabled confirmation. No Treasury confirmation, Assessment, payment or permit created on the real local record. Cloud unchanged.
+- Officer steps: select applicable LOB, enter test amount and basis in Determine Mayor’s Permit Fee, click Confirm amount, review items/subtotal, then Confirm Treasury to persist. Do not select an Enterprise Classification for the manual path.
+
+
 ### Specimen selector restoration — subsequent owner correction
 
 - Supersedes the single generic example and Classic-link presentation above. Ordinary fresh Citizen New applications in safe preview now receive the existing laboratory specimen pool and show Source specimen, Fill blanks, Clear helper values and collapsed details. The Classic navigation link is removed from this panel.

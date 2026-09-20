@@ -14,9 +14,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { dateTime, money } from '@/lib/evaluationPresentation';
 import { financialLineItemsResolved } from '@/lib/financialLineItems';
-import type { EnterpriseSchedule } from '@/lib/treasuryEnterprise';
+import type {
+    EnterpriseSchedule,
+    ManualTreasuryDetermination,
+} from '@/lib/treasuryEnterprise';
 import {
     applyEnterpriseClassification,
+    applyManualTreasuryDetermination,
     treasuryConfirmationReason,
 } from '@/lib/treasuryEnterprise';
 import { index as workInbox } from '@/routes/staff/work';
@@ -174,7 +178,8 @@ type BploRoutingTask = {
             id: number;
             name: string;
             enterprise_determination?: {
-                classification: string;
+                classification: string | null;
+                basis?: string;
                 determined_by_id: number;
                 determined_at: string;
                 schedule: EnterpriseSchedule;
@@ -227,6 +232,8 @@ const treasurySelections = ref<
     {
         line_of_business_id: number;
         enterprise_classification?: string;
+        manual_amount_cents?: number;
+        manual_basis?: string;
         enterprise_schedule_fingerprint?: string;
         items: {
             amount_locked?: boolean;
@@ -694,6 +701,8 @@ function determineEnterprise(
     }
 
     selection.enterprise_classification = classification;
+    delete selection.manual_amount_cents;
+    delete selection.manual_basis;
     selection.enterprise_schedule_fingerprint =
         fee.enterprise_schedule.fingerprint;
     selection.items = applyEnterpriseClassification(
@@ -706,6 +715,34 @@ function determineEnterprise(
 
 function actorLabel(name: string): string {
     return name.replace(/^Cleanroom\s+\S+\s+/, '');
+}
+
+function determineManualAmount(
+    selection: (typeof treasurySelections.value)[number],
+    determination: ManualTreasuryDetermination | null,
+): void {
+    const fee = enterpriseFee(selection.line_of_business_id);
+
+    if (!fee?.enterprise_schedule?.manual_determination_available) {
+        return;
+    }
+
+    delete selection.enterprise_classification;
+    delete selection.manual_amount_cents;
+    delete selection.manual_basis;
+
+    if (determination) {
+        selection.manual_amount_cents = determination.amount_cents;
+        selection.manual_basis = determination.basis;
+    }
+
+    selection.enterprise_schedule_fingerprint =
+        fee.enterprise_schedule.fingerprint;
+    selection.items = applyManualTreasuryDetermination(
+        selection.items,
+        fee.fee_rule_id,
+        determination,
+    );
 }
 
 const treasurySelectionsReady = computed(
@@ -728,6 +765,9 @@ const treasuryConfirmReason = computed(() =>
                     ?.enterprise_schedule,
             ),
             enterpriseClassification: selection.enterprise_classification,
+            manualDetermination:
+                selection.manual_amount_cents !== undefined &&
+                Boolean(selection.manual_basis),
             enterpriseFeeId: enterpriseFee(selection.line_of_business_id)
                 ?.fee_rule_id,
         })),
@@ -980,10 +1020,15 @@ const filteredTreasuryLobOptions = computed(() => {
                             v-if="assignment.enterprise_determination"
                             class="text-sm break-words"
                         >
-                            Enterprise Classification:
+                            {{
+                                assignment.enterprise_determination.basis
+                                    ? 'Manual test determination:'
+                                    : 'Enterprise Classification:'
+                            }}
                             {{
                                 assignment.enterprise_determination
-                                    .classification
+                                    .classification ??
+                                assignment.enterprise_determination.basis
                             }}
                             · Treasury actor #{{
                                 assignment.enterprise_determination
@@ -1095,6 +1140,9 @@ const filteredTreasuryLobOptions = computed(() => {
                                 </button>
                             </div>
                             <EnterpriseClassificationSelector
+                                @manual="
+                                    determineManualAmount(selection, $event)
+                                "
                                 v-if="
                                     enterpriseFee(selection.line_of_business_id)
                                         ?.enterprise_schedule
@@ -1871,10 +1919,15 @@ const filteredTreasuryLobOptions = computed(() => {
                             v-if="assignment.enterprise_determination"
                             class="text-sm break-words"
                         >
-                            Enterprise Classification:
+                            {{
+                                assignment.enterprise_determination.basis
+                                    ? 'Manual test determination:'
+                                    : 'Enterprise Classification:'
+                            }}
                             {{
                                 assignment.enterprise_determination
-                                    .classification
+                                    .classification ??
+                                assignment.enterprise_determination.basis
                             }}
                             · Provisional UAT policy — pending Ipil Officer
                             confirmation ·
@@ -1952,6 +2005,7 @@ const filteredTreasuryLobOptions = computed(() => {
                             </button>
                         </div>
                         <EnterpriseClassificationSelector
+                            @manual="determineManualAmount(selection, $event)"
                             v-if="
                                 enterpriseFee(selection.line_of_business_id)
                                     ?.enterprise_schedule

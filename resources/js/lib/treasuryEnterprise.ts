@@ -5,7 +5,53 @@ export type EnterpriseSchedule = {
     version: string;
     fingerprint: string;
     bands: Record<string, number>;
+    manual_determination_available?: boolean;
 };
+
+export type ManualTreasuryDetermination = {
+    amount_cents: number;
+    basis: string;
+};
+
+export function manualTreasuryDetermination(
+    amount: string,
+    basis: string,
+): ManualTreasuryDetermination | null {
+    if (
+        !/^\d+(\.\d{1,2})?$/.test(amount.trim()) ||
+        !basis.trim() ||
+        basis.length > 1000
+    ) {
+        return null;
+    }
+
+    const [whole, fraction = ''] = amount.trim().split('.');
+    const cents = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+
+    return Number.isSafeInteger(cents) && cents > 0 && cents <= 1000000000
+        ? { amount_cents: cents, basis: basis.trim() }
+        : null;
+}
+
+export function applyManualTreasuryDetermination(
+    items: FinancialLineItem[],
+    feeId: number,
+    determination: ManualTreasuryDetermination | null,
+): FinancialLineItem[] {
+    return items.map((item) =>
+        item.fee_rule_id !== feeId
+            ? item
+            : {
+                  ...item,
+                  amount_locked: true,
+                  amount_cents: determination?.amount_cents ?? 0,
+                  resolution_status: determination ? 'resolved' : 'unresolved',
+                  resolution_message: determination
+                      ? 'Manual test amount — saved with Confirm Treasury'
+                      : 'TBD — Treasury determination required',
+              },
+    );
+}
 
 export function treasuryConfirmationReason(
     selections: {
@@ -13,6 +59,7 @@ export function treasuryConfirmationReason(
         requiresEnterpriseClassification?: boolean;
         enterpriseClassification?: string;
         enterpriseFeeId?: number;
+        manualDetermination?: boolean;
     }[],
     pending: boolean,
 ): string {
@@ -30,11 +77,12 @@ export function treasuryConfirmationReason(
         selections.some(
             (selection) =>
                 selection.requiresEnterpriseClassification &&
+                !selection.manualDetermination &&
                 !selection.enterpriseClassification,
         )
     ) {
         reasons.push(
-            'Choose Enterprise Classification only from the displayed provisional UAT schedule, using an established test basis—not a target amount. It is separate from the Line of Business. Without that basis, ask the authorized municipal official to confirm the classification. The required fee cannot be removed or manually priced.',
+            'Choose Enterprise Classification using an established test basis—not a target amount—or use Determine Mayor’s Permit Fee where local/UAT manual determination is offered. Otherwise ask the authorized municipal official to confirm the classification. The required fee cannot be removed.',
         );
     }
 

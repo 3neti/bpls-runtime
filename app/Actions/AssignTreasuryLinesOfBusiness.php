@@ -179,7 +179,11 @@ class AssignTreasuryLinesOfBusiness
                     $itemEnterpriseDetermination = $rule->code === ProvisionalTreasuryEnterpriseSchedule::FeeCode ? $enterpriseDetermination : null;
                     if ($itemEnterpriseDetermination !== null) {
                         $defaultAmount = $itemEnterpriseDetermination['resulting_amount_cents'];
-                        $calculation = ['amount_cents' => $defaultAmount, 'basis' => 'explicit_treasury_enterprise_classification', 'schedule' => $itemEnterpriseDetermination['schedule']];
+                        $calculation = ['amount_cents' => $defaultAmount,
+                            'basis' => $itemEnterpriseDetermination['determination_source'] === 'manual_treasury_test_determination'
+                                ? 'manual_treasury_test_determination' : 'explicit_treasury_enterprise_classification',
+                            'schedule' => $itemEnterpriseDetermination['schedule'],
+                        ];
                     }
                     $variance = $amount - $defaultAmount;
                     $reason = $item['reason'] ?? null;
