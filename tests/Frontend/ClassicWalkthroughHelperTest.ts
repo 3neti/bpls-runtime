@@ -29,6 +29,86 @@ class Input {
 class Select extends Input {}
 class Textarea extends Input {}
 
+test('ordinary draft guidance does not require a Classic invitation', () => {
+    assert.doesNotMatch(
+        source,
+        /the guide requires 2025 New|started through a Classic invitation|keep this draft and ask BPLO/,
+    );
+    assert.match(
+        source,
+        /Review your details, upload documents, then sign and/,
+    );
+    assert.match(
+        source,
+        /<option disabled value="">\s*Select occupancy\s*<\/option>/,
+    );
+});
+
+test('ordinary prefill respects occupancy and keeps rental fields consistent', () => {
+    const handler = source.slice(
+        source.indexOf('function fillExampleDetails('),
+        source.indexOf('const walkthroughFilledCount'),
+    );
+    const clear = source.slice(
+        source.indexOf('function clearWalkthroughExample('),
+        source.indexOf('const savesCitizenDraft'),
+    );
+    const make = new Function(
+        'HTMLInputElement',
+        'HTMLSelectElement',
+        'HTMLTextAreaElement',
+        'fields',
+        transpile(`
+        const canFillExampleDetails = {value: true};
+        const labIntakeFixture = {value: {fields}};
+        let walkthroughFilledControls = []; const filledControls = [];
+        const walkthroughFilledCount = {value: 0}; const walkthroughFillNotice = {value: ''};
+        ${controls} ${handler} ${clear}
+        return {fill: fillExampleDetails, clear: clearWalkthroughExample};
+    `),
+    );
+
+    for (const choice of ['', 'owned', 'rented']) {
+        const helper = make(Input, Select, Textarea, {
+            monthly_rental_pesos: 900,
+            lessor_last_name: 'Sample',
+            occupancy: 'rented',
+        });
+        const occupancy = new Select('occupancy', choice);
+        const rental = new Input('monthly_rental_pesos', '');
+        const lessor = new Input('lessor_last_name', '');
+        helper.fill({
+            currentTarget: {
+                closest: () => ({ elements: [occupancy, rental, lessor] }),
+            },
+        });
+        assert.equal(occupancy.value, choice || 'rented');
+        assert.equal(rental.value, choice === 'owned' ? '' : '900');
+        assert.equal(lessor.value, choice === 'owned' ? '' : 'Sample');
+        helper.clear();
+        assert.equal(occupancy.value, choice);
+        assert.equal(rental.value, '');
+        assert.equal(lessor.value, '');
+    }
+
+    const helper = make(Input, Select, Textarea, {
+        occupancy: 'owned',
+        monthly_rental_pesos: 900,
+        lessor_last_name: 'Sample',
+    });
+    const occupancy = new Select('occupancy', '');
+    const rental = new Input('monthly_rental_pesos', '');
+    const lessor = new Input('lessor_last_name', '');
+    helper.fill({
+        currentTarget: {
+            closest: () => ({ elements: [occupancy, rental, lessor] }),
+        },
+    });
+    assert.equal(occupancy.value, 'owned');
+    assert.equal(rental.value, '');
+    assert.equal(lessor.value, '');
+});
+
 test('ordinary example is limited to fresh preview Citizen new applications', () => {
     const guard = source.slice(
         source.indexOf('const canFillExampleDetails ='),

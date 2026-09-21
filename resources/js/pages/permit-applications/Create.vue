@@ -196,7 +196,21 @@ function fillExampleDetails(event: MouseEvent): void {
 
     const example = labIntakeFixture.value.fields;
 
+    fillEmptyControl(
+        form,
+        'occupancy',
+        example.occupancy,
+        walkthroughFilledControls,
+    );
+
     for (const [name, value] of Object.entries(example)) {
+        if (
+            (name === 'monthly_rental_pesos' || name.startsWith('lessor_')) &&
+            namedControls(form, 'occupancy')[0]?.value !== 'rented'
+        ) {
+            continue;
+        }
+
         fillEmptyControl(form, name, value, walkthroughFilledControls);
     }
 
@@ -860,7 +874,9 @@ const occupancy = ref(
             : 'owned'
         : (props.draft?.occupancy ?? cleanroom('occupancy')) === 'rented'
           ? 'rented'
-          : 'owned',
+          : (props.draft?.occupancy ?? cleanroom('occupancy')) === 'owned'
+            ? 'owned'
+            : '',
 );
 function text(value: unknown): string | number | null {
     return typeof value === 'string' || typeof value === 'number'
@@ -1084,17 +1100,9 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                             {{ walkthroughFillNotice }}
                         </p>
                     </template>
-                    <p v-else-if="!isEditing">
-                        Following the guide? Start through the Classic
-                        Laboratory invitation for the 2025 New walkthrough, not
-                        ordinary New Application. Pricing depends on the actual
-                        scenario.
-                    </p>
                     <p v-else>
-                        Before Sign &amp; Submit: the guide requires 2025 New,
-                        started through a Classic invitation. If this differs,
-                        keep this draft and ask BPLO for the correct starting
-                        path; do not change its year to match the guide.
+                        Review your details, upload documents, then sign and
+                        submit. You can save a draft before signing.
                     </p>
                 </section>
                 <section
@@ -1959,6 +1967,9 @@ setLayoutProps({ breadcrumbs: breadcrumbs.value });
                                     :aria-invalid="Boolean(errors.occupancy)"
                                     aria-describedby="occupancy-error"
                                 >
+                                    <option disabled value="">
+                                        Select occupancy
+                                    </option>
                                     <option value="owned">Owned</option>
                                     <option value="rented">Rented</option>
                                 </select>
