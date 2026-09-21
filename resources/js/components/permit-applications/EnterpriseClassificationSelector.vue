@@ -111,7 +111,10 @@ function clearDetermination(): void {
             </div>
             <p>Local/UAT only · Amount and basis save with Confirm Treasury.</p>
         </section>
-        <label class="grid min-w-0 gap-2 font-semibold">
+        <label
+            v-if="Object.keys(schedule.bands).length"
+            class="grid min-w-0 gap-2 font-semibold"
+        >
             Enterprise Classification
             <select
                 aria-label="Enterprise Classification"
@@ -129,12 +132,12 @@ function clearDetermination(): void {
                 </option>
             </select>
         </label>
-        <p>
+        <p v-if="Object.keys(schedule.bands).length">
             Alternative: select the established classification. Its scheduled
             amount is fixed. Otherwise use manual determination or stop for
             municipal confirmation.
         </p>
-        <p class="font-bold">PROVISIONAL UAT SCHEDULE — NOT MUNICIPAL POLICY</p>
+        <p class="font-bold">UAT TEST DETERMINATION — NOT MUNICIPAL POLICY</p>
         <p class="text-xs break-words">
             UAT only · {{ schedule.id }} · {{ schedule.version }}. Not derived
             from applicant data; not production policy.

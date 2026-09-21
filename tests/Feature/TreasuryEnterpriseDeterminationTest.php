@@ -5,6 +5,7 @@ use App\Actions\BuildBploRoutingTask;
 use App\Actions\BuildScheduleOfPayment;
 use App\Actions\CreateAssessmentForPermitApplication;
 use App\Assessment\ProvisionalTreasuryEnterpriseSchedule;
+use App\Enums\PermitApplicationType;
 use App\Enums\UserPermission;
 use App\Enums\UserRole;
 use App\Models\FeeRule;
@@ -12,6 +13,108 @@ use App\Models\User;
 use Illuminate\Validation\ValidationException;
 
 require_once __DIR__.'/../Support/TreasuryEnterpriseFixture.php';
+
+test('Household Materials uses an exact manual test determination through Assessment without activating ranges', function (): void {
+    [$application, $actor] = enterpriseUatFixture();
+    $lob = collect(app(BuildBploRoutingTask::class)->handle($application, $actor)->financial_editor['line_of_business_options'])
+        ->firstWhere('code', 'LOB-D146D600B479BECD');
+    $mayor = collect($lob['default_items'])->firstWhere('code', 'IPIL-LEGACY-862E8AD7476CA829');
+    expect($mayor['enterprise_schedule']['manual_determination_available'])->toBeTrue()
+        ->and($mayor['enterprise_schedule']['bands'])->toBe([])
+        ->and($mayor['enterprise_schedule'])->not->toHaveKey('entry_default');
+    $selection = [
+        'line_of_business_id' => $lob['id'],
+        'manual_amount_cents' => 12300,
+        'manual_basis' => 'Usability trial - sample amount, not an approved tariff.',
+        'enterprise_schedule_fingerprint' => $mayor['enterprise_schedule']['fingerprint'],
+        'items' => collect($lob['default_items'])->map(fn ($item) => [
+            'fee_rule_id' => $item['fee_rule_id'],
+            'amount_cents' => $item['fee_rule_id'] === $mayor['fee_rule_id'] ? 12300 : $item['amount_cents'],
+        ])->all(),
+    ];
+    $declaration = $application->declaration->getRawOriginal();
+    $orders = $application->paperlessPaymentOrders()->with('lines')->get()->toJson();
+    app(AssignTreasuryLinesOfBusiness::class)->handle($application, [$selection], $actor);
+    $assignment = $application->treasuryLineOfBusinessAssignments()->with('items')->sole();
+    expect($assignment->source_snapshot['enterprise_determination']['fee_rule_id'])->toBe($mayor['fee_rule_id'])
+        ->and($assignment->source_snapshot['enterprise_determination']['production_policy_authority'])->toBeFalse()
+        ->and($assignment->source_snapshot['enterprise_determination']['classification'])->toBeNull()
+        ->and($application->declaration->fresh()->getRawOriginal())->toBe($declaration)
+        ->and($application->paperlessPaymentOrders()->with('lines')->get()->toJson())->toBe($orders);
+    $assessment = app(CreateAssessmentForPermitApplication::class)->handle($application->fresh(), userWithPermissions([UserPermission::AssessPermitApplications], UserRole::Treasury));
+    $schedule = app(BuildScheduleOfPayment::class)->handle($assessment, $assessment->price_report_snapshot)->toArray();
+    $expected = (int) $application->paperlessPaymentOrders()->sum('total_amount_cents') + $assignment->items->sum('determined_amount_cents');
+    expect($assessment->total_amount_cents)->toBe($expected)
+        ->and(data_get($assessment->price_report_snapshot, 'total.minor'))->toBe($expected)
+        ->and($schedule['grand_total_minor'])->toBe($expected);
+});
+
+test('expanded Mayor identities are exact New catalogue fees and remain guarded', function (): void {
+    [$application] = enterpriseUatFixture();
+    $rules = FeeRule::whereIn('code', ProvisionalTreasuryEnterpriseSchedule::ManualFeeCodes)->get();
+    expect($rules)->toHaveCount(count(ProvisionalTreasuryEnterpriseSchedule::ManualFeeCodes));
+    foreach ($rules as $rule) {
+        expect($rule->name)->toBe("Mayor's Permit Fee")
+            ->and($rule->basis)->toBe('legacy_unresolved')
+            ->and(data_get($rule->metadata, 'application_types'))->toContain('new');
+    }
+    $rule = $rules->firstWhere('code', 'IPIL-LEGACY-862E8AD7476CA829');
+    $service = app(ProvisionalTreasuryEnterpriseSchedule::class);
+    $application->type = PermitApplicationType::Renewal;
+    expect($service->forApplication($application, $rule))->toBeNull();
+    $application->type = PermitApplicationType::New;
+    $application->application_year = 2025;
+    expect($service->forApplication($application, $rule))->toBeNull();
+    $application->application_year = 2026;
+    config(['stakeholder_preview.mode' => false]);
+    expect($service->forApplication($application, $rule))->toBeNull();
+    config(['stakeholder_preview.mode' => true]);
+    app()->instance('env', 'production');
+    expect($service->forApplication($application, $rule))->toBeNull();
+});
+
+test('a Fresh Fish determination cannot unlock an unresolved Household Materials fee', function (): void {
+    [$application, $actor, $fish] = enterpriseUatFixture();
+    $lob = collect(app(BuildBploRoutingTask::class)->handle($application, $actor)->financial_editor['line_of_business_options'])
+        ->firstWhere('code', 'LOB-D146D600B479BECD');
+    $mayor = collect($lob['default_items'])->firstWhere('code', 'IPIL-LEGACY-862E8AD7476CA829');
+    $household = ['line_of_business_id' => $lob['id'],
+        'items' => collect($lob['default_items'])->map(fn ($item) => ['fee_rule_id' => $item['fee_rule_id'], 'amount_cents' => $item['amount_cents']])->all()];
+    expect(fn () => app(AssignTreasuryLinesOfBusiness::class)->handle($application, [$fish, $household], $actor))->toThrow(ValidationException::class);
+    expect($application->treasuryLineOfBusinessAssignments()->count())->toBe(0);
+    $household['manual_amount_cents'] = 12300;
+    $household['manual_basis'] = 'Independent Household test amount';
+    $household['enterprise_schedule_fingerprint'] = $mayor['enterprise_schedule']['fingerprint'];
+    foreach ($household['items'] as &$item) {
+        if ($item['fee_rule_id'] === $mayor['fee_rule_id']) {
+            $item['amount_cents'] = 12300;
+        }
+    }
+    unset($item);
+    app(AssignTreasuryLinesOfBusiness::class)->handle($application, [$fish, $household], $actor);
+    $evidence = $application->treasuryLineOfBusinessAssignments()->get()->pluck('source_snapshot.enterprise_determination');
+    expect($evidence)->toHaveCount(2)
+        ->and($evidence->pluck('fee_rule_id')->unique())->toHaveCount(2)
+        ->and($evidence->firstWhere('fee_rule_id', $mayor['fee_rule_id'])['resulting_amount_cents'])->toBe(12300);
+});
+
+test('Household Materials rejects missing basis stale identity and borrowed classification', function (string $case): void {
+    [$application, $actor] = enterpriseUatFixture();
+    $rule = FeeRule::where('code', 'IPIL-LEGACY-862E8AD7476CA829')->firstOrFail();
+    $service = app(ProvisionalTreasuryEnterpriseSchedule::class);
+    $selection = ['line_of_business_id' => 1, 'manual_amount_cents' => 12300, 'manual_basis' => 'Test only',
+        'enterprise_schedule_fingerprint' => $service->forApplication($application, $rule)['fingerprint'],
+        'items' => [['fee_rule_id' => $rule->id, 'amount_cents' => 12300]]];
+    match ($case) {
+        'basis' => $selection['manual_basis'] = '',
+        'stale' => $selection['enterprise_schedule_fingerprint'] = 'wrong',
+        'amount' => $selection['items'][0]['amount_cents'] = 1,
+        'omitted' => $selection['items'] = [],
+        'classification' => $selection['enterprise_classification'] = 'Small',
+        'actor' => $actor = User::factory()->create(),
+    };
+    expect(fn () => $service->determine($application, $rule, $selection, $actor))->toThrow(ValidationException::class);
+})->with(['basis', 'stale', 'amount', 'omitted', 'classification', 'actor']);
 
 test('catalogue entry default is scoped editable evidence and never a calculated classification', function (): void {
     [$application, $actor, $selection, $mayor] = enterpriseUatFixture();

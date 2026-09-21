@@ -14,10 +14,20 @@ class ProvisionalTreasuryEnterpriseSchedule
 {
     public const FeeCode = 'IPIL-LEGACY-5F028B76EEBEF485';
 
+    /** Exact New-applicable Mayor fee identities; the application guard excludes Renewal and production. */
+    public const ManualFeeCodes = [
+        self::FeeCode, 'IPIL-LEGACY-6AB4BE2893A5E40D', 'IPIL-LEGACY-E2080C485D71B3FA',
+        'IPIL-LEGACY-CB590436779EF57F', 'IPIL-LEGACY-A7C5089506E8F612', 'IPIL-LEGACY-AFF802C5E37C9560',
+        'IPIL-LEGACY-DA24F9A360151D6B', 'IPIL-LEGACY-AA02C719FB66BEED', 'IPIL-LEGACY-862E8AD7476CA829',
+        'IPIL-LEGACY-347A966FE4EF8B07', 'IPIL-LEGACY-0D95E808887A61FA', 'IPIL-LEGACY-A55AC5CA07472003',
+        'IPIL-LEGACY-45064A5BCB55E36D', 'IPIL-LEGACY-92CA6C3F4A4832CB', 'IPIL-LEGACY-A051655E2D2F3998',
+        'IPIL-LEGACY-4EFC975F6E46D995',
+    ];
+
     /** @return array<string, mixed>|null */
     public function forApplication(PermitApplication $application, FeeRule $rule): ?array
     {
-        if ($rule->code !== self::FeeCode || $rule->basis !== 'legacy_unresolved'
+        if (! in_array($rule->code, self::ManualFeeCodes, true) || $rule->basis !== 'legacy_unresolved'
             || $application->type !== PermitApplicationType::New || $application->application_year !== 2026
             || $application->isHistoricalEvidenceOnly()
             || data_get($application->metadata, 'nelson_reconciliation_v1.commissioned_path') !== true
@@ -47,6 +57,19 @@ class ProvisionalTreasuryEnterpriseSchedule
         $default = data_get($rule->metadata, 'treasury_entry_default');
         $manualAvailable = app(StakeholderPreviewSafety::class)->isEnabled()
             && app()->environment(['local', 'testing', 'staging', 'uat']);
+        if ($rule->code !== self::FeeCode) {
+            if (! $manualAvailable) {
+                return null;
+            }
+            $schedule = [
+                'id' => 'manual-new-mayor-test-determination',
+                'version' => '2026-09-21.v1',
+                'policy_status' => 'test_only_not_municipal_policy',
+                'currency' => 'PHP',
+                'fee_code' => $rule->code,
+                'bands' => [],
+            ];
+        }
         if ($manualAvailable && is_array($default)
             && ($default['application_year'] ?? null) === $application->application_year
             && ($default['application_type'] ?? null) === $application->type->value

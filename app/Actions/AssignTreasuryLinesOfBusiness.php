@@ -48,8 +48,7 @@ class AssignTreasuryLinesOfBusiness
             }
             $selections = $this->normalizeApplicationWideItems($selections);
             $enterpriseDeterminations = [];
-            $enterpriseRule = FeeRule::query()->where('code', ProvisionalTreasuryEnterpriseSchedule::FeeCode)->first();
-            if ($enterpriseRule !== null) {
+            foreach (FeeRule::query()->whereIn('code', ProvisionalTreasuryEnterpriseSchedule::ManualFeeCodes)->get() as $enterpriseRule) {
                 foreach ($selections as $selection) {
                     if ($enterpriseRule->line_of_business_id === $selection['line_of_business_id']
                         || $enterpriseRule->lineOfBusinesses()->where('line_of_businesses.id', $selection['line_of_business_id'])->exists()) {
@@ -66,7 +65,7 @@ class AssignTreasuryLinesOfBusiness
             }
             foreach (FeeRule::query()->whereIn('id', $selectedFeeIds)->get() as $rule) {
                 if ($this->treasuryFeeResolution->unresolved($rule, $application)
-                    && ! ($rule->code === ProvisionalTreasuryEnterpriseSchedule::FeeCode && collect($enterpriseDeterminations)->filter()->isNotEmpty())) {
+                    && ! collect($enterpriseDeterminations)->contains(fn ($determination): bool => ($determination['fee_rule_id'] ?? null) === $rule->id)) {
                     throw ValidationException::withMessages(['selections' => 'Treasury classification is incomplete: an unresolved fee requires municipal classification and authority.']);
                 }
             }
@@ -85,7 +84,7 @@ class AssignTreasuryLinesOfBusiness
                     continue;
                 }
                 if ($this->treasuryFeeResolution->unresolved($rule, $application)
-                    && ! ($rule->code === ProvisionalTreasuryEnterpriseSchedule::FeeCode && collect($enterpriseDeterminations)->filter()->isNotEmpty())) {
+                    && ! collect($enterpriseDeterminations)->contains(fn ($determination): bool => ($determination['fee_rule_id'] ?? null) === $rule->id)) {
                     throw ValidationException::withMessages(['selections' => 'Treasury classification is incomplete: an unresolved catalogue default cannot be omitted.']);
                 }
             }
@@ -176,7 +175,7 @@ class AssignTreasuryLinesOfBusiness
                         ? ['basis_amount_cents' => 0, 'amount_cents' => $rule->amount_cents, 'range_id' => null, 'rule_snapshot' => null]
                         : $this->assessmentCalculator->calculate($rule, null, $application);
                     $defaultAmount = $calculation['amount_cents'];
-                    $itemEnterpriseDetermination = $rule->code === ProvisionalTreasuryEnterpriseSchedule::FeeCode ? $enterpriseDetermination : null;
+                    $itemEnterpriseDetermination = ($enterpriseDetermination['fee_rule_id'] ?? null) === $rule->id ? $enterpriseDetermination : null;
                     if ($itemEnterpriseDetermination !== null) {
                         $defaultAmount = $itemEnterpriseDetermination['resulting_amount_cents'];
                         $calculation = ['amount_cents' => $defaultAmount,

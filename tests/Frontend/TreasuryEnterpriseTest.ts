@@ -379,7 +379,7 @@ test('selector displays supplied band amounts without claiming municipal policy'
         selector,
         /\{\{ classification \}\} — \{\{ money\(amount\) \}\}/,
     );
-    assert.match(selector, /PROVISIONAL UAT SCHEDULE — NOT MUNICIPAL POLICY/);
+    assert.match(selector, /UAT TEST DETERMINATION — NOT MUNICIPAL POLICY/);
     assert.match(selector, /schedule.id/);
     assert.match(selector, /schedule.version/);
     assert.match(selector, /stop\s+for\s+municipal\s+confirmation/);
@@ -422,6 +422,33 @@ test('selector displays supplied band amounts without claiming municipal policy'
 
     assert.match(html, /NOT MUNICIPAL POLICY/);
     assert.match(html, /<option value(?:="")?>Choose classification<\/option>/);
+    const manualHtml = await renderToString(
+        Vue.createSSRApp({
+            render,
+            data: () => ({
+                schedule: {
+                    ...schedule,
+                    bands: {},
+                    manual_determination_available: true,
+                },
+                modelValue: '',
+                amount: '',
+                basis: '',
+                manual: null,
+                confirmed: false,
+                invalidate: () => {},
+                confirmAmount: () => {},
+                clearDetermination: () => {},
+            }),
+        }),
+    );
+    assert.match(manualHtml, /Determine Mayor’s Permit Fee/);
+    assert.match(manualHtml, /Basis \/ reference/);
+    assert.doesNotMatch(
+        manualHtml,
+        /Choose classification|Enterprise Classification|Micro|Small/,
+    );
+    assert.match(manualHtml, /NOT MUNICIPAL POLICY/);
 });
 
 test('unselected means TBD and partial 125; each explicit band controls immutable preview amount', () => {
