@@ -18,7 +18,7 @@ class ReconcileQrPhPayment implements ShouldBeUnique, ShouldQueue
 
     public int $timeout = 105;
 
-    public int $uniqueFor = 3600;
+    public int $uniqueFor = 180;
 
     public function uniqueId(): string
     {

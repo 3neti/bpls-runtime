@@ -6,7 +6,9 @@ use App\Jobs\ReconcileQrPhPayment;
 use App\Models\Receipt;
 use App\Models\TreasuryCollection;
 use App\Models\XChangePayment;
+use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Http\Client\Factory;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -73,6 +75,38 @@ test('pending sweep defaults off and dispatches due requests only when enabled',
     config()->set('payment_reconciliation.enabled', true);
     $this->artisan('payments:reconcile')->assertSuccessful();
     Queue::assertPushed(ReconcileQrPhPayment::class);
+});
+
+test('a failed queue submission cannot suppress sweep recovery beyond three minutes', function () {
+    [, $schedule] = qrPhScheduleFixture();
+    fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfixture"));
+    app(InitiateQrPhPayment::class)->handle($schedule);
+    $payment = XChangePayment::query()->sole();
+    Http::swap(new Factory);
+    Http::preventStrayRequests();
+    config()->set('payment_reconciliation.enabled', true);
+
+    $submissions = 0;
+    $dispatcher = Mockery::mock(Dispatcher::class);
+    $dispatcher->shouldReceive('dispatch')->twice()->andReturnUsing(function (ReconcileQrPhPayment $job) use (&$submissions, $payment): void {
+        expect($job->paymentId)->toBe($payment->id);
+        if (++$submissions === 1) {
+            throw new RuntimeException('Synthetic queue outage');
+        }
+    });
+    app()->instance(Dispatcher::class, $dispatcher);
+
+    expect(fn () => Artisan::call('payments:reconcile'))
+        ->toThrow(RuntimeException::class, 'Synthetic queue outage');
+    $this->travel(179)->seconds();
+    $this->artisan('payments:reconcile')->assertSuccessful();
+    expect($submissions)->toBe(1);
+    $this->travel(2)->seconds();
+    $this->artisan('payments:reconcile')->assertSuccessful();
+    expect($submissions)->toBe(2)
+        ->and($payment->fresh()->reconciliation_state)->toBe('pending')
+        ->and(TreasuryCollection::query()->count())->toBe(0);
+    Http::assertNothingSent();
 });
 
 test('unsafe references amounts and partial settlement require review', function (string $field, mixed $value) {
