@@ -72,6 +72,12 @@ class ProcessXChangePaymentEvent implements ShouldBeUnique, ShouldQueue
 
             return;
         }
+        $startsAt = ReconcileQrPhPayment::startsAt();
+        if ($startsAt !== null && $payment->created_at->lt($startsAt)) {
+            $this->transition(['state' => 'needs_review', 'failure_code' => 'EVENT_BEFORE_RECONCILIATION_CUTOFF']);
+
+            return;
+        }
         if (! hash_equals($payment->pay_code, $event->pay_code) || $payment->amount_cents !== $event->amount_minor || $payment->currency !== $event->currency) {
             $this->transition(['state' => 'needs_review', 'failure_code' => 'EVENT_OBLIGATION_MISMATCH']);
 

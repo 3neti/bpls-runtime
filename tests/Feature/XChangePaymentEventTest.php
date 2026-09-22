@@ -7,6 +7,7 @@ use App\Models\TreasuryCollection;
 use App\Models\XChangePayment;
 use App\Models\XChangePaymentEvent;
 use Illuminate\Contracts\Bus\Dispatcher;
+use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -173,6 +174,34 @@ test('event worker uses authoritative inquiry and duplicate processing creates o
     expect($event->fresh()->state)->toBe('processed')
         ->and(TreasuryCollection::query()->count())->toBe(1)
         ->and($schedule->fresh()->paid_amount_cents)->toBe($payment->amount_cents);
+});
+
+test('signed notifications preserve pre-activation payment requests without provider inquiry', function () {
+    config()->set('services.x_change', ['base_url' => 'https://x-change.example.test', 'token_endpoint' => '/oauth/token', 'client_id' => 'synthetic-client', 'client_secret' => 'synthetic-secret', 'scope' => 'pay-codes:read', 'settlement_rail' => 'INSTAPAY']);
+    [, $schedule] = qrPhScheduleFixture();
+    fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfixture"), true, true);
+    app(InitiateQrPhPayment::class)->handle($schedule);
+    $payment = XChangePayment::query()->sole();
+    $payment->forceFill(['created_at' => now()->subDay()])->save();
+    config()->set('payment_reconciliation.starts_at', now()->format('Y-m-d H:i:s'));
+    $paymentBefore = $payment->fresh()->getAttributes();
+    $scheduleBefore = $schedule->fresh()->getAttributes();
+    Http::swap(new Factory);
+    Http::preventStrayRequests();
+    [$body, $headers] = signedPaymentEvent([
+        'external_reference' => $payment->external_reference,
+        'pay_code' => $payment->pay_code,
+        'amount_minor' => $payment->amount_cents,
+    ]);
+    $this->call('POST', '/integrations/x-change/payment-events', [], [], [], $headers, $body)->assertStatus(202);
+    $event = XChangePaymentEvent::query()->sole();
+    (new ProcessXChangePaymentEvent($event->id))->handle(app(ConfirmQrPhPayment::class));
+    expect($event->fresh()->state)->toBe('needs_review')
+        ->and($event->fresh()->failure_code)->toBe('EVENT_BEFORE_RECONCILIATION_CUTOFF')
+        ->and($payment->fresh()->getAttributes())->toBe($paymentBefore)
+        ->and($schedule->fresh()->getAttributes())->toBe($scheduleBefore)
+        ->and(TreasuryCollection::query()->count())->toBe(0);
+    Http::assertNothingSent();
 });
 
 test('event worker preserves synthetic collection provenance and routes it to review', function () {
