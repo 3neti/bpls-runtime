@@ -27,17 +27,26 @@ export function createPaymentStatusMonitor(options: {
     let review = false;
 
     async function check(): Promise<void> {
-        if (disposed || settled || state.checking || !options.enabled()) return;
+        if (disposed || settled || state.checking || !options.enabled()) {
+            return;
+        }
+
         state.checking = true;
         options.changed({ ...state });
+
         try {
             const result = await options.request();
-            if (disposed || !options.enabled()) return;
+
+            if (disposed || !options.enabled()) {
+                return;
+            }
+
             state.lastCheckedAt =
                 result.last_checked_at ?? new Date().toISOString();
             review =
                 result.status === 'needs_review' ||
                 result.reconciliation_state === 'needs_review';
+
             if (result.paid && !review) {
                 settled = true;
                 state.message = 'Paid. Refreshing payment details…';
@@ -61,7 +70,10 @@ export function createPaymentStatusMonitor(options: {
             }
         } finally {
             state.checking = false;
-            if (!disposed) options.changed({ ...state });
+
+            if (!disposed) {
+                options.changed({ ...state });
+            }
         }
     }
 

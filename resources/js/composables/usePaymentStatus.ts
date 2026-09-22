@@ -1,8 +1,8 @@
 import { computed, onBeforeUnmount, onMounted, reactive, watch } from 'vue';
-import {
-    createPaymentStatusMonitor,
-    type PaymentCheckState,
-    type PaymentStatusResult,
+import { createPaymentStatusMonitor } from '@/lib/payment-status-monitor';
+import type {
+    PaymentCheckState,
+    PaymentStatusResult,
 } from '@/lib/payment-status-monitor';
 
 export function usePaymentStatus(options: {
@@ -22,8 +22,9 @@ export function usePaymentStatus(options: {
     let timer: ReturnType<typeof setInterval> | null = null;
 
     function refresh(): void {
-        if (!document.hidden && monitor.canAutomaticallyCheck())
+        if (!document.hidden && monitor.canAutomaticallyCheck()) {
             void monitor.check();
+        }
     }
 
     onMounted(() => {
@@ -33,11 +34,17 @@ export function usePaymentStatus(options: {
         document.addEventListener('visibilitychange', refresh);
     });
     watch(options.enabled, (enabled) => {
-        if (enabled) refresh();
+        if (enabled) {
+            refresh();
+        }
     });
     onBeforeUnmount(() => {
         monitor.dispose();
-        if (timer !== null) clearInterval(timer);
+
+        if (timer !== null) {
+            clearInterval(timer);
+        }
+
         window.removeEventListener('focus', refresh);
         document.removeEventListener('visibilitychange', refresh);
     });
