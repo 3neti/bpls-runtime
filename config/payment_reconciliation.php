@@ -2,6 +2,8 @@
 
 return [
     'enabled' => (bool) env('PAYMENT_RECONCILIATION_ENABLED', false),
+    // Optional inclusive creation cutoff, in app.timezone, formatted Y-m-d H:i:s.
+    'starts_at' => env('PAYMENT_RECONCILIATION_STARTS_AT'),
     'connection' => 'payments',
     'queue' => 'payments',
     'interval_seconds' => 300,

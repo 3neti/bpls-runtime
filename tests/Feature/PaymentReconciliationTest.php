@@ -17,7 +17,77 @@ beforeEach(function () {
     Http::preventStrayRequests();
     config()->set('services.x_change', ['base_url' => 'https://x-change.example.test', 'token_endpoint' => '/oauth/token', 'client_id' => 'synthetic-client', 'client_secret' => 'synthetic-secret', 'scope' => 'pay-codes:read', 'settlement_rail' => 'INSTAPAY']);
     Cache::flush();
+    config()->set('payment_reconciliation.starts_at', null);
 });
+
+test('rollout cutoff preserves historical requests even when their queued jobs predate activation', function (int $ageHours) {
+    Queue::fake();
+    [, $schedule] = qrPhScheduleFixture();
+    fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfixture"));
+    app(InitiateQrPhPayment::class)->handle($schedule);
+    $payment = XChangePayment::query()->sole();
+    $payment->forceFill(['created_at' => now()->subHours($ageHours)])->save();
+    $job = unserialize(serialize(new ReconcileQrPhPayment($payment->id)));
+    $before = $payment->getRawOriginal();
+    $attemptBefore = $payment->attempts()->sole()->getRawOriginal();
+    $scheduleBefore = $schedule->fresh()->getRawOriginal();
+    Http::swap(new Factory);
+    Http::preventStrayRequests();
+    config()->set(['payment_reconciliation.enabled' => true, 'payment_reconciliation.starts_at' => now()->toDateTimeString()]);
+
+    $this->artisan('payments:reconcile')->assertSuccessful();
+    $job->handle(app(ConfirmQrPhPayment::class));
+
+    Queue::assertNothingPushed();
+    Http::assertNothingSent();
+    expect($payment->fresh()->getRawOriginal())->toBe($before)
+        ->and($payment->attempts()->sole()->getRawOriginal())->toBe($attemptBefore)
+        ->and($schedule->fresh()->getRawOriginal())->toBe($scheduleBefore)
+        ->and(TreasuryCollection::query()->count())->toBe(0);
+})->with(['recent history' => 1, 'expired history' => 96]);
+
+test('requests at or after rollout cutoff remain eligible for sweep and background settlement', function (int $secondsAfter) {
+    Queue::fake();
+    $this->freezeSecond();
+    [, $schedule] = qrPhScheduleFixture();
+    fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfixture"));
+    app(InitiateQrPhPayment::class)->handle($schedule);
+    $payment = XChangePayment::query()->sole();
+    Http::swap(new Factory);
+    Http::preventStrayRequests();
+    Http::fake(['*/api/partner/v1/pay-codes/*' => Http::response(qrPhInquiry($schedule, true, false))]);
+    config()->set(['payment_reconciliation.enabled' => true, 'payment_reconciliation.starts_at' => now()->subSeconds($secondsAfter)->toDateTimeString()]);
+
+    $this->artisan('payments:reconcile')->assertSuccessful();
+    Queue::assertPushed(ReconcileQrPhPayment::class, fn (ReconcileQrPhPayment $job) => $job->paymentId === $payment->id);
+    (new ReconcileQrPhPayment($payment->id))->handle(app(ConfirmQrPhPayment::class));
+
+    Http::assertSentCount(1);
+    expect($payment->fresh()->reconciliation_state)->toBe('confirmed')
+        ->and(TreasuryCollection::query()->count())->toBe(1);
+})->with(['inclusive boundary' => 0, 'future request' => 60]);
+
+test('invalid rollout cutoff fails closed before sweep or stale queued job can mutate a request', function (mixed $cutoff) {
+    Queue::fake();
+    [, $schedule] = qrPhScheduleFixture();
+    fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfixture"));
+    app(InitiateQrPhPayment::class)->handle($schedule);
+    $payment = XChangePayment::query()->sole();
+    $payment->forceFill(['created_at' => now()->subDays(4)])->save();
+    $before = $payment->getRawOriginal();
+    Http::swap(new Factory);
+    Http::preventStrayRequests();
+    config()->set(['payment_reconciliation.enabled' => true, 'payment_reconciliation.starts_at' => $cutoff]);
+
+    expect(fn () => Artisan::call('payments:reconcile'))->toThrow(InvalidArgumentException::class);
+    expect(fn () => (new ReconcileQrPhPayment($payment->id))->handle(app(ConfirmQrPhPayment::class)))
+        ->toThrow(InvalidArgumentException::class);
+
+    Queue::assertNothingPushed();
+    Http::assertNothingSent();
+    expect($payment->fresh()->getRawOriginal())->toBe($before)
+        ->and(TreasuryCollection::query()->count())->toBe(0);
+})->with(['garbage' => 'invalid', 'relative date' => 'tomorrow', 'calendar overflow' => '2026-02-30 12:00:00', 'whitespace' => ' ', 'wrong type' => false]);
 
 test('background job confirms late settlement without any authenticated browser and remains idempotent', function () {
     [, $schedule] = qrPhScheduleFixture();

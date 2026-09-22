@@ -17,7 +17,9 @@ class ReconcileQrPhPayments extends Command
         if (! config('payment_reconciliation.enabled')) {
             return self::SUCCESS;
         }
+        $startsAt = ReconcileQrPhPayment::startsAt();
         XChangePayment::query()->whereNotNull('pay_code')
+            ->when($startsAt !== null, fn ($query) => $query->where('created_at', '>=', $startsAt))
             ->whereIn('reconciliation_state', ['pending', 'error'])
             ->where(fn ($query) => $query->whereNull('next_check_at')->orWhere('next_check_at', '<=', now()))
             ->orderBy('next_check_at')->orderBy('id')->limit(100)->get()
