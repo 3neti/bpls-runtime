@@ -39,6 +39,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
+    Http::preventStrayRequests();
     $this->withoutVite();
     config()->set([
         'stakeholder_preview.mode' => true,
@@ -338,18 +339,22 @@ test('classic ceremony completes the canonical lifecycle through each municipal 
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('can.initiate_qr_ph', false)
-            ->where('can.simulate_classic_payment', true)
+            ->where('can.check_qr_ph', true)
+            ->where('can.simulate_classic_payment', false)
             ->where('classicPaymentHandoff.pay_code', 'CLSC')
             ->where('classicPaymentHandoff.external_reference', fn (string $reference): bool => $reference !== '')
             ->where('classicPaymentHandoff.attempt.reference', 'SYNTHETIC-CLASSIC-'.$schedule->id.'-2')
             ->where('classicPaymentHandoff.attempt.provider', 'netbank')
             ->where('classicPaymentHandoff.amount_cents', $schedule->total_amount_cents));
     $this->actingAs($actor('cashier'))
-        ->post(route('staff.payment-schedules.classic-payment-simulation.store', $schedule), [
-            'attempt_id' => $schedule->xChangePayment->attempts()->latest('id')->firstOrFail()->id,
-        ])
-        ->assertRedirect(route('staff.payment-schedules.show', $schedule));
+        ->getJson(route('staff.payment-schedules.qr-ph.status', $schedule))
+        ->assertOk()
+        ->assertJsonPath('paid', true)
+        ->assertJsonPath('reconciliation_state', 'confirmed');
     $collection = $schedule->treasuryCollections()->sole();
+    expect(data_get($collection->source_snapshot, 'integration_evidence.source'))->toBe('authoritative_partner_inquiry')
+        ->and(data_get($collection->source_snapshot, 'integration_evidence.synthetic_only'))->toBeFalse()
+        ->and($collection->receipts()->count())->toBe(0);
     $receiptGroups = $collection->allocations()->pluck('receipt_group_key')->unique()->sort()->values();
     foreach ($receiptGroups as $index => $receiptGroup) {
         app(IssueManualCollectionReceipt::class)->handle($collection->fresh(), [
@@ -460,6 +465,20 @@ function fakeClassicQrPhIssue(PaymentSchedule $schedule): void
                     ],
                 ]],
             ], 201);
+        }
+
+        if ($request->method() === 'GET' && str_ends_with($request->url(), '/api/partner/v1/pay-codes/CLSC')) {
+            return Http::response(['data' => [
+                'external_reference' => $schedule->fresh()->xChangePayment->external_reference,
+                'currency' => 'PHP',
+                'consumer_status' => 'collected',
+                'status' => ['key' => 'active', 'is_terminal' => false],
+                'collection' => [
+                    'collected_total_minor' => $schedule->total_amount_cents,
+                    'target_amount_minor' => $schedule->total_amount_cents,
+                    'is_fully_collected' => true,
+                ],
+            ]]);
         }
 
         return Http::response([
