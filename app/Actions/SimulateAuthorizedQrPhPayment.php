@@ -18,6 +18,7 @@ final class SimulateAuthorizedQrPhPayment
         private readonly ResolveActivePaymentAttempt $resolveAttempt,
         private readonly EnsureQrPhPaymentEligible $ensureEligible,
         private readonly RecordPaymentScheduleCollection $recordCollection,
+        private readonly ConfirmQrPhPayment $confirmPayment,
     ) {}
 
     public function handle(PaymentSchedule $schedule, User $actor, int $attemptId): TreasuryCollection
@@ -26,13 +27,23 @@ final class SimulateAuthorizedQrPhPayment
             abort(403, 'This payment is not authorized for UAT simulation.');
         }
 
+        $payment = $schedule->xChangePayment;
+        if ($payment === null || ! $payment->synthetic_only || $payment->pay_code !== null || $payment->voucher_id !== null) {
+            $result = $this->confirmPayment->handle($schedule, 'simulation_precheck');
+            if ($result['paid'] && $result['collection_id'] !== null) {
+                return TreasuryCollection::query()->findOrFail($result['collection_id']);
+            }
+
+            throw new LogicException('Simulation is unavailable for a provider payable. Check payment status; unresolved provider evidence must be reviewed.');
+        }
+
         return Cache::lock("qr-ph:payment-schedule:{$schedule->id}", 20)->block(10, fn (): TreasuryCollection => DB::transaction(function () use ($schedule, $actor, $attemptId): TreasuryCollection {
             $schedule = PaymentSchedule::query()->lockForUpdate()->findOrFail($schedule->id);
             $payment = $schedule->xChangePayment()->lockForUpdate()->first();
             if (! $this->authorizeSimulation->handle($schedule, $actor->fresh())) {
                 abort(403, 'This payment is not authorized for UAT simulation.');
             }
-            if ($payment === null || blank($payment->pay_code)) {
+            if ($payment === null || ! $payment->synthetic_only || $payment->pay_code !== null || $payment->voucher_id !== null) {
                 throw new LogicException('The Citizen must create the QR Ph request first.');
             }
             if ($payment->treasury_collection_id !== null) {
@@ -94,6 +105,8 @@ final class SimulateAuthorizedQrPhPayment
                 'confirmed_at' => now(),
                 'last_error_code' => null,
             ])->save();
+
+            $attempt->update(['status' => 'collected']);
 
             return $collection;
         }));

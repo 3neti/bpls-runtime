@@ -1,0 +1,126 @@
+<?php
+
+use App\Actions\ConfirmQrPhPayment;
+use App\Actions\InitiateQrPhPayment;
+use App\Jobs\ReconcileQrPhPayment;
+use App\Models\Receipt;
+use App\Models\TreasuryCollection;
+use App\Models\XChangePayment;
+use Illuminate\Http\Client\Factory;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
+
+beforeEach(function () {
+    Http::preventStrayRequests();
+    config()->set('services.x_change', ['base_url' => 'https://x-change.example.test', 'token_endpoint' => '/oauth/token', 'client_id' => 'synthetic-client', 'client_secret' => 'synthetic-secret', 'scope' => 'pay-codes:read', 'settlement_rail' => 'INSTAPAY']);
+    Cache::flush();
+});
+
+test('background job confirms late settlement without any authenticated browser and remains idempotent', function () {
+    [, $schedule] = qrPhScheduleFixture();
+    fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfixture"), true, true);
+    app(InitiateQrPhPayment::class)->handle($schedule);
+    $payment = XChangePayment::query()->sole();
+    $payment->attempts()->update(['expires_at' => now()->subHour()]);
+    config()->set('payment_reconciliation.enabled', true);
+    $job = new ReconcileQrPhPayment($payment->id);
+    $job->handle(app(ConfirmQrPhPayment::class));
+    $job->handle(app(ConfirmQrPhPayment::class));
+    expect(TreasuryCollection::query()->count())->toBe(1)
+        ->and(Receipt::query()->count())->toBe(0)
+        ->and($payment->fresh()->reconciliation_state)->toBe('confirmed')
+        ->and($payment->fresh()->last_checked_at)->not->toBeNull()
+        ->and($payment->attempts()->sole()->status)->toBe('collected');
+});
+
+test('currency mismatch is persisted as review with no collection', function () {
+    [, $schedule] = qrPhScheduleFixture();
+    fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfixture"));
+    app(InitiateQrPhPayment::class)->handle($schedule);
+    $data = qrPhInquiry($schedule, true, false);
+    $data['data']['currency'] = 'USD';
+    Http::swap(new Factory);
+    Http::preventStrayRequests();
+    Http::fake(['*/api/partner/v1/pay-codes/*' => Http::response($data)]);
+    $result = app(ConfirmQrPhPayment::class)->handle($schedule);
+    expect($result['paid'])->toBeFalse()->and($result['reconciliation_state'])->toBe('needs_review')
+        ->and(TreasuryCollection::query()->count())->toBe(0);
+});
+
+test('a synthetic historical collection never becomes authoritative payment evidence', function () {
+    [, $schedule] = qrPhScheduleFixture();
+    fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfixture"), true);
+    app(InitiateQrPhPayment::class)->handle($schedule);
+    app(ConfirmQrPhPayment::class)->handle($schedule);
+    $collection = TreasuryCollection::query()->sole();
+    $snapshot = $collection->source_snapshot;
+    $snapshot['integration_evidence']['synthetic_only'] = true;
+    $collection->update(['source_snapshot' => $snapshot]);
+    $result = app(ConfirmQrPhPayment::class)->handle($schedule);
+    expect($result['paid'])->toBeFalse()->and($result['reconciliation_state'])->toBe('needs_review')
+        ->and($collection->fresh()->source_snapshot)->toBe($snapshot)
+        ->and(TreasuryCollection::query()->count())->toBe(1);
+});
+
+test('pending sweep defaults off and dispatches due requests only when enabled', function () {
+    Queue::fake();
+    [, $schedule] = qrPhScheduleFixture();
+    fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfixture"));
+    app(InitiateQrPhPayment::class)->handle($schedule);
+    $this->artisan('payments:reconcile')->assertSuccessful();
+    Queue::assertNothingPushed();
+    config()->set('payment_reconciliation.enabled', true);
+    $this->artisan('payments:reconcile')->assertSuccessful();
+    Queue::assertPushed(ReconcileQrPhPayment::class);
+});
+
+test('unsafe references amounts and partial settlement require review', function (string $field, mixed $value) {
+    [, $schedule] = qrPhScheduleFixture();
+    fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfixture"));
+    app(InitiateQrPhPayment::class)->handle($schedule);
+    $data = qrPhInquiry($schedule, true, false);
+    data_set($data, $field, $value);
+    Http::swap(new Factory);
+    Http::preventStrayRequests();
+    Http::fake(['*/api/partner/v1/pay-codes/*' => Http::response($data)]);
+    $result = app(ConfirmQrPhPayment::class)->handle($schedule);
+    expect($result['paid'])->toBeFalse()->and($result['reconciliation_state'])->toBe('needs_review')
+        ->and(TreasuryCollection::query()->count())->toBe(0);
+})->with([
+    ['data.external_reference', 'different-obligation'],
+    ['data.collection.collected_total_minor', 1],
+    ['data.collection.collected_total_minor', 12551],
+    ['data.collection.target_amount_minor', 12551],
+    ['data.currency', null],
+]);
+
+test('provider outage persists safe evidence and recovers on a later sweep', function () {
+    [, $schedule] = qrPhScheduleFixture();
+    fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfixture"));
+    app(InitiateQrPhPayment::class)->handle($schedule);
+    Http::swap(new Factory);
+    Http::preventStrayRequests();
+    Http::fake(['*/api/partner/v1/pay-codes/*' => Http::sequence()->push([], 503)->push([], 503)->push([], 503)->push(qrPhInquiry($schedule, true, false))]);
+    $confirm = app(ConfirmQrPhPayment::class);
+    expect($confirm->handle($schedule)['reconciliation_state'])->toBe('error')
+        ->and(XChangePayment::query()->sole()->last_error_code)->toBe('PARTNER_API_UNAVAILABLE')
+        ->and(TreasuryCollection::query()->count())->toBe(0);
+    expect($confirm->handle($schedule)['paid'])->toBeTrue()
+        ->and(TreasuryCollection::query()->count())->toBe(1);
+});
+
+test('expired review window stops background inquiries without changing liability', function () {
+    [, $schedule] = qrPhScheduleFixture();
+    fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfixture"));
+    app(InitiateQrPhPayment::class)->handle($schedule);
+    $payment = XChangePayment::query()->sole();
+    $payment->forceFill(['created_at' => now()->subDays(4)])->save();
+    Http::swap(new Factory);
+    Http::preventStrayRequests();
+    config()->set('payment_reconciliation.enabled', true);
+    (new ReconcileQrPhPayment($payment->id))->handle(app(ConfirmQrPhPayment::class));
+    expect($payment->fresh()->reconciliation_state)->toBe('needs_review')
+        ->and($schedule->fresh()->paid_amount_cents)->toBe(0);
+    Http::assertNothingSent();
+});

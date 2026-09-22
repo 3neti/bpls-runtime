@@ -5,6 +5,7 @@ use App\Actions\BuildCitizenCurrentQrPhAttempt;
 use App\Actions\InitiateQrPhPayment;
 use App\Actions\ResolveActivePaymentAttempt;
 use App\Actions\SimulateAuthorizedQrPhPayment;
+use App\Actions\SimulateLifecycleQrPhPayment;
 use App\Assessment\AssessmentSnapshotFingerprint;
 use App\Enums\AssessmentDecisionAction;
 use App\Enums\AssessmentStatus;
@@ -18,6 +19,7 @@ use App\Models\AssessmentDecision;
 use App\Models\AssessmentLine;
 use App\Models\InstitutionalPosition;
 use App\Models\InstitutionalPositionAssignment;
+use App\Models\LifecycleCleanroomRun;
 use App\Models\PaymentSchedule;
 use App\Models\PaymentScheduleLine;
 use App\Models\PermitApplication;
@@ -30,7 +32,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 
-function handoffFixture(): array
+function handoffFixture(bool $isolated = false): array
 {
     Http::preventStrayRequests();
     $actor = userWithPermissions([UserPermission::AccessStaff, UserPermission::ViewPaymentSchedules, UserPermission::RecordCollections]);
@@ -72,7 +74,8 @@ function handoffFixture(): array
         'payment_schedule_id' => $schedule->id, 'assessment_id' => $assessment->id,
         'external_reference' => 'synthetic-handoff', 'issue_idempotency_key' => Str::uuid(),
         'terms_hash' => hash('sha256', 'synthetic'), 'amount_cents' => 417500,
-        'currency' => 'PHP', 'binding_secret' => '123456', 'status' => 'awaiting_payment', 'pay_code' => 'TEST',
+        'currency' => 'PHP', 'binding_secret' => '123456', 'status' => 'awaiting_payment', 'pay_code' => $isolated ? null : 'TEST',
+        'synthetic_only' => $isolated,
     ]);
 
     $application->update(['metadata' => ['nelson_reconciliation_v1' => ['commissioned_path' => true]]]);
@@ -102,7 +105,7 @@ test('ordinary Cashier and Citizen share the unique replacement and reads preser
                 ->where('classicPaymentHandoff.amount_cents', 417500)
                 ->where('classicPaymentHandoff.resolution', 'active')
                 ->where('can.initiate_qr_ph', false)
-                ->where('can.simulate_classic_payment', true));
+                ->where('can.simulate_classic_payment', false));
         $citizen = app(BuildCitizenCurrentQrPhAttempt::class)->handle($schedule->fresh());
         expect($citizen['payment_id'])->toBe($payment->id)
             ->and($citizen['attempt_id'])->toBe($active->id)
@@ -133,20 +136,78 @@ test('ambiguous active attempts fail closed in both projection and confirmation'
     expect(TreasuryCollection::count())->toBe(0)->and($payment->attempts()->count())->toBe(2);
 });
 
-test('exact active simulation creates one Collection and duplicate returns the same evidence', function () {
+test('a provider payable cannot be synthetically collected even by an authorized Cashier', function () {
     [$actor, $schedule, $payment] = handoffFixture();
-    $old = handoffAttempt($payment, -60);
     $attempt = handoffAttempt($payment);
-    $hash = app(AssessmentSnapshotFingerprint::class)->hash($schedule->assessment);
+    expect(fn () => app(SimulateAuthorizedQrPhPayment::class)->handle($schedule, $actor, $attempt->id))
+        ->toThrow(LogicException::class, 'Simulation is unavailable for a provider payable.');
+    expect(TreasuryCollection::count())->toBe(0)
+        ->and($schedule->fresh()->paid_amount_cents)->toBe(0)
+        ->and($payment->fresh()->reconciliation_state)->toBe('error');
+    Http::assertNothingSent();
+});
+
+test('explicit isolated synthetic requests remain simulatable and cannot be issued to a provider', function () {
+    [$actor, $schedule, $payment] = handoffFixture(true);
+    $attempt = handoffAttempt($payment);
+    expect(app(AuthorizeUatQrPhSimulation::class)->available($schedule, $actor))->toBeTrue();
+    expect(fn () => app(InitiateQrPhPayment::class)->handle($schedule))->toThrow(XChangePartnerApiException::class);
+    $action = app(SimulateAuthorizedQrPhPayment::class);
+    $collection = $action->handle($schedule, $actor, $attempt->id);
+    expect($action->handle($schedule, $actor, $attempt->id)->id)->toBe($collection->id)
+        ->and(data_get($collection->source_snapshot, 'integration_evidence.synthetic_only'))->toBeTrue()
+        ->and($payment->fresh()->pay_code)->toBeNull();
+    Http::assertNothingSent();
+});
+
+test('alternate lifecycle simulation preserves isolated fixtures and refuses provider overlap', function (bool $isolated) {
+    [$actor, $schedule, $payment] = handoffFixture($isolated);
+    handoffAttempt($payment);
+    $run = LifecycleCleanroomRun::factory()->create(['new_application_id' => $schedule->permit_application_id]);
+    $action = app(SimulateLifecycleQrPhPayment::class);
+    if ($isolated) {
+        $collection = $action->handle($run);
+        expect(data_get($collection->source_snapshot, 'integration_evidence.synthetic_only'))->toBeTrue()
+            ->and(TreasuryCollection::count())->toBe(1);
+    } else {
+        expect(fn () => $action->handle($run))->toThrow(LogicException::class, 'Simulation is unavailable for a provider payable.');
+        expect(TreasuryCollection::count())->toBe(0);
+    }
+    Http::assertNothingSent();
+})->with([true, false]);
+
+test('real settled payment wins over a simulation request and creates no synthetic collection', function () {
+    [$actor, $schedule, $payment] = handoffFixture();
+    $attempt = handoffAttempt($payment);
+    $payment->update(['terms_hash' => hash('sha256', implode('|', [$schedule->id, $schedule->assessment_id,
+        app(AssessmentSnapshotFingerprint::class)->hash($schedule->assessment), $schedule->total_amount_cents, 'PHP']))]);
+    config()->set('services.x_change', ['base_url' => 'https://x-change.example.test', 'token_endpoint' => '/oauth/token', 'client_id' => 'synthetic-client', 'client_secret' => 'synthetic-secret', 'scope' => 'pay-codes:read']);
+    Http::fake([
+        '*/oauth/token' => Http::response(['expires_in' => 900, 'access_token' => 'synthetic-token']),
+        '*/api/partner/v1/pay-codes/TEST' => Http::response(['data' => [
+            'external_reference' => $payment->external_reference, 'currency' => 'PHP',
+            'consumer_status' => 'collected', 'status' => ['key' => 'active', 'is_terminal' => false],
+            'collection' => ['collected_total_minor' => 417500, 'target_amount_minor' => 417500, 'is_fully_collected' => true],
+        ]]),
+    ]);
     $action = app(SimulateAuthorizedQrPhPayment::class);
     $collection = $action->handle($schedule, $actor, $attempt->id);
     expect($action->handle($schedule, $actor, $attempt->id)->id)->toBe($collection->id)
         ->and(TreasuryCollection::count())->toBe(1)
-        ->and($collection->amount_cents)->toBe(417500)
-        ->and($schedule->fresh()->paid_amount_cents)->toBe(417500)
-        ->and($payment->fresh()->treasury_collection_id)->toBe($collection->id)
-        ->and(app(AssessmentSnapshotFingerprint::class)->hash($schedule->assessment->fresh()))->toBe($hash)
-        ->and($old->fresh()->status)->toBe('awaiting_payment');
+        ->and(data_get($collection->source_snapshot, 'integration_evidence.source'))->toBe('authoritative_partner_inquiry')
+        ->and(data_get($collection->source_snapshot, 'integration_evidence.synthetic_only'))->toBeFalse();
+});
+
+test('authorized staff may check an existing Classic payable while generation remains Citizen owned', function () {
+    [$actor, $schedule, $payment] = handoffFixture();
+    handoffAttempt($payment);
+    $run = LifecycleCleanroomRun::factory()->create([
+        'actor_manifest' => ['ceremony' => LifecycleCleanroomRun::CeremonyClassicLifecycleV1],
+    ]);
+    $schedule->permitApplication->update(['metadata' => ['lifecycle_cleanroom' => ['run_id' => $run->public_id]]]);
+    $this->actingAs($actor)->getJson(route('staff.payment-schedules.qr-ph.status', $schedule))
+        ->assertOk()->assertJsonPath('paid', false)->assertJsonPath('reconciliation_state', 'error');
+    $this->actingAs($actor)->postJson(route('staff.payment-schedules.qr-ph.initiate', $schedule))->assertForbidden();
     Http::assertNothingSent();
 });
 
@@ -217,7 +278,7 @@ test('simulation uses municipal Cashier authority rather than a preview persona'
     [$actor, $schedule, $payment] = handoffFixture();
     handoffAttempt($payment);
     expect(app(StakeholderPreviewSafety::class)->personaFor($actor))->toBeNull()
-        ->and(app(AuthorizeUatQrPhSimulation::class)->available($schedule, $actor))->toBeTrue();
+        ->and(app(AuthorizeUatQrPhSimulation::class)->available($schedule, $actor))->toBeFalse();
 });
 
 test('non Cashier positions cannot simulate even with collection permission', function (string $role) {
@@ -239,7 +300,7 @@ test('simulation environment is explicit and fail closed', function (string $env
         'stakeholder_preview.production_migration_enabled' => $migration,
         'stakeholder_preview.production_integrations' => $integrations]);
     $this->actingAs($actor)->get(route('staff.payment-schedules.show', $schedule))->assertOk()
-        ->assertInertia(fn (Assert $page) => $page->where('can.simulate_classic_payment', $allowed));
+        ->assertInertia(fn (Assert $page) => $page->where('can.simulate_classic_payment', false));
     if (! $allowed) {
         $this->withSession(['_token' => 'synthetic-csrf'])->post(route('staff.payment-schedules.classic-payment-simulation.store', $schedule), [
             'attempt_id' => $attempt->id, '_token' => 'synthetic-csrf',
@@ -279,28 +340,21 @@ test('anonymous users cannot simulate', function () {
 test('visible simulation fails cleanly when request expires before submission', function () {
     [$actor, $schedule, $payment] = handoffFixture();
     $attempt = handoffAttempt($payment);
-    expect(app(AuthorizeUatQrPhSimulation::class)->available($schedule, $actor))->toBeTrue();
+    expect(app(AuthorizeUatQrPhSimulation::class)->available($schedule, $actor))->toBeFalse();
     $this->travel(11)->minutes();
     $this->actingAs($actor)->post(route('staff.payment-schedules.classic-payment-simulation.store', $schedule), ['attempt_id' => $attempt->id])->assertSessionHasErrors('payment');
     expect(TreasuryCollection::count())->toBe(0);
 });
 
-test('HTTP simulation is idempotent and refresh hides the settled action with provenance intact', function () {
+test('repeated HTTP simulation refuses a provider payable without creating synthetic evidence', function () {
     [$actor, $schedule, $payment] = handoffFixture();
     $attempt = handoffAttempt($payment);
     foreach ([1, 2] as $retry) {
-        $this->actingAs($actor)->post(route('staff.payment-schedules.classic-payment-simulation.store', $schedule), ['attempt_id' => $attempt->id])->assertRedirect(route('staff.payment-schedules.show', $schedule));
+        $this->actingAs($actor)->post(route('staff.payment-schedules.classic-payment-simulation.store', $schedule), ['attempt_id' => $attempt->id])->assertSessionHasErrors('payment');
     }
-    $collection = TreasuryCollection::sole();
-    expect($collection->amount_cents)->toBe(417500)
-        ->and(data_get($collection->source_snapshot, 'integration_evidence.x_change_payment_id'))->toBe(5)
-        ->and(data_get($collection->source_snapshot, 'integration_evidence.attempt_id'))->toBe($attempt->id)
-        ->and(data_get($collection->source_snapshot, 'integration_evidence.attempt_reference'))->toBe($attempt->reference)
-        ->and(data_get($collection->source_snapshot, 'integration_evidence.attempt_provider'))->toBe('synthetic')
-        ->and(data_get($collection->source_snapshot, 'integration_evidence.real_funds_moved'))->toBeFalse()
+    expect(TreasuryCollection::count())->toBe(0)
+        ->and($schedule->fresh()->paid_amount_cents)->toBe(0)
         ->and(XChangePayment::count())->toBe(1)->and($payment->attempts()->count())->toBe(1);
-    $this->get(route('staff.payment-schedules.show', $schedule))->assertOk()
-        ->assertInertia(fn (Assert $page) => $page->where('can.simulate_classic_payment', false)->where('classicPaymentSimulationUrl', null));
 });
 
 test('no active or non payable payment never advertises simulation', function (string $state) {

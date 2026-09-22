@@ -6,6 +6,7 @@ use App\Assessment\AssessmentSnapshotFingerprint;
 use App\Exceptions\XChangePartnerApiException;
 use App\Integrations\QrPhPaymentArtifactCache;
 use App\Integrations\XChangePartnerApiClient;
+use App\Jobs\ReconcileQrPhPayment;
 use App\Models\PaymentSchedule;
 use App\Models\XChangePayment;
 use App\Models\XChangePaymentAttempt;
@@ -27,7 +28,7 @@ final class InitiateQrPhPayment
      */
     public function handle(PaymentSchedule $paymentSchedule): array
     {
-        return Cache::lock("qr-ph:payment-schedule:{$paymentSchedule->id}", 20)->block(10, function () use ($paymentSchedule): array {
+        return Cache::lock("qr-ph:payment-schedule:{$paymentSchedule->id}", 120)->block(10, function () use ($paymentSchedule): array {
             $paymentSchedule = $this->ensureEligible->handle($paymentSchedule->fresh());
             $payment = $this->payment($paymentSchedule);
 
@@ -74,6 +75,10 @@ final class InitiateQrPhPayment
                     $created['base64_payload'],
                 );
 
+                if (config('payment_reconciliation.enabled')) {
+                    ReconcileQrPhPayment::dispatch($payment->id)->afterCommit();
+                }
+
                 return [
                     'amount_cents' => $payment->amount_cents,
                     'status' => $created['status'],
@@ -111,7 +116,7 @@ final class InitiateQrPhPayment
             ],
         );
 
-        if ($payment->assessment_id !== $paymentSchedule->assessment_id
+        if ($payment->synthetic_only || $payment->assessment_id !== $paymentSchedule->assessment_id
             || $payment->amount_cents !== $paymentSchedule->total_amount_cents
             || ! hash_equals($payment->terms_hash, $termsHash)) {
             throw new XChangePartnerApiException(

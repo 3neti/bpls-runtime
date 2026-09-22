@@ -32,6 +32,7 @@ use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
+    Http::preventStrayRequests();
     config()->set('cache.default', 'array');
     config()->set('services.x_change', [
         'base_url' => 'https://x-change.example.test',
@@ -436,6 +437,7 @@ function qrPhInquiry(PaymentSchedule $schedule, bool $paid, bool $terminal): arr
 
     return [
         'data' => [
+            'currency' => 'PHP',
             'external_reference' => $payment->external_reference,
             'consumer_status' => $paid ? 'collected' : 'processing',
             'status' => ['key' => $terminal ? 'expired' : 'active', 'is_terminal' => $terminal],

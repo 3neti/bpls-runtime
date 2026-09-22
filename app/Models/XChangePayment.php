@@ -30,6 +30,12 @@ use Illuminate\Support\Collection;
  * @property bool $is_fully_collected
  * @property Carbon|null $confirmed_at
  * @property string|null $last_error_code
+ * @property string $reconciliation_state
+ * @property string|null $reconciliation_source
+ * @property Carbon|null $last_checked_at
+ * @property Carbon|null $next_check_at
+ * @property int $reconciliation_attempts
+ * @property bool $synthetic_only
  * @property-read PaymentSchedule $paymentSchedule
  * @property-read Assessment $assessment
  * @property-read TreasuryCollection|null $treasuryCollection
@@ -71,6 +77,10 @@ class XChangePayment extends Model
             'binding_secret' => 'encrypted',
             'is_fully_collected' => 'boolean',
             'confirmed_at' => 'datetime',
+            'last_checked_at' => 'datetime',
+            'next_check_at' => 'datetime',
+            'reconciliation_attempts' => 'integer',
+            'synthetic_only' => 'boolean',
         ];
     }
 }

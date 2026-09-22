@@ -36,7 +36,6 @@ final class QrPhPaymentController extends Controller
     public function status(PaymentSchedule $paymentSchedule, ConfirmQrPhPayment $confirm): JsonResponse
     {
         Gate::authorize(UserPermission::ViewPaymentSchedules->value);
-        $this->ensureStaffMayControlQrPh($paymentSchedule);
 
         try {
             return response()->json($confirm->handle($paymentSchedule))->header('Cache-Control', 'no-store');

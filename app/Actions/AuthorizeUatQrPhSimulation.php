@@ -29,11 +29,13 @@ final class AuthorizeUatQrPhSimulation
         $payment = $schedule->xChangePayment;
 
         return $payment !== null
+            && $payment->synthetic_only
             && in_array($payment->status, ['issued', 'awaiting_payment'], true)
             && $payment->assessment_id === $schedule->assessment_id
             && $payment->amount_cents === $schedule->total_amount_cents
             && $payment->currency === 'PHP'
-            && filled($payment->pay_code)
+            && $payment->pay_code === null
+            && $payment->voucher_id === null
             && $schedule->treasuryCollections()->doesntExist()
             && $this->resolveAttempt->handle($payment)['state'] === 'active';
     }

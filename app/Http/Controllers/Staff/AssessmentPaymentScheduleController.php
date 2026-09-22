@@ -150,6 +150,7 @@ class AssessmentPaymentScheduleController extends Controller
                 'issue_receipts' => $canIssueReceipts,
                 'view_receipts' => $canViewReceipts,
                 'initiate_qr_ph' => ! $isActiveClassicRun && $classicPaymentHandoff === null,
+                'check_qr_ph' => $paymentSchedule->xChangePayment()->whereNotNull('pay_code')->exists(),
                 'simulate_classic_payment' => $canSimulateClassicPayment,
             ],
             'classicPaymentHandoff' => $classicPaymentHandoff,

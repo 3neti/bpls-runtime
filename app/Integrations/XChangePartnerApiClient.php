@@ -123,7 +123,7 @@ final class XChangePartnerApiClient
     }
 
     /**
-     * @return array{external_reference: string|null, consumer_status: string|null, provider_status: string|null, collected_total_cents: int, target_amount_cents: int, is_fully_collected: bool, is_terminal: bool}
+     * @return array{external_reference: string|null, currency: string|null, consumer_status: string|null, provider_status: string|null, collected_total_cents: int, target_amount_cents: int, is_fully_collected: bool, is_terminal: bool}
      */
     public function inquire(string $code): array
     {
@@ -132,12 +132,13 @@ final class XChangePartnerApiClient
         $collected = data_get($data, 'collection.collected_total_minor');
         $target = data_get($data, 'collection.target_amount_minor');
 
-        if (! is_numeric($collected) || ! is_numeric($target)) {
+        if (! is_int($collected) || ! is_int($target) || $collected < 0 || $target < 0) {
             throw new XChangePartnerApiException('INQUIRY_RESPONSE_INVALID', 'x-change returned invalid collection totals.');
         }
 
         return [
             'external_reference' => is_string(data_get($data, 'external_reference')) ? data_get($data, 'external_reference') : null,
+            'currency' => is_string(data_get($data, 'currency')) ? data_get($data, 'currency') : null,
             'consumer_status' => is_string(data_get($data, 'consumer_status')) ? data_get($data, 'consumer_status') : null,
             'provider_status' => is_string(data_get($data, 'status.key')) ? data_get($data, 'status.key') : null,
             'collected_total_cents' => (int) $collected,

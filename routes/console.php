@@ -13,3 +13,4 @@ Schedule::command('bpls:routing-sentinel')
     ->withoutOverlapping();
 
 Schedule::command('bpls:dispatch-payment-events')->everyMinute()->withoutOverlapping()->onOneServer();
+Schedule::command('payments:reconcile')->everyMinute()->withoutOverlapping();

@@ -18,6 +18,7 @@ class SimulateLifecycleQrPhPayment
     public function __construct(
         private readonly RecordPaymentScheduleCollection $recordCollection,
         private readonly ResolveActivePaymentAttempt $resolveAttempt,
+        private readonly ConfirmQrPhPayment $confirmPayment,
     ) {}
 
     public function handle(LifecycleCleanroomRun $run): TreasuryCollection
@@ -38,8 +39,17 @@ class SimulateLifecycleQrPhPayment
             ->with(['xChangePayment.attempts', 'treasuryCollections', 'permitApplication.business.owner'])
             ->latest('sequence')
             ->first();
-        if (! $schedule instanceof PaymentSchedule || ! $schedule->xChangePayment instanceof XChangePayment || blank($schedule->xChangePayment->pay_code)) {
+        if (! $schedule instanceof PaymentSchedule || ! $schedule->xChangePayment instanceof XChangePayment) {
             throw new LogicException('Generate the Pay Code and QR Ph first.');
+        }
+        $payment = $schedule->xChangePayment;
+        if (! $payment->synthetic_only || $payment->pay_code !== null || $payment->voucher_id !== null) {
+            $result = $this->confirmPayment->handle($schedule, 'simulation_precheck');
+            if ($result['paid'] && $result['collection_id'] !== null) {
+                return TreasuryCollection::query()->findOrFail($result['collection_id']);
+            }
+
+            throw new LogicException('Simulation is unavailable for a provider payable. Check payment status.');
         }
         if ($schedule->treasuryCollections->isNotEmpty()) {
             return $schedule->treasuryCollections->first();
@@ -96,6 +106,7 @@ class SimulateLifecycleQrPhPayment
                 'confirmed_at' => now(),
                 'last_error_code' => null,
             ])->save();
+            $attempt->update(['status' => 'collected']);
 
             return $collection;
         });
