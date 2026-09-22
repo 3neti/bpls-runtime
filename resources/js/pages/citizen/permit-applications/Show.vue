@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { Head, Link, setLayoutProps, useForm } from '@inertiajs/vue3';
+import {
+    Head,
+    Link,
+    router,
+    setLayoutProps,
+    useForm,
+    useHttp,
+} from '@inertiajs/vue3';
 import {
     ArrowLeft,
     Banknote,
@@ -21,6 +28,7 @@ import {
     show,
     submit,
 } from '@/actions/App/Http/Controllers/Citizen/PermitApplicationController';
+import { status as qrPhStatus } from '@/actions/App/Http/Controllers/Citizen/QrPhPaymentController';
 import InputError from '@/components/InputError.vue';
 import ApplicationDocumentPillbox from '@/components/permit-applications/ApplicationDocumentPillbox.vue';
 import AuthenticatedPdfPreview from '@/components/permit-applications/AuthenticatedPdfPreview.vue';
@@ -30,6 +38,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
 import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue';
+import { usePaymentStatus } from '@/composables/usePaymentStatus';
+import type { PaymentStatusResult } from '@/lib/payment-status-monitor';
 import type { BreadcrumbItem } from '@/types';
 
 type PermitApplication = {
@@ -232,6 +242,31 @@ const props = defineProps<{
         typeof IpilExecutableDocument
     >['$props']['document'];
 }>();
+
+const paymentStatusRequest = useHttp({});
+const canCheckPayment = computed(() => {
+    const schedule = props.permitApplication.processing.payment_schedule;
+
+    return Boolean(
+        schedule &&
+        schedule.balance_amount_cents > 0 &&
+        schedule.online_payment_boundary.pay_code,
+    );
+});
+const {
+    check: checkPayment,
+    checking: checkingPayment,
+    message: paymentMessage,
+    lastChecked,
+} = usePaymentStatus({
+    enabled: () => canCheckPayment.value,
+    request: async () =>
+        (await paymentStatusRequest.submit(
+            qrPhStatus(props.permitApplication.processing.payment_schedule!.id),
+        )) as PaymentStatusResult,
+    paid: () =>
+        router.reload({ only: ['permitApplication', 'executableDocument'] }),
+});
 
 const submissionForm = useForm({
     undertaking_accepted: false,
@@ -912,6 +947,31 @@ const showReleasedPermit = ref(true);
                                 Payment details
                             </Link>
                         </Button>
+                    </div>
+                    <div v-if="canCheckPayment" class="grid gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            data-testid="citizen-application-check-payment"
+                            :disabled="checkingPayment"
+                            @click="checkPayment"
+                        >
+                            {{
+                                checkingPayment
+                                    ? 'Checking…'
+                                    : 'Check payment status'
+                            }}
+                        </Button>
+                        <p class="text-xs text-muted-foreground">
+                            Last check: {{ lastChecked }}
+                        </p>
+                        <p
+                            v-if="paymentMessage"
+                            class="text-sm"
+                            aria-live="polite"
+                        >
+                            {{ paymentMessage }}
+                        </p>
                     </div>
                     <dl class="grid gap-3 text-sm sm:grid-cols-4">
                         <div>

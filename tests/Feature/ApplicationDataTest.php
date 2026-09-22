@@ -358,7 +358,8 @@ test('Executable Application centers the facsimile and keeps actor-neutral work 
         ->and($officialReceipt)->toContain('v-if="viewUrl"')
         ->and($officialReceipt)->toContain('aria-label="Open issued Official Receipt"')
         ->and($component)->toContain('check_payment_status')
-        ->and($component)->toContain('setInterval(() => void checkPayment(), 4000)');
+        ->and($component)->toContain('usePaymentStatus(')
+        ->and(file_get_contents(resource_path('js/composables/usePaymentStatus.ts')))->toContain('setInterval(refresh, 4000)');
 });
 
 function configureApplicationDataPreview(): void
