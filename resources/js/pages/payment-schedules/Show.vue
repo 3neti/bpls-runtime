@@ -219,6 +219,7 @@ const props = defineProps<{
         issue_receipts: boolean;
         view_receipts: boolean;
         initiate_qr_ph: boolean;
+        check_qr_ph: boolean;
         simulate_classic_payment: boolean;
     };
     classicPaymentHandoff: ClassicPaymentHandoff | null;
@@ -285,6 +286,7 @@ const qrAttempt = ref<QrPhAttempt | null>(
 const generationMessage = ref<string | null>(null);
 const canCheckPayment = computed(
     () =>
+        props.can.check_qr_ph &&
         balanceDueCents.value > 0 &&
         Boolean(qrAttempt.value || props.classicPaymentHandoff?.pay_code),
 );
