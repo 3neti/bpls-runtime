@@ -74,7 +74,7 @@ final class QrPhPaymentController extends Controller
             : null;
 
         if ($run instanceof LifecycleCleanroomRun && $run->isClassicLifecycleV1() && $run->status === 'active') {
-            abort(403, 'The Classic Lifecycle Citizen must generate and monitor QR Ph.');
+            abort(403, 'The Classic Lifecycle Citizen must generate QR Ph. Staff may check an existing payment request.');
         }
     }
 }
