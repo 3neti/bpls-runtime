@@ -43,8 +43,38 @@ const calls = {
     application: 0,
 };
 
+let citizenOutageHeld = false;
+let citizenCallsSinceHold = 0;
+let citizenRecoveryCalls = 0;
+let staffSettled = false;
+
 function nextStatus(key) {
     calls[key]++;
+
+    if (key === 'citizen') {
+        if (citizenOutageHeld) {
+            citizenCallsSinceHold++;
+
+            return citizenCallsSinceHold === 1
+                ? statusQueues.citizen[0]
+                : statusQueues.citizen[1];
+        }
+
+        if (citizenRecoveryCalls === 0) {
+            citizenRecoveryCalls++;
+
+            return statusQueues.citizen[2];
+        }
+
+        citizenRecoveryCalls++;
+
+        return statusQueues.citizen[3];
+    }
+
+    if (key === 'staff' && statusQueues.staff[(calls[key] - 1) % statusQueues.staff.length].paid) {
+        staffSettled = true;
+    }
+
     const queue = statusQueues[key];
     return queue[(calls[key] - 1) % queue.length];
 }
@@ -225,17 +255,17 @@ function permitApplicationSummary() {
     };
 }
 
-function classicHandoff() {
+function classicHandoff(settled = false) {
     return {
         payment_id: 9001,
         pay_code: 'QRPH-RESILIENCE',
         external_reference: 'synthetic-payment-reference',
         amount_cents: 397500,
         currency: 'PHP',
-        status: 'awaiting_payment',
-        is_current: true,
-        is_settled: false,
-        resolution: 'active',
+        status: settled ? 'collected' : 'awaiting_payment',
+        is_current: !settled,
+        is_settled: settled,
+        resolution: settled ? 'settled' : 'active',
         server_now: now(),
         history: [
             {
@@ -404,6 +434,21 @@ const server = await createServer({
                         return json(res, { calls });
                     }
 
+                    if (requestUrl.pathname === '/test-hold-citizen-outage') {
+                        citizenOutageHeld = true;
+                        citizenCallsSinceHold = 0;
+                        citizenRecoveryCalls = 0;
+
+                        return json(res, { held: true });
+                    }
+
+                    if (requestUrl.pathname === '/test-release-citizen-outage') {
+                        citizenOutageHeld = false;
+                        citizenRecoveryCalls = 0;
+
+                        return json(res, { held: false });
+                    }
+
                     if (requestUrl.pathname === '/citizen/payment-schedules/66/qr-ph/status') {
                         const payload = nextStatus('citizen');
                         return json(res, payload, payload.httpStatus ?? 200);
@@ -452,6 +497,8 @@ const server = await createServer({
                             module: '/resources/js/pages/payment-schedules/Show.vue',
                             props: {
                                 paymentSchedule: paymentSchedule({
+                                    status: staffSettled ? 'paid' : 'pending',
+                                    paid_amount_cents: staffSettled ? 397500 : 0,
                                     permit_application: {
                                         id: 295,
                                         application_number: null,
@@ -465,7 +512,7 @@ const server = await createServer({
                                 collectionMethods: [],
                                 receiptReconciliation: null,
                                 classicPaymentSimulationUrl: '/synthetic-simulation-disabled',
-                                classicPaymentHandoff: classicHandoff(),
+                                classicPaymentHandoff: classicHandoff(staffSettled),
                                 can: {
                                     view_permit_application: true,
                                     view_collections: true,
@@ -592,12 +639,17 @@ async function run() {
             const pageErrors = [];
             page.on('pageerror', (error) => pageErrors.push(error.message));
 
+            staffSettled = false;
+            await fetch(`${baseUrl}/test-hold-citizen-outage`);
             await page.goto(`${baseUrl}/citizen`);
             await page.getByTestId('citizen-check-payment').waitFor();
             await page.getByText(/Awaiting payment confirmation/i).waitFor();
             assert.equal(await page.getByTestId('qr-ph-generate').count(), 0);
-            await page.getByTestId('citizen-check-payment').click();
-            await page.getByTestId('citizen-check-payment').click();
+            await waitForStatusJson(
+                page,
+                '/citizen/payment-schedules/66/qr-ph/status',
+                () => page.getByTestId('citizen-check-payment').click(),
+            );
             await page.getByText(/temporarily unavailable/i).waitFor();
             await page.getByText(/do not pay again/i).waitFor();
             await page.getByText(/Last check:/i).waitFor();
@@ -605,6 +657,7 @@ async function run() {
                 path: `${artifactDir}/citizen-${viewport.name}-offline.png`,
                 fullPage: true,
             });
+            await fetch(`${baseUrl}/test-release-citizen-outage`);
             await page.getByTestId('citizen-check-payment').click();
             await page.getByText(/Awaiting payment confirmation/i).waitFor();
             const citizenPaid = await waitForStatusJson(
@@ -646,6 +699,7 @@ async function run() {
                 () => page.getByTestId('staff-check-payment').click(),
             );
             assert.equal(staffPaid.body.paid, true);
+            await page.getByRole('heading', { name: 'Payment complete' }).waitFor();
             await page.screenshot({
                 path: `${artifactDir}/staff-${viewport.name}-paid.png`,
                 fullPage: true,
