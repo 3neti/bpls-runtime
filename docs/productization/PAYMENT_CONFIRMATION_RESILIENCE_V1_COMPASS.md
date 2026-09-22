@@ -2,19 +2,26 @@
 
 Updated: 22 September 2026.
 
+## BPLS-first checkpoint
+
+- Provider package `release/payment-resilience-v1030` at `5ed59de2` and old host `release/payment-resilience-v1` at `56728426` are **SUPERSEDED — DO NOT DEPLOY**. Retained for reference only. Provider v1.0.34/package `a5f3380f`, host `63aa389a`, remain independently managed.
+- Reviewed v1.0.34 Partner API source: collection totals remain explicit; Paid and availability are separate. Added four BPLS compatibility cases for expired/closed/cancelled availability and insufficient Paid-label evidence. No Composer dependency change.
+- Focused payment packet: **105 tests / 748 assertions PASS**; six frontend monitor tests PASS; four actual Vue surfaces rerun at desktop and 390×844 PASS; updated screenshots inspected. Pint and diff check PASS.
+- Read-only Cloud preflight confirms BPLS still `8bd497c` with no worker and scheduler disabled. Private bucket/disk binding verified. Logical backup creation and checksum verification in progress; no deployment yet.
+
 ## Current position
 
-Implementation complete and locally verified; shipping approved by the owner on 22 September 2026. Exact GitHub publishing confirmation requested after the tool approval check blocked the push. No push or deployment performed by this wave. Real funds and incident correction remain unauthorized. Renewal paused.
+Implementation complete and locally verified. Owner approved the narrowed BPLS-only push/deployment plan on 22 September 2026. Provider candidates are superseded; notifications remain disabled. Backup and readiness remain gates. No push or deployment performed yet. Real funds and incident correction remain unauthorized. Renewal paused.
 
 | Gate | Status |
 |---|---|
 | Evidence/baseline | Incident diagnosis and isolated regression coverage complete |
 | Canonical confirmation/background jobs | Integrated; full suite PASS |
-| Provider notification durability | Durable signed outbox + worker commits `5e0c8ef`, `9da6e34`; source accepted |
+| Provider notification durability | Source accepted; deployment deferred, older candidates superseded |
 | UI/manual checks/notification ingress | Integrated in `release/payment-resilience-v1`; focused tests passing |
 | Browser acceptance | Four surfaces desktop/mobile passed; final permission/error states and screenshots verified |
 | Independent acceptance | No remaining P1/P2 source blocker reported; deployment acceptance separate |
-| Deployment | Not authorized; prepare only |
+| Deployment | BPLS-only authorized; backup/readiness gates pending |
 | Incident data correction | Separate proposal/approval required |
 
 ## Resume instructions

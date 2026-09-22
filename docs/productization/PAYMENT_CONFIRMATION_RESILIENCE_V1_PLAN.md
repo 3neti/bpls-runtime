@@ -1,6 +1,17 @@
 # Payment Confirmation Resilience V1
 
-Approved implementation: 22 September 2026. Deployment, live-money testing and historical incident correction remain separate approval gates. Renewal is paused.
+Approved implementation: 22 September 2026. Owner approved BPLS-only push and UAT deployment, subject to backup and verification. Live-money testing and incident correction remain separate approval gates. Renewal is paused.
+
+## Current release scope — BPLS first
+
+1. Retire provider candidate `release/payment-resilience-v1030` (`5ed59de2`) and old host candidate `release/payment-resilience-v1` (`56728426`) from deployment. Retain as reference; no deletion, merge, push or deployment.
+2. Release only `3neti/bpls-runtime`: shared automatic/manual checks, durable reconciliation, and simulation isolation. Keep `XCHANGE_PAYMENT_EVENTS_ENABLED=false`.
+3. Verify API compatibility with separately deployed x-change v1.0.34, reported package `a5f3380f` and host `63aa389a`. BPLS consumes its API, not its Composer package. No provider dependency or host changes.
+4. Verify private backup and rollback readiness, focused tests, and desktop/mobile behavior. Preserve historical requests and receipts.
+5. Deploy BPLS with reconciliation initially disabled; verify its dedicated worker, shared locks and scheduler. Then activate reconciliation with a future-request cutoff.
+6. Verify Cloud health and duplicate protection without making a real payment. Real-money proof requires separately approved amount and destination.
+
+Provider notifications are deferred to a separate release from the current provider baseline. The original matrix below describes the full capability, not permission to activate deferred features.
 
 ## Outcome
 

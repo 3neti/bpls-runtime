@@ -106,6 +106,34 @@ test('background job confirms late settlement without any authenticated browser 
         ->and($payment->attempts()->sole()->status)->toBe('collected');
 });
 
+test('v1.0.34 paid outcome reconciles independently of availability', function (string $availability, bool $collected) {
+    [, $schedule] = qrPhScheduleFixture();
+    fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfixture"));
+    app(InitiateQrPhPayment::class)->handle($schedule);
+    $inquiry = qrPhInquiry($schedule, $collected, true);
+    $inquiry['data']['status'] = [
+        'key' => 'paid', 'label' => 'Paid', 'is_terminal' => true,
+        'availability_key' => $availability,
+    ];
+    $inquiry['data']['consumer_status'] = 'collected';
+    Http::swap(new Factory);
+    Http::preventStrayRequests();
+    Http::fake(['*/api/partner/v1/pay-codes/*' => Http::response($inquiry)]);
+
+    $result = app(ConfirmQrPhPayment::class)->handle($schedule);
+    $again = app(ConfirmQrPhPayment::class)->handle($schedule);
+
+    expect($result['paid'])->toBe($collected)
+        ->and($again['paid'])->toBe($collected)
+        ->and(TreasuryCollection::query()->count())->toBe($collected ? 1 : 0)
+        ->and(Receipt::query()->count())->toBe(0);
+})->with([
+    'paid but expired' => ['expired', true],
+    'paid but closed' => ['closed', true],
+    'paid but cancelled' => ['cancelled', true],
+    'label alone is insufficient' => ['expired', false],
+]);
+
 test('currency mismatch is persisted as review with no collection', function () {
     [, $schedule] = qrPhScheduleFixture();
     fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfixture"));
