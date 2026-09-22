@@ -1,6 +1,6 @@
 # Payment Confirmation Resilience V1 — Release and Operations
 
-Status: implementation verification in progress. This document does not authorize deployment or payment.
+Status: local implementation verified; shipping preflight in progress. See the compass for owner approval and unresolved publishing/backup gates. This document never authorizes a real payment.
 
 ## Officer interaction
 
@@ -17,6 +17,7 @@ If a payment was made but confirmation has not appeared, select **Check payment 
 - Run the Laravel scheduler continuously; restart workers after deployment. Verify a worker actually consumes a harmless test job before enabling payment reconciliation.
 - Provider worker: use the configured durable connection and `partner-payments` queue, with 30-second timeout and connection retry interval greater than 30 seconds. The scheduler dispatches delivery jobs; it must not perform network delivery itself.
 - Keep all new background/event feature flags disabled until worker, scheduler, shared-lock and receiver checks pass.
+- Set `PAYMENT_RECONCILIATION_STARTS_AT` to the agreed activation timestamp in the BPLS app timezone, using `YYYY-MM-DD HH:MM:SS`. The initial rollout must exclude historical requests. The sweep and already queued jobs both enforce this boundary; invalid configuration fails closed. Do not remove the boundary to sweep incident records without separate approval.
 
 ## Notification setup
 

@@ -4,7 +4,7 @@ Updated: 22 September 2026.
 
 ## Current position
 
-Implementation complete and locally verified; baseline preserved. Deployment, real funds and incident correction NOT authorized. Renewal paused.
+Implementation complete and locally verified; shipping approved by the owner on 22 September 2026. Exact GitHub publishing confirmation requested after the tool approval check blocked the push. No push or deployment performed by this wave. Real funds and incident correction remain unauthorized. Renewal paused.
 
 | Gate | Status |
 |---|---|
@@ -23,7 +23,7 @@ Read the sibling PLAN first. Inspect branch/diff and agent results before editin
 
 ## Next
 
-Seek approval for exact release integration/deployment, then follow OPERATIONS and verify the actual workers, scheduler and concurrency topology before enabling background features. A controlled Cloud payment needs separate authorization. Do not alter historical incident evidence.
+Resolve exact GitHub publishing approval and pre-migration backup readiness. Recheck both Cloud deployment SHAs before release, especially a concurrent provider deployment observed during preflight. Then follow OPERATIONS, verify workers/scheduler/concurrency, and activate future-only reconciliation. A controlled Cloud payment needs separate authorization. Do not alter historical incident evidence.
 
 ## Checkpoint — implementation underway
 
@@ -68,3 +68,15 @@ Seek approval for exact release integration/deployment, then follow OPERATIONS a
 - Six monitor tests and seven receipt/layout tests pass. Runtime types/lint/format/build and targeted PHPStan pass; all changed PHP files pass Pint.
 - See VERIFICATION for evidence scope and OPERATIONS for activation boundaries. Source implementation is accepted; deployed concurrency/workers and Cloud payment acceptance remain unperformed, not presumed.
 - No push, deployment, real funds, main-worktree mutation or historical correction.
+
+## Shipping preflight — 22 September 2026
+
+- User requested shipping. Unrelated dirty main checkouts are retained untouched; release work remains isolated.
+- Initial Cloud baselines: BPLS `8bd497c` on `release/workflow-handoff-uat-20260911`; provider host `3e490af8` on `main`. Both push-to-deploy enabled. A later provider read reported an external deployment in progress; refresh its SHA before adopting any host patch.
+- BPLS has no worker and scheduler disabled. Provider has scheduler plus an existing funding/feedback/default worker. Both use database queue/cache/session and have jobs/cache/cache_locks tables.
+- Both managed databases reject snapshot creation as unsupported. No snapshots created or retention changed. BPLS has pg_dump and an S3 disk; logical backup/export has NOT been performed. Backup readiness remains a release gate.
+- Publishing attempt was blocked by the tool approval check; requested explicit authorization for release branches in `3neti/bpls-runtime`, `3neti/x-change`, and `3neti/x-change-sandbox`. Do not retry or bypass that denial before it is resolved.
+- Isolated provider package `work/x-change-payment-ship`, branch `release/payment-resilience-v1030`, candidate `5ed59de2040bccf553b5c0a5a3966d165af2ac40`: deployed package base plus only the two accepted changes. 43 tests / 209 assertions PASS. No stable version tag created; use a frozen branch/hash pin to avoid shipping unrelated later package work.
+- BPLS rollout guard `5d00ec7`: optional inclusive `PAYMENT_RECONCILIATION_STARTS_AT`, strict app-timezone timestamp, excludes older requests from sweep and stale jobs. Combined 51 tests / 336 assertions PASS; targeted PHPStan/Pint passed in specialist packet. Manual checks unchanged.
+- Isolated host `work/x-change-host-payment-ship`, candidate `bf3e2fbb`: deployment-secret-backed receiver wiring and partner-payments queue declaration. Two configuration tests / seven assertions PASS, Pint PASS. Composer adoption still pending publishing approval; copied test dependencies are not proof of exact final package installation.
+- No Cloud configuration, worker, scheduler, application, Collection or receipt mutation performed by this wave. Only read-only inventory and unsuccessful snapshot requests occurred.
