@@ -15,7 +15,7 @@ const future = () => new Date(Date.now() + 30 * 60 * 1000).toISOString();
 const statusQueues = {
     citizen: [
         { paid: false, status: 'awaiting_payment', last_checked_at: '2026-09-22T01:59:56Z' },
-        { paid: false, status: 'temporarily_unavailable', httpStatus: 503 },
+        { paid: false, status: 'error', reconciliation_state: 'error', last_checked_at: '2026-09-22T02:00:00Z' },
         { paid: false, status: 'awaiting_payment', last_checked_at: '2026-09-22T02:00:00Z' },
         { paid: true, status: 'paid', collection_id: 7001, receipt_id: null, last_checked_at: '2026-09-22T02:00:04Z' },
     ],
@@ -31,7 +31,7 @@ const statusQueues = {
     ],
     application: [
         { paid: false, status: 'expired', last_checked_at: '2026-09-22T02:20:00Z' },
-        { paid: false, status: 'temporarily_unavailable', httpStatus: 503 },
+        { paid: false, status: 'error', reconciliation_state: 'error', last_checked_at: '2026-09-22T02:20:02Z' },
         { paid: false, status: 'needs_review', reconciliation_state: 'needs_review', last_checked_at: '2026-09-22T02:20:04Z' },
     ],
 };
@@ -368,7 +368,7 @@ const server = await createServer({
                                         const response = await fetch('/application/payment-status', {headers: {Accept: 'application/json'}});
                                         const result = await response.json();
                                         lastChecked.value = result.last_checked_at ?? new Date().toLocaleTimeString('en-PH');
-                                        if (!response.ok || result.status === 'temporarily_unavailable') {
+                                        if (!response.ok || result.status === 'temporarily_unavailable' || result.status === 'error' || result.reconciliation_state === 'error') {
                                             message.value = 'Payment checking is temporarily unavailable. Please check again; do not pay again solely because confirmation is delayed.';
                                         } else if (result.reconciliation_state === 'needs_review' || result.status === 'needs_review') {
                                             message.value = 'Needs review. Ask Treasury to check the payment evidence; do not pay again.';
@@ -472,8 +472,40 @@ const server = await createServer({
                                     record_collections: true,
                                     issue_receipts: true,
                                     view_receipts: true,
+                                    check_qr_ph: true,
                                     initiate_qr_ph: false,
-                                    simulate_classic_payment: true,
+                                    simulate_classic_payment: false,
+                                },
+                            },
+                        },
+                        '/staff-denied': {
+                            component: 'StaffPaymentDenied',
+                            module: '/resources/js/pages/payment-schedules/Show.vue',
+                            props: {
+                                paymentSchedule: paymentSchedule({
+                                    permit_application: {
+                                        id: 295,
+                                        application_number: null,
+                                        type: 'new',
+                                        status: 'pending_payment',
+                                        application_year: 2026,
+                                        business_name: 'Payment Resilience Browser Fixture',
+                                        owner_name: 'Synthetic Owner',
+                                    },
+                                }),
+                                collectionMethods: [],
+                                receiptReconciliation: null,
+                                classicPaymentSimulationUrl: '/synthetic-simulation-disabled',
+                                classicPaymentHandoff: classicHandoff(),
+                                can: {
+                                    view_permit_application: true,
+                                    view_collections: true,
+                                    record_collections: true,
+                                    issue_receipts: true,
+                                    view_receipts: true,
+                                    check_qr_ph: false,
+                                    initiate_qr_ph: false,
+                                    simulate_classic_payment: false,
                                 },
                             },
                         },
@@ -600,7 +632,7 @@ async function run() {
             await page.getByTestId('staff-check-payment').waitFor();
             await page.getByTestId('staff-qr-ph-message').getByText(/Awaiting payment confirmation/i).waitFor();
             assert.equal(await page.getByTestId('staff-qr-ph-generate').count(), 0);
-            assert.equal(await page.getByTestId('classic-payment-simulate').count(), 1);
+            assert.equal(await page.getByTestId('classic-payment-simulate').count(), 0);
             await page.getByText(/Last check: /i).waitFor();
             const staffAwaiting = await waitForStatusJson(
                 page,
@@ -616,6 +648,21 @@ async function run() {
             assert.equal(staffPaid.body.paid, true);
             await page.screenshot({
                 path: `${artifactDir}/staff-${viewport.name}-paid.png`,
+                fullPage: true,
+            });
+            await assertNoHorizontalOverflow(page);
+
+            const staffCallsBeforeDenied = calls.staff;
+            await page.goto(`${baseUrl}/staff-denied`);
+            await page.getByTestId('staff-qr-ph-payment').waitFor();
+            await page.getByText('QRPH-RESILIENCE').waitFor();
+            assert.equal(await page.getByTestId('staff-check-payment').count(), 0);
+            assert.equal(await page.getByTestId('classic-payment-simulate').count(), 0);
+            assert.equal(await page.getByTestId('staff-qr-ph-generate').count(), 0);
+            await page.waitForTimeout(500);
+            assert.equal(calls.staff, staffCallsBeforeDenied);
+            await page.screenshot({
+                path: `${artifactDir}/staff-denied-${viewport.name}.png`,
                 fullPage: true,
             });
             await assertNoHorizontalOverflow(page);

@@ -5,6 +5,10 @@ import vue from '@vitejs/plugin-vue';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
+// Synthetic-only form boundary fixture: this verifies that the UAT simulation
+// form submits the exact active attempt. Real-provider-shaped handoffs are
+// covered by PaymentConfirmationResilienceBrowserTest.mjs and do not expose the
+// simulation control.
 let submitted = [];
 const props = () => ({
     errors: {},
@@ -48,6 +52,7 @@ const props = () => ({
         },
     },
     collectionMethods: [],
+    receiptReconciliation: null,
     can: {
         record_collections: true,
         view_collections: true,
