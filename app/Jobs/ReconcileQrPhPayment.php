@@ -4,18 +4,26 @@ namespace App\Jobs;
 
 use App\Actions\ConfirmQrPhPayment;
 use App\Models\XChangePayment;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\RateLimiter;
 
-class ReconcileQrPhPayment implements ShouldQueue
+class ReconcileQrPhPayment implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
     public int $tries = 3;
 
     public int $timeout = 105;
+
+    public int $uniqueFor = 3600;
+
+    public function uniqueId(): string
+    {
+        return (string) $this->paymentId;
+    }
 
     public function __construct(public int $paymentId)
     {

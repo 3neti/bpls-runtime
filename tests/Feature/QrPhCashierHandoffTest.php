@@ -196,6 +196,8 @@ test('real settled payment wins over a simulation request and creates no synthet
         ->and(TreasuryCollection::count())->toBe(1)
         ->and(data_get($collection->source_snapshot, 'integration_evidence.source'))->toBe('authoritative_partner_inquiry')
         ->and(data_get($collection->source_snapshot, 'integration_evidence.synthetic_only'))->toBeFalse();
+    $run = LifecycleCleanroomRun::factory()->create(['new_application_id' => $schedule->permit_application_id]);
+    expect(app(SimulateLifecycleQrPhPayment::class)->handle($run)->id)->toBe($collection->id);
 });
 
 test('authorized staff may check an existing Classic payable while generation remains Citizen owned', function () {

@@ -53,7 +53,11 @@ final class ConfirmQrPhPayment
                 try {
                     $inquiry = $this->client->inquire($payment->pay_code);
                 } catch (XChangePartnerApiException $exception) {
-                    $payment->forceFill(['reconciliation_state' => 'error', 'last_error_code' => $exception->errorCode])->save();
+                    $payment->forceFill([
+                        'reconciliation_state' => 'error',
+                        'last_error_code' => $exception->errorCode,
+                        'next_check_at' => now()->addSeconds(min(3600, 60 * (2 ** min(6, $payment->reconciliation_attempts)))),
+                    ])->save();
 
                     return $this->result($payment, false, 'error');
                 }

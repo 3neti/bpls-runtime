@@ -1366,7 +1366,7 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         ->and(app(BuildMunicipalWorkInbox::class)->handle(User::query()->findOrFail(data_get($run->actor_manifest, 'actors.cashier.user_id')))['items']->pluck('task_type')->all())
         ->toBe(['collection']);
 
-    $payment = XChangePayment::query()->create([
+    $payment = XChangePayment::query()->forceCreate([
         'payment_schedule_id' => $schedule->id,
         'assessment_id' => $assessment->id,
         'external_reference' => 'bpls-ps-'.$schedule->id.'-synthetic-nelson',
@@ -1376,7 +1376,8 @@ test('nelson cleanroom assigns routed Payment Order work without requiring an ap
         'currency' => 'PHP',
         'binding_secret' => 'synthetic-binding-secret',
         'status' => 'awaiting_payment',
-        'pay_code' => 'NELS',
+        'pay_code' => null,
+        'synthetic_only' => true,
         'consumer_status' => 'payable',
         'provider_status' => 'awaiting_payment',
         'target_amount_cents' => $schedule->total_amount_cents,
