@@ -98,6 +98,7 @@ const props = () => ({
     },
 });
 const server = await createServer({
+    cacheDir: 'storage/framework/testing/qr-handoff-vite',
     configFile: false,
     root: process.cwd(),
     plugins: [

@@ -27,6 +27,7 @@ test('reopening an existing request checks immediately, independent of QR expiry
         enabled: () => true,
         request: async () => {
             calls++;
+
             return { paid: true, status: 'paid' };
         },
         changed: () => {},
@@ -45,6 +46,7 @@ test('manual and automatic checks cannot overlap', async () => {
         enabled: () => true,
         request: () => {
             calls++;
+
             return new Promise((r) => (resolve = r));
         },
         changed: () => {},
@@ -63,7 +65,10 @@ test('provider failure stays unavailable, then a later check can recover', async
     const monitor = createPaymentStatusMonitor({
         enabled: () => true,
         request: async () => {
-            if (++calls === 1) throw new Error('offline');
+            if (++calls === 1) {
+                throw new Error('offline');
+            }
+
             return {
                 paid: true,
                 status: 'paid',

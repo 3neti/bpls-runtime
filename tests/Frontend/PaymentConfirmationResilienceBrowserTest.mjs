@@ -6,7 +6,9 @@ import vue from '@vitejs/plugin-vue';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
-const artifactDir = resolve('tests/Frontend/artifacts/payment-confirmation-resilience');
+const artifactDir = resolve(
+    'tests/Frontend/artifacts/payment-confirmation-resilience',
+);
 mkdirSync(artifactDir, { recursive: true });
 
 const now = () => new Date().toISOString();
@@ -14,25 +16,85 @@ const future = () => new Date(Date.now() + 30 * 60 * 1000).toISOString();
 
 const statusQueues = {
     citizen: [
-        { paid: false, status: 'awaiting_payment', last_checked_at: '2026-09-22T01:59:56Z' },
-        { paid: false, status: 'error', reconciliation_state: 'error', last_checked_at: '2026-09-22T02:00:00Z' },
-        { paid: false, status: 'awaiting_payment', last_checked_at: '2026-09-22T02:00:00Z' },
-        { paid: true, status: 'paid', collection_id: 7001, receipt_id: null, last_checked_at: '2026-09-22T02:00:04Z' },
+        {
+            paid: false,
+            status: 'awaiting_payment',
+            last_checked_at: '2026-09-22T01:59:56Z',
+        },
+        {
+            paid: false,
+            status: 'error',
+            reconciliation_state: 'error',
+            last_checked_at: '2026-09-22T02:00:00Z',
+        },
+        {
+            paid: false,
+            status: 'awaiting_payment',
+            last_checked_at: '2026-09-22T02:00:00Z',
+        },
+        {
+            paid: true,
+            status: 'paid',
+            collection_id: 7001,
+            receipt_id: null,
+            last_checked_at: '2026-09-22T02:00:04Z',
+        },
     ],
     citizenApplication: [
-        { paid: false, status: 'awaiting_payment', last_checked_at: '2026-09-22T02:04:56Z' },
-        { paid: false, status: 'expired', last_checked_at: '2026-09-22T02:05:00Z' },
-        { paid: false, status: 'needs_review', reconciliation_state: 'needs_review', last_checked_at: '2026-09-22T02:05:04Z' },
+        {
+            paid: false,
+            status: 'awaiting_payment',
+            last_checked_at: '2026-09-22T02:04:56Z',
+        },
+        {
+            paid: false,
+            status: 'expired',
+            last_checked_at: '2026-09-22T02:05:00Z',
+        },
+        {
+            paid: false,
+            status: 'needs_review',
+            reconciliation_state: 'needs_review',
+            last_checked_at: '2026-09-22T02:05:04Z',
+        },
     ],
     staff: [
-        { paid: false, status: 'awaiting_payment', last_checked_at: '2026-09-22T02:09:56Z' },
-        { paid: false, status: 'awaiting_payment', last_checked_at: '2026-09-22T02:10:00Z' },
-        { paid: true, status: 'paid', collection_id: 7002, receipt_id: null, last_checked_at: '2026-09-22T02:10:04Z' },
+        {
+            paid: false,
+            status: 'awaiting_payment',
+            last_checked_at: '2026-09-22T02:09:56Z',
+        },
+        {
+            paid: false,
+            status: 'awaiting_payment',
+            last_checked_at: '2026-09-22T02:10:00Z',
+        },
+        {
+            paid: true,
+            status: 'paid',
+            collection_id: 7002,
+            receipt_id: null,
+            last_checked_at: '2026-09-22T02:10:04Z',
+        },
     ],
     application: [
-        { paid: false, status: 'expired', last_checked_at: '2026-09-22T02:20:00Z' },
-        { paid: false, status: 'error', reconciliation_state: 'error', last_checked_at: '2026-09-22T02:20:02Z' },
-        { paid: false, status: 'needs_review', reconciliation_state: 'needs_review', last_checked_at: '2026-09-22T02:20:04Z' },
+        {
+            paid: false,
+            status: 'expired',
+            last_checked_at: '2026-09-22T02:20:00Z',
+        },
+        {
+            paid: false,
+            status: 'error',
+            reconciliation_state: 'error',
+            last_checked_at: '2026-09-22T02:20:02Z',
+        },
+        {
+            paid: false,
+            status: 'needs_review',
+            reconciliation_state: 'needs_review',
+            last_checked_at: '2026-09-22T02:20:04Z',
+        },
     ],
 };
 
@@ -71,11 +133,15 @@ function nextStatus(key) {
         return statusQueues.citizen[3];
     }
 
-    if (key === 'staff' && statusQueues.staff[(calls[key] - 1) % statusQueues.staff.length].paid) {
+    if (
+        key === 'staff' &&
+        statusQueues.staff[(calls[key] - 1) % statusQueues.staff.length].paid
+    ) {
         staffSettled = true;
     }
 
     const queue = statusQueues[key];
+
     return queue[(calls[key] - 1) % queue.length];
 }
 
@@ -155,7 +221,8 @@ function paymentSchedule(overrides = {}) {
             expires_at: future(),
             qr_data_url: qrDataUrl,
         },
-        artifact_statement: 'Payment Schedule is payable through synthetic QR Ph.',
+        artifact_statement:
+            'Payment Schedule is payable through synthetic QR Ph.',
         ...overrides,
     };
 }
@@ -353,7 +420,7 @@ function application() {
 const server = await createServer({
     configFile: false,
     root: process.cwd(),
-    cacheDir: 'tests/Frontend/artifacts/payment-confirmation-resilience/vite-cache',
+    cacheDir: 'storage/framework/testing/payment-resilience-vite',
     plugins: [
         vue(),
         tailwindcss(),
@@ -428,7 +495,10 @@ const server = await createServer({
             },
             configureServer(server) {
                 server.middlewares.use((req, res, next) => {
-                    const requestUrl = new URL(req.url ?? '/', 'http://localhost');
+                    const requestUrl = new URL(
+                        req.url ?? '/',
+                        'http://localhost',
+                    );
 
                     if (requestUrl.pathname === '/test-state') {
                         return json(res, { calls });
@@ -442,39 +512,57 @@ const server = await createServer({
                         return json(res, { held: true });
                     }
 
-                    if (requestUrl.pathname === '/test-release-citizen-outage') {
+                    if (
+                        requestUrl.pathname === '/test-release-citizen-outage'
+                    ) {
                         citizenOutageHeld = false;
                         citizenRecoveryCalls = 0;
 
                         return json(res, { held: false });
                     }
 
-                    if (requestUrl.pathname === '/citizen/payment-schedules/66/qr-ph/status') {
+                    if (
+                        requestUrl.pathname ===
+                        '/citizen/payment-schedules/66/qr-ph/status'
+                    ) {
                         const payload = nextStatus('citizen');
+
                         return json(res, payload, payload.httpStatus ?? 200);
                     }
 
-                    if (requestUrl.pathname === '/citizen/payment-schedules/67/qr-ph/status') {
+                    if (
+                        requestUrl.pathname ===
+                        '/citizen/payment-schedules/67/qr-ph/status'
+                    ) {
                         const payload = nextStatus('citizenApplication');
+
                         return json(res, payload, payload.httpStatus ?? 200);
                     }
 
-                    if (requestUrl.pathname === '/staff/payment-schedules/66/qr-ph/status') {
+                    if (
+                        requestUrl.pathname ===
+                        '/staff/payment-schedules/66/qr-ph/status'
+                    ) {
                         const payload = nextStatus('staff');
+
                         return json(res, payload, payload.httpStatus ?? 200);
                     }
 
                     if (requestUrl.pathname === '/application/payment-status') {
                         const payload = nextStatus('application');
+
                         return json(res, payload, payload.httpStatus ?? 200);
                     }
 
                     if (requestUrl.pathname === '/application') {
                         const html = `<meta name="viewport" content="width=device-width,initial-scale=1"><div id="app"></div><script type="module">import '/resources/css/app.css'; import 'synthetic-application-payment';</script>`;
-                        return server.transformIndexHtml('/application', html).then((body) => {
-                            res.setHeader('Content-Type', 'text/html');
-                            res.end(body);
-                        });
+
+                        return server
+                            .transformIndexHtml('/application', html)
+                            .then((body) => {
+                                res.setHeader('Content-Type', 'text/html');
+                                res.end(body);
+                            });
                     }
 
                     const pageByPath = {
@@ -498,21 +586,26 @@ const server = await createServer({
                             props: {
                                 paymentSchedule: paymentSchedule({
                                     status: staffSettled ? 'paid' : 'pending',
-                                    paid_amount_cents: staffSettled ? 397500 : 0,
+                                    paid_amount_cents: staffSettled
+                                        ? 397500
+                                        : 0,
                                     permit_application: {
                                         id: 295,
                                         application_number: null,
                                         type: 'new',
                                         status: 'pending_payment',
                                         application_year: 2026,
-                                        business_name: 'Payment Resilience Browser Fixture',
+                                        business_name:
+                                            'Payment Resilience Browser Fixture',
                                         owner_name: 'Synthetic Owner',
                                     },
                                 }),
                                 collectionMethods: [],
                                 receiptReconciliation: null,
-                                classicPaymentSimulationUrl: '/synthetic-simulation-disabled',
-                                classicPaymentHandoff: classicHandoff(staffSettled),
+                                classicPaymentSimulationUrl:
+                                    '/synthetic-simulation-disabled',
+                                classicPaymentHandoff:
+                                    classicHandoff(staffSettled),
                                 can: {
                                     view_permit_application: true,
                                     view_collections: true,
@@ -536,13 +629,15 @@ const server = await createServer({
                                         type: 'new',
                                         status: 'pending_payment',
                                         application_year: 2026,
-                                        business_name: 'Payment Resilience Browser Fixture',
+                                        business_name:
+                                            'Payment Resilience Browser Fixture',
                                         owner_name: 'Synthetic Owner',
                                     },
                                 }),
                                 collectionMethods: [],
                                 receiptReconciliation: null,
-                                classicPaymentSimulationUrl: '/synthetic-simulation-disabled',
+                                classicPaymentSimulationUrl:
+                                    '/synthetic-simulation-disabled',
                                 classicPaymentHandoff: classicHandoff(),
                                 can: {
                                     view_permit_application: true,
@@ -572,6 +667,7 @@ const server = await createServer({
 
                     if (req.headers['x-inertia']) {
                         res.setHeader('X-Inertia', 'true');
+
                         return json(res, page);
                     }
 
@@ -583,17 +679,22 @@ const server = await createServer({
                         createInertiaApp({page:${JSON.stringify(page)},resolve:()=>Page,setup:({el,App,props,plugin})=>createApp({render:()=>h(App,props)}).use(plugin).mount(el)});
                     </script>`;
 
-                    server.transformIndexHtml(requestUrl.pathname, html).then((body) => {
-                        res.setHeader('Content-Type', 'text/html');
-                        res.end(body);
-                    });
+                    server
+                        .transformIndexHtml(requestUrl.pathname, html)
+                        .then((body) => {
+                            res.setHeader('Content-Type', 'text/html');
+                            res.end(body);
+                        });
                 });
             },
         },
     ],
     resolve: {
         alias: [
-            { find: '@/layouts/AppLayout.vue', replacement: 'synthetic-layout' },
+            {
+                find: '@/layouts/AppLayout.vue',
+                replacement: 'synthetic-layout',
+            },
             {
                 find: '@/components/permit-applications/IpilExecutableDocument.vue',
                 replacement: 'synthetic-executable-document',
@@ -609,7 +710,9 @@ const baseUrl = `http://127.0.0.1:${server.httpServer.address().port}`;
 
 async function assertNoHorizontalOverflow(page) {
     assert.equal(
-        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        await page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
         true,
     );
 }
@@ -669,10 +772,14 @@ async function run() {
             await assertNoHorizontalOverflow(page);
 
             await page.goto(`${baseUrl}/citizen-application`);
-            await page.getByTestId('citizen-application-check-payment').waitFor();
+            await page
+                .getByTestId('citizen-application-check-payment')
+                .waitFor();
             await page.getByText(/Awaiting payment confirmation/i).waitFor();
             await page.getByTestId('citizen-application-check-payment').click();
-            await page.getByText(/QR expired; payment is not yet confirmed/i).waitFor();
+            await page
+                .getByText(/QR expired; payment is not yet confirmed/i)
+                .waitFor();
             await page.getByTestId('citizen-application-check-payment').click();
             await page.getByText(/Needs review/i).waitFor();
             await page.screenshot({
@@ -683,9 +790,18 @@ async function run() {
 
             await page.goto(`${baseUrl}/staff`);
             await page.getByTestId('staff-check-payment').waitFor();
-            await page.getByTestId('staff-qr-ph-message').getByText(/Awaiting payment confirmation/i).waitFor();
-            assert.equal(await page.getByTestId('staff-qr-ph-generate').count(), 0);
-            assert.equal(await page.getByTestId('classic-payment-simulate').count(), 0);
+            await page
+                .getByTestId('staff-qr-ph-message')
+                .getByText(/Awaiting payment confirmation/i)
+                .waitFor();
+            assert.equal(
+                await page.getByTestId('staff-qr-ph-generate').count(),
+                0,
+            );
+            assert.equal(
+                await page.getByTestId('classic-payment-simulate').count(),
+                0,
+            );
             await page.getByText(/Last check: /i).waitFor();
             const staffAwaiting = await waitForStatusJson(
                 page,
@@ -699,7 +815,9 @@ async function run() {
                 () => page.getByTestId('staff-check-payment').click(),
             );
             assert.equal(staffPaid.body.paid, true);
-            await page.getByRole('heading', { name: 'Payment complete' }).waitFor();
+            await page
+                .getByRole('heading', { name: 'Payment complete' })
+                .waitFor();
             await page.screenshot({
                 path: `${artifactDir}/staff-${viewport.name}-paid.png`,
                 fullPage: true,
@@ -710,9 +828,18 @@ async function run() {
             await page.goto(`${baseUrl}/staff-denied`);
             await page.getByTestId('staff-qr-ph-payment').waitFor();
             await page.getByText('QRPH-RESILIENCE').waitFor();
-            assert.equal(await page.getByTestId('staff-check-payment').count(), 0);
-            assert.equal(await page.getByTestId('classic-payment-simulate').count(), 0);
-            assert.equal(await page.getByTestId('staff-qr-ph-generate').count(), 0);
+            assert.equal(
+                await page.getByTestId('staff-check-payment').count(),
+                0,
+            );
+            assert.equal(
+                await page.getByTestId('classic-payment-simulate').count(),
+                0,
+            );
+            assert.equal(
+                await page.getByTestId('staff-qr-ph-generate').count(),
+                0,
+            );
             await page.waitForTimeout(500);
             assert.equal(calls.staff, staffCallsBeforeDenied);
             await page.screenshot({
@@ -724,7 +851,9 @@ async function run() {
             await page.goto(`${baseUrl}/application`);
             await page.getByTestId('application-check-payment').waitFor();
             await page.getByTestId('application-check-payment').click();
-            await page.getByText(/QR expired; payment is not yet confirmed/i).waitFor();
+            await page
+                .getByText(/QR expired; payment is not yet confirmed/i)
+                .waitFor();
             await page.getByTestId('application-check-payment').click();
             await page.getByText(/temporarily unavailable/i).waitFor();
             await page.getByText(/do not pay again/i).waitFor();

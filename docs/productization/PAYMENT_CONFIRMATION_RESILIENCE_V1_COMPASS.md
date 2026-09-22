@@ -4,16 +4,16 @@ Updated: 22 September 2026.
 
 ## Current position
 
-Implementation authorized; baseline preserved. Deployment, real funds and incident correction NOT authorized. Renewal paused.
+Implementation complete and locally verified; baseline preserved. Deployment, real funds and incident correction NOT authorized. Renewal paused.
 
 | Gate | Status |
 |---|---|
-| Evidence/baseline | Incident diagnosis complete; isolated regression reproduction starting |
-| Canonical confirmation/background jobs | Integrated and focused tests passing; full suite running |
+| Evidence/baseline | Incident diagnosis and isolated regression coverage complete |
+| Canonical confirmation/background jobs | Integrated; full suite PASS |
 | Provider notification durability | Durable signed outbox + worker commits `5e0c8ef`, `9da6e34`; source accepted |
 | UI/manual checks/notification ingress | Integrated in `release/payment-resilience-v1`; focused tests passing |
-| Browser acceptance | Four surfaces desktop/mobile passed; final permission/error-state follow-up running |
-| Independent acceptance | No remaining P1/P2 source blocker reported; final evidence review pending |
+| Browser acceptance | Four surfaces desktop/mobile passed; final permission/error states and screenshots verified |
+| Independent acceptance | No remaining P1/P2 source blocker reported; deployment acceptance separate |
 | Deployment | Not authorized; prepare only |
 | Incident data correction | Separate proposal/approval required |
 
@@ -23,7 +23,7 @@ Read the sibling PLAN first. Inspect branch/diff and agent results before editin
 
 ## Next
 
-Integrate the backend packet, run combined tests and browser evidence, obtain independent review, and finish release instructions. Deployment requires separate approval. Update this file after each meaningful gate; never turn implemented into accepted without evidence.
+Seek approval for exact release integration/deployment, then follow OPERATIONS and verify the actual workers, scheduler and concurrency topology before enabling background features. A controlled Cloud payment needs separate authorization. Do not alter historical incident evidence.
 
 ## Checkpoint — implementation underway
 
@@ -52,3 +52,19 @@ Integrate the backend packet, run combined tests and browser evidence, obtain in
 - Browser fixture packet `3bec2dc` is integrated. Final follow-up must reflect the explicit staff permission and provider-backed simulation prohibition before accepting screenshots.
 - Deployed provider v1.0.30 dependency `bfa34afaa63cc48e8c271b318585d23b2a11acb4` was inspected read-only: explicit `data.currency` and integer minor-unit collection totals already exist. Stricter BPLS inquiry parsing is compatible.
 - Full PHP suite still running. No deployment, push, real money or incident data changes. Worker operation, database concurrency under deployment topology, and controlled Cloud acceptance remain deployment gates.
+
+## Checkpoint — full-suite compatibility correction
+
+- First broad run: 1,229 tests; 1,227 passed, one skipped, one failed. The failure was the Classic ceremony fixture expecting simulation after creating a provider-backed payable.
+- `713d20a` changes that fixture to authoritative status confirmation with fake provider HTTP; no runtime guard weakened. Complete Classic file passes (three tests / 275 assertions), including downstream receipts, certifications and Permit assertions.
+- `8f0532e` clarifies that staff may check an existing Classic request while Citizen QR generation remains separate.
+- Full suite rerunning on this integrated runtime. Final browser evidence synchronization and release report remain in progress.
+
+## Final local verification
+
+- **Full BPLS suite: 1,236 passed, one intentional live-payment smoke skip; 19,630 assertions; 1,237 total.** No failures. Final run took 323.5 seconds.
+- Chief provider rerun: **43 tests / 209 assertions PASS**.
+- Chief reran both browser fixtures after integration: PASS on desktop and 390×844. Screenshots visually inspected; unavailable and paid states now match their filenames. Browser caches are worktree-local, not shared dependency writes.
+- Six monitor tests and seven receipt/layout tests pass. Runtime types/lint/format/build and targeted PHPStan pass; all changed PHP files pass Pint.
+- See VERIFICATION for evidence scope and OPERATIONS for activation boundaries. Source implementation is accepted; deployed concurrency/workers and Cloud payment acceptance remain unperformed, not presumed.
+- No push, deployment, real funds, main-worktree mutation or historical correction.
