@@ -29,8 +29,14 @@ final class ConfirmQrPhPayment
             return DB::transaction(function () use ($paymentSchedule, $source): array {
                 $schedule = PaymentSchedule::query()->lockForUpdate()->findOrFail($paymentSchedule->id);
                 $payment = $schedule->xChangePayment()->lockForUpdate()->first();
-                if ($payment === null || $payment->pay_code === null) {
+                if ($payment === null) {
                     return ['paid' => false, 'status' => 'not_started', 'collection_id' => null, 'receipt_id' => null, 'last_checked_at' => null, 'reconciliation_state' => 'pending'];
+                }
+                if ($payment->reconciliation_state === 'needs_review') {
+                    return $this->result($payment, false, 'needs_review');
+                }
+                if ($payment->pay_code === null) {
+                    return $this->result($payment, false, 'not_started');
                 }
                 $payment->load('treasuryCollection.receipt');
                 if ($payment->treasuryCollection !== null) {

@@ -50,6 +50,29 @@ test('currency mismatch is persisted as review with no collection', function () 
         ->and(TreasuryCollection::query()->count())->toBe(0);
 });
 
+test('integrity review cannot be cleared by a later clean inquiry from any check source', function (string $source) {
+    [, $schedule] = qrPhScheduleFixture();
+    fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfixture"));
+    app(InitiateQrPhPayment::class)->handle($schedule);
+    $clean = qrPhInquiry($schedule, true, false);
+    $mismatch = $clean;
+    $mismatch['data']['external_reference'] = 'different-obligation';
+    Http::swap(new Factory);
+    Http::preventStrayRequests();
+    Http::fake(['*/api/partner/v1/pay-codes/*' => Http::sequence()->push($mismatch)->push($clean)]);
+    $confirm = app(ConfirmQrPhPayment::class);
+    expect($confirm->handle($schedule)['reconciliation_state'])->toBe('needs_review');
+    $checkedAt = XChangePayment::query()->sole()->last_checked_at;
+    $this->travel(5)->minutes();
+    $result = $confirm->handle($schedule, $source);
+    expect($result['paid'])->toBeFalse()
+        ->and($result['reconciliation_state'])->toBe('needs_review')
+        ->and(XChangePayment::query()->sole()->last_error_code)->toBe('EXTERNAL_REFERENCE_MISMATCH')
+        ->and(XChangePayment::query()->sole()->last_checked_at->equalTo($checkedAt))->toBeTrue()
+        ->and(TreasuryCollection::query()->count())->toBe(0);
+    Http::assertSentCount(1);
+})->with(['manual', 'background', 'partner_notification', 'simulation_precheck']);
+
 test('a synthetic historical collection never becomes authoritative payment evidence', function () {
     [, $schedule] = qrPhScheduleFixture();
     fakeQrPhIssueAndAttempt($schedule, base64_encode("\x89PNG\r\n\x1a\nfixture"), true);
@@ -156,5 +179,9 @@ test('expired review window stops background inquiries without changing liabilit
     (new ReconcileQrPhPayment($payment->id))->handle(app(ConfirmQrPhPayment::class));
     expect($payment->fresh()->reconciliation_state)->toBe('needs_review')
         ->and($schedule->fresh()->paid_amount_cents)->toBe(0);
+    $result = app(ConfirmQrPhPayment::class)->handle($schedule);
+    expect($result['paid'])->toBeFalse()
+        ->and($result['reconciliation_state'])->toBe('needs_review')
+        ->and($payment->fresh()->last_error_code)->toBe('RECONCILIATION_WINDOW_EXHAUSTED');
     Http::assertNothingSent();
 });
