@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import AuthorityBoundaryPanel from '@/components/workflow/AuthorityBoundaryPanel.vue';
 import WorkflowSectionHeader from '@/components/workflow/WorkflowSectionHeader.vue';
 import WorkflowStageSummary from '@/components/workflow/WorkflowStageSummary.vue';
+import { usePaymentStatus } from '@/composables/usePaymentStatus';
 import type { BreadcrumbItem } from '@/types';
 
 type PaymentScheduleLine = {
@@ -140,10 +141,37 @@ const statusRequest = useHttp({});
 const qrAttempt = ref<QrPhAttempt | null>(
     props.paymentSchedule.current_qr_ph_attempt,
 );
-const paymentMessage = ref<string | null>(null);
+const generationMessage = ref<string | null>(null);
+const canCheckPayment = computed(
+    () =>
+        props.paymentSchedule.balance_amount_cents > 0 &&
+        Boolean(
+            qrAttempt.value ||
+            props.paymentSchedule.online_payment_boundary.pay_code ||
+            props.paymentSchedule.online_payment_boundary.payment_status,
+        ),
+);
+const {
+    check: checkPayment,
+    checking: checkingPayment,
+    message: statusMessage,
+    lastChecked,
+} = usePaymentStatus({
+    enabled: () => canCheckPayment.value,
+    request: async () =>
+        (await statusRequest.submit(
+            qrPhStatus(props.paymentSchedule.id),
+        )) as QrPhStatus,
+    paid: () => {
+        qrAttempt.value = null;
+        router.reload({ only: ['paymentSchedule'] });
+    },
+});
+const paymentMessage = computed(
+    () => statusMessage.value ?? generationMessage.value,
+);
 const currentTime = ref(Date.now());
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
-let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 const secondsRemaining = computed(() => {
     if (qrAttempt.value === null) {
@@ -211,38 +239,6 @@ function stopPaymentChecks(): void {
         clearInterval(countdownTimer);
         countdownTimer = null;
     }
-
-    if (pollTimer !== null) {
-        clearInterval(pollTimer);
-        pollTimer = null;
-    }
-}
-
-async function checkPayment(): Promise<void> {
-    if (statusRequest.processing || qrAttempt.value === null) {
-        return;
-    }
-
-    try {
-        const result = (await statusRequest.submit(
-            qrPhStatus(props.paymentSchedule.id),
-        )) as QrPhStatus;
-
-        if (result.paid) {
-            stopPaymentChecks();
-            paymentMessage.value =
-                'Payment confirmed. Your municipal collection is now recorded.';
-            qrAttempt.value = null;
-            router.reload({ only: ['paymentSchedule'] });
-        } else if (result.status === 'expired') {
-            stopPaymentChecks();
-            paymentMessage.value =
-                'This QR has expired without payment. Generate a fresh QR to continue.';
-        }
-    } catch {
-        paymentMessage.value =
-            'We could not check the payment yet. We will keep trying while this page is open.';
-    }
 }
 
 function startPaymentChecks(): void {
@@ -253,11 +249,10 @@ function startPaymentChecks(): void {
 
         if (secondsRemaining.value === 0) {
             stopPaymentChecks();
-            paymentMessage.value =
-                'This QR has expired without payment. Generate a fresh QR to continue.';
+            generationMessage.value =
+                'QR expired. Check payment status before paying again.';
         }
     }, 1000);
-    pollTimer = setInterval(() => void checkPayment(), 4000);
 }
 
 onMounted(() => {
@@ -267,7 +262,7 @@ onMounted(() => {
 });
 
 async function generateQrPh(): Promise<void> {
-    paymentMessage.value = null;
+    generationMessage.value = null;
 
     try {
         const result = (await initiateRequest.submit(
@@ -277,7 +272,7 @@ async function generateQrPh(): Promise<void> {
         if (
             result.amount_cents !== props.paymentSchedule.balance_amount_cents
         ) {
-            paymentMessage.value =
+            generationMessage.value =
                 'The returned payment amount did not match this obligation. Nothing was marked paid.';
 
             return;
@@ -286,7 +281,7 @@ async function generateQrPh(): Promise<void> {
         qrAttempt.value = result;
         startPaymentChecks();
     } catch {
-        paymentMessage.value =
+        generationMessage.value =
             'QR Ph is temporarily unavailable. Your obligation is unchanged; please try again.';
     }
 }
@@ -696,6 +691,24 @@ onBeforeUnmount(stopPaymentChecks);
                     </p>
                 </div>
 
+                <div v-if="canCheckPayment" class="grid gap-2">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        data-testid="citizen-check-payment"
+                        :disabled="checkingPayment"
+                        @click="checkPayment"
+                    >
+                        {{
+                            checkingPayment
+                                ? 'Checking…'
+                                : 'Check payment status'
+                        }}
+                    </Button>
+                    <p class="text-xs text-muted-foreground">
+                        Last check: {{ lastChecked }}
+                    </p>
+                </div>
                 <p
                     v-if="paymentMessage"
                     data-testid="qr-ph-message"

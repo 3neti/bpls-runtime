@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { usePaymentStatus } from '@/composables/usePaymentStatus';
 import type { BreadcrumbItem } from '@/types';
 
 type PaymentScheduleLine = {
@@ -281,13 +282,43 @@ const qrAttempt = ref<QrPhAttempt | null>(
         ? props.classicPaymentHandoff.attempt
         : null,
 );
-const qrMessage = ref<string | null>(null);
+const generationMessage = ref<string | null>(null);
+const canCheckPayment = computed(
+    () =>
+        balanceDueCents.value > 0 &&
+        Boolean(qrAttempt.value || props.classicPaymentHandoff?.pay_code),
+);
+const {
+    check: checkQrPayment,
+    checking: checkingPayment,
+    message: statusMessage,
+    lastChecked,
+} = usePaymentStatus({
+    enabled: () => canCheckPayment.value,
+    request: async () =>
+        (await statusRequest.submit(
+            qrPhStatus(props.paymentSchedule.id),
+        )) as QrPhStatus,
+    paid: () => {
+        qrAttempt.value = null;
+        router.reload({
+            only: [
+                'paymentSchedule',
+                'classicPaymentHandoff',
+                'receiptReconciliation',
+                'can',
+            ],
+        });
+    },
+});
+const qrMessage = computed(
+    () => statusMessage.value ?? generationMessage.value,
+);
 let serverClockOffset = props.classicPaymentHandoff
     ? Date.parse(props.classicPaymentHandoff.server_now) - Date.now()
     : 0;
 const currentTime = ref(Date.now() + serverClockOffset);
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
-let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 const secondsRemaining = computed(() => {
     if (qrAttempt.value === null) {
@@ -355,41 +386,9 @@ function stopQrChecks(): void {
         clearInterval(countdownTimer);
         countdownTimer = null;
     }
-
-    if (pollTimer !== null) {
-        clearInterval(pollTimer);
-        pollTimer = null;
-    }
 }
 
-async function checkQrPayment(): Promise<void> {
-    if (statusRequest.processing || qrAttempt.value === null) {
-        return;
-    }
-
-    try {
-        const result = (await statusRequest.submit(
-            qrPhStatus(props.paymentSchedule.id),
-        )) as QrPhStatus;
-
-        if (result.paid) {
-            stopQrChecks();
-            qrMessage.value =
-                'Payment confirmed. The municipal collection is now recorded.';
-            qrAttempt.value = null;
-            router.reload({ only: ['paymentSchedule'] });
-        } else if (result.status === 'expired') {
-            stopQrChecks();
-            qrMessage.value =
-                'This QR expired without payment. Generate a fresh QR to continue.';
-        }
-    } catch {
-        qrMessage.value =
-            'Payment confirmation is temporarily unavailable. No collection was recorded.';
-    }
-}
-
-function startQrChecks(pollForPayment = true): void {
+function startQrChecks(): void {
     stopQrChecks();
     currentTime.value = Date.now() + serverClockOffset;
     countdownTimer = setInterval(() => {
@@ -397,18 +396,14 @@ function startQrChecks(pollForPayment = true): void {
 
         if (secondsRemaining.value === 0) {
             stopQrChecks();
-            qrMessage.value =
-                'This QR request expired. The Citizen must request a replacement; refresh to review the current request.';
+            generationMessage.value =
+                'QR expired. Check payment status before requesting another payment.';
         }
     }, 1000);
-
-    if (pollForPayment) {
-        pollTimer = setInterval(() => void checkQrPayment(), 4000);
-    }
 }
 
 async function generateQrPh(): Promise<void> {
-    qrMessage.value = null;
+    generationMessage.value = null;
 
     try {
         const result = (await initiateRequest.submit(
@@ -416,7 +411,7 @@ async function generateQrPh(): Promise<void> {
         )) as QrPhAttempt;
 
         if (result.amount_cents !== balanceDueCents.value) {
-            qrMessage.value =
+            generationMessage.value =
                 'The returned amount does not match this Payment Schedule. Nothing was changed.';
 
             return;
@@ -425,13 +420,13 @@ async function generateQrPh(): Promise<void> {
         qrAttempt.value = result;
         startQrChecks();
     } catch {
-        qrMessage.value =
+        generationMessage.value =
             'QR Ph is temporarily unavailable. The Payment Schedule is unchanged.';
     }
 }
 
 if (qrAttempt.value !== null) {
-    startQrChecks(props.classicPaymentHandoff === null);
+    startQrChecks();
 }
 
 watch(
@@ -444,10 +439,10 @@ watch(
         stopQrChecks();
         serverClockOffset = Date.parse(handoff.server_now) - Date.now();
         qrAttempt.value = handoff.is_current ? handoff.attempt : null;
-        qrMessage.value = null;
+        generationMessage.value = null;
 
         if (qrAttempt.value !== null) {
-            startQrChecks(false);
+            startQrChecks();
         }
     },
 );
@@ -1057,6 +1052,24 @@ onBeforeUnmount(stopQrChecks);
                             </p>
                         </div>
 
+                        <div v-if="canCheckPayment" class="mt-3 grid gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                data-testid="staff-check-payment"
+                                :disabled="checkingPayment"
+                                @click="checkQrPayment"
+                            >
+                                {{
+                                    checkingPayment
+                                        ? 'Checking…'
+                                        : 'Check payment status'
+                                }}
+                            </Button>
+                            <p class="text-xs text-muted-foreground">
+                                Last check: {{ lastChecked }}
+                            </p>
+                        </div>
                         <p
                             v-if="qrMessage"
                             data-testid="staff-qr-ph-message"

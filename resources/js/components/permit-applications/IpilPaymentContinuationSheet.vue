@@ -84,6 +84,7 @@ const props = defineProps<{
     application: Record<string, any>;
     checking?: boolean;
     checkMessage?: string | null;
+    lastChecked?: string;
     statusUrl?: string | null;
 }>();
 
@@ -345,6 +346,10 @@ function paymentSource(): string {
                                 : 'Check payment status'
                         }}
                     </button>
+                    <p v-if="statusUrl && !isCollected" class="text-xs">
+                        Last check:
+                        {{ lastChecked ?? 'Not checked on this screen' }}
+                    </p>
                     <p
                         v-if="checkMessage"
                         class="text-xs font-bold"

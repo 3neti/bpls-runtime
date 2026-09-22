@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { router, useHttp } from '@inertiajs/vue3';
 import { ExternalLink, Printer, QrCode, ReceiptText } from '@lucide/vue';
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { ApplicantDocumentReferenceItem } from '@/components/permit-applications/ApplicantDocumentReference.vue';
 import ApplicationAttachmentRail from '@/components/permit-applications/ApplicationAttachmentRail.vue';
 import ApplicationDocumentNavigator from '@/components/permit-applications/ApplicationDocumentNavigator.vue';
@@ -12,6 +12,8 @@ import IpilBusinessPermit from '@/components/permit-applications/IpilBusinessPer
 import IpilExecutableDocument from '@/components/permit-applications/IpilExecutableDocument.vue';
 import IpilPaymentContinuationSheet from '@/components/permit-applications/IpilPaymentContinuationSheet.vue';
 import OfficePaymentOrdersSheet from '@/components/permit-applications/OfficePaymentOrdersSheet.vue';
+import { usePaymentStatus } from '@/composables/usePaymentStatus';
+import type { PaymentStatusResult } from '@/lib/payment-status-monitor';
 import type { MunicipalScheduleOfFees } from '@/types/municipal-schedule-of-fees';
 
 type Task = {
@@ -281,14 +283,29 @@ const snapshot = computed(() => props.application.declaration.snapshot ?? {});
 const activeTask = ref(props.initialTask);
 const officeMobileView = ref<'application' | 'payment-order'>('payment-order');
 const statusRequest = useHttp({});
-const paymentCheckMessage = ref<string | null>(null);
 const paymentStatusUrl = computed(
     () =>
         props.application.actor_context.available_affordances?.find(
             (affordance) => affordance.key === 'check_payment_status',
         )?.href ?? null,
 );
-let paymentPollTimer: ReturnType<typeof setInterval> | null = null;
+const {
+    check: checkPayment,
+    checking: checkingPayment,
+    message: paymentCheckMessage,
+    lastChecked,
+} = usePaymentStatus({
+    enabled: () =>
+        activeTab.value === 'payment' &&
+        Boolean(paymentStatusUrl.value) &&
+        Boolean(props.application.payment.payment_request?.pay_code) &&
+        props.application.payment.payment_request?.state !== 'collected',
+    request: async () =>
+        (await statusRequest.get(
+            paymentStatusUrl.value!,
+        )) as PaymentStatusResult,
+    paid: () => router.reload(),
+});
 const page2Summary = computed(() => {
     const projection = props.document?.page_2_assessment;
     const offices = Array.isArray(projection?.offices)
@@ -360,67 +377,6 @@ watch(
     },
 );
 
-watch(
-    [activeTab, () => props.application.payment.payment_request],
-    () => {
-        stopPaymentPolling();
-
-        const request = props.application.payment.payment_request;
-        const expiresAt = request?.active_attempt?.expires_at;
-
-        if (
-            activeTab.value === 'payment' &&
-            request?.state !== 'collected' &&
-            paymentStatusUrl.value &&
-            request?.active_attempt?.qr_data_url &&
-            expiresAt &&
-            new Date(expiresAt).getTime() > Date.now()
-        ) {
-            paymentPollTimer = setInterval(() => void checkPayment(), 4000);
-        }
-    },
-    { immediate: true },
-);
-
-function stopPaymentPolling(): void {
-    if (paymentPollTimer !== null) {
-        clearInterval(paymentPollTimer);
-        paymentPollTimer = null;
-    }
-}
-
-async function checkPayment(): Promise<void> {
-    const statusUrl = paymentStatusUrl.value;
-
-    if (!statusUrl || statusRequest.processing) {
-        return;
-    }
-
-    try {
-        const result = (await statusRequest.get(statusUrl)) as {
-            paid: boolean;
-            status: string;
-        };
-
-        if (result.paid) {
-            stopPaymentPolling();
-            paymentCheckMessage.value =
-                'Payment confirmed. Refreshing the Application record.';
-            router.reload();
-        } else if (result.status === 'expired') {
-            stopPaymentPolling();
-            paymentCheckMessage.value =
-                'The QR expired without a canonical Collection.';
-        } else {
-            paymentCheckMessage.value = 'No confirmed Collection yet.';
-        }
-    } catch {
-        paymentCheckMessage.value =
-            'Payment confirmation is temporarily unavailable. No Application facts were changed.';
-    }
-}
-
-onBeforeUnmount(stopPaymentPolling);
 watch(activeTab, (tab) => {
     if (tab === 'application' || tab === 'processing') {
         lastApplicationPage.value = tab;
@@ -1051,8 +1007,9 @@ function permitBlockerLabel(blocker: string): string {
                     </section>
                     <IpilPaymentContinuationSheet
                         :application="application"
-                        :checking="statusRequest.processing"
+                        :checking="checkingPayment"
                         :check-message="paymentCheckMessage"
+                        :last-checked="lastChecked"
                         :status-url="paymentStatusUrl"
                         @check="checkPayment"
                     />
