@@ -9,11 +9,11 @@ Implementation authorized; baseline preserved. Deployment, real funds and incide
 | Gate | Status |
 |---|---|
 | Evidence/baseline | Incident diagnosis complete; isolated regression reproduction starting |
-| Canonical confirmation/background jobs | Engineer assigned clean `agent/payment-resilience-engine`, base `8bd497c` |
-| Provider notification durability | Provider specialist locating canonical editable package; no dirty vendor edits |
-| UI/manual checks/notification ingress | Chief integration branch `release/payment-resilience-v1` |
-| Browser acceptance | Testing Agent preparing isolated fixtures; no Cloud visits |
-| Independent acceptance | Testing Adjudicator assigned risk/acceptance review |
+| Canonical confirmation/background jobs | Integrated and focused tests passing; full suite running |
+| Provider notification durability | Durable signed outbox + worker commits `5e0c8ef`, `9da6e34`; source accepted |
+| UI/manual checks/notification ingress | Integrated in `release/payment-resilience-v1`; focused tests passing |
+| Browser acceptance | Four surfaces desktop/mobile passed; final permission/error-state follow-up running |
+| Independent acceptance | No remaining P1/P2 source blocker reported; final evidence review pending |
 | Deployment | Not authorized; prepare only |
 | Incident data correction | Separate proposal/approval required |
 
@@ -43,3 +43,12 @@ Integrate the backend packet, run combined tests and browser evidence, obtain in
 - Backend specialist reports 30 focused tests / 207 assertions and targeted PHPStan passing. Canonical confirmation, durable reconciliation and simulation isolation are still being integrated; these are not yet final combined acceptance results.
 - Independent review identified synthetic-collection provenance and provider-collection deduplication risks. Deduplication fixed; provenance handling is in the backend packet. Lost-dispatch unique-lock recovery is being checked.
 - Browser specialist remains on isolated, fake-provider fixtures. No Cloud or existing transaction changes.
+
+## Checkpoint — final verification
+
+- Backend integrated as `980780f`, `9bafa77`, `6420b69`, `385c357`; explicit simulation isolation, bounded queue recovery and sticky integrity review are in place.
+- Final focused BPLS packet: **97 tests / 2,347 assertions PASS**. Receiver collision, queue outage/recovery and shared-lock configuration checks pass. This is deterministic isolated coverage, not a claim of production-database concurrent execution.
+- Targeted PHPStan, Pint, TypeScript, ESLint, Prettier and production build pass. Six pure frontend monitor tests pass.
+- Browser fixture packet `3bec2dc` is integrated. Final follow-up must reflect the explicit staff permission and provider-backed simulation prohibition before accepting screenshots.
+- Deployed provider v1.0.30 dependency `bfa34afaa63cc48e8c271b318585d23b2a11acb4` was inspected read-only: explicit `data.currency` and integer minor-unit collection totals already exist. Stricter BPLS inquiry parsing is compatible.
+- Full PHP suite still running. No deployment, push, real money or incident data changes. Worker operation, database concurrency under deployment topology, and controlled Cloud acceptance remain deployment gates.

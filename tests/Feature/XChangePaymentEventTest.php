@@ -6,7 +6,9 @@ use App\Jobs\ProcessXChangePaymentEvent;
 use App\Models\TreasuryCollection;
 use App\Models\XChangePayment;
 use App\Models\XChangePaymentEvent;
+use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -112,6 +114,46 @@ test('provider collection identity deduplicates different event IDs and rejects 
     $this->call('POST', '/integrations/x-change/payment-events', [], [], [], $headers, $conflict)->assertConflict();
     expect(XChangePaymentEvent::query()->count())->toBe(1);
     Queue::assertPushed(ProcessXChangePaymentEvent::class, 1);
+});
+
+test('forced event identity collision returns conflict rather than server error', function () {
+    XChangePaymentEvent::creating(function (XChangePaymentEvent $event) {
+        DB::table('x_change_payment_events')->insert(array_replace($event->getAttributes(), [
+            'provider_collection_id' => 'competing-collection',
+            'created_at' => now(), 'updated_at' => now(),
+        ]));
+    });
+    try {
+        [$body, $headers] = signedPaymentEvent();
+        $this->call('POST', '/integrations/x-change/payment-events', [], [], [], $headers, $body)->assertConflict();
+        // This deterministic collision is inside Eloquent's savepoint, so both
+        // fixture inserts roll back. Real cross-connection races need DB acceptance.
+        expect(XChangePaymentEvent::query()->count())->toBe(0);
+        Queue::assertNothingPushed();
+    } finally {
+        XChangePaymentEvent::flushEventListeners();
+    }
+});
+
+test('sweep queue outage retains accepted events and retries after bounded unique lease expiry', function () {
+    $event = XChangePaymentEvent::factory()->create();
+    $bus = app(Dispatcher::class);
+    Bus::shouldReceive('dispatch')->once()->andThrow(new RuntimeException('Synthetic queue unavailable'));
+    $this->artisan('bpls:dispatch-payment-events')->assertFailed();
+    expect($event->fresh()->state)->toBe('accepted');
+    Bus::swap($bus);
+    $this->travel(181)->seconds();
+    $this->artisan('bpls:dispatch-payment-events')->assertSuccessful();
+    Queue::assertPushed(ProcessXChangePaymentEvent::class, fn ($job) => $job->eventId === $event->id);
+    Http::assertNothingSent();
+});
+
+test('notification workers reject inline queues and nonshared unique locks', function () {
+    config()->set('queue.connections.payments.driver', 'sync');
+    expect(fn () => new ProcessXChangePaymentEvent(1))->toThrow(LogicException::class);
+    config()->set('queue.connections.payments.driver', 'database');
+    config()->set('x_change_payment_events.lock_store', 'array');
+    expect(fn () => new ProcessXChangePaymentEvent(1))->toThrow(LogicException::class);
 });
 
 test('event worker uses authoritative inquiry and duplicate processing creates only one collection', function () {

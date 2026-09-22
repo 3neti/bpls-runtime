@@ -6,6 +6,8 @@ Status: implementation verification in progress. This document does not authoriz
 
 If a payment was made but confirmation has not appeared, select **Check payment status**. Reopening the payment page also checks the existing request. Do not pay again or simulate a payment because confirmation is delayed. **Needs review** belongs with Treasury; **checking unavailable** is not proof that payment failed.
 
+`needs_review` is deliberately persistent. Ordinary checks and notifications cannot clear it; disposition requires a separately authorized investigation. Transport outages remain automatically recoverable. Background checks stop after the configured 72-hour/864-check window; notification inbox processing enters review after 24 hours. These limits do not declare an obligation unpaid.
+
 ## Release gates
 
 - Approve exact BPLS and x-change release SHAs separately. The editable x-change package baseline is newer than the currently deployed package; do not upgrade unrelated package changes implicitly.
@@ -21,6 +23,8 @@ If a payment was made but confirmation has not appeared, select **Check payment 
 Configure the provider's deployment-managed receiver map for the exact BPLS partner reference. Destination is the approved BPLS HTTPS host plus `/integrations/x-change/payment-events`; allowlist that host. Use a dedicated secret of at least 32 characters, stored in deployment secrets, never in this document or screenshots.
 
 Set the matching BPLS `XCHANGE_PAYMENT_EVENTS_SECRET` and `XCHANGE_PAYMENT_EVENTS_PARTNER_REFERENCE`. Configure provider durable connection, queue and shared lock store. Both hosts require correct clocks. Timestamp tolerance is five minutes; retries re-sign the same event body.
+
+BPLS notification uniqueness uses `XCHANGE_PAYMENT_EVENTS_LOCK_STORE` (database by default). Its 180-second lease allows recovery after a failed queue submission; the sweep may wait up to this lease plus its next scheduled run. Keep the application's default cache shared as well, for canonical confirmation and background-job locks.
 
 After approval, enable BPLS `XCHANGE_PAYMENT_EVENTS_ENABLED`, provider `XCHANGE_PARTNER_PAYMENT_EVENTS_ENABLED`, and BPLS `PAYMENT_RECONCILIATION_ENABLED`. A notification schedules authoritative inquiry; its reported amount alone never records collection.
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Integrations;
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessXChangePaymentEvent;
 use App\Models\XChangePaymentEvent;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -36,20 +37,26 @@ class XChangePaymentEventController extends Controller
         ]);
         abort_unless(hash_equals($partner, $data['partner_reference']), 401);
         $event = XChangePaymentEvent::query()->where('event_id', $data['event_id'])->first();
-        $event ??= XChangePaymentEvent::query()->firstOrCreate([
-            'partner_reference' => $data['partner_reference'],
-            'provider_collection_id' => $data['collection_id'],
-        ], [
-            'event_id' => $data['event_id'],
-            'payload_hash' => hash('sha256', $body),
-            'partner_reference' => $data['partner_reference'],
-            'external_reference' => $data['external_reference'],
-            'pay_code' => $data['pay_code'],
-            'provider_collection_id' => $data['collection_id'],
-            'amount_minor' => $data['amount_minor'],
-            'currency' => $data['currency'],
-            'occurred_at' => $data['occurred_at'],
-        ]);
+        try {
+            $event ??= XChangePaymentEvent::query()->firstOrCreate([
+                'partner_reference' => $data['partner_reference'],
+                'provider_collection_id' => $data['collection_id'],
+            ], [
+                'event_id' => $data['event_id'],
+                'payload_hash' => hash('sha256', $body),
+                'partner_reference' => $data['partner_reference'],
+                'external_reference' => $data['external_reference'],
+                'pay_code' => $data['pay_code'],
+                'provider_collection_id' => $data['collection_id'],
+                'amount_minor' => $data['amount_minor'],
+                'currency' => $data['currency'],
+                'occurred_at' => $data['occurred_at'],
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            // Eloquent already recovers matching provider-collection races. A remaining
+            // collision means the event ID was concurrently bound to different evidence.
+            abort(409, 'Payment event identity conflict.');
+        }
         if ($event->event_id === $data['event_id']) {
             abort_unless(hash_equals($event->payload_hash, hash('sha256', $body)), 409);
         } else {

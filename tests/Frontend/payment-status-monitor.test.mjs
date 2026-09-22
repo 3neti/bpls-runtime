@@ -120,7 +120,11 @@ test('a successful HTTP response reporting a provider error does not claim pendi
     let last;
     const monitor = createPaymentStatusMonitor({
         enabled: () => true,
-        request: async () => ({ paid: false, status: 'error', reconciliation_state: 'error' }),
+        request: async () => ({
+            paid: false,
+            status: 'error',
+            reconciliation_state: 'error',
+        }),
         changed: (state) => (last = state),
         paid: () => assert.fail('must not settle'),
     });
