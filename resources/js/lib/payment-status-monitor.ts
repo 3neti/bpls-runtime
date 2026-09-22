@@ -57,9 +57,13 @@ export function createPaymentStatusMonitor(options: {
             } else if (result.status === 'expired') {
                 state.message =
                     'QR expired; payment is not yet confirmed. Check before paying again.';
-            } else if (result.status === 'temporarily_unavailable') {
+            } else if (
+                result.status === 'temporarily_unavailable' ||
+                result.status === 'error' ||
+                result.reconciliation_state === 'error'
+            ) {
                 state.message =
-                    'Payment checking is temporarily unavailable. Please check again.';
+                    'Payment checking is temporarily unavailable. Please check again; do not pay again solely because confirmation is delayed.';
             } else {
                 state.message = 'Awaiting payment confirmation.';
             }

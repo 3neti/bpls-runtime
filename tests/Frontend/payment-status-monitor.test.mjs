@@ -115,3 +115,17 @@ test('unmount or permission loss ignores in-flight responses', async () => {
     await first;
     assert.equal(paid, 0);
 });
+
+test('a successful HTTP response reporting a provider error does not claim pending payment', async () => {
+    let last;
+    const monitor = createPaymentStatusMonitor({
+        enabled: () => true,
+        request: async () => ({ paid: false, status: 'error', reconciliation_state: 'error' }),
+        changed: (state) => (last = state),
+        paid: () => assert.fail('must not settle'),
+    });
+    await monitor.check();
+    assert.match(last.message, /unavailable/);
+    assert.match(last.message, /do not pay again/);
+    assert.equal(monitor.canAutomaticallyCheck(), true);
+});

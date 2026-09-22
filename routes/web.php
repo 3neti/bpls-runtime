@@ -9,6 +9,7 @@ use App\Http\Controllers\Citizen\PermitApplicationController as CitizenPermitApp
 use App\Http\Controllers\Citizen\PermitApplicationDocumentController as CitizenPermitApplicationDocumentController;
 use App\Http\Controllers\Citizen\ProfileController as CitizenProfileController;
 use App\Http\Controllers\Citizen\QrPhPaymentController as CitizenQrPhPaymentController;
+use App\Http\Controllers\Integrations\XChangePaymentEventController;
 use App\Http\Controllers\LifecycleCleanroomController;
 use App\Http\Controllers\LifecycleLaboratoryController;
 use App\Http\Controllers\PublicMunicipalServiceCatalogController;
@@ -72,6 +73,10 @@ use App\Http\Middleware\EnsureStakeholderPreviewIsSafe;
 use App\Http\Middleware\EnsureStakeholderPreviewReviewer;
 use App\StakeholderPreview\StakeholderPreviewSafety;
 use Illuminate\Support\Facades\Route;
+
+Route::post('/integrations/x-change/payment-events', XChangePaymentEventController::class)
+    ->middleware('throttle:120,1')
+    ->name('integrations.x-change.payment-events');
 
 $stakeholderPreviewSafety = app(StakeholderPreviewSafety::class);
 

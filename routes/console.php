@@ -11,3 +11,5 @@ Artisan::command('inspire', function () {
 Schedule::command('bpls:routing-sentinel')
     ->everyMinute()
     ->withoutOverlapping();
+
+Schedule::command('bpls:dispatch-payment-events')->everyMinute()->withoutOverlapping()->onOneServer();

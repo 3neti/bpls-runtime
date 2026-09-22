@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
+        $middleware->preventRequestForgery(except: ['integrations/x-change/payment-events']);
 
         $middleware->redirectGuestsTo(function (Request $request): string {
             if ($request->routeIs('citizen.permit-applications.submit')) {
