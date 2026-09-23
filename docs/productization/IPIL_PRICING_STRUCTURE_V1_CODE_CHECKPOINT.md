@@ -1,5 +1,17 @@
 # Pricing Structure V1 — Disabled Draft Persistence
 
+## Ninth slice — visible maintenance workspace (2026-09-24)
+
+Added /staff/pricing-maintenance and Administration > Pricing Maintenance. Search name/source code/revenue code; filter category and catalogue active/inactive; paginate 20 rows. Selected fee shows amount/basis, category/division, account code, effective dates, policy references, content-review state and history. Existing revision editor is linked, not duplicated. This is a draft-maintenance workspace: neither proposals nor reviews publish live prices.
+
+New review POST requires staff access plus ViewFeeRules and ManageFeeRules. Domain action reauthorizes, locks the fee/current decision/account in a transaction, compares the displayed fingerprint and refuses stale or superseded content. Actor is server-derived; repeated identical actor/reference/content is idempotent. Review creates no reconciliation, amount change or Assessment. There is no publication endpoint or implied fiscal approval. Concurrent behavior remains dependent on existing writers respecting fee locking; no cross-DB contention test claimed.
+
+Verification: six new HTTP tests; combined pricing/assessment selection 189 tests /1,477 assertions passed. Pint, targeted PHPStan, page/sidebar ESLint, Prettier, configured TypeScript check and production build passed. Initial frontend route generation omitted preview-only modules; reran the repository's configured types:check command successfully. Initial HTTP fixtures needed staff-access permission, fresh persisted snapshot inputs and the newly built Vite manifest; corrected and reran.
+
+Browser: isolated disposable SQLite database only, six synthetic demo fees. Normal login, search, review save/reload, revision-editor navigation, proposed amount save/reload passed. Desktop 1440x1000 and mobile 390x844 captured; no captured browser errors or horizontal overflow. No live municipality records used. Screenshots: workspace outputs/pricing-maintenance-desktop.png and pricing-maintenance-mobile.png. Laravel migrations applied only to the disposable database, not canonical local/UAT data.
+
+The UI follows repository Inertia/Vue, Tailwind, Wayfinder and testing guidance. Reuses existing categories, permissions and revision workflow; no new dependencies. Canonical main remains unmerged and deployment not performed. Next: integration review against dirty main, then authorized publication/price activation design and fuller taxonomy maintenance; these are not silently enabled by this screen.
+
 ## Eighth slice — persisted review-content binding (2026-09-24)
 
 Verification: nine new binding tests; 28 binding/adapter tests passed. Combined focused/assessment regression selection: 183 tests /1,413 assertions passed. Pint, targeted PHPStan and whitespace checks passed. SQLite in-memory only; no full-suite/browser claims.

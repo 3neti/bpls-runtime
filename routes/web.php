@@ -51,6 +51,7 @@ use App\Http\Controllers\Staff\PermitApplicationController;
 use App\Http\Controllers\Staff\PermitApplicationDocumentController;
 use App\Http\Controllers\Staff\PldsReportController;
 use App\Http\Controllers\Staff\PostPaymentCertificationController;
+use App\Http\Controllers\Staff\PricingMaintenanceController;
 use App\Http\Controllers\Staff\QrPhPaymentController as StaffQrPhPaymentController;
 use App\Http\Controllers\Staff\ReceiptController;
 use App\Http\Controllers\Staff\ReportCatalogController;
@@ -281,6 +282,8 @@ Route::middleware(['auth', 'verified', EnsureActiveUserAccess::class])->group(fu
             ->name('permit-applications.documents.view');
         Route::get('permit-applications/{permitApplication}/documents/{document}/download', [PermitApplicationDocumentController::class, 'download'])
             ->name('permit-applications.documents.download');
+        Route::get('pricing-maintenance', [PricingMaintenanceController::class, 'index'])->name('pricing-maintenance.index');
+        Route::post('pricing-maintenance/{feeRule}/reviews', [PricingMaintenanceController::class, 'recordReview'])->name('pricing-maintenance.reviews.store');
         Route::get('fee-rules', [FeeRuleController::class, 'index'])
             ->name('fee-rules.index');
         Route::get('fee-rules/legacy-candidates', [LegacyFeeCatalogController::class, 'index'])

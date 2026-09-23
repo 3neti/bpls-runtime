@@ -27,6 +27,7 @@ import { index as municipalityConfigurationIndex } from '@/actions/App/Http/Cont
 import { index as municipalWorkInboxIndex } from '@/actions/App/Http/Controllers/Staff/MunicipalWorkInboxController';
 import { index as assessmentIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationAssessmentController';
 import { index as permitApplicationIndex } from '@/actions/App/Http/Controllers/Staff/PermitApplicationController';
+import { index as pricingMaintenanceIndex } from '@/actions/App/Http/Controllers/Staff/PricingMaintenanceController';
 import { index as receiptIndex } from '@/actions/App/Http/Controllers/Staff/ReceiptController';
 import { index as reportCatalogIndex } from '@/actions/App/Http/Controllers/Staff/ReportCatalogController';
 import { index as rolePermissionIndex } from '@/actions/App/Http/Controllers/Staff/RolePermissionController';
@@ -138,6 +139,11 @@ const staffSections = computed<NavSection[]>(() => {
         administrationItems.push({
             title: 'Municipal Fees',
             href: feeRuleIndex(),
+            icon: Coins,
+        });
+        administrationItems.push({
+            title: 'Pricing Maintenance',
+            href: pricingMaintenanceIndex(),
             icon: Coins,
         });
     }
