@@ -1,5 +1,17 @@
 # Pricing Structure V1 — Disabled Draft Persistence
 
+## Seventh slice — reconciled fixed-fee Price adapter (2026-09-24)
+
+Verification: 19 new tests; combined focused/regression selection 174 tests /1,394 assertions passed. Pint, targeted PHPStan and whitespace checks passed. An initial null-amount fixture failed the existing NOT NULL schema constraint; corrected the test to exercise an unsupported basis instead. No full-suite/browser claim; SQLite in-memory test data only.
+
+Added a read-only adapter using stored FeeRule and its exact current FeeRuleReconciliation, ApplicableFeeRuleQuery, AssessmentCalculator and existing Price/PriceReport. Supports only New, automatic, application-wide, fixed, basis-none Fee-category rules. Requires executable reconciliation, recorded non-future decision, nonblank authority/evidence/decision references and applicable reconciliation dates. Uses the existing application-year January 1 selection convention; does not establish a new fiscal date policy.
+
+Unlike the legacy calculator shortcut, this adapter always requires reconciliation, even when reconciliation_required is absent. It never consumes a PricingDefinitionDraft or accepts a caller approval boolean. Account identity and serialized reconciliation evidence are frozen in the component explanation; exact-once key matches the existing fee_rule convention. Explicit fixed zero remains a priced zero only after these gates. No Assessment is persisted.
+
+Boundary: this is a characterized adapter over existing reconciled records, NOT the finished published rule-version contract. Current FeeRule records remain mutable. Immutable publication must bind the exact rule content to the approving decision before this is exposed through maintenance or wired to operational workflows. Reference strings and status records are not independently authenticated here. No tax/formula/quantity/LOB/renewal expansion, draft promotion, route/UI or automatic activation.
+
+Next: immutable reviewed rule snapshot/publication binding, with stale-content rejection, before catalogue integration. Operational calculator behavior remains unchanged.
+
 ## Sixth slice — guarded draft resolution (2026-09-24)
 
 Added exact code/revision/source selection with explicit no_match, ambiguous_match, conflicting_source and policy_disabled outcomes. Duplicate candidates do not select the first amount, and mixed source fingerprints are not silently discarded. Every outcome has null amount and executable=false. requirePriceComponent throws the existing UnsupportedAssessmentPolicy before any AssessmentPriceComponentInput/Price construction; even fixed zero and purported evidence acceptance remain disabled.
