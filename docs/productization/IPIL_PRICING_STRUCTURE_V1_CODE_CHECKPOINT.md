@@ -1,5 +1,15 @@
 # Pricing Structure V1 — Disabled Draft Persistence
 
+## Tenth slice — inline price proposals (2026-09-24)
+
+Fixed-fee proposals can now be entered directly in Pricing Maintenance in pesos, with effective dates, reason and authority reference. Exact integer-centavo conversion rejects excess precision rather than rounding. Processing locks the form; successful save clears it and reload preserves proposal history. Latest five proposals are displayed newest-first; other calculation types retain the existing detailed editor. Reuses the existing authorized revision endpoint/action, with no new financial execution path, approval stage or fee activation.
+
+Verification: 109 focused pricing/review/adapter/assessment tests, 474 assertions passed. Four new workspace tests cover exact amount/history, permission denial, validation/no mutation and latest-five rule-specific ordering. Initial combined user fixture collided on role uniqueness; split the tests, then passed. Browser inspection found relationship ordering overriding newest-first; explicitly reordered and added regression coverage. Pint, targeted PHPStan, ESLint, Prettier, TypeScript and production build passed (existing optional fontaine warning only).
+
+Disposable local browser: rejected 29.155, saved 29.15 as a proposal, reloaded and verified current fee stayed 25.00. Desktop 1440x1000 and mobile 390x844: no overflow or captured errors. Screenshots in workspace outputs/pricing-revision-desktop.png and pricing-revision-mobile.png. No full-suite claim or operational records changed.
+
+Still isolated on feature/pricing-structure-v1; not merged, pushed or deployed. Next: reconcile integration against canonical dirty main and continue taxonomy/publication design. Saving a proposal does not publish a rate.
+
 ## Ninth slice — visible maintenance workspace (2026-09-24)
 
 Added /staff/pricing-maintenance and Administration > Pricing Maintenance. Search name/source code/revenue code; filter category and catalogue active/inactive; paginate 20 rows. Selected fee shows amount/basis, category/division, account code, effective dates, policy references, content-review state and history. Existing revision editor is linked, not duplicated. This is a draft-maintenance workspace: neither proposals nor reviews publish live prices.

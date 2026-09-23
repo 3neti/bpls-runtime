@@ -9,6 +9,7 @@ use App\Enums\UserPermission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RecordPricingRuleReviewRequest;
 use App\Models\FeeRule;
+use App\Models\FeeRuleRevision;
 use App\Models\PricingRuleReview;
 use App\Support\MunicipalFeeCatalogPresentation;
 use Illuminate\Http\RedirectResponse;
@@ -67,6 +68,13 @@ class PricingMaintenanceController extends Controller
                 'execution_status' => $decision?->execution_status->value,
                 'execution_reason' => $decision?->execution_reason,
                 'review_status' => $latest === null ? 'Not recorded' : ($hash === $latest->getAttribute('snapshot_sha256') ? 'Current content recorded' : 'Changed since review'),
+                'revisions' => $selected->revisions()->where('status', 'proposed')->reorder('version', 'desc')->limit(5)->get()->map(fn (FeeRuleRevision $revision): array => [
+                    'id' => $revision->id, 'version' => $revision->version, 'status' => $revision->status,
+                    'amount_display' => $revision->proposed_amount_minor === null ? '—' : '₱'.number_format($revision->proposed_amount_minor / 100, 2),
+                    'effective_from' => $revision->effective_from->toDateString(),
+                    'effective_until' => $revision->effective_until?->toDateString(),
+                    'reason' => $revision->reason, 'authority' => $revision->authority,
+                ])->all(),
                 'reviews' => $reviews->map(fn (PricingRuleReview $review): array => [
                     'id' => $review->id, 'reference' => $review->getAttribute('review_reference'),
                     'recorded_at' => $review->created_at?->toIso8601String(),

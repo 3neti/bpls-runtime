@@ -9,6 +9,7 @@ import {
     index,
     recordReview,
 } from '@/actions/App/Http/Controllers/Staff/PricingMaintenanceController';
+import PricingRevisionForm from '@/components/PricingRevisionForm.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +39,16 @@ type Detail = Rule & {
     execution_status: string | null;
     execution_reason: string | null;
     review_status: string;
+    revisions: {
+        id: number;
+        version: number;
+        status: string;
+        amount_display: string;
+        effective_from: string;
+        effective_until: string | null;
+        reason: string;
+        authority: string;
+    }[];
     reviews: { id: number; reference: string; recorded_at: string | null }[];
 };
 const props = defineProps<{
@@ -67,6 +78,7 @@ const submitted = ref(false);
 watch(
     () => props.selected,
     (selected) => {
+        submitted.value = false;
         review.reset();
         review.clearErrors();
         review.snapshot_sha256 = selected?.snapshot_sha256 ?? '';
@@ -360,11 +372,53 @@ function saveReview() {
                             {{ selected.decision_reference }}
                         </p>
                     </div>
-                    <Button v-if="canManage" as-child class="mt-5 w-full"
+                    <PricingRevisionForm
+                        v-if="canManage && selected.method === 'fixed'"
+                        :key="selected.id"
+                        :rule-id="selected.id"
+                    />
+                    <Button v-else-if="canManage" as-child class="mt-5 w-full"
                         ><Link :href="show(selected.id)"
-                            >Prepare price revision</Link
+                            >Review calculation &amp; revisions</Link
                         ></Button
                     >
+                    <details
+                        v-if="selected.revisions.length"
+                        class="mt-5 border-t pt-4"
+                    >
+                        <summary class="cursor-pointer text-sm font-medium">
+                            Recent price proposals ({{
+                                selected.revisions.length
+                            }})
+                        </summary>
+                        <ul class="mt-3 grid gap-3 text-sm">
+                            <li
+                                v-for="entry in selected.revisions"
+                                :key="entry.id"
+                                class="rounded-lg bg-muted/40 p-3"
+                            >
+                                <p class="font-medium">
+                                    Revision {{ entry.version }} ·
+                                    {{ entry.amount_display }}
+                                </p>
+                                <p class="mt-1 capitalize">
+                                    {{ entry.status }} · Not executable
+                                </p>
+                                <p class="mt-1">
+                                    {{ entry.effective_from }} →
+                                    {{ entry.effective_until ?? 'Open-ended' }}
+                                </p>
+                                <p class="mt-2 break-words">
+                                    {{ entry.reason }}
+                                </p>
+                                <p
+                                    class="mt-1 break-words text-muted-foreground"
+                                >
+                                    {{ entry.authority }}
+                                </p>
+                            </li>
+                        </ul>
+                    </details>
                     <form
                         v-if="canReview"
                         class="mt-5 grid gap-3 border-t pt-4"

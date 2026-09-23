@@ -1,9 +1,11 @@
 <?php
 
+use App\Actions\ProposeFeeRuleRevision;
 use App\Assessment\PricingRuleReviewSnapshot;
 use App\Enums\UserPermission;
 use App\Models\FeeRule;
 use App\Models\FeeRuleReconciliation;
+use App\Models\FeeRuleRevision;
 use App\Models\PricingRuleReview;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -72,4 +74,56 @@ test('review validation rejects missing evidence and a superseded decision', fun
     $this->actingAs($actor)->post(route('staff.pricing-maintenance.reviews.store', $rule), [])->assertSessionHasErrors(['review_reference', 'snapshot_sha256', 'reconciliation_id']);
     $this->post(route('staff.pricing-maintenance.reviews.store', $rule), ['snapshot_sha256' => $hash, 'reconciliation_id' => $decision->id, 'review_reference' => 'Older version'])->assertSessionHasErrors('snapshot_sha256');
     $this->assertDatabaseCount('pricing_rule_reviews', 0);
+});
+
+test('workspace records an exact centavo proposal and displays it without changing current pricing', function () {
+    $actor = userWithPermissions([UserPermission::AccessStaff, UserPermission::ViewFeeRules, UserPermission::ManageFeeRules]);
+    $rule = FeeRule::factory()->create(['amount_cents' => 2500]);
+    $workspace = route('staff.pricing-maintenance.index', ['rule' => $rule->id]);
+    $this->actingAs($actor)->from($workspace)->post(route('staff.fee-rules.revisions.store', $rule), [
+        'proposed_amount_minor' => 2915,
+        'effective_from' => '2027-01-01', 'effective_until' => '2027-12-31',
+        'reason' => 'Synthetic proposal test', 'authority' => 'Test reference only',
+    ])->assertSessionHasNoErrors()->assertRedirect($workspace);
+    expect($rule->fresh()->amount_cents)->toBe(2500)
+        ->and(FeeRuleRevision::query()->sole()->proposed_by_id)->toBe($actor->id);
+    $this->assertDatabaseCount('fee_rule_revisions', 1);
+    $this->get($workspace)->assertInertia(fn (Assert $page) => $page
+        ->has('selected.revisions', 1)
+        ->where('selected.revisions.0.amount_display', '₱29.15')
+        ->where('selected.revisions.0.status', 'proposed')
+        ->where('selected.revisions.0.effective_until', '2027-12-31')
+        ->where('selected.revisions.0.authority', 'Test reference only'));
+});
+
+test('proposal endpoint rejects readonly users', function () {
+    $rule = FeeRule::factory()->create(['amount_cents' => 2500]);
+    $url = route('staff.fee-rules.revisions.store', $rule);
+    $this->actingAs(userWithPermissions([UserPermission::AccessStaff, UserPermission::ViewFeeRules]))
+        ->post($url, [])->assertForbidden();
+    $this->assertDatabaseCount('fee_rule_revisions', 0);
+});
+
+test('workspace shows the newest five proposals for only the selected rule', function () {
+    $actor = userWithPermissions([UserPermission::AccessStaff, UserPermission::ViewFeeRules, UserPermission::ManageFeeRules]);
+    $rule = FeeRule::factory()->create();
+    $other = FeeRule::factory()->create();
+    $propose = app(ProposeFeeRuleRevision::class);
+    foreach (range(1, 6) as $version) {
+        $propose->handle($rule, $version * 100, '2027-01-01', null, 'Test', 'Test authority', $actor);
+    }
+    $propose->handle($other, 999, '2027-01-01', null, 'Other fee', 'Other reference', $actor);
+    $this->actingAs($actor)->get(route('staff.pricing-maintenance.index', ['rule' => $rule->id]))
+        ->assertInertia(fn (Assert $page) => $page->has('selected.revisions', 5)
+            ->where('selected.revisions.0.version', 6)->where('selected.revisions.4.version', 2));
+});
+
+test('proposal endpoint rejects invalid input without changing pricing', function () {
+    $rule = FeeRule::factory()->create(['amount_cents' => 2500]);
+    $url = route('staff.fee-rules.revisions.store', $rule);
+    $this->actingAs(userWithPermissions([UserPermission::AccessStaff, UserPermission::ViewFeeRules, UserPermission::ManageFeeRules]))
+        ->post($url, ['proposed_amount_minor' => -1, 'effective_from' => '2027-01-01', 'effective_until' => '2026-12-31'])
+        ->assertSessionHasErrors(['proposed_amount_minor', 'effective_until', 'reason', 'authority']);
+    $this->assertDatabaseCount('fee_rule_revisions', 0);
+    expect($rule->fresh()->amount_cents)->toBe(2500);
 });
