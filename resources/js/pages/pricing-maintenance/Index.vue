@@ -7,6 +7,8 @@ import {
 } from '@/actions/App/Http/Controllers/Staff/FeeRuleController';
 import {
     index,
+    publish,
+    storeGroup,
     recordReview,
 } from '@/actions/App/Http/Controllers/Staff/PricingMaintenanceController';
 import PricingRevisionForm from '@/components/PricingRevisionForm.vue';
@@ -24,11 +26,21 @@ type Rule = {
     division: string | null;
     method: string;
     amount_display: string;
+    price_year: number;
+    publication_id: number | null;
     basis: string;
     revenue_code: string | null;
     is_active: boolean;
 };
 type Detail = Rule & {
+    source_basis: string;
+    revenue_account_id: number | null;
+    group_id: number | null;
+    ranges: {
+        min_basis_cents: number;
+        max_basis_cents: number | null;
+        amount_cents: number;
+    }[];
     legal_basis: string | null;
     effective_from: string;
     effective_until: string | null;
@@ -43,6 +55,7 @@ type Detail = Rule & {
         id: number;
         version: number;
         status: string;
+        can_publish: boolean;
         amount_display: string;
         effective_from: string;
         effective_until: string | null;
@@ -64,6 +77,8 @@ const props = defineProps<{
     filters: { search: string; category: string; status: string };
     categories: { value: string; label: string }[];
     canManage: boolean;
+    accounts: { id: number; code: string; name: string | null }[];
+    groups: { id: number; code: string; name: string }[];
     summary: { rules: number; missing_accounts: number };
 }>();
 const search = ref(props.filters.search);
@@ -75,10 +90,32 @@ const review = useForm({
     reconciliation_id: props.selected?.reconciliation_id ?? 0,
 });
 const submitted = ref(false);
+const publication = useForm({});
+const groupForm = useForm({
+    code: '',
+    name: '',
+    parent_id: null as number | null,
+});
+function saveGroup() {
+    groupForm.post(storeGroup.url(), {
+        preserveScroll: true,
+        onSuccess: () => groupForm.reset(),
+    });
+}
+const publishCandidate = ref<number | null>(null);
+function publishRevision(id: number) {
+    publication.post(publish.url(id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            publishCandidate.value = null;
+        },
+    });
+}
 watch(
     () => props.selected,
     (selected) => {
         submitted.value = false;
+        publishCandidate.value = null;
         review.reset();
         review.clearErrors();
         review.snapshot_sha256 = selected?.snapshot_sha256 ?? '';
@@ -136,6 +173,61 @@ function saveReview() {
                     ></Button
                 >
             </header>
+            <details v-if="canManage" class="rounded-lg border p-4">
+                <summary class="cursor-pointer text-sm font-medium">
+                    Fee groups · Add group
+                </summary>
+                <form
+                    class="mt-3 grid gap-3 sm:grid-cols-2"
+                    @submit.prevent="saveGroup"
+                >
+                    <div class="grid gap-2">
+                        <Label for="group-code">Group code</Label
+                        ><Input
+                            id="group-code"
+                            v-model="groupForm.code"
+                            required
+                            placeholder="e.g. REGULATORY"
+                        />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="group-name">Group name</Label
+                        ><Input
+                            id="group-name"
+                            v-model="groupForm.name"
+                            required
+                        />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="group-parent">Parent group</Label
+                        ><select
+                            id="group-parent"
+                            v-model="groupForm.parent_id"
+                            class="h-9 rounded border bg-background px-2"
+                        >
+                            <option :value="null">Top level</option>
+                            <option
+                                v-for="group in groups"
+                                :key="group.id"
+                                :value="group.id"
+                            >
+                                {{ group.name }}
+                            </option>
+                        </select>
+                    </div>
+                    <Button type="submit" :disabled="groupForm.processing"
+                        >Add group</Button
+                    >
+                    <p
+                        v-for="(error, key) in groupForm.errors"
+                        :key="key"
+                        role="alert"
+                        class="text-sm text-destructive"
+                    >
+                        {{ error }}
+                    </p>
+                </form>
+            </details>
             <div class="grid gap-3 sm:grid-cols-3">
                 <div class="rounded-xl border bg-card p-4">
                     <p class="text-sm text-muted-foreground">Catalogue rules</p>
@@ -152,10 +244,10 @@ function saveReview() {
                     </p>
                 </div>
                 <div class="rounded-xl border bg-muted/30 p-4">
-                    <p class="font-medium">Draft workspace</p>
+                    <p class="font-medium">Versioned pricing</p>
                     <p class="mt-1 text-sm text-muted-foreground">
-                        Review records and proposed changes do not alter current
-                        assessments.
+                        Publish effective-dated revisions. Existing assessments
+                        stay frozen.
                     </p>
                 </div>
             </div>
@@ -313,6 +405,14 @@ function saveReview() {
                         {{ selected.name }}
                     </h2>
                     <div class="my-5 rounded-lg bg-muted/40 p-4">
+                        <p class="mb-1 text-xs text-muted-foreground">
+                            {{ selected.price_year }} pricing ·
+                            {{
+                                selected.publication_id
+                                    ? 'Published revision'
+                                    : 'Source catalogue'
+                            }}
+                        </p>
                         <p class="text-2xl font-semibold break-words">
                             {{ selected.amount_display }}
                         </p>
@@ -373,9 +473,21 @@ function saveReview() {
                         </p>
                     </div>
                     <PricingRevisionForm
-                        v-if="canManage && selected.method === 'fixed'"
+                        v-if="
+                            canManage &&
+                            (selected.source_basis === 'none' ||
+                                selected.source_basis === 'employee_count' ||
+                                selected.method === 'range')
+                        "
                         :key="selected.id"
                         :rule-id="selected.id"
+                        :method="selected.method"
+                        :basis="selected.source_basis"
+                        :ranges="selected.ranges"
+                        :account-id="selected.revenue_account_id"
+                        :group-id="selected.group_id"
+                        :accounts="accounts"
+                        :groups="groups"
                     />
                     <Button v-else-if="canManage" as-child class="mt-5 w-full"
                         ><Link :href="show(selected.id)"
@@ -402,7 +514,12 @@ function saveReview() {
                                     {{ entry.amount_display }}
                                 </p>
                                 <p class="mt-1 capitalize">
-                                    {{ entry.status }} · Not executable
+                                    {{ entry.status
+                                    }}{{
+                                        entry.status === 'published'
+                                            ? ' · Effective-date lookup'
+                                            : ' · Not executable'
+                                    }}
                                 </p>
                                 <p class="mt-1">
                                     {{ entry.effective_from }} →
@@ -416,9 +533,54 @@ function saveReview() {
                                 >
                                     {{ entry.authority }}
                                 </p>
+                                <div
+                                    v-if="canManage && entry.can_publish"
+                                    class="mt-3 grid gap-2"
+                                >
+                                    <Button
+                                        v-if="publishCandidate !== entry.id"
+                                        variant="outline"
+                                        @click="publishCandidate = entry.id"
+                                        >Publish revision
+                                        {{ entry.version }}</Button
+                                    >
+                                    <template v-else>
+                                        <p>
+                                            Publish
+                                            {{ entry.amount_display }} from
+                                            {{ entry.effective_from }}? Lookup
+                                            uses January 1 of the application
+                                            tax year. Frozen assessments will
+                                            not change.
+                                        </p>
+                                        <Button
+                                            :disabled="publication.processing"
+                                            @click="publishRevision(entry.id)"
+                                            >{{
+                                                publication.processing
+                                                    ? 'Publishing…'
+                                                    : 'Confirm publication'
+                                            }}</Button
+                                        >
+                                        <Button
+                                            variant="ghost"
+                                            :disabled="publication.processing"
+                                            @click="publishCandidate = null"
+                                            >Cancel</Button
+                                        >
+                                    </template>
+                                </div>
                             </li>
                         </ul>
                     </details>
+                    <p
+                        v-for="(error, key) in publication.errors"
+                        :key="key"
+                        role="alert"
+                        class="mt-3 text-sm text-destructive"
+                    >
+                        {{ error }}
+                    </p>
                     <form
                         v-if="canReview"
                         class="mt-5 grid gap-3 border-t pt-4"

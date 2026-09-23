@@ -2,15 +2,22 @@
 
 namespace App\Http\Controllers\Staff;
 
+use App\Actions\PublishFeeRuleRevision;
 use App\Actions\RecordPricingRuleReview;
 use App\Assessment\PricingRuleReviewSnapshot;
+use App\Assessment\PublishedFeeRuleResolver;
 use App\Enums\FeeRuleCategory;
 use App\Enums\UserPermission;
+use App\Exceptions\UnsupportedAssessmentPolicy;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RecordPricingRuleReviewRequest;
+use App\Http\Requests\StorePricingGroupRequest;
 use App\Models\FeeRule;
+use App\Models\FeeRulePublication;
 use App\Models\FeeRuleRevision;
+use App\Models\PricingChargeGroup;
 use App\Models\PricingRuleReview;
+use App\Models\RevenueAccount;
 use App\Support\MunicipalFeeCatalogPresentation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +30,7 @@ class PricingMaintenanceController extends Controller
     public function __construct(
         private readonly MunicipalFeeCatalogPresentation $presentation,
         private readonly PricingRuleReviewSnapshot $snapshots,
+        private readonly PublishedFeeRuleResolver $publishedPrices,
     ) {}
 
     public function index(Request $request): Response
@@ -56,11 +64,21 @@ class PricingMaintenanceController extends Controller
             $hash = $decision === null ? null : $this->snapshots->hash($this->snapshots->capture($selected, $decision));
             $reviews = PricingRuleReview::query()->where('fee_rule_id', $selected->id)->latest('id')->limit(8)->get();
             $latest = $reviews->first();
+            $publications = FeeRulePublication::query()->where('fee_rule_id', $selected->id)->get()->keyBy('fee_rule_revision_id');
+            try {
+                $currentPrice = $this->publishedPrices->forYear($selected, (int) now()->year);
+            } catch (UnsupportedAssessmentPolicy) {
+                $currentPrice = $selected;
+            }
             $detail = [
                 ...$this->row($selected),
+                'source_basis' => $selected->basis,
+                'revenue_account_id' => $currentPrice->getAttribute('revenue_account_id'),
+                'group_id' => data_get($currentPrice->metadata, 'pricing_publication.group.id'),
+                'ranges' => $currentPrice->ranges->map->only(['min_basis_cents', 'max_basis_cents', 'amount_cents'])->values()->all(),
                 'legal_basis' => $selected->legal_basis,
-                'effective_from' => $selected->effective_from->toDateString(),
-                'effective_until' => $selected->effective_until?->toDateString(),
+                'effective_from' => data_get($currentPrice->metadata, 'pricing_publication.effective_from', $selected->effective_from->toDateString()),
+                'effective_until' => data_get($currentPrice->metadata, 'pricing_publication.effective_until', $selected->effective_until?->toDateString()),
                 'snapshot_sha256' => $hash,
                 'reconciliation_id' => $decision?->id,
                 'decision_reference' => $decision?->decision_reference,
@@ -69,8 +87,11 @@ class PricingMaintenanceController extends Controller
                 'execution_reason' => $decision?->execution_reason,
                 'review_status' => $latest === null ? 'Not recorded' : ($hash === $latest->getAttribute('snapshot_sha256') ? 'Current content recorded' : 'Changed since review'),
                 'revisions' => $selected->revisions()->where('status', 'proposed')->reorder('version', 'desc')->limit(5)->get()->map(fn (FeeRuleRevision $revision): array => [
-                    'id' => $revision->id, 'version' => $revision->version, 'status' => $revision->status,
-                    'amount_display' => $revision->proposed_amount_minor === null ? '—' : '₱'.number_format($revision->proposed_amount_minor / 100, 2),
+                    'id' => $revision->id, 'version' => $revision->version, 'status' => $publications->has($revision->id) ? 'published' : $revision->status,
+                    'can_publish' => ! $publications->has($revision->id) && isset($revision->snapshot['publication_base_sha256']),
+                    'amount_display' => $selected->calculation_type->value === 'range'
+                        ? count($revision->snapshot['definition_changes']['ranges'] ?? []).' brackets'
+                        : ($revision->proposed_amount_minor === null ? '—' : '₱'.number_format($revision->proposed_amount_minor / 100, 2).($selected->basis === 'employee_count' ? ' per employee' : '')),
                     'effective_from' => $revision->effective_from->toDateString(),
                     'effective_until' => $revision->effective_until?->toDateString(),
                     'reason' => $revision->reason, 'authority' => $revision->authority,
@@ -85,6 +106,8 @@ class PricingMaintenanceController extends Controller
         return Inertia::render('pricing-maintenance/Index', [
             'rules' => $rules->through(fn (FeeRule $rule): array => $this->row($rule)),
             'selected' => $detail, 'filters' => $filters,
+            'groups' => PricingChargeGroup::query()->orderBy('name')->get(['id', 'code', 'name']),
+            'accounts' => RevenueAccount::query()->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name']),
             'categories' => array_map(fn (FeeRuleCategory $category): array => ['value' => $category->value, 'label' => ucfirst($category->value)], FeeRuleCategory::cases()),
             'canManage' => $request->user()?->can(UserPermission::ManageFeeRules->value) ?? false,
             'summary' => ['rules' => FeeRule::query()->count(), 'missing_accounts' => FeeRule::query()->whereNull('revenue_account_id')->count()],
@@ -99,9 +122,29 @@ class PricingMaintenanceController extends Controller
         return back()->with('status', 'Review recorded. Current prices are unchanged.');
     }
 
+    public function publish(Request $request, FeeRuleRevision $revision, PublishFeeRuleRevision $publish): RedirectResponse
+    {
+        $publish->handle($revision, $request->user());
+
+        return back()->with('status', 'Price revision published. Frozen assessments are unchanged.');
+    }
+
+    public function storeGroup(StorePricingGroupRequest $request): RedirectResponse
+    {
+        PricingChargeGroup::query()->create($request->validated());
+
+        return back()->with('status', 'Fee group added.');
+    }
+
     /** @return array<string, mixed> */
     private function row(FeeRule $rule): array
     {
+        $issue = null;
+        try {
+            $rule = $this->publishedPrices->forYear($rule, (int) now()->year);
+        } catch (UnsupportedAssessmentPolicy $exception) {
+            $issue = $exception->getMessage();
+        }
         $amount = $this->presentation->amountAndBasis($rule);
 
         return [
@@ -109,7 +152,10 @@ class PricingMaintenanceController extends Controller
             'category' => $rule->feeCategory->name ?? ucfirst($rule->category->value),
             'division' => $rule->businessDivision?->name,
             'method' => $rule->calculation_type->value,
-            'amount_display' => $amount['value'], 'basis' => $amount['basis'],
+            'amount_display' => $issue === null ? $amount['value'] : 'Unavailable',
+            'basis' => $issue ?? $amount['basis'],
+            'price_year' => (int) now()->year,
+            'publication_id' => data_get($rule->metadata, 'pricing_publication.id'),
             'revenue_code' => $rule->revenueAccount?->code,
             'is_active' => $rule->is_active,
         ];

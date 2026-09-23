@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Assessment\AssessmentCalculator;
 use App\Assessment\ConcernedOfficeFeeApplicability;
 use App\Assessment\ProvisionalTreasuryEnterpriseSchedule;
+use App\Assessment\PublishedFeeRuleResolver;
 use App\Assessment\TreasuryFeeResolution;
 use App\Data\Application\BploRoutingTaskData;
 use App\Enums\FeeDeterminationChannel;
@@ -35,6 +36,7 @@ class BuildBploRoutingTask
         private readonly TreasuryFeeResolution $treasuryFeeResolution,
         private readonly ProvisionalTreasuryEnterpriseSchedule $enterpriseSchedule,
         private readonly ProvisionalMenroFeeDeterminationProposal $menroProposal,
+        private readonly PublishedFeeRuleResolver $publishedPrices,
     ) {}
 
     public function handle(PermitApplication $permitApplication, ?User $viewer): BploRoutingTaskData
@@ -205,7 +207,7 @@ class BuildBploRoutingTask
                 'classification' => $menroDetermination->classification,
                 'production_authority' => $menroDetermination->production_authority,
                 'reason' => $menroDetermination->reason,
-                'actor' => $menroDetermination->actor?->name,
+                'actor' => $menroDetermination->actor?->getAttribute('name'),
                 'determined_at' => $menroDetermination->determined_at->toIso8601String(),
                 'fingerprint' => $menroDetermination->fingerprint,
                 'warning' => 'Synthetic-UAT evidence only; this is not municipal policy.',
@@ -235,7 +237,7 @@ class BuildBploRoutingTask
                     $sameLabelCount = $fees->where('name', $fee->name)->count();
                     $sameCodeCount = $fees->where('code', $fee->code)->count();
                     $needsProvenanceLabel = $sameLabelCount > 1 || $sameCodeCount > 1;
-                    $catalogVersion = $fee->catalogVersion?->code
+                    $catalogVersion = $fee->catalogVersion->code
                         ?? data_get($fee->metadata, 'catalog_version');
                     $classification = data_get($fee->metadata, 'semantic_classification')
                         ?? data_get($fee->metadata, 'price_list_source_classification')
@@ -245,12 +247,12 @@ class BuildBploRoutingTask
                         $fee->basis,
                         $fee->calculation_type->value,
                     ])
-                        ->filter(fn ($value): bool => is_string($value) && trim($value) !== '' && strtolower(trim($value)) !== 'none')
+                        ->filter(fn (string $value): bool => trim($value) !== '' && strtolower(trim($value)) !== 'none')
                         ->map(fn (string $value): string => str($value)->replace(['_', '-'], ' ')->headline()->toString())
                         ->unique()
                         ->implode(' · ');
                     $effectivePeriod = collect([
-                        $fee->effective_from?->toDateString(),
+                        $fee->effective_from->toDateString(),
                         $fee->effective_until?->toDateString(),
                     ])->filter()->implode(' → ');
                     $provenanceLabel = collect([$catalogVersion, $classification, $basisLabel, $fee->code, $effectivePeriod])
@@ -272,7 +274,7 @@ class BuildBploRoutingTask
                             'catalog_version' => $catalogVersion,
                             'classification' => $classification,
                             'source_name' => data_get($fee->metadata, 'source_name'),
-                            'effective_from' => $fee->effective_from?->toDateString(),
+                            'effective_from' => $fee->effective_from->toDateString(),
                             'effective_until' => $fee->effective_until?->toDateString(),
                             'is_active' => $fee->is_active,
                         ],
@@ -394,6 +396,7 @@ class BuildBploRoutingTask
     /** @return array{amount_cents: int, basis_value: int|null, basis_unit: string|null, explanation: string|null, rule_signature: string} */
     private function catalogCalculation(FeeRule $fee, PermitApplication $application): array
     {
+        $fee = $this->publishedPrices->forYear($fee, $application->application_year);
         if (data_get($fee->metadata, 'manual_amount_required') === true) {
             return [
                 'amount_cents' => $fee->amount_cents,

@@ -2,11 +2,13 @@
 
 namespace App\Actions;
 
+use App\Assessment\PublishedFeeRuleResolver;
 use App\Enums\FeeRuleCalculationType;
 use App\Enums\FeeRuleExecutionStatus;
 use App\Enums\FeeRulePublicationSource;
 use App\Enums\FeeRuleScope;
 use App\Enums\RevenueCodeProvisionType;
+use App\Exceptions\UnsupportedAssessmentPolicy;
 use App\Models\FeeRule;
 use App\Models\FeeRuleReconciliation;
 use App\Models\RevenueCodeProvision;
@@ -22,6 +24,7 @@ final class BuildFeeMatrixQuickLook
     public function __construct(
         private readonly MunicipalFeeScheduleCategory $scheduleCategory,
         private readonly MunicipalFeeCatalogPresentation $presentation,
+        private readonly PublishedFeeRuleResolver $publishedPrices,
     ) {}
 
     /** @return array<string, mixed> */
@@ -33,6 +36,7 @@ final class BuildFeeMatrixQuickLook
         ?string $chargeCode = null,
         ?string $chargeLabel = null,
         ?string $sourceClassification = null,
+        ?int $applicationYear = null,
     ): array {
         $allRules = FeeRule::query()
             ->with([
@@ -56,6 +60,16 @@ final class BuildFeeMatrixQuickLook
             ->filter(fn (FeeRule $rule): bool => ! in_array(data_get($rule->metadata, 'semantic_classification'), [
                 'synthetic', 'provisional_uat', 'historical', 'mock', 'legacy_evidence_only', 'lifecycle_test', 'test',
             ], true));
+
+        $allRules = $allRules->map(function (FeeRule $rule) use ($applicationYear): FeeRule {
+            try {
+                return $this->publishedPrices->forYear($rule, $applicationYear ?? (int) now()->year);
+            } catch (UnsupportedAssessmentPolicy $exception) {
+                $rule->metadata = [...($rule->metadata ?? []), 'publication_unavailable' => $exception->getMessage()];
+
+                return $rule;
+            }
+        });
 
         $rules = $allRules
             ->when($feeRuleId !== null, fn (Collection $rules) => $rules->where('id', $feeRuleId))
@@ -122,6 +136,7 @@ final class BuildFeeMatrixQuickLook
         $inForce = $reconciliation instanceof FeeRuleReconciliation
             && $reconciliation->execution_status === FeeRuleExecutionStatus::Executable;
         $status = match (true) {
+            data_get($rule->metadata, 'publication_unavailable') !== null => 'not_commissioned',
             data_get($rule->metadata, 'amount_determined_by_concerned_office') === true => 'concerned_office_determined',
             $inForce => 'in_force',
             $source === FeeRulePublicationSource::MunicipalConfirmationRequired => 'municipal_confirmation_required',

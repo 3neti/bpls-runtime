@@ -1,4 +1,24 @@
-# Pricing Structure V1 — Disabled Draft Persistence
+# Pricing Structure V1 — Implementation Checkpoint
+
+## Effective-dated publication — 2026-09-24
+
+Implementation branch: `feature/pricing-publication-v1`, base `107c763`. This checkpoint supersedes the proposal-only implementation limit below. Not merged to canonical main, pushed or deployed.
+
+- Authorized fee administrators can publish their own immutable proposal. No maker-checker. Publication requires an active fee, explicit amount, reason and authority; source drift and duplicate start dates are rejected. Retrying an already-published revision is idempotent.
+- Published snapshots retain definition, effectivity, actor, authority, group/account identities and digest. The existing application-tax-year January 1 selection basis is preserved. Expired or changed-source publications fail closed rather than silently reverting to an older price.
+- Payment Order and Treasury selectors/recording actions use the effective published definition. AssessmentCalculator remains the sole computation path. Frozen Assessment/Price input/report and line snapshots are not recalculated or rewritten.
+- Maintenance supports fixed amounts, employee-count unit rates, the established employee-count formula, fixed-amount brackets for supported bases, fee-group creation/assignment, and active revenue-account selection. It does not introduce arbitrary formulas, tax activation, policy acceptance or maker-checker. Existing unresolved-rule gates remain intact.
+- Pricing Maintenance and the Municipal Schedule of Fees listing expose effective published amounts. The existing individual source-rule evidence page remains a source record, not a replacement for the publication editor/history.
+
+Verification: 204 combined focused/lifecycle tests /3,205 assertions passed. Fourteen publication tests prove changed new-assessment pricing, exact preservation of the prior persisted Assessment and lines, authorization, idempotency, stale/expired/tampered evidence, unit rates, brackets, mappings and both operational selector defaults. Subsequent catalogue/publication checks: 21 tests /793 assertions passed. Complete Classic/Nelson lifecycle selection: 42 tests /1,532 assertions, including payment/receipts, certifications, issuance, separate release and public identity. No full repository-suite claim.
+
+Scenario test repair: its existing sample LOB is now created before the first Citizen helper request, matching the helper's availability on ordinary Citizen forms. All five scenario tests /149 assertions passed. No operational catalogue was modified by this fixture repair.
+
+Pint, changed-file PHPStan, TypeScript, scoped ESLint/Prettier, production build and whitespace checks passed. Existing optional fontaine warning remains non-blocking.
+
+Browser: only verified disposable SQLite `/private/tmp/bpls-pricing-ui-XXXXXX.sqlite` received the new migration and DEMO-1 publication (₱25 → ₱30). Server environment was checked against that exact path; the database had zero applications/assessments and only a synthetic test user. Publication persisted through reload; desktop 1440×1000 and mobile 390×844 had no horizontal overflow or captured errors. Screenshots: workspace `outputs/pricing-publication-desktop.png` and `outputs/pricing-publication-mobile.png`.
+
+Next release gate: integrate this reviewed feature into dirty canonical main without losing unrelated work, apply only its additive publication migration, verify local integration, then obtain Cloud deployment approval. No real fee revision has been published and no Cloud change made.
 
 ## Local-main integration — 2026-09-24
 

@@ -14,6 +14,8 @@ use App\Models\PermitApplicationLine;
 
 class AssessmentCalculator
 {
+    public function __construct(private readonly PublishedFeeRuleResolver $publishedPrices) {}
+
     /**
      * @return array{
      *     basis_amount_cents: int,
@@ -27,6 +29,10 @@ class AssessmentCalculator
         ?PermitApplicationLine $applicationLine = null,
         ?PermitApplication $permitApplication = null,
     ): array {
+        $permitApplication ??= $applicationLine?->permitApplication;
+        if ($permitApplication !== null) {
+            $feeRule = $this->publishedPrices->forYear($feeRule, $permitApplication->application_year);
+        }
         $this->assertExecutableReconciliation($feeRule);
 
         $basisAmountCents = $this->basisAmountCents($feeRule, $applicationLine, $permitApplication);
@@ -205,6 +211,7 @@ class AssessmentCalculator
 
         return [
             'fee_rule_id' => $feeRule->id,
+            'pricing_publication' => data_get($feeRule->metadata, 'pricing_publication'),
             'line_of_business_id' => $feeRule->line_of_business_id,
             'code' => $feeRule->code,
             'name' => $feeRule->name,

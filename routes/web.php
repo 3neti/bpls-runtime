@@ -283,6 +283,8 @@ Route::middleware(['auth', 'verified', EnsureActiveUserAccess::class])->group(fu
         Route::get('permit-applications/{permitApplication}/documents/{document}/download', [PermitApplicationDocumentController::class, 'download'])
             ->name('permit-applications.documents.download');
         Route::get('pricing-maintenance', [PricingMaintenanceController::class, 'index'])->name('pricing-maintenance.index');
+        Route::post('pricing-maintenance/groups', [PricingMaintenanceController::class, 'storeGroup'])->name('pricing-maintenance.groups.store');
+        Route::post('pricing-maintenance/revisions/{revision}/publish', [PricingMaintenanceController::class, 'publish'])->name('pricing-maintenance.publish');
         Route::post('pricing-maintenance/{feeRule}/reviews', [PricingMaintenanceController::class, 'recordReview'])->name('pricing-maintenance.reviews.store');
         Route::get('fee-rules', [FeeRuleController::class, 'index'])
             ->name('fee-rules.index');

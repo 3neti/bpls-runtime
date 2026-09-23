@@ -4,6 +4,7 @@ namespace App\Actions;
 
 use App\Assessment\AssessmentCalculator;
 use App\Assessment\ConcernedOfficeFeeApplicability;
+use App\Assessment\PublishedFeeRuleResolver;
 use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCategory;
 use App\Enums\UserPermission;
@@ -24,6 +25,7 @@ class ConfirmOfficePaymentOrder
         private readonly AuthorizeRoutedOfficeActor $authorizeRoutedOfficeActor,
         private readonly AssessmentCalculator $assessmentCalculator,
         private readonly ConcernedOfficeFeeApplicability $officeFeeApplicability,
+        private readonly PublishedFeeRuleResolver $publishedPrices,
     ) {}
 
     /**
@@ -147,6 +149,7 @@ class ConfirmOfficePaymentOrder
                 if ($amount < 0) {
                     throw new LogicException('A Payment Order amount cannot be negative.');
                 }
+                $rule = $this->publishedPrices->forYear($rule, $application->application_year);
                 $calculation = data_get($rule->metadata, 'manual_amount_required') === true
                     ? ['basis_amount_cents' => 0, 'amount_cents' => $rule->amount_cents, 'range_id' => null, 'rule_snapshot' => null]
                     : $this->assessmentCalculator->calculate($rule, null, $application);
@@ -169,6 +172,7 @@ class ConfirmOfficePaymentOrder
                     'source_snapshot' => [
                         'scope' => 'application',
                         'fee_rule_id' => $rule->id,
+                        'pricing_publication' => data_get($rule->metadata, 'pricing_publication'),
                         'fee_rule_version' => $this->feeRuleVersion($rule),
                         'exact_once_key' => $this->exactOnceKey($rule),
                         'office_code' => $work->office_code,

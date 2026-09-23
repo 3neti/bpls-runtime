@@ -4,6 +4,7 @@ namespace App\Actions;
 
 use App\Assessment\AssessmentCalculator;
 use App\Assessment\ProvisionalTreasuryEnterpriseSchedule;
+use App\Assessment\PublishedFeeRuleResolver;
 use App\Assessment\TreasuryFeeResolution;
 use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCategory;
@@ -26,6 +27,7 @@ class AssignTreasuryLinesOfBusiness
         private readonly TreasuryFeeResolution $treasuryFeeResolution,
         private readonly ProvisionalTreasuryEnterpriseSchedule $enterpriseSchedule,
         private readonly FreezeTreasuryFinancialEvaluation $freezeEvaluation,
+        private readonly PublishedFeeRuleResolver $publishedPrices,
     ) {}
 
     /**
@@ -171,6 +173,7 @@ class AssignTreasuryLinesOfBusiness
                         || ($rule->effective_until !== null && $rule->effective_until->year < $application->application_year)) {
                         throw new LogicException('The Treasury payment item must be active for the Application year and have a non-negative amount.');
                     }
+                    $rule = $this->publishedPrices->forYear($rule, $application->application_year);
                     $calculation = data_get($rule->metadata, 'manual_amount_required') === true
                         ? ['basis_amount_cents' => 0, 'amount_cents' => $rule->amount_cents, 'range_id' => null, 'rule_snapshot' => null]
                         : $this->assessmentCalculator->calculate($rule, null, $application);
@@ -208,6 +211,7 @@ class AssignTreasuryLinesOfBusiness
                             'financial_source' => 'treasury_lob_component',
                             'permit_application_line_id' => $applicationLine->id,
                             'fee_rule_id' => $rule->id,
+                            'pricing_publication' => data_get($rule->metadata, 'pricing_publication'),
                             'fee_rule_version' => $this->feeRuleVersion($rule),
                             'enterprise_determination' => $itemEnterpriseDetermination,
                             'scope' => $rule->scope->value,

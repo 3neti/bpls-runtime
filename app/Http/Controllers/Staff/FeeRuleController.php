@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Staff;
 
 use App\Actions\AnalyzeRevenueCodeSchedule;
 use App\Actions\ProposeFeeRuleRevision;
+use App\Assessment\PublishedFeeRuleResolver;
 use App\Enums\FeeCatalogVersionStatus;
 use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCalculationType;
@@ -12,6 +13,7 @@ use App\Enums\FeeRuleExecutionStatus;
 use App\Enums\FeeRuleScope;
 use App\Enums\RevenueCodeProvisionStatus;
 use App\Enums\UserPermission;
+use App\Exceptions\UnsupportedAssessmentPolicy;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ProposeFeeRuleRevisionRequest;
 use App\Models\BusinessDivision;
@@ -35,6 +37,7 @@ class FeeRuleController extends Controller
     public function __construct(
         private readonly AnalyzeRevenueCodeSchedule $analyzeRevenueCodeSchedule,
         private readonly MunicipalFeeCatalogPresentation $catalogPresentation,
+        private readonly PublishedFeeRuleResolver $publishedPrices,
     ) {}
 
     public function index(Request $request): Response
@@ -100,7 +103,7 @@ class FeeRuleController extends Controller
             ->orderBy('name')
             ->paginate(25)
             ->withQueryString()
-            ->through(fn (FeeRule $feeRule): array => $this->feeRulePayload($feeRule));
+            ->through(fn (FeeRule $feeRule): array => $this->feeRulePayload($feeRule, (int) ($filters['year'] ?? now()->year)));
 
         $currentCatalogueRules = FeeRule::query()
             ->whereHas('catalogVersion', fn ($query) => $query->where('status', FeeCatalogVersionStatus::Active));
@@ -257,6 +260,7 @@ class FeeRuleController extends Controller
             $data['reason'],
             $data['authority'],
             auth()->user(),
+            $data['definition'] ?? [],
         );
 
         return back()->with('status', 'Fee revision recorded as Proposed — not executable.');
@@ -265,8 +269,16 @@ class FeeRuleController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function feeRulePayload(FeeRule $feeRule): array
+    private function feeRulePayload(FeeRule $feeRule, ?int $priceYear = null): array
     {
+        $publicationIssue = null;
+        if ($priceYear !== null) {
+            try {
+                $feeRule = $this->publishedPrices->forYear($feeRule, $priceYear);
+            } catch (UnsupportedAssessmentPolicy $exception) {
+                $publicationIssue = $exception->getMessage();
+            }
+        }
         $amountAndBasis = $this->catalogPresentation->amountAndBasis($feeRule);
 
         return [
@@ -304,10 +316,11 @@ class FeeRuleController extends Controller
             'applies_to' => $this->catalogPresentation->appliesTo($feeRule),
             'owner' => $this->owner($feeRule),
             'determination_channel' => $feeRule->determination_channel->value,
-            'amount_display' => $amountAndBasis['value'],
-            'amount_basis' => $amountAndBasis['basis'],
+            'amount_display' => $publicationIssue === null ? $amountAndBasis['value'] : 'Unavailable',
+            'amount_basis' => $publicationIssue ?? $amountAndBasis['basis'],
             'raw_formula' => data_get($feeRule->metadata, 'formula') ?? data_get($feeRule->metadata, 'legacy_formula'),
             'display_status' => match (true) {
+                $publicationIssue !== null => 'Review required',
                 $feeRule->catalogVersion?->status === FeeCatalogVersionStatus::Superseded => 'Superseded',
                 data_get($feeRule->metadata, 'catalog_status') === 'incomplete' => 'Incomplete',
                 $feeRule->is_active => 'Active',

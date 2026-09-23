@@ -29,6 +29,7 @@ final class BuildMunicipalScheduleOfFees
             $chargeCode,
             $chargeLabel,
             $sourceClassification,
+            (int) ($asOf ?? now())->year,
         );
 
         return $this->fromMatrix($matrix, $asOf ?? now(), $includeUnconfirmedRules);
