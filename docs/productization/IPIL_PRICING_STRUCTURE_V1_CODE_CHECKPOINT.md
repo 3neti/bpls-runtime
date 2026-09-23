@@ -1,5 +1,17 @@
 # Pricing Structure V1 — Disabled Draft Persistence
 
+## Third slice — catalogue structure
+
+Verification: 21 new tests /33 assertions; combined pricing/assessment regression selection 124 tests /1,287 assertions passed. Pint, targeted PHPStan and whitespace checks passed. Full suite and browser checks not run.
+
+Added pricing_charge_groups, pricing_units and pricing_charge_items, with factories and Eloquent relationships. Reuses existing fee_categories instead of duplicating it. Business divisions, office routing and LOB applicability remain separate. No catalogue rows are automatically imported, no existing fee_rules modified and no draft-to-item crosswalk guessed.
+
+Groups are an append-only browsing hierarchy: new nodes may reference existing parents, and model updates/reparenting are refused. Units retain explicit dimension and integer decimal precision (0–12); no conversions are inferred. Charge items have nullable group/category/unit references with restrictive foreign keys. Definitions are immutable through model operations at this foundation stage; a versioned maintenance service is still required. Bulk SQL can bypass model immutability; this is not a database-wide cycle/immutability guarantee.
+
+No account FK is assigned merely because source evidence includes a code. Existing revenue_accounts will be reused by a later explicit reviewed-mapping layer. No migration was applied to an operational database; schema exercised in SQLite in-memory tests only. No browser-visible changes or browser checks.
+
+Next: explicit draft-to-item and reviewed account crosswalks with provenance, then versioned rule resolution through existing Price/PriceReport. Unit conversion, maintenance UI and fiscal activation remain unimplemented.
+
 ## Second slice — source-to-draft dry run
 
 Implemented read-only PricingCatalogDraftPlanner and pricing:plan-definitions. An explicit reviewed SHA-256 is required; mismatched fingerprints and duplicate fee identities fail. Existing pinned tax-evidence validation is reused. The command has no apply/import option and reports aggregate evidence only.
