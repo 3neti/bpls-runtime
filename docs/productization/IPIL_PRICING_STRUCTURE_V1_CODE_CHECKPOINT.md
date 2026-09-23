@@ -1,5 +1,17 @@
 # Pricing Structure V1 — Disabled Draft Persistence
 
+## Local-main integration — 2026-09-24
+
+User authorized proceeding with the proposed local integration. Canonical main fast-forwarded from 66d7024 to 1fc0830. All 17 non-route modified tracked files retained their exact hashes; the original Citizen permit PDF route remains an uncommitted addition alongside the committed pricing routes. No unrelated work staged, stashed or discarded.
+
+Verified local SQLite target, made a private backup, applied only the four new additive pricing migrations (six empty tables). Hash of existing fee/application/assessment/payment/receipt/permit records unchanged. No import, seed, price proposal, review, activation or operational transaction performed.
+
+Combined tests passed: 240 PHP /1,948 assertions; nine Treasury frontend tests. TypeScript, build, targeted PHPStan, scoped ESLint/Prettier and whitespace checks passed. First run began before the build completed and cached an old Vite manifest; rerun after build passed. No full-suite/lifecycle claim.
+
+Local browser at https://bpls-runtime.test/staff/pricing-maintenance: administrator normal login, catalogue search, formula detail and fixed-fee form display, desktop 1440x1000 and mobile 390x844 passed; no captured errors/overflow. Existing Treasury account is correctly denied pricing permission. Browser checks were read-only apart from authentication; no permissions changed. Screenshots: workspace outputs/pricing-main-desktop.png and pricing-main-mobile.png.
+
+Ready for local review under Administration > Pricing Maintenance. Main retains prior unrelated working changes. Cloud unchanged; nothing pushed. Next: taxonomy editing and authorized publication design, not implicit rate activation.
+
 ## Tenth slice — inline price proposals (2026-09-24)
 
 Fixed-fee proposals can now be entered directly in Pricing Maintenance in pesos, with effective dates, reason and authority reference. Exact integer-centavo conversion rejects excess precision rather than rounding. Processing locks the form; successful save clears it and reload preserves proposal history. Latest five proposals are displayed newest-first; other calculation types retain the existing detailed editor. Reuses the existing authorized revision endpoint/action, with no new financial execution path, approval stage or fee activation.
