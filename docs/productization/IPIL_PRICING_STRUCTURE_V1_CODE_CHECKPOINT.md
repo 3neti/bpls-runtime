@@ -1,5 +1,13 @@
 # Pricing Structure V1 — Disabled Draft Persistence
 
+## Sixth slice — guarded draft resolution (2026-09-24)
+
+Added exact code/revision/source selection with explicit no_match, ambiguous_match, conflicting_source and policy_disabled outcomes. Duplicate candidates do not select the first amount, and mixed source fingerprints are not silently discarded. Every outcome has null amount and executable=false. requirePriceComponent throws the existing UnsupportedAssessmentPolicy before any AssessmentPriceComponentInput/Price construction; even fixed zero and purported evidence acceptance remain disabled.
+
+This is a diagnostic draft boundary, NOT an operational calculator adapter. Existing AssessmentCalculator/Price/PriceReport are unchanged. Successful integration needs a separate adopted rule-version contract covering authority, applicability, effective period, units and rounding. Do not introduce a boolean flag to promote these drafts.
+
+Nine new tests /26 assertions; combined focused/regression selection 155 tests /1,369 assertions passed. Pint and targeted PHPStan passed. No operational migration, UI/browser changes, main merge or deployment. Next: model the separate approved-rule contract and characterize resolver-to-Price inputs against existing accepted-policy boundaries.
+
 ## Fifth slice — mapping coverage audit (2026-09-24)
 
 Combined focused/assessment regression result: 146 tests /1,343 assertions passed; whitespace check passed.
