@@ -1,5 +1,15 @@
 # Pricing Structure V1 — Disabled Draft Persistence
 
+## Fourth slice — explicit mapping evidence (2026-09-24)
+
+Verification: 15 new tests /33 assertions; combined focused/assessment regressions 139 tests /1,320 assertions passed. Pint and targeted PHPStan passed. Initial static analysis identified ambiguous single-versus-multiple lookup types; explicit scalar reference validation and single-row lookup corrected this. SQLite in-memory schema only; no full-suite/browser claims.
+
+Added append-only pricing_draft_mappings linking an exact draft revision to a charge item and optional existing revenue account. Each mapping records a recorder user, review reference/hash and rationale; identities are snapshotted on creation, not supplied by callers. Source account and selected account remain separately visible. Matching codes never auto-map, and account renames do not rewrite recorded evidence.
+
+Mapping revisions are unique per draft; restrictive FKs retain referenced records. Model updates/deletes fail; bulk SQL is outside that immutability guarantee. This is mapping evidence only, not fiscal acceptance or an authorization service. No route/UI/importer exposes writes; future maintenance must enforce permissions, effective scope and reviewed evidence authenticity. No actual municipal mappings were accepted in this slice.
+
+Next: a read-only mapping coverage audit, then the guarded rule resolver/Price adapter. No operational migration, active fee mutation, merge, push or deployment.
+
 ## Third slice — catalogue structure
 
 Verification: 21 new tests /33 assertions; combined pricing/assessment regression selection 124 tests /1,287 assertions passed. Pint, targeted PHPStan and whitespace checks passed. Full suite and browser checks not run.
