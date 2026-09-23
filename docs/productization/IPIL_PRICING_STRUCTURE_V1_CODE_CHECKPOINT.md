@@ -1,5 +1,15 @@
 # Pricing Structure V1 — Disabled Draft Persistence
 
+## Fifth slice — mapping coverage audit (2026-09-24)
+
+Combined focused/assessment regression result: 146 tests /1,343 assertions passed; whitespace check passed.
+
+Added PricingMappingCoverageAudit and pricing:audit-mappings with required source SHA-256. Reports every stored draft revision in that exact source cohort, selecting its highest mapping revision. This is stored-record coverage, not a claim that all source catalogue rows were imported. Empty cohorts explicitly report no_stored_drafts.
+
+Exclusive counts: unmapped, account_unmapped, identity_drift, account_inactive, mapping_recorded. Drift compares frozen source/charge/account identity fields; no rewriting or fallback to old mappings occurs. Reports expose aggregate counts, not recorder emails or evidence text. All results retain fiscal_readiness=false and executable=false. An exit success means audit completed, not financial readiness. This is a read-only diagnostic, not a concurrent publication gate or evidence-authenticity verifier.
+
+Verification: seven new tests /23 assertions; Pint and targeted PHPStan passed. No operational database audit, browser check, import, live pricing change or deployment. Next: define explicit rule-resolution outcomes and guarded integration with existing Price/PriceReport; mapping evidence alone must never authorize calculation.
+
 ## Fourth slice — explicit mapping evidence (2026-09-24)
 
 Verification: 15 new tests /33 assertions; combined focused/assessment regressions 139 tests /1,320 assertions passed. Pint and targeted PHPStan passed. Initial static analysis identified ambiguous single-versus-multiple lookup types; explicit scalar reference validation and single-row lookup corrected this. SQLite in-memory schema only; no full-suite/browser claims.
