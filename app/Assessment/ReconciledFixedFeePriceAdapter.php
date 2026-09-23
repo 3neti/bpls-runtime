@@ -13,6 +13,7 @@ use App\Exceptions\UnsupportedAssessmentPolicy;
 use App\Models\FeeRule;
 use App\Models\FeeRuleReconciliation;
 use App\Models\PermitApplication;
+use App\Models\PricingRuleReview;
 use Illuminate\Support\Arr;
 
 /** Read-only adapter for an existing reconciled fixed fee; never promotes catalogue drafts. */
@@ -23,7 +24,7 @@ final class ReconciledFixedFeePriceAdapter
         private readonly AssessmentCalculator $calculator,
     ) {}
 
-    public function price(int $applicationId, int $feeRuleId, int $reconciliationId): Price
+    public function price(int $applicationId, int $feeRuleId, int $reconciliationId, int $reviewId): Price
     {
         $application = PermitApplication::query()->findOrFail($applicationId);
         if ($application->type !== PermitApplicationType::New) {
@@ -57,10 +58,23 @@ final class ReconciledFixedFeePriceAdapter
             || ($reconciliation->effective_until !== null && $reconciliation->effective_until->toDateString() < $asOfDate)) {
             throw new UnsupportedAssessmentPolicy('Reconciliation is outside the application-year policy period.');
         }
+        $review = PricingRuleReview::query()->findOrFail($reviewId);
+        $snapshotBuilder = new PricingRuleReviewSnapshot;
+        $snapshot = $review->getAttribute('snapshot');
+        $fingerprint = $review->getAttribute('snapshot_sha256');
+        if ($review->getAttribute('fee_rule_id') !== $rule->id
+            || $review->getAttribute('fee_rule_reconciliation_id') !== $reconciliation->id
+            || ! is_array($snapshot) || ! is_string($fingerprint)
+            || ! hash_equals($fingerprint, $snapshotBuilder->hash($snapshot))
+            || ! hash_equals($fingerprint, $snapshotBuilder->hash($snapshotBuilder->capture($rule, $reconciliation)))) {
+            throw new UnsupportedAssessmentPolicy('Rule or decision differs from the exact reviewed content.');
+        }
         $calculation = $this->calculator->calculate($rule, null, $application);
         $sourceIdentity = "{$rule->id}:application";
         $account = $rule->revenueAccount;
         $evidence = [
+            'rule_review_id' => $review->getKey(),
+            'rule_review_sha256' => $fingerprint,
             'application_id' => $application->id,
             'application_year' => $application->application_year,
             'rule_snapshot' => $calculation['rule_snapshot'],

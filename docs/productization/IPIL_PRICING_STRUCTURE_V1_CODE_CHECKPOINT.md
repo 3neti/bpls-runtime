@@ -1,5 +1,17 @@
 # Pricing Structure V1 — Disabled Draft Persistence
 
+## Eighth slice — persisted review-content binding (2026-09-24)
+
+Verification: nine new binding tests; 28 binding/adapter tests passed. Combined focused/assessment regression selection: 183 tests /1,413 assertions passed. Pint, targeted PHPStan and whitespace checks passed. SQLite in-memory only; no full-suite/browser claims.
+
+Added append-only pricing_rule_reviews with exact FeeRule/reconciliation/recorder FKs, review reference, source snapshot and deterministic SHA-256. Snapshot captures serialized rule/decision/account attributes, excluding only top-level created/updated timestamps. Unlike display-oriented financial hashing, no evidence keys named display/formatted/symbol are removed.
+
+The fixed-fee adapter now requires an explicit review ID, verifies linkage and snapshot integrity, and compares current content before calculation. Amount, legal basis, applicability metadata, decision text/reference and account changes invalidate the old binding. It still separately requires current executable reconciliation and applicability. Existing adapter tests updated to create explicit test review records.
+
+This binds recorded content, not municipal authenticity. Review creation has no fiscal activation effect. No maintenance endpoint/write authorization implemented; bulk database writes can bypass append-only model guards and an attacker with DB write access can rewrite hashes. It is not a signature scheme. No transactional publication/concurrency guarantee or workflow integration claimed.
+
+Next: authorized maintenance/publication service with review permissions and transaction boundaries, followed by a read-only maintenance UI. No operational migration/import, main merge, push or deployment.
+
 ## Seventh slice — reconciled fixed-fee Price adapter (2026-09-24)
 
 Verification: 19 new tests; combined focused/regression selection 174 tests /1,394 assertions passed. Pint, targeted PHPStan and whitespace checks passed. An initial null-amount fixture failed the existing NOT NULL schema constraint; corrected the test to exercise an unsupported basis instead. No full-suite/browser claim; SQLite in-memory test data only.
