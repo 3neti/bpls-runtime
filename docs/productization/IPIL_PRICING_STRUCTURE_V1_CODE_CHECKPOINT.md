@@ -1,5 +1,13 @@
 # Pricing Structure V1 — Implementation Checkpoint
 
+## Approved Cloud release preparation — 2026-09-24
+
+Local main is integrated at `5f69b84`, preserving unrelated working changes. Cloud release is based on deployed `3fa2aa846383f1074345626157d830aac552c773`, with pricing-only commits through `a8458af`; newer payment-resilience fixes are retained. The calculator conflict adds only published-price resolution and snapshot identity. Cloud lifecycle fixtures remain unchanged; local-only unfinished renewal replay is excluded.
+
+Release verification: 175 pricing/payment tests /1,035 assertions and 47 complete-lifecycle tests /1,687 assertions passed. TypeScript, build, targeted PHPStan and whitespace checks passed. Local integration separately passed 80 tests /640 assertions and administrator desktop/mobile browser checks. No full-suite claim.
+
+Five additive migrations create seven pricing tables. No seeding, existing fee changes or transaction rewrites. Existing Cloud fee/financial/workflow table counts and SHA-256 fingerprints were recorded before deployment for comparison. Deployment is authorized, via the existing push-to-deploy branch `release/payment-resilience-v1`; status and post-deployment proof are maintained in the canonical pricing compass. Rollback must preserve pricing evidence tables: code rollback only, not migration rollback. No x-change changes.
+
 ## Effective-dated publication — 2026-09-24
 
 Implementation branch: `feature/pricing-publication-v1`, base `107c763`. This checkpoint supersedes the proposal-only implementation limit below. Not merged to canonical main, pushed or deployed.
