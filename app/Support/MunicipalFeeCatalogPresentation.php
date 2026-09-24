@@ -79,6 +79,11 @@ final class MunicipalFeeCatalogPresentation
         }
 
         if ($feeRule->calculation_type === FeeRuleCalculationType::Formula) {
+            if ($feeRule->basis === 'employee_count'
+                && data_get($feeRule->metadata, 'basis_unit') === 'employee'
+                && is_int(data_get($feeRule->metadata, 'unit_amount_minor'))) {
+                return ['value' => $this->money(data_get($feeRule->metadata, 'unit_amount_minor')).' × employee', 'basis' => 'Formula'];
+            }
             $formula = (string) (data_get($feeRule->metadata, 'formula') ?? data_get($feeRule->metadata, 'legacy_formula') ?? '');
 
             return ['value' => $this->humanFormula($formula), 'basis' => 'Formula'];

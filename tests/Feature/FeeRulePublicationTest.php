@@ -205,7 +205,7 @@ test('other municipal employee charges publish without changing their source cat
     $rule->update(['category' => FeeRuleCategory::Other, 'calculation_type' => FeeRuleCalculationType::Formula,
         'basis' => 'employee_count', 'scope' => FeeRuleScope::Application,
         'determination_channel' => FeeDeterminationChannel::TreasuryLineOfBusiness,
-        'metadata' => ['basis_unit' => 'employee', 'unit_amount_minor' => 10000]]);
+        'metadata' => ['basis_unit' => 'employee', 'unit_amount_minor' => 10000, 'legacy_formula' => 'numberOfEmployees * 100']]);
     $revision = app(ProposeFeeRuleRevision::class)->handle($rule, 11000, '2026-01-01', null, 'Test only', 'Test authorization', $actor);
     $this->actingAs($actor)->post(route('staff.pricing-maintenance.publish', $revision))
         ->assertRedirect()->assertSessionHasNoErrors();
@@ -215,6 +215,10 @@ test('other municipal employee charges publish without changing their source cat
         ->and($rule->fresh()->category)->toBe(FeeRuleCategory::Other)
         ->and(data_get($rule->fresh()->metadata, 'unit_amount_minor'))->toBe(10000);
     $this->assertDatabaseCount('fee_rule_publications', 1);
+    $this->get(route('staff.pricing-maintenance.index', ['rule' => $rule->id]))
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('selected.amount_display', '₱110.00 × employee'));
+    $this->get(route('staff.fee-rules.index', ['q' => $rule->code, 'year' => 2026]))
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('feeRules.data.0.amount_display', '₱110.00 × employee'));
 });
 
 test('publication still rejects taxes and uncharacterized other charges', function (string $category, string $method, string $basis, ?string $unit) {
