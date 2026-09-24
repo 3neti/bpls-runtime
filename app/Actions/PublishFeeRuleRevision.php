@@ -5,7 +5,6 @@ namespace App\Actions;
 use App\Assessment\PricingDefinitionValidator;
 use App\Assessment\PricingPublicationSnapshot;
 use App\Assessment\PricingRuleReviewSnapshot;
-use App\Enums\FeeRuleCategory;
 use App\Enums\UserPermission;
 use App\Models\FeeRule;
 use App\Models\FeeRulePublication;
@@ -35,7 +34,8 @@ final class PublishFeeRuleRevision
             if (($revision->snapshot['publication_base_sha256'] ?? null) !== $this->hashes->hash($base)) {
                 throw ValidationException::withMessages(['publication' => 'The source rule changed or this proposal predates publication support. Prepare a fresh revision.']);
             }
-            if (! $rule->is_active || $rule->category !== FeeRuleCategory::Fee
+            $definitions = new PricingDefinitionValidator;
+            if (! $rule->is_active || ! $definitions->supportsCategory($rule)
                 || $revision->status !== 'proposed' || $revision->currency !== 'PHP'
                 || $revision->proposed_amount_minor === null || $revision->proposed_amount_minor < 0
                 || blank($revision->authority) || blank($revision->reason)) {
@@ -49,7 +49,7 @@ final class PublishFeeRuleRevision
             if (FeeRulePublication::query()->where('fee_rule_id', $rule->id)->whereDate('effective_from', $revision->effective_from)->exists()) {
                 throw ValidationException::withMessages(['publication' => 'A published revision already starts on this date. Choose a later effective date.']);
             }
-            $definition = (new PricingDefinitionValidator)->resolve($rule, $revision->proposed_amount_minor, $revision->snapshot['definition_changes'] ?? []);
+            $definition = $definitions->resolve($rule, $revision->proposed_amount_minor, $revision->snapshot['definition_changes'] ?? []);
             $snapshot = ['schema_version' => 1, 'base' => $base, 'definition' => $definition, 'revision' => $revision->attributesToArray(), 'selection_basis' => 'application_tax_year_january_1'];
             $publication = FeeRulePublication::query()->create([
                 'fee_rule_id' => $rule->id, 'fee_rule_revision_id' => $revision->id, 'published_by_id' => $actor->id,

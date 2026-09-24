@@ -7,6 +7,7 @@ use App\Actions\PublishFeeRuleRevision;
 use App\Assessment\AssessmentCalculator;
 use App\Enums\FeeDeterminationChannel;
 use App\Enums\FeeRuleCalculationType;
+use App\Enums\FeeRuleCategory;
 use App\Enums\FeeRuleScope;
 use App\Enums\UserPermission;
 use App\Exceptions\UnsupportedAssessmentPolicy;
@@ -197,3 +198,38 @@ test('Payment Order and Treasury selectors use their effective published default
     expect(collect($editor['office_fee_options']['engineering'])->firstWhere('id', $office->id)['default_amount_cents'])->toBe(3000)
         ->and(collect($editor['line_of_business_options'])->firstWhere('id', $lob->id)['default_items'][0]['amount_cents'])->toBe(2000);
 });
+
+test('other municipal employee charges publish without changing their source category', function () {
+    $this->withoutVite();
+    [$actor, $rule] = publicationFixture();
+    $rule->update(['category' => FeeRuleCategory::Other, 'calculation_type' => FeeRuleCalculationType::Formula,
+        'basis' => 'employee_count', 'scope' => FeeRuleScope::Application,
+        'determination_channel' => FeeDeterminationChannel::TreasuryLineOfBusiness,
+        'metadata' => ['basis_unit' => 'employee', 'unit_amount_minor' => 10000]]);
+    $revision = app(ProposeFeeRuleRevision::class)->handle($rule, 11000, '2026-01-01', null, 'Test only', 'Test authorization', $actor);
+    $this->actingAs($actor)->post(route('staff.pricing-maintenance.publish', $revision))
+        ->assertRedirect()->assertSessionHasNoErrors();
+    $application = PermitApplication::factory()->create(['application_year' => 2026]);
+    PermitApplicationDeclaration::factory()->for($application)->create(['snapshot' => ['establishment' => ['total_employees' => 1]]]);
+    expect(app(AssessmentCalculator::class)->calculate($rule, null, $application)['amount_cents'])->toBe(11000)
+        ->and($rule->fresh()->category)->toBe(FeeRuleCategory::Other)
+        ->and(data_get($rule->fresh()->metadata, 'unit_amount_minor'))->toBe(10000);
+    $this->assertDatabaseCount('fee_rule_publications', 1);
+});
+
+test('publication still rejects taxes and uncharacterized other charges', function (string $category, string $method, string $basis, ?string $unit) {
+    $this->withoutVite();
+    [$actor, $rule] = publicationFixture();
+    $rule->update(['category' => $category, 'calculation_type' => $method, 'basis' => $basis,
+        'metadata' => ['basis_unit' => $unit, 'unit_amount_minor' => 10000]]);
+    $revision = app(ProposeFeeRuleRevision::class)->handle($rule, 11000, '2026-01-01', null, 'Test', 'Test', $actor);
+    expect(fn () => app(PublishFeeRuleRevision::class)->handle($revision, $actor))->toThrow(ValidationException::class);
+    $this->assertDatabaseCount('fee_rule_publications', 0);
+    $this->actingAs($actor)->get(route('staff.pricing-maintenance.index', ['rule' => $rule->id]))
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('selected.revisions.0.can_publish', false));
+})->with([
+    'tax employee formula' => ['tax', 'formula', 'employee_count', 'employee'],
+    'other unresolved formula' => ['other', 'formula', 'none', null],
+    'other wrong unit' => ['other', 'formula', 'employee_count', 'square_meter'],
+    'other fixed charge' => ['other', 'fixed', 'none', null],
+]);

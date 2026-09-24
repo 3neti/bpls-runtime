@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Staff;
 
 use App\Actions\PublishFeeRuleRevision;
 use App\Actions\RecordPricingRuleReview;
+use App\Assessment\PricingDefinitionValidator;
 use App\Assessment\PricingRuleReviewSnapshot;
 use App\Assessment\PublishedFeeRuleResolver;
 use App\Enums\FeeRuleCategory;
@@ -88,7 +89,8 @@ class PricingMaintenanceController extends Controller
                 'review_status' => $latest === null ? 'Not recorded' : ($hash === $latest->getAttribute('snapshot_sha256') ? 'Current content recorded' : 'Changed since review'),
                 'revisions' => $selected->revisions()->where('status', 'proposed')->reorder('version', 'desc')->limit(5)->get()->map(fn (FeeRuleRevision $revision): array => [
                     'id' => $revision->id, 'version' => $revision->version, 'status' => $publications->has($revision->id) ? 'published' : $revision->status,
-                    'can_publish' => ! $publications->has($revision->id) && isset($revision->snapshot['publication_base_sha256']),
+                    'can_publish' => $selected->is_active && (new PricingDefinitionValidator)->supportsCategory($selected)
+                        && ! $publications->has($revision->id) && isset($revision->snapshot['publication_base_sha256']),
                     'amount_display' => $selected->calculation_type->value === 'range'
                         ? count($revision->snapshot['definition_changes']['ranges'] ?? []).' brackets'
                         : ($revision->proposed_amount_minor === null ? '—' : '₱'.number_format($revision->proposed_amount_minor / 100, 2).($selected->basis === 'employee_count' ? ' per employee' : '')),

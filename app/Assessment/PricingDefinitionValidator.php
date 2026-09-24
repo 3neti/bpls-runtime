@@ -12,6 +12,15 @@ use Illuminate\Validation\ValidationException;
 
 final class PricingDefinitionValidator
 {
+    public function supportsCategory(FeeRule $rule): bool
+    {
+        return $rule->category === FeeRuleCategory::Fee
+            || ($rule->category === FeeRuleCategory::Other
+                && $rule->calculation_type === FeeRuleCalculationType::Formula
+                && $rule->basis === 'employee_count'
+                && data_get($rule->metadata, 'basis_unit') === 'employee');
+    }
+
     /** @param array<string, mixed> $changes
      * @return array<string, mixed>
      */
@@ -25,7 +34,7 @@ final class PricingDefinitionValidator
             'ranges.*.max_basis_cents' => ['nullable', 'integer', 'min:0', 'max:99999999999999'],
             'ranges.*.amount_cents' => ['required', 'integer', 'min:0', 'max:99999999999999'],
         ])->validate();
-        if ($amount < 0 || $amount > 99999999999999 || $rule->category !== FeeRuleCategory::Fee) {
+        if ($amount < 0 || $amount > 99999999999999 || ! $this->supportsCategory($rule)) {
             throw ValidationException::withMessages(['publication' => 'Publication supports non-negative fee amounts, not unresolved tax policy.']);
         }
         $accountId = array_key_exists('revenue_account_id', $data) ? $data['revenue_account_id'] : $rule->getAttribute('revenue_account_id');
